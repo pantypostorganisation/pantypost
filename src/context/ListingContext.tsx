@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode } from 'react';
 
+// 🔖 Listing type
 export type Listing = {
   id: string;
   title: string;
@@ -10,14 +11,20 @@ export type Listing = {
   imageUrl: string;
 };
 
+// 🔌 Context type
 type ListingContextType = {
   listings: Listing[];
   addListing: (listing: Listing) => void;
   removeListing: (id: string) => void;
+  user: string | null;
+  login: (username: string) => void;
+  logout: () => void;
 };
 
+// 🧠 Create context
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
+// 🏗 Provider component
 export function ListingProvider({ children }: { children: ReactNode }) {
   const [listings, setListings] = useState<Listing[]>([
     {
@@ -36,6 +43,8 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     },
   ]);
 
+  const [user, setUser] = useState<string | null>(null);
+
   const addListing = (listing: Listing) => {
     setListings((prev) => [...prev, listing]);
   };
@@ -44,13 +53,24 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     setListings((prev) => prev.filter((l) => l.id !== id));
   };
 
+  const login = (username: string) => {
+    setUser(username);
+  };
+
+  const logout = () => {
+    setUser(null);
+  };
+
   return (
-    <ListingContext.Provider value={{ listings, addListing, removeListing }}>
+    <ListingContext.Provider
+      value={{ listings, addListing, removeListing, user, login, logout }}
+    >
       {children}
     </ListingContext.Provider>
   );
 }
 
+// 🎣 Custom hook
 export function useListings() {
   const context = useContext(ListingContext);
   if (!context) {
