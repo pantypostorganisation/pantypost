@@ -1,4 +1,4 @@
-a'use client';
+'use client';
 
 import { useState } from 'react';
 import { useListings } from '@/context/ListingContext';
