@@ -1,6 +1,12 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 
 export type Listing = {
   id: string;
@@ -8,12 +14,14 @@ export type Listing = {
   description: string;
   price: number;
   imageUrl: string;
+  seller: string;
 };
 
 type Role = 'buyer' | 'seller';
 
 type ListingContextType = {
   listings: Listing[];
+  setListings: React.Dispatch<React.SetStateAction<Listing[]>>;
   addListing: (listing: Listing) => void;
   removeListing: (id: string) => void;
   user: string | null;
@@ -22,8 +30,9 @@ type ListingContextType = {
   logout: () => void;
   buyerBalance: number;
   sellerBalance: number;
-  purchaseListing: (price: number) => boolean;
+  purchaseListing: (listing: Listing) => boolean;
   isAuthReady: boolean;
+  buyerOrders: Listing[];
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -37,7 +46,6 @@ export function ListingProvider({ children }: { children: ReactNode }) {
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [buyerOrders, setBuyerOrders] = useState<Listing[]>([]);
 
-  // ✅ Load listings and login state from localStorage on first render
   useEffect(() => {
     const storedListings = localStorage.getItem('pantypost_listings');
     const storedUser = localStorage.getItem('pantypost_user');
@@ -57,6 +65,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
           description: 'Worn 2 days, scented and sealed 💋',
           price: 50,
           imageUrl: 'https://via.placeholder.com/300x300?text=Red+Thong',
+          seller: 'demoSeller1',
         },
         {
           id: '2',
@@ -64,6 +73,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
           description: 'Comfy and cute — with a lil attitude 🖤',
           price: 40,
           imageUrl: 'https://via.placeholder.com/300x300?text=Black+Briefs',
+          seller: 'demoSeller2',
         },
       ]);
     }
@@ -71,10 +81,9 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     if (storedUser) setUser(storedUser);
     if (storedRole === 'buyer' || storedRole === 'seller') setRole(storedRole);
 
-    setIsAuthReady(true); // ✅ Mark auth as ready
+    setIsAuthReady(true);
   }, []);
 
-  // ✅ Save listings to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('pantypost_listings', JSON.stringify(listings));
   }, [listings]);
@@ -87,11 +96,23 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     setListings((prev) => prev.filter((l) => l.id !== id));
   };
 
+  const fetchListings = () => {
+    const storedListings = localStorage.getItem('pantypost_listings');
+    if (storedListings) {
+      try {
+        setListings(JSON.parse(storedListings));
+      } catch {
+        console.warn('Failed to parse listings from localStorage.');
+      }
+    }
+  };
+
   const login = (username: string, selectedRole: Role) => {
     setUser(username);
     setRole(selectedRole);
     localStorage.setItem('pantypost_user', username);
     localStorage.setItem('pantypost_role', selectedRole);
+    fetchListings(); // Fetch listings on login
   };
 
   const logout = () => {
@@ -101,10 +122,10 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('pantypost_role');
   };
 
-  const purchaseListing = (price: number): boolean => {
-    if (buyerBalance >= price) {
-      setBuyerBalance((prev) => prev - price);
-      setSellerBalance((prev) => prev + price);
+  const purchaseListing = (listing: Listing): boolean => {
+    if (buyerBalance >= listing.price) {
+      setBuyerBalance((prev) => prev - listing.price);
+      setSellerBalance((prev) => prev + listing.price);
       setBuyerOrders((prev) => [...prev, listing]);
       return true;
     }
@@ -115,6 +136,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     <ListingContext.Provider
       value={{
         listings,
+        setListings,
         addListing,
         removeListing,
         user,

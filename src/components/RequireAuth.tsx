@@ -1,38 +1,51 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
-type Props = {
+export default function RequireAuth({
+  role: requiredRole,
+  children,
+}: {
+  role: 'buyer' | 'seller';
   children: React.ReactNode;
-  role?: 'buyer' | 'seller';
-};
-
-export default function RequireAuth({ children, role }: Props) {
-  const router = useRouter();
-  const { user, role: userRole, isAuthReady } = useListings();
+}) {
+  const { user, role, isAuthReady } = useListings();
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
-    if (!isAuthReady) return; // wait for auth state to load
-
-    if (!user) {
-      router.replace('/login');
-    } else if (role && userRole !== role) {
-      router.replace('/login');
+    if (isAuthReady) {
+      if (!user || role !== requiredRole) {
+        setShowFallback(true);
+      }
     }
-  }, [user, userRole, role, router, isAuthReady]);
+  }, [user, role, requiredRole, isAuthReady]);
 
-  // 👇 wait before showing anything
   if (!isAuthReady) {
-    return <div className="p-10 text-center">Loading...</div>;
+    return (
+      <div className="p-10 text-center text-gray-600">
+        Checking your login status...
+      </div>
+    );
   }
 
-  // 👇 if not authorized, render nothing
-  if (!user || (role && userRole !== role)) {
-    return null;
+  if (showFallback) {
+    return (
+      <div className="p-10 text-center">
+        <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+        <p className="mb-4">
+          This page is for <span className="font-semibold">{requiredRole}s</span> only.
+        </p>
+        <Link
+          href="/login"
+          className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 transition"
+        >
+          Go to Login
+        </Link>
+      </div>
+    );
   }
 
-  // 👇 finally render the protected content
   return <>{children}</>;
 }

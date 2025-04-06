@@ -1,23 +1,32 @@
 'use client';
 
+import { Listing } from '@/context/ListingContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function MyListingsPage() {
-  const { listings, addListing, removeListing } = useListings();
+  const { listings, addListing, removeListing, user, setListings } = useListings();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [imageUrl, setImageUrl] = useState('');
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editImageUrl, setEditImageUrl] = useState('');
+
   const handleAddListing = () => {
-    if (!title || !description || !price || !imageUrl) {
+    if (!title.trim() || !description.trim() || !price.trim() || !imageUrl.trim()) {
       alert('Please fill in all fields.');
       return;
     }
+
+    if (!user) return;
 
     addListing({
       id: uuidv4(),
@@ -25,12 +34,34 @@ export default function MyListingsPage() {
       description,
       price: parseFloat(price),
       imageUrl,
+      seller: user,
     });
 
     setTitle('');
     setDescription('');
     setPrice('');
     setImageUrl('');
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingId) return;
+
+    const updatedListing = listings.find((l) => l.id === editingId);
+    if (updatedListing) {
+      const updatedListings = listings.map((listing) =>
+        listing.id === editingId
+          ? {
+              ...listing,
+              title: editTitle,
+              description: editDescription,
+              price: parseFloat(editPrice),
+              imageUrl: editImageUrl,
+            }
+          : listing
+      );
+      setListings(updatedListings);
+      setEditingId(null);
+    }
   };
 
   return (
@@ -85,12 +116,63 @@ export default function MyListingsPage() {
               <h2 className="text-xl font-bold">{listing.title}</h2>
               <p className="text-gray-600">{listing.description}</p>
               <p className="text-pink-700 font-semibold mb-2">${listing.price}</p>
-              <button
-                onClick={() => removeListing(listing.id)}
-                className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-              >
-                Delete
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditingId(listing.id);
+                    setEditTitle(listing.title);
+                    setEditDescription(listing.description);
+                    setEditPrice(listing.price.toString());
+                    setEditImageUrl(listing.imageUrl);
+                  }}
+                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => removeListing(listing.id)}
+                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+              {editingId === listing.id && (
+                <div className="mt-4 space-y-4">
+                  <input
+                    type="text"
+                    placeholder="Title"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  />
+                  <textarea
+                    placeholder="Description"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Price"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Image URL"
+                    value={editImageUrl}
+                    onChange={(e) => setEditImageUrl(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  />
+                  <button
+                    onClick={handleSaveEdit}
+                    className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
