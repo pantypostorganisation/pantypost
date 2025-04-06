@@ -35,6 +35,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
   const [buyerBalance, setBuyerBalance] = useState<number>(100);
   const [sellerBalance, setSellerBalance] = useState<number>(250);
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [buyerOrders, setBuyerOrders] = useState<Listing[]>([]);
 
   // ✅ Load listings and login state from localStorage on first render
   useEffect(() => {
@@ -104,6 +105,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     if (buyerBalance >= price) {
       setBuyerBalance((prev) => prev - price);
       setSellerBalance((prev) => prev + price);
+      setBuyerOrders((prev) => [...prev, listing]);
       return true;
     }
     return false;
@@ -123,6 +125,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
         sellerBalance,
         purchaseListing,
         isAuthReady,
+        buyerOrders,
       }}
     >
       {children}
