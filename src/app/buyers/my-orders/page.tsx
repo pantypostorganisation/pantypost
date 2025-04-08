@@ -20,7 +20,7 @@ export default function MyOrdersPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {orderHistory.map((order) => (
               <div
-                key={order.id}
+                key={`${order.id}-${order.date}`} // Ensure unique key by combining id and date
                 className="border rounded-xl p-4 shadow hover:shadow-md transition"
               >
                 {/* Order Image */}
