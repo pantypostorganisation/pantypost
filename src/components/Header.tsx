@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useListings } from '@/context/ListingContext';
+import { useListings } from '@/context/ListingContext'; // Assuming useListings includes role and balance
 import { useEffect, useState } from 'react';
 
 export default function Header() {
@@ -25,7 +25,13 @@ export default function Header() {
         {mounted && user && (
           <div className="flex items-center gap-4">
             <span className="font-semibold">{user} ({role})</span>
-            {role === 'buyer' && <span>💰 ${buyerBalance}</span>}
+            {role === 'buyer' && (
+              <>
+                <span>💰 ${buyerBalance}</span>
+                {/* Add link to 'My Orders' page for buyers */}
+                <Link href="/buyers/my-orders" className="ml-4 text-white underline">My Orders</Link>
+              </>
+            )}
             {role === 'seller' && <span>💼 ${sellerBalance}</span>}
             <button
               onClick={logout}
