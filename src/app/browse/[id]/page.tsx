@@ -1,42 +1,50 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useListings } from '@/context/ListingContext';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react'; // Import useState for re-rendering
+import { useWallet } from '@/context/WalletContext'; // Correct path to WalletContext
+import { useListings } from '@/context/ListingContext'; // Correct path to ListingContext
+import { useParams } from 'next/navigation'; // Use useParams for dynamic routes
 
 export default function ListingDetailPage() {
-  const { id } = useParams();
+  const { listings } = useListings(); // Get all listings
+  const { id } = useParams(); // Get the dynamic route param (id) using useParams
+  const listing = listings.find((item) => item.id === id); // Find the listing by ID
+  const { buyerBalance, setBuyerBalance, purchaseListing } = useWallet(); // Access wallet balance and purchase function
   const router = useRouter();
-  const { listings, purchaseListing } = useListings();
-
-  const listing = listings.find((l) => l.id === id);
+  const [purchaseStatus, setPurchaseStatus] = useState<string>(''); // State for purchase status
 
   if (!listing) {
-    return <div className="p-10">Listing not found</div>;
+    return <p>Listing not found</p>; // Handle case where listing is not found
   }
 
   const handlePurchase = () => {
-    const success = purchaseListing(listing.price);
-    if (success) {
-      router.push('/purchase-success');
+    console.log('Button clicked');
+    console.log('Current buyer balance:', buyerBalance);
+    console.log('Listing price:', listing.price);
+
+    const isPurchased = purchaseListing(listing.price);
+    console.log(isPurchased ? 'Purchase successful!' : 'Not enough funds');
+
+    if (isPurchased) {
+      setPurchaseStatus('Purchase successful!');
+      setTimeout(() => {
+        router.push('/purchase-success'); // Redirect to success page after purchase
+      }, 1500); // Redirect after 1.5 seconds to show success message
+    } else {
+      setPurchaseStatus('Insufficient funds!');
     }
   };
 
   return (
-    <main className="p-10 max-w-xl mx-auto">
-      <img
-        src={listing.imageUrl}
-        alt={listing.title}
-        className="w-full h-64 object-cover rounded mb-4"
-      />
-      <h1 className="text-2xl font-bold">{listing.title}</h1>
-      <p className="text-gray-600 mb-2">{listing.description}</p>
-      <p className="text-pink-600 font-semibold mb-4">${listing.price}</p>
-      <button
-        onClick={handlePurchase}
-        className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
-      >
-        Buy Now
-      </button>
+    <main>
+      <h1>{listing.title}</h1>
+      <p>{listing.description}</p>
+      <p>Price: ${listing.price}</p>
+      <button onClick={handlePurchase}>Buy Now</button>
+
+      {purchaseStatus && <p>{purchaseStatus}</p>} {/* Display purchase status */}
+      <p>Current Balance: ${buyerBalance}</p> {/* Display current balance */}
     </main>
   );
 }
