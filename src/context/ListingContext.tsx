@@ -22,8 +22,9 @@ type ListingContextType = {
   logout: () => void;
   buyerBalance: number;
   sellerBalance: number;
-  purchaseListing: (price: number) => boolean;
+  purchaseListing: (listing: Listing) => boolean; // Ensure listing is passed to the function
   isAuthReady: boolean;
+  buyerOrders: Listing[]; // Ensure buyerOrders is part of context
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -35,7 +36,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
   const [buyerBalance, setBuyerBalance] = useState<number>(100);
   const [sellerBalance, setSellerBalance] = useState<number>(250);
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
-  const [buyerOrders, setBuyerOrders] = useState<Listing[]>([]);
+  const [buyerOrders, setBuyerOrders] = useState<Listing[]>([]); // Initialize buyerOrders
 
   // ✅ Load listings and login state from localStorage on first render
   useEffect(() => {
@@ -101,10 +102,13 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('pantypost_role');
   };
 
-  const purchaseListing = (price: number): boolean => {
-    if (buyerBalance >= price) {
-      setBuyerBalance((prev) => prev - price);
-      setSellerBalance((prev) => prev + price);
+  const purchaseListing = (listing: Listing): boolean => {
+    if (buyerBalance >= listing.price) {
+      // Deduct from the buyer's balance
+      setBuyerBalance((prev) => prev - listing.price);
+      // Add to the seller's balance
+      setSellerBalance((prev) => prev + listing.price);
+      // Add the listing to the buyer's orders
       setBuyerOrders((prev) => [...prev, listing]);
       return true;
     }
@@ -125,7 +129,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
         sellerBalance,
         purchaseListing,
         isAuthReady,
-        buyerOrders,
+        buyerOrders, // Provide buyerOrders here
       }}
     >
       {children}
