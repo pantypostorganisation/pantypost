@@ -2,34 +2,51 @@
 
 import { createContext, useContext, useState, ReactNode } from 'react';
 
+type Order = {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  imageUrl: string; // Add imageUrl to the Order type
+  date: string; // Add a date to track when the order was placed
+};
+
 type WalletContextType = {
   buyerBalance: number;
   sellerBalance: number;
   setBuyerBalance: (balance: number) => void;
   setSellerBalance: (balance: number) => void;
-  purchaseListing: (listingPrice: number) => boolean; // Add purchaseListing function to context
+  purchaseListing: (listing: Order) => boolean; // Use Order type for purchase
+  orderHistory: Order[]; // Add order history state
+  addOrder: (order: Order) => void; // Function to add an order
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [buyerBalance, setBuyerBalance] = useState<number>(100); // Initial balance for the buyer
-  const [sellerBalance, setSellerBalance] = useState<number>(250); // Initial balance for the seller
+  const [buyerBalance, setBuyerBalance] = useState<number>(100);
+  const [sellerBalance, setSellerBalance] = useState<number>(250);
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]); // Initialize order history
 
-  // Define purchaseListing function
-  const purchaseListing = (listingPrice: number): boolean => {
-    if (buyerBalance >= listingPrice) {
-      // Deduct from the buyer's balance
-      setBuyerBalance((prev) => prev - listingPrice);
-      // Add to the seller's balance
-      setSellerBalance((prev) => prev + listingPrice);
+  const purchaseListing = (listing: Order): boolean => {
+    if (buyerBalance >= listing.price) {
+      // Deduct from buyer's balance
+      setBuyerBalance((prev) => prev - listing.price);
+      // Add to seller's balance
+      setSellerBalance((prev) => prev + listing.price);
+      // Add order to history
+      addOrder(listing);
       return true;
     }
-    return false; // Insufficient funds
+    return false;
+  };
+
+  const addOrder = (order: Order) => {
+    setOrderHistory((prev) => [...prev, order]);
   };
 
   return (
-    <WalletContext.Provider value={{ buyerBalance, sellerBalance, setBuyerBalance, setSellerBalance, purchaseListing }}>
+    <WalletContext.Provider value={{ buyerBalance, sellerBalance, setBuyerBalance, setSellerBalance, purchaseListing, orderHistory, addOrder }}>
       {children}
     </WalletContext.Provider>
   );
