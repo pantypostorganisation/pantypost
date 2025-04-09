@@ -28,6 +28,15 @@ export default function Header() {
       <nav className="flex items-center gap-6">
         <Link href="/browse">Browse</Link>
 
+        {/* ✅ Only for buyers */}
+        {mounted && role === 'buyer' && (
+          <Link href="/buyers/my-orders">My Orders</Link>
+        )}
+
+        {mounted && role === 'buyer' && (
+          <Link href="/wallet/buyer">Wallet</Link>
+        )}
+
         {/* ✅ Only for sellers */}
         {mounted && role === 'seller' && (
           <Link href="/sellers/my-listings">My Listings</Link>
@@ -35,11 +44,6 @@ export default function Header() {
 
         {mounted && role === 'seller' && (
           <Link href="/wallet/seller">Wallet</Link>
-        )}
-
-        {/* ✅ Only for buyers */}
-        {mounted && role === 'buyer' && (
-          <Link href="/wallet/buyer">Wallet</Link>
         )}
 
         {/* ✅ Only show Login if not logged in */}
@@ -64,4 +68,5 @@ export default function Header() {
     </header>
   );
 }
+
 
