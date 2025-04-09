@@ -27,6 +27,7 @@ export default function MyListingsPage() {
       imageUrl,
     });
 
+    // Reset form
     setTitle('');
     setDescription('');
     setPrice('');
@@ -38,6 +39,7 @@ export default function MyListingsPage() {
       <main className="p-10 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">My Listings</h1>
 
+        {/* Form to add new listing */}
         <div className="mb-10 space-y-4">
           <input
             type="text"
@@ -74,6 +76,7 @@ export default function MyListingsPage() {
           </button>
         </div>
 
+        {/* List of seller's listings */}
         <div className="grid gap-4">
           {listings.map((listing) => (
             <div key={listing.id} className="border rounded p-4 shadow">
@@ -98,3 +101,4 @@ export default function MyListingsPage() {
     </RequireAuth>
   );
 }
+
