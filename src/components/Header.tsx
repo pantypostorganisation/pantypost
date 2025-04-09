@@ -28,9 +28,21 @@ export default function Header() {
 
       <nav className="flex items-center gap-6">
         <Link href="/browse">Browse</Link>
-        <Link href="/sellers/my-listings">My Listings</Link>
-        <Link href="/wallet/seller">Wallet</Link>
-        <Link href="/login">Login</Link>
+
+        {/* ✅ Only show if logged in as seller */}
+        {mounted && role === 'seller' && (
+          <Link href="/sellers/my-listings">My Listings</Link>
+        )}
+
+        {/* ✅ Only show if logged in as seller */}
+        {mounted && role === 'seller' && (
+          <Link href="/wallet/seller">Wallet</Link>
+        )}
+
+        {/* ✅ Only show Login if NOT logged in */}
+        {mounted && !user && (
+          <Link href="/login">Login</Link>
+        )}
 
         {mounted && user && (
           <div className="flex items-center gap-4">

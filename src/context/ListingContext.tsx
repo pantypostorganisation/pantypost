@@ -22,9 +22,9 @@ type ListingContextType = {
   logout: () => void;
   buyerBalance: number;
   sellerBalance: number;
-  purchaseListing: (listing: Listing) => boolean; // Ensure listing is passed to the function
+  purchaseListing: (listing: Listing) => boolean;
   isAuthReady: boolean;
-  buyerOrders: Listing[]; // Ensure buyerOrders is part of context
+  buyerOrders: Listing[];
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -36,9 +36,9 @@ export function ListingProvider({ children }: { children: ReactNode }) {
   const [buyerBalance, setBuyerBalance] = useState<number>(100);
   const [sellerBalance, setSellerBalance] = useState<number>(250);
   const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
-  const [buyerOrders, setBuyerOrders] = useState<Listing[]>([]); // Initialize buyerOrders
+  const [buyerOrders, setBuyerOrders] = useState<Listing[]>([]);
 
-  // ✅ Load listings and login state from localStorage on first render
+  // 🔃 Load listings + login state on first render
   useEffect(() => {
     const storedListings = localStorage.getItem('pantypost_listings');
     const storedUser = localStorage.getItem('pantypost_user');
@@ -72,13 +72,27 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     if (storedUser) setUser(storedUser);
     if (storedRole === 'buyer' || storedRole === 'seller') setRole(storedRole);
 
-    setIsAuthReady(true); // ✅ Mark auth as ready
+    setIsAuthReady(true);
   }, []);
 
-  // ✅ Save listings to localStorage whenever they change
+  // 💾 Save listings to localStorage when they change
   useEffect(() => {
     localStorage.setItem('pantypost_listings', JSON.stringify(listings));
   }, [listings]);
+
+  // ✅ FIX: Reload listings from localStorage when user/role changes
+  useEffect(() => {
+    if (user && role) {
+      const storedListings = localStorage.getItem('pantypost_listings');
+      if (storedListings) {
+        try {
+          setListings(JSON.parse(storedListings));
+        } catch {
+          console.warn('Failed to reload listings after login.');
+        }
+      }
+    }
+  }, [user, role]);
 
   const addListing = (listing: Listing) => {
     setListings((prev) => [...prev, listing]);
@@ -102,17 +116,14 @@ export function ListingProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('pantypost_role');
   };
 
-  const purchaseListing = (listing: Listing): boolean => {
-    if (buyerBalance >= listing.price) {
-      // Deduct from the buyer's balance
-      setBuyerBalance((prev) => prev - listing.price);
-      // Add to the seller's balance
-      setSellerBalance((prev) => prev + listing.price);
-      // Add the listing to the buyer's orders
-      setBuyerOrders((prev) => [...prev, listing]);
-      return true;
-    }
-    return false;
+  const purchaseListing = (listing: Listing) => {
+    if (role !== 'buyer') return false;
+    if (buyerBalance < listing.price) return false;
+
+    setBuyerBalance((prev) => prev - listing.price);
+    setListings((prev) => prev.filter((l) => l.id !== listing.id));
+    setBuyerOrders((prev) => [...prev, listing]);
+    return true;
   };
 
   return (
@@ -129,7 +140,7 @@ export function ListingProvider({ children }: { children: ReactNode }) {
         sellerBalance,
         purchaseListing,
         isAuthReady,
-        buyerOrders, // Provide buyerOrders here
+        buyerOrders,
       }}
     >
       {children}
@@ -139,6 +150,9 @@ export function ListingProvider({ children }: { children: ReactNode }) {
 
 export function useListings() {
   const context = useContext(ListingContext);
-  if (!context) throw new Error('useListings must be used within a ListingProvider');
+  if (context === undefined) {
+    throw new Error('useListings must be used within a ListingProvider');
+  }
   return context;
 }
+
