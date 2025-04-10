@@ -6,19 +6,22 @@ type Order = {
   id: string;
   title: string;
   description: string;
-  price: number;
-  imageUrl: string; // Add imageUrl to the Order type
-  date: string; // Add a date to track when the order was placed
+  price: number; // The original price set by the seller
+  markedUpPrice: number; // The marked-up price that the buyer sees
+  imageUrl: string;
+  date: string;
 };
 
 type WalletContextType = {
   buyerBalance: number;
   sellerBalance: number;
+  platformBalance: number; // Platform's 10% fee
   setBuyerBalance: (balance: number) => void;
   setSellerBalance: (balance: number) => void;
-  purchaseListing: (listing: Order) => boolean; // Use Order type for purchase
-  orderHistory: Order[]; // Add order history state
-  addOrder: (order: Order) => void; // Function to add an order
+  setPlatformBalance: (balance: number) => void;
+  purchaseListing: (listing: Order) => boolean;
+  orderHistory: Order[];
+  addOrder: (order: Order) => void;
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -26,14 +29,20 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [buyerBalance, setBuyerBalance] = useState<number>(100);
   const [sellerBalance, setSellerBalance] = useState<number>(250);
-  const [orderHistory, setOrderHistory] = useState<Order[]>([]); // Initialize order history
+  const [platformBalance, setPlatformBalance] = useState<number>(0); // Platform's earnings
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
 
   const purchaseListing = (listing: Order): boolean => {
-    if (buyerBalance >= listing.price) {
-      // Deduct from buyer's balance
-      setBuyerBalance((prev) => prev - listing.price);
-      // Add to seller's balance
-      setSellerBalance((prev) => prev + listing.price);
+    if (buyerBalance >= listing.markedUpPrice) {
+      // Deduct from buyer's balance (marked-up price)
+      setBuyerBalance((prev) => prev - listing.markedUpPrice);
+
+      // Add to seller's balance (original price minus 10% fee)
+      setSellerBalance((prev) => prev + listing.price * 0.9); // Seller receives 90%
+
+      // Add platform fee to platform balance (10% of the price)
+      setPlatformBalance((prev) => prev + listing.price * 0.1);
+
       // Add order to history
       addOrder(listing);
       return true;
@@ -42,15 +51,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const addOrder = (order: Order) => {
-    // Add order to history with current date
-    setOrderHistory((prev) => [
-      ...prev,
-      { ...order, date: new Date().toISOString() }, // Adding current date to the order
-    ]);
+    setOrderHistory((prev) => [...prev, order]);
   };
 
   return (
-    <WalletContext.Provider value={{ buyerBalance, sellerBalance, setBuyerBalance, setSellerBalance, purchaseListing, orderHistory, addOrder }}>
+    <WalletContext.Provider value={{ buyerBalance, sellerBalance, platformBalance, setBuyerBalance, setSellerBalance, setPlatformBalance, purchaseListing, orderHistory, addOrder }}>
       {children}
     </WalletContext.Provider>
   );

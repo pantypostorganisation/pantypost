@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function MyListingsPage() {
-  const { listings, addListing, removeListing } = useListings();
+  const { listings = [], addListing, removeListing, user } = useListings();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -19,27 +19,35 @@ export default function MyListingsPage() {
       return;
     }
 
+    const numericPrice = parseFloat(price);
+
     addListing({
       id: uuidv4(),
       title,
       description,
-      price: parseFloat(price),
+      price: numericPrice,
+      markedUpPrice: numericPrice * 1.1,
       imageUrl,
+      date: new Date().toISOString(),
+      seller: user?.username || 'unknown', // associate listing with seller
     });
 
-    // Reset form
     setTitle('');
     setDescription('');
     setPrice('');
     setImageUrl('');
   };
 
+  // Filter to only show current seller's listings
+  const myListings = listings?.filter(
+    (listing) => listing.seller === user?.username
+  ) ?? [];
+
   return (
     <RequireAuth role="seller">
       <main className="p-10 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">My Listings</h1>
 
-        {/* Form to add new listing */}
         <div className="mb-10 space-y-4">
           <input
             type="text"
@@ -76,29 +84,33 @@ export default function MyListingsPage() {
           </button>
         </div>
 
-        {/* List of seller's listings */}
         <div className="grid gap-4">
-          {listings.map((listing) => (
-            <div key={listing.id} className="border rounded p-4 shadow">
-              <img
-                src={listing.imageUrl}
-                alt={listing.title}
-                className="w-full h-48 object-cover rounded mb-2"
-              />
-              <h2 className="text-xl font-bold">{listing.title}</h2>
-              <p className="text-gray-600">{listing.description}</p>
-              <p className="text-pink-700 font-semibold mb-2">${listing.price}</p>
-              <button
-                onClick={() => removeListing(listing.id)}
-                className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
+          {myListings.length === 0 ? (
+            <p>You haven't listed anything yet.</p>
+          ) : (
+            myListings.map((listing) => (
+              <div key={listing.id} className="border rounded p-4 shadow">
+                <img
+                  src={listing.imageUrl}
+                  alt={listing.title}
+                  className="w-full h-48 object-cover rounded mb-2"
+                />
+                <h2 className="text-xl font-bold">{listing.title}</h2>
+                <p className="text-gray-600">{listing.description}</p>
+                <p className="text-pink-700 font-semibold mb-2">
+                  Price (before fee): ${listing.price.toFixed(2)}
+                </p>
+                <button
+                  onClick={() => removeListing(listing.id)}
+                  className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </main>
     </RequireAuth>
   );
 }
-

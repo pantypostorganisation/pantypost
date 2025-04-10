@@ -6,7 +6,7 @@ import { useListings } from '@/context/ListingContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useListings();
+  const { login } = useListings(); // Ensure this comes from a context that provides it
 
   const [username, setUsername] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller' | null>(null);
@@ -17,7 +17,7 @@ export default function LoginPage() {
       return;
     }
 
-    login(username, role);
+    login(username, role); // Call login with correct shape
     router.push('/');
   };
 
