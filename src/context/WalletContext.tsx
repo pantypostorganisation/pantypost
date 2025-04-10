@@ -42,7 +42,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const addOrder = (order: Order) => {
-    setOrderHistory((prev) => [...prev, order]);
+    // Add order to history with current date
+    setOrderHistory((prev) => [
+      ...prev,
+      { ...order, date: new Date().toISOString() }, // Adding current date to the order
+    ]);
   };
 
   return (
