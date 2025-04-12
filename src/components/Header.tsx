@@ -39,17 +39,17 @@ export default function Header() {
 
             {/* Show buyer wallet */}
             {user.role === 'buyer' && (
-              <span>💰 ${buyerBalance.toFixed(2)}</span>
+              <span>💰 ${Number(buyerBalance || 0).toFixed(2)}</span>
             )}
 
             {/* Show seller wallet */}
             {user.role === 'seller' && (
-              <span>💼 ${getSellerBalance(user.username).toFixed(2)}</span>
+              <span>💼 ${Number(getSellerBalance(user.username) || 0).toFixed(2)}</span>
             )}
 
-            {/* Show shared admin wallet only for admins */}
+            {/* Show shared admin wallet */}
             {isAdmin && (
-              <span>🏦 ${adminBalance.toFixed(2)}</span>
+              <span>🏦 ${Number(adminBalance || 0).toFixed(2)}</span>
             )}
 
             <button

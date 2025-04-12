@@ -1,6 +1,12 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 
 type Order = {
   id: string;
@@ -11,6 +17,11 @@ type Order = {
   imageUrl: string;
   date: string;
   seller: string;
+};
+
+type Withdrawal = {
+  amount: number;
+  date: string;
 };
 
 type WalletContextType = {
@@ -24,30 +35,41 @@ type WalletContextType = {
   purchaseListing: (listing: Order) => boolean;
   orderHistory: Order[];
   addOrder: (order: Order) => void;
+  sellerWithdrawals: { [username: string]: Withdrawal[] };
+  adminWithdrawals: Withdrawal[];
+  addSellerWithdrawal: (username: string, amount: number) => void;
+  addAdminWithdrawal: (amount: number) => void;
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const WalletProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [buyerBalance, setBuyerBalanceState] = useState<number>(100);
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
-  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
+  const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
 
-  // --- Load from localStorage on mount ---
+  // --- LocalStorage Persistence ---
   useEffect(() => {
-    const storedBuyer = localStorage.getItem('wallet_buyer');
-    const storedAdmin = localStorage.getItem('wallet_admin');
-    const storedSellers = localStorage.getItem('wallet_sellers');
-    const storedOrders = localStorage.getItem('wallet_orders');
+    const buyer = localStorage.getItem('wallet_buyer');
+    const admin = localStorage.getItem('wallet_admin');
+    const sellers = localStorage.getItem('wallet_sellers');
+    const orders = localStorage.getItem('wallet_orders');
+    const sellerWds = localStorage.getItem('wallet_sellerWithdrawals');
+    const adminWds = localStorage.getItem('wallet_adminWithdrawals');
 
-    if (storedBuyer) setBuyerBalanceState(parseFloat(storedBuyer));
-    if (storedAdmin) setAdminBalanceState(parseFloat(storedAdmin));
-    if (storedSellers) setSellerBalancesState(JSON.parse(storedSellers));
-    if (storedOrders) setOrderHistory(JSON.parse(storedOrders));
+    if (buyer) setBuyerBalanceState(parseFloat(buyer));
+    if (admin) setAdminBalanceState(parseFloat(admin));
+    if (sellers) setSellerBalancesState(JSON.parse(sellers));
+    if (orders) setOrderHistory(JSON.parse(orders));
+    if (sellerWds) setSellerWithdrawals(JSON.parse(sellerWds));
+    if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
   }, []);
 
-  // --- Save to localStorage when values change ---
   useEffect(() => {
     localStorage.setItem('wallet_buyer', buyerBalance.toString());
   }, [buyerBalance]);
@@ -64,6 +86,15 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     localStorage.setItem('wallet_orders', JSON.stringify(orderHistory));
   }, [orderHistory]);
 
+  useEffect(() => {
+    localStorage.setItem('wallet_sellerWithdrawals', JSON.stringify(sellerWithdrawals));
+  }, [sellerWithdrawals]);
+
+  useEffect(() => {
+    localStorage.setItem('wallet_adminWithdrawals', JSON.stringify(adminWithdrawals));
+  }, [adminWithdrawals]);
+
+  // --- Core Methods ---
   const getSellerBalance = (seller: string): number => {
     return sellerBalances[seller] || 0;
   };
@@ -81,6 +112,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   const setAdminBalance = (balance: number) => {
     setAdminBalanceState(balance);
+  };
+
+  const addOrder = (order: Order) => {
+    setOrderHistory((prev) => [...prev, order]);
   };
 
   const purchaseListing = (listing: Order): boolean => {
@@ -104,8 +139,19 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return false;
   };
 
-  const addOrder = (order: Order) => {
-    setOrderHistory((prev) => [...prev, order]);
+  const addSellerWithdrawal = (username: string, amount: number) => {
+    const date = new Date().toISOString();
+    setSellerWithdrawals((prev) => ({
+      ...prev,
+      [username]: [...(prev[username] || []), { amount, date }],
+    }));
+    setSellerBalance(username, getSellerBalance(username) - amount);
+  };
+
+  const addAdminWithdrawal = (amount: number) => {
+    const date = new Date().toISOString();
+    setAdminWithdrawals((prev) => [...prev, { amount, date }]);
+    setAdminBalanceState((prev) => prev - amount);
   };
 
   return (
@@ -121,6 +167,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         purchaseListing,
         orderHistory,
         addOrder,
+        sellerWithdrawals,
+        adminWithdrawals,
+        addSellerWithdrawal,
+        addAdminWithdrawal,
       }}
     >
       {children}
