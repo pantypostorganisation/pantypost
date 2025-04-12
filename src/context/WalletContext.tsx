@@ -1,13 +1,13 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 type Order = {
   id: string;
   title: string;
   description: string;
-  price: number; // Seller's original price
-  markedUpPrice: number; // Buyer pays this
+  price: number;
+  markedUpPrice: number;
   imageUrl: string;
   date: string;
   seller: string;
@@ -29,20 +29,58 @@ type WalletContextType = {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [buyerBalance, setBuyerBalance] = useState<number>(100);
-  const [adminBalance, setAdminBalance] = useState<number>(0);
+  const [buyerBalance, setBuyerBalanceState] = useState<number>(100);
+  const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
-  const [sellerBalances, setSellerBalances] = useState<{ [username: string]: number }>({});
+  const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
+
+  // --- Load from localStorage on mount ---
+  useEffect(() => {
+    const storedBuyer = localStorage.getItem('wallet_buyer');
+    const storedAdmin = localStorage.getItem('wallet_admin');
+    const storedSellers = localStorage.getItem('wallet_sellers');
+    const storedOrders = localStorage.getItem('wallet_orders');
+
+    if (storedBuyer) setBuyerBalanceState(parseFloat(storedBuyer));
+    if (storedAdmin) setAdminBalanceState(parseFloat(storedAdmin));
+    if (storedSellers) setSellerBalancesState(JSON.parse(storedSellers));
+    if (storedOrders) setOrderHistory(JSON.parse(storedOrders));
+  }, []);
+
+  // --- Save to localStorage when values change ---
+  useEffect(() => {
+    localStorage.setItem('wallet_buyer', buyerBalance.toString());
+  }, [buyerBalance]);
+
+  useEffect(() => {
+    localStorage.setItem('wallet_admin', adminBalance.toString());
+  }, [adminBalance]);
+
+  useEffect(() => {
+    localStorage.setItem('wallet_sellers', JSON.stringify(sellerBalances));
+  }, [sellerBalances]);
+
+  useEffect(() => {
+    localStorage.setItem('wallet_orders', JSON.stringify(orderHistory));
+  }, [orderHistory]);
 
   const getSellerBalance = (seller: string): number => {
     return sellerBalances[seller] || 0;
   };
 
   const setSellerBalance = (seller: string, balance: number) => {
-    setSellerBalances((prev) => ({
+    setSellerBalancesState((prev) => ({
       ...prev,
       [seller]: balance,
     }));
+  };
+
+  const setBuyerBalance = (balance: number) => {
+    setBuyerBalanceState(balance);
+  };
+
+  const setAdminBalance = (balance: number) => {
+    setAdminBalanceState(balance);
   };
 
   const purchaseListing = (listing: Order): boolean => {
@@ -51,19 +89,15 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       const sellerCut = listing.price * 0.9;
       const platformCut = listing.markedUpPrice - sellerCut;
 
-      // Deduct full marked-up amount from buyer
-      setBuyerBalance((prev) => prev - listing.markedUpPrice);
+      setBuyerBalanceState((prev) => prev - listing.markedUpPrice);
 
-      // Credit seller their 90% cut
-      setSellerBalances((prev) => ({
+      setSellerBalancesState((prev) => ({
         ...prev,
         [seller]: (prev[seller] || 0) + sellerCut,
       }));
 
-      // Add full 20% platform margin to shared admin pool
-      setAdminBalance((prev) => prev + platformCut);
+      setAdminBalanceState((prev) => prev + platformCut);
 
-      // Save order
       addOrder(listing);
       return true;
     }
