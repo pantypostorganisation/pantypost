@@ -11,7 +11,11 @@ export default function ListingDetailPage() {
   const listing = listings.find((item) => item.id === id);
   const { buyerBalance, purchaseListing } = useWallet();
   const router = useRouter();
+
   const [purchaseStatus, setPurchaseStatus] = useState<string>('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [sent, setSent] = useState(false);
 
   if (!listing) {
     return <p className="p-10 text-lg font-medium">Listing not found.</p>;
@@ -26,7 +30,7 @@ export default function ListingDetailPage() {
       markedUpPrice: listing.markedUpPrice,
       imageUrl: listing.imageUrl,
       date: new Date().toISOString(),
-      seller: listing.seller, // ✅ Include seller here
+      seller: listing.seller,
     };
 
     const isPurchased = purchaseListing(order);
@@ -41,8 +45,19 @@ export default function ListingDetailPage() {
     }
   };
 
+  const handleSendMessage = () => {
+    if (!message.trim()) return;
+    console.log(`Message to ${listing.seller}:`, message); // 📝 mock action
+    setSent(true);
+    setTimeout(() => {
+      setIsModalOpen(false);
+      setMessage('');
+      setSent(false);
+    }, 1500);
+  };
+
   return (
-    <main className="p-10 max-w-2xl mx-auto">
+    <main className="p-10 max-w-2xl mx-auto relative">
       <img
         src={listing.imageUrl}
         alt={listing.title}
@@ -55,20 +70,58 @@ export default function ListingDetailPage() {
         Price: ${listing.markedUpPrice.toFixed(2)}
       </p>
 
-      <button
-        onClick={handlePurchase}
-        className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
-      >
-        Buy Now
-      </button>
+      <div className="flex gap-4 mb-4">
+        <button
+          onClick={handlePurchase}
+          className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
+        >
+          Buy Now
+        </button>
+
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="bg-white border border-pink-600 text-pink-600 px-4 py-2 rounded hover:bg-pink-50"
+        >
+          Message Seller 💬
+        </button>
+      </div>
 
       {purchaseStatus && (
-        <p className="mt-4 font-semibold text-sm">{purchaseStatus}</p>
+        <p className="mt-2 font-semibold text-sm">{purchaseStatus}</p>
       )}
 
       <p className="text-sm text-gray-500 mt-2">
         Your Balance: ${buyerBalance.toFixed(2)}
       </p>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl text-black">
+            <h2 className="text-xl font-semibold mb-2">Send a message to {listing.seller}</h2>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type your message here..."
+              className="w-full h-32 p-2 border rounded mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendMessage}
+                className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+              >
+                {sent ? '✅ Sent!' : 'Send Message'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
