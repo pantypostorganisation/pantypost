@@ -25,6 +25,7 @@ export default function Header() {
       <nav className="flex items-center gap-6">
         <Link href="/browse">Browse</Link>
         {user?.role === 'seller' && <Link href="/sellers/my-listings">My Listings</Link>}
+        {user?.role === 'seller' && <Link href="/sellers/messages">Messages</Link>}
         {user?.role === 'buyer' && <Link href="/buyers/my-orders">My Orders</Link>}
         {user?.role === 'buyer' && <Link href="/wallet/buyer">Wallet</Link>}
         {user?.role === 'seller' && <Link href="/wallet/seller">Wallet</Link>}
@@ -39,17 +40,17 @@ export default function Header() {
 
             {/* Show buyer wallet */}
             {user.role === 'buyer' && (
-              <span>💰 ${Number(buyerBalance || 0).toFixed(2)}</span>
+              <span>💰 ${buyerBalance.toFixed(2)}</span>
             )}
 
             {/* Show seller wallet */}
             {user.role === 'seller' && (
-              <span>💼 ${Number(getSellerBalance(user.username) || 0).toFixed(2)}</span>
+              <span>💼 ${getSellerBalance(user.username).toFixed(2)}</span>
             )}
 
-            {/* Show shared admin wallet */}
+            {/* Show shared admin wallet only for admins */}
             {isAdmin && (
-              <span>🏦 ${Number(adminBalance || 0).toFixed(2)}</span>
+              <span>🏦 ${adminBalance.toFixed(2)}</span>
             )}
 
             <button

@@ -4,12 +4,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
+import { useMessages } from '@/context/MessageContext'; // ✅ Import messages context
 
 export default function ListingDetailPage() {
-  const { listings } = useListings();
+  const { listings, user } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
   const { buyerBalance, purchaseListing } = useWallet();
+  const { sendMessage } = useMessages();
   const router = useRouter();
 
   const [purchaseStatus, setPurchaseStatus] = useState<string>('');
@@ -47,7 +49,9 @@ export default function ListingDetailPage() {
 
   const handleSendMessage = () => {
     if (!message.trim()) return;
-    console.log(`Message to ${listing.seller}:`, message); // 📝 mock action
+    if (!user) return;
+
+    sendMessage(user.username, listing.seller, message); // ✅ Save the message
     setSent(true);
     setTimeout(() => {
       setIsModalOpen(false);

@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Header from '../components/Header';
 import { ListingProvider } from '../context/ListingContext';
-import { WalletProvider } from '../context/WalletContext'; // Import WalletProvider
+import { WalletProvider } from '../context/WalletContext';
+import { MessageProvider } from '../context/MessageContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -20,12 +21,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <WalletProvider> {/* Wrap the app with WalletProvider */}
-          <ListingProvider>
-            <Header />
-            {children}
-          </ListingProvider>
-        </WalletProvider>
+        <MessageProvider>
+          <WalletProvider>
+            <ListingProvider>
+              <Header />
+              {children}
+            </ListingProvider>
+          </WalletProvider>
+        </MessageProvider>
       </body>
     </html>
   );
