@@ -26,6 +26,7 @@ export default function ListingDetailPage() {
       markedUpPrice: listing.markedUpPrice,
       imageUrl: listing.imageUrl,
       date: new Date().toISOString(),
+      seller: listing.seller, // ✅ Include seller here
     };
 
     const isPurchased = purchaseListing(order);

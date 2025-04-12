@@ -6,19 +6,21 @@ type Order = {
   id: string;
   title: string;
   description: string;
-  price: number; // The original price set by the seller
-  markedUpPrice: number; // The marked-up price that the buyer sees
+  price: number; // Seller's original price
+  markedUpPrice: number; // Buyer pays this
   imageUrl: string;
   date: string;
+  seller: string;
 };
 
 type WalletContextType = {
   buyerBalance: number;
-  sellerBalance: number;
-  platformBalance: number; // Platform's 10% fee
+  adminBalance: number;
+  sellerBalances: { [username: string]: number };
   setBuyerBalance: (balance: number) => void;
-  setSellerBalance: (balance: number) => void;
-  setPlatformBalance: (balance: number) => void;
+  setAdminBalance: (balance: number) => void;
+  setSellerBalance: (seller: string, balance: number) => void;
+  getSellerBalance: (seller: string) => number;
   purchaseListing: (listing: Order) => boolean;
   orderHistory: Order[];
   addOrder: (order: Order) => void;
@@ -28,22 +30,40 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [buyerBalance, setBuyerBalance] = useState<number>(100);
-  const [sellerBalance, setSellerBalance] = useState<number>(250);
-  const [platformBalance, setPlatformBalance] = useState<number>(0); // Platform's earnings
+  const [adminBalance, setAdminBalance] = useState<number>(0);
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [sellerBalances, setSellerBalances] = useState<{ [username: string]: number }>({});
+
+  const getSellerBalance = (seller: string): number => {
+    return sellerBalances[seller] || 0;
+  };
+
+  const setSellerBalance = (seller: string, balance: number) => {
+    setSellerBalances((prev) => ({
+      ...prev,
+      [seller]: balance,
+    }));
+  };
 
   const purchaseListing = (listing: Order): boolean => {
     if (buyerBalance >= listing.markedUpPrice) {
-      // Deduct from buyer's balance (marked-up price)
+      const seller = listing.seller;
+      const sellerCut = listing.price * 0.9;
+      const platformCut = listing.markedUpPrice - sellerCut;
+
+      // Deduct full marked-up amount from buyer
       setBuyerBalance((prev) => prev - listing.markedUpPrice);
 
-      // Add to seller's balance (original price minus 10% fee)
-      setSellerBalance((prev) => prev + listing.price * 0.9); // Seller receives 90%
+      // Credit seller their 90% cut
+      setSellerBalances((prev) => ({
+        ...prev,
+        [seller]: (prev[seller] || 0) + sellerCut,
+      }));
 
-      // Add platform fee to platform balance (10% of the price)
-      setPlatformBalance((prev) => prev + listing.price * 0.1);
+      // Add full 20% platform margin to shared admin pool
+      setAdminBalance((prev) => prev + platformCut);
 
-      // Add order to history
+      // Save order
       addOrder(listing);
       return true;
     }
@@ -55,7 +75,20 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   return (
-    <WalletContext.Provider value={{ buyerBalance, sellerBalance, platformBalance, setBuyerBalance, setSellerBalance, setPlatformBalance, purchaseListing, orderHistory, addOrder }}>
+    <WalletContext.Provider
+      value={{
+        buyerBalance,
+        adminBalance,
+        sellerBalances,
+        setBuyerBalance,
+        setAdminBalance,
+        setSellerBalance,
+        getSellerBalance,
+        purchaseListing,
+        orderHistory,
+        addOrder,
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );

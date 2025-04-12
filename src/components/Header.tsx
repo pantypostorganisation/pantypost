@@ -7,8 +7,10 @@ import { useEffect, useState } from 'react';
 
 export default function Header() {
   const { user, logout } = useListings();
-  const { buyerBalance, sellerBalance } = useWallet();
+  const { buyerBalance, getSellerBalance, adminBalance } = useWallet();
   const [mounted, setMounted] = useState(false);
+
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
   useEffect(() => {
     setMounted(true);
@@ -17,23 +19,16 @@ export default function Header() {
   return (
     <header className="bg-pink-600 text-white px-6 py-4 flex justify-between items-center">
       <Link href="/" className="text-2xl font-bold flex items-center gap-2">
-        <img
-          src="/logo.png"
-          alt="PantyPost Logo"
-          className="w-24 h-auto"
-        />
+        <img src="/logo.png" alt="PantyPost Logo" className="w-24 h-auto" />
       </Link>
 
       <nav className="flex items-center gap-6">
         <Link href="/browse">Browse</Link>
-        {user?.role === 'seller' && (
-          <Link href="/sellers/my-listings">My Listings</Link>
-        )}
-        {user?.role === 'buyer' && (
-          <Link href="/buyers/my-orders">My Orders</Link>
-        )}
+        {user?.role === 'seller' && <Link href="/sellers/my-listings">My Listings</Link>}
+        {user?.role === 'buyer' && <Link href="/buyers/my-orders">My Orders</Link>}
         {user?.role === 'buyer' && <Link href="/wallet/buyer">Wallet</Link>}
         {user?.role === 'seller' && <Link href="/wallet/seller">Wallet</Link>}
+        {isAdmin && <Link href="/wallet/admin">Admin</Link>}
         {!user && <Link href="/login">Login</Link>}
 
         {mounted && user && (
@@ -41,12 +36,22 @@ export default function Header() {
             <span className="font-semibold">
               {user.username} ({user.role})
             </span>
+
+            {/* Show buyer wallet */}
             {user.role === 'buyer' && (
               <span>💰 ${buyerBalance.toFixed(2)}</span>
             )}
+
+            {/* Show seller wallet */}
             {user.role === 'seller' && (
-              <span>💼 ${sellerBalance.toFixed(2)}</span>
+              <span>💼 ${getSellerBalance(user.username).toFixed(2)}</span>
             )}
+
+            {/* Show shared admin wallet only for admins */}
+            {isAdmin && (
+              <span>🏦 ${adminBalance.toFixed(2)}</span>
+            )}
+
             <button
               onClick={logout}
               className="ml-2 bg-white text-pink-600 px-2 py-1 rounded"

@@ -29,7 +29,7 @@ export default function MyListingsPage() {
       markedUpPrice: numericPrice * 1.1,
       imageUrl,
       date: new Date().toISOString(),
-      seller: user?.username || 'unknown', // associate listing with seller
+      seller: user?.username || 'unknown', // ✅ associate listing with seller
     });
 
     setTitle('');
@@ -38,7 +38,6 @@ export default function MyListingsPage() {
     setImageUrl('');
   };
 
-  // Filter to only show current seller's listings
   const myListings = listings?.filter(
     (listing) => listing.seller === user?.username
   ) ?? [];
