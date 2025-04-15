@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Header from '../components/Header';
+import AgeVerificationModal from '../components/AgeVerificationModal'; // ✅ Add this
 import { ListingProvider } from '../context/ListingContext';
 import { WalletProvider } from '../context/WalletContext';
 import { MessageProvider } from '../context/MessageContext';
@@ -25,6 +26,7 @@ export default function RootLayout({
           <WalletProvider>
             <ListingProvider>
               <Header />
+              <AgeVerificationModal /> {/* ✅ Show age check modal on all pages */}
               {children}
             </ListingProvider>
           </WalletProvider>
