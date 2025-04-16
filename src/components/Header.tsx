@@ -27,6 +27,7 @@ export default function Header() {
         {user?.role === 'seller' && <Link href="/sellers/my-listings">My Listings</Link>}
         {user?.role === 'seller' && <Link href="/sellers/messages">Messages</Link>}
         {user?.role === 'buyer' && <Link href="/buyers/my-orders">My Orders</Link>}
+        {user?.role === 'buyer' && <Link href="/buyers/messages">Messages</Link>}
         {user?.role === 'buyer' && <Link href="/wallet/buyer">Wallet</Link>}
         {user?.role === 'seller' && <Link href="/wallet/seller">Wallet</Link>}
         {isAdmin && <Link href="/wallet/admin">Admin</Link>}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
@@ -32,14 +32,19 @@ export default function ListingDetailPage() {
       )
     : [];
 
-  // ✅ Prevent infinite loop: only run once when modal opens
+  const hasMarkedRef = useRef(false);
+
   useEffect(() => {
-    let hasMarked = false;
-    if (isModalOpen && listing?.seller && currentUsername && !hasMarked) {
+    if (
+      isModalOpen &&
+      listing?.seller &&
+      currentUsername &&
+      !hasMarkedRef.current
+    ) {
       markMessagesAsRead(listing.seller, currentUsername);
-      hasMarked = true;
+      hasMarkedRef.current = true;
     }
-  }, [isModalOpen]);
+  }, [isModalOpen, listing?.seller, currentUsername, markMessagesAsRead]);
 
   if (!listing) {
     return <p className="p-10 text-lg font-medium">Listing not found.</p>;

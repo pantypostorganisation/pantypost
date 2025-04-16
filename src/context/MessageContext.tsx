@@ -24,14 +24,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // Load messages from localStorage on mount
   useEffect(() => {
-    // Use a stable JSON string for comparison
-    const current = localStorage.getItem('panty_messages');
-    const next = JSON.stringify(messages);
-  
-    if (current !== next) {
-      localStorage.setItem('panty_messages', next);
+    const stored = localStorage.getItem('panty_messages');
+    if (stored) {
+      setMessages(JSON.parse(stored));
     }
-  }, [messages]);
+  }, []);
 
   // Save messages to localStorage on change
   useEffect(() => {
@@ -47,10 +44,13 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       read: false,
     };
 
-    setMessages((prev) => ({
-      ...prev,
-      [receiver]: [...(prev[receiver] || []), newMessage],
-    }));
+    setMessages((prev) => {
+      const updatedReceiverMessages = [...(prev[receiver] || []), newMessage];
+      return {
+        ...prev,
+        [receiver]: updatedReceiverMessages,
+      };
+    });
   };
 
   const getMessagesForSeller = (seller: string): Message[] => {
