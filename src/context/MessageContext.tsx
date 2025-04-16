@@ -2,17 +2,19 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
-type Message = {
+export type Message = {
   sender: string;
   receiver: string;
   content: string;
   date: string;
+  read?: boolean;
 };
 
 type MessageContextType = {
   messages: { [seller: string]: Message[] };
   sendMessage: (sender: string, receiver: string, content: string) => void;
   getMessagesForSeller: (seller: string) => Message[];
+  markMessagesAsRead: (seller: string, sender: string) => void;
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -20,15 +22,18 @@ const MessageContext = createContext<MessageContextType | undefined>(undefined);
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<{ [seller: string]: Message[] }>({});
 
-  // Load from localStorage
+  // Load messages from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('panty_messages');
-    if (stored) {
-      setMessages(JSON.parse(stored));
+    // Use a stable JSON string for comparison
+    const current = localStorage.getItem('panty_messages');
+    const next = JSON.stringify(messages);
+  
+    if (current !== next) {
+      localStorage.setItem('panty_messages', next);
     }
-  }, []);
+  }, [messages]);
 
-  // Save to localStorage
+  // Save messages to localStorage on change
   useEffect(() => {
     localStorage.setItem('panty_messages', JSON.stringify(messages));
   }, [messages]);
@@ -39,6 +44,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       receiver,
       content,
       date: new Date().toISOString(),
+      read: false,
     };
 
     setMessages((prev) => ({
@@ -51,8 +57,27 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return messages[seller] || [];
   };
 
+  const markMessagesAsRead = (seller: string, sender: string) => {
+    setMessages((prev) => {
+      const updatedMessages = (prev[seller] || []).map((msg) =>
+        msg.sender === sender ? { ...msg, read: true } : msg
+      );
+      return {
+        ...prev,
+        [seller]: updatedMessages,
+      };
+    });
+  };
+
   return (
-    <MessageContext.Provider value={{ messages, sendMessage, getMessagesForSeller }}>
+    <MessageContext.Provider
+      value={{
+        messages,
+        sendMessage,
+        getMessagesForSeller,
+        markMessagesAsRead,
+      }}
+    >
       {children}
     </MessageContext.Provider>
   );

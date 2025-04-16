@@ -1,23 +1,45 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
-import { useMessages } from '@/context/MessageContext'; // ✅ Import messages context
+import { useMessages } from '@/context/MessageContext';
 
 export default function ListingDetailPage() {
   const { listings, user } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
   const { buyerBalance, purchaseListing } = useWallet();
-  const { sendMessage } = useMessages();
+  const {
+    sendMessage,
+    getMessagesForSeller,
+    markMessagesAsRead,
+  } = useMessages();
   const router = useRouter();
 
-  const [purchaseStatus, setPurchaseStatus] = useState<string>('');
+  const [purchaseStatus, setPurchaseStatus] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sent, setSent] = useState(false);
+
+  const currentUsername = user?.username || '';
+  const conversation = listing?.seller
+    ? getMessagesForSeller(listing.seller).filter(
+        (msg) =>
+          (msg.sender === currentUsername && msg.receiver === listing.seller) ||
+          (msg.sender === listing.seller && msg.receiver === currentUsername)
+      )
+    : [];
+
+  // ✅ Prevent infinite loop: only run once when modal opens
+  useEffect(() => {
+    let hasMarked = false;
+    if (isModalOpen && listing?.seller && currentUsername && !hasMarked) {
+      markMessagesAsRead(listing.seller, currentUsername);
+      hasMarked = true;
+    }
+  }, [isModalOpen]);
 
   if (!listing) {
     return <p className="p-10 text-lg font-medium">Listing not found.</p>;
@@ -48,14 +70,12 @@ export default function ListingDetailPage() {
   };
 
   const handleSendMessage = () => {
-    if (!message.trim()) return;
-    if (!user) return;
+    if (!message.trim() || !user) return;
 
-    sendMessage(user.username, listing.seller, message); // ✅ Save the message
+    sendMessage(user.username, listing.seller, message);
     setSent(true);
+    setMessage('');
     setTimeout(() => {
-      setIsModalOpen(false);
-      setMessage('');
       setSent(false);
     }, 1500);
   };
@@ -101,14 +121,35 @@ export default function ListingDetailPage() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl text-black">
-            <h2 className="text-xl font-semibold mb-2">Send a message to {listing.seller}</h2>
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl text-black relative">
+            <h2 className="text-xl font-semibold mb-3">
+              Chat with {listing.seller}
+            </h2>
+
+            {/* Thread Preview */}
+            <div className="border rounded p-2 mb-4 h-40 overflow-y-auto bg-gray-50">
+              {conversation.length === 0 ? (
+                <p className="text-sm text-gray-500">No messages yet.</p>
+              ) : (
+                conversation.map((msg, i) => (
+                  <div key={i} className="mb-2">
+                    <p className="text-xs text-gray-500">
+                      {msg.sender === user?.username ? 'You' : msg.sender} —{' '}
+                      {new Date(msg.date).toLocaleString()}
+                    </p>
+                    <p className="text-sm">{msg.content}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Type your message here..."
-              className="w-full h-32 p-2 border rounded mb-4"
+              className="w-full h-24 p-2 border rounded mb-3"
             />
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setIsModalOpen(false)}
