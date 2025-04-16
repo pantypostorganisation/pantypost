@@ -7,13 +7,14 @@ import { useEffect, useState, useRef } from 'react';
 
 export default function SellerMessagesPage() {
   const { user } = useListings();
-  const { getMessagesForSeller, markMessagesAsRead } = useMessages();
+  const { getMessagesForSeller, markMessagesAsRead, sendMessage } = useMessages();
   const [activeThread, setActiveThread] = useState<string | null>(null);
-  const markedThreadsRef = useRef<Set<string>>(new Set()); // track read threads
+  const [replyMessage, setReplyMessage] = useState('');
+  const markedThreadsRef = useRef<Set<string>>(new Set());
 
   const sellerMessages = user ? getMessagesForSeller(user.username) : [];
 
-  // Group messages by sender (buyer ➜ seller)
+  // Group messages by sender
   const threads = sellerMessages.reduce<{ [sender: string]: typeof sellerMessages }>((acc, msg) => {
     if (!acc[msg.sender]) acc[msg.sender] = [];
     acc[msg.sender].push(msg);
@@ -28,13 +29,19 @@ export default function SellerMessagesPage() {
     }
   });
 
-  // Mark as read only once when thread is opened
+  // Mark thread as read once on open
   useEffect(() => {
     if (activeThread && user && !markedThreadsRef.current.has(activeThread)) {
       markMessagesAsRead(user.username, activeThread);
-      markedThreadsRef.current.add(activeThread); // ✅ mark it so we don’t repeat it
+      markedThreadsRef.current.add(activeThread);
     }
   }, [activeThread, user, markMessagesAsRead]);
+
+  const handleReply = () => {
+    if (!replyMessage.trim() || !activeThread || !user) return;
+    sendMessage(user.username, activeThread, replyMessage);
+    setReplyMessage('');
+  };
 
   return (
     <RequireAuth role="seller">
@@ -45,7 +52,7 @@ export default function SellerMessagesPage() {
           <p className="text-gray-600">You haven’t received any messages yet.</p>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
-            {/* Sidebar - buyer list */}
+            {/* Sidebar */}
             <aside className="bg-white rounded border shadow p-4">
               <h2 className="font-semibold mb-4">Inbox</h2>
               <ul className="space-y-2">
@@ -78,12 +85,12 @@ export default function SellerMessagesPage() {
               </ul>
             </aside>
 
-            {/* Conversation view */}
-            <section className="md:col-span-2 bg-white rounded border shadow p-4">
+            {/* Conversation View */}
+            <section className="md:col-span-2 bg-white rounded border shadow p-4 flex flex-col">
               {activeThread ? (
                 <>
                   <h2 className="font-semibold mb-4">Conversation with {activeThread}</h2>
-                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
                     {threads[activeThread].map((msg, index) => (
                       <div key={index} className="bg-gray-50 p-3 rounded border">
                         <p className="text-sm text-gray-500 mb-1">
@@ -93,6 +100,24 @@ export default function SellerMessagesPage() {
                         <p>{msg.content}</p>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Reply Form */}
+                  <div className="border-t pt-4 mt-auto">
+                    <textarea
+                      value={replyMessage}
+                      onChange={(e) => setReplyMessage(e.target.value)}
+                      placeholder="Type your reply..."
+                      className="w-full p-2 border rounded mb-2"
+                    />
+                    <div className="text-right">
+                      <button
+                        onClick={handleReply}
+                        className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
+                      >
+                        Send Reply
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
