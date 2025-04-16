@@ -12,37 +12,43 @@ export default function BuyerMessagesPage() {
   const [replyMessage, setReplyMessage] = useState('');
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
+  // Prevent crash on logout by guarding all hooks
   const threads: { [seller: string]: typeof messages[string] } = {};
-
-  Object.values(messages).forEach((msgs) => {
-    msgs.forEach((msg) => {
-      if (user && (msg.sender === user.username || msg.receiver === user.username)) {
-        const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-        if (!threads[otherParty]) threads[otherParty] = [];
-        threads[otherParty].push(msg);
-      }
-    });
-  });
-
-  Object.values(threads).forEach((thread) =>
-    thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  );
-
   const unreadCounts: { [seller: string]: number } = {};
-  Object.entries(threads).forEach(([seller, msgs]) => {
-    if (user) {
+  let activeMessages: typeof messages[string] = [];
+
+  if (user) {
+    Object.values(messages).forEach((msgs) => {
+      msgs.forEach((msg) => {
+        if (msg.sender === user.username || msg.receiver === user.username) {
+          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+          if (!threads[otherParty]) threads[otherParty] = [];
+          threads[otherParty].push(msg);
+        }
+      });
+    });
+
+    Object.values(threads).forEach((thread) =>
+      thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    );
+
+    Object.entries(threads).forEach(([seller, msgs]) => {
       unreadCounts[seller] = msgs.filter(
         (msg) => !msg.read && msg.receiver === user.username
       ).length;
+    });
+
+    if (activeThread) {
+      activeMessages = threads[activeThread] || [];
     }
-  });
+  }
 
   useEffect(() => {
-    if (activeThread && user && !markedThreadsRef.current.has(activeThread)) {
+    if (user && activeThread && !markedThreadsRef.current.has(activeThread)) {
       markMessagesAsRead(user.username, activeThread);
       markedThreadsRef.current.add(activeThread);
     }
-  }, [activeThread, user, markMessagesAsRead]);
+  }, [activeThread, user?.username]);
 
   const handleReply = () => {
     if (!replyMessage.trim() || !activeThread || !user) return;
@@ -55,10 +61,13 @@ export default function BuyerMessagesPage() {
       <main className="p-8 max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">📨 Your Messages</h1>
 
-        {user && Object.keys(threads).length === 0 ? (
+        {!user ? (
+          <p className="text-gray-600">Please log in to view your messages.</p>
+        ) : Object.keys(threads).length === 0 ? (
           <p className="text-gray-600">No conversations yet.</p>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
+            {/* Inbox */}
             <aside className="bg-white rounded border shadow p-4">
               <h2 className="font-semibold mb-4">Inbox</h2>
               <ul className="space-y-2">
@@ -91,6 +100,7 @@ export default function BuyerMessagesPage() {
               </ul>
             </aside>
 
+            {/* Thread view */}
             <section className="md:col-span-2 bg-white rounded border shadow p-4 flex flex-col">
               {activeThread ? (
                 <>
@@ -98,7 +108,7 @@ export default function BuyerMessagesPage() {
                     Conversation with {activeThread}
                   </h2>
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
-                    {threads[activeThread].map((msg, index) => (
+                    {activeMessages.map((msg, index) => (
                       <div key={index} className="bg-gray-50 p-3 rounded border">
                         <p className="text-sm text-gray-500 mb-1">
                           <strong>{msg.sender === user?.username ? 'You' : msg.sender}</strong>{' '}
