@@ -2,9 +2,22 @@
 
 import Link from 'next/link';
 import { useListings } from '@/context/ListingContext';
+import { useWallet } from '@/context/WalletContext'; // ✅ Import wallet context
 
 export default function BrowsePage() {
-  const { listings } = useListings();
+  const { listings, removeListing, role } = useListings();
+  const { purchaseListing } = useWallet(); // ✅ Use wallet method
+
+  const handlePurchase = (listing) => {
+    const success = purchaseListing(listing);
+
+    if (success) {
+      removeListing(listing.id);
+      alert('Purchase successful! 🎉');
+    } else {
+      alert('Insufficient balance. Please top up your wallet.');
+    }
+  };
 
   return (
     <main className="p-10">
@@ -12,28 +25,40 @@ export default function BrowsePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {listings.map((listing) => (
-          <Link
+          <div
             key={listing.id}
-            href={`/browse/${listing.id}`}
             className="border rounded-xl p-4 shadow hover:shadow-lg transition flex flex-col justify-between bg-white dark:bg-black"
           >
-            <img
-              src={listing.imageUrl}
-              alt={listing.title}
-              className="w-full h-48 object-cover mb-4 rounded"
-            />
-            <h2 className="text-xl font-semibold">{listing.title}</h2>
-            <p className="text-sm text-gray-600 mb-2">
-              {listing.description.length > 80
-                ? listing.description.slice(0, 80) + '...'
-                : listing.description}
-            </p>
-            <p className="font-bold text-pink-700">
-              ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
-            </p>
-          </Link>
+            <Link href={`/browse/${listing.id}`}>
+              <img
+                src={listing.imageUrl}
+                alt={listing.title}
+                className="w-full h-48 object-cover mb-4 rounded"
+              />
+              <h2 className="text-xl font-semibold">{listing.title}</h2>
+              <p className="text-sm text-gray-600 mb-2">
+                {listing.description.length > 80
+                  ? listing.description.slice(0, 80) + '...'
+                  : listing.description}
+              </p>
+              <p className="font-bold text-pink-700">
+                ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
+              </p>
+            </Link>
+
+            {role === 'buyer' && (
+              <button
+                onClick={() => handlePurchase(listing)} // ✅ Send full listing object
+                className="mt-4 bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+              >
+                Buy Now
+              </button>
+            )}
+          </div>
         ))}
       </div>
     </main>
   );
 }
+
+

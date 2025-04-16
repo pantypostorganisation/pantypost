@@ -43,9 +43,7 @@ type WalletContextType = {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export const WalletProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
+export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [buyerBalance, setBuyerBalanceState] = useState<number>(100);
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
@@ -53,7 +51,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
 
-  // --- LocalStorage Persistence ---
+  // --- LocalStorage: Load ---
   useEffect(() => {
     const buyer = localStorage.getItem('wallet_buyer');
     const admin = localStorage.getItem('wallet_admin');
@@ -70,6 +68,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
   }, []);
 
+  // --- LocalStorage: Save ---
   useEffect(() => {
     localStorage.setItem('wallet_buyer', buyerBalance.toString());
   }, [buyerBalance]);
@@ -119,24 +118,34 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const purchaseListing = (listing: Order): boolean => {
-    if (buyerBalance >= listing.markedUpPrice) {
-      const seller = listing.seller;
-      const sellerCut = listing.price * 0.9;
-      const platformCut = listing.markedUpPrice - sellerCut;
+    const price = listing.markedUpPrice ?? listing.price;
+    const seller = listing.seller;
+    const sellerCut = listing.price * 0.9;
+    const platformCut = price - sellerCut;
 
-      setBuyerBalanceState((prev) => prev - listing.markedUpPrice);
-
-      setSellerBalancesState((prev) => ({
-        ...prev,
-        [seller]: (prev[seller] || 0) + sellerCut,
-      }));
-
-      setAdminBalanceState((prev) => prev + platformCut);
-
-      addOrder(listing);
-      return true;
+    if (buyerBalance < price) {
+      return false;
     }
-    return false;
+
+    // 💸 Deduct buyer
+    setBuyerBalanceState((prev) => prev - price);
+
+    // 💼 Pay seller
+    setSellerBalancesState((prev) => ({
+      ...prev,
+      [seller]: (prev[seller] || 0) + sellerCut,
+    }));
+
+    // 🏦 Pay admin
+    setAdminBalanceState((prev) => prev + platformCut);
+
+    // 🧾 Save order
+    addOrder({
+      ...listing,
+      date: new Date().toISOString(),
+    });
+
+    return true;
   };
 
   const addSellerWithdrawal = (username: string, amount: number) => {
@@ -185,3 +194,4 @@ export const useWallet = () => {
   }
   return context;
 };
+
