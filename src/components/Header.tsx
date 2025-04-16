@@ -3,18 +3,20 @@
 import Link from 'next/link';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
+import { useMessages } from '@/context/MessageContext';
 import { useEffect, useState } from 'react';
 
 export default function Header() {
   const { user, logout } = useListings();
   const { buyerBalance, getSellerBalance, adminBalance } = useWallet();
+  const { messages } = useMessages(); // ✅ Must not be conditional
   const [mounted, setMounted] = useState(false);
-
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
   return (
     <header className="bg-pink-600 text-white px-6 py-4 flex justify-between items-center">
@@ -24,13 +26,30 @@ export default function Header() {
 
       <nav className="flex items-center gap-6">
         <Link href="/browse">Browse</Link>
-        {user?.role === 'seller' && <Link href="/sellers/my-listings">My Listings</Link>}
-        {user?.role === 'seller' && <Link href="/sellers/messages">Messages</Link>}
-        {user?.role === 'buyer' && <Link href="/buyers/my-orders">My Orders</Link>}
-        {user?.role === 'buyer' && <Link href="/buyers/messages">Messages</Link>}
-        {user?.role === 'buyer' && <Link href="/wallet/buyer">Wallet</Link>}
-        {user?.role === 'seller' && <Link href="/wallet/seller">Wallet</Link>}
-        {isAdmin && <Link href="/wallet/admin">Admin</Link>}
+
+        {user?.role === 'seller' && (
+          <>
+            <Link href="/sellers/my-listings">My Listings</Link>
+            <Link href="/sellers/messages">Messages</Link>
+          </>
+        )}
+
+        {user?.role === 'buyer' && (
+          <>
+            <Link href="/buyers/my-orders">My Orders</Link>
+            <Link href="/buyers/messages">Messages</Link>
+            <Link href="/wallet/buyer">Wallet</Link>
+          </>
+        )}
+
+        {user?.role === 'seller' && (
+          <Link href="/wallet/seller">Wallet</Link>
+        )}
+
+        {isAdmin && (
+          <Link href="/wallet/admin">Admin</Link>
+        )}
+
         {!user && <Link href="/login">Login</Link>}
 
         {mounted && user && (
@@ -39,17 +58,14 @@ export default function Header() {
               {user.username} ({user.role})
             </span>
 
-            {/* Show buyer wallet */}
             {user.role === 'buyer' && (
               <span>💰 ${buyerBalance.toFixed(2)}</span>
             )}
 
-            {/* Show seller wallet */}
             {user.role === 'seller' && (
               <span>💼 ${getSellerBalance(user.username).toFixed(2)}</span>
             )}
 
-            {/* Show shared admin wallet only for admins */}
             {isAdmin && (
               <span>🏦 ${adminBalance.toFixed(2)}</span>
             )}

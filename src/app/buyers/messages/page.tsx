@@ -12,14 +12,11 @@ export default function BuyerMessagesPage() {
   const [replyMessage, setReplyMessage] = useState('');
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
-  if (!user) return null;
-
-  // Group all messages involving this buyer (by seller)
   const threads: { [seller: string]: typeof messages[string] } = {};
 
   Object.values(messages).forEach((msgs) => {
     msgs.forEach((msg) => {
-      if (msg.sender === user.username || msg.receiver === user.username) {
+      if (user && (msg.sender === user.username || msg.receiver === user.username)) {
         const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
         if (!threads[otherParty]) threads[otherParty] = [];
         threads[otherParty].push(msg);
@@ -27,29 +24,28 @@ export default function BuyerMessagesPage() {
     });
   });
 
-  // Sort each thread by date
   Object.values(threads).forEach((thread) =>
     thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   );
 
-  // Unread count per seller
   const unreadCounts: { [seller: string]: number } = {};
   Object.entries(threads).forEach(([seller, msgs]) => {
-    unreadCounts[seller] = msgs.filter(
-      (msg) => !msg.read && msg.receiver === user.username
-    ).length;
+    if (user) {
+      unreadCounts[seller] = msgs.filter(
+        (msg) => !msg.read && msg.receiver === user.username
+      ).length;
+    }
   });
 
-  // Mark as read when opening a thread
   useEffect(() => {
-    if (activeThread && !markedThreadsRef.current.has(activeThread)) {
+    if (activeThread && user && !markedThreadsRef.current.has(activeThread)) {
       markMessagesAsRead(user.username, activeThread);
       markedThreadsRef.current.add(activeThread);
     }
-  }, [activeThread]);
+  }, [activeThread, user, markMessagesAsRead]);
 
   const handleReply = () => {
-    if (!replyMessage.trim() || !activeThread) return;
+    if (!replyMessage.trim() || !activeThread || !user) return;
     sendMessage(user.username, activeThread, replyMessage);
     setReplyMessage('');
   };
@@ -59,11 +55,10 @@ export default function BuyerMessagesPage() {
       <main className="p-8 max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold mb-6">📨 Your Messages</h1>
 
-        {Object.keys(threads).length === 0 ? (
+        {user && Object.keys(threads).length === 0 ? (
           <p className="text-gray-600">No conversations yet.</p>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
-            {/* Sidebar */}
             <aside className="bg-white rounded border shadow p-4">
               <h2 className="font-semibold mb-4">Inbox</h2>
               <ul className="space-y-2">
@@ -96,7 +91,6 @@ export default function BuyerMessagesPage() {
               </ul>
             </aside>
 
-            {/* Conversation Thread */}
             <section className="md:col-span-2 bg-white rounded border shadow p-4 flex flex-col">
               {activeThread ? (
                 <>
@@ -107,7 +101,7 @@ export default function BuyerMessagesPage() {
                     {threads[activeThread].map((msg, index) => (
                       <div key={index} className="bg-gray-50 p-3 rounded border">
                         <p className="text-sm text-gray-500 mb-1">
-                          <strong>{msg.sender === user.username ? 'You' : msg.sender}</strong>{' '}
+                          <strong>{msg.sender === user?.username ? 'You' : msg.sender}</strong>{' '}
                           on {new Date(msg.date).toLocaleString()}
                         </p>
                         <p>{msg.content}</p>
