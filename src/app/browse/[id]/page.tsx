@@ -7,7 +7,7 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 
 export default function ListingDetailPage() {
-  const { listings, user } = useListings();
+  const { listings, user, removeListing } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
   const { buyerBalance, purchaseListing } = useWallet();
@@ -19,6 +19,7 @@ export default function ListingDetailPage() {
   const router = useRouter();
 
   const [purchaseStatus, setPurchaseStatus] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sent, setSent] = useState(false);
@@ -65,6 +66,8 @@ export default function ListingDetailPage() {
     const isPurchased = purchaseListing(order);
 
     if (isPurchased) {
+      setIsProcessing(true);
+      removeListing(listing.id);
       setPurchaseStatus('✅ Purchase successful!');
       setTimeout(() => {
         router.push('/purchase-success');
@@ -103,6 +106,7 @@ export default function ListingDetailPage() {
         <button
           onClick={handlePurchase}
           className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
+          disabled={purchaseStatus.includes('✅') || isProcessing}
         >
           Buy Now
         </button>
@@ -117,6 +121,10 @@ export default function ListingDetailPage() {
 
       {purchaseStatus && (
         <p className="mt-2 font-semibold text-sm">{purchaseStatus}</p>
+      )}
+
+      {isProcessing && (
+        <p className="text-sm text-pink-500 mt-1">Processing your purchase...</p>
       )}
 
       <p className="text-sm text-gray-500 mt-2">
