@@ -14,14 +14,16 @@ export default function SellerMessagesPage() {
 
   const sellerMessages = user ? getMessagesForSeller(user.username) : [];
 
-  // Group messages by sender
   const threads = sellerMessages.reduce<{ [sender: string]: typeof sellerMessages }>((acc, msg) => {
     if (!acc[msg.sender]) acc[msg.sender] = [];
     acc[msg.sender].push(msg);
     return acc;
   }, {});
 
-  // Track unread counts
+  Object.values(threads).forEach((thread) =>
+    thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  );
+
   const unreadCounts: { [sender: string]: number } = {};
   sellerMessages.forEach((msg) => {
     if (!msg.read && msg.receiver === user?.username) {
@@ -29,7 +31,6 @@ export default function SellerMessagesPage() {
     }
   });
 
-  // Mark thread as read once on open
   useEffect(() => {
     if (activeThread && user && !markedThreadsRef.current.has(activeThread)) {
       markMessagesAsRead(user.username, activeThread);
@@ -52,7 +53,6 @@ export default function SellerMessagesPage() {
           <p className="text-gray-600">You haven’t received any messages yet.</p>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
-            {/* Sidebar */}
             <aside className="bg-white rounded border shadow p-4">
               <h2 className="font-semibold mb-4">Inbox</h2>
               <ul className="space-y-2">
@@ -85,7 +85,6 @@ export default function SellerMessagesPage() {
               </ul>
             </aside>
 
-            {/* Conversation View */}
             <section className="md:col-span-2 bg-white rounded border shadow p-4 flex flex-col">
               {activeThread ? (
                 <>
@@ -102,7 +101,6 @@ export default function SellerMessagesPage() {
                     ))}
                   </div>
 
-                  {/* Reply Form */}
                   <div className="border-t pt-4 mt-auto">
                     <textarea
                       value={replyMessage}
