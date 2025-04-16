@@ -1,12 +1,14 @@
 'use client';
 
 import { useListings } from '@/context/ListingContext';
+import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function MyListingsPage() {
   const { listings = [], addListing, removeListing, user } = useListings();
+  const { orderHistory } = useWallet();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -29,7 +31,7 @@ export default function MyListingsPage() {
       markedUpPrice: numericPrice * 1.1,
       imageUrl,
       date: new Date().toISOString(),
-      seller: user?.username || 'unknown', // ✅ associate listing with seller
+      seller: user?.username || 'unknown',
     });
 
     setTitle('');
@@ -41,6 +43,10 @@ export default function MyListingsPage() {
   const myListings = listings?.filter(
     (listing) => listing.seller === user?.username
   ) ?? [];
+
+  const sellerOrders = orderHistory.filter(
+    (order) => order.seller === user?.username
+  );
 
   return (
     <RequireAuth role="seller">
@@ -109,7 +115,39 @@ export default function MyListingsPage() {
             ))
           )}
         </div>
+
+        {sellerOrders.length > 0 && (
+          <section className="mt-12">
+            <h2 className="text-2xl font-bold mb-4">Order History</h2>
+            <div className="grid gap-4">
+              {sellerOrders.map((order) => (
+                <div
+                  key={order.id + order.date}
+                  className="border rounded p-4 bg-gray-50"
+                >
+                  <img
+                    src={order.imageUrl}
+                    alt={order.title}
+                    className="w-full h-48 object-cover rounded mb-2"
+                  />
+                  <h3 className="text-lg font-semibold">{order.title}</h3>
+                  <p className="text-sm text-gray-600 mb-1">
+                    {order.description}
+                  </p>
+                  <p className="text-pink-700 font-semibold">
+                    Sold for ${order.markedUpPrice.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Purchased on{' '}
+                    {new Date(order.date).toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </RequireAuth>
   );
 }
+
