@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
+import type { Listing } from '@/context/ListingContext'; // ✅ Import Listing type for safety
 
 export default function BrowsePage() {
   const { listings, removeListing, role } = useListings();
   const { purchaseListing } = useWallet();
 
-  const handlePurchase = (listing) => {
+  const handlePurchase = (listing: Listing) => {
     const success = purchaseListing(listing);
 
     if (success) {
@@ -65,4 +66,5 @@ export default function BrowsePage() {
     </main>
   );
 }
+
 
