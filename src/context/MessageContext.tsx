@@ -15,27 +15,45 @@ type MessageContextType = {
   sendMessage: (sender: string, receiver: string, content: string) => void;
   getMessagesForSeller: (seller: string) => Message[];
   markMessagesAsRead: (seller: string, sender: string) => void;
+  blockUser: (blocker: string, blockee: string) => void;
+  reportUser: (reporter: string, reportee: string) => void;
+  isBlocked: (blocker: string, blockee: string) => boolean;
+  hasReported: (reporter: string, reportee: string) => boolean;
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
 
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<{ [seller: string]: Message[] }>({});
+  const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
+  const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
 
-  // Load messages from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem('panty_messages');
-    if (stored) {
-      setMessages(JSON.parse(stored));
-    }
+    if (stored) setMessages(JSON.parse(stored));
+
+    const blocked = localStorage.getItem('panty_blocked');
+    if (blocked) setBlockedUsers(JSON.parse(blocked));
+
+    const reported = localStorage.getItem('panty_reported');
+    if (reported) setReportedUsers(JSON.parse(reported));
   }, []);
 
-  // Save messages to localStorage on change
   useEffect(() => {
     localStorage.setItem('panty_messages', JSON.stringify(messages));
   }, [messages]);
 
+  useEffect(() => {
+    localStorage.setItem('panty_blocked', JSON.stringify(blockedUsers));
+  }, [blockedUsers]);
+
+  useEffect(() => {
+    localStorage.setItem('panty_reported', JSON.stringify(reportedUsers));
+  }, [reportedUsers]);
+
   const sendMessage = (sender: string, receiver: string, content: string) => {
+    if (isBlocked(receiver, sender)) return; // Don't allow messages if sender is blocked by receiver
+
     const newMessage: Message = {
       sender,
       receiver,
@@ -69,6 +87,28 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  const blockUser = (blocker: string, blockee: string) => {
+    setBlockedUsers((prev) => {
+      const updated = [...(prev[blocker] || []), blockee];
+      return { ...prev, [blocker]: Array.from(new Set(updated)) };
+    });
+  };
+
+  const reportUser = (reporter: string, reportee: string) => {
+    setReportedUsers((prev) => {
+      const updated = [...(prev[reporter] || []), reportee];
+      return { ...prev, [reporter]: Array.from(new Set(updated)) };
+    });
+  };
+
+  const isBlocked = (blocker: string, blockee: string) => {
+    return blockedUsers[blocker]?.includes(blockee) || false;
+  };
+
+  const hasReported = (reporter: string, reportee: string) => {
+    return reportedUsers[reporter]?.includes(reportee) || false;
+  };
+
   return (
     <MessageContext.Provider
       value={{
@@ -76,6 +116,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         sendMessage,
         getMessagesForSeller,
         markMessagesAsRead,
+        blockUser,
+        reportUser,
+        isBlocked,
+        hasReported,
       }}
     >
       {children}
