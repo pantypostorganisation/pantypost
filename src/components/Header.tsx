@@ -9,14 +9,31 @@ import { useEffect, useState } from 'react';
 export default function Header() {
   const { user, logout } = useListings();
   const { buyerBalance, getSellerBalance, adminBalance } = useWallet();
-  const { messages } = useMessages(); // ✅ Must not be conditional
+  const { messages } = useMessages();
   const [mounted, setMounted] = useState(false);
+  const [reportCount, setReportCount] = useState(0);
+
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+
+  const updateReportCount = () => {
+    if (typeof window !== 'undefined' && isAdmin) {
+      const stored = localStorage.getItem('panty_report_logs');
+      const parsed = stored ? JSON.parse(stored) : [];
+      setReportCount(parsed.length);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    updateReportCount();
 
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+    // Listen for global update events
+    window.addEventListener('updateReports', updateReportCount);
+
+    return () => {
+      window.removeEventListener('updateReports', updateReportCount);
+    };
+  }, [user]);
 
   return (
     <header className="bg-pink-600 text-white px-6 py-4 flex justify-between items-center">
@@ -42,13 +59,19 @@ export default function Header() {
           </>
         )}
 
-        {user?.role === 'seller' && (
-          <Link href="/wallet/seller">Wallet</Link>
-        )}
+        {user?.role === 'seller' && <Link href="/wallet/seller">Wallet</Link>}
 
         {isAdmin && (
           <>
-            <Link href="/admin/reports">Admin Reports</Link>
+            <Link href="/admin/reports">
+              Admin Reports
+              {reportCount > 0 && (
+                <span className="ml-1 inline-block bg-white text-pink-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {reportCount}
+                </span>
+              )}
+            </Link>
+            <Link href="/admin/resolved">Resolved</Link>
             <Link href="/wallet/admin">Admin Wallet</Link>
           </>
         )}
