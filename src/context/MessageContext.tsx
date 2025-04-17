@@ -10,12 +10,20 @@ export type Message = {
   read?: boolean;
 };
 
+type ReportLog = {
+  reporter: string;
+  reportee: string;
+  messages: Message[];
+  date: string;
+};
+
 type MessageContextType = {
   messages: { [seller: string]: Message[] };
   sendMessage: (sender: string, receiver: string, content: string) => void;
   getMessagesForSeller: (seller: string) => Message[];
   markMessagesAsRead: (seller: string, sender: string) => void;
   blockUser: (blocker: string, blockee: string) => void;
+  unblockUser: (blocker: string, blockee: string) => void;
   reportUser: (reporter: string, reportee: string) => void;
   isBlocked: (blocker: string, blockee: string) => boolean;
   hasReported: (reporter: string, reportee: string) => boolean;
@@ -52,7 +60,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [reportedUsers]);
 
   const sendMessage = (sender: string, receiver: string, content: string) => {
-    if (isBlocked(receiver, sender)) return; // Don't allow messages if sender is blocked by receiver
+    if (isBlocked(receiver, sender)) return;
 
     const newMessage: Message = {
       sender,
@@ -94,11 +102,42 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  const unblockUser = (blocker: string, blockee: string) => {
+    setBlockedUsers((prev) => {
+      const updated = (prev[blocker] || []).filter((u) => u !== blockee);
+      return { ...prev, [blocker]: updated };
+    });
+  };
+
   const reportUser = (reporter: string, reportee: string) => {
     setReportedUsers((prev) => {
       const updated = [...(prev[reporter] || []), reportee];
       return { ...prev, [reporter]: Array.from(new Set(updated)) };
     });
+
+    // Save the reported message thread to admin logs
+    const pantyMessages = JSON.parse(localStorage.getItem('panty_messages') || '{}');
+    const allMessages: Message[] = [];
+
+    (Object.values(pantyMessages) as Message[][]).forEach((msgList) => {
+      msgList.forEach((msg) => {
+        const between = [msg.sender, msg.receiver];
+        if (between.includes(reporter) && between.includes(reportee)) {
+          allMessages.push(msg);
+        }
+      });
+    });
+
+    const existingReports: ReportLog[] = JSON.parse(localStorage.getItem('panty_report_logs') || '[]');
+
+    existingReports.push({
+      reporter,
+      reportee,
+      messages: allMessages,
+      date: new Date().toISOString(),
+    });
+
+    localStorage.setItem('panty_report_logs', JSON.stringify(existingReports));
   };
 
   const isBlocked = (blocker: string, blockee: string) => {
@@ -117,6 +156,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         getMessagesForSeller,
         markMessagesAsRead,
         blockUser,
+        unblockUser,
         reportUser,
         isBlocked,
         hasReported,

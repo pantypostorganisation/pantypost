@@ -12,6 +12,7 @@ export default function SellerMessagesPage() {
     markMessagesAsRead,
     sendMessage,
     blockUser,
+    unblockUser,
     reportUser,
     isBlocked,
     hasReported,
@@ -53,16 +54,23 @@ export default function SellerMessagesPage() {
     setReplyMessage('');
   };
 
-  const handleBlock = () => {
-    if (user && activeThread) blockUser(user.username, activeThread);
+  const handleBlockToggle = () => {
+    if (!user || !activeThread) return;
+    if (isBlocked(user.username, activeThread)) {
+      unblockUser(user.username, activeThread);
+    } else {
+      blockUser(user.username, activeThread);
+    }
   };
 
   const handleReport = () => {
-    if (user && activeThread) reportUser(user.username, activeThread);
+    if (user && activeThread && !hasReported(user.username, activeThread)) {
+      reportUser(user.username, activeThread);
+    }
   };
 
-  const isUserBlocked = user && activeThread && isBlocked(user.username, activeThread);
-  const isUserReported = user && activeThread && hasReported(user.username, activeThread);
+  const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
+  const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
   return (
     <RequireAuth role="seller">
@@ -112,14 +120,23 @@ export default function SellerMessagesPage() {
                     <h2 className="font-semibold">Conversation with {activeThread}</h2>
                     <div className="space-x-2">
                       <button
-                        onClick={handleBlock}
-                        className="text-xs px-2 py-1 border rounded text-red-500 border-red-500 hover:bg-red-50"
+                        onClick={handleBlockToggle}
+                        className={`text-xs px-2 py-1 border rounded ${
+                          isUserBlocked
+                            ? 'text-green-600 border-green-600 hover:bg-green-50'
+                            : 'text-red-500 border-red-500 hover:bg-red-50'
+                        }`}
                       >
-                        {isUserBlocked ? 'Blocked' : 'Block'}
+                        {isUserBlocked ? 'Unblock' : 'Block'}
                       </button>
                       <button
                         onClick={handleReport}
-                        className="text-xs px-2 py-1 border rounded text-orange-500 border-orange-500 hover:bg-orange-50"
+                        disabled={isUserReported}
+                        className={`text-xs px-2 py-1 border rounded ${
+                          isUserReported
+                            ? 'text-gray-400 border-gray-300 cursor-not-allowed'
+                            : 'text-orange-500 border-orange-500 hover:bg-orange-50'
+                        }`}
                       >
                         {isUserReported ? 'Reported' : 'Report'}
                       </button>

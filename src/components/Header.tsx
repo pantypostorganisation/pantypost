@@ -47,7 +47,10 @@ export default function Header() {
         )}
 
         {isAdmin && (
-          <Link href="/wallet/admin">Admin</Link>
+          <>
+            <Link href="/admin/reports">Admin Reports</Link>
+            <Link href="/wallet/admin">Admin Wallet</Link>
+          </>
         )}
 
         {!user && <Link href="/login">Login</Link>}
