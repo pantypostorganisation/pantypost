@@ -10,7 +10,10 @@ export default function ListingDetailPage() {
   const { listings, user, removeListing } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
-  const { getBuyerBalance, purchaseListing } = useWallet();
+  const {
+    getBuyerBalance,
+    purchaseListing,
+  } = useWallet();
   const {
     sendMessage,
     getMessagesForSeller,
@@ -63,7 +66,7 @@ export default function ListingDetailPage() {
       seller: listing.seller,
     };
 
-    const isPurchased = purchaseListing(order, currentUsername);
+    const isPurchased = purchaseListing(order, currentUsername); // ✅ now passes buyerUsername
 
     if (isPurchased) {
       setIsProcessing(true);
