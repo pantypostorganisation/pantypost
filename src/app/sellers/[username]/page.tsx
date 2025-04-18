@@ -20,9 +20,7 @@ export default function SellerProfilePage() {
   const reviews = getReviewsForSeller(username);
 
   const hasPurchased = orderHistory.some(
-    (order) =>
-      order.seller === username &&
-      order.id?.startsWith(`${user?.username}-`)
+    (order) => order.seller === username && order.buyer === user?.username
   );
 
   const alreadyReviewed =
@@ -37,13 +35,12 @@ export default function SellerProfilePage() {
       ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
       : null;
 
-  // ✅ Load from sessionStorage instead of localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const bio = sessionStorage.getItem(`profile_bio_${username}`);
-      const pic = sessionStorage.getItem(`profile_pic_${username}`);
-      if (bio) setBio(bio);
-      if (pic) setProfilePic(pic);
+      const storedBio = sessionStorage.getItem(`profile_bio_${username}`);
+      const storedPic = sessionStorage.getItem(`profile_pic_${username}`);
+      if (storedBio) setBio(storedBio);
+      if (storedPic) setProfilePic(storedPic);
     }
   }, [username]);
 

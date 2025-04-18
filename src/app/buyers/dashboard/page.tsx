@@ -19,7 +19,7 @@ export default function BuyerDashboardPage() {
     );
   }
 
-  // ✅ Get sellers this buyer has purchased from
+  // ✅ Only include sellers this buyer has actually purchased from
   const uniqueSellers = Array.from(
     new Set(
       orderHistory
@@ -39,7 +39,10 @@ export default function BuyerDashboardPage() {
           {uniqueSellers.map((seller) => {
             const reviewed = hasReviewed(seller, user.username);
             return (
-              <li key={seller} className="border rounded p-4 shadow bg-white dark:bg-black">
+              <li
+                key={seller}
+                className="border rounded p-4 shadow bg-white dark:bg-black"
+              >
                 <h2 className="text-lg font-semibold mb-1">{seller}</h2>
                 <p className="text-sm text-gray-600 mb-2">
                   {reviewed
