@@ -44,7 +44,7 @@ export default function Header() {
           <>
             <Link href="/sellers/my-listings">My Listings</Link>
             <Link href="/sellers/messages">Messages</Link>
-            <Link href="/sellers/my-profile">My Profile</Link>
+            <Link href="/sellers/profile">My Profile</Link>
             <Link href="/wallet/seller">Wallet</Link>
           </>
         )}

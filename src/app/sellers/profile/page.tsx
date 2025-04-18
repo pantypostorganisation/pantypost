@@ -2,7 +2,6 @@
 
 import { useListings } from '@/context/ListingContext';
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import RequireAuth from '@/components/RequireAuth';
 
 export default function SellerProfileSettingsPage() {
@@ -11,34 +10,56 @@ export default function SellerProfileSettingsPage() {
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  // Load from localStorage
   useEffect(() => {
     if (user?.username) {
-      const storedBio = localStorage.getItem(`profile_bio_${user.username}`);
-      const storedPic = localStorage.getItem(`profile_pic_${user.username}`);
+      const storedBio = sessionStorage.getItem(`profile_bio_${user.username}`);
+      const storedPic = sessionStorage.getItem(`profile_pic_${user.username}`);
       if (storedBio) setBio(storedBio);
       if (storedPic) setProfilePic(storedPic);
     }
   }, [user]);
 
   const handleSave = () => {
-    if (user?.username) {
-      localStorage.setItem(`profile_bio_${user.username}`, bio);
-      if (preview) {
-        localStorage.setItem(`profile_pic_${user.username}`, preview);
-        setProfilePic(preview);
-        setPreview(null);
-      }
-      alert('✅ Profile updated!');
+    if (!user?.username) return;
+
+    sessionStorage.setItem(`profile_bio_${user.username}`, bio);
+    if (preview) {
+      sessionStorage.setItem(`profile_pic_${user.username}`, preview);
+      setProfilePic(preview);
+      setPreview(null);
     }
+    alert('✅ Profile updated!');
+  };
+
+  const compressImage = (file: File, callback: (dataUrl: string) => void) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 300;
+        const scale = Math.min(maxSize / img.width, maxSize / img.height);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.7); // quality: 70%
+          callback(compressed);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result as string);
-      reader.readAsDataURL(file);
+      compressImage(file, (compressed) => {
+        setPreview(compressed);
+      });
     }
   };
 

@@ -13,16 +13,20 @@ export default function SellerProfilePage() {
   const { orderHistory } = useWallet();
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
+  const [bio, setBio] = useState('');
+  const [profilePic, setProfilePic] = useState<string | null>(null);
+
   const sellerListings = listings.filter((listing) => listing.seller === username);
   const reviews = getReviewsForSeller(username);
 
   const hasPurchased = orderHistory.some(
-    (order) => order.seller === username && order.buyer === user?.username
+    (order) =>
+      order.seller === username &&
+      order.id?.startsWith(`${user?.username}-`)
   );
 
-  const alreadyReviewed = user?.username
-    ? hasReviewed(username, user.username)
-    : false;
+  const alreadyReviewed =
+    user?.username && hasReviewed(username, user.username);
 
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState('');
@@ -32,6 +36,16 @@ export default function SellerProfilePage() {
     reviews.length > 0
       ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
       : null;
+
+  // ✅ Load from sessionStorage instead of localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const bio = sessionStorage.getItem(`profile_bio_${username}`);
+      const pic = sessionStorage.getItem(`profile_pic_${username}`);
+      if (bio) setBio(bio);
+      if (pic) setProfilePic(pic);
+    }
+  }, [username]);
 
   const handleSubmit = () => {
     if (!user?.username || rating < 1 || rating > 5 || !comment.trim()) return;
@@ -58,18 +72,26 @@ export default function SellerProfilePage() {
   return (
     <main className="p-10 max-w-4xl mx-auto">
       <div className="flex items-center gap-6 mb-8">
-        <div className="w-24 h-24 rounded-full bg-gray-300" />
+        {profilePic ? (
+          <img
+            src={profilePic}
+            alt={`${username}'s profile picture`}
+            className="w-24 h-24 rounded-full object-cover border"
+          />
+        ) : (
+          <div className="w-24 h-24 rounded-full bg-gray-300" />
+        )}
         <div>
           <h1 className="text-3xl font-bold">{username}'s Profile</h1>
           <p className="text-sm text-gray-600 mt-1">
-            🧾 Seller bio goes here. You can add bio editing later.
+            {bio || '🧾 Seller bio goes here.'}
           </p>
           {averageRating !== null && (
             <p className="mt-2 text-yellow-500">
               {'★'.repeat(Math.round(averageRating))}{' '}
               <span className="text-gray-600 text-sm">
-                ({averageRating.toFixed(1)} stars from {reviews.length} review
-                {reviews.length !== 1 ? 's' : ''})
+                ({averageRating.toFixed(1)} stars from {reviews.length}{' '}
+                {reviews.length === 1 ? 'review' : 'reviews'})
               </span>
             </p>
           )}
@@ -120,7 +142,8 @@ export default function SellerProfilePage() {
               <p className="text-sm text-yellow-500 mb-1">
                 {'★'.repeat(review.rating)}{' '}
                 <span className="text-gray-500 text-xs">
-                  by {review.reviewer} on {new Date(review.date).toLocaleDateString()}
+                  by {review.reviewer} on{' '}
+                  {new Date(review.date).toLocaleDateString()}
                 </span>
               </p>
               <p className="text-sm">{review.comment}</p>
