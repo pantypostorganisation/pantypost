@@ -17,6 +17,7 @@ type Order = {
   imageUrl: string;
   date: string;
   seller: string;
+  buyer: string; // ✅ Added buyer to order
 };
 
 type Withdrawal = {
@@ -33,7 +34,7 @@ type WalletContextType = {
   setAdminBalance: (balance: number) => void;
   setSellerBalance: (seller: string, balance: number) => void;
   getSellerBalance: (seller: string) => number;
-  purchaseListing: (listing: Order, buyerUsername: string) => boolean;
+  purchaseListing: (listing: Omit<Order, 'buyer'>, buyerUsername: string) => boolean;
   orderHistory: Order[];
   addOrder: (order: Order) => void;
   sellerWithdrawals: { [username: string]: Withdrawal[] };
@@ -52,7 +53,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
 
-  // --- LocalStorage: Load ---
   useEffect(() => {
     const buyers = localStorage.getItem("wallet_buyers");
     const admin = localStorage.getItem("wallet_admin");
@@ -69,7 +69,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
   }, []);
 
-  // --- LocalStorage: Save ---
   useEffect(() => {
     localStorage.setItem("wallet_buyers", JSON.stringify(buyerBalances));
   }, [buyerBalances]);
@@ -94,7 +93,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     localStorage.setItem("wallet_adminWithdrawals", JSON.stringify(adminWithdrawals));
   }, [adminWithdrawals]);
 
-  // --- Core Methods ---
   const getBuyerBalance = (username: string): number => {
     return buyerBalances[username] || 0;
   };
@@ -125,7 +123,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setOrderHistory((prev) => [...prev, order]);
   };
 
-  const purchaseListing = (listing: Order, buyerUsername: string): boolean => {
+  const purchaseListing = (listing: Omit<Order, 'buyer'>, buyerUsername: string): boolean => {
     const price = listing.markedUpPrice ?? listing.price;
     const seller = listing.seller;
     const sellerCut = listing.price * 0.9;
@@ -136,21 +134,18 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return false;
     }
 
-    // 💸 Deduct buyer
     setBuyerBalance(buyerUsername, currentBuyerBalance - price);
 
-    // 💼 Pay seller
     setSellerBalancesState((prev) => ({
       ...prev,
       [seller]: (prev[seller] || 0) + sellerCut,
     }));
 
-    // 🏦 Pay admin
     setAdminBalanceState((prev) => prev + platformCut);
 
-    // 🧾 Save order
     addOrder({
       ...listing,
+      buyer: buyerUsername, // ✅ Save buyer!
       date: new Date().toISOString(),
     });
 

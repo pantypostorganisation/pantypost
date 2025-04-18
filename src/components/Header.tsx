@@ -27,12 +27,8 @@ export default function Header() {
     setMounted(true);
     updateReportCount();
 
-    // Listen for global update events
     window.addEventListener('updateReports', updateReportCount);
-
-    return () => {
-      window.removeEventListener('updateReports', updateReportCount);
-    };
+    return () => window.removeEventListener('updateReports', updateReportCount);
   }, [user]);
 
   return (
@@ -48,6 +44,8 @@ export default function Header() {
           <>
             <Link href="/sellers/my-listings">My Listings</Link>
             <Link href="/sellers/messages">Messages</Link>
+            <Link href="/sellers/my-profile">My Profile</Link>
+            <Link href="/wallet/seller">Wallet</Link>
           </>
         )}
 
@@ -55,11 +53,10 @@ export default function Header() {
           <>
             <Link href="/buyers/my-orders">My Orders</Link>
             <Link href="/buyers/messages">Messages</Link>
+            <Link href="/buyers/dashboard">Dashboard</Link>
             <Link href="/wallet/buyer">Wallet</Link>
           </>
         )}
-
-        {user?.role === 'seller' && <Link href="/wallet/seller">Wallet</Link>}
 
         {isAdmin && (
           <>

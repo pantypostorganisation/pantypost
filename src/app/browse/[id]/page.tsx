@@ -5,15 +5,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
+import Link from 'next/link';
 
 export default function ListingDetailPage() {
   const { listings, user, removeListing } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
-  const {
-    getBuyerBalance,
-    purchaseListing,
-  } = useWallet();
+  const { getBuyerBalance, purchaseListing } = useWallet();
   const {
     sendMessage,
     getMessagesForSeller,
@@ -66,7 +64,7 @@ export default function ListingDetailPage() {
       seller: listing.seller,
     };
 
-    const isPurchased = purchaseListing(order, currentUsername); // ✅ now passes buyerUsername
+    const isPurchased = purchaseListing(order, currentUsername);
 
     if (isPurchased) {
       setIsProcessing(true);
@@ -105,7 +103,7 @@ export default function ListingDetailPage() {
         Price: ${listing.markedUpPrice.toFixed(2)}
       </p>
 
-      <div className="flex gap-4 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
         <button
           onClick={handlePurchase}
           className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
@@ -120,6 +118,13 @@ export default function ListingDetailPage() {
         >
           Message Seller 💬
         </button>
+
+        <Link
+          href={`/sellers/${listing.seller}`}
+          className="bg-gray-100 border border-gray-400 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 text-center"
+        >
+          Visit {listing.seller}&apos;s Profile
+        </Link>
       </div>
 
       {purchaseStatus && (
