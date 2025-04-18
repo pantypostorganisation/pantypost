@@ -2,23 +2,10 @@
 
 import Link from 'next/link';
 import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
-import type { Listing } from '@/context/ListingContext'; // ✅ Import Listing type for safety
+import type { Listing } from '@/context/ListingContext';
 
 export default function BrowsePage() {
-  const { listings, removeListing, role } = useListings();
-  const { purchaseListing } = useWallet();
-
-  const handlePurchase = (listing: Listing) => {
-    const success = purchaseListing(listing);
-
-    if (success) {
-      removeListing(listing.id);
-      alert('Purchase successful! 🎉');
-    } else {
-      alert('Insufficient balance. Please top up your wallet.');
-    }
-  };
+  const { listings, role } = useListings();
 
   return (
     <main className="p-10">
@@ -53,12 +40,11 @@ export default function BrowsePage() {
             </Link>
 
             {role === 'buyer' && (
-              <button
-                onClick={() => handlePurchase(listing)}
-                className="mt-4 bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
-              >
-                Buy Now
-              </button>
+              <Link href={`/browse/${listing.id}`}>
+                <button className="mt-4 w-full bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700">
+                  View Listing
+                </button>
+              </Link>
             )}
           </div>
         ))}
@@ -66,5 +52,3 @@ export default function BrowsePage() {
     </main>
   );
 }
-
-
