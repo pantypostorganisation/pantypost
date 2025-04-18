@@ -13,22 +13,7 @@ export default function Header() {
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
 
-  const role = user?.role ?? null;
-  const username = user?.username ?? '';
-
-  const isAdmin = role === 'admin';
-  const isBuyer = role === 'buyer' || isAdmin;
-  const isSeller = role === 'seller' || isAdmin;
-
-  const buyerBalance =
-    username && typeof getBuyerBalance(username) === 'number'
-      ? getBuyerBalance(username)
-      : 0;
-
-  const sellerBalance =
-    username && typeof getSellerBalance(username) === 'number'
-      ? getSellerBalance(username)
-      : 0;
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
   const updateReportCount = () => {
     if (typeof window !== 'undefined' && isAdmin) {
@@ -55,52 +40,57 @@ export default function Header() {
       <nav className="flex items-center gap-6">
         <Link href="/browse">Browse</Link>
 
-        {isSeller && (
+        {user?.role === 'seller' && (
           <>
             <Link href="/sellers/my-listings">My Listings</Link>
+            <Link href="/sellers/messages">Messages</Link>
+            <Link href="/sellers/profile">My Profile</Link>
             <Link href="/wallet/seller">Wallet</Link>
           </>
         )}
 
-        {isBuyer && (
-          <Link href="/wallet/buyer">Wallet</Link>
+        {user?.role === 'buyer' && (
+          <>
+            <Link href="/buyers/my-orders">My Orders</Link>
+            <Link href="/buyers/messages">Messages</Link>
+            <Link href="/buyers/dashboard">Dashboard</Link>
+            <Link href="/wallet/buyer">Wallet</Link>
+          </>
         )}
 
         {isAdmin && (
-          <Link href="/admin/reports">
-            Reports
-            {reportCount > 0 && (
-              <span className="ml-1 text-yellow-300">({reportCount})</span>
-            )}
-          </Link>
+          <>
+            <Link href="/admin/reports">
+              Admin Reports
+              {reportCount > 0 && (
+                <span className="ml-1 inline-block bg-white text-pink-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+                  {reportCount}
+                </span>
+              )}
+            </Link>
+            <Link href="/admin/resolved">Resolved</Link>
+            <Link href="/wallet/admin">Admin Wallet</Link>
+          </>
         )}
 
-        {!user && (
-          <Link href="/login">Login</Link>
-        )}
+        {!user && <Link href="/login">Login</Link>}
 
-        {user && (
+        {mounted && user && (
           <div className="flex items-center gap-4">
             <span className="font-semibold">
-              {username} ({role})
+              {user.username} ({user.role})
             </span>
 
-            {isBuyer && (
-              <span>
-                💰 ${typeof buyerBalance === 'number' ? buyerBalance.toFixed(2) : '0.00'}
-              </span>
+            {user.role === 'buyer' && (
+              <span>💰 ${getBuyerBalance(user.username).toFixed(2)}</span>
             )}
 
-            {isSeller && (
-              <span>
-                💼 ${typeof sellerBalance === 'number' ? sellerBalance.toFixed(2) : '0.00'}
-              </span>
+            {user.role === 'seller' && (
+              <span>💼 ${getSellerBalance(user.username).toFixed(2)}</span>
             )}
 
             {isAdmin && (
-              <span>
-                🛠️ ${typeof adminBalance === 'number' ? adminBalance.toFixed(2) : '0.00'}
-              </span>
+              <span>🏦 ${adminBalance.toFixed(2)}</span>
             )}
 
             <button

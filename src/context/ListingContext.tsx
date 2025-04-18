@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type Role = 'buyer' | 'seller' | 'admin';
+export type Role = 'buyer' | 'seller';
 
 export type User = {
   username: string;
@@ -61,11 +55,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   const login = (username: string, role: Role) => {
-    const normalized = username.trim().toLowerCase();
-    const actualRole: Role =
-      normalized === 'gerome' || normalized === 'oakley' ? 'admin' : role;
-
-    const newUser = { username, role: actualRole };
+    const newUser = { username, role };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
   };
