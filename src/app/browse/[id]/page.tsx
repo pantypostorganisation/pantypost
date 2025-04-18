@@ -10,7 +10,7 @@ export default function ListingDetailPage() {
   const { listings, user, removeListing } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
-  const { buyerBalance, purchaseListing } = useWallet();
+  const { getBuyerBalance, purchaseListing } = useWallet();
   const {
     sendMessage,
     getMessagesForSeller,
@@ -63,7 +63,7 @@ export default function ListingDetailPage() {
       seller: listing.seller,
     };
 
-    const isPurchased = purchaseListing(order);
+    const isPurchased = purchaseListing(order, currentUsername);
 
     if (isPurchased) {
       setIsProcessing(true);
@@ -128,7 +128,7 @@ export default function ListingDetailPage() {
       )}
 
       <p className="text-sm text-gray-500 mt-2">
-        Your Balance: ${buyerBalance.toFixed(2)}
+        Your Balance: ${getBuyerBalance(currentUsername).toFixed(2)}
       </p>
 
       {/* Modal */}

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   createContext,
@@ -6,7 +6,7 @@ import {
   useState,
   useEffect,
   ReactNode,
-} from 'react';
+} from "react";
 
 type Order = {
   id: string;
@@ -25,14 +25,15 @@ type Withdrawal = {
 };
 
 type WalletContextType = {
-  buyerBalance: number;
+  buyerBalances: { [username: string]: number };
   adminBalance: number;
   sellerBalances: { [username: string]: number };
-  setBuyerBalance: (balance: number) => void;
+  setBuyerBalance: (username: string, balance: number) => void;
+  getBuyerBalance: (username: string) => number;
   setAdminBalance: (balance: number) => void;
   setSellerBalance: (seller: string, balance: number) => void;
   getSellerBalance: (seller: string) => number;
-  purchaseListing: (listing: Order) => boolean;
+  purchaseListing: (listing: Order, buyerUsername: string) => boolean;
   orderHistory: Order[];
   addOrder: (order: Order) => void;
   sellerWithdrawals: { [username: string]: Withdrawal[] };
@@ -44,7 +45,7 @@ type WalletContextType = {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [buyerBalance, setBuyerBalanceState] = useState<number>(100);
+  const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
@@ -53,14 +54,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // --- LocalStorage: Load ---
   useEffect(() => {
-    const buyer = localStorage.getItem('wallet_buyer');
-    const admin = localStorage.getItem('wallet_admin');
-    const sellers = localStorage.getItem('wallet_sellers');
-    const orders = localStorage.getItem('wallet_orders');
-    const sellerWds = localStorage.getItem('wallet_sellerWithdrawals');
-    const adminWds = localStorage.getItem('wallet_adminWithdrawals');
+    const buyers = localStorage.getItem("wallet_buyers");
+    const admin = localStorage.getItem("wallet_admin");
+    const sellers = localStorage.getItem("wallet_sellers");
+    const orders = localStorage.getItem("wallet_orders");
+    const sellerWds = localStorage.getItem("wallet_sellerWithdrawals");
+    const adminWds = localStorage.getItem("wallet_adminWithdrawals");
 
-    if (buyer) setBuyerBalanceState(parseFloat(buyer));
+    if (buyers) setBuyerBalancesState(JSON.parse(buyers));
     if (admin) setAdminBalanceState(parseFloat(admin));
     if (sellers) setSellerBalancesState(JSON.parse(sellers));
     if (orders) setOrderHistory(JSON.parse(orders));
@@ -70,30 +71,41 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   // --- LocalStorage: Save ---
   useEffect(() => {
-    localStorage.setItem('wallet_buyer', buyerBalance.toString());
-  }, [buyerBalance]);
+    localStorage.setItem("wallet_buyers", JSON.stringify(buyerBalances));
+  }, [buyerBalances]);
 
   useEffect(() => {
-    localStorage.setItem('wallet_admin', adminBalance.toString());
+    localStorage.setItem("wallet_admin", adminBalance.toString());
   }, [adminBalance]);
 
   useEffect(() => {
-    localStorage.setItem('wallet_sellers', JSON.stringify(sellerBalances));
+    localStorage.setItem("wallet_sellers", JSON.stringify(sellerBalances));
   }, [sellerBalances]);
 
   useEffect(() => {
-    localStorage.setItem('wallet_orders', JSON.stringify(orderHistory));
+    localStorage.setItem("wallet_orders", JSON.stringify(orderHistory));
   }, [orderHistory]);
 
   useEffect(() => {
-    localStorage.setItem('wallet_sellerWithdrawals', JSON.stringify(sellerWithdrawals));
+    localStorage.setItem("wallet_sellerWithdrawals", JSON.stringify(sellerWithdrawals));
   }, [sellerWithdrawals]);
 
   useEffect(() => {
-    localStorage.setItem('wallet_adminWithdrawals', JSON.stringify(adminWithdrawals));
+    localStorage.setItem("wallet_adminWithdrawals", JSON.stringify(adminWithdrawals));
   }, [adminWithdrawals]);
 
   // --- Core Methods ---
+  const getBuyerBalance = (username: string): number => {
+    return buyerBalances[username] || 0;
+  };
+
+  const setBuyerBalance = (username: string, balance: number) => {
+    setBuyerBalancesState((prev) => ({
+      ...prev,
+      [username]: balance,
+    }));
+  };
+
   const getSellerBalance = (seller: string): number => {
     return sellerBalances[seller] || 0;
   };
@@ -105,10 +117,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }));
   };
 
-  const setBuyerBalance = (balance: number) => {
-    setBuyerBalanceState(balance);
-  };
-
   const setAdminBalance = (balance: number) => {
     setAdminBalanceState(balance);
   };
@@ -117,18 +125,19 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setOrderHistory((prev) => [...prev, order]);
   };
 
-  const purchaseListing = (listing: Order): boolean => {
+  const purchaseListing = (listing: Order, buyerUsername: string): boolean => {
     const price = listing.markedUpPrice ?? listing.price;
     const seller = listing.seller;
     const sellerCut = listing.price * 0.9;
     const platformCut = price - sellerCut;
+    const currentBuyerBalance = getBuyerBalance(buyerUsername);
 
-    if (buyerBalance < price) {
+    if (currentBuyerBalance < price) {
       return false;
     }
 
     // 💸 Deduct buyer
-    setBuyerBalanceState((prev) => prev - price);
+    setBuyerBalance(buyerUsername, currentBuyerBalance - price);
 
     // 💼 Pay seller
     setSellerBalancesState((prev) => ({
@@ -166,10 +175,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   return (
     <WalletContext.Provider
       value={{
-        buyerBalance,
+        buyerBalances,
         adminBalance,
         sellerBalances,
         setBuyerBalance,
+        getBuyerBalance,
         setAdminBalance,
         setSellerBalance,
         getSellerBalance,
@@ -190,8 +200,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 export const useWallet = () => {
   const context = useContext(WalletContext);
   if (!context) {
-    throw new Error('useWallet must be used within a WalletProvider');
+    throw new Error("useWallet must be used within a WalletProvider");
   }
   return context;
 };
-

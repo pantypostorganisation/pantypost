@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 
 export default function Header() {
   const { user, logout } = useListings();
-  const { buyerBalance, getSellerBalance, adminBalance } = useWallet();
+  const { getBuyerBalance, getSellerBalance, adminBalance } = useWallet();
   const { messages } = useMessages();
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
@@ -85,7 +85,7 @@ export default function Header() {
             </span>
 
             {user.role === 'buyer' && (
-              <span>💰 ${buyerBalance.toFixed(2)}</span>
+              <span>💰 ${getBuyerBalance(user.username).toFixed(2)}</span>
             )}
 
             {user.role === 'seller' && (
