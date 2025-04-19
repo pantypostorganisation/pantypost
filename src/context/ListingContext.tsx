@@ -24,6 +24,7 @@ export type Listing = {
   imageUrl: string;
   date: string;
   seller: string;
+  isPremium?: boolean; // ✅ optional flag for premium listings
 };
 
 type ListingContextType = {
@@ -35,6 +36,9 @@ type ListingContextType = {
   listings: Listing[];
   addListing: (listing: Listing) => void;
   removeListing: (id: string) => void;
+  subscriptions: { [buyer: string]: string[] }; // ✅ buyer username -> array of seller usernames
+  subscribeToSeller: (buyer: string, seller: string) => void;
+  isSubscribed: (buyer: string, seller: string) => boolean;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -42,11 +46,13 @@ const ListingContext = createContext<ListingContextType | undefined>(undefined);
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const storedListings = localStorage.getItem('listings');
+    const storedSubs = localStorage.getItem('subscriptions');
 
     if (storedUser) {
       setUser(JSON.parse(storedUser));
@@ -54,6 +60,10 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     if (storedListings) {
       setListings(JSON.parse(storedListings));
+    }
+
+    if (storedSubs) {
+      setSubscriptions(JSON.parse(storedSubs));
     }
 
     setIsAuthReady(true);
@@ -90,6 +100,21 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  const subscribeToSeller = (buyer: string, seller: string) => {
+    setSubscriptions((prev) => {
+      const updated = {
+        ...prev,
+        [buyer]: [...(prev[buyer] || []), seller],
+      };
+      localStorage.setItem('subscriptions', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const isSubscribed = (buyer: string, seller: string): boolean => {
+    return subscriptions[buyer]?.includes(seller) ?? false;
+  };
+
   return (
     <ListingContext.Provider
       value={{
@@ -101,6 +126,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         listings,
         addListing,
         removeListing,
+        subscriptions,
+        subscribeToSeller,
+        isSubscribed,
       }}
     >
       {children}
@@ -113,4 +141,3 @@ export const useListings = () => {
   if (!context) throw new Error('useListings must be used within a ListingProvider');
   return context;
 };
-

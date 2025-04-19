@@ -10,25 +10,30 @@ import StarRating from '@/components/StarRating';
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
-  const { listings, user } = useListings();
+  const {
+    listings,
+    user,
+    subscribeToSeller,
+    isSubscribed,
+  } = useListings();
   const { orderHistory } = useWallet();
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
 
-  const sellerListings = listings.filter((listing) => listing.seller === username);
+  const sellerListings = listings.filter(
+    (listing) => listing.seller === username && !listing.isPremium
+  );
   const reviews = getReviewsForSeller(username);
-
   const hasPurchased = orderHistory.some(
     (order) => order.seller === username && order.buyer === user?.username
   );
-
   const alreadyReviewed = user?.username && hasReviewed(username, user.username);
-
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [justSubscribed, setJustSubscribed] = useState(false);
 
   const averageRating =
     reviews.length > 0
@@ -66,6 +71,18 @@ export default function SellerProfilePage() {
     }
   }, [submitted]);
 
+  const handleSubscribe = () => {
+    if (user?.username && user.role === 'buyer') {
+      subscribeToSeller(user.username, username);
+      setJustSubscribed(true);
+    }
+  };
+
+  const showSubscribe =
+    user?.role === 'buyer' &&
+    user.username !== username &&
+    !isSubscribed(user.username, username);
+
   return (
     <main className="p-10 max-w-4xl mx-auto">
       <div className="flex items-center gap-6 mb-8">
@@ -92,6 +109,19 @@ export default function SellerProfilePage() {
               </span>
             </div>
           )}
+
+          {showSubscribe && (
+            <button
+              onClick={handleSubscribe}
+              className="mt-4 inline-block text-sm bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
+            >
+              Subscribe to Seller
+            </button>
+          )}
+
+          {justSubscribed && (
+            <p className="text-green-600 text-sm mt-2">✅ Subscribed!</p>
+          )}
         </div>
       </div>
 
@@ -102,7 +132,10 @@ export default function SellerProfilePage() {
       ) : (
         <div className="grid md:grid-cols-2 gap-6 mb-10">
           {sellerListings.map((listing) => (
-            <div key={listing.id} className="border rounded p-4 shadow bg-white dark:bg-black">
+            <div
+              key={listing.id}
+              className="border rounded p-4 shadow bg-white dark:bg-black"
+            >
               <img
                 src={listing.imageUrl}
                 alt={listing.title}
@@ -137,7 +170,7 @@ export default function SellerProfilePage() {
           {reviews.map((review, i) => (
             <li key={i} className="bg-white border rounded p-4 shadow">
               <div className="flex items-center gap-2 mb-1">
-                <StarRating rating={review.rating} size="sm" />
+                <StarRating rating={review.rating} />
                 <span className="text-gray-500 text-xs">
                   by {review.reviewer} on{' '}
                   {new Date(review.date).toLocaleDateString()}

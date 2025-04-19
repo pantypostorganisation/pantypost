@@ -14,6 +14,7 @@ export default function MyListingsPage() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [isPremium, setIsPremium] = useState(false); // ✅ new state for premium flag
 
   const handleAddListing = () => {
     if (!title || !description || !price || !imageUrl) {
@@ -32,12 +33,14 @@ export default function MyListingsPage() {
       imageUrl,
       date: new Date().toISOString(),
       seller: user?.username || 'unknown',
+      isPremium, // ✅ save premium flag
     });
 
     setTitle('');
     setDescription('');
     setPrice('');
     setImageUrl('');
+    setIsPremium(false);
   };
 
   const myListings = listings?.filter(
@@ -85,6 +88,14 @@ export default function MyListingsPage() {
                 onChange={(e) => setImageUrl(e.target.value)}
                 className="w-full p-2 border rounded"
               />
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={isPremium}
+                  onChange={() => setIsPremium(!isPremium)}
+                />
+                <span className="text-sm">Premium Only (Subscribers required)</span>
+              </label>
               <button
                 onClick={handleAddListing}
                 className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
@@ -107,9 +118,12 @@ export default function MyListingsPage() {
                     />
                     <h2 className="text-xl font-bold">{listing.title}</h2>
                     <p className="text-gray-600">{listing.description}</p>
-                    <p className="text-pink-700 font-semibold mb-2">
-                      Price (before fee): ${listing.price.toFixed(2)}
+                    <p className="text-pink-700 font-semibold mb-1">
+                      Price: ${listing.price.toFixed(2)}
                     </p>
+                    {listing.isPremium && (
+                      <p className="text-sm text-yellow-500 mb-2">🌟 Premium Listing</p>
+                    )}
                     <button
                       onClick={() => removeListing(listing.id)}
                       className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
@@ -157,5 +171,3 @@ export default function MyListingsPage() {
     </RequireAuth>
   );
 }
-
-
