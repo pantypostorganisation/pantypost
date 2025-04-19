@@ -13,14 +13,19 @@ export default function SellerProfilePage() {
   const {
     listings,
     user,
-    subscribeToSeller,
     isSubscribed,
   } = useListings();
-  const { orderHistory } = useWallet();
+
+  const {
+    orderHistory,
+    subscribeToSellerWithPayment,
+  } = useWallet();
+
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
 
   const hasAccess = user?.username && isSubscribed(user.username, username);
   const standardListings = listings.filter(
@@ -35,6 +40,7 @@ export default function SellerProfilePage() {
     (order) => order.seller === username && order.buyer === user?.username
   );
   const alreadyReviewed = user?.username && hasReviewed(username, user.username);
+
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -49,8 +55,10 @@ export default function SellerProfilePage() {
     if (typeof window !== 'undefined') {
       const storedBio = sessionStorage.getItem(`profile_bio_${username}`);
       const storedPic = sessionStorage.getItem(`profile_pic_${username}`);
+      const storedSub = sessionStorage.getItem(`subscription_price_${username}`);
       if (storedBio) setBio(storedBio);
       if (storedPic) setProfilePic(storedPic);
+      if (storedSub) setSubscriptionPrice(parseFloat(storedSub));
     }
   }, [username]);
 
@@ -77,9 +85,14 @@ export default function SellerProfilePage() {
   }, [submitted]);
 
   const handleSubscribe = () => {
-    if (user?.username && user.role === 'buyer') {
-      subscribeToSeller(user.username, username);
-      setJustSubscribed(true);
+    if (user?.username && user.role === 'buyer' && subscriptionPrice != null) {
+      const success = subscribeToSellerWithPayment(user.username, username, subscriptionPrice);
+      if (success) {
+        setJustSubscribed(true);
+        alert('✅ Subscribed and payment processed!');
+      } else {
+        alert('❌ Insufficient balance for subscription.');
+      }
     }
   };
 
@@ -114,16 +127,14 @@ export default function SellerProfilePage() {
               </span>
             </div>
           )}
-
           {showSubscribe && (
             <button
               onClick={handleSubscribe}
               className="mt-4 inline-block text-sm bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
             >
-              Subscribe to Seller
+              Subscribe for ${subscriptionPrice?.toFixed(2) ?? '...'}/month
             </button>
           )}
-
           {justSubscribed && (
             <p className="text-green-600 text-sm mt-2">✅ Subscribed!</p>
           )}

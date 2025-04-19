@@ -17,7 +17,7 @@ type Order = {
   imageUrl: string;
   date: string;
   seller: string;
-  buyer: string; // ✅ Added buyer to order
+  buyer: string;
 };
 
 type Withdrawal = {
@@ -35,6 +35,11 @@ type WalletContextType = {
   setSellerBalance: (seller: string, balance: number) => void;
   getSellerBalance: (seller: string) => number;
   purchaseListing: (listing: Omit<Order, 'buyer'>, buyerUsername: string) => boolean;
+  subscribeToSellerWithPayment: (
+    buyer: string,
+    seller: string,
+    amount: number
+  ) => boolean;
   orderHistory: Order[];
   addOrder: (order: Order) => void;
   sellerWithdrawals: { [username: string]: Withdrawal[] };
@@ -145,9 +150,29 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     addOrder({
       ...listing,
-      buyer: buyerUsername, // ✅ Save buyer!
+      buyer: buyerUsername,
       date: new Date().toISOString(),
     });
+
+    return true;
+  };
+
+  const subscribeToSellerWithPayment = (
+    buyer: string,
+    seller: string,
+    amount: number
+  ): boolean => {
+    const buyerBalance = getBuyerBalance(buyer);
+    if (buyerBalance < amount) return false;
+
+    const sellerCut = amount * 0.75;
+    const adminCut = amount * 0.25;
+    const oakleyShare = adminCut / 2;
+    const geromeShare = adminCut / 2;
+
+    setBuyerBalance(buyer, buyerBalance - amount);
+    setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
+    setAdminBalanceState((prev) => prev + oakleyShare + geromeShare);
 
     return true;
   };
@@ -179,6 +204,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setSellerBalance,
         getSellerBalance,
         purchaseListing,
+        subscribeToSellerWithPayment,
         orderHistory,
         addOrder,
         sellerWithdrawals,

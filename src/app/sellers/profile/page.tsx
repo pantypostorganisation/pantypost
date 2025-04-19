@@ -9,13 +9,17 @@ export default function SellerProfileSettingsPage() {
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [subscriptionPrice, setSubscriptionPrice] = useState<string>('');
 
   useEffect(() => {
     if (user?.username) {
       const storedBio = sessionStorage.getItem(`profile_bio_${user.username}`);
       const storedPic = sessionStorage.getItem(`profile_pic_${user.username}`);
+      const storedSubPrice = sessionStorage.getItem(`subscription_price_${user.username}`);
+
       if (storedBio) setBio(storedBio);
       if (storedPic) setProfilePic(storedPic);
+      if (storedSubPrice) setSubscriptionPrice(storedSubPrice);
     }
   }, [user]);
 
@@ -23,11 +27,13 @@ export default function SellerProfileSettingsPage() {
     if (!user?.username) return;
 
     sessionStorage.setItem(`profile_bio_${user.username}`, bio);
+    sessionStorage.setItem(`subscription_price_${user.username}`, subscriptionPrice);
     if (preview) {
       sessionStorage.setItem(`profile_pic_${user.username}`, preview);
       setProfilePic(preview);
       setPreview(null);
     }
+
     alert('✅ Profile updated!');
   };
 
@@ -45,7 +51,7 @@ export default function SellerProfileSettingsPage() {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.7); // quality: 70%
+          const compressed = canvas.toDataURL('image/jpeg', 0.7);
           callback(compressed);
         }
       };
@@ -96,6 +102,18 @@ export default function SellerProfileSettingsPage() {
             onChange={(e) => setBio(e.target.value)}
             className="w-full p-2 border rounded h-28"
             placeholder="Tell buyers a little about yourself..."
+          />
+        </div>
+
+        <div className="mb-6">
+          <label className="block font-medium mb-1">Subscription Price (Monthly in $)</label>
+          <input
+            type="number"
+            value={subscriptionPrice}
+            onChange={(e) => setSubscriptionPrice(e.target.value)}
+            className="w-full p-2 border rounded"
+            placeholder="e.g. 19.99"
+            min="0"
           />
         </div>
 
