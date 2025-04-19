@@ -6,7 +6,7 @@ import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
 
 export default function BuyerDashboardPage() {
-  const { user } = useListings();
+  const { user, subscriptions, unsubscribeFromSeller } = useListings();
   const { orderHistory } = useWallet();
   const { hasReviewed } = useReviews();
 
@@ -19,7 +19,6 @@ export default function BuyerDashboardPage() {
     );
   }
 
-  // ✅ Only include sellers this buyer has actually purchased from
   const uniqueSellers = Array.from(
     new Set(
       orderHistory
@@ -28,6 +27,8 @@ export default function BuyerDashboardPage() {
     )
   );
 
+  const subscribedSellers = subscriptions[user.username] || [];
+
   return (
     <main className="p-10 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">🛍️ Your Purchase History</h1>
@@ -35,7 +36,7 @@ export default function BuyerDashboardPage() {
       {uniqueSellers.length === 0 ? (
         <p className="text-gray-500 italic">You haven't purchased from any sellers yet.</p>
       ) : (
-        <ul className="space-y-4">
+        <ul className="space-y-4 mb-10">
           {uniqueSellers.map((seller) => {
             const reviewed = hasReviewed(seller, user.username);
             return (
@@ -65,6 +66,45 @@ export default function BuyerDashboardPage() {
                     </Link>
                   )}
                 </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <h2 className="text-2xl font-bold mb-4">💖 Active Subscriptions</h2>
+
+      {subscribedSellers.length === 0 ? (
+        <p className="text-gray-500 italic">You're not subscribed to any sellers yet.</p>
+      ) : (
+        <ul className="space-y-4">
+          {subscribedSellers.map((seller) => {
+            const bio = sessionStorage.getItem(`profile_bio_${seller}`) || 'No bio provided';
+            const pic = sessionStorage.getItem(`profile_pic_${seller}`);
+            const price = sessionStorage.getItem(`subscription_price_${seller}`);
+
+            return (
+              <li
+                key={seller}
+                className="border rounded p-4 shadow bg-white dark:bg-black flex items-center justify-between"
+              >
+                <div className="flex items-center gap-4">
+                  {pic ? (
+                    <img src={pic} alt={`${seller}'s profile`} className="w-14 h-14 rounded-full object-cover border" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gray-300" />
+                  )}
+                  <div>
+                    <h3 className="text-lg font-semibold">{seller}</h3>
+                    <p className="text-sm text-gray-500">💵 ${price}/month</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => unsubscribeFromSeller(user.username, seller)}
+                  className="text-sm bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                >
+                  Unsubscribe
+                </button>
               </li>
             );
           })}
