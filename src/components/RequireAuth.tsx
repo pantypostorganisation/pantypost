@@ -1,38 +1,34 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-type Props = {
+export default function RequireAuth({
+  role,
+  children,
+}: {
+  role: 'buyer' | 'seller' | 'admin';
   children: React.ReactNode;
-  role?: 'buyer' | 'seller';
-};
-
-export default function RequireAuth({ children, role }: Props) {
+}) {
+  const { user, isAuthReady } = useListings();
   const router = useRouter();
-  const { user, role: userRole, isAuthReady } = useListings();
 
   useEffect(() => {
-    if (!isAuthReady) return; // wait for auth state to load
+    if (isAuthReady) {
+      const userRole = user?.role;
 
-    if (!user) {
-      router.replace('/login');
-    } else if (role && userRole !== role) {
-      router.replace('/login');
+      // ✅ Allow access if user is the correct role or is admin
+      const hasAccess =
+        userRole === role || (role !== 'admin' && userRole === 'admin');
+
+      if (!user || !hasAccess) {
+        router.push('/login');
+      }
     }
-  }, [user, userRole, role, router, isAuthReady]);
+  }, [user, isAuthReady, role, router]);
 
-  // 👇 wait before showing anything
-  if (!isAuthReady) {
-    return <div className="p-10 text-center">Loading...</div>;
-  }
+  if (!user) return null;
 
-  // 👇 if not authorized, render nothing
-  if (!user || (role && userRole !== role)) {
-    return null;
-  }
-
-  // 👇 finally render the protected content
   return <>{children}</>;
 }
