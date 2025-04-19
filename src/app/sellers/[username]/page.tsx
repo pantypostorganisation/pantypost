@@ -22,9 +22,14 @@ export default function SellerProfilePage() {
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
 
-  const sellerListings = listings.filter(
+  const hasAccess = user?.username && isSubscribed(user.username, username);
+  const standardListings = listings.filter(
     (listing) => listing.seller === username && !listing.isPremium
   );
+  const premiumListings = listings.filter(
+    (listing) => listing.seller === username && listing.isPremium
+  );
+
   const reviews = getReviewsForSeller(username);
   const hasPurchased = orderHistory.some(
     (order) => order.seller === username && order.buyer === user?.username
@@ -127,21 +132,37 @@ export default function SellerProfilePage() {
 
       <h2 className="text-2xl font-semibold mb-4">Listings by {username}</h2>
 
-      {sellerListings.length === 0 ? (
+      {standardListings.length === 0 && premiumListings.length === 0 ? (
         <p className="text-gray-500 italic">This seller has no active listings.</p>
       ) : (
         <div className="grid md:grid-cols-2 gap-6 mb-10">
-          {sellerListings.map((listing) => (
+          {[...standardListings, ...premiumListings].map((listing) => (
             <div
               key={listing.id}
-              className="border rounded p-4 shadow bg-white dark:bg-black"
+              className="border rounded p-4 shadow bg-white dark:bg-black relative"
             >
-              <img
-                src={listing.imageUrl}
-                alt={listing.title}
-                className="w-full h-48 object-cover rounded mb-3"
-              />
-              <h3 className="text-lg font-semibold">{listing.title}</h3>
+              <div className="relative">
+                <img
+                  src={listing.imageUrl}
+                  alt={listing.title}
+                  className={`w-full h-48 object-cover rounded mb-3 ${
+                    listing.isPremium && !hasAccess ? 'blur-sm' : ''
+                  }`}
+                />
+                {listing.isPremium && !hasAccess && (
+                  <div className="absolute inset-0 flex items-center justify-center text-sm bg-black bg-opacity-50 text-white font-semibold rounded">
+                    🔒 Subscribe to unlock
+                  </div>
+                )}
+              </div>
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                {listing.title}
+                {listing.isPremium && (
+                  <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full">
+                    Premium
+                  </span>
+                )}
+              </h3>
               <p className="text-sm text-gray-600 mb-2">
                 {listing.description.length > 100
                   ? listing.description.slice(0, 100) + '...'
@@ -150,12 +171,14 @@ export default function SellerProfilePage() {
               <p className="text-pink-600 font-bold mb-2">
                 ${listing.markedUpPrice.toFixed(2)}
               </p>
-              <Link
-                href={`/browse/${listing.id}`}
-                className="inline-block text-sm bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
-              >
-                View Listing
-              </Link>
+              {(!listing.isPremium || hasAccess) && (
+                <Link
+                  href={`/browse/${listing.id}`}
+                  className="inline-block text-sm bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+                >
+                  View Listing
+                </Link>
+              )}
             </div>
           ))}
         </div>
