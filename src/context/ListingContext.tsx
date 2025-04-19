@@ -1,8 +1,14 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 
-export type Role = 'buyer' | 'seller';
+export type Role = 'buyer' | 'seller' | 'admin';
 
 export type User = {
   username: string;
@@ -38,7 +44,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [listings, setListings] = useState<Listing[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Load from localStorage on initial mount
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const storedListings = localStorage.getItem('listings');
@@ -54,8 +59,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setIsAuthReady(true);
   }, []);
 
-  const login = (username: string, role: Role) => {
-    const newUser = { username, role };
+  const login = (username: string, selectedRole: Role) => {
+    const normalized = username.trim().toLowerCase();
+    const actualRole: Role =
+      normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
+
+    const newUser = { username, role: actualRole };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
   };
@@ -104,3 +113,4 @@ export const useListings = () => {
   if (!context) throw new Error('useListings must be used within a ListingProvider');
   return context;
 };
+
