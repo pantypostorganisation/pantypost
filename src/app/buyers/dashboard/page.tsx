@@ -90,9 +90,13 @@ export default function BuyerDashboardPage() {
               >
                 <div className="flex items-center gap-4">
                   {pic ? (
-                    <img src={pic} alt={`${seller}'s profile`} className="w-14 h-14 rounded-full object-cover border" />
+                    <img
+                      src={pic}
+                      alt={`${seller}'s profile`}
+                      className="w-16 h-16 rounded-full object-cover aspect-square"
+                    />
                   ) : (
-                    <div className="w-14 h-14 rounded-full bg-gray-300" />
+                    <div className="w-16 h-16 rounded-full bg-gray-300" />
                   )}
                   <div>
                     <h3 className="text-lg font-semibold">{seller}</h3>
