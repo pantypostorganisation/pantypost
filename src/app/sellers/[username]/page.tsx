@@ -6,6 +6,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import StarRating from '@/components/StarRating';
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
@@ -23,8 +24,7 @@ export default function SellerProfilePage() {
     (order) => order.seller === username && order.buyer === user?.username
   );
 
-  const alreadyReviewed =
-    user?.username && hasReviewed(username, user.username);
+  const alreadyReviewed = user?.username && hasReviewed(username, user.username);
 
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState('');
@@ -84,13 +84,13 @@ export default function SellerProfilePage() {
             {bio || '🧾 Seller bio goes here.'}
           </p>
           {averageRating !== null && (
-            <p className="mt-2 text-yellow-500">
-              {'★'.repeat(Math.round(averageRating))}{' '}
-              <span className="text-gray-600 text-sm">
+            <div className="mt-2 flex items-center gap-2">
+              <StarRating rating={averageRating} />
+              <span className="text-gray-500 text-sm">
                 ({averageRating.toFixed(1)} stars from {reviews.length}{' '}
                 {reviews.length === 1 ? 'review' : 'reviews'})
               </span>
-            </p>
+            </div>
           )}
         </div>
       </div>
@@ -136,13 +136,13 @@ export default function SellerProfilePage() {
         <ul className="space-y-4 mb-8">
           {reviews.map((review, i) => (
             <li key={i} className="bg-white border rounded p-4 shadow">
-              <p className="text-sm text-yellow-500 mb-1">
-                {'★'.repeat(review.rating)}{' '}
+              <div className="flex items-center gap-2 mb-1">
+                <StarRating rating={review.rating} size="sm" />
                 <span className="text-gray-500 text-xs">
                   by {review.reviewer} on{' '}
                   {new Date(review.date).toLocaleDateString()}
                 </span>
-              </p>
+              </div>
               <p className="text-sm">{review.comment}</p>
             </li>
           ))}
