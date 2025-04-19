@@ -13,19 +13,17 @@ export default function SellerProfilePage() {
   const {
     listings,
     user,
+    subscribeToSeller,
     isSubscribed,
+    unsubscribeFromSeller,
   } = useListings();
-
-  const {
-    orderHistory,
-    subscribeToSellerWithPayment,
-  } = useWallet();
-
+  const { orderHistory } = useWallet();
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   const hasAccess = user?.username && isSubscribed(user.username, username);
   const standardListings = listings.filter(
@@ -84,15 +82,18 @@ export default function SellerProfilePage() {
     }
   }, [submitted]);
 
-  const handleSubscribe = () => {
-    if (user?.username && user.role === 'buyer' && subscriptionPrice != null) {
-      const success = subscribeToSellerWithPayment(user.username, username, subscriptionPrice);
-      if (success) {
-        setJustSubscribed(true);
-        alert('✅ Subscribed and payment processed!');
-      } else {
-        alert('❌ Insufficient balance for subscription.');
-      }
+  const handleConfirmSubscribe = () => {
+    if (user?.username && user.role === 'buyer') {
+      subscribeToSeller(user.username, username, subscriptionPrice ?? 0);
+      setJustSubscribed(true);
+      setShowModal(false);
+    }
+  };
+
+  const handleUnsubscribe = () => {
+    if (user?.username && user.role === 'buyer') {
+      unsubscribeFromSeller(user.username, username);
+      setJustSubscribed(false);
     }
   };
 
@@ -100,6 +101,11 @@ export default function SellerProfilePage() {
     user?.role === 'buyer' &&
     user.username !== username &&
     !isSubscribed(user.username, username);
+
+  const showUnsubscribe =
+    user?.role === 'buyer' &&
+    user.username !== username &&
+    isSubscribed(user.username, username);
 
   return (
     <main className="p-10 max-w-4xl mx-auto">
@@ -127,19 +133,57 @@ export default function SellerProfilePage() {
               </span>
             </div>
           )}
+
           {showSubscribe && (
             <button
-              onClick={handleSubscribe}
+              onClick={() => setShowModal(true)}
               className="mt-4 inline-block text-sm bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
             >
               Subscribe for ${subscriptionPrice?.toFixed(2) ?? '...'}/month
             </button>
           )}
+
+          {showUnsubscribe && (
+            <button
+              onClick={handleUnsubscribe}
+              className="mt-4 ml-2 inline-block text-sm bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
+            >
+              Unsubscribe
+            </button>
+          )}
+
           {justSubscribed && (
             <p className="text-green-600 text-sm mt-2">✅ Subscribed!</p>
           )}
         </div>
       </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-md w-full max-w-sm">
+            <h2 className="text-lg font-bold mb-2">Confirm Subscription</h2>
+            <p className="mb-4">
+              Are you sure you want to subscribe to <strong>{username}</strong> for{' '}
+              <strong>${subscriptionPrice?.toFixed(2) ?? '...'}/month</strong>?
+            </p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => setShowModal(false)}
+                className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSubscribe}
+                className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <h2 className="text-2xl font-semibold mb-4">Listings by {username}</h2>
 

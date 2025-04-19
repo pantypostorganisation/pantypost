@@ -7,6 +7,7 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
+import { useWallet } from './WalletContext';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -38,6 +39,7 @@ type ListingContextType = {
   removeListing: (id: string) => void;
   subscriptions: { [buyer: string]: string[] };
   subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
+  unsubscribeFromSeller: (buyer: string, seller: string) => void;
   isSubscribed: (buyer: string, seller: string) => boolean;
 };
 
@@ -47,26 +49,27 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [user, setUser] = useState<User | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
-  const [balances, setBalances] = useState<{ [username: string]: number }>({});
   const [isAuthReady, setIsAuthReady] = useState(false);
+
+  const wallet = useWallet();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const storedListings = localStorage.getItem('listings');
     const storedSubs = localStorage.getItem('subscriptions');
-    const storedBalances = localStorage.getItem('balances');
 
     if (storedUser) setUser(JSON.parse(storedUser));
     if (storedListings) setListings(JSON.parse(storedListings));
     if (storedSubs) setSubscriptions(JSON.parse(storedSubs));
-    if (storedBalances) setBalances(JSON.parse(storedBalances));
 
     setIsAuthReady(true);
   }, []);
 
   const login = (username: string, selectedRole: Role) => {
     const normalized = username.trim().toLowerCase();
-    const actualRole: Role = normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
+    const actualRole: Role =
+      normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
+
     const newUser = { username, role: actualRole };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
@@ -94,28 +97,23 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
-    const buyerBalance = balances[buyer] || 0;
-    if (buyerBalance < price) {
-      alert('Insufficient balance for subscription.');
+    const currentBalance = wallet.getBuyerBalance(buyer);
+    if (currentBalance < price) {
+      alert('Insufficient funds for subscription.');
       return false;
     }
 
+    // Split payment
     const sellerCut = price * 0.75;
     const adminCut = price * 0.25;
-    const halfAdminCut = adminCut / 2;
 
-    setBalances((prev) => {
-      const updated = {
-        ...prev,
-        [buyer]: prev[buyer] - price,
-        [seller]: (prev[seller] || 0) + sellerCut,
-        ['oakley']: (prev['oakley'] || 0) + halfAdminCut,
-        ['gerome']: (prev['gerome'] || 0) + halfAdminCut,
-      };
-      localStorage.setItem('balances', JSON.stringify(updated));
-      return updated;
-    });
+    // Apply changes
+    wallet.setBuyerBalance(buyer, currentBalance - price);
+    wallet.setSellerBalance(seller, wallet.getSellerBalance(seller) + sellerCut);
+    wallet.setAdminBalance(wallet.adminBalance + adminCut / 2); // Oakley
+    wallet.setAdminBalance(wallet.adminBalance + adminCut / 2); // Gerome
 
+    // Register subscription
     setSubscriptions((prev) => {
       const updated = {
         ...prev,
@@ -126,6 +124,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     return true;
+  };
+
+  const unsubscribeFromSeller = (buyer: string, seller: string) => {
+    setSubscriptions((prev) => {
+      const updated = {
+        ...prev,
+        [buyer]: (prev[buyer] || []).filter((s) => s !== seller),
+      };
+      localStorage.setItem('subscriptions', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const isSubscribed = (buyer: string, seller: string): boolean => {
@@ -145,6 +154,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         removeListing,
         subscriptions,
         subscribeToSeller,
+        unsubscribeFromSeller,
         isSubscribed,
       }}
     >
