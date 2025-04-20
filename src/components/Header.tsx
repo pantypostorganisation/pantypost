@@ -62,19 +62,22 @@ export default function Header() {
         {mounted && role === 'seller' && (
           <>
             <Link href="/sellers/my-listings">My Listings</Link>
-            <Link href="/sellers/profile">Profile</Link> {/* ✅ restored */}
+            <Link href="/sellers/profile">Profile</Link>
             <Link href="/wallet/seller">Wallet</Link>
             <Link href="/sellers/messages">Messages</Link>
+            <Link href="/sellers/subscribers">Subscribers</Link> {/* ✅ New tab */}
+            <span>💼 ${Math.max(sellerBalance, 0).toFixed(2)}</span>
           </>
         )}
 
         {/* ✅ Buyer-only tabs */}
         {mounted && role === 'buyer' && (
           <>
-            <Link href="/buyers/dashboard">Dashboard</Link> {/* ✅ added */}
-            <Link href="/buyers/my-orders">My Orders</Link> {/* ✅ added */}
+            <Link href="/buyers/dashboard">Dashboard</Link>
+            <Link href="/buyers/my-orders">My Orders</Link>
             <Link href="/wallet/buyer">Wallet</Link>
             <Link href="/buyers/messages">Messages</Link>
+            <span>💰 ${buyerBalance.toFixed(2)}</span>
           </>
         )}
 
@@ -85,14 +88,6 @@ export default function Header() {
             <span className="font-semibold">
               {username} ({role})
             </span>
-
-            {role === 'buyer' && (
-              <span>💰 ${buyerBalance.toFixed(2)}</span>
-            )}
-            {role === 'seller' && (
-              <span>💼 ${sellerBalance.toFixed(2)}</span>
-            )}
-
             <button
               onClick={logout}
               className="ml-2 bg-white text-pink-600 px-2 py-1 rounded"
