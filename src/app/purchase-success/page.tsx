@@ -1,9 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle } from 'lucide-react'; // ✅ icon (make sure lucide-react is installed)
+import { CheckCircle } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { useWallet } from '@/context/WalletContext';
+import { useListings } from '@/context/ListingContext';
 
 export default function PurchaseSuccessPage() {
+  const { orderHistory } = useWallet();
+  const { addSellerNotification } = useListings();
+  const hasNotified = useRef(false);
+
+  useEffect(() => {
+    if (orderHistory.length > 0 && !hasNotified.current) {
+      const latest = orderHistory[orderHistory.length - 1];
+      addSellerNotification(latest.seller, `💌 A buyer purchased: ${latest.title}`);
+      hasNotified.current = true;
+    }
+  }, [orderHistory, addSellerNotification]);
+
   return (
     <main className="p-10 max-w-md mx-auto text-center">
       <CheckCircle className="text-green-500 w-16 h-16 mx-auto mb-4" />

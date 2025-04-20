@@ -6,7 +6,7 @@ import AgeVerificationModal from '../components/AgeVerificationModal';
 import { ListingProvider } from '../context/ListingContext';
 import { WalletProvider } from '../context/WalletContext';
 import { MessageProvider } from '../context/MessageContext';
-import { ReviewProvider } from '../context/ReviewContext'; // ✅ Import new ReviewProvider
+import { ReviewProvider } from '../context/ReviewContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,15 +24,16 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <MessageProvider>
-          <WalletProvider>
+          <ReviewProvider>
+            {/* 🧠 ListingProvider must go BEFORE WalletProvider if it uses useWallet */}
             <ListingProvider>
-              <ReviewProvider> {/* ✅ Wrap with review context */}
+              <WalletProvider>
                 <Header />
                 <AgeVerificationModal />
                 {children}
-              </ReviewProvider>
+              </WalletProvider>
             </ListingProvider>
-          </WalletProvider>
+          </ReviewProvider>
         </MessageProvider>
       </body>
     </html>

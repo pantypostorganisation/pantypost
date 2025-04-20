@@ -7,7 +7,6 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
-import { useWallet } from './WalletContext';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -41,6 +40,9 @@ type ListingContextType = {
   subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
   unsubscribeFromSeller: (buyer: string, seller: string) => void;
   isSubscribed: (buyer: string, seller: string) => boolean;
+  sellerNotifications: string[];
+  addSellerNotification: (seller: string, message: string) => void;
+  clearSellerNotification: (index: number) => void;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -49,18 +51,19 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [user, setUser] = useState<User | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
+  const [sellerNotifications, setSellerNotifications] = useState<string[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
-
-  const wallet = useWallet();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const storedListings = localStorage.getItem('listings');
     const storedSubs = localStorage.getItem('subscriptions');
+    const storedNotifs = localStorage.getItem('seller_notifications');
 
     if (storedUser) setUser(JSON.parse(storedUser));
     if (storedListings) setListings(JSON.parse(storedListings));
     if (storedSubs) setSubscriptions(JSON.parse(storedSubs));
+    if (storedNotifs) setSellerNotifications(JSON.parse(storedNotifs));
 
     setIsAuthReady(true);
   }, []);
@@ -97,23 +100,30 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
-    const currentBalance = wallet.getBuyerBalance(buyer);
+    const buyerBalancesRaw = localStorage.getItem('wallet_buyers');
+    const buyerBalances = buyerBalancesRaw ? JSON.parse(buyerBalancesRaw) : {};
+    const currentBalance = buyerBalances[buyer] || 0;
+
     if (currentBalance < price) {
       alert('Insufficient funds for subscription.');
       return false;
     }
 
-    // Split payment
     const sellerCut = price * 0.75;
     const adminCut = price * 0.25;
+    const sellerBalancesRaw = localStorage.getItem('wallet_sellers');
+    const sellerBalances = sellerBalancesRaw ? JSON.parse(sellerBalancesRaw) : {};
+    const adminBalanceRaw = localStorage.getItem('wallet_admin');
+    const adminBalance = adminBalanceRaw ? parseFloat(adminBalanceRaw) : 0;
 
-    // Apply changes
-    wallet.setBuyerBalance(buyer, currentBalance - price);
-    wallet.setSellerBalance(seller, wallet.getSellerBalance(seller) + sellerCut);
-    wallet.setAdminBalance(wallet.adminBalance + adminCut / 2); // Oakley
-    wallet.setAdminBalance(wallet.adminBalance + adminCut / 2); // Gerome
+    buyerBalances[buyer] = currentBalance - price;
+    sellerBalances[seller] = (sellerBalances[seller] || 0) + sellerCut;
+    const newAdminBalance = adminBalance + adminCut;
 
-    // Register subscription
+    localStorage.setItem('wallet_buyers', JSON.stringify(buyerBalances));
+    localStorage.setItem('wallet_sellers', JSON.stringify(sellerBalances));
+    localStorage.setItem('wallet_admin', newAdminBalance.toString());
+
     setSubscriptions((prev) => {
       const updated = {
         ...prev,
@@ -122,6 +132,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       localStorage.setItem('subscriptions', JSON.stringify(updated));
       return updated;
     });
+
+    addSellerNotification(seller, `${buyer} subscribed to you.`);
 
     return true;
   };
@@ -141,6 +153,22 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return subscriptions[buyer]?.includes(seller) ?? false;
   };
 
+  const addSellerNotification = (seller: string, message: string) => {
+    setSellerNotifications((prev) => {
+      const updated = [...prev, message];
+      localStorage.setItem('seller_notifications', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearSellerNotification = (index: number) => {
+    setSellerNotifications((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      localStorage.setItem('seller_notifications', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <ListingContext.Provider
       value={{
@@ -156,6 +184,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         subscribeToSeller,
         unsubscribeFromSeller,
         isSubscribed,
+        sellerNotifications,
+        addSellerNotification,
+        clearSellerNotification,
       }}
     >
       {children}

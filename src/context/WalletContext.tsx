@@ -8,6 +8,8 @@ import {
   ReactNode,
 } from "react";
 
+import { useListings } from "./ListingContext";
+
 type Order = {
   id: string;
   title: string;
@@ -57,6 +59,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
+
+  const { addSellerNotification } = useListings();
 
   useEffect(() => {
     const buyers = localStorage.getItem("wallet_buyers");
@@ -148,11 +152,18 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     setAdminBalanceState((prev) => prev + platformCut);
 
-    addOrder({
+    const order: Order = {
       ...listing,
       buyer: buyerUsername,
       date: new Date().toISOString(),
-    });
+    };
+
+    addOrder(order);
+
+    addSellerNotification(
+      seller,
+      `💸 New sale: "${listing.title}" for $${listing.markedUpPrice.toFixed(2)}`
+    );
 
     return true;
   };
@@ -173,6 +184,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setBuyerBalance(buyer, buyerBalance - amount);
     setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
     setAdminBalanceState((prev) => prev + oakleyShare + geromeShare);
+
+    addSellerNotification(seller, `✅ New subscriber: ${buyer}`);
 
     return true;
   };

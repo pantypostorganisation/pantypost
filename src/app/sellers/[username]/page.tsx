@@ -25,6 +25,7 @@ export default function SellerProfilePage() {
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   const hasAccess = user?.username && isSubscribed(user.username, username);
   const standardListings = listings.filter(
@@ -88,6 +89,8 @@ export default function SellerProfilePage() {
       subscribeToSeller(user.username, username, subscriptionPrice ?? 0);
       setJustSubscribed(true);
       setShowSubscribeModal(false);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
     }
   };
 
@@ -111,6 +114,12 @@ export default function SellerProfilePage() {
 
   return (
     <main className="p-10 max-w-4xl mx-auto">
+      {showToast && (
+        <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
+          ✅ Subscribed to {username} successfully!
+        </div>
+      )}
+
       <div className="flex items-center gap-6 mb-8">
         {profilePic ? (
           <img

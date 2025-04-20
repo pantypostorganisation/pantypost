@@ -8,7 +8,7 @@ import { useMessages } from '@/context/MessageContext';
 import Link from 'next/link';
 
 export default function ListingDetailPage() {
-  const { listings, user, removeListing } = useListings();
+  const { listings, user, removeListing, addSellerNotification } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
   const { getBuyerBalance, purchaseListing } = useWallet();
@@ -69,6 +69,7 @@ export default function ListingDetailPage() {
     if (isPurchased) {
       setIsProcessing(true);
       removeListing(listing.id);
+      addSellerNotification(listing.seller, `💸 You made a sale: ${listing.title}`);
       setPurchaseStatus('✅ Purchase successful!');
       setTimeout(() => {
         router.push('/purchase-success');
