@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 
 export default function Header() {
@@ -14,6 +14,7 @@ export default function Header() {
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
@@ -37,6 +38,17 @@ export default function Header() {
     updateReportCount();
     window.addEventListener('updateReports', updateReportCount);
     return () => window.removeEventListener('updateReports', updateReportCount);
+  }, []);
+
+  // 🔒 Auto-close dropdown if click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   return (
@@ -68,9 +80,9 @@ export default function Header() {
             <span>💼 ${Math.max(sellerBalance, 0).toFixed(2)}</span>
 
             {/* 🔔 Notification Bell */}
-            <div className="relative">
+            <div className="relative" ref={notifRef}>
               <button
-                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                onClick={() => setShowNotifDropdown((prev) => !prev)}
                 className="relative"
               >
                 <Bell className="w-6 h-6" />
@@ -89,9 +101,11 @@ export default function Header() {
                       sellerNotifications.map((note, i) => (
                         <li
                           key={i}
-                          className="flex justify-between items-center p-3 text-sm"
+                          className="flex justify-between items-start p-3 text-sm"
                         >
-                          <span className="text-gray-800">{note}</span>
+                          <span className="text-gray-800 leading-snug">
+                            {note}
+                          </span>
                           <button
                             onClick={() => clearSellerNotification(i)}
                             className="text-xs text-red-500 hover:underline ml-2"

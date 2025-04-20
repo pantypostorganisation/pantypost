@@ -41,7 +41,7 @@ export default function AdminWalletPage() {
   }
 
   return (
-    <RequireAuth>
+    <RequireAuth role="admin">
       <main className="p-10 max-w-md mx-auto">
         <h1 className="text-2xl font-bold mb-4">Admin Wallet</h1>
         <p className="mb-4">

@@ -6,7 +6,7 @@ import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef } from 'react';
 
 export default function SellerMessagesPage() {
-  const { user } = useListings();
+  const { user, addSellerNotification } = useListings();
   const {
     getMessagesForSeller,
     markMessagesAsRead,
@@ -50,7 +50,9 @@ export default function SellerMessagesPage() {
 
   const handleReply = () => {
     if (!replyMessage.trim() || !activeThread || !user) return;
+
     sendMessage(user.username, activeThread, replyMessage);
+    addSellerNotification(user.username, `💌 You replied to buyer: ${activeThread}`);
     setReplyMessage('');
   };
 

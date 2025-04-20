@@ -79,19 +79,8 @@ export default function AdminReportsPage() {
     alert(`Marked report from ${report.reporter} about ${report.reportee} as resolved.`);
   };
 
-  if (!user || (user.username !== 'oakley' && user.username !== 'gerome')) {
-    return (
-      <RequireAuth>
-        <main className="p-8 max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold mb-4">🔒 Access Denied</h1>
-          <p>You do not have permission to view this page.</p>
-        </main>
-      </RequireAuth>
-    );
-  }
-
   return (
-    <RequireAuth>
+    <RequireAuth role="admin">
       <main className="p-8 max-w-5xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">🚨 Reported Users & Threads</h1>
 

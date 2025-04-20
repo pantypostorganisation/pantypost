@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 export default function BuyerDashboardPage() {
-  const { user, subscriptions, unsubscribeFromSeller } = useListings();
+  const { user, subscriptions, unsubscribeFromSeller, addSellerNotification } = useListings();
   const { orderHistory } = useWallet();
   const { hasReviewed } = useReviews();
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -110,6 +110,7 @@ export default function BuyerDashboardPage() {
                     <button
                       onClick={() => {
                         unsubscribeFromSeller(user.username, seller);
+                        addSellerNotification(seller, `❌ ${user.username} unsubscribed from you.`);
                         setConfirming(null);
                       }}
                       className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"

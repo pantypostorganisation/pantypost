@@ -2,7 +2,7 @@
 
 import { useListings } from '@/context/ListingContext';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function RequireAuth({
   role,
@@ -13,22 +13,25 @@ export default function RequireAuth({
 }) {
   const { user, isAuthReady } = useListings();
   const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    if (isAuthReady) {
-      const userRole = user?.role;
+    if (!isAuthReady) return;
 
-      // ✅ Allow access if user is the correct role or is admin
-      const hasAccess =
-        userRole === role || (role !== 'admin' && userRole === 'admin');
+    const userRole = user?.role;
+    const isAdmin = userRole === 'admin';
 
-      if (!user || !hasAccess) {
-        router.push('/login');
-      }
+    // Allow access if role matches or if admin accessing buyer/seller page
+    const hasAccess = user && (userRole === role || (role !== 'admin' && isAdmin));
+
+    if (!hasAccess) {
+      router.push('/login');
+    } else {
+      setAuthorized(true);
     }
-  }, [user, isAuthReady, role, router]);
+  }, [isAuthReady, user, role, router]);
 
-  if (!user) return null;
+  if (!isAuthReady || !authorized) return null;
 
   return <>{children}</>;
 }

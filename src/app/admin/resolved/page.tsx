@@ -86,7 +86,7 @@ export default function ResolvedReportsPage() {
 
   if (!user || (user.username !== 'oakley' && user.username !== 'gerome')) {
     return (
-      <RequireAuth>
+      <RequireAuth role="admin">
         <main className="p-8 max-w-4xl mx-auto">
           <h1 className="text-2xl font-bold mb-4">🔒 Access Denied</h1>
           <p>You do not have permission to view this page.</p>
@@ -96,7 +96,7 @@ export default function ResolvedReportsPage() {
   }
 
   return (
-    <RequireAuth>
+    <RequireAuth role="admin">
       <main className="p-8 max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">✅ Resolved Reports</h1>
 

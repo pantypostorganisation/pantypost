@@ -27,7 +27,8 @@ export default function SellerProfileSettingsPage() {
     if (!user?.username) return;
 
     sessionStorage.setItem(`profile_bio_${user.username}`, bio);
-    sessionStorage.setItem(`subscription_price_${user.username}`, subscriptionPrice);
+    sessionStorage.setItem(`subscription_price_${user.username}`, subscriptionPrice || '0');
+
     if (preview) {
       sessionStorage.setItem(`profile_pic_${user.username}`, preview);
       setProfilePic(preview);
@@ -106,7 +107,9 @@ export default function SellerProfileSettingsPage() {
         </div>
 
         <div className="mb-6">
-          <label className="block font-medium mb-1">Subscription Price (Monthly in $)</label>
+          <label className="block font-medium mb-1">
+            Subscription Price (Monthly in $)
+          </label>
           <input
             type="number"
             value={subscriptionPrice}

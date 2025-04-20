@@ -3,13 +3,14 @@
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useMessages } from '@/context/MessageContext';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export default function SellerSubscribersPage() {
   const { user, subscriptions } = useListings();
   const { sendMessage } = useMessages();
-  const [messageModal, setMessageModal] = useState<null | string>(null);
+  const [messageModal, setMessageModal] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState('');
+  const [messageSent, setMessageSent] = useState(false);
 
   if (!user || user.role !== 'seller') return null;
 
@@ -19,10 +20,15 @@ export default function SellerSubscribersPage() {
     .map(([buyer]) => buyer);
 
   const sendToSubscriber = (subscriber: string) => {
-    if (!messageContent.trim()) return;
-    sendMessage(user.username, subscriber, messageContent.trim());
-    setMessageModal(null);
-    setMessageContent('');
+    const trimmed = messageContent.trim();
+    if (!trimmed) return;
+    sendMessage(user.username, subscriber, trimmed);
+    setMessageSent(true);
+    setTimeout(() => {
+      setMessageModal(null);
+      setMessageContent('');
+      setMessageSent(false);
+    }, 1500);
   };
 
   return (
@@ -55,17 +61,17 @@ export default function SellerSubscribersPage() {
 
         {/* Message Modal */}
         {messageModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-md w-full max-w-sm">
-              <h2 className="text-lg font-bold mb-2">Message {messageModal}</h2>
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-full max-w-sm">
+              <h2 className="text-lg font-bold mb-3">Message {messageModal}</h2>
               <textarea
-                className="w-full border rounded p-2 mb-4"
+                className="w-full border rounded p-2 mb-3"
                 rows={4}
                 placeholder="Type your message..."
                 value={messageContent}
                 onChange={(e) => setMessageContent(e.target.value)}
               />
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setMessageModal(null)}
                   className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400"
@@ -76,7 +82,7 @@ export default function SellerSubscribersPage() {
                   onClick={() => sendToSubscriber(messageModal)}
                   className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
                 >
-                  Send
+                  {messageSent ? '✅ Sent!' : 'Send'}
                 </button>
               </div>
             </div>

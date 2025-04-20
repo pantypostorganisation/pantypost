@@ -4,25 +4,26 @@ import Link from 'next/link';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
+import { Listing } from '@/context/ListingContext';
 
 export default function BrowsePage() {
-  const { listings, removeListing, user, isSubscribed } = useListings();
+  const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
 
-  const handlePurchase = (listing: any) => {
-    if (!user) return;
+  const handlePurchase = (listing: Listing) => {
+    if (!user || !listing.seller) return;
 
     const success = purchaseListing(listing, user.username);
 
     if (success) {
       removeListing(listing.id);
+      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
       alert('Purchase successful! 🎉');
     } else {
       alert('Insufficient balance. Please top up your wallet.');
     }
   };
 
-  // ✅ Filter listings: Only show premium if buyer is subscribed to the seller
   const visibleListings = listings.filter((listing) => {
     if (!listing.isPremium) return true;
     return user?.username && isSubscribed(user.username, listing.seller);

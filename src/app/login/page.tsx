@@ -1,24 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useListings(); // Ensure this comes from a context that provides it
+  const { login, isAuthReady, user } = useListings();
 
   const [username, setUsername] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller' | null>(null);
 
+  useEffect(() => {
+    if (isAuthReady && user) {
+      router.push('/');
+    }
+  }, [isAuthReady, user]);
+
   const handleLogin = () => {
-    if (!username || !role) {
-      alert('Enter a username and choose a role.');
+    if (!username.trim() || !role) {
+      alert('❌ Please enter a username and select a role.');
       return;
     }
 
-    login(username, role); // Call login with correct shape
-    router.push('/');
+    login(username.trim(), role);
   };
 
   return (
@@ -36,16 +41,16 @@ export default function LoginPage() {
       <div className="flex gap-4 mb-4">
         <button
           onClick={() => setRole('buyer')}
-          className={`flex-1 p-2 rounded ${
-            role === 'buyer' ? 'bg-pink-600 text-white' : 'bg-gray-200'
+          className={`flex-1 p-2 rounded font-semibold ${
+            role === 'buyer' ? 'bg-pink-600 text-white' : 'bg-gray-200 text-gray-700'
           }`}
         >
           I'm a Buyer
         </button>
         <button
           onClick={() => setRole('seller')}
-          className={`flex-1 p-2 rounded ${
-            role === 'seller' ? 'bg-pink-600 text-white' : 'bg-gray-200'
+          className={`flex-1 p-2 rounded font-semibold ${
+            role === 'seller' ? 'bg-pink-600 text-white' : 'bg-gray-200 text-gray-700'
           }`}
         >
           I'm a Seller
@@ -54,7 +59,7 @@ export default function LoginPage() {
 
       <button
         onClick={handleLogin}
-        className="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 rounded"
+        className="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 rounded font-medium"
       >
         Log In
       </button>

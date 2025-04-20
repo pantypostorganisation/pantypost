@@ -13,7 +13,8 @@ export default function BuyerWalletPage() {
 
   useEffect(() => {
     if (user?.username) {
-      setBalance(getBuyerBalance(user.username));
+      const rawBalance = getBuyerBalance(user.username);
+      setBalance(Math.max(0, rawBalance));
     }
   }, [user, getBuyerBalance]);
 
@@ -30,12 +31,18 @@ export default function BuyerWalletPage() {
   return (
     <RequireAuth role="buyer">
       <main className="p-10 max-w-md mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Buyer Wallet</h1>
-        <p className="mb-4">
-          Balance: <span className="font-semibold">${balance.toFixed(2)}</span>
-        </p>
+        <h1 className="text-3xl font-bold mb-6">💰 Buyer Wallet</h1>
 
-        <div className="mb-4">
+        <div className="mb-6">
+          <p className="text-lg">
+            Current Balance:{' '}
+            <span className="font-semibold text-pink-700">
+              ${Math.max(0, balance).toFixed(2)}
+            </span>
+          </p>
+        </div>
+
+        <div className="mb-8">
           <label className="block text-sm font-medium mb-1">Add Funds</label>
           <input
             type="number"
@@ -47,14 +54,14 @@ export default function BuyerWalletPage() {
           />
           <button
             onClick={handleAddFunds}
-            className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+            className="w-full bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700 transition"
           >
             Add Funds
           </button>
         </div>
 
         <p className="text-sm text-gray-500">
-          Use this wallet to purchase listings on PantyPost. Purchases include a 10% platform fee.
+          Use your wallet to purchase listings. Each transaction includes a 10% platform fee.
         </p>
       </main>
     </RequireAuth>
