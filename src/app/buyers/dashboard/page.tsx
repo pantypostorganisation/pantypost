@@ -4,11 +4,13 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
+import { useState } from 'react';
 
 export default function BuyerDashboardPage() {
   const { user, subscriptions, unsubscribeFromSeller } = useListings();
   const { orderHistory } = useWallet();
   const { hasReviewed } = useReviews();
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   if (!user || user.role !== 'buyer') {
     return (
@@ -103,12 +105,32 @@ export default function BuyerDashboardPage() {
                     <p className="text-sm text-gray-500">💵 ${price}/month</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => unsubscribeFromSeller(user.username, seller)}
-                  className="text-sm bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-                >
-                  Unsubscribe
-                </button>
+                {confirming === seller ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        unsubscribeFromSeller(user.username, seller);
+                        setConfirming(null);
+                      }}
+                      className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => setConfirming(null)}
+                      className="text-sm bg-gray-300 text-black px-3 py-1 rounded hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirming(seller)}
+                    className="text-sm bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                  >
+                    Unsubscribe
+                  </button>
+                )}
               </li>
             );
           })}
