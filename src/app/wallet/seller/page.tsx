@@ -11,7 +11,8 @@ export default function SellerWalletPage() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [message, setMessage] = useState('');
 
-  const balance = user ? getSellerBalance(user.username) : 0;
+  const balanceRaw = user ? getSellerBalance(user.username) : 0;
+  const balance = parseFloat(balanceRaw.toFixed(2)); // ✅ round to 2 decimals
   const logs = user ? sellerWithdrawals[user.username] || [] : [];
 
   const handleWithdraw = () => {
@@ -20,13 +21,16 @@ export default function SellerWalletPage() {
       setMessage('❌ Enter a valid amount.');
       return;
     }
-    if (amount > balance) {
+
+    const roundedAmount = parseFloat(amount.toFixed(2)); // ✅ round to match balance
+
+    if (roundedAmount > balance) {
       setMessage('❌ Withdrawal exceeds balance.');
       return;
     }
 
-    addSellerWithdrawal(user!.username, amount);
-    setMessage(`✅ Successfully withdrew $${amount.toFixed(2)}.`);
+    addSellerWithdrawal(user!.username, roundedAmount);
+    setMessage(`✅ Successfully withdrew $${roundedAmount.toFixed(2)}.`);
     setWithdrawAmount('');
     setTimeout(() => setMessage(''), 3000);
   };
@@ -42,6 +46,7 @@ export default function SellerWalletPage() {
         <div className="mb-4 space-y-2">
           <input
             type="number"
+            step="0.01"
             value={withdrawAmount}
             onChange={(e) => setWithdrawAmount(e.target.value)}
             placeholder="Enter amount to withdraw"
