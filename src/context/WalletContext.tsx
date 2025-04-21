@@ -8,8 +8,6 @@ import {
   ReactNode,
 } from "react";
 
-import { useListings } from "./ListingContext";
-
 type Order = {
   id: string;
   title: string;
@@ -59,8 +57,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
-
-  const { addSellerNotification } = useListings();
 
   useEffect(() => {
     const buyers = localStorage.getItem("wallet_buyers");
@@ -160,10 +156,15 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     addOrder(order);
 
-    addSellerNotification(
-      seller,
-      `💸 New sale: "${listing.title}" for $${listing.markedUpPrice.toFixed(2)}`
-    );
+    // Add the notification to localStorage for ListingContext to pick up 
+    const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
+    notifs.push(`💸 New sale: "${listing.title}" for $${listing.markedUpPrice.toFixed(2)}`);
+    localStorage.setItem('seller_notifications', JSON.stringify(notifs));
+    
+    // Trigger an event for the notification
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('newSellerNotification'));
+    }
 
     return true;
   };
@@ -173,19 +174,37 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     seller: string,
     amount: number
   ): boolean => {
+    // Check if buyer has enough balance
     const buyerBalance = getBuyerBalance(buyer);
-    if (buyerBalance < amount) return false;
+    if (buyerBalance < amount) {
+      return false;
+    }
 
+    // Calculate distribution
+    // Seller gets 75% of subscription price
     const sellerCut = amount * 0.75;
+    // Admin gets 25% of subscription price
     const adminCut = amount * 0.25;
-    const oakleyShare = adminCut / 2;
-    const geromeShare = adminCut / 2;
 
+    // Update balances
     setBuyerBalance(buyer, buyerBalance - amount);
     setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
-    setAdminBalanceState((prev) => prev + oakleyShare + geromeShare);
+    setAdminBalanceState((prev) => prev + adminCut);
 
-    addSellerNotification(seller, `✅ New subscriber: ${buyer}`);
+    // Add the notification to localStorage for ListingContext to pick up
+    const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
+    notifs.push(`💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`);
+    localStorage.setItem('seller_notifications', JSON.stringify(notifs));
+    
+    // Trigger an event for the notification
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('newSellerNotification'));
+    }
+
+    console.log(`Subscription processed: ${buyer} -> ${seller} ($${amount})`);
+    console.log(`New buyer balance: $${buyerBalance - amount}`);
+    console.log(`New seller balance: $${getSellerBalance(seller) + sellerCut}`);
+    console.log(`Admin cut: $${adminCut}`);
 
     return true;
   };

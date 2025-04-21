@@ -23,18 +23,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <MessageProvider>
-          <ReviewProvider>
-            {/* 🧠 ListingProvider must go BEFORE WalletProvider if it uses useWallet */}
-            <ListingProvider>
-              <WalletProvider>
+        {/* The order matters: WalletProvider must come before ListingProvider */}
+        <WalletProvider>
+          <MessageProvider>
+            <ReviewProvider>
+              <ListingProvider>
                 <Header />
                 <AgeVerificationModal />
                 {children}
-              </WalletProvider>
-            </ListingProvider>
-          </ReviewProvider>
-        </MessageProvider>
+              </ListingProvider>
+            </ReviewProvider>
+          </MessageProvider>
+        </WalletProvider>
       </body>
     </html>
   );

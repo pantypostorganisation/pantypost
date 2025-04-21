@@ -7,6 +7,7 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
+import { useWallet } from './WalletContext';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -53,6 +54,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
   const [sellerNotifications, setSellerNotifications] = useState<string[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  
+  // Now we can safely use useWallet because WalletProvider is above ListingProvider in the tree
+  const { subscribeToSellerWithPayment } = useWallet();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -66,6 +70,21 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (storedNotifs) setSellerNotifications(JSON.parse(storedNotifs));
 
     setIsAuthReady(true);
+  }, []);
+
+  // Listen for notifications from WalletContext
+  useEffect(() => {
+    const handleNewNotification = () => {
+      const storedNotifs = localStorage.getItem('seller_notifications');
+      if (storedNotifs) {
+        setSellerNotifications(JSON.parse(storedNotifs));
+      }
+    };
+
+    window.addEventListener('newSellerNotification', handleNewNotification);
+    return () => {
+      window.removeEventListener('newSellerNotification', handleNewNotification);
+    };
   }, []);
 
   const login = (username: string, selectedRole: Role) => {
@@ -100,42 +119,22 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
-    const buyerBalancesRaw = localStorage.getItem('wallet_buyers');
-    const buyerBalances = buyerBalancesRaw ? JSON.parse(buyerBalancesRaw) : {};
-    const currentBalance = buyerBalances[buyer] || 0;
-
-    if (currentBalance < price) {
-      alert('Insufficient funds for subscription.');
-      return false;
+    // Use the WalletContext function to handle the payment
+    const success = subscribeToSellerWithPayment(buyer, seller, price);
+    
+    if (success) {
+      // Update subscriptions state only if payment was successful
+      setSubscriptions((prev) => {
+        const updated = {
+          ...prev,
+          [buyer]: [...(prev[buyer] || []), seller],
+        };
+        localStorage.setItem('subscriptions', JSON.stringify(updated));
+        return updated;
+      });
     }
-
-    const sellerCut = price * 0.75;
-    const adminCut = price * 0.25;
-    const sellerBalancesRaw = localStorage.getItem('wallet_sellers');
-    const sellerBalances = sellerBalancesRaw ? JSON.parse(sellerBalancesRaw) : {};
-    const adminBalanceRaw = localStorage.getItem('wallet_admin');
-    const adminBalance = adminBalanceRaw ? parseFloat(adminBalanceRaw) : 0;
-
-    buyerBalances[buyer] = currentBalance - price;
-    sellerBalances[seller] = (sellerBalances[seller] || 0) + sellerCut;
-    const newAdminBalance = adminBalance + adminCut;
-
-    localStorage.setItem('wallet_buyers', JSON.stringify(buyerBalances));
-    localStorage.setItem('wallet_sellers', JSON.stringify(sellerBalances));
-    localStorage.setItem('wallet_admin', newAdminBalance.toString());
-
-    setSubscriptions((prev) => {
-      const updated = {
-        ...prev,
-        [buyer]: [...(prev[buyer] || []), seller],
-      };
-      localStorage.setItem('subscriptions', JSON.stringify(updated));
-      return updated;
-    });
-
-    addSellerNotification(seller, `${buyer} subscribed to you.`);
-
-    return true;
+    
+    return success;
   };
 
   const unsubscribeFromSeller = (buyer: string, seller: string) => {
