@@ -232,43 +232,48 @@ export default function BrowsePage() {
                   </div>
                 )}
                 
-                <Link href={`/browse/${listing.id}`}>
-                  <div className="relative">
-                    <img
-                      src={listing.imageUrl}
-                      alt={listing.title}
-                      className="w-full h-48 object-cover"
-                    />
-                    {listing.wearTime && (
-                      <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center">
-                        <Clock className="w-3 h-3 mr-1" /> {listing.wearTime}
-                      </div>
-                    )}
-                  </div>
+                {/* FIX: Dividing this into separate sections to avoid nested links */}
+                <div className="listing-content">
+                  <Link href={`/browse/${listing.id}`}>
+                    <div className="relative">
+                      <img
+                        src={listing.imageUrl}
+                        alt={listing.title}
+                        className="w-full h-48 object-cover"
+                      />
+                      {listing.wearTime && (
+                        <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center">
+                          <Clock className="w-3 h-3 mr-1" /> {listing.wearTime}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
                   
                   <div className="p-4">
-                    <div className="flex items-start justify-between">
-                      <h2 className="text-lg font-semibold text-gray-800">{listing.title}</h2>
-                    </div>
-                    
-                    <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-                      {listing.description}
-                    </p>
-                    
-                    {listing.tags && listing.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {listing.tags.slice(0, 3).map((tag, idx) => (
-                          <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
-                            {tag}
-                          </span>
-                        ))}
-                        {listing.tags.length > 3 && (
-                          <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
-                            +{listing.tags.length - 3}
-                          </span>
-                        )}
+                    <Link href={`/browse/${listing.id}`}>
+                      <div className="flex items-start justify-between">
+                        <h2 className="text-lg font-semibold text-gray-800">{listing.title}</h2>
                       </div>
-                    )}
+                      
+                      <p className="text-sm text-gray-700 mt-1 line-clamp-2">
+                        {listing.description}
+                      </p>
+                      
+                      {listing.tags && listing.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {listing.tags.slice(0, 3).map((tag, idx) => (
+                            <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                          {listing.tags.length > 3 && (
+                            <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
+                              +{listing.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </Link>
                     
                     <div className="flex justify-between items-center mt-3">
                       <p className="font-bold text-pink-700">
@@ -276,13 +281,14 @@ export default function BrowsePage() {
                       </p>
                       
                       <div className="flex items-center">
+                        {/* This is now a separate link, not nested inside the listing link */}
                         <Link href={`/sellers/${listing.seller}`} className="text-xs text-gray-600 hover:text-pink-600">
                           {listing.seller}
                         </Link>
                       </div>
                     </div>
                   </div>
-                </Link>
+                </div>
 
                 {user?.role === 'buyer' && (
                   <button
