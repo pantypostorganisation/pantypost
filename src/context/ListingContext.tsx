@@ -1,3 +1,4 @@
+// src/context/ListingContext.tsx
 'use client';
 
 import {
@@ -26,13 +27,14 @@ export type Listing = {
   date: string;
   seller: string;
   isPremium?: boolean;
-  tags?: string[];        // New field for tags
-  wearTime?: string;      // New field for wear time
+  tags?: string[];
+  wearTime?: string;
 };
 
 type ListingContextType = {
   user: User | null;
   role: Role | null;
+  users: { [username: string]: Role };
   login: (username: string, role: Role) => void;
   logout: () => void;
   isAuthReady: boolean;
@@ -52,21 +54,23 @@ const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<{ [username: string]: Role }>({});
   const [listings, setListings] = useState<Listing[]>([]);
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
   const [sellerNotifications, setSellerNotifications] = useState<string[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  
-  // Now we can safely use useWallet because WalletProvider is above ListingProvider in the tree
+
   const { subscribeToSellerWithPayment } = useWallet();
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
+    const storedUsers = localStorage.getItem('all_users');
     const storedListings = localStorage.getItem('listings');
     const storedSubs = localStorage.getItem('subscriptions');
     const storedNotifs = localStorage.getItem('seller_notifications');
 
     if (storedUser) setUser(JSON.parse(storedUser));
+    if (storedUsers) setUsers(JSON.parse(storedUsers));
     if (storedListings) setListings(JSON.parse(storedListings));
     if (storedSubs) setSubscriptions(JSON.parse(storedSubs));
     if (storedNotifs) setSellerNotifications(JSON.parse(storedNotifs));
@@ -74,7 +78,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setIsAuthReady(true);
   }, []);
 
-  // Listen for notifications from WalletContext
   useEffect(() => {
     const handleNewNotification = () => {
       const storedNotifs = localStorage.getItem('seller_notifications');
@@ -94,9 +97,16 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const actualRole: Role =
       normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
 
-    const newUser = { username, role: actualRole };
+    const newUser = { username: normalized, role: actualRole };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
+
+    // ✅ Track all users
+    setUsers((prev) => {
+      const updated = { ...prev, [normalized]: actualRole };
+      localStorage.setItem('all_users', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const logout = () => {
@@ -121,11 +131,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
-    // Use the WalletContext function to handle the payment
     const success = subscribeToSellerWithPayment(buyer, seller, price);
-    
     if (success) {
-      // Update subscriptions state only if payment was successful
       setSubscriptions((prev) => {
         const updated = {
           ...prev,
@@ -135,7 +142,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         return updated;
       });
     }
-    
     return success;
   };
 
@@ -175,6 +181,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       value={{
         user,
         role: user?.role ?? null,
+        users,
         login,
         logout,
         isAuthReady,

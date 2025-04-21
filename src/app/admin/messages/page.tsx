@@ -13,7 +13,7 @@ type Message = {
 };
 
 export default function AdminMessagesPage() {
-  const { user } = useListings();
+  const { user, users } = useListings();
   const { messages, sendMessage } = useMessages();
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [content, setContent] = useState<string>('');
@@ -29,15 +29,9 @@ export default function AdminMessagesPage() {
       msg.sender === username || msg.receiver === username
   );
 
-  const uniqueUsers = Array.from(
-    new Set<string>(
-      allMessages
-        .map((msg: Message) =>
-          msg.sender !== username ? msg.sender : msg.receiver
-        )
-        .filter((name: string) => name !== username)
-    )
-  );
+  // ✅ Fix: Show all users except this admin
+  const allUsernames = Object.keys(users || {});
+  const uniqueUsers = allUsernames.filter(name => name !== username);
 
   const handleSend = () => {
     if (!selectedUser || !content.trim()) {
