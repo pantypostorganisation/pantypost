@@ -23,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* The order matters: WalletProvider must come before ListingProvider */}
+        {/* IMPORTANT: WalletProvider must come before ListingProvider */}
         <WalletProvider>
           <MessageProvider>
             <ReviewProvider>

@@ -26,6 +26,8 @@ export type Listing = {
   date: string;
   seller: string;
   isPremium?: boolean;
+  tags?: string[];        // New field for tags
+  wearTime?: string;      // New field for wear time
 };
 
 type ListingContextType = {

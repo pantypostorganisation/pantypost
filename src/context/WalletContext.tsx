@@ -8,6 +8,17 @@ import {
   ReactNode,
 } from "react";
 
+// Import-free notification function to avoid circular dependencies
+const addSellerNotificationToStorage = (seller: string, message: string) => {
+  if (typeof window !== 'undefined') {
+    const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
+    notifs.push(message);
+    localStorage.setItem('seller_notifications', JSON.stringify(notifs));
+    // Dispatch a custom event that the ListingContext can listen for
+    window.dispatchEvent(new CustomEvent('newSellerNotification'));
+  }
+};
+
 type Order = {
   id: string;
   title: string;
@@ -18,6 +29,8 @@ type Order = {
   date: string;
   seller: string;
   buyer: string;
+  tags?: string[];
+  wearTime?: string;
 };
 
 type Withdrawal = {
@@ -50,7 +63,7 @@ type WalletContextType = {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export function WalletProvider({ children }: { children: ReactNode }) {
   const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
@@ -59,6 +72,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const buyers = localStorage.getItem("wallet_buyers");
     const admin = localStorage.getItem("wallet_admin");
     const sellers = localStorage.getItem("wallet_sellers");
@@ -75,26 +90,32 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem("wallet_buyers", JSON.stringify(buyerBalances));
   }, [buyerBalances]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem("wallet_admin", adminBalance.toString());
   }, [adminBalance]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem("wallet_sellers", JSON.stringify(sellerBalances));
   }, [sellerBalances]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem("wallet_orders", JSON.stringify(orderHistory));
   }, [orderHistory]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem("wallet_sellerWithdrawals", JSON.stringify(sellerWithdrawals));
   }, [sellerWithdrawals]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     localStorage.setItem("wallet_adminWithdrawals", JSON.stringify(adminWithdrawals));
   }, [adminWithdrawals]);
 
@@ -152,19 +173,15 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       ...listing,
       buyer: buyerUsername,
       date: new Date().toISOString(),
-    };
+    } as Order;
 
     addOrder(order);
 
-    // Add the notification to localStorage for ListingContext to pick up 
-    const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
-    notifs.push(`💸 New sale: "${listing.title}" for $${listing.markedUpPrice.toFixed(2)}`);
-    localStorage.setItem('seller_notifications', JSON.stringify(notifs));
-    
-    // Trigger an event for the notification
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('newSellerNotification'));
-    }
+    // Use standalone function to avoid circular dependency
+    addSellerNotificationToStorage(
+      seller,
+      `💸 New sale: "${listing.title}" for $${listing.markedUpPrice?.toFixed(2) || listing.price?.toFixed(2)}`
+    );
 
     return true;
   };
@@ -191,15 +208,11 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
     setAdminBalanceState((prev) => prev + adminCut);
 
-    // Add the notification to localStorage for ListingContext to pick up
-    const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
-    notifs.push(`💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`);
-    localStorage.setItem('seller_notifications', JSON.stringify(notifs));
-    
-    // Trigger an event for the notification
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('newSellerNotification'));
-    }
+    // Add notification without dependency on ListingContext
+    addSellerNotificationToStorage(
+      seller,
+      `💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
+    );
 
     console.log(`Subscription processed: ${buyer} -> ${seller} ($${amount})`);
     console.log(`New buyer balance: $${buyerBalance - amount}`);
@@ -248,7 +261,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       {children}
     </WalletContext.Provider>
   );
-};
+}
 
 export const useWallet = () => {
   const context = useContext(WalletContext);
