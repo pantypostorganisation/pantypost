@@ -1,42 +1,47 @@
 'use client';
 
-import React from 'react';
+import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 
-export default function MyOrdersPage() {
+export default function BuyerOrdersPage() {
+  const { user } = useListings();
   const { orderHistory } = useWallet();
+
+  if (!user || user.role !== 'buyer') return null;
+
+  // ✅ Filter orders to show only those made by the logged-in buyer
+  const myOrders = orderHistory.filter(
+    (order) => order.buyer === user.username
+  );
 
   return (
     <RequireAuth role="buyer">
-      <main className="p-10">
+      <main className="p-10 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">My Orders</h1>
 
-        {orderHistory.length === 0 ? (
-          <p className="text-gray-600">You haven’t purchased anything yet.</p>
+        {myOrders.length === 0 ? (
+          <p>You haven’t purchased anything yet.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {orderHistory.map((order) => (
-              <div
-                key={`${order.id}-${order.date}`}
-                className="border rounded-xl p-4 shadow hover:shadow-md transition"
-              >
+          <ul className="space-y-6">
+            {myOrders.map((order, index) => (
+              <li key={index} className="border rounded p-4 shadow">
                 <img
-                  src={order.imageUrl || '/default-image.jpg'}
+                  src={order.imageUrl}
                   alt={order.title}
-                  className="w-full h-48 object-cover mb-4 rounded"
+                  className="w-full h-48 object-cover rounded mb-3"
                 />
-                <h2 className="text-xl font-semibold mb-1">{order.title}</h2>
-                <p className="text-sm text-gray-600 mb-2">{order.description}</p>
-                <p className="font-bold text-pink-700 mb-1">
-                  You paid: ${order.markedUpPrice?.toFixed(2) ?? order.price.toFixed(2)}
+                <h2 className="text-xl font-semibold">{order.title}</h2>
+                <p className="text-gray-600 mb-1">{order.description}</p>
+                <p className="font-bold text-pink-700">
+                  ${order.markedUpPrice.toFixed(2)}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Purchased on: {new Date(order.date).toLocaleDateString()}
+                <p className="text-sm text-gray-500 mt-2">
+                  Purchased on {new Date(order.date).toLocaleDateString()}
                 </p>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </main>
     </RequireAuth>
