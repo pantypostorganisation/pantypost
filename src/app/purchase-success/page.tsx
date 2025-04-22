@@ -14,7 +14,9 @@ export default function PurchaseSuccessPage() {
   useEffect(() => {
     if (orderHistory.length > 0 && !hasNotified.current) {
       const latest = orderHistory[orderHistory.length - 1];
-      addSellerNotification(latest.seller, `💌 A buyer purchased: ${latest.title}`);
+      
+      // Add seller name to notification message to make it easier to filter
+      addSellerNotification(latest.seller, `💌 [For ${latest.seller}] A buyer purchased: ${latest.title}`);
       hasNotified.current = true;
     }
   }, [orderHistory, addSellerNotification]);

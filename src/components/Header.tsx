@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Bell, ShoppingBag, Wallet, MessageSquare, Users, User, LogOut, Settings, BarChart2 } from 'lucide-react';
 
 export default function Header() {
-  const { user, logout, sellerNotifications, clearSellerNotification } = useListings();
+  const { user, logout, sellerNotifications, clearSellerNotification, listings } = useListings();
   const { getBuyerBalance, getSellerBalance, adminBalance } = useWallet();
   const { messages } = useMessages();
   const [mounted, setMounted] = useState(false);
@@ -19,6 +19,45 @@ export default function Header() {
   const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
   const username = user?.username ?? '';
+
+  // CRITICAL FIX: Filter notifications that mention the current seller
+  const [filteredNotifications, setFilteredNotifications] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (user && user.role === 'seller') {
+      // Filter notifications to only include those relevant to this seller
+      const filtered = sellerNotifications.filter(notif => {
+        // For purchased items
+        if (notif.includes('purchased:')) {
+          const itemMatch = notif.match(/purchased: ["']?([^"']+)["']?/);
+          if (!itemMatch) return false;
+          
+          const itemTitle = itemMatch[1].trim();
+          
+          // Check if this seller has a listing with this name
+          const sellerHasItem = listings.some(listing => 
+            listing.seller === user.username && 
+            listing.title === itemTitle
+          );
+          
+          return sellerHasItem;
+        }
+        
+        // For subscription notifications
+        if (notif.includes('subscriber:') || notif.includes('subscribed')) {
+          // Simple check if notification mentions this seller's name
+          return notif.toLowerCase().includes(user.username.toLowerCase());
+        }
+        
+        // For any other notification type, try to see if it mentions this seller
+        return notif.toLowerCase().includes(user.username.toLowerCase());
+      });
+      
+      setFilteredNotifications(filtered);
+    } else {
+      setFilteredNotifications([]);
+    }
+  }, [user, sellerNotifications, listings]);
 
   const buyerBalance =
     typeof getBuyerBalance(username) === 'number' ? getBuyerBalance(username) : 0;
@@ -92,26 +131,26 @@ export default function Header() {
               <Users className="w-5 h-5" />
             </Link>
 
-            {/* 🔔 Notification Bell */}
+            {/* 🔔 Notification Bell - USING FILTERED NOTIFICATIONS */}
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
                 className="relative hover:text-[#ff950e] transition"
               >
                 <Bell className="w-5 h-5" />
-                {sellerNotifications.length > 0 && (
+                {filteredNotifications.length > 0 && (
                   <span className="absolute -top-1 -right-2 bg-[#ff950e] text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
-                    {sellerNotifications.length}
+                    {filteredNotifications.length}
                   </span>
                 )}
               </button>
               {showNotifDropdown && (
                 <div className="absolute right-0 mt-2 w-80 bg-[#1a1a1a] text-white rounded shadow-lg z-50 border border-[#333]">
                   <ul className="divide-y divide-gray-800 max-h-64 overflow-y-auto">
-                    {sellerNotifications.length === 0 ? (
+                    {filteredNotifications.length === 0 ? (
                       <li className="p-3 text-sm text-center text-gray-400">No notifications</li>
                     ) : (
-                      sellerNotifications.map((note, i) => (
+                      filteredNotifications.map((note, i) => (
                         <li
                           key={i}
                           className="flex justify-between items-start p-3 text-sm hover:bg-[#222]"
@@ -120,7 +159,13 @@ export default function Header() {
                             {note}
                           </span>
                           <button
-                            onClick={() => clearSellerNotification(i)}
+                            onClick={() => {
+                              // Find this notification in the original list
+                              const origIndex = sellerNotifications.indexOf(note);
+                              if (origIndex !== -1) {
+                                clearSellerNotification(origIndex);
+                              }
+                            }}
                             className="text-xs text-[#ff950e] hover:text-[#e0850d] ml-2"
                           >
                             Clear
