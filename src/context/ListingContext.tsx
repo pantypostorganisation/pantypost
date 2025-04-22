@@ -1,4 +1,3 @@
-// src/context/ListingContext.tsx
 'use client';
 
 import {
@@ -45,9 +44,9 @@ type ListingContextType = {
   subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
   unsubscribeFromSeller: (buyer: string, seller: string) => void;
   isSubscribed: (buyer: string, seller: string) => boolean;
-  sellerNotifications: string[];
+  sellerNotifications: { [seller: string]: string[] };
   addSellerNotification: (seller: string, message: string) => void;
-  clearSellerNotification: (index: number) => void;
+  clearSellerNotification: (seller: string, index: number) => void;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -57,7 +56,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [users, setUsers] = useState<{ [username: string]: Role }>({});
   const [listings, setListings] = useState<Listing[]>([]);
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
-  const [sellerNotifications, setSellerNotifications] = useState<string[]>([]);
+  const [sellerNotifications, setSellerNotifications] = useState<{ [seller: string]: string[] }>({});
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   const { subscribeToSellerWithPayment } = useWallet();
@@ -101,7 +100,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
 
-    // ✅ Track all users
     setUsers((prev) => {
       const updated = { ...prev, [normalized]: actualRole };
       localStorage.setItem('all_users', JSON.stringify(updated));
@@ -160,17 +158,24 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return subscriptions[buyer]?.includes(seller) ?? false;
   };
 
+  // ✅ FIXED: Per-seller notification mapping
   const addSellerNotification = (seller: string, message: string) => {
     setSellerNotifications((prev) => {
-      const updated = [...prev, message];
+      const updated = {
+        ...prev,
+        [seller]: [...(prev[seller] || []), message],
+      };
       localStorage.setItem('seller_notifications', JSON.stringify(updated));
       return updated;
     });
   };
 
-  const clearSellerNotification = (index: number) => {
+  const clearSellerNotification = (seller: string, index: number) => {
     setSellerNotifications((prev) => {
-      const updated = prev.filter((_, i) => i !== index);
+      const updated = {
+        ...prev,
+        [seller]: (prev[seller] || []).filter((_, i) => i !== index),
+      };
       localStorage.setItem('seller_notifications', JSON.stringify(updated));
       return updated;
     });
