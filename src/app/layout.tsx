@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Header from '../components/Header';
 import AgeVerificationModal from '../components/AgeVerificationModal';
-import { ListingsProvider } from '../context/ListingContext';
+import { ListingProvider } from '../context/ListingContext';
 import { WalletProvider } from '../context/WalletContext';
 import { MessageProvider } from '../context/MessageContext';
 import { ReviewProvider } from '../context/ReviewContext';
@@ -27,11 +27,11 @@ export default function RootLayout({
         <WalletProvider>
           <MessageProvider>
             <ReviewProvider>
-              <ListingsProvider>
+              <ListingProvider>
                 <Header />
                 <AgeVerificationModal />
                 {children}
-              </ListingsProvider>
+              </ListingProvider>
             </ReviewProvider>
           </MessageProvider>
         </WalletProvider>

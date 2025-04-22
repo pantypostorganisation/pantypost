@@ -9,10 +9,10 @@ import Link from 'next/link';
 import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star } from 'lucide-react';
 
 export default function ListingDetailPage() {
-  const { listings, user, isSubscribed, addSellerNotification, recordSale } = useListings();
+  const { listings, user, removeListing, addSellerNotification, isSubscribed } = useListings();
   const { id } = useParams();
   const listing = listings.find((item) => item.id === id);
-  const { purchaseListing } = useWallet();
+  const { getBuyerBalance, purchaseListing } = useWallet();
   const {
     sendMessage,
     getMessagesForSeller,
@@ -71,42 +71,28 @@ export default function ListingDetailPage() {
   }
 
   const handlePurchase = () => {
-    if (!listing || !user) return;
+    if (!listing) return;
     
-    // Use purchaseListing from WalletContext to handle the transaction
-    const isPurchased = purchaseListing(listing, user.username);
+    const order = {
+      id: listing.id,
+      title: listing.title,
+      description: listing.description,
+      price: listing.price,
+      markedUpPrice: listing.markedUpPrice,
+      imageUrl: listing.imageUrl,
+      date: new Date().toISOString(),
+      seller: listing.seller,
+      // Include tags and wearTime if they exist
+      ...(listing.tags ? { tags: listing.tags } : {}),
+      ...(listing.wearTime ? { wearTime: listing.wearTime } : {})
+    };
+
+    const isPurchased = purchaseListing(order, currentUsername);
 
     if (isPurchased) {
       setIsProcessing(true);
-      
-      // Create a sale record with appropriate information
-      const sale = {
-        id: Date.now().toString(),
-        listingId: listing.id,
-        listingTitle: listing.title,
-        buyer: user.username,
-        seller: listing.seller,
-        price: listing.markedUpPrice || listing.price,
-        commissionAmount: (listing.markedUpPrice || listing.price) * 0.10, // 10% fee
-        sellerEarnings: (listing.markedUpPrice || listing.price) * 0.90, // 90% to seller
-        date: new Date().toISOString(),
-        imageUrl: listing.imageUrl
-      };
-      
-      // Record the sale - this will:
-      // 1. Update the listing status to 'sold'
-      // 2. Add a notification for the seller
-      // 3. Add the sale to the sales records
-      recordSale(sale);
-      
-      // Find the seller ID
-      const sellerId = getSellerIdByUsername(listing.seller);
-      
-      // Add a notification specifically for this seller
-      if (sellerId) {
-        addSellerNotification(sellerId, `💸 You made a sale: ${listing.title}`);
-      }
-      
+      removeListing(listing.id);
+      addSellerNotification(listing.seller, `💸 You made a sale: ${listing.title}`);
       setPurchaseStatus('✅ Purchase successful!');
       setTimeout(() => {
         router.push('/purchase-success');
@@ -114,18 +100,6 @@ export default function ListingDetailPage() {
     } else {
       setPurchaseStatus('❌ Insufficient funds!');
     }
-  };
-  
-  // Helper function to get seller ID by username
-  const getSellerIdByUsername = (username: string): string => {
-    // Get users from localStorage
-    const storedUsers = localStorage.getItem('users');
-    if (!storedUsers) return '';
-    
-    const users = JSON.parse(storedUsers);
-    const seller = users.find((user: any) => user.username === username && user.role === 'seller');
-    
-    return seller ? seller.id : '';
   };
 
   const handleSendMessage = () => {
@@ -182,13 +156,11 @@ export default function ListingDetailPage() {
             
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
               <p className="text-2xl font-semibold text-pink-600">
-                ${(listing.markedUpPrice || listing.price).toFixed(2)}
+                ${listing.markedUpPrice.toFixed(2)}
               </p>
               
               <p className="text-sm text-gray-700 mt-2">
-                Your Balance: ${user?.role === 'buyer' ? 
-                  (useWallet().buyerWallet.balance || 0).toFixed(2) : 
-                  '0.00'}
+                Your Balance: ${getBuyerBalance(currentUsername).toFixed(2)}
               </p>
             </div>
 

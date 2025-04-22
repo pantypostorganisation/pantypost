@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { Listing, Sale } from '@/context/ListingContext';
+import { Listing } from '@/context/ListingContext';
 import { useState, useEffect } from 'react';
 import { Crown, Filter, Clock, ShoppingBag, Lock } from 'lucide-react';
 
@@ -15,7 +15,7 @@ type SellerProfile = {
 };
 
 export default function BrowsePage() {
-  const { listings, user, isSubscribed, recordSale } = useListings();
+  const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -40,27 +40,11 @@ export default function BrowsePage() {
   const handlePurchase = (listing: Listing) => {
     if (!user || !listing.seller) return;
 
-    // Call the purchaseListing function from WalletContext
     const success = purchaseListing(listing, user.username);
 
     if (success) {
-      // Create sale record
-      const sale: Sale = {
-        id: Date.now().toString(),
-        listingId: listing.id,
-        listingTitle: listing.title,
-        buyer: user.username,
-        seller: listing.seller,
-        price: listing.markedUpPrice || listing.price,
-        commissionAmount: (listing.markedUpPrice || listing.price) * 0.10, // 10% commission
-        sellerEarnings: (listing.markedUpPrice || listing.price) * 0.90, // 90% to seller
-        date: new Date().toISOString(),
-        imageUrl: listing.imageUrl
-      };
-
-      // Record the sale in the context
-      recordSale(sale);
-      
+      removeListing(listing.id);
+      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
       alert('Purchase successful! 🎉');
     } else {
       alert('Insufficient balance. Please top up your wallet.');
@@ -69,11 +53,6 @@ export default function BrowsePage() {
 
   // Apply filters to listings
   const filteredListings = listings.filter((listing) => {
-    // Only show available listings
-    if (listing.status !== 'available') {
-      return false;
-    }
-    
     // First check premium visibility
     if (listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller))) {
       return false;
@@ -253,7 +232,7 @@ export default function BrowsePage() {
                   </div>
                 )}
                 
-                {/* Listing content */}
+                {/* FIX: Dividing this into separate sections to avoid nested links */}
                 <div className="listing-content">
                   <Link href={`/browse/${listing.id}`}>
                     <div className="relative">
@@ -298,10 +277,11 @@ export default function BrowsePage() {
                     
                     <div className="flex justify-between items-center mt-3">
                       <p className="font-bold text-pink-700">
-                        ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
+                        ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
                       </p>
                       
                       <div className="flex items-center">
+                        {/* This is now a separate link, not nested inside the listing link */}
                         <Link href={`/sellers/${listing.seller}`} className="text-xs text-gray-600 hover:text-pink-600">
                           {listing.seller}
                         </Link>
