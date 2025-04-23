@@ -153,6 +153,14 @@ export default function SellerMessagesPage() {
                           {new Date(msg.date).toLocaleString()}
                         </p>
                         <p>{msg.content}</p>
+                        {msg.type === 'customRequest' && msg.meta && (
+                          <div className="mt-2 text-sm text-pink-700">
+                            <p><strong>🛠️ Custom Request</strong></p>
+                            <p>Title: {msg.meta.title}</p>
+                            <p>Price: ${msg.meta.price.toFixed(2)}</p>
+                            <p>Tags: {msg.meta.tags.join(', ')}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

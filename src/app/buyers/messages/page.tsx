@@ -17,6 +17,7 @@ export default function BuyerMessagesPage() {
     isBlocked,
     hasReported,
   } = useMessages();
+
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const markedThreadsRef = useRef<Set<string>>(new Set());
@@ -163,6 +164,15 @@ export default function BuyerMessagesPage() {
                           on {new Date(msg.date).toLocaleString()}
                         </p>
                         <p>{msg.content}</p>
+
+                        {msg.type === 'customRequest' && msg.meta && (
+                          <div className="mt-2 text-sm text-pink-700">
+                            <p><strong>⚙️ Custom Request</strong></p>
+                            <p>📌 Title: {msg.meta.title}</p>
+                            <p>💰 Price: ${msg.meta.price.toFixed(2)}</p>
+                            <p>🏷️ Tags: {msg.meta.tags.join(', ')}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -185,6 +195,7 @@ export default function BuyerMessagesPage() {
                       </div>
                     </div>
                   )}
+
                   {isUserBlocked && (
                     <p className="text-center text-sm text-red-500 italic">
                       You have blocked this seller.

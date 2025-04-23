@@ -8,6 +8,12 @@ export type Message = {
   content: string;
   date: string;
   read?: boolean;
+  type?: 'normal' | 'customRequest';
+  meta?: {
+    title: string;
+    price: number;
+    tags: string[];
+  };
 };
 
 type ReportLog = {
@@ -20,6 +26,14 @@ type ReportLog = {
 type MessageContextType = {
   messages: { [seller: string]: Message[] };
   sendMessage: (sender: string, receiver: string, content: string) => void;
+  sendCustomRequest: (
+    buyer: string,
+    seller: string,
+    content: string,
+    title: string,
+    price: number,
+    tags: string[]
+  ) => void;
   getMessagesForSeller: (seller: string) => Message[];
   markMessagesAsRead: (seller: string, sender: string) => void;
   blockUser: (blocker: string, blockee: string) => void;
@@ -68,6 +82,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       content,
       date: new Date().toISOString(),
       read: false,
+      type: 'normal',
     };
 
     setMessages((prev) => {
@@ -75,6 +90,39 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       return {
         ...prev,
         [receiver]: updatedReceiverMessages,
+      };
+    });
+  };
+
+  const sendCustomRequest = (
+    buyer: string,
+    seller: string,
+    content: string,
+    title: string,
+    price: number,
+    tags: string[]
+  ) => {
+    if (isBlocked(seller, buyer)) return;
+
+    const newMessage: Message = {
+      sender: buyer,
+      receiver: seller,
+      content,
+      date: new Date().toISOString(),
+      read: false,
+      type: 'customRequest',
+      meta: {
+        title,
+        price,
+        tags,
+      },
+    };
+
+    setMessages((prev) => {
+      const updatedReceiverMessages = [...(prev[seller] || []), newMessage];
+      return {
+        ...prev,
+        [seller]: updatedReceiverMessages,
       };
     });
   };
@@ -115,7 +163,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       return { ...prev, [reporter]: Array.from(new Set(updated)) };
     });
 
-    // Save the reported message thread to admin logs
     const pantyMessages = JSON.parse(localStorage.getItem('panty_messages') || '{}');
     const allMessages: Message[] = [];
 
@@ -153,6 +200,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       value={{
         messages,
         sendMessage,
+        sendCustomRequest,
         getMessagesForSeller,
         markMessagesAsRead,
         blockUser,
