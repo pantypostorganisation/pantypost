@@ -8,7 +8,6 @@ import { Listing } from '@/context/ListingContext';
 import { useState, useEffect } from 'react';
 import { Crown, Filter, Clock, ShoppingBag, Lock } from 'lucide-react';
 
-// Define a proper type for seller profiles
 type SellerProfile = {
   bio: string | null;
   pic: string | null;
@@ -17,22 +16,26 @@ type SellerProfile = {
 export default function BrowsePage() {
   const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
+
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [sellerProfiles, setSellerProfiles] = useState<{[key: string]: SellerProfile}>({});
+  const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc'>('newest');
 
-  // Load seller profiles from sessionStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const sellers = new Set(listings.map(listing => listing.seller));
-      const profiles: {[key: string]: SellerProfile} = {};
-      
+      const profiles: { [key: string]: SellerProfile } = {};
+
       sellers.forEach(seller => {
         const bio = sessionStorage.getItem(`profile_bio_${seller}`);
         const pic = sessionStorage.getItem(`profile_pic_${seller}`);
         profiles[seller] = { bio, pic };
       });
-      
+
       setSellerProfiles(profiles);
     }
   }, [listings]);
@@ -51,73 +54,79 @@ export default function BrowsePage() {
     }
   };
 
-  // Apply filters to listings
-  const filteredListings = listings.filter((listing) => {
-    // First check premium visibility
-    if (listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller))) {
-      return false;
-    }
-    
-    // Apply selected filter type
-    if (filter === 'standard' && listing.isPremium) return false;
-    if (filter === 'premium' && !listing.isPremium) return false;
-    
-    // Apply tag filters if any
-    if (activeFilters.length > 0) {
-      if (!listing.tags || listing.tags.length === 0) return false;
-      return activeFilters.some(tag => listing.tags?.includes(tag));
-    }
-    
-    return true;
-  });
+  const filteredListings = listings
+    .filter(listing => {
+      if (listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller))) return false;
+      if (filter === 'standard' && listing.isPremium) return false;
+      if (filter === 'premium' && !listing.isPremium) return false;
+      if (activeFilters.length > 0 && (!listing.tags || !activeFilters.some(tag => listing.tags?.includes(tag)))) {
+        return false;
+      }
+      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
+        .join(' ')
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-  // Extract all unique tags from listings
-  const allTags = Array.from(new Set(
-    listings.flatMap(listing => listing.tags || [])
-  )).sort();
+      if (!matchesSearch) return false;
 
-  // Get premium sellers that the user is not subscribed to
+      const price = listing.markedUpPrice || listing.price;
+      const min = parseFloat(minPrice) || 0;
+      const max = parseFloat(maxPrice) || Infinity;
+      if (price < min || price > max) return false;
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'priceAsc') return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
+      if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? a.price);
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+  const allTags = Array.from(new Set(listings.flatMap(l => l.tags || []))).sort();
+
   const premiumSellers = listings
     .filter(l => l.isPremium)
     .map(l => l.seller)
-    .filter((seller, index, self) => self.indexOf(seller) === index)
-    .filter(seller => !user?.username || !isSubscribed(user.username, seller));
+    .filter((seller, i, self) => self.indexOf(seller) === i && (!user?.username || !isSubscribed(user.username, seller)));
 
   return (
     <RequireAuth role="buyer">
-      <main className="p-10 max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+      <main className="p-10 max-w-7xl mx-auto space-y-8">
+
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-3xl font-bold text-white">Browse Listings</h1>
-          
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg ${filter === 'all' 
-                ? 'bg-pink-600 text-white' 
-                : 'bg-white text-gray-800 hover:bg-gray-200'}`}
+          <div className="flex gap-2 flex-wrap">
+            <input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search..."
+              className="px-3 py-2 rounded border text-sm"
+            />
+            <input
+              value={minPrice}
+              onChange={e => setMinPrice(e.target.value)}
+              placeholder="Min Price"
+              className="px-3 py-2 rounded border text-sm w-24"
+            />
+            <input
+              value={maxPrice}
+              onChange={e => setMaxPrice(e.target.value)}
+              placeholder="Max Price"
+              className="px-3 py-2 rounded border text-sm w-24"
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-3 py-2 rounded border text-sm"
             >
-              All
-            </button>
-            <button 
-              onClick={() => setFilter('standard')}
-              className={`px-4 py-2 rounded-lg ${filter === 'standard' 
-                ? 'bg-pink-600 text-white' 
-                : 'bg-white text-gray-800 hover:bg-gray-200'}`}
-            >
-              Standard
-            </button>
-            <button 
-              onClick={() => setFilter('premium')}
-              className={`px-4 py-2 rounded-lg ${filter === 'premium' 
-                ? 'bg-yellow-500 text-white' 
-                : 'bg-white text-gray-800 hover:bg-gray-200'}`}
-            >
-              <Crown className="w-4 h-4 inline mr-1" />
-              Premium
-            </button>
+              <option value="newest">Newest</option>
+              <option value="priceAsc">Price: Low → High</option>
+              <option value="priceDesc">Price: High → Low</option>
+            </select>
           </div>
         </div>
-        
+
+        {/* [Rest of your JSX for filters, listings, and cards remains unchanged below this line] */}
         {/* Tag filters */}
         {allTags.length > 0 && (
           <div className="mb-6 bg-white p-4 rounded-lg">
@@ -129,13 +138,13 @@ export default function BrowsePage() {
               {allTags.map(tag => (
                 <button
                   key={tag}
-                  onClick={() => {
-                    setActiveFilters(prev => 
-                      prev.includes(tag) 
-                        ? prev.filter(t => t !== tag) 
+                  onClick={() =>
+                    setActiveFilters(prev =>
+                      prev.includes(tag)
+                        ? prev.filter(t => t !== tag)
                         : [...prev, tag]
-                    );
-                  }}
+                    )
+                  }
                   className={`px-2 py-1 text-xs rounded-full ${
                     activeFilters.includes(tag)
                       ? 'bg-pink-600 text-white'
@@ -157,7 +166,7 @@ export default function BrowsePage() {
           </div>
         )}
 
-        {/* Premium Seller Subscribe Prompt */}
+        {/* Premium Seller Prompt */}
         {premiumSellers.length > 0 && (
           <div className="mb-8 bg-yellow-600 rounded-lg p-5 border border-yellow-500 shadow-sm text-white">
             <div className="flex items-center gap-2 mb-3">
@@ -171,20 +180,22 @@ export default function BrowsePage() {
               {premiumSellers.slice(0, 4).map(seller => {
                 const profile = sellerProfiles[seller] || { bio: null, pic: null };
                 return (
-                  <Link 
+                  <Link
                     href={`/sellers/${seller}`}
                     key={seller}
                     className="flex items-center gap-3 bg-white p-3 rounded-lg border border-yellow-300 hover:shadow-md transition"
                   >
                     {profile.pic ? (
-                      <img 
-                        src={profile.pic} 
-                        alt={seller} 
+                      <img
+                        src={profile.pic}
+                        alt={seller}
                         className="w-10 h-10 rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-gray-500 text-xs">{seller.charAt(0).toUpperCase()}</span>
+                        <span className="text-gray-500 text-xs">
+                          {seller.charAt(0).toUpperCase()}
+                        </span>
                       </div>
                     )}
                     <div>
@@ -205,12 +216,14 @@ export default function BrowsePage() {
           </div>
         )}
 
+        {/* Listings */}
         {filteredListings.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
             <ShoppingBag className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-700 font-medium">No listings match your current filters</p>
-            <p className="text-sm text-gray-500 mt-1">Try changing your filter settings or check back later</p>
-            
+            <p className="text-sm text-gray-500 mt-1">
+              Try changing your filter settings or check back later
+            </p>
             {filter === 'premium' && (
               <p className="mt-4 text-sm text-yellow-600">
                 You may need to subscribe to sellers to see their premium listings
@@ -222,7 +235,7 @@ export default function BrowsePage() {
             {filteredListings.map((listing) => (
               <div
                 key={listing.id}
-                className={`border rounded-xl overflow-hidden shadow hover:shadow-md transition flex flex-col justify-between relative bg-white`}
+                className="border rounded-xl overflow-hidden shadow hover:shadow-md transition flex flex-col justify-between relative bg-white"
               >
                 {listing.isPremium && (
                   <div className="absolute top-3 right-3 z-10">
@@ -231,8 +244,7 @@ export default function BrowsePage() {
                     </span>
                   </div>
                 )}
-                
-                {/* FIX: Dividing this into separate sections to avoid nested links */}
+
                 <div className="listing-content">
                   <Link href={`/browse/${listing.id}`}>
                     <div className="relative">
@@ -248,21 +260,15 @@ export default function BrowsePage() {
                       )}
                     </div>
                   </Link>
-                  
+
                   <div className="p-4">
                     <Link href={`/browse/${listing.id}`}>
-                      <div className="flex items-start justify-between">
-                        <h2 className="text-lg font-semibold text-gray-800">{listing.title}</h2>
-                      </div>
-                      
-                      <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-                        {listing.description}
-                      </p>
-                      
-                      {listing.tags && listing.tags.length > 0 && (
+                      <h2 className="text-lg font-semibold text-gray-800">{listing.title}</h2>
+                      <p className="text-sm text-gray-700 mt-1 line-clamp-2">{listing.description}</p>
+                      {listing.tags && (
                         <div className="flex flex-wrap gap-1 mt-2">
-                          {listing.tags.slice(0, 3).map((tag, idx) => (
-                            <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
+                          {listing.tags.slice(0, 3).map((tag, i) => (
+                            <span key={i} className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
                               {tag}
                             </span>
                           ))}
@@ -274,18 +280,17 @@ export default function BrowsePage() {
                         </div>
                       )}
                     </Link>
-                    
+
                     <div className="flex justify-between items-center mt-3">
                       <p className="font-bold text-pink-700">
                         ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
                       </p>
-                      
-                      <div className="flex items-center">
-                        {/* This is now a separate link, not nested inside the listing link */}
-                        <Link href={`/sellers/${listing.seller}`} className="text-xs text-gray-600 hover:text-pink-600">
-                          {listing.seller}
-                        </Link>
-                      </div>
+                      <Link
+                        href={`/sellers/${listing.seller}`}
+                        className="text-xs text-gray-600 hover:text-pink-600"
+                      >
+                        {listing.seller}
+                      </Link>
                     </div>
                   </div>
                 </div>
