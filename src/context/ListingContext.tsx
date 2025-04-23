@@ -1,281 +1,482 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from 'react';
-import { useWallet } from './WalletContext';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type Role = 'buyer' | 'seller' | 'admin';
-
-export type User = {
-  username: string;
-  role: Role;
-};
-
-export type Listing = {
+// Add viewCount, sellerRating, and isVerifiedSeller to the Listing type
+type Listing = {
   id: string;
   title: string;
   description: string;
   price: number;
-  markedUpPrice: number;
-  imageUrl: string;
-  date: string;
-  seller: string;
+  imageUrl?: string;
+  sellerId: string;
+  sellerName: string;
   isPremium?: boolean;
-  tags?: string[];
-  wearTime?: string;
+  category?: string;
+  createdAt: number; // timestamp
+  status: 'active' | 'sold' | 'pending';
+  viewCount?: number; // New property for filtering by popularity
+  sellerRating?: number; // New property for filtering by seller rating
+  isVerifiedSeller?: boolean; // New property for filtering by verified sellers
 };
 
-// COMPLETELY NEW NOTIFICATION SYSTEM
-// Simple key-value object with seller usernames as keys and arrays of messages as values
-type NotificationStore = Record<string, string[]>;
+type User = {
+  id: string;
+  username: string;
+  role: 'buyer' | 'seller' | 'admin';
+  balance: number;
+  subscriptions: string[]; // Array of seller IDs the user is subscribed to
+  cart: CartItem[];
+};
+
+type CartItem = {
+  listingId: string;
+  quantity: number;
+};
 
 type ListingContextType = {
-  user: User | null;
-  role: Role | null;
-  users: { [username: string]: Role };
-  login: (username: string, role: Role) => void;
-  logout: () => void;
-  isAuthReady: boolean;
   listings: Listing[];
-  addListing: (listing: Listing) => void;
+  user: User | null;
+  isAuthReady: boolean;
+  login: (username: string, role: 'buyer' | 'seller' | 'admin') => void;
+  logout: () => void;
+  addListing: (listing: Omit<Listing, 'id'>) => void;
+  updateListing: (id: string, updates: Partial<Listing>) => void;
   removeListing: (id: string) => void;
-  subscriptions: { [buyer: string]: string[] };
-  subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
-  unsubscribeFromSeller: (buyer: string, seller: string) => void;
-  isSubscribed: (buyer: string, seller: string) => boolean;
-  sellerNotifications: string[];
-  addSellerNotification: (seller: string, message: string) => void;
-  clearSellerNotification: (index: number) => void;
+  addToCart: (listing: Listing) => void;
+  removeFromCart: (listingId: string) => void;
+  clearCart: () => void;
+  isSubscribedToSeller: (sellerId: string) => boolean;
+  subscribeToSeller: (sellerId: string, sellerName: string) => void;
+  unsubscribeFromSeller: (sellerId: string) => void;
+  addViewToListing: (listingId: string) => void; // New function to track views
+  checkout: () => void;
+  getSavedFilters: () => any;
+  saveFilters: (filters: any) => void;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
-export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<{ [username: string]: Role }>({});
+export function ListingProvider({ children }: { children: React.ReactNode }) {
   const [listings, setListings] = useState<Listing[]>([]);
-  const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
-  
-  // NEW: Replace sellerNotifications with a store that separates by seller
-  const [notificationStore, setNotificationStore] = useState<NotificationStore>({});
-  
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  const { subscribeToSellerWithPayment } = useWallet();
-
+  // Load data from localStorage on component mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedUser = localStorage.getItem('user');
-      const storedUsers = localStorage.getItem('all_users');
-      const storedListings = localStorage.getItem('listings');
-      const storedSubs = localStorage.getItem('subscriptions');
-      
-      // Try to load notifications from new storage format
-      const storedNotifications = localStorage.getItem('seller_notifications_store');
+    const storedListings = localStorage.getItem('pantypost_listings');
+    const storedUser = localStorage.getItem('pantypost_user');
 
-      if (storedUser) setUser(JSON.parse(storedUser));
-      if (storedUsers) setUsers(JSON.parse(storedUsers));
-      if (storedListings) setListings(JSON.parse(storedListings));
-      if (storedSubs) setSubscriptions(JSON.parse(storedSubs));
-      
-      // Initialize notification store
-      if (storedNotifications) {
-        try {
-          setNotificationStore(JSON.parse(storedNotifications));
-        } catch (e) {
-          console.error("Error parsing notification store:", e);
-          // Initialize with empty object if there's an error
-          setNotificationStore({});
-          localStorage.setItem('seller_notifications_store', JSON.stringify({}));
-        }
-      } else {
-        // Start with empty object if no notifications found
-        setNotificationStore({});
-        localStorage.setItem('seller_notifications_store', JSON.stringify({}));
-      }
-      
-      // Clear any old notification formats to avoid conflicts
-      localStorage.removeItem('seller_notifications');
-      localStorage.removeItem('seller_notifications_by_id');
-      localStorage.removeItem('seller_notifications_map');
-
-      setIsAuthReady(true);
+    if (storedListings) {
+      setListings(JSON.parse(storedListings));
+    } else {
+      // Initialize with demo data if no listings exist
+      const demoListings = generateDemoListings();
+      setListings(demoListings);
+      localStorage.setItem('pantypost_listings', JSON.stringify(demoListings));
     }
+
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+
+    setIsAuthReady(true);
   }, []);
 
-  const login = (username: string, selectedRole: Role) => {
-    const normalized = username.trim().toLowerCase();
-    const actualRole: Role =
-      normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
+  // Save listings to localStorage whenever they change
+  useEffect(() => {
+    if (listings.length > 0) {
+      localStorage.setItem('pantypost_listings', JSON.stringify(listings));
+    }
+  }, [listings]);
 
-    const newUser = { username: normalized, role: actualRole };
-    setUser(newUser);
-    localStorage.setItem('user', JSON.stringify(newUser));
+  // Save user to localStorage whenever it changes
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('pantypost_user', JSON.stringify(user));
+    }
+  }, [user]);
 
-    // ✅ Track all users
-    setUsers((prev) => {
-      const updated = { ...prev, [normalized]: actualRole };
-      localStorage.setItem('all_users', JSON.stringify(updated));
-      return updated;
-    });
+  // Login function
+  const login = (username: string, role: 'buyer' | 'seller' | 'admin') => {
+    // Check if user exists in localStorage
+    const storedUsers = localStorage.getItem('pantypost_users');
+    const users = storedUsers ? JSON.parse(storedUsers) : [];
+    
+    let existingUser = users.find((u: any) => u.username === username);
+    
+    // For admin role, hardcode specific credentials
+    if (role === 'admin' && (username === 'oakley' || username === 'gerome')) {
+      existingUser = {
+        id: username === 'oakley' ? 'admin1' : 'admin2',
+        username,
+        role: 'admin',
+        balance: 1000,
+        subscriptions: [],
+        cart: []
+      };
+    }
+
+    if (existingUser) {
+      setUser(existingUser);
+    } else {
+      // Create new user if not exists
+      const newUser: User = {
+        id: `user_${Date.now()}`,
+        username,
+        role,
+        balance: role === 'buyer' ? 500 : 0, // Give buyers some starting balance
+        subscriptions: [],
+        cart: []
+      };
+      
+      // Save to localStorage
+      const updatedUsers = [...users, newUser];
+      localStorage.setItem('pantypost_users', JSON.stringify(updatedUsers));
+      
+      setUser(newUser);
+    }
   };
 
+  // Logout function
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    localStorage.removeItem('pantypost_user');
   };
 
-  const addListing = (listing: Listing) => {
-    setListings((prev) => {
-      const updated = [...prev, listing];
-      localStorage.setItem('listings', JSON.stringify(updated));
-      return updated;
-    });
+  // Add a new listing
+  const addListing = (listing: Omit<Listing, 'id'>) => {
+    const newListing: Listing = {
+      ...listing,
+      id: `listing_${Date.now()}`,
+      createdAt: Date.now(),
+      status: 'active',
+      viewCount: 0,
+    };
+    
+    setListings((prevListings) => [...prevListings, newListing]);
   };
 
+  // Update an existing listing
+  const updateListing = (id: string, updates: Partial<Listing>) => {
+    setListings((prevListings) =>
+      prevListings.map((listing) =>
+        listing.id === id ? { ...listing, ...updates } : listing
+      )
+    );
+  };
+
+  // Remove a listing
   const removeListing = (id: string) => {
-    setListings((prev) => {
-      const updated = prev.filter((listing) => listing.id !== id);
-      localStorage.setItem('listings', JSON.stringify(updated));
-      return updated;
+    setListings((prevListings) => prevListings.filter((listing) => listing.id !== id));
+  };
+
+  // Add a listing to cart
+  const addToCart = (listing: Listing) => {
+    if (!user) return;
+    
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+      
+      // Check if item is already in cart
+      const existingCartItem = prevUser.cart.find(item => item.listingId === listing.id);
+      
+      let updatedCart;
+      if (existingCartItem) {
+        updatedCart = prevUser.cart.map(item => 
+          item.listingId === listing.id 
+            ? { ...item, quantity: item.quantity + 1 } 
+            : item
+        );
+      } else {
+        updatedCart = [...prevUser.cart, { listingId: listing.id, quantity: 1 }];
+      }
+      
+      return { ...prevUser, cart: updatedCart };
     });
   };
 
-  const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
-    const success = subscribeToSellerWithPayment(buyer, seller, price);
-    if (success) {
-      setSubscriptions((prev) => {
-        const updated = {
-          ...prev,
-          [buyer]: [...(prev[buyer] || []), seller],
-        };
-        localStorage.setItem('subscriptions', JSON.stringify(updated));
-        return updated;
-      });
-    }
-    return success;
-  };
-
-  const unsubscribeFromSeller = (buyer: string, seller: string) => {
-    setSubscriptions((prev) => {
-      const updated = {
-        ...prev,
-        [buyer]: (prev[buyer] || []).filter((s) => s !== seller),
+  // Remove a listing from cart
+  const removeFromCart = (listingId: string) => {
+    if (!user) return;
+    
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+      
+      return {
+        ...prevUser,
+        cart: prevUser.cart.filter(item => item.listingId !== listingId)
       };
-      localStorage.setItem('subscriptions', JSON.stringify(updated));
-      return updated;
     });
   };
 
-  const isSubscribed = (buyer: string, seller: string): boolean => {
-    return subscriptions[buyer]?.includes(seller) ?? false;
-  };
-
-  // COMPLETELY NEW notification implementation
-  const addSellerNotification = (seller: string, message: string) => {
-    if (!seller) {
-      console.warn("Attempted to add notification without seller ID");
-      return;
-    }
+  // Clear the cart
+  const clearCart = () => {
+    if (!user) return;
     
-    // Update notification store with new message for this seller
-    setNotificationStore(prev => {
-      // Get existing notifications for this seller or empty array
-      const sellerNotifications = prev[seller] || [];
+    setUser((prevUser) => {
+      if (!prevUser) return null;
       
-      // Create updated store with new notification added
-      const updated = {
-        ...prev,
-        [seller]: [...sellerNotifications, message]
+      return {
+        ...prevUser,
+        cart: []
       };
-      
-      // Save to localStorage
-      localStorage.setItem('seller_notifications_store', JSON.stringify(updated));
-      
-      return updated;
     });
   };
 
-  // Get only notifications for the current user
-  const getCurrentSellerNotifications = (): string[] => {
-    if (!user || user.role !== 'seller') {
-      return [];
-    }
-    
-    // Return only notifications for the current seller
-    return notificationStore[user.username] || [];
+  // Check if user is subscribed to a seller
+  const isSubscribedToSeller = (sellerId: string) => {
+    if (!user) return false;
+    return user.subscriptions.includes(sellerId);
   };
 
-  // Clear notification for the current user
-  const clearSellerNotification = (index: number) => {
-    if (!user || user.role !== 'seller') {
+  // Subscribe to a seller
+  const subscribeToSeller = (sellerId: string, sellerName: string) => {
+    if (!user) return;
+    
+    // Check if already subscribed
+    if (isSubscribedToSeller(sellerId)) return;
+    
+    // Subscription cost is $9.99
+    const subscriptionCost = 9.99;
+    
+    // Check if user has enough balance
+    if (user.balance < subscriptionCost) {
+      alert('Insufficient balance to subscribe. Please add funds to your wallet.');
       return;
     }
     
-    const username = user.username;
-    const userNotifications = notificationStore[username] || [];
+    // Update user balance and subscriptions
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+      
+      return {
+        ...prevUser,
+        balance: prevUser.balance - subscriptionCost,
+        subscriptions: [...prevUser.subscriptions, sellerId]
+      };
+    });
     
-    // Check if index is valid
-    if (index < 0 || index >= userNotifications.length) {
+    // Update seller balance (75% goes to seller, 25% to platform)
+    const sellerAmount = subscriptionCost * 0.75;
+    
+    // Find the seller user
+    const storedUsers = localStorage.getItem('pantypost_users');
+    const users = storedUsers ? JSON.parse(storedUsers) : [];
+    
+    const sellerUser = users.find((u: any) => u.id === sellerId);
+    
+    if (sellerUser) {
+      sellerUser.balance += sellerAmount;
+      
+      // Update seller in localStorage
+      localStorage.setItem('pantypost_users', JSON.stringify(users));
+    }
+    
+    // Notify user
+    alert(`You have successfully subscribed to ${sellerName}'s content!`);
+  };
+
+  // Unsubscribe from a seller
+  const unsubscribeFromSeller = (sellerId: string) => {
+    if (!user) return;
+    
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+      
+      return {
+        ...prevUser,
+        subscriptions: prevUser.subscriptions.filter(id => id !== sellerId)
+      };
+    });
+  };
+
+  // Add a view to a listing (for popularity tracking)
+  const addViewToListing = (listingId: string) => {
+    setListings((prevListings) =>
+      prevListings.map((listing) =>
+        listing.id === listingId
+          ? { ...listing, viewCount: (listing.viewCount || 0) + 1 }
+          : listing
+      )
+    );
+  };
+
+  // Process checkout
+  const checkout = () => {
+    if (!user || user.cart.length === 0) return;
+    
+    // Calculate total cost
+    let totalCost = 0;
+    const updatedListings = [...listings];
+    
+    user.cart.forEach(item => {
+      const listing = listings.find(l => l.id === item.listingId);
+      if (listing && listing.status === 'active') {
+        totalCost += listing.price * item.quantity;
+        
+        // Update listing status
+        const listingIndex = updatedListings.findIndex(l => l.id === item.listingId);
+        if (listingIndex !== -1) {
+          updatedListings[listingIndex] = {
+            ...updatedListings[listingIndex],
+            status: 'sold'
+          };
+        }
+      }
+    });
+    
+    // Add platform fee (10%)
+    const platformFee = totalCost * 0.1;
+    const finalCost = totalCost + platformFee;
+    
+    // Check if user has enough balance
+    if (user.balance < finalCost) {
+      alert(`Insufficient balance. Your total is $${finalCost.toFixed(2)} including platform fee.`);
       return;
     }
     
-    // Create new notifications array without the specified index
-    const updatedNotifications = [
-      ...userNotifications.slice(0, index),
-      ...userNotifications.slice(index + 1)
+    // Process payment
+    setUser((prevUser) => {
+      if (!prevUser) return null;
+      
+      return {
+        ...prevUser,
+        balance: prevUser.balance - finalCost,
+        cart: []
+      };
+    });
+    
+    // Update listings
+    setListings(updatedListings);
+    
+    // Update sellers' balances (90% of item price goes to sellers)
+    const sellerPayments = new Map<string, number>();
+    
+    user.cart.forEach(item => {
+      const listing = listings.find(l => l.id === item.listingId);
+      if (listing && listing.status === 'active') {
+        const sellerAmount = listing.price * item.quantity * 0.9;
+        const sellerId = listing.sellerId;
+        
+        sellerPayments.set(
+          sellerId,
+          (sellerPayments.get(sellerId) || 0) + sellerAmount
+        );
+      }
+    });
+    
+    // Update sellers in localStorage
+    const storedUsers = localStorage.getItem('pantypost_users');
+    const users = storedUsers ? JSON.parse(storedUsers) : [];
+    
+    sellerPayments.forEach((amount, sellerId) => {
+      const sellerIndex = users.findIndex((u: any) => u.id === sellerId);
+      if (sellerIndex !== -1) {
+        users[sellerIndex].balance += amount;
+      }
+    });
+    
+    localStorage.setItem('pantypost_users', JSON.stringify(users));
+    
+    // Notify user
+    alert(`Purchase successful! Total: $${finalCost.toFixed(2)}`);
+  };
+
+  // Get saved filters from localStorage
+  const getSavedFilters = () => {
+    if (!user) return null;
+    
+    const storedFilters = localStorage.getItem(`pantypost_filters_${user.id}`);
+    return storedFilters ? JSON.parse(storedFilters) : null;
+  };
+
+  // Save filters to localStorage
+  const saveFilters = (filters: any) => {
+    if (!user) return;
+    
+    localStorage.setItem(`pantypost_filters_${user.id}`, JSON.stringify(filters));
+  };
+
+  // Generate demo listings if none exist
+  function generateDemoListings(): Listing[] {
+    const categories = [
+      'Panties', 
+      'Bras', 
+      'Socks', 
+      'Lingerie', 
+      'Activewear', 
+      'Swimwear'
     ];
     
-    // Update the store
-    setNotificationStore(prev => {
-      const updated = {
-        ...prev,
-        [username]: updatedNotifications
-      };
+    const sellerNames = [
+      'Emily', 'Jessica', 'Sophia', 'Olivia', 'Emma', 
+      'Ava', 'Mia', 'Isabella', 'Zoe', 'Lily'
+    ];
+    
+    const demoListings: Listing[] = [];
+    
+    // Generate 20 demo listings
+    for (let i = 1; i <= 20; i++) {
+      const sellerId = `seller_${i % 10 + 1}`;
+      const sellerName = sellerNames[i % 10];
+      const category = categories[Math.floor(Math.random() * categories.length)];
+      const isPremium = Math.random() > 0.7; // 30% chance to be premium
+      const isVerified = Math.random() > 0.5; // 50% chance to be verified
       
-      // Save to localStorage
-      localStorage.setItem('seller_notifications_store', JSON.stringify(updated));
-      
-      return updated;
-    });
-  };
-
-  // Get all current seller's notifications
-  const sellerNotifications = getCurrentSellerNotifications();
+      demoListings.push({
+        id: `listing_${i}`,
+        title: `${category} Item ${i}`,
+        description: `This is a demo ${category.toLowerCase()} item from ${sellerName}.`,
+        price: Math.floor(Math.random() * 100) + 10, // Random price between $10-$110
+        imageUrl: `/images/demo_${i % 5 + 1}.jpg`, // Cycle through 5 demo images
+        sellerId,
+        sellerName,
+        isPremium,
+        category,
+        createdAt: Date.now() - (i * 86400000), // Spread creation dates over several days
+        status: 'active',
+        viewCount: Math.floor(Math.random() * 1000), // Random view count
+        sellerRating: Math.floor(Math.random() * 5) + 1, // Random rating 1-5
+        isVerifiedSeller: isVerified,
+      });
+    }
+    
+    return demoListings;
+  }
 
   return (
     <ListingContext.Provider
       value={{
+        listings,
         user,
-        role: user?.role ?? null,
-        users,
+        isAuthReady,
         login,
         logout,
-        isAuthReady,
-        listings,
         addListing,
+        updateListing,
         removeListing,
-        subscriptions,
+        addToCart,
+        removeFromCart,
+        clearCart,
+        isSubscribedToSeller,
         subscribeToSeller,
         unsubscribeFromSeller,
-        isSubscribed,
-        sellerNotifications,
-        addSellerNotification,
-        clearSellerNotification,
+        addViewToListing,
+        checkout,
+        getSavedFilters,
+        saveFilters,
       }}
     >
       {children}
     </ListingContext.Provider>
   );
-};
+}
 
-export const useListings = () => {
+export function useListings() {
   const context = useContext(ListingContext);
-  if (!context) throw new Error('useListings must be used within a ListingProvider');
+  if (context === undefined) {
+    throw new Error('useListings must be used within a ListingProvider');
+  }
   return context;
-};
+}
