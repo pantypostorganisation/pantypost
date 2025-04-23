@@ -33,7 +33,15 @@ export default function BuyerDashboardPage() {
 
   return (
     <main className="p-10 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">🛍️ Your Purchase History</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">🛍️ Your Purchase History</h1>
+        <Link
+          href="/buyers/custom-request"
+          className="text-sm bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
+        >
+          + Create Custom Request
+        </Link>
+      </div>
 
       {uniqueSellers.length === 0 ? (
         <p className="text-gray-500 italic">You haven't purchased from any sellers yet.</p>

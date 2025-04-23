@@ -7,6 +7,7 @@ import { ListingProvider } from '../context/ListingContext';
 import { WalletProvider } from '../context/WalletContext';
 import { MessageProvider } from '../context/MessageContext';
 import { ReviewProvider } from '../context/ReviewContext';
+import { RequestProvider } from '../context/RequestContext';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,11 +28,13 @@ export default function RootLayout({
         <WalletProvider>
           <MessageProvider>
             <ReviewProvider>
-              <ListingProvider>
-                <Header />
-                <AgeVerificationModal />
-                {children}
-              </ListingProvider>
+              <RequestProvider>
+                <ListingProvider>
+                  <Header />
+                  <AgeVerificationModal />
+                  {children}
+                </ListingProvider>
+              </RequestProvider>
             </ReviewProvider>
           </MessageProvider>
         </WalletProvider>
