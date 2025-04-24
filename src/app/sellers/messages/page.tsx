@@ -2,6 +2,7 @@
 
 import { useMessages } from '@/context/MessageContext';
 import { useListings } from '@/context/ListingContext';
+import { useRequests } from '@/context/RequestContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef } from 'react';
 
@@ -17,6 +18,7 @@ export default function SellerMessagesPage() {
     isBlocked,
     hasReported,
   } = useMessages();
+  const { respondToRequest, getRequestsForUser } = useRequests();
 
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
@@ -74,6 +76,17 @@ export default function SellerMessagesPage() {
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
+  // For custom request approval
+  const requests = user ? getRequestsForUser(user.username, 'seller') : [];
+
+  const handleApproveRequest = (reqId: string) => {
+    respondToRequest(reqId, 'accepted', 'Approved! I will fulfill your request soon.');
+  };
+
+  const handleDeclineRequest = (reqId: string) => {
+    respondToRequest(reqId, 'declined', 'Sorry, I cannot fulfill this request.');
+  };
+
   return (
     <RequireAuth role="seller">
       <main className="p-8 max-w-4xl mx-auto">
@@ -93,14 +106,14 @@ export default function SellerMessagesPage() {
                     <li key={sender}>
                       <button
                         onClick={() => setActiveThread(sender)}
-                        className={`block w-full text-left px-3 py-2 rounded hover:bg-pink-50 ${
-                          activeThread === sender ? 'bg-pink-100' : 'bg-gray-50'
+                        className={`block w-full text-left px-3 py-2 rounded hover:bg-orange-50 ${
+                          activeThread === sender ? 'bg-orange-100' : 'bg-gray-50'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <span className="font-semibold">{sender}</span>
                           {unread > 0 && (
-                            <span className="text-xs text-white bg-pink-600 rounded-full px-2 py-0.5">
+                            <span className="text-xs text-white bg-[#ff950e] rounded-full px-2 py-0.5">
                               {unread}
                             </span>
                           )}
@@ -146,23 +159,68 @@ export default function SellerMessagesPage() {
                   </div>
 
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
-                    {threads[activeThread].map((msg, index) => (
-                      <div key={index} className="bg-gray-50 p-3 rounded border">
-                        <p className="text-sm text-gray-500 mb-1">
-                          <strong>{msg.sender === user?.username ? 'You' : msg.sender}</strong> on{' '}
-                          {new Date(msg.date).toLocaleString()}
-                        </p>
-                        <p>{msg.content}</p>
-                        {msg.type === 'customRequest' && msg.meta && (
-                          <div className="mt-2 text-sm text-pink-700">
-                            <p><strong>🛠️ Custom Request</strong></p>
-                            <p>Title: {msg.meta.title}</p>
-                            <p>Price: ${msg.meta.price.toFixed(2)}</p>
-                            <p>Tags: {msg.meta.tags.join(', ')}</p>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    {threads[activeThread].map((msg, index) => {
+                      let customReq: typeof requests[number] | undefined = undefined;
+                      if (
+                        msg.type === 'customRequest' &&
+                        typeof msg.meta === 'object' &&
+                        msg.meta !== null &&
+                        'id' in msg.meta &&
+                        typeof (msg.meta as any).id === 'string'
+                      ) {
+                        customReq = requests.find((r) => r.id === (msg.meta as any).id);
+                      }
+
+                      return (
+                        <div key={index} className="bg-gray-50 p-3 rounded border">
+                          <p className="text-sm mb-1 text-black">
+                            <strong>{msg.sender === user?.username ? 'You' : msg.sender}</strong> on{' '}
+                            {new Date(msg.date).toLocaleString()}
+                          </p>
+                          <p className="text-black">{msg.content}</p>
+                          {customReq ? (
+                            <div className="mt-2 text-sm text-orange-700">
+                              <p>
+                                <strong>🛠️ Custom Request</strong>
+                              </p>
+                              <p>Title: {customReq.title}</p>
+                              <p>Price: ${customReq.price.toFixed(2)}</p>
+                              <p>Tags: {customReq.tags.join(', ')}</p>
+                              <p>
+                                Status:{' '}
+                                <span
+                                  className={
+                                    customReq.status === 'pending'
+                                      ? 'text-yellow-600'
+                                      : customReq.status === 'accepted'
+                                      ? 'text-green-600'
+                                      : 'text-red-600'
+                                  }
+                                >
+                                  {customReq.status.toUpperCase()}
+                                </span>
+                              </p>
+                              {customReq.status === 'pending' && (
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    onClick={() => handleApproveRequest(customReq!.id)}
+                                    className="bg-[#ff950e] text-white px-3 py-1 rounded hover:bg-orange-600 text-xs"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeclineRequest(customReq!.id)}
+                                    className="bg-black text-white px-3 py-1 rounded hover:bg-gray-800 text-xs"
+                                  >
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {!isUserBlocked && (
@@ -171,12 +229,12 @@ export default function SellerMessagesPage() {
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your reply..."
-                        className="w-full p-2 border rounded mb-2"
+                        className="w-full p-2 border rounded mb-2 text-black"
                       />
                       <div className="text-right">
                         <button
                           onClick={handleReply}
-                          className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
+                          className="bg-black hover:bg-[#ff950e] hover:text-black text-white px-4 py-2 rounded"
                         >
                           Send Reply
                         </button>

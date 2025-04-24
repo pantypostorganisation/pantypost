@@ -76,7 +76,7 @@ export default function SellerProfileSettingsPage() {
         <h1 className="text-3xl font-bold mb-6">🛠️ My Profile</h1>
 
         <div className="mb-6">
-          <label className="block font-medium mb-1">Profile Picture</label>
+          <label className="block font-medium mb-1" htmlFor="profilePic">Profile Picture</label>
           <div className="flex items-center gap-4 mb-2">
             {preview || profilePic ? (
               <img
@@ -88,6 +88,8 @@ export default function SellerProfileSettingsPage() {
               <div className="w-24 h-24 rounded-full bg-gray-300" />
             )}
             <input
+              id="profilePic"
+              name="profilePic"
               type="file"
               accept="image/*"
               onChange={handleImageUpload}
@@ -97,8 +99,10 @@ export default function SellerProfileSettingsPage() {
         </div>
 
         <div className="mb-6">
-          <label className="block font-medium mb-1">Bio</label>
+          <label className="block font-medium mb-1" htmlFor="bio">Bio</label>
           <textarea
+            id="bio"
+            name="bio"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             className="w-full p-2 border rounded h-28"
@@ -107,10 +111,12 @@ export default function SellerProfileSettingsPage() {
         </div>
 
         <div className="mb-6">
-          <label className="block font-medium mb-1">
+          <label className="block font-medium mb-1" htmlFor="subscriptionPrice">
             Subscription Price (Monthly in $)
           </label>
           <input
+            id="subscriptionPrice"
+            name="subscriptionPrice"
             type="number"
             value={subscriptionPrice}
             onChange={(e) => setSubscriptionPrice(e.target.value)}

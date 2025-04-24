@@ -10,6 +10,7 @@ export type Message = {
   read?: boolean;
   type?: 'normal' | 'customRequest';
   meta?: {
+    id?: string;
     title: string;
     price: number;
     tags: string[];
@@ -23,9 +24,24 @@ type ReportLog = {
   date: string;
 };
 
+type MessageOptions = {
+  type?: 'normal' | 'customRequest';
+  meta?: {
+    id?: string;
+    title: string;
+    price: number;
+    tags: string[];
+  };
+};
+
 type MessageContextType = {
   messages: { [seller: string]: Message[] };
-  sendMessage: (sender: string, receiver: string, content: string) => void;
+  sendMessage: (
+    sender: string,
+    receiver: string,
+    content: string,
+    options?: MessageOptions
+  ) => void;
   sendCustomRequest: (
     buyer: string,
     seller: string,
@@ -73,7 +89,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     localStorage.setItem('panty_reported', JSON.stringify(reportedUsers));
   }, [reportedUsers]);
 
-  const sendMessage = (sender: string, receiver: string, content: string) => {
+  const sendMessage = (
+    sender: string,
+    receiver: string,
+    content: string,
+    options?: MessageOptions
+  ) => {
     if (isBlocked(receiver, sender)) return;
 
     const newMessage: Message = {
@@ -82,7 +103,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       content,
       date: new Date().toISOString(),
       read: false,
-      type: 'normal',
+      ...(options?.type && { type: options.type }),
+      ...(options?.meta && { meta: options.meta }),
     };
 
     setMessages((prev) => {

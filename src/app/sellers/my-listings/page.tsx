@@ -5,7 +5,8 @@ import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Crown, Sparkles, Trash2, Clock } from 'lucide-react';
+import { Crown, Sparkles, Trash2, Clock, PackageCheck } from 'lucide-react';
+import Link from 'next/link';
 
 export default function MyListingsPage() {
   const { listings = [], addListing, removeListing, user } = useListings();
@@ -66,7 +67,16 @@ export default function MyListingsPage() {
   return (
     <RequireAuth role="seller">
       <main className="p-10 max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-white">My Listings</h1>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <h1 className="text-3xl font-bold text-white">My Listings</h1>
+          <Link
+            href="/sellers/orders-to-fulfil"
+            className="inline-flex items-center gap-2 bg-[#ff950e] text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-600 transition"
+          >
+            <PackageCheck className="w-5 h-5" />
+            Orders to Fulfil
+          </Link>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
           {/* Left side: form + active listings */}
@@ -87,7 +97,7 @@ export default function MyListingsPage() {
               </div>
             </div>
 
-            {/* Add listing form - Enhanced */}
+            {/* Add listing form */}
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-xl font-bold mb-4 text-gray-800">Create New Listing</h2>
               
@@ -195,7 +205,7 @@ export default function MyListingsPage() {
               </div>
             </div>
 
-            {/* Seller's own listings - Enhanced */}
+            {/* Seller's own listings */}
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-xl font-bold mb-4 text-gray-800">Your Active Listings</h2>
               
@@ -270,7 +280,7 @@ export default function MyListingsPage() {
 
           {/* Right side: order history and premium tips */}
           <div className="space-y-6">
-            {/* Premium Seller Tips - IMPROVED CONTRAST */}
+            {/* Premium Seller Tips */}
             <div className="bg-yellow-600 p-5 rounded-lg shadow text-white">
               <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
                 <Crown className="text-yellow-200 w-5 h-5" />

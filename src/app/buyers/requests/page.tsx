@@ -3,7 +3,6 @@
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import RequireAuth from '@/components/RequireAuth';
-import { useEffect } from 'react';
 
 export default function BuyerRequestInboxPage() {
   const { user } = useListings();

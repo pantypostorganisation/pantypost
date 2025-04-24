@@ -83,6 +83,12 @@ export default function SellerRequestInboxPage() {
                     >
                       Decline
                     </button>
+                    <button
+                      onClick={() => handleRespond(req.id, 'accepted')}
+                      className="text-sm bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
+                    >
+                      Accept
+                    </button>
                   </div>
                 )}
 
