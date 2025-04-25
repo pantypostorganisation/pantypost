@@ -7,7 +7,7 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
-import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star } from 'lucide-react';
+import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star, ArrowRight } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function ListingDetailPage() {
@@ -131,20 +131,43 @@ export default function ListingDetailPage() {
   };
 
   return (
-    <main className="p-6 md:p-10 max-w-6xl mx-auto">
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="flex-1">
+    <main className="p-6 md:p-10 max-w-4xl mx-auto">
+      <div className="flex flex-col md:flex-row gap-8 bg-[#171717] rounded-2xl shadow-xl p-6 border border-[#222]">
+        <div className="flex-1 flex flex-col items-center">
           <img
             src={listing.imageUrl}
             alt={listing.title}
-            className="w-full h-64 object-cover rounded-lg shadow-md"
+            className="w-full h-64 object-cover rounded-xl shadow-md mb-4"
           />
           {listing.wearTime && (
-            <div className="mt-2 flex items-center gap-2 text-gray-600">
+            <div className="mt-2 flex items-center gap-2 text-gray-400">
               <Clock className="w-5 h-5" />
               <span>{listing.wearTime}</span>
             </div>
           )}
+          {/* Seller profile quick link */}
+          <div className="mt-6 w-full flex flex-col items-center">
+            <Link
+              href={`/sellers/${listing.seller}`}
+              className="flex items-center gap-2 bg-white border-2 border-[#ff950e] text-[#ff950e] font-semibold px-4 py-2 rounded-full shadow hover:bg-[#ff950e] hover:text-white transition mb-2"
+              style={{ transition: 'all 0.15s' }}
+            >
+              {sellerProfile.pic ? (
+                <img
+                  src={sellerProfile.pic}
+                  alt={listing.seller}
+                  className="w-8 h-8 rounded-full object-cover border-2 border-white"
+                />
+              ) : (
+                <User className="w-7 h-7" />
+              )}
+              <span>View {listing.seller}'s Profile</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            {sellerProfile.bio && (
+              <p className="text-xs text-gray-400 text-center max-w-xs">{sellerProfile.bio}</p>
+            )}
+          </div>
         </div>
         <div className="flex-1 space-y-4">
           <h1 className="text-3xl font-bold text-white">{listing.title}</h1>
@@ -160,38 +183,39 @@ export default function ListingDetailPage() {
           )}
           <div className="flex items-center gap-4">
             <p className="text-2xl font-bold text-pink-600">${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}</p>
-            <Link href={`/sellers/${listing.seller}`} className="text-lg text-gray-300 hover:text-pink-600">
+            <span className="text-lg text-gray-300 flex items-center gap-1">
+              <User className="w-5 h-5" />
               {listing.seller}
-            </Link>
+            </span>
           </div>
           {user?.role === 'buyer' && (
-            <button
-              onClick={() => {
-                const success = purchaseListing(listing, user.username);
-                if (success) {
-                  removeListing(listing.id);
-                  addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-                  setPurchaseStatus('Purchase successful! 🎉');
-                } else {
-                  setPurchaseStatus('Insufficient balance. Please top up your wallet.');
-                }
-                setIsProcessing(false);
-              }}
-              className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 font-medium"
-              disabled={isProcessing}
-            >
-              {isProcessing ? 'Processing...' : 'Buy Now'}
-            </button>
+            <div className="flex flex-col gap-3 w-full max-w-xs">
+              <button
+                onClick={() => {
+                  const success = purchaseListing(listing, user.username);
+                  if (success) {
+                    removeListing(listing.id);
+                    addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
+                    setPurchaseStatus('Purchase successful! 🎉');
+                  } else {
+                    setPurchaseStatus('Insufficient balance. Please top up your wallet.');
+                  }
+                  setIsProcessing(false);
+                }}
+                className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 font-medium w-full"
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Processing...' : 'Buy Now'}
+              </button>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium w-full"
+              >
+                Message {listing.seller}
+              </button>
+            </div>
           )}
           {purchaseStatus && <p className="text-lg text-green-500">{purchaseStatus}</p>}
-          {user?.role === 'buyer' && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
-            >
-              Message {listing.seller}
-            </button>
-          )}
         </div>
       </div>
 

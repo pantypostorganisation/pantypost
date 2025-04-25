@@ -6,7 +6,16 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState } from 'react';
-import { Bell, ShoppingBag, Wallet, MessageSquare, Users, User, LogOut, Settings, BarChart2, ClipboardList, Package } from 'lucide-react';
+import {
+  Bell,
+  ShoppingBag,
+  Wallet,
+  MessageSquare,
+  Users,
+  User,
+  LogOut,
+  Package,
+} from 'lucide-react';
 
 export default function Header() {
   const { user, logout, sellerNotifications, clearSellerNotification, listings } = useListings();
@@ -46,17 +55,11 @@ export default function Header() {
     }
   }, [user, sellerNotifications, listings]);
 
-  // Calculate pending orders count
   useEffect(() => {
     if (user && user.role === 'seller') {
-      // Count direct sales for this seller
       const sales = orderHistory.filter((order) => order.seller === user.username);
-      
-      // Count accepted custom requests for this seller
       const requests = getRequestsForUser(user.username, 'seller');
       const acceptedCustoms = requests.filter((req) => req.status === 'accepted');
-      
-      // Set total pending orders count
       setPendingOrdersCount(sales.length + acceptedCustoms.length);
     }
   }, [user, orderHistory, getRequestsForUser]);
@@ -90,92 +93,77 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="bg-black text-white shadow-md border-b border-[#1a1a1a] px-6 py-4 flex justify-between items-center">
-      <Link href="/" className="text-2xl font-bold flex items-center gap-2">
-        <img src="/logo.png" alt="PantyPost Logo" className="w-24 h-auto" />
+    <header className="bg-black text-white shadow-lg border-b border-[#222] px-8 py-3 flex justify-between items-center z-50 relative">
+      <Link href="/" className="flex items-center gap-3">
+        <img src="/logo.png" alt="PantyPost Logo" className="w-24 h-auto drop-shadow-lg" />
       </Link>
 
-      <nav className="flex items-center gap-6 relative">
-        <Link href="/browse" className="text-white hover:text-[#ff950e] transition flex items-center gap-1">
+      <nav className="flex items-center gap-2 relative">
+        <Link href="/browse" className="flex items-center gap-1 text-white hover:text-primary text-xs px-2 py-1 rounded transition">
           <ShoppingBag className="w-4 h-4" />
           <span>Browse</span>
         </Link>
 
-        {mounted && isAdmin && (
-          <>
-            <Link href="/admin/reports" className="text-white hover:text-[#ff950e] transition">
-              Reports {reportCount > 0 && <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{reportCount}</span>}
-            </Link>
-            <Link href="/admin/resolved" className="text-white hover:text-[#ff950e] transition">Resolved</Link>
-            <Link href="/admin/messages" className="text-white hover:text-[#ff950e] transition">Messages</Link>
-            <Link href="/wallet/admin" className="text-white hover:text-[#ff950e] transition">Admin Wallet</Link>
-            <span className="text-[#ff950e] font-semibold">${adminBalance.toFixed(2)}</span>
-          </>
-        )}
-
         {mounted && role === 'seller' && (
           <>
-            <Link href="/sellers/my-listings" className="text-white hover:text-[#ff950e] transition">My Listings</Link>
-            <Link href="/sellers/profile" className="text-white hover:text-[#ff950e] transition">Profile</Link>
-            <Link href="/wallet/seller" className="text-white hover:text-[#ff950e] transition">
+            <Link href="/sellers/my-listings" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">My Listings</Link>
+            <Link href="/sellers/profile" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">Profile</Link>
+            <Link href="/wallet/seller" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
                 <span>${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </span>
             </Link>
-            <Link href="/sellers/messages" className="text-white hover:text-[#ff950e] transition">
-              <MessageSquare className="w-5 h-5" />
+            <Link href="/sellers/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              <MessageSquare className="w-4 h-4" />
             </Link>
-            <Link href="/sellers/subscribers" className="text-white hover:text-[#ff950e] transition">
-              <Users className="w-5 h-5" />
+            <Link href="/sellers/subscribers" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              <Users className="w-4 h-4" />
             </Link>
-            {/* Orders to Fulfil - Bigger button with count */}
-            <Link 
-              href="/sellers/orders-to-fulfil" 
-              className="text-white hover:text-[#ff950e] transition flex items-center gap-1 bg-[#333] hover:bg-[#444] px-3 py-1.5 rounded-md relative"
-            >
-              <Package className="w-5 h-5" />
-              <span>Orders to Fulfil</span>
+            {/* Orders to Fulfil - Prominent button with badge */}
+            <div className="relative flex items-center">
+              <Link
+                href="/sellers/orders-to-fulfil"
+                className="flex items-center bg-primary hover:bg-primary-dark text-black text-xs font-semibold px-4 pr-8 py-1.5 rounded-full shadow transition border border-white"
+                style={{ minWidth: 0, minHeight: 0 }}
+              >
+                <Package className="w-4 h-4 mr-2" />
+                <span className="font-semibold text-white">Orders to Fulfil</span>
+              </Link>
               {pendingOrdersCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-[#ff950e] text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                <span className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow">
                   {pendingOrdersCount}
                 </span>
               )}
-            </Link>
-            <div className="relative" ref={notifRef}>
+            </div>
+            {/* Notification Bell - large, white, always visible */}
+            <div className="relative flex items-center" ref={notifRef}>
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
-                className="relative hover:text-[#ff950e] transition"
+                className="relative flex items-center justify-center w-10 h-10 bg-[#ff950e] border border-white rounded-full shadow hover:scale-105 transition"
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-5 h-5 text-white" />
                 {filteredNotifications.length > 0 && (
-                  <span className="absolute -top-1 -right-2 bg-[#ff950e] text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                  <span className="absolute -top-1 -right-1 bg-white text-[#ff950e] text-[10px] rounded-full px-1 py-0.5 min-w-[14px] text-center border-2 border-[#ff950e] font-bold">
                     {filteredNotifications.length}
                   </span>
                 )}
               </button>
               {showNotifDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-[#1a1a1a] text-white rounded shadow-lg z-50 border border-[#333]">
+                <div className="absolute right-0 top-12 w-80 bg-card text-white rounded-xl shadow-2xl z-50 border border-[#333]">
                   <ul className="divide-y divide-gray-800 max-h-64 overflow-y-auto">
                     {filteredNotifications.length === 0 ? (
                       <li className="p-3 text-sm text-center text-gray-400">No notifications</li>
                     ) : (
                       filteredNotifications.map((note, i) => (
-                        <li
-                          key={i}
-                          className="flex justify-between items-start p-3 text-sm hover:bg-[#222]"
-                        >
-                          <span className="text-gray-200 leading-snug">
-                            {note}
-                          </span>
+                        <li key={i} className="flex justify-between items-start p-3 text-sm hover:bg-[#222] transition">
+                          <span className="text-gray-200 leading-snug">{note}</span>
                           <button
                             onClick={() => {
                               const origIndex = sellerNotifications.indexOf(note);
-                              if (origIndex !== -1) {
-                                clearSellerNotification(origIndex);
-                              }
+                              if (origIndex !== -1) clearSellerNotification(origIndex);
                             }}
-                            className="text-xs text-[#ff950e] hover:text-[#e0850d] ml-2"
+                            className="text-xs text-primary hover:text-primary-light ml-2 font-bold"
                           >
                             Clear
                           </button>
@@ -191,38 +179,39 @@ export default function Header() {
 
         {mounted && role === 'buyer' && (
           <>
-            <Link href="/buyers/dashboard" className="text-white hover:text-[#ff950e] transition">Dashboard</Link>
-            <Link href="/buyers/my-orders" className="text-white hover:text-[#ff950e] transition">My Orders</Link>
-            <Link href="/wallet/buyer" className="text-white hover:text-[#ff950e] transition">
+            <Link href="/buyers/dashboard" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">Dashboard</Link>
+            <Link href="/buyers/my-orders" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">My Orders</Link>
+            <Link href="/wallet/buyer" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
                 <span>${buyerBalance.toFixed(2)}</span>
               </span>
             </Link>
-            <Link href="/buyers/messages" className="text-white hover:text-[#ff950e] transition">
-              <MessageSquare className="w-5 h-5" />
+            <Link href="/buyers/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              <MessageSquare className="w-4 h-4" />
             </Link>
           </>
         )}
 
         {!user && (
-          <Link 
-            href="/login" 
-            className="bg-[#ff950e] hover:bg-[#e0850d] text-white px-4 py-1.5 rounded-full transition font-medium"
+          <Link
+            href="/login"
+            className="bg-primary hover:bg-primary-dark text-white text-xs px-3 py-1 rounded-full transition font-bold shadow-lg"
           >
             Login
           </Link>
         )}
 
         {mounted && user && (
-          <div className="flex items-center gap-3">
-            <span className="text-[#ff950e] font-semibold flex items-center gap-1">
+          <div className="flex items-center gap-1 ml-1">
+            <span className="text-primary font-bold flex items-center gap-1 bg-card px-2 py-0.5 rounded-full shadow text-xs">
               <User className="w-4 h-4" />
               {username} <span className="text-gray-400 text-xs">({role})</span>
             </span>
             <button
               onClick={logout}
-              className="bg-[#333] hover:bg-[#444] text-white px-3 py-1 rounded-full flex items-center gap-1 text-sm"
+              className="bg-card hover:bg-[#222] text-white px-3 py-[6px] rounded-full flex items-center gap-1 text-xs font-semibold border border-[#333] transition"
+              style={{ height: '30px' }}
             >
               <LogOut className="w-3 h-3" />
               Log out
