@@ -4,15 +4,18 @@ import Link from 'next/link';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
+import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState } from 'react';
-import { Bell, ShoppingBag, Wallet, MessageSquare, Users, User, LogOut, Settings, BarChart2, ClipboardList } from 'lucide-react';
+import { Bell, ShoppingBag, Wallet, MessageSquare, Users, User, LogOut, Settings, BarChart2, ClipboardList, Package } from 'lucide-react';
 
 export default function Header() {
   const { user, logout, sellerNotifications, clearSellerNotification, listings } = useListings();
-  const { getBuyerBalance, getSellerBalance, adminBalance } = useWallet();
+  const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory } = useWallet();
   const { messages } = useMessages();
+  const { getRequestsForUser } = useRequests();
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +45,21 @@ export default function Header() {
       setFilteredNotifications([]);
     }
   }, [user, sellerNotifications, listings]);
+
+  // Calculate pending orders count
+  useEffect(() => {
+    if (user && user.role === 'seller') {
+      // Count direct sales for this seller
+      const sales = orderHistory.filter((order) => order.seller === user.username);
+      
+      // Count accepted custom requests for this seller
+      const requests = getRequestsForUser(user.username, 'seller');
+      const acceptedCustoms = requests.filter((req) => req.status === 'accepted');
+      
+      // Set total pending orders count
+      setPendingOrdersCount(sales.length + acceptedCustoms.length);
+    }
+  }, [user, orderHistory, getRequestsForUser]);
 
   const buyerBalance = typeof getBuyerBalance(username) === 'number' ? getBuyerBalance(username) : 0;
   const sellerBalance = typeof getSellerBalance(username) === 'number' ? getSellerBalance(username) : 0;
@@ -111,10 +129,19 @@ export default function Header() {
             <Link href="/sellers/subscribers" className="text-white hover:text-[#ff950e] transition">
               <Users className="w-5 h-5" />
             </Link>
-            {/* Removed Custom Requests link for sellers */}
-            {/* <Link href="/sellers/requests" className="text-white hover:text-[#ff950e] transition">
-              <ClipboardList className="w-5 h-5" />
-            </Link> */}
+            {/* Orders to Fulfil - Bigger button with count */}
+            <Link 
+              href="/sellers/orders-to-fulfil" 
+              className="text-white hover:text-[#ff950e] transition flex items-center gap-1 bg-[#333] hover:bg-[#444] px-3 py-1.5 rounded-md relative"
+            >
+              <Package className="w-5 h-5" />
+              <span>Orders to Fulfil</span>
+              {pendingOrdersCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-[#ff950e] text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                  {pendingOrdersCount}
+                </span>
+              )}
+            </Link>
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -166,8 +193,6 @@ export default function Header() {
           <>
             <Link href="/buyers/dashboard" className="text-white hover:text-[#ff950e] transition">Dashboard</Link>
             <Link href="/buyers/my-orders" className="text-white hover:text-[#ff950e] transition">My Orders</Link>
-            {/* Removed Custom Requests link for buyers */}
-            {/* <Link href="/buyers/requests" className="text-white hover:text-[#ff950e] transition">Custom Requests</Link> */}
             <Link href="/wallet/buyer" className="text-white hover:text-[#ff950e] transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
