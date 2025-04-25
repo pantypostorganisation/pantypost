@@ -7,6 +7,7 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import Link from 'next/link';
 import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function ListingDetailPage() {
   const { listings, user, removeListing, addSellerNotification, isSubscribed } = useListings();
@@ -66,12 +67,6 @@ export default function ListingDetailPage() {
     }
   }, [isModalOpen, listing?.seller, currentUsername, markMessagesAsRead]);
 
-  // Debugging logs
-  console.log('Listings:', listings);
-  console.log('Listing ID:', listingId);
-  console.log('Listing:', listing);
-  console.log('User:', user);
-
   if (!listingId) {
     return <div className="text-white text-center p-10">Invalid listing URL.</div>;
   }
@@ -81,9 +76,7 @@ export default function ListingDetailPage() {
   }
 
   const handleSend = () => {
-    if (!user || !listing?.seller || !message.trim()) return;
-
-    let finalMessage = message.trim();
+    if (!user || !listing?.seller || (!message.trim() && !sendAsRequest)) return;
 
     if (sendAsRequest) {
       if (!requestTitle.trim() || !requestPrice || isNaN(Number(requestPrice))) {
@@ -92,17 +85,30 @@ export default function ListingDetailPage() {
       }
 
       const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
-      const payload = {
-        title: requestTitle.trim(),
-        price: Number(requestPrice),
-        tags: tagsArray,
-        message: finalMessage,
-      };
+      const requestId = uuidv4();
 
-      finalMessage = `[REQUEST]::${JSON.stringify(payload)}`;
+      sendMessage(
+        user.username,
+        listing.seller,
+        `[PantyPost Custom Request] ${requestTitle.trim()}`,
+        {
+          type: 'customRequest',
+          meta: {
+            id: requestId,
+            title: requestTitle.trim(),
+            price: Number(requestPrice),
+            tags: tagsArray,
+            message: message.trim(),
+          }
+        }
+      );
+
+    
+    } else {
+      sendMessage(user.username, listing.seller, message.trim());
     }
-
-    sendMessage(user.username, listing.seller, finalMessage);
+      
+    
 
     setSent(true);
     setMessage('');
@@ -208,8 +214,9 @@ export default function ListingDetailPage() {
                 type="checkbox"
                 checked={sendAsRequest}
                 onChange={() => setSendAsRequest(prev => !prev)}
+                id="sendAsRequest"
               />
-              <label className="text-sm font-medium text-gray-700">Send as custom request</label>
+              <label htmlFor="sendAsRequest" className="text-sm font-medium text-gray-700">Send as custom request</label>
             </div>
 
             {sendAsRequest && (
@@ -252,7 +259,7 @@ export default function ListingDetailPage() {
               >Cancel</button>
               <button
                 onClick={handleSend}
-                disabled={!message.trim()}
+                disabled={!message.trim() && !sendAsRequest}
                 className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 disabled:bg-pink-300 disabled:cursor-not-allowed"
               >{sent ? '✅ Sent!' : sendAsRequest ? 'Send Request' : 'Send Message'}</button>
             </div>

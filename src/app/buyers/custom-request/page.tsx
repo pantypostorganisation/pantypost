@@ -1,161 +1,48 @@
 'use client';
 
-import { useState } from 'react';
-import { useListings } from '@/context/ListingContext';
-import { useRequests, RequestStatus } from '@/context/RequestContext';
-import { useMessages } from '@/context/MessageContext';
-import { useRouter } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
-import RequireAuth from '@/components/RequireAuth';
+import Link from 'next/link';
 
 export default function CustomRequestPage() {
-  const { user } = useListings();
-  const { addRequest } = useRequests();
-  const { sendMessage } = useMessages();
-  const router = useRouter();
-
-  const [seller, setSeller] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [price, setPrice] = useState('');
-  const [tags, setTags] = useState('');
-  const [error, setError] = useState('');
-
-  const handleSubmit = () => {
-    if (!title || !description || !price || !seller) {
-      setError('Please fill out all required fields.');
-      return;
-    }
-
-    const requestId = uuidv4();
-    const tagsArray = tags.split(',').map(t => t.trim()).filter(Boolean);
-
-    const newRequest = {
-      id: requestId,
-      buyer: user!.username,
-      seller,
-      title,
-      description,
-      price: parseFloat(price),
-      tags: tagsArray,
-      status: 'pending' as RequestStatus,
-      date: new Date().toISOString()
-    };
-
-    addRequest(newRequest);
-
-    // THIS IS THE ONLY CORRECT WAY TO SEND THE MESSAGE:
-    sendMessage(
-      user!.username,
-      seller,
-      `[PantyPost Custom Request] ${title}`,
-      {
-        type: 'customRequest',
-        meta: {
-          id: requestId,
-          title,
-          price: parseFloat(price),
-          tags: tagsArray,
-        }
-      }
-    );
-
-    router.push('/buyers/requests');
-  };
-
   return (
-    <RequireAuth role="buyer">
-      <main className="p-10 max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">📝 Create Custom Request</h1>
-        <div className="space-y-4">
-          {error && (
-            <div className="bg-red-100 border border-red-300 text-red-700 px-4 py-2 rounded text-sm">
-              {error}
-            </div>
-          )}
-          <div>
-            <label htmlFor="seller" className="block text-sm font-medium mb-1">
-              Target Seller *
-            </label>
-            <input
-              id="seller"
-              name="seller"
-              type="text"
-              value={seller}
-              onChange={(e) => setSeller(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-              placeholder="e.g., seller123"
-              autoComplete="username"
-            />
-          </div>
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium mb-1">
-              Request Title *
-            </label>
-            <input
-              id="title"
-              name="title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-              placeholder="e.g., 48hr worn gym panties"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium mb-1">
-              Request Description *
-            </label>
-            <textarea
-              id="description"
-              name="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full border rounded px-3 py-2"
-              placeholder="Include any details, preferences, or conditions you have in mind"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <label htmlFor="price" className="block text-sm font-medium mb-1">
-              Suggested Price ($) *
-            </label>
-            <input
-              id="price"
-              name="price"
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-              placeholder="e.g., 35.00"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <label htmlFor="tags" className="block text-sm font-medium mb-1">
-              Tags (comma-separated)
-            </label>
-            <input
-              id="tags"
-              name="tags"
-              type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-              placeholder="e.g., gym, sweaty, cotton"
-              autoComplete="off"
-            />
-          </div>
-          <button
-            onClick={handleSubmit}
-            className="mt-4 bg-pink-600 text-white px-6 py-2 rounded hover:bg-pink-700"
-          >
-            Send Request
-          </button>
-        </div>
-      </main>
-    </RequireAuth>
+    <main className="p-10 max-w-xl mx-auto text-center">
+      <h1 className="text-3xl font-bold mb-6 text-pink-700">How to Send a Custom Request</h1>
+      <div className="mb-8 text-lg text-gray-800">
+        <ol className="list-decimal list-inside space-y-3 text-left mx-auto max-w-md">
+          <li>
+            <b>Go to a listing</b> you’re interested in on the{' '}
+            <Link href="/browse" className="text-pink-600 underline">Browse Listings</Link> page.
+          </li>
+          <li>
+            Click the <b>Message [seller username]</b> button.
+          </li>
+          <li>
+            In the chat modal, <b>tick</b> the{' '}
+            <span className="inline-block bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-semibold">
+              Send as custom request
+            </span>{' '}
+            checkbox.
+          </li>
+          <li>
+            Fill out the <b>Title</b>, <b>Price</b>, <b>Tags</b>, and your <b>Message</b>.
+          </li>
+          <li>
+            Click{' '}
+            <span className="inline-block bg-pink-600 text-white px-2 py-0.5 rounded font-semibold">
+              Send Request
+            </span>
+            .
+          </li>
+        </ol>
+      </div>
+      <p className="mb-8 text-gray-600">
+        All custom requests are now sent directly through the messaging system for a smoother, more secure experience.
+      </p>
+      <Link
+        href="/browse"
+        className="inline-block bg-pink-600 text-white px-6 py-2 rounded hover:bg-pink-700 transition"
+      >
+        Browse Listings
+      </Link>
+    </main>
   );
 }

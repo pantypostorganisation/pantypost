@@ -183,9 +183,12 @@ export default function SellerMessagesPage() {
                               <p>
                                 <strong>🛠️ Custom Request</strong>
                               </p>
-                              <p>Title: {customReq.title}</p>
-                              <p>Price: ${customReq.price.toFixed(2)}</p>
-                              <p>Tags: {customReq.tags.join(', ')}</p>
+                              <p><b>Title:</b> {customReq.title}</p>
+                              <p><b>Price:</b> ${customReq.price.toFixed(2)}</p>
+                              <p><b>Tags:</b> {customReq.tags.join(', ')}</p>
+                              {msg.meta?.message && (
+                                <p><b>Message:</b> {msg.meta.message}</p>
+                              )}
                               <p>
                                 Status:{' '}
                                 <span

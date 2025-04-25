@@ -14,6 +14,7 @@ export type Message = {
     title: string;
     price: number;
     tags: string[];
+    message?: string; // <-- Added for custom request message body
   };
 };
 
@@ -31,6 +32,7 @@ type MessageOptions = {
     title: string;
     price: number;
     tags: string[];
+    message?: string; // <-- Added for custom request message body
   };
 };
 
@@ -137,6 +139,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         title,
         price,
         tags,
+        message: content, // Store the custom request message body
       },
     };
 
