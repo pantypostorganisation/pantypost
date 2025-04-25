@@ -29,9 +29,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black">
-      <main className="w-full max-w-md mx-auto p-8 bg-white rounded-3xl shadow-2xl flex flex-col items-center relative">
-        {/* Logo */}
+    <div className="min-h-screen flex items-start justify-center pt-6 bg-black">
+      <main className="w-full max-w-md mx-auto p-8 bg-[#1a1a1a] rounded-3xl shadow-xl flex flex-col items-center text-white">
+        {/* Logo + Branding */}
         <div className="flex flex-col items-center mb-6">
           <div className="w-16 h-16 rounded-full bg-black flex items-center justify-center mb-2 shadow-lg overflow-hidden">
             <img
@@ -40,13 +40,12 @@ export default function LoginPage() {
               className="w-10 h-10 object-contain"
             />
           </div>
-          <span className="text-3xl font-extrabold text-black tracking-tight mb-1">PantyPost</span>
+          <span className="text-3xl font-extrabold tracking-tight mb-1 text-white">PantyPost</span>
           <span className="text-xs text-[#ff950e] font-semibold tracking-wide uppercase">Marketplace for used underwear</span>
         </div>
 
-        <h1 className="text-xl font-bold mb-6 text-black">Sign In</h1>
+        <h1 className="text-xl font-bold mb-6 text-white">Sign In</h1>
 
-        {/* Error message */}
         {error && (
           <div className="w-full mb-4 bg-red-100 border border-red-300 text-red-700 px-4 py-2 rounded text-sm text-center">
             {error}
@@ -55,7 +54,7 @@ export default function LoginPage() {
 
         {/* Username input */}
         <div className="w-full mb-4">
-          <label className="block text-sm font-medium text-black mb-1" htmlFor="username">
+          <label className="block text-sm font-medium text-white mb-1" htmlFor="username">
             Username
           </label>
           <input
@@ -66,21 +65,20 @@ export default function LoginPage() {
             value={username}
             autoFocus
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 transition"
+            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
             autoComplete="username"
           />
         </div>
 
-        {/* Role selection */}
+        {/* Role buttons */}
         <div className="w-full flex gap-4 mb-6">
           <button
             type="button"
             onClick={() => setRole('buyer')}
             className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg font-semibold border transition
               ${role === 'buyer'
-                ? 'bg-pink-600 text-white border-pink-600 shadow'
-                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-pink-50'}
-            `}
+                ? 'bg-[#ff950e] text-black border-[#ff950e] shadow'
+                : 'bg-black text-white border-gray-600 hover:bg-[#1a1a1a]'}`}
           >
             <ShoppingBag className="w-5 h-5" />
             Buyer
@@ -90,19 +88,17 @@ export default function LoginPage() {
             onClick={() => setRole('seller')}
             className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg font-semibold border transition
               ${role === 'seller'
-                ? 'bg-yellow-400 text-white border-yellow-400 shadow'
-                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-yellow-100'}
-            `}
+                ? 'bg-[#ff950e] text-black border-[#ff950e] shadow'
+                : 'bg-black text-white border-gray-600 hover:bg-[#1a1a1a]'}`}
           >
             <User className="w-5 h-5" />
             Seller
           </button>
         </div>
 
-        {/* Login button */}
         <button
           onClick={handleLogin}
-          className="w-full bg-black hover:bg-[#ff950e] hover:text-black text-white py-3 rounded-lg font-bold text-lg transition shadow"
+          className="w-full bg-white text-black hover:bg-[#ff950e] hover:text-black font-bold text-lg py-3 rounded-lg shadow transition"
         >
           Log In
         </button>
