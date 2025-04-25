@@ -18,13 +18,14 @@ export default function SellerMessagesPage() {
     isBlocked,
     hasReported,
   } = useMessages();
-  const { respondToRequest, getRequestsForUser } = useRequests();
+  const { getRequestsForUser, respondToRequest } = useRequests();
 
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
   const sellerMessages = user ? getMessagesForSeller(user.username) : [];
+  const requests = user ? getRequestsForUser(user.username, 'seller') : [];
 
   const threads = sellerMessages.reduce<{ [sender: string]: typeof sellerMessages }>((acc, msg) => {
     if (!acc[msg.sender]) acc[msg.sender] = [];
@@ -75,17 +76,6 @@ export default function SellerMessagesPage() {
 
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
-
-  // For custom request approval
-  const requests = user ? getRequestsForUser(user.username, 'seller') : [];
-
-  const handleApproveRequest = (reqId: string) => {
-    respondToRequest(reqId, 'accepted', 'Approved! I will fulfill your request soon.');
-  };
-
-  const handleDeclineRequest = (reqId: string) => {
-    respondToRequest(reqId, 'declined', 'Sorry, I cannot fulfill this request.');
-  };
 
   return (
     <RequireAuth role="seller">
@@ -161,6 +151,7 @@ export default function SellerMessagesPage() {
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
                     {threads[activeThread].map((msg, index) => {
                       let customReq: typeof requests[number] | undefined = undefined;
+                      let metaId: string | undefined = undefined;
                       if (
                         msg.type === 'customRequest' &&
                         typeof msg.meta === 'object' &&
@@ -168,7 +159,14 @@ export default function SellerMessagesPage() {
                         'id' in msg.meta &&
                         typeof (msg.meta as any).id === 'string'
                       ) {
-                        customReq = requests.find((r) => r.id === (msg.meta as any).id);
+                        metaId = (msg.meta as any).id as string;
+                        customReq = requests.find((r) => r.id === metaId);
+                      }
+                      
+                      // Debug log
+                      if (msg.type === 'customRequest') {
+                        // eslint-disable-next-line no-console
+                        console.log('msg.meta:', msg.meta, 'metaId:', metaId, 'requests:', requests, 'customReq:', customReq);
                       }
 
                       return (
@@ -178,49 +176,45 @@ export default function SellerMessagesPage() {
                             {new Date(msg.date).toLocaleString()}
                           </p>
                           <p className="text-black">{msg.content}</p>
-                          {customReq ? (
-                            <div className="mt-2 text-sm text-orange-700">
-                              <p>
-                                <strong>🛠️ Custom Request</strong>
-                              </p>
+                          {customReq && (
+                            <div className="mt-2 text-sm text-orange-700 space-y-1">
+                              <p className="font-semibold">🛠️ Custom Request</p>
                               <p><b>Title:</b> {customReq.title}</p>
                               <p><b>Price:</b> ${customReq.price.toFixed(2)}</p>
                               <p><b>Tags:</b> {customReq.tags.join(', ')}</p>
-                              {msg.meta?.message && (
-                                <p><b>Message:</b> {msg.meta.message}</p>
+                              {customReq.description && (
+                                <p><b>Message:</b> {customReq.description}</p>
                               )}
                               <p>
-                                Status:{' '}
-                                <span
-                                  className={
-                                    customReq.status === 'pending'
-                                      ? 'text-yellow-600'
-                                      : customReq.status === 'accepted'
-                                      ? 'text-green-600'
-                                      : 'text-red-600'
-                                  }
-                                >
+                                <b>Status:</b>{' '}
+                                <span className={
+                                  customReq.status === 'pending'
+                                    ? 'text-yellow-600'
+                                    : customReq.status === 'accepted'
+                                    ? 'text-green-600'
+                                    : 'text-red-600'
+                                }>
                                   {customReq.status.toUpperCase()}
                                 </span>
                               </p>
                               {customReq.status === 'pending' && (
-                                <div className="flex gap-2 mt-2">
+                                <div className="flex gap-2 pt-2">
                                   <button
-                                    onClick={() => handleApproveRequest(customReq!.id)}
-                                    className="bg-[#ff950e] text-white px-3 py-1 rounded hover:bg-orange-600 text-xs"
+                                    onClick={() => respondToRequest(customReq.id, 'accepted')}
+                                    className="bg-[#ff950e] text-white px-3 py-1 rounded text-xs hover:bg-orange-600"
                                   >
                                     Accept
                                   </button>
                                   <button
-                                    onClick={() => handleDeclineRequest(customReq!.id)}
-                                    className="bg-black text-white px-3 py-1 rounded hover:bg-gray-800 text-xs"
+                                    onClick={() => respondToRequest(customReq.id, 'declined')}
+                                    className="bg-black text-white px-3 py-1 rounded text-xs hover:bg-gray-800"
                                   >
                                     Decline
                                   </button>
                                 </div>
                               )}
                             </div>
-                          ) : null}
+                          )}
                         </div>
                       );
                     })}

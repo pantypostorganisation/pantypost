@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
+import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
 import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,6 +21,7 @@ export default function ListingDetailPage() {
     getMessagesForSeller,
     markMessagesAsRead,
   } = useMessages();
+  const { addRequest } = useRequests();
   const router = useRouter();
 
   const [purchaseStatus, setPurchaseStatus] = useState('');
@@ -87,6 +89,20 @@ export default function ListingDetailPage() {
       const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
       const requestId = uuidv4();
 
+      // 1. Save the request in RequestContext
+      addRequest({
+        id: requestId,
+        buyer: user.username,
+        seller: listing.seller,
+        title: requestTitle.trim(),
+        description: message.trim(),
+        price: Number(requestPrice),
+        tags: tagsArray,
+        status: 'pending',
+        date: new Date().toISOString(),
+      });
+
+      // 2. Send the message with meta
       sendMessage(
         user.username,
         listing.seller,
@@ -102,13 +118,9 @@ export default function ListingDetailPage() {
           }
         }
       );
-
-    
     } else {
       sendMessage(user.username, listing.seller, message.trim());
     }
-      
-    
 
     setSent(true);
     setMessage('');
