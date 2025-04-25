@@ -111,10 +111,10 @@ export default function Header() {
             <Link href="/sellers/subscribers" className="text-white hover:text-[#ff950e] transition">
               <Users className="w-5 h-5" />
             </Link>
-            <Link href="/sellers/requests" className="text-white hover:text-[#ff950e] transition">
+            {/* Removed Custom Requests link for sellers */}
+            {/* <Link href="/sellers/requests" className="text-white hover:text-[#ff950e] transition">
               <ClipboardList className="w-5 h-5" />
-            </Link>
-
+            </Link> */}
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -166,7 +166,8 @@ export default function Header() {
           <>
             <Link href="/buyers/dashboard" className="text-white hover:text-[#ff950e] transition">Dashboard</Link>
             <Link href="/buyers/my-orders" className="text-white hover:text-[#ff950e] transition">My Orders</Link>
-            <Link href="/buyers/requests" className="text-white hover:text-[#ff950e] transition">Custom Requests</Link>
+            {/* Removed Custom Requests link for buyers */}
+            {/* <Link href="/buyers/requests" className="text-white hover:text-[#ff950e] transition">Custom Requests</Link> */}
             <Link href="/wallet/buyer" className="text-white hover:text-[#ff950e] transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
