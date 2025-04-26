@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
-import { useMessages } from '@/context/MessageContext';
+import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -28,7 +28,8 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+  // Only username check for admin links
+  const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
   const username = user?.username ?? '';
 
@@ -68,38 +69,29 @@ export default function Header() {
   const sellerBalance = typeof getSellerBalance(username) === 'number' ? getSellerBalance(username) : 0;
 
   const updateReportCount = () => {
-    if (typeof window !== 'undefined' && isAdmin) {
-      const stored = localStorage.getItem('panty_report_logs');
-      const parsed = stored ? JSON.parse(stored) : [];
-      setReportCount(parsed.length);
+    if (typeof window !== 'undefined' && isAdminUser) {
+      setReportCount(getReportCount());
     }
   };
 
-  // Fix: Combine event listeners into a single useEffect to ensure proper cleanup
   useEffect(() => {
-    // Only run on client-side
     if (typeof window === 'undefined') return;
-    
     setMounted(true);
     updateReportCount();
-    
-    // Add event listeners
     window.addEventListener('updateReports', updateReportCount);
-    
-    // Handle clicks outside notification dropdown
+
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    
-    // Clean up all event listeners when component unmounts
+
     return () => {
       window.removeEventListener('updateReports', updateReportCount);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [user?.username]);
 
   return (
     <header className="bg-black text-white shadow-lg border-b border-[#222] px-8 py-3 flex justify-between items-center z-50 relative">
@@ -113,7 +105,38 @@ export default function Header() {
           <span>Browse</span>
         </Link>
 
-        {mounted && role === 'seller' && (
+        {/* ADMIN BUTTONS (for oakley/gerome, regardless of role) */}
+        {mounted && isAdminUser && (
+          <>
+            <div className="relative flex items-center min-w-[60px]">
+              <Link
+                href="/admin/reports"
+                className="block text-white hover:text-primary text-xs px-2 py-1 rounded transition pr-6"
+                style={{ position: 'relative', zIndex: 10 }}
+              >
+                Reports
+                {reportCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow z-50 pointer-events-none">
+                    {reportCount}
+                  </span>
+                )}
+              </Link>
+            </div>
+            <Link href="/admin/resolved" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              Resolved
+            </Link>
+            <Link href="/admin/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              Messages
+            </Link>
+            <Link href="/wallet/admin" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              Admin Wallet
+            </Link>
+            <span className="text-primary font-bold text-xs">${adminBalance.toFixed(2)}</span>
+          </>
+        )}
+
+        {/* SELLER BUTTONS (for non-admin sellers) */}
+        {mounted && role === 'seller' && !isAdminUser && (
           <>
             <Link href="/sellers/my-listings" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">My Listings</Link>
             <Link href="/sellers/profile" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">Profile</Link>
@@ -145,7 +168,7 @@ export default function Header() {
                 </span>
               )}
             </div>
-            {/* Notification Bell - large, white, always visible */}
+            {/* Notification Bell */}
             <div className="relative flex items-center" ref={notifRef}>
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -186,7 +209,8 @@ export default function Header() {
           </>
         )}
 
-        {mounted && role === 'buyer' && (
+        {/* BUYER BUTTONS */}
+        {mounted && role === 'buyer' && !isAdminUser && (
           <>
             <Link href="/buyers/dashboard" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">Dashboard</Link>
             <Link href="/buyers/my-orders" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">My Orders</Link>

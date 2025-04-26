@@ -10,16 +10,18 @@ type ResolvedReport = {
   date: string;
 };
 
+type Message = {
+  sender: string;
+  receiver: string;
+  content: string;
+  date: string;
+  read?: boolean;
+};
+
 type ReportLog = {
   reporter: string;
   reportee: string;
-  messages: {
-    sender: string;
-    receiver: string;
-    content: string;
-    date: string;
-    read?: boolean;
-  }[];
+  messages: Message[];
   date: string;
 };
 
@@ -50,33 +52,32 @@ export default function ResolvedReportsPage() {
     saveResolved(updatedResolved);
 
     // Restore to active reports
+    let thread: Message[] = [];
     const messagesRaw = localStorage.getItem('panty_messages');
-    const allMessages = messagesRaw ? JSON.parse(messagesRaw) : {};
-
-    const thread: ReportLog['messages'] = [];
-
-    Object.values(allMessages as { [key: string]: any[] }).forEach((msgList) => {
-      msgList.forEach((msg) => {
-        const between = [msg.sender, msg.receiver];
-        if (between.includes(entry.reporter) && between.includes(entry.reportee)) {
-          thread.push(msg);
-        }
+    if (messagesRaw) {
+      const allMessages = JSON.parse(messagesRaw);
+      Object.values(allMessages as { [key: string]: any[] }).forEach((msgList) => {
+        msgList.forEach((msg) => {
+          const between = [msg.sender, msg.receiver];
+          if (between.includes(entry.reporter) && between.includes(entry.reportee)) {
+            thread.push(msg);
+          }
+        });
       });
-    });
-
-    if (thread.length > 0) {
-      const newReport: ReportLog = {
-        reporter: entry.reporter,
-        reportee: entry.reportee,
-        messages: thread,
-        date: entry.date,
-      };
-
-      const existingReportsRaw = localStorage.getItem('panty_report_logs');
-      const existingReports = existingReportsRaw ? JSON.parse(existingReportsRaw) : [];
-      existingReports.push(newReport);
-      localStorage.setItem('panty_report_logs', JSON.stringify(existingReports));
     }
+
+    // Always restore the report, even if no messages found
+    const newReport: ReportLog = {
+      reporter: entry.reporter,
+      reportee: entry.reportee,
+      messages: thread,
+      date: entry.date,
+    };
+
+    const existingReportsRaw = localStorage.getItem('panty_report_logs');
+    const existingReports = existingReportsRaw ? JSON.parse(existingReportsRaw) : [];
+    existingReports.push(newReport);
+    localStorage.setItem('panty_report_logs', JSON.stringify(existingReports));
 
     // Dispatch event to update report counter
     window.dispatchEvent(new Event('updateReports'));

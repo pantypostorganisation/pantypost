@@ -247,3 +247,13 @@ export const useMessages = () => {
   }
   return context;
 };
+
+// Export getReportCount for use in Header.tsx
+export const getReportCount = () => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('panty_report_logs');
+    const parsed = stored ? JSON.parse(stored) : [];
+    return parsed.length;
+  }
+  return 0;
+};
