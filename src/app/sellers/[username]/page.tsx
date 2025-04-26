@@ -225,10 +225,17 @@ export default function SellerProfilePage() {
               <span className="text-xs text-gray-400">Followers</span>
             </div>
             <div className="flex flex-col items-center">
-              <span className="text-lg font-bold text-white">
-                {averageRating !== null ? averageRating.toFixed(1) : '--'}
-              </span>
-              <span className="text-xs text-gray-400">Rating</span>
+              {averageRating !== null ? (
+                <>
+                  <StarRating rating={averageRating} />
+                  <span className="text-xs text-gray-400 mt-1">{averageRating.toFixed(1)}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg font-bold text-white">--</span>
+                  <span className="text-xs text-gray-400">Rating</span>
+                </>
+              )}
             </div>
           </div>
           {/* Action Buttons */}

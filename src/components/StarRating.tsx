@@ -13,7 +13,9 @@ type StarRatingProps = {
 
 export default function StarRating({ rating, size = 'md' }: StarRatingProps) {
   const fullStars = Math.floor(rating);
-  const hasHalfStar = rating - fullStars >= 0.5;
+  // Only show half star if decimal is >= 0.4
+  const decimal = rating - fullStars;
+  const hasHalfStar = decimal >= 0.4;
   const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
 
   const iconClass = size === 'sm' ? 'text-xs' : 'text-base';
