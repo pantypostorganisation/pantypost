@@ -75,21 +75,30 @@ export default function Header() {
     }
   };
 
+  // Fix: Combine event listeners into a single useEffect to ensure proper cleanup
   useEffect(() => {
+    // Only run on client-side
+    if (typeof window === 'undefined') return;
+    
     setMounted(true);
     updateReportCount();
+    
+    // Add event listeners
     window.addEventListener('updateReports', updateReportCount);
-    return () => window.removeEventListener('updateReports', updateReportCount);
-  }, []);
-
-  useEffect(() => {
+    
+    // Handle clicks outside notification dropdown
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    
+    // Clean up all event listeners when component unmounts
+    return () => {
+      window.removeEventListener('updateReports', updateReportCount);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   return (
@@ -184,7 +193,7 @@ export default function Header() {
             <Link href="/wallet/buyer" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
-                <span>${buyerBalance.toFixed(2)}</span>
+                <span>${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </span>
             </Link>
             <Link href="/buyers/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
