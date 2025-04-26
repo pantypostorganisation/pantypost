@@ -216,10 +216,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const sellerNotifications = getCurrentSellerNotifications();
 
-  // Debugging logs
-  console.log('User:', user);
-  console.log('Listings:', listings);
-  console.log('Subscriptions:', subscriptions);
+  // Removed debugging console.log statements
 
   return (
     <ListingContext.Provider
