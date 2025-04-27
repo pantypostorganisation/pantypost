@@ -7,11 +7,11 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
-import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star, ArrowRight } from 'lucide-react';
+import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star, ArrowRight, BadgeCheck, AlertTriangle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function ListingDetailPage() {
-  const { listings, user, removeListing, addSellerNotification, isSubscribed } = useListings();
+  const { listings, user, removeListing, addSellerNotification, isSubscribed, users } = useListings();
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id;
   const listing = listings.find((item) => item.id === listingId);
@@ -68,6 +68,10 @@ export default function ListingDetailPage() {
       hasMarkedRef.current = true;
     }
   }, [isModalOpen, listing?.seller, currentUsername, markMessagesAsRead]);
+
+  // --- VERIFIED BADGE LOGIC ---
+  const sellerUser = users?.[listing?.seller ?? ''];
+  const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
   if (!listingId) {
     return <div className="text-white text-center p-10">Invalid listing URL.</div>;
@@ -171,6 +175,23 @@ export default function ListingDetailPage() {
         </div>
         <div className="flex-1 space-y-4">
           <h1 className="text-3xl font-bold text-white">{listing.title}</h1>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-gray-400">by</span>
+            <Link href={`/sellers/${listing.seller}`} className="text-primary font-bold hover:underline">
+              {listing.seller}
+            </Link>
+            {isVerified ? (
+              <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-0.5 rounded-full font-semibold">
+                <BadgeCheck className="w-4 h-4" />
+                Verified Seller
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-0.5 rounded-full font-semibold">
+                <AlertTriangle className="w-4 h-4" />
+                Unverified Seller
+              </span>
+            )}
+          </div>
           <p className="text-lg text-gray-300">{listing.description}</p>
           {listing.tags && (
             <div className="flex flex-wrap gap-2">
