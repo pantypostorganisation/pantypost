@@ -7,13 +7,14 @@ import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import StarRating from '@/components/StarRating';
-import { Lock, Mail, Gift, UserPlus, DollarSign, MessageCircle, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Gift, UserPlus, DollarSign, MessageCircle, ArrowRight, BadgeCheck } from 'lucide-react';
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
   const {
     listings,
     user,
+    users, // <-- ADDED
     subscribeToSeller,
     isSubscribed,
     unsubscribeFromSeller,
@@ -76,6 +77,10 @@ export default function SellerProfilePage() {
     reviews.length > 0
       ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
       : null;
+
+  // --- VERIFIED BADGE LOGIC ---
+  const sellerUser = users?.[username];
+  const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -202,6 +207,12 @@ export default function SellerProfilePage() {
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-2xl font-bold text-white">{username}</span>
+            {isVerified && (
+              <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-0.5 rounded-full font-semibold">
+                <BadgeCheck className="w-4 h-4 mr-1" />
+                Verified Seller
+              </span>
+            )}
             <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-semibold">
               Active Now
             </span>

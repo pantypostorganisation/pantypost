@@ -15,6 +15,8 @@ import {
   User,
   LogOut,
   Package,
+  ShieldCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 
 export default function Header() {
@@ -128,6 +130,10 @@ export default function Header() {
             <Link href="/admin/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               Messages
             </Link>
+            <Link href="/admin/verification-requests" className="flex items-center text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              <ClipboardCheck className="w-4 h-4 mr-1" />
+              Review Verifications
+            </Link>
             <Link href="/wallet/admin" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               Admin Wallet
             </Link>
@@ -140,6 +146,10 @@ export default function Header() {
           <>
             <Link href="/sellers/my-listings" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">My Listings</Link>
             <Link href="/sellers/profile" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">Profile</Link>
+            <Link href="/sellers/verify" className="flex items-center text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+              <ShieldCheck className="w-4 h-4 mr-1" />
+              Get Verified
+            </Link>
             <Link href="/wallet/seller" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />

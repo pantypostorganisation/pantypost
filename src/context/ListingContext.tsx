@@ -11,9 +11,25 @@ import { useWallet } from './WalletContext';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
+export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
+
+export type VerificationDocs = {
+  codePhoto?: string; // base64 or URL
+  idFront?: string;
+  idBack?: string;
+  passport?: string;
+  code?: string;
+};
+
 export type User = {
   username: string;
   role: Role;
+  verified?: boolean;
+  verificationStatus?: VerificationStatus;
+  verificationDocs?: VerificationDocs;
+  verificationRequestedAt?: string;
+  verificationReviewedAt?: string;
+  verificationRejectionReason?: string;
 };
 
 export type Listing = {
@@ -35,7 +51,7 @@ type NotificationStore = Record<string, string[]>;
 type ListingContextType = {
   user: User | null;
   role: Role | null;
-  users: { [username: string]: Role };
+  users: { [username: string]: User };
   login: (username: string, role: Role) => void;
   logout: () => void;
   isAuthReady: boolean;
@@ -49,13 +65,17 @@ type ListingContextType = {
   sellerNotifications: string[];
   addSellerNotification: (seller: string, message: string) => void;
   clearSellerNotification: (index: number) => void;
+
+  // Verification
+  requestVerification: (docs: VerificationDocs) => void;
+  setVerificationStatus: (username: string, status: VerificationStatus, rejectionReason?: string) => void;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<{ [username: string]: Role }>({});
+  const [users, setUsers] = useState<{ [username: string]: User }>({});
   const [listings, setListings] = useState<Listing[]>([]);
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
   const [notificationStore, setNotificationStore] = useState<NotificationStore>({});
@@ -66,7 +86,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem('user');
-      const storedUsers = localStorage.getItem('all_users');
+      const storedUsers = localStorage.getItem('all_users_v2');
       const storedListings = localStorage.getItem('listings');
       const storedSubs = localStorage.getItem('subscriptions');
       const storedNotifications = localStorage.getItem('seller_notifications_store');
@@ -96,19 +116,34 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, []);
 
+  const persistUsers = (updated: { [username: string]: User }) => {
+    setUsers(updated);
+    localStorage.setItem('all_users_v2', JSON.stringify(updated));
+  };
+
   const login = (username: string, selectedRole: Role) => {
     const normalized = username.trim().toLowerCase();
     const actualRole: Role =
       normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
 
-    const newUser = { username: normalized, role: actualRole };
+    // If user exists, preserve verification fields
+    let existingUser: User | undefined = users[normalized];
+    const newUser: User = {
+      username: normalized,
+      role: actualRole,
+      verified: existingUser?.verified ?? false,
+      verificationStatus: existingUser?.verificationStatus ?? 'unverified',
+      verificationDocs: existingUser?.verificationDocs ?? {},
+      verificationRequestedAt: existingUser?.verificationRequestedAt,
+      verificationReviewedAt: existingUser?.verificationReviewedAt,
+      verificationRejectionReason: existingUser?.verificationRejectionReason,
+    };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
 
-    setUsers((prev) => {
-      const updated = { ...prev, [normalized]: actualRole };
-      localStorage.setItem('all_users', JSON.stringify(updated));
-      return updated;
+    persistUsers({
+      ...users,
+      [normalized]: newUser,
     });
   };
 
@@ -214,9 +249,47 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
-  const sellerNotifications = getCurrentSellerNotifications();
+  // --- Seller Verification Logic ---
 
-  // Removed debugging console.log statements
+  const requestVerification = (docs: VerificationDocs) => {
+    if (!user) return;
+    const normalized = user.username;
+    const code = docs.code || `VERIF-${normalized}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const updatedUser: User = {
+      ...user,
+      verificationStatus: 'pending',
+      verificationDocs: { ...docs, code },
+      verificationRequestedAt: new Date().toISOString(),
+    };
+    setUser(updatedUser);
+    persistUsers({
+      ...users,
+      [normalized]: updatedUser,
+    });
+  };
+
+  const setVerificationStatus = (
+    username: string,
+    status: VerificationStatus,
+    rejectionReason?: string
+  ) => {
+    const existingUser = users[username];
+    if (!existingUser) return;
+    const updatedUser: User = {
+      ...existingUser,
+      verificationStatus: status,
+      verified: status === 'verified',
+      verificationReviewedAt: new Date().toISOString(),
+      verificationRejectionReason: rejectionReason,
+    };
+    if (user?.username === username) setUser(updatedUser);
+    persistUsers({
+      ...users,
+      [username]: updatedUser,
+    });
+  };
+
+  const sellerNotifications = getCurrentSellerNotifications();
 
   return (
     <ListingContext.Provider
@@ -237,6 +310,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         sellerNotifications,
         addSellerNotification,
         clearSellerNotification,
+        // Verification
+        requestVerification,
+        setVerificationStatus,
       }}
     >
       {children}
