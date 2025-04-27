@@ -78,7 +78,7 @@ export default function ListingDetailPage() {
   }
 
   const handleSend = () => {
-    if (!user || !listing?.seller || (!message.trim() && !sendAsRequest)) return;
+    if (!user || !listing?.seller || !message.trim()) return;
 
     if (sendAsRequest) {
       if (!requestTitle.trim() || !requestPrice || isNaN(Number(requestPrice))) {
@@ -295,7 +295,7 @@ export default function ListingDetailPage() {
               >Cancel</button>
               <button
                 onClick={handleSend}
-                disabled={!message.trim() && !sendAsRequest}
+                disabled={!message.trim()}
                 className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 disabled:bg-pink-300 disabled:cursor-not-allowed"
               >{sent ? '✅ Sent!' : sendAsRequest ? 'Send Request' : 'Send Message'}</button>
             </div>
