@@ -247,13 +247,7 @@ export default function SellerProfilePage() {
               <Gift className="w-4 h-4" />
               Tip Seller
             </button>
-            <button
-              className="flex items-center gap-2 bg-[#222] text-primary font-bold px-5 py-2 rounded-full shadow hover:bg-[#333] transition"
-              disabled
-            >
-              <UserPlus className="w-4 h-4" />
-              Follow
-            </button>
+            {/* Follow button removed */}
             {showSubscribe && (
               <button
                 onClick={handleConfirmSubscribe}
