@@ -53,7 +53,7 @@ type MessageContextType = {
     tags: string[]
   ) => void;
   getMessagesForSeller: (seller: string) => Message[];
-  markMessagesAsRead: (seller: string, reader: string) => void;
+  markMessagesAsRead: (userA: string, userB: string) => void;
   blockUser: (blocker: string, blockee: string) => void;
   unblockUser: (blocker: string, blockee: string) => void;
   reportUser: (reporter: string, reportee: string) => void;
@@ -156,16 +156,26 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return messages[seller] || [];
   };
 
-  // --- READ RECEIPTS LOGIC ---
-  // Mark all messages sent to 'reader' as read in the conversation with 'seller'
-  const markMessagesAsRead = (seller: string, reader: string) => {
+  // --- READ RECEIPTS LOGIC (REFINED) ---
+  // Mark all messages between userA and userB as read for userA (the reader)
+  const markMessagesAsRead = (userA: string, userB: string) => {
     setMessages((prev) => {
-      const updatedMessages = (prev[seller] || []).map((msg) =>
-        msg.receiver === reader && !msg.read ? { ...msg, read: true } : msg
+      // Update messages stored under userA
+      const updatedA = (prev[userA] || []).map((msg) =>
+        msg.receiver === userA && msg.sender === userB && !msg.read
+          ? { ...msg, read: true }
+          : msg
+      );
+      // Update messages stored under userB
+      const updatedB = (prev[userB] || []).map((msg) =>
+        msg.receiver === userA && msg.sender === userB && !msg.read
+          ? { ...msg, read: true }
+          : msg
       );
       return {
         ...prev,
-        [seller]: updatedMessages,
+        [userA]: updatedA,
+        [userB]: updatedB,
       };
     });
   };

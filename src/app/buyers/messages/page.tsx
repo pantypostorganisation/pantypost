@@ -36,14 +36,13 @@ export default function BuyerMessagesPage() {
   const [editPrice, setEditPrice] = useState<number | ''>('');
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
-  const [_, forceRerender] = useState(0); // for forcing re-render after marking as read
+  const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
   const threads: { [seller: string]: typeof messages[string] } = {};
   const unreadCounts: { [seller: string]: number } = {};
   let activeMessages: typeof messages[string] = [];
 
-  // --- Get all custom requests for this buyer ---
   const buyerRequests = user ? getRequestsForUser(user.username, 'buyer') : [];
 
   if (user) {
@@ -72,7 +71,6 @@ export default function BuyerMessagesPage() {
     }
   }
 
-  // --- FIX: Ensure threadParam is always in threads, even if empty ---
   useEffect(() => {
     if (threadParam && user) {
       if (!threads[threadParam]) {
@@ -83,15 +81,14 @@ export default function BuyerMessagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadParam, user?.username]);
 
-  // --- FIX: Mark as read for both sides and force re-render ---
   useEffect(() => {
     if (user && activeThread && !markedThreadsRef.current.has(activeThread)) {
-      markMessagesAsRead(user.username, activeThread); // Mark as read in buyer's inbox
-      markMessagesAsRead(activeThread, user.username); // Mark as read in seller's inbox
+      markMessagesAsRead(user.username, activeThread);
+      markMessagesAsRead(activeThread, user.username);
       markedThreadsRef.current.add(activeThread);
-      setTimeout(() => forceRerender((v) => v + 1), 0); // Force re-render so unread count disappears
+      setTimeout(() => forceRerender((v) => v + 1), 0);
     }
-  }, [activeThread, user?.username]);
+  }, [activeThread, user?.username, markMessagesAsRead]);
 
   const handleReply = () => {
     if (!replyMessage.trim() || !activeThread || !user) return;
@@ -104,7 +101,6 @@ export default function BuyerMessagesPage() {
       const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
       const requestId = uuidv4();
 
-      // 1. Save the request in RequestContext
       addRequest({
         id: requestId,
         buyer: user.username,
@@ -113,11 +109,10 @@ export default function BuyerMessagesPage() {
         description: replyMessage.trim(),
         price: Number(requestPrice),
         tags: tagsArray,
-        status: 'pending',
+        status: 'pending', // Always pending on creation
         date: new Date().toISOString(),
       });
 
-      // 2. Send the message with meta
       sendMessage(
         user.username,
         activeThread,
@@ -161,13 +156,11 @@ export default function BuyerMessagesPage() {
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
-  // --- FIX: Always show threadParam in inbox, even if no messages exist ---
   const inboxSellers = Object.keys(threads);
   if (threadParam && !inboxSellers.includes(threadParam)) {
     inboxSellers.push(threadParam);
   }
 
-  // --- Helper for status badge ---
   function statusBadge(status: string) {
     let color = 'bg-yellow-500 text-white';
     let label = status.toUpperCase();
@@ -181,7 +174,6 @@ export default function BuyerMessagesPage() {
     );
   }
 
-  // --- Handle edit custom request ---
   const handleEditRequest = (req: typeof buyerRequests[number]) => {
     setEditRequestId(req.id);
     setEditPrice(req.price);
@@ -215,12 +207,16 @@ export default function BuyerMessagesPage() {
     setEditMessage('');
   };
 
-  // --- Handle accept/reject for buyer on EDITED requests ---
-  const handleAcceptEdited = (req: typeof buyerRequests[number]) => {
-    respondToRequest(req.id, 'accepted');
+  // Accept/Decline for buyer (only if status is 'edited')
+  const handleAccept = (req: typeof buyerRequests[number]) => {
+    if (req.status === 'edited') {
+      respondToRequest(req.id, 'accepted');
+    }
   };
-  const handleRejectEdited = (req: typeof buyerRequests[number]) => {
-    respondToRequest(req.id, 'rejected');
+  const handleDecline = (req: typeof buyerRequests[number]) => {
+    if (req.status === 'edited') {
+      respondToRequest(req.id, 'rejected');
+    }
   };
 
   return (
@@ -299,8 +295,7 @@ export default function BuyerMessagesPage() {
 
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
                     {(threads[activeThread] || []).map((msg, index) => {
-                      // Find the matching custom request (if any)
-                      let customReq;
+                      let customReq: typeof buyerRequests[number] | undefined = undefined;
                       if (
                         msg.type === 'customRequest' &&
                         msg.meta &&
@@ -308,12 +303,12 @@ export default function BuyerMessagesPage() {
                       ) {
                         customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
                       }
-                      // Only show action buttons to the party who did NOT make the last edit
-                      const showEditedActions =
+                      // Show action buttons for buyer only if status is 'edited' and this is the latest custom request message
+                      const isLatestCustom =
                         customReq &&
                         customReq.status === 'edited' &&
-                        ((msg.sender !== user?.username && index === (threads[activeThread]?.length ?? 1) - 1) ||
-                          (msg.sender === user?.username && index === (threads[activeThread]?.length ?? 1) - 1));
+                        index === (threads[activeThread]?.length ?? 1) - 1 &&
+                        msg.type === 'customRequest';
 
                       return (
                         <div key={index} className="bg-gray-50 p-3 rounded border">
@@ -322,7 +317,6 @@ export default function BuyerMessagesPage() {
                             <span className="font-normal text-gray-700">
                               on {new Date(msg.date).toLocaleString()}
                             </span>
-                            {/* --- READ RECEIPT INDICATOR --- */}
                             {msg.sender === user?.username && (
                               <span className="ml-2 text-[10px] font-semibold">
                                 {msg.read ? (
@@ -350,30 +344,29 @@ export default function BuyerMessagesPage() {
                                   {statusBadge(customReq.status)}
                                 </div>
                               )}
-                              {/* Show action buttons for EDITED status */}
-                              {customReq && customReq.status === 'edited' && showEditedActions && (
+                              {/* Buyer action buttons for 'edited' only */}
+                              {isLatestCustom && (
                                 <div className="flex gap-2 pt-2">
                                   <button
-                                    onClick={() => handleAcceptEdited(customReq)}
+                                    onClick={() => customReq && handleAccept(customReq)}
                                     className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800"
                                   >
                                     Accept
                                   </button>
                                   <button
-                                    onClick={() => handleRejectEdited(customReq)}
+                                    onClick={() => customReq && handleDecline(customReq)}
                                     className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800"
                                   >
-                                    Reject
+                                    Decline
                                   </button>
                                   <button
-                                    onClick={() => handleEditRequest(customReq)}
+                                    onClick={() => customReq && handleEditRequest(customReq)}
                                     className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
                                   >
                                     Edit
                                   </button>
                                 </div>
                               )}
-                              {/* Edit form */}
                               {editRequestId === customReq?.id && (
                                 <div className="mt-2 space-y-2">
                                   <input
@@ -405,7 +398,7 @@ export default function BuyerMessagesPage() {
                                   />
                                   <div className="flex gap-2">
                                     <button
-                                      onClick={() => handleEditSubmit(customReq)}
+                                      onClick={() => customReq && handleEditSubmit(customReq)}
                                       className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
                                     >
                                       Submit Edit
