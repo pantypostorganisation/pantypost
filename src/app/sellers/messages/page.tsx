@@ -17,11 +17,18 @@ export default function SellerMessagesPage() {
     reportUser,
     isBlocked,
     hasReported,
+    messages,
   } = useMessages();
-  const { getRequestsForUser, respondToRequest } = useRequests();
+  const { getRequestsForUser, respondToRequest, addRequest } = useRequests();
 
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
+  const [editRequestId, setEditRequestId] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState<number | ''>('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editTags, setEditTags] = useState('');
+  const [editMessage, setEditMessage] = useState('');
+  const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
   const sellerMessages = user ? getMessagesForSeller(user.username) : [];
@@ -44,10 +51,13 @@ export default function SellerMessagesPage() {
     }
   });
 
+  // Mark as read for both sides and force re-render
   useEffect(() => {
     if (activeThread && user && !markedThreadsRef.current.has(activeThread)) {
       markMessagesAsRead(user.username, activeThread);
+      markMessagesAsRead(activeThread, user.username);
       markedThreadsRef.current.add(activeThread);
+      setTimeout(() => forceRerender((v) => v + 1), 0);
     }
   }, [activeThread, user, markMessagesAsRead]);
 
@@ -77,6 +87,62 @@ export default function SellerMessagesPage() {
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
+  // --- Helper for status badge ---
+  function statusBadge(status: string) {
+    let color = 'bg-yellow-500 text-white';
+    let label = status.toUpperCase();
+    if (status === 'accepted') color = 'bg-green-600 text-white';
+    else if (status === 'rejected') color = 'bg-red-600 text-white';
+    else if (status === 'edited') color = 'bg-blue-600 text-white';
+    return (
+      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
+        {label}
+      </span>
+    );
+  }
+
+  // --- Handle edit custom request ---
+  const handleEditRequest = (req: typeof requests[number]) => {
+    setEditRequestId(req.id);
+    setEditPrice(req.price);
+    setEditTitle(req.title);
+    setEditTags(req.tags.join(', '));
+    setEditMessage(req.description || '');
+  };
+
+  const handleEditSubmit = (req: typeof requests[number]) => {
+    if (!user || !activeThread || !editRequestId) return;
+    respondToRequest(editRequestId, 'edited', editMessage);
+    sendMessage(
+      user.username,
+      activeThread,
+      `[PantyPost Custom Request Edited] ${editTitle}`,
+      {
+        type: 'customRequest',
+        meta: {
+          id: req.id,
+          title: editTitle,
+          price: Number(editPrice),
+          tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
+          message: editMessage,
+        },
+      }
+    );
+    setEditRequestId(null);
+    setEditPrice('');
+    setEditTitle('');
+    setEditTags('');
+    setEditMessage('');
+  };
+
+  // --- Handle accept/reject for seller on EDITED requests ---
+  const handleAcceptEdited = (req: typeof requests[number]) => {
+    respondToRequest(req.id, 'accepted');
+  };
+  const handleRejectEdited = (req: typeof requests[number]) => {
+    respondToRequest(req.id, 'rejected');
+  };
+
   return (
     <RequireAuth role="seller">
       <main className="p-8 max-w-4xl mx-auto">
@@ -102,7 +168,7 @@ export default function SellerMessagesPage() {
                       >
                         <div className="flex justify-between items-center">
                           <span className="font-semibold">{sender}</span>
-                          {unread > 0 && (
+                          {unread > 0 && activeThread !== sender && (
                             <span className="text-xs text-white bg-[#ff950e] rounded-full px-2 py-0.5">
                               {unread}
                             </span>
@@ -162,18 +228,29 @@ export default function SellerMessagesPage() {
                         metaId = (msg.meta as any).id as string;
                         customReq = requests.find((r) => r.id === metaId);
                       }
-                      
-                      // Debug log
-                      if (msg.type === 'customRequest') {
-                        // eslint-disable-next-line no-console
-                        console.log('msg.meta:', msg.meta, 'metaId:', metaId, 'requests:', requests, 'customReq:', customReq);
-                      }
+
+                      // Only show action buttons to the party who did NOT make the last edit
+                      const showEditedActions =
+                        customReq &&
+                        customReq.status === 'edited' &&
+                        ((msg.sender !== user?.username && index === (threads[activeThread]?.length ?? 1) - 1) ||
+                          (msg.sender === user?.username && index === (threads[activeThread]?.length ?? 1) - 1));
 
                       return (
                         <div key={index} className="bg-gray-50 p-3 rounded border">
                           <p className="text-sm mb-1 text-black">
                             <strong>{msg.sender === user?.username ? 'You' : msg.sender}</strong> on{' '}
                             {new Date(msg.date).toLocaleString()}
+                            {/* --- READ RECEIPT INDICATOR --- */}
+                            {msg.sender === user?.username && (
+                              <span className="ml-2 text-[10px] font-semibold">
+                                {msg.read ? (
+                                  <span className="text-green-600">Read</span>
+                                ) : (
+                                  <span className="text-gray-400">Unread</span>
+                                )}
+                              </span>
+                            )}
                           </p>
                           <p className="text-black">{msg.content}</p>
                           {customReq && (
@@ -186,31 +263,76 @@ export default function SellerMessagesPage() {
                                 <p><b>Message:</b> {customReq.description}</p>
                               )}
                               <p>
-                                <b>Status:</b>{' '}
-                                <span className={
-                                  customReq.status === 'pending'
-                                    ? 'text-yellow-600'
-                                    : customReq.status === 'accepted'
-                                    ? 'text-green-600'
-                                    : 'text-red-600'
-                                }>
-                                  {customReq.status.toUpperCase()}
-                                </span>
+                                <b>Status:</b>
+                                {statusBadge(customReq.status)}
                               </p>
-                              {customReq.status === 'pending' && (
+                              {/* Show action buttons for EDITED status */}
+                              {customReq && customReq.status === 'edited' && showEditedActions && (
                                 <div className="flex gap-2 pt-2">
                                   <button
-                                    onClick={() => respondToRequest(customReq.id, 'accepted')}
-                                    className="bg-[#ff950e] text-white px-3 py-1 rounded text-xs hover:bg-orange-600"
+                                    onClick={() => handleAcceptEdited(customReq)}
+                                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800"
                                   >
                                     Accept
                                   </button>
                                   <button
-                                    onClick={() => respondToRequest(customReq.id, 'declined')}
-                                    className="bg-black text-white px-3 py-1 rounded text-xs hover:bg-gray-800"
+                                    onClick={() => handleRejectEdited(customReq)}
+                                    className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800"
                                   >
-                                    Decline
+                                    Reject
                                   </button>
+                                  <button
+                                    onClick={() => handleEditRequest(customReq)}
+                                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              )}
+                              {/* Edit form */}
+                              {editRequestId === customReq?.id && (
+                                <div className="mt-2 space-y-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Title"
+                                    value={editTitle}
+                                    onChange={e => setEditTitle(e.target.value)}
+                                    className="w-full p-2 border rounded text-black"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="Price (USD)"
+                                    value={editPrice}
+                                    onChange={e => setEditPrice(Number(e.target.value))}
+                                    className="w-full p-2 border rounded text-black"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Tags (comma-separated)"
+                                    value={editTags}
+                                    onChange={e => setEditTags(e.target.value)}
+                                    className="w-full p-2 border rounded text-black"
+                                  />
+                                  <textarea
+                                    placeholder="Message"
+                                    value={editMessage}
+                                    onChange={e => setEditMessage(e.target.value)}
+                                    className="w-full p-2 border rounded text-black"
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleEditSubmit(customReq!)}
+                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
+                                    >
+                                      Submit Edit
+                                    </button>
+                                    <button
+                                      onClick={() => setEditRequestId(null)}
+                                      className="bg-gray-300 text-black px-3 py-1 rounded text-xs hover:bg-gray-400"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>

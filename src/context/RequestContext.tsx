@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type RequestStatus = 'pending' | 'accepted' | 'declined';
+// UPDATED: Added 'rejected' and 'edited'
+export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'edited';
 
 export type CustomRequest = {
   id: string;

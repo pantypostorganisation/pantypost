@@ -26,7 +26,7 @@ export default function ListingDetailPage() {
 
   const [purchaseStatus, setPurchaseStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Removed: const [isModalOpen, setIsModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sent, setSent] = useState(false);
   const [sendAsRequest, setSendAsRequest] = useState(false);
@@ -58,8 +58,9 @@ export default function ListingDetailPage() {
   }, [listing?.seller]);
 
   useEffect(() => {
+    // Removed isModalOpen logic
     if (
-      isModalOpen &&
+      /* isModalOpen && */
       listing?.seller &&
       currentUsername &&
       !hasMarkedRef.current
@@ -67,7 +68,7 @@ export default function ListingDetailPage() {
       markMessagesAsRead(listing.seller, currentUsername);
       hasMarkedRef.current = true;
     }
-  }, [isModalOpen, listing?.seller, currentUsername, markMessagesAsRead]);
+  }, [/* isModalOpen, */ listing?.seller, currentUsername, markMessagesAsRead]);
 
   // --- VERIFIED BADGE LOGIC ---
   const sellerUser = users?.[listing?.seller ?? ''];
@@ -229,7 +230,10 @@ export default function ListingDetailPage() {
                 {isProcessing ? 'Processing...' : 'Buy Now'}
               </button>
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  // Redirect to buyers/messages with thread open
+                  window.location.href = `/buyers/messages?thread=${listing.seller}`;
+                }}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium w-full"
               >
                 Message {listing.seller}
@@ -239,90 +243,6 @@ export default function ListingDetailPage() {
           {purchaseStatus && <p className="text-lg text-green-500">{purchaseStatus}</p>}
         </div>
       </div>
-
-      {/* Message Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl text-black relative">
-            <h2 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-800">
-              <MessageCircle className="w-5 h-5 text-pink-600" />
-              Chat with {listing.seller}
-            </h2>
-
-            <div className="border rounded p-3 mb-4 h-48 overflow-y-auto bg-gray-50">
-              {conversation.length === 0 ? (
-                <p className="text-sm text-gray-600 italic">No messages yet. Start the conversation!</p>
-              ) : (
-                conversation.map((msg, i) => (
-                  <div key={i} className={`mb-3 p-2 rounded ${
-                    msg.sender === user?.username ? 'bg-pink-50 border border-pink-100 ml-6' : 'bg-gray-100 border border-gray-200 mr-6'
-                  }`}>
-                    <p className="text-xs text-gray-600 mb-1">
-                      {msg.sender === user?.username ? 'You' : msg.sender} — {new Date(msg.date).toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-800">{msg.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="mb-3 flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={sendAsRequest}
-                onChange={() => setSendAsRequest(prev => !prev)}
-                id="sendAsRequest"
-              />
-              <label htmlFor="sendAsRequest" className="text-sm font-medium text-gray-700">Send as custom request</label>
-            </div>
-
-            {sendAsRequest && (
-              <div className="space-y-2 mb-3">
-                <input
-                  type="text"
-                  placeholder="Title"
-                  value={requestTitle}
-                  onChange={(e) => setRequestTitle(e.target.value)}
-                  className="w-full p-2 border rounded"
-                />
-                <input
-                  type="number"
-                  placeholder="Price (USD)"
-                  value={requestPrice}
-                  onChange={(e) => setRequestPrice(Number(e.target.value))}
-                  className="w-full p-2 border rounded"
-                />
-                <input
-                  type="text"
-                  placeholder="Tags (comma-separated)"
-                  value={requestTags}
-                  onChange={(e) => setRequestTags(e.target.value)}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-            )}
-
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Type your message here..."
-              className="w-full h-24 p-3 border rounded-lg mb-3 focus:border-pink-500 focus:ring-1 focus:ring-pink-500 outline-none text-gray-800"
-            />
-
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100"
-              >Cancel</button>
-              <button
-                onClick={handleSend}
-                disabled={!message.trim()}
-                className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 disabled:bg-pink-300 disabled:cursor-not-allowed"
-              >{sent ? '✅ Sent!' : sendAsRequest ? 'Send Request' : 'Send Message'}</button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

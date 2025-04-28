@@ -53,7 +53,7 @@ type MessageContextType = {
     tags: string[]
   ) => void;
   getMessagesForSeller: (seller: string) => Message[];
-  markMessagesAsRead: (seller: string, sender: string) => void;
+  markMessagesAsRead: (seller: string, reader: string) => void;
   blockUser: (blocker: string, blockee: string) => void;
   unblockUser: (blocker: string, blockee: string) => void;
   reportUser: (reporter: string, reportee: string) => void;
@@ -156,10 +156,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return messages[seller] || [];
   };
 
-  const markMessagesAsRead = (seller: string, sender: string) => {
+  // --- READ RECEIPTS LOGIC ---
+  // Mark all messages sent to 'reader' as read in the conversation with 'seller'
+  const markMessagesAsRead = (seller: string, reader: string) => {
     setMessages((prev) => {
       const updatedMessages = (prev[seller] || []).map((msg) =>
-        msg.sender === sender ? { ...msg, read: true } : msg
+        msg.receiver === reader && !msg.read ? { ...msg, read: true } : msg
       );
       return {
         ...prev,
