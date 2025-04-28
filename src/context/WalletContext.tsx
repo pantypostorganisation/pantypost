@@ -150,7 +150,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const purchaseListing = (listing: Omit<Order, 'buyer'>, buyerUsername: string): boolean => {
-    const price = listing.markedUpPrice ?? listing.price;
+    // Fix 1: Use explicit check for markedUpPrice instead of nullish coalescing
+    const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null) 
+      ? listing.markedUpPrice 
+      : listing.price;
+    
     const seller = listing.seller;
     const sellerCut = listing.price * 0.9;
     const platformCut = price - sellerCut;
@@ -177,10 +181,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     addOrder(order);
 
+    // Fix 2: Also fix the notification message to handle undefined/null values safely
+    const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
+      ? listing.markedUpPrice.toFixed(2)
+      : listing.price.toFixed(2);
+
     // Use standalone function to avoid circular dependency
     addSellerNotificationToStorage(
       seller,
-      `💸 New sale: "${listing.title}" for $${listing.markedUpPrice?.toFixed(2) || listing.price?.toFixed(2)}`
+      `💸 New sale: "${listing.title}" for $${displayPrice}`
     );
 
     return true;
