@@ -39,19 +39,43 @@ export default function Header() {
 
   useEffect(() => {
     if (user && user.role === 'seller') {
-      const filtered = sellerNotifications.filter(notif => {
-        if (notif.includes('purchased:')) {
-          const itemMatch = notif.match(/purchased: ["']?([^"']+)["']?/);
-          if (!itemMatch) return false;
-          const itemTitle = itemMatch[1].trim();
-          const sellerHasItem = listings.some(listing => listing.seller === user.username && listing.title === itemTitle);
-          return sellerHasItem;
+      // Fix: Add null check for sellerNotifications and improve regex handling
+      const filtered = (sellerNotifications || []).filter(notif => {
+        // Skip null/undefined notifications
+        if (!notif) return false;
+        
+        // Trim notification text for more reliable matching
+        const trimmedNotif = notif.trim();
+        
+        if (trimmedNotif.includes('purchased:')) {
+          // Improved regex with better error handling
+          try {
+            const itemMatch = trimmedNotif.match(/purchased:\s*["']?([^"']+)["']?/i);
+            if (!itemMatch?.[1]) return false;
+            
+            const itemTitle = itemMatch[1].trim();
+            // Check if this seller has a listing with this title
+            const sellerHasItem = Array.isArray(listings) && listings.some(
+              listing => 
+                listing && 
+                listing.seller === user.username && 
+                listing.title === itemTitle
+            );
+            return sellerHasItem;
+          } catch (e) {
+            console.error("Error matching purchase notification:", e);
+            return false;
+          }
         }
-        if (notif.includes('subscriber:') || notif.includes('subscribed')) {
-          return notif.toLowerCase().includes(user.username.toLowerCase());
+        
+        if (trimmedNotif.includes('subscriber:') || trimmedNotif.includes('subscribed')) {
+          return user.username && trimmedNotif.toLowerCase().includes(user.username.toLowerCase());
         }
-        return notif.toLowerCase().includes(user.username.toLowerCase());
+        
+        // Default case - check if notification mentions the user
+        return user.username && trimmedNotif.toLowerCase().includes(user.username.toLowerCase());
       });
+      
       setFilteredNotifications(filtered);
     } else {
       setFilteredNotifications([]);
