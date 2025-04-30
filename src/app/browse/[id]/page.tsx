@@ -26,7 +26,6 @@ export default function ListingDetailPage() {
 
   const [purchaseStatus, setPurchaseStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  // Removed: const [isModalOpen, setIsModalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [sent, setSent] = useState(false);
   const [sendAsRequest, setSendAsRequest] = useState(false);
@@ -58,9 +57,7 @@ export default function ListingDetailPage() {
   }, [listing?.seller]);
 
   useEffect(() => {
-    // Removed isModalOpen logic
     if (
-      /* isModalOpen && */
       listing?.seller &&
       currentUsername &&
       !hasMarkedRef.current
@@ -68,7 +65,7 @@ export default function ListingDetailPage() {
       markMessagesAsRead(listing.seller, currentUsername);
       hasMarkedRef.current = true;
     }
-  }, [/* isModalOpen, */ listing?.seller, currentUsername, markMessagesAsRead]);
+  }, [listing?.seller, currentUsername, markMessagesAsRead]);
 
   // --- VERIFIED BADGE LOGIC ---
   const sellerUser = users?.[listing?.seller ?? ''];
@@ -214,15 +211,20 @@ export default function ListingDetailPage() {
             <div className="flex flex-col gap-3 w-full max-w-xs">
               <button
                 onClick={() => {
+                  setIsProcessing(true);
                   const success = purchaseListing(listing, user.username);
                   if (success) {
                     removeListing(listing.id);
                     addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
                     setPurchaseStatus('Purchase successful! 🎉');
+                    // Redirect to seller's messages after a short delay
+                    setTimeout(() => {
+                      window.location.href = `/buyers/messages?seller=${listing.seller}`;
+                    }, 1000);
                   } else {
                     setPurchaseStatus('Insufficient balance. Please top up your wallet.');
+                    setIsProcessing(false);
                   }
-                  setIsProcessing(false);
                 }}
                 className="bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 font-medium w-full"
                 disabled={isProcessing}
@@ -238,6 +240,13 @@ export default function ListingDetailPage() {
               >
                 Message {listing.seller}
               </button>
+            </div>
+          )}
+          {user?.role === 'seller' && (
+            <div className="bg-blue-600 text-white p-4 rounded-lg">
+              <p className="text-sm">
+                You are viewing this page as a seller. You can browse listings but cannot make purchases.
+              </p>
             </div>
           )}
           {purchaseStatus && <p className="text-lg text-green-500">{purchaseStatus}</p>}

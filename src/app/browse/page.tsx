@@ -90,8 +90,15 @@ export default function BrowsePage() {
     .filter((seller, i, self) => self.indexOf(seller) === i && (!user?.username || !isSubscribed(user.username, seller)));
 
   return (
-    <RequireAuth role="buyer">
+    <RequireAuth role={user?.role || 'buyer'}>
       <main className="p-10 max-w-7xl mx-auto space-y-8">
+        {user?.role === 'seller' && (
+          <div className="bg-blue-600 text-white p-4 rounded-lg mb-6">
+            <p className="text-sm">
+              You are viewing this page as a seller. You can browse listings but cannot make purchases.
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-3xl font-bold text-white">Browse Listings</h1>
@@ -126,7 +133,6 @@ export default function BrowsePage() {
           </div>
         </div>
 
-        {/* [Rest of your JSX for filters, listings, and cards remains unchanged below this line] */}
         {/* Tag filters */}
         {allTags.length > 0 && (
           <div className="mb-6 bg-white p-4 rounded-lg">
@@ -292,17 +298,21 @@ export default function BrowsePage() {
                         {listing.seller}
                       </Link>
                     </div>
+
+                    {user?.role === 'buyer' ? (
+                      <button
+                        onClick={() => handlePurchase(listing)}
+                        className="mt-4 w-full bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 font-medium"
+                      >
+                        Buy Now
+                      </button>
+                    ) : user?.role === 'seller' ? (
+                      <div className="mt-4 text-center text-sm text-gray-500">
+                        Sellers cannot purchase listings
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-
-                {user?.role === 'buyer' && (
-                  <button
-                    onClick={() => handlePurchase(listing)}
-                    className="m-4 mt-0 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 font-medium"
-                  >
-                    Buy Now
-                  </button>
-                )}
               </div>
             ))}
           </div>
