@@ -14,7 +14,6 @@ const addSellerNotificationToStorage = (seller: string, message: string) => {
     const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
     notifs.push(message);
     localStorage.setItem('seller_notifications', JSON.stringify(notifs));
-    // Dispatch a custom event that the ListingContext can listen for
     window.dispatchEvent(new CustomEvent('newSellerNotification'));
   }
 };
@@ -25,12 +24,13 @@ type Order = {
   description: string;
   price: number;
   markedUpPrice: number;
-  imageUrl: string;
+  imageUrl?: string;
   date: string;
   seller: string;
   buyer: string;
   tags?: string[];
   wearTime?: string;
+  // You can add more fields as needed
 };
 
 type Withdrawal = {
@@ -59,6 +59,8 @@ type WalletContextType = {
   adminWithdrawals: Withdrawal[];
   addSellerWithdrawal: (username: string, amount: number) => void;
   addAdminWithdrawal: (amount: number) => void;
+  wallet: { [username: string]: number }; // Unified wallet object
+  updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void; // Generic update function, now can add order
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -150,7 +152,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const purchaseListing = (listing: Omit<Order, 'buyer'>, buyerUsername: string): boolean => {
-    // Fix 1: Use explicit check for markedUpPrice instead of nullish coalescing
     const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null) 
       ? listing.markedUpPrice 
       : listing.price;
@@ -171,7 +172,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       [seller]: (prev[seller] || 0) + sellerCut,
     }));
 
-    setAdminBalanceState((prev) => prev + platformCut);
+    // Credit the full admin cut to the shared admin wallet (oakley)
+    updateWallet('oakley', platformCut);
 
     const order: Order = {
       ...listing,
@@ -181,12 +183,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     addOrder(order);
 
-    // Fix 2: Also fix the notification message to handle undefined/null values safely
     const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
       ? listing.markedUpPrice.toFixed(2)
       : listing.price.toFixed(2);
 
-    // Use standalone function to avoid circular dependency
     addSellerNotificationToStorage(
       seller,
       `💸 New sale: "${listing.title}" for $${displayPrice}`
@@ -200,33 +200,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     seller: string,
     amount: number
   ): boolean => {
-    // Check if buyer has enough balance
     const buyerBalance = getBuyerBalance(buyer);
     if (buyerBalance < amount) {
       return false;
     }
 
-    // Calculate distribution
-    // Seller gets 75% of subscription price
     const sellerCut = amount * 0.75;
-    // Admin gets 25% of subscription price
     const adminCut = amount * 0.25;
 
-    // Update balances
     setBuyerBalance(buyer, buyerBalance - amount);
     setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
-    setAdminBalanceState((prev) => prev + adminCut);
 
-    // Add notification without dependency on ListingContext
+    // Credit the full admin cut to the shared admin wallet (oakley)
+    updateWallet('oakley', adminCut);
+
     addSellerNotificationToStorage(
       seller,
       `💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
     );
-
-    console.log(`Subscription processed: ${buyer} -> ${seller} ($${amount})`);
-    console.log(`New buyer balance: $${buyerBalance - amount}`);
-    console.log(`New seller balance: $${getSellerBalance(seller) + sellerCut}`);
-    console.log(`Admin cut: $${adminCut}`);
 
     return true;
   };
@@ -244,6 +235,57 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const date = new Date().toISOString();
     setAdminWithdrawals((prev) => [...prev, { amount, date }]);
     setAdminBalanceState((prev) => prev - amount);
+  };
+
+  // Unified wallet object (buyer, seller, admin)
+  // Both oakley and gerome see the same admin balance
+  const wallet: { [username: string]: number } = {
+    ...buyerBalances,
+    ...sellerBalances,
+    oakley: adminBalance,
+    gerome: adminBalance,
+    admin: adminBalance,
+  };
+
+  /**
+   * updateWallet: 
+   * - Always adds to seller's balance (even if not present, initializes to 0).
+   * - Always adds to buyer's balance (even if not present, initializes to 0).
+   * - If orderToFulfil is provided, adds it to orderHistory (for custom request payments).
+   * - For admin, always update the shared admin balance (oakley/gerome/admin).
+   */
+  const updateWallet = (username: string, amount: number, orderToFulfil?: Order) => {
+    if (username === "oakley" || username === "gerome" || username === "admin") {
+      setAdminBalanceState((prev) => prev + amount);
+    } else if (
+      sellerBalances.hasOwnProperty(username) ||
+      Object.keys(sellerBalances).includes(username) ||
+      (orderToFulfil && orderToFulfil.seller === username)
+    ) {
+      setSellerBalance(username, (sellerBalances[username] || 0) + amount);
+      if (orderToFulfil) {
+        addOrder(orderToFulfil);
+        addSellerNotificationToStorage(
+          username,
+          `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
+        );
+      }
+    } else if (buyerBalances.hasOwnProperty(username) || Object.keys(buyerBalances).includes(username)) {
+      setBuyerBalance(username, getBuyerBalance(username) + amount);
+    } else {
+      if (amount > 0) {
+        setSellerBalance(username, (sellerBalances[username] || 0) + amount);
+        if (orderToFulfil) {
+          addOrder(orderToFulfil);
+          addSellerNotificationToStorage(
+            username,
+            `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
+          );
+        }
+      } else {
+        setBuyerBalance(username, (buyerBalances[username] || 0) + amount);
+      }
+    }
   };
 
   return (
@@ -265,6 +307,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         adminWithdrawals,
         addSellerWithdrawal,
         addAdminWithdrawal,
+        wallet,
+        updateWallet,
       }}
     >
       {children}

@@ -3,10 +3,13 @@
 import { useMessages } from '@/context/MessageContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
+import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
+
+const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
 
 export default function BuyerMessagesPage() {
   const { user } = useListings();
@@ -20,7 +23,8 @@ export default function BuyerMessagesPage() {
     isBlocked,
     hasReported,
   } = useMessages();
-  const { addRequest, getRequestsForUser, respondToRequest } = useRequests();
+  const { addRequest, getRequestsForUser, respondToRequest, requests, setRequests } = useRequests();
+  const { wallet, updateWallet } = useWallet();
 
   const searchParams = useSearchParams();
   const threadParam = searchParams?.get('thread');
@@ -36,8 +40,14 @@ export default function BuyerMessagesPage() {
   const [editPrice, setEditPrice] = useState<number | ''>('');
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payingRequest, setPayingRequest] = useState<any>(null);
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    forceRerender((v) => v + 1);
+  }, [requests, wallet]);
 
   const threads: { [seller: string]: typeof messages[string] } = {};
   const unreadCounts: { [seller: string]: number } = {};
@@ -109,7 +119,7 @@ export default function BuyerMessagesPage() {
         description: replyMessage.trim(),
         price: Number(requestPrice),
         tags: tagsArray,
-        status: 'pending', // Always pending on creation
+        status: 'pending',
         date: new Date().toISOString(),
       });
 
@@ -167,6 +177,8 @@ export default function BuyerMessagesPage() {
     if (status === 'accepted') color = 'bg-green-600 text-white';
     else if (status === 'rejected') color = 'bg-red-600 text-white';
     else if (status === 'edited') color = 'bg-blue-600 text-white';
+    else if (status === 'paid') color = 'bg-green-800 text-white';
+    else if (status === 'pending') color = 'bg-yellow-500 text-white';
     return (
       <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
         {label}
@@ -184,7 +196,17 @@ export default function BuyerMessagesPage() {
 
   const handleEditSubmit = (req: typeof buyerRequests[number]) => {
     if (!user || !activeThread || !editRequestId) return;
-    respondToRequest(editRequestId, 'edited', editMessage);
+    respondToRequest(
+      editRequestId,
+      'pending',
+      editMessage,
+      {
+        title: editTitle,
+        price: Number(editPrice),
+        tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
+        description: editMessage,
+      }
+    );
     sendMessage(
       user.username,
       activeThread,
@@ -205,19 +227,120 @@ export default function BuyerMessagesPage() {
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
+    setTimeout(() => forceRerender((v) => v + 1), 0);
   };
 
-  // Accept/Decline for buyer (only if status is 'edited')
   const handleAccept = (req: typeof buyerRequests[number]) => {
-    if (req.status === 'edited') {
+    if (req && req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
+      setTimeout(() => forceRerender((v) => v + 1), 0);
     }
   };
   const handleDecline = (req: typeof buyerRequests[number]) => {
-    if (req.status === 'edited') {
+    if (req && req.status === 'pending') {
       respondToRequest(req.id, 'rejected');
+      setTimeout(() => forceRerender((v) => v + 1), 0);
     }
   };
+
+  // Payment logic
+  const handlePayNow = (req: typeof buyerRequests[number]) => {
+    setPayingRequest(req);
+    setShowPayModal(true);
+  };
+
+  const handleConfirmPay = () => {
+    if (!user || !payingRequest) return;
+    const basePrice = payingRequest.price;
+    const markupPrice = Math.round(basePrice * 1.1 * 100) / 100;
+    const seller = payingRequest.seller;
+    const buyer = payingRequest.buyer;
+
+    // Corrected logic:
+    const sellerShare = Math.round(basePrice * 0.9 * 100) / 100;
+    const adminCut = Math.round((markupPrice - sellerShare) * 100) / 100;
+
+    if (wallet[buyer] === undefined || wallet[buyer] < markupPrice) {
+      setShowPayModal(false);
+      setPayingRequest(null);
+      alert("Insufficient balance to complete this transaction.");
+      return;
+    }
+
+    // Deduct from buyer
+    updateWallet(buyer, -markupPrice);
+
+    // Credit shared admin wallet (oakley/gerome/admin)
+    updateWallet('oakley', adminCut);
+
+    // Credit seller and add order to fulfil
+    updateWallet(
+      seller,
+      sellerShare,
+      {
+        id: payingRequest.id,
+        title: payingRequest.title,
+        description: payingRequest.description,
+        price: payingRequest.price,
+        markedUpPrice: markupPrice,
+        date: new Date().toISOString(),
+        seller: payingRequest.seller,
+        buyer: payingRequest.buyer,
+        tags: payingRequest.tags,
+      }
+    );
+
+    // Mark this request as paid in the requests context
+    setRequests((prev: any) =>
+      prev.map((r: any) =>
+        r.id === payingRequest.id ? { ...r, paid: true, status: 'paid' } : r
+      )
+    );
+
+    setShowPayModal(false);
+    setPayingRequest(null);
+    setTimeout(() => forceRerender((v) => v + 1), 0);
+  };
+
+  const handleCancelPay = () => {
+    setShowPayModal(false);
+    setPayingRequest(null);
+  };
+
+  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
+    const seen = new Set();
+    const result: any[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
+        if (!seen.has(msg.meta.id)) {
+          seen.add(msg.meta.id);
+          result.unshift(msg);
+        }
+      } else {
+        result.unshift(msg);
+      }
+    }
+    return result;
+  }
+
+  const threadMessages =
+    activeThread
+      ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
+      : [];
+
+  function isLastEditor(customReq: any) {
+    if (!customReq) return false;
+    const lastMsg = threadMessages
+      .filter(
+        (msg) =>
+          msg.type === 'customRequest' &&
+          msg.meta &&
+          msg.meta.id === customReq.id
+      )
+      .slice(-1)[0];
+    return lastMsg && lastMsg.sender === user?.username;
+  }
 
   return (
     <RequireAuth role="buyer">
@@ -294,7 +417,7 @@ export default function BuyerMessagesPage() {
                   </div>
 
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
-                    {(threads[activeThread] || []).map((msg, index) => {
+                    {threadMessages.map((msg, index) => {
                       let customReq: typeof buyerRequests[number] | undefined = undefined;
                       if (
                         msg.type === 'customRequest' &&
@@ -303,12 +426,28 @@ export default function BuyerMessagesPage() {
                       ) {
                         customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
                       }
-                      // Show action buttons for buyer only if status is 'edited' and this is the latest custom request message
                       const isLatestCustom =
-                        customReq &&
-                        customReq.status === 'edited' &&
-                        index === (threads[activeThread]?.length ?? 1) - 1 &&
+                        !!customReq &&
+                        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+                        index === (threadMessages.length - 1) &&
                         msg.type === 'customRequest';
+
+                      const showPayNow =
+                        !!customReq &&
+                        customReq.status === 'accepted' &&
+                        index === (threadMessages.length - 1) &&
+                        msg.type === 'customRequest';
+
+                      const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
+                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
+                      const canPay = customReq && buyerBalance >= markupPrice;
+                      const isPaid = customReq && customReq.paid;
+
+                      const showActionButtons =
+                        !!customReq &&
+                        isLatestCustom &&
+                        customReq.status === 'pending' &&
+                        !isLastEditor(customReq);
 
                       return (
                         <div key={index} className="bg-gray-50 p-3 rounded border">
@@ -327,16 +466,17 @@ export default function BuyerMessagesPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-black">{msg.content}</p>
-
+                          {msg.type !== 'customRequest' && (
+                            <p className="text-black">{msg.content}</p>
+                          )}
                           {msg.type === 'customRequest' && msg.meta && (
                             <div className="mt-2 text-sm text-pink-700">
                               <p><strong>⚙️ Custom Request</strong></p>
-                              <p>📌 Title: {msg.meta.title}</p>
-                              <p>💰 Price: ${msg.meta.price.toFixed(2)}</p>
-                              <p>🏷️ Tags: {msg.meta.tags.join(', ')}</p>
-                              {msg.meta.message && (
-                                <p>📝 {msg.meta.message}</p>
+                              <p>📌 Title: {customReq ? customReq.title : msg.meta.title}</p>
+                              <p>💰 Price: {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price.toFixed(2)}`}</p>
+                              <p>🏷️ Tags: {customReq ? customReq.tags.join(', ') : msg.meta.tags.join(', ')}</p>
+                              {(customReq ? customReq.description : msg.meta.message) && (
+                                <p>📝 {customReq ? customReq.description : msg.meta.message}</p>
                               )}
                               {customReq && (
                                 <div>
@@ -344,8 +484,7 @@ export default function BuyerMessagesPage() {
                                   {statusBadge(customReq.status)}
                                 </div>
                               )}
-                              {/* Buyer action buttons for 'edited' only */}
-                              {isLatestCustom && (
+                              {showActionButtons && (
                                 <div className="flex gap-2 pt-2">
                                   <button
                                     onClick={() => customReq && handleAccept(customReq)}
@@ -367,7 +506,29 @@ export default function BuyerMessagesPage() {
                                   </button>
                                 </div>
                               )}
-                              {editRequestId === customReq?.id && (
+                              {showPayNow && (
+                                <div className="flex flex-col gap-2 pt-2">
+                                  {isPaid ? (
+                                    <span className="text-green-700 font-bold">Paid ✅</span>
+                                  ) : (
+                                    <>
+                                      <button
+                                        onClick={() => customReq && canPay && handlePayNow(customReq)}
+                                        className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-green-600 ${!canPay ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        disabled={!canPay}
+                                      >
+                                        Pay {customReq ? `$${markupPrice.toFixed(2)}` : ''} Now
+                                      </button>
+                                      {!canPay && (
+                                        <span className="text-xs text-red-600">
+                                          Insufficient balance to pay ${markupPrice.toFixed(2)}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {editRequestId === customReq?.id && customReq && (
                                 <div className="mt-2 space-y-2">
                                   <input
                                     type="text"
@@ -418,6 +579,35 @@ export default function BuyerMessagesPage() {
                       );
                     })}
                   </div>
+
+                  {showPayModal && payingRequest && (
+                    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+                      <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-lg">
+                        <h3 className="text-lg font-bold mb-4">Confirm Payment</h3>
+                        <p>
+                          Are you sure you want to pay{' '}
+                          <span className="font-bold text-green-700">
+                            ${payingRequest ? (Math.round(payingRequest.price * 1.1 * 100) / 100).toFixed(2) : ''}
+                          </span>
+                          ?
+                        </p>
+                        <div className="flex justify-end gap-2 mt-6">
+                          <button
+                            onClick={handleCancelPay}
+                            className="px-4 py-2 rounded bg-gray-200 text-gray-800 hover:bg-gray-300"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleConfirmPay}
+                            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-800"
+                          >
+                            Confirm & Pay
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {!isUserBlocked && (
                     <div className="border-t pt-4 mt-auto">

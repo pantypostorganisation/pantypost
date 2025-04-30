@@ -1,9 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from "react";
 
-// UPDATED: Added 'rejected' and 'edited'
-export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'edited';
+// Add "paid" to RequestStatus
+export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'edited' | 'paid';
 
 export type CustomRequest = {
   id: string;
@@ -16,13 +16,20 @@ export type CustomRequest = {
   status: RequestStatus;
   date: string;
   response?: string;
+  paid?: boolean; // <-- add this
 };
 
 type RequestContextType = {
   requests: CustomRequest[];
+  setRequests: React.Dispatch<React.SetStateAction<CustomRequest[]>>; // <-- add this
   addRequest: (req: CustomRequest) => void;
   getRequestsForUser: (username: string, role: 'buyer' | 'seller') => CustomRequest[];
-  respondToRequest: (id: string, status: RequestStatus, response?: string) => void;
+  respondToRequest: (
+    id: string,
+    status: RequestStatus,
+    response?: string,
+    updateFields?: Partial<Pick<CustomRequest, 'title' | 'price' | 'tags' | 'description'>>
+  ) => void;
 };
 
 const RequestContext = createContext<RequestContextType | undefined>(undefined);
@@ -36,7 +43,6 @@ export const useRequests = () => {
 export const RequestProvider = ({ children }: { children: React.ReactNode }) => {
   const [requests, setRequests] = useState<CustomRequest[]>([]);
 
-  // Load from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('panty_custom_requests');
@@ -44,7 +50,6 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     }
   }, []);
 
-  // Save to localStorage on change
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('panty_custom_requests', JSON.stringify(requests));
@@ -59,11 +64,22 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     return requests.filter((r) => r[role] === username);
   };
 
-  const respondToRequest = (id: string, status: RequestStatus, response?: string) => {
+  // FIX: respondToRequest now updates all editable fields if provided
+  const respondToRequest = (
+    id: string,
+    status: RequestStatus,
+    response?: string,
+    updateFields?: Partial<Pick<CustomRequest, 'title' | 'price' | 'tags' | 'description'>>
+  ) => {
     setRequests((prev) =>
       prev.map((r) =>
         r.id === id
-          ? { ...r, status, response }
+          ? {
+              ...r,
+              status,
+              response,
+              ...(updateFields || {}),
+            }
           : r
       )
     );
@@ -73,6 +89,7 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     <RequestContext.Provider
       value={{
         requests,
+        setRequests,
         addRequest,
         getRequestsForUser,
         respondToRequest,

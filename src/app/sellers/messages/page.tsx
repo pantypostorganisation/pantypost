@@ -3,6 +3,7 @@
 import { useMessages } from '@/context/MessageContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
+import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef } from 'react';
 
@@ -19,7 +20,8 @@ export default function SellerMessagesPage() {
     hasReported,
     messages,
   } = useMessages();
-  const { getRequestsForUser, respondToRequest } = useRequests();
+  const { getRequestsForUser, respondToRequest, requests } = useRequests();
+  const { wallet } = useWallet();
 
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
@@ -31,6 +33,10 @@ export default function SellerMessagesPage() {
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
+  useEffect(() => {
+    forceRerender((v) => v + 1);
+  }, [requests, wallet]);
+
   let sellerMessages: any[] = [];
   if (user) {
     sellerMessages = Object.values(messages)
@@ -40,7 +46,7 @@ export default function SellerMessagesPage() {
           msg.sender === user.username || msg.receiver === user.username
       );
   }
-  const requests = user ? getRequestsForUser(user.username, 'seller') : [];
+  const sellerRequests = user ? getRequestsForUser(user.username, 'seller') : [];
 
   const threads: { [buyer: string]: typeof sellerMessages } = {};
   if (user) {
@@ -106,6 +112,8 @@ export default function SellerMessagesPage() {
     if (status === 'accepted') color = 'bg-green-600 text-white';
     else if (status === 'rejected') color = 'bg-red-600 text-white';
     else if (status === 'edited') color = 'bg-blue-600 text-white';
+    else if (status === 'paid') color = 'bg-green-800 text-white';
+    else if (status === 'pending') color = 'bg-yellow-500 text-white';
     return (
       <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
         {label}
@@ -113,7 +121,7 @@ export default function SellerMessagesPage() {
     );
   }
 
-  const handleEditRequest = (req: typeof requests[number]) => {
+  const handleEditRequest = (req: typeof sellerRequests[number]) => {
     setEditRequestId(req.id);
     setEditPrice(req.price);
     setEditTitle(req.title);
@@ -121,9 +129,20 @@ export default function SellerMessagesPage() {
     setEditMessage(req.description || '');
   };
 
-  const handleEditSubmit = (req: typeof requests[number]) => {
+  // When editing, always set status to 'pending'
+  const handleEditSubmit = (req: typeof sellerRequests[number]) => {
     if (!user || !activeThread || !editRequestId) return;
-    respondToRequest(editRequestId, 'edited', editMessage);
+    respondToRequest(
+      editRequestId,
+      'pending',
+      editMessage,
+      {
+        title: editTitle,
+        price: Number(editPrice),
+        tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
+        description: editMessage,
+      }
+    );
     sendMessage(
       user.username,
       activeThread,
@@ -147,19 +166,54 @@ export default function SellerMessagesPage() {
     setTimeout(() => forceRerender((v) => v + 1), 0);
   };
 
-  // Accept/Decline for seller (pending or edited)
-  const handleAccept = (req: typeof requests[number]) => {
-    if (req.status === 'pending' || req.status === 'edited') {
+  const handleAccept = (req: typeof sellerRequests[number]) => {
+    if (req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
+      setTimeout(() => forceRerender((v) => v + 1), 0);
     }
   };
-  const handleDecline = (req: typeof requests[number]) => {
-    if (req.status === 'pending' || req.status === 'edited') {
+  const handleDecline = (req: typeof sellerRequests[number]) => {
+    if (req.status === 'pending') {
       respondToRequest(req.id, 'rejected');
+      setTimeout(() => forceRerender((v) => v + 1), 0);
     }
   };
 
+  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
+    const seen = new Set();
+    const result: any[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
+        if (!seen.has(msg.meta.id)) {
+          seen.add(msg.meta.id);
+          result.unshift(msg);
+        }
+      } else {
+        result.unshift(msg);
+      }
+    }
+    return result;
+  }
+
   const inboxBuyers = Object.keys(threads);
+  const threadMessages =
+    activeThread
+      ? getLatestCustomRequestMessages(threads[activeThread] || [], sellerRequests)
+      : [];
+
+  function isLastEditor(customReq: any) {
+    if (!customReq) return false;
+    const lastMsg = threadMessages
+      .filter(
+        (msg) =>
+          msg.type === 'customRequest' &&
+          msg.meta &&
+          msg.meta.id === customReq.id
+      )
+      .slice(-1)[0];
+    return lastMsg && lastMsg.sender === user?.username;
+  }
 
   return (
     <RequireAuth role="seller">
@@ -233,8 +287,8 @@ export default function SellerMessagesPage() {
                   </div>
 
                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
-                    {(threads[activeThread] || []).map((msg, index) => {
-                      let customReq: typeof requests[number] | undefined = undefined;
+                    {threadMessages.map((msg, index) => {
+                      let customReq: typeof sellerRequests[number] | undefined = undefined;
                       let metaId: string | undefined = undefined;
                       if (
                         msg.type === 'customRequest' &&
@@ -244,15 +298,22 @@ export default function SellerMessagesPage() {
                         typeof (msg.meta as any).id === 'string'
                       ) {
                         metaId = (msg.meta as any).id as string;
-                        customReq = requests.find((r) => r.id === metaId);
+                        customReq = sellerRequests.find((r) => r.id === metaId);
                       }
 
-                      // Show action buttons for seller if request is pending or edited and this is the latest custom request message
                       const isLatestCustom =
-                        customReq &&
-                        (customReq.status === 'pending' || customReq.status === 'edited') &&
-                        index === (threads[activeThread]?.length ?? 1) - 1 &&
+                        !!customReq &&
+                        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+                        index === (threadMessages.length - 1) &&
                         msg.type === 'customRequest';
+
+                      const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
+
+                      const showActionButtons =
+                        !!customReq &&
+                        isLatestCustom &&
+                        customReq.status === 'pending' &&
+                        !isLastEditor(customReq);
 
                       return (
                         <div key={index} className="bg-gray-50 p-3 rounded border">
@@ -269,45 +330,50 @@ export default function SellerMessagesPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-black">{msg.content}</p>
-                          {customReq && (
+                          {msg.type !== 'customRequest' && (
+                            <p className="text-black">{msg.content}</p>
+                          )}
+                          {msg.type === 'customRequest' && msg.meta && (
                             <div className="mt-2 text-sm text-orange-700 space-y-1">
                               <p className="font-semibold">🛠️ Custom Request</p>
-                              <p><b>Title:</b> {customReq.title}</p>
-                              <p><b>Price:</b> ${customReq.price.toFixed(2)}</p>
-                              <p><b>Tags:</b> {customReq.tags.join(', ')}</p>
-                              {customReq.description && (
-                                <p><b>Message:</b> {customReq.description}</p>
+                              <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
+                              <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price.toFixed(2)}`}</p>
+                              <p><b>Tags:</b> {customReq ? customReq.tags.join(', ') : msg.meta.tags.join(', ')}</p>
+                              {(customReq ? customReq.description : msg.meta.message) && (
+                                <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
                               )}
-                              <p>
-                                <b>Status:</b>
-                                {statusBadge(customReq.status)}
-                              </p>
-                              {/* Seller action buttons for pending/edited */}
-                              {isLatestCustom && (
+                              {customReq && (
+                                <p>
+                                  <b>Status:</b>
+                                  {statusBadge(customReq.status)}
+                                </p>
+                              )}
+                              {isPaid && (
+                                <span className="text-green-700 font-bold">Paid ✅</span>
+                              )}
+                              {showActionButtons && !isPaid && (
                                 <div className="flex gap-2 pt-2">
                                   <button
-                                    onClick={() => handleAccept(customReq!)}
+                                    onClick={() => customReq && handleAccept(customReq)}
                                     className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800"
                                   >
                                     Accept
                                   </button>
                                   <button
-                                    onClick={() => handleDecline(customReq!)}
+                                    onClick={() => customReq && handleDecline(customReq)}
                                     className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800"
                                   >
                                     Decline
                                   </button>
                                   <button
-                                    onClick={() => handleEditRequest(customReq!)}
+                                    onClick={() => customReq && handleEditRequest(customReq)}
                                     className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
                                   >
                                     Edit
                                   </button>
                                 </div>
                               )}
-                              {/* Edit form */}
-                              {editRequestId === customReq?.id && (
+                              {editRequestId === customReq?.id && customReq && (
                                 <div className="mt-2 space-y-2">
                                   <input
                                     type="text"
@@ -338,7 +404,7 @@ export default function SellerMessagesPage() {
                                   />
                                   <div className="flex gap-2">
                                     <button
-                                      onClick={() => handleEditSubmit(customReq!)}
+                                      onClick={() => customReq && handleEditSubmit(customReq)}
                                       className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
                                     >
                                       Submit Edit
