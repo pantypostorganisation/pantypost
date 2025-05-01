@@ -8,7 +8,6 @@ import {
   ReactNode,
 } from "react";
 
-// Import-free notification function to avoid circular dependencies
 const addSellerNotificationToStorage = (seller: string, message: string) => {
   if (typeof window !== 'undefined') {
     const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
@@ -30,7 +29,6 @@ type Order = {
   buyer: string;
   tags?: string[];
   wearTime?: string;
-  // You can add more fields as needed
 };
 
 type Withdrawal = {
@@ -59,12 +57,11 @@ type WalletContextType = {
   adminWithdrawals: Withdrawal[];
   addSellerWithdrawal: (username: string, amount: number) => void;
   addAdminWithdrawal: (amount: number) => void;
-  wallet: { [username: string]: number }; // Unified wallet object
-  updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void; // Generic update function, now can add order
+  wallet: { [username: string]: number };
+  updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void;
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
-
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
@@ -75,7 +72,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     const buyers = localStorage.getItem("wallet_buyers");
     const admin = localStorage.getItem("wallet_admin");
     const sellers = localStorage.getItem("wallet_sellers");
@@ -152,10 +149,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const purchaseListing = (listing: Omit<Order, 'buyer'>, buyerUsername: string): boolean => {
-    const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null) 
-      ? listing.markedUpPrice 
+    const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
+      ? listing.markedUpPrice
       : listing.price;
-    
+
     const seller = listing.seller;
     const sellerCut = listing.price * 0.9;
     const platformCut = price - sellerCut;
@@ -172,7 +169,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       [seller]: (prev[seller] || 0) + sellerCut,
     }));
 
-    // Credit the full admin cut to the shared admin wallet (oakley)
     updateWallet('oakley', platformCut);
 
     const order: Order = {
@@ -211,7 +207,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setBuyerBalance(buyer, buyerBalance - amount);
     setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
 
-    // Credit the full admin cut to the shared admin wallet (oakley)
     updateWallet('oakley', adminCut);
 
     addSellerNotificationToStorage(
@@ -237,8 +232,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAdminBalanceState((prev) => prev - amount);
   };
 
-  // Unified wallet object (buyer, seller, admin)
-  // Both oakley and gerome see the same admin balance
   const wallet: { [username: string]: number } = {
     ...buyerBalances,
     ...sellerBalances,
@@ -247,21 +240,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     admin: adminBalance,
   };
 
-  /**
-   * updateWallet: 
-   * - Always adds to seller's balance (even if not present, initializes to 0).
-   * - Always adds to buyer's balance (even if not present, initializes to 0).
-   * - If orderToFulfil is provided, adds it to orderHistory (for custom request payments).
-   * - For admin, always update the shared admin balance (oakley/gerome/admin).
-   */
   const updateWallet = (username: string, amount: number, orderToFulfil?: Order) => {
-    if (username === "oakley" || username === "gerome" || username === "admin") {
+    if (["oakley", "gerome", "admin"].includes(username)) {
       setAdminBalanceState((prev) => prev + amount);
-    } else if (
-      sellerBalances.hasOwnProperty(username) ||
-      Object.keys(sellerBalances).includes(username) ||
-      (orderToFulfil && orderToFulfil.seller === username)
-    ) {
+    } else if (username in sellerBalances || (orderToFulfil && orderToFulfil.seller === username)) {
       setSellerBalance(username, (sellerBalances[username] || 0) + amount);
       if (orderToFulfil) {
         addOrder(orderToFulfil);
@@ -270,8 +252,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
         );
       }
-    } else if (buyerBalances.hasOwnProperty(username) || Object.keys(buyerBalances).includes(username)) {
-      setBuyerBalance(username, getBuyerBalance(username) + amount);
+    } else if (username in buyerBalances) {
+      setBuyerBalance(username, (buyerBalances[username] || 0) + amount);
     } else {
       if (amount > 0) {
         setSellerBalance(username, (sellerBalances[username] || 0) + amount);
