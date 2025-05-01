@@ -8,6 +8,7 @@ import {
   ReactNode,
 } from 'react';
 import { useWallet } from './WalletContext';
+import { v4 as uuidv4 } from 'uuid'; // Import uuid for generating IDs
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -43,7 +44,8 @@ export type Listing = {
   seller: string;
   isPremium?: boolean;
   tags?: string[];
-  wearTime?: string;
+  // wearTime?: string; // Removed wearTime
+  hoursWorn?: number; // <-- Added hoursWorn as a number
 };
 
 type NotificationStore = Record<string, string[]>;
@@ -56,8 +58,9 @@ type ListingContextType = {
   logout: () => void;
   isAuthReady: boolean;
   listings: Listing[];
-  addListing: (listing: Listing) => void;
+  addListing: (listing: Omit<Listing, 'id' | 'date' | 'markedUpPrice'>) => void; // Updated signature to match how it's likely used
   removeListing: (id: string) => void;
+  updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => void; // <-- Added updateListing
   subscriptions: { [buyer: string]: string[] };
   subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
   unsubscribeFromSeller: (buyer: string, seller: string) => void;
@@ -152,9 +155,16 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     localStorage.removeItem('user');
   };
 
-  const addListing = (listing: Listing) => {
+  // Updated addListing to match the new Listing type and generate ID/date/markedUpPrice
+  const addListing = (listing: Omit<Listing, 'id' | 'date' | 'markedUpPrice'>) => {
+     const newListing: Listing = {
+       id: uuidv4(),
+       date: new Date().toISOString(),
+       markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100, // 10% markup
+       ...listing, // This will include hoursWorn if provided
+     };
     setListings((prev) => {
-      const updated = [...prev, listing];
+      const updated = [...prev, newListing];
       localStorage.setItem('listings', JSON.stringify(updated));
       return updated;
     });
@@ -167,6 +177,27 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return updated;
     });
   };
+
+  // Added updateListing function
+  const updateListing = (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => {
+    setListings(prev =>
+      prev.map(listing => {
+        if (listing.id === id) {
+          const updated = {
+            ...listing,
+            ...updatedListing,
+          };
+          // Recalculate markedUpPrice if price is updated
+          if (updatedListing.price !== undefined) {
+             updated.markedUpPrice = Math.round(updatedListing.price * 1.1 * 100) / 100;
+          }
+          return updated;
+        }
+        return listing;
+      })
+    );
+  };
+
 
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
     const success = subscribeToSellerWithPayment(buyer, seller, price);
@@ -303,6 +334,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         listings,
         addListing,
         removeListing,
+        updateListing, // <-- Added to context value
         subscriptions,
         subscribeToSeller,
         unsubscribeFromSeller,

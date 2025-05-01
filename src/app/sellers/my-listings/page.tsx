@@ -6,6 +6,7 @@ import RequireAuth from '@/components/RequireAuth';
 import { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Crown, Sparkles, Trash2, Clock } from 'lucide-react';
+import { Listing } from '@/context/ListingContext'; // Import Listing type
 
 export default function MyListingsPage() {
   const { listings = [], addListing, removeListing, user } = useListings();
@@ -17,7 +18,8 @@ export default function MyListingsPage() {
   const [imageUrl, setImageUrl] = useState('');
   const [isPremium, setIsPremium] = useState(false);
   const [tags, setTags] = useState('');
-  const [wearTime, setWearTime] = useState('');
+  // Changed wearTime state to hoursWorn and type to number or empty string
+  const [hoursWorn, setHoursWorn] = useState<number | ''>('');
 
   const handleAddListing = () => {
     if (!title || !description || !price || !imageUrl) {
@@ -26,33 +28,42 @@ export default function MyListingsPage() {
     }
 
     const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+        alert('Please enter a valid price.');
+        return;
+    }
+
     const tagsList = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
 
-    addListing({
-      id: uuidv4(),
+    // Prepare listing data, including hoursWorn
+    const newListingData = {
       title,
       description,
       price: numericPrice,
-      markedUpPrice: numericPrice * 1.1,
       imageUrl,
-      date: new Date().toISOString(),
       seller: user?.username || 'unknown',
       isPremium,
       tags: tagsList,
-      wearTime: wearTime || undefined,
-    });
+      // Pass hoursWorn as a number, or undefined if empty
+      hoursWorn: hoursWorn === '' ? undefined : Number(hoursWorn),
+    };
 
+    // Call addListing with the new data structure
+    addListing(newListingData);
+
+    // Clear form fields
     setTitle('');
     setDescription('');
     setPrice('');
     setImageUrl('');
     setIsPremium(false);
     setTags('');
-    setWearTime('');
+    setHoursWorn(''); // Clear hoursWorn state
   };
 
-  const myListings = listings?.filter(
-    (listing) => listing.seller === user?.username
+  // Ensure myListings is typed correctly
+  const myListings: Listing[] = listings?.filter(
+    (listing: Listing) => listing.seller === user?.username
   ) ?? [];
 
   // Count premium vs standard listings
@@ -92,7 +103,7 @@ export default function MyListingsPage() {
             {/* Add listing form */}
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-xl font-bold mb-4 text-gray-800">Create New Listing</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
@@ -104,7 +115,7 @@ export default function MyListingsPage() {
                     className="w-full p-2 border rounded text-gray-800"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                   <textarea
@@ -114,7 +125,7 @@ export default function MyListingsPage() {
                     className="w-full p-2 border rounded h-24 text-gray-800"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Price ($)</label>
@@ -127,7 +138,7 @@ export default function MyListingsPage() {
                       className="w-full p-2 border rounded text-gray-800"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
                     <input
@@ -139,7 +150,7 @@ export default function MyListingsPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tags (comma separated)</label>
                   <input
@@ -151,26 +162,20 @@ export default function MyListingsPage() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Help buyers find your items with relevant tags</p>
                 </div>
-                
+
+                {/* Replaced Wear Time dropdown with Hours Worn number input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Wear Time (optional)</label>
-                  <select
-                    value={wearTime}
-                    onChange={(e) => setWearTime(e.target.value)}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Hours Worn (optional)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 24"
+                    value={hoursWorn}
+                    onChange={(e) => setHoursWorn(e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full p-2 border rounded text-gray-800"
-                  >
-                    <option value="">Select wear time (optional)</option>
-                    <option value="12h">12 hours</option>
-                    <option value="24h">24 hours</option>
-                    <option value="36h">36 hours</option>
-                    <option value="48h">48 hours</option>
-                    <option value="3d+">3+ days</option>
-                    <option value="gym">Gym session</option>
-                    <option value="workout">Workout</option>
-                    <option value="custom">Custom (specify in description)</option>
-                  </select>
+                    min="0" // Ensure non-negative hours
+                  />
                 </div>
-                
+
                 <div className="mt-3">
                   <label className="flex items-center gap-2 py-3 px-4 border-2 rounded-lg cursor-pointer border-yellow-400 bg-yellow-50">
                     <input
@@ -186,7 +191,7 @@ export default function MyListingsPage() {
                     </div>
                   </label>
                 </div>
-              
+
                 <button
                   onClick={handleAddListing}
                   className="w-full bg-pink-600 text-white px-4 py-3 rounded-lg hover:bg-pink-700 font-medium mt-2 flex items-center justify-center gap-2"
@@ -200,7 +205,7 @@ export default function MyListingsPage() {
             {/* Seller's own listings */}
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-xl font-bold mb-4 text-gray-800">Your Active Listings</h2>
-              
+
               {myListings.length === 0 ? (
                 <div className="text-center py-6 bg-gray-50 rounded border border-dashed border-gray-300">
                   <p className="text-gray-700">You haven't created any listings yet.</p>
@@ -209,8 +214,8 @@ export default function MyListingsPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {myListings.map((listing) => (
-                    <div 
-                      key={listing.id} 
+                    <div
+                      key={listing.id}
                       className={`border rounded-lg overflow-hidden shadow-sm hover:shadow transition relative
                         ${listing.isPremium ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200 bg-white'}`
                       }
@@ -222,24 +227,25 @@ export default function MyListingsPage() {
                           </span>
                         </div>
                       )}
-                      
+
                       <div className="relative">
                         <img
                           src={listing.imageUrl}
                           alt={listing.title}
                           className="w-full h-48 object-cover"
                         />
-                        {listing.wearTime && (
+                        {/* Display hoursWorn if available */}
+                        {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
                           <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center">
-                            <Clock className="w-3 h-3 mr-1" /> {listing.wearTime}
+                            <Clock className="w-3 h-3 mr-1" /> {listing.hoursWorn} Hours Worn
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="p-4">
                         <h3 className="text-lg font-bold text-gray-800">{listing.title}</h3>
                         <p className="text-gray-700 text-sm mt-1 line-clamp-2">{listing.description}</p>
-                        
+
                         {listing.tags && listing.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {listing.tags.map((tag, idx) => (
@@ -249,7 +255,7 @@ export default function MyListingsPage() {
                             ))}
                           </div>
                         )}
-                        
+
                         <div className="flex justify-between items-center mt-3">
                           <p className="text-pink-700 font-semibold">
                             ${listing.price.toFixed(2)}

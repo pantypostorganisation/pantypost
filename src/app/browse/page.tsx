@@ -13,20 +13,25 @@ type SellerProfile = {
   pic: string | null;
 };
 
-// Define possible wear time options
-const wearTimeOptions = ['All', 'New', 'Lightly Used', 'Well Worn'];
+// Define the hour range filter options
+const hourRangeOptions = [
+  { label: 'Any Hours', min: 0, max: Infinity },
+  { label: '12+ Hours', min: 12, max: Infinity },
+  { label: '24+ Hours', min: 24, max: Infinity },
+  { label: '48+ Hours', min: 48, max: Infinity },
+];
 
 export default function BrowsePage() {
   const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
 
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
-  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]); // Renamed for clarity
-  const [selectedWearTime, setSelectedWearTime] = useState<string>('All'); // New state for wear time filter
+  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]);
+  const [selectedHourRange, setSelectedHourRange] = useState<{ label: string, min: number, max: number }>(hourRangeOptions[0]); // State for hour range filter
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
+  const [searchTerm, setSearchTerm] = useState<string>(''); // Added explicit type
+  const [minPrice, setMinPrice] = useState<string>(''); // Added explicit type
+  const [maxPrice, setMaxPrice] = useState<string>(''); // Added explicit type
   const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc'>('newest');
 
   useEffect(() => {
@@ -59,23 +64,23 @@ export default function BrowsePage() {
   };
 
   const filteredListings = listings
-    .filter(listing => {
+    .filter((listing: Listing) => { // Added explicit type for listing
       // Existing premium filter
       if (listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller))) return false;
       if (filter === 'standard' && listing.isPremium) return false;
       if (filter === 'premium' && !listing.isPremium) return false;
 
-      // Existing tag filters (using renamed state)
+      // Existing tag filters
       if (activeTagFilters.length > 0 && (!listing.tags || !activeTagFilters.some(tag => listing.tags?.includes(tag)))) {
         return false;
       }
 
-      // New wear time filter
-      if (selectedWearTime !== 'All') {
-        if (!listing.wearTime || listing.wearTime !== selectedWearTime) {
-          return false;
-        }
+      // New hours worn filter
+      const hoursWorn = listing.hoursWorn ?? 0; // Treat undefined hoursWorn as 0 for filtering
+      if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
+        return false;
       }
+
 
       // Existing search filter
       const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
@@ -93,17 +98,17 @@ export default function BrowsePage() {
 
       return true;
     })
-    .sort((a, b) => {
+    .sort((a: Listing, b: Listing) => { // Added explicit types for a and b
       if (sortBy === 'priceAsc') return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
       if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? a.price);
-      return new Date(b.date).getTime() - new Date(b.date).getTime(); // Sort by date (newest first)
+      return new Date(b.date).getTime() - new Date(a.date).getTime(); // Sort by date (newest first)
     });
 
-  const allTags = Array.from(new Set(listings.flatMap(l => l.tags || []))).sort();
+  const allTags = Array.from(new Set(listings.flatMap((l: Listing) => l.tags || []))).sort(); // Added explicit type for l
 
   const premiumSellers = listings
-    .filter(l => l.isPremium)
-    .map(l => l.seller)
+    .filter((l: Listing) => l.isPremium) // Added explicit type for l
+    .map((l: Listing) => l.seller) // Added explicit type for l
     .filter((seller, i, self) => self.indexOf(seller) === i && (!user?.username || !isSubscribed(user.username, seller)));
 
   return (
@@ -150,14 +155,19 @@ export default function BrowsePage() {
               <option value="priceAsc">Price: Low → High</option>
               <option value="priceDesc">Price: High → Low</option>
             </select>
-             {/* Wear Time Filter */}
+             {/* Hours Worn Filter */}
              <select
-              value={selectedWearTime}
-              onChange={(e) => setSelectedWearTime(e.target.value)}
+              value={selectedHourRange.label}
+              onChange={(e) => {
+                const selectedOption = hourRangeOptions.find(opt => opt.label === e.target.value);
+                if (selectedOption) {
+                  setSelectedHourRange(selectedOption);
+                }
+              }}
               className="px-3 py-2 rounded border text-sm"
             >
-              {wearTimeOptions.map(option => (
-                <option key={option} value={option}>{option}</option>
+              {hourRangeOptions.map(option => (
+                <option key={option.label} value={option.label}>{option.label}</option>
               ))}
             </select>
           </div>
@@ -171,13 +181,13 @@ export default function BrowsePage() {
               <h2 className="text-sm font-semibold text-gray-800">Filter by Tags:</h2>
             </div>
             <div className="flex flex-wrap gap-2">
-              {allTags.map(tag => (
+              {allTags.map((tag: string) => ( // Added explicit type for tag
                 <button
                   key={tag}
                   onClick={() =>
-                    setActiveTagFilters(prev =>
+                    setActiveTagFilters((prev: string[]) => // Added explicit type for prev
                       prev.includes(tag)
-                        ? prev.filter(t => t !== tag)
+                        ? prev.filter((t: string) => t !== tag) // Added explicit type for t
                         : [...prev, tag]
                     )
                   }
@@ -289,9 +299,10 @@ export default function BrowsePage() {
                         alt={listing.title}
                         className="w-full h-48 object-cover"
                       />
-                      {listing.wearTime && (
+                      {/* Display hoursWorn if available */}
+                      {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
                         <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center">
-                          <Clock className="w-3 h-3 mr-1" /> {listing.wearTime}
+                          <Clock className="w-3 h-3 mr-1" /> {listing.hoursWorn} Hours Worn
                         </div>
                       )}
                     </div>
