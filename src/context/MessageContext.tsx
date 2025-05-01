@@ -8,13 +8,14 @@ export type Message = {
   content: string;
   date: string;
   read?: boolean;
-  type?: 'normal' | 'customRequest';
+  type?: 'normal' | 'customRequest' | 'image';
   meta?: {
-    id?: string;
-    title: string;
-    price: number;
-    tags: string[];
-    message?: string; // <-- Added for custom request message body
+    id?: string; // For custom requests
+    title?: string; // For custom requests
+    price?: number; // For custom requests
+    tags?: string[]; // For custom requests message body
+    message?: string; // For custom requests message body
+    imageUrl?: string; // Added imageUrl here for image messages
   };
 };
 
@@ -26,13 +27,14 @@ type ReportLog = {
 };
 
 type MessageOptions = {
-  type?: 'normal' | 'customRequest';
+  type?: 'normal' | 'customRequest' | 'image';
   meta?: {
     id?: string;
-    title: string;
-    price: number;
-    tags: string[];
-    message?: string; // <-- Added for custom request message body
+    title?: string;
+    price?: number;
+    tags?: string[];
+    message?: string;
+    imageUrl?: string; // Added imageUrl here too
   };
 };
 
@@ -80,7 +82,20 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('panty_messages', JSON.stringify(messages));
+    // When saving to localStorage, exclude imageUrl from meta to avoid quota issues
+    const messagesToSave = Object.entries(messages).reduce((acc, [key, msgList]) => {
+      acc[key] = msgList.map(msg => {
+        if (msg.type === 'image' && msg.meta?.imageUrl) {
+          // Exclude imageUrl when saving, but keep other meta properties if any
+          const { imageUrl, ...restMeta } = msg.meta;
+          return { ...msg, meta: restMeta };
+        }
+        return msg;
+      });
+      return acc;
+    }, {} as { [seller: string]: Message[] });
+
+    localStorage.setItem('panty_messages', JSON.stringify(messagesToSave));
   }, [messages]);
 
   useEffect(() => {
@@ -105,8 +120,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       content,
       date: new Date().toISOString(),
       read: false,
-      ...(options?.type && { type: options.type }),
-      ...(options?.meta && { meta: options.meta }),
+      type: options?.type || 'normal',
+      meta: options?.meta, // Include meta (which can contain imageUrl for in-memory state)
     };
 
     setMessages((prev) => {
@@ -139,7 +154,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         title,
         price,
         tags,
-        message: content, // Store the custom request message body
+        message: content,
       },
     };
 
@@ -151,6 +166,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       };
     });
   };
+
 
   const getMessagesForSeller = (seller: string): Message[] => {
     return messages[seller] || [];

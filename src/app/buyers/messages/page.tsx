@@ -42,6 +42,8 @@ export default function BuyerMessagesPage() {
   const [editMessage, setEditMessage] = useState('');
   const [showPayModal, setShowPayModal] = useState(false);
   const [payingRequest, setPayingRequest] = useState<any>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null); // State for selected image Data URL
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the hidden file input
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
@@ -100,8 +102,33 @@ export default function BuyerMessagesPage() {
     }
   }, [activeThread, user?.username, markMessagesAsRead]);
 
+  // Handle image file selection
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Trigger hidden file input click
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
+
   const handleReply = () => {
-    if (!replyMessage.trim() || !activeThread || !user) return;
+    if (!activeThread || !user) return;
+
+    const textContent = replyMessage.trim();
+
+    if (!textContent && !selectedImage) {
+      // Don't send empty messages
+      return;
+    }
 
     if (sendAsRequest) {
       if (!requestTitle.trim() || !requestPrice || isNaN(Number(requestPrice))) {
@@ -116,7 +143,7 @@ export default function BuyerMessagesPage() {
         buyer: user.username,
         seller: activeThread,
         title: requestTitle.trim(),
-        description: replyMessage.trim(),
+        description: textContent, // Use textContent for description
         price: Number(requestPrice),
         tags: tagsArray,
         status: 'pending',
@@ -134,7 +161,8 @@ export default function BuyerMessagesPage() {
             title: requestTitle.trim(),
             price: Number(requestPrice),
             tags: tagsArray,
-            message: replyMessage.trim(),
+            message: textContent, // Use textContent for message meta
+            imageUrl: selectedImage || undefined, // Include image if selected
           }
         }
       );
@@ -143,9 +171,18 @@ export default function BuyerMessagesPage() {
       setRequestTags('');
       setSendAsRequest(false);
     } else {
-      sendMessage(user.username, activeThread, replyMessage);
+      // Send normal message or image message
+      sendMessage(user.username, activeThread, textContent, {
+        type: selectedImage ? 'image' : 'normal', // Set type based on image presence
+        meta: selectedImage ? { imageUrl: selectedImage } : undefined, // Include image URL in meta
+      });
     }
+
     setReplyMessage('');
+    setSelectedImage(null); // Clear selected image after sending
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // Clear file input
+    }
   };
 
   const handleBlockToggle = () => {
@@ -207,21 +244,10 @@ export default function BuyerMessagesPage() {
         description: editMessage,
       }
     );
-    sendMessage(
-      user.username,
-      activeThread,
-      `[PantyPost Custom Request Edited] ${editTitle}`,
-      {
-        type: 'customRequest',
-        meta: {
-          id: req.id,
-          title: editTitle,
-          price: Number(editPrice),
-          tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
-          message: editMessage,
-        },
-      }
-    );
+    // We don't send a new message here, the request context update is enough
+    // If you want a message indicating the edit, you could send a 'normal' message
+    // sendMessage(user.username, activeThread, `[PantyPost Custom Request Edited] ${editTitle}`);
+
     setEditRequestId(null);
     setEditPrice('');
     setEditTitle('');
@@ -256,7 +282,6 @@ export default function BuyerMessagesPage() {
     const seller = payingRequest.seller;
     const buyer = payingRequest.buyer;
 
-    // Corrected logic:
     const sellerShare = Math.round(basePrice * 0.9 * 100) / 100;
     const adminCut = Math.round((markupPrice - sellerShare) * 100) / 100;
 
@@ -267,13 +292,9 @@ export default function BuyerMessagesPage() {
       return;
     }
 
-    // Deduct from buyer
     updateWallet(buyer, -markupPrice);
+    updateWallet('oakley', adminCut); // Credit shared admin wallet
 
-    // Credit shared admin wallet (oakley/gerome/admin)
-    updateWallet('oakley', adminCut);
-
-    // Credit seller and add order to fulfil
     updateWallet(
       seller,
       sellerShare,
@@ -290,7 +311,6 @@ export default function BuyerMessagesPage() {
       }
     );
 
-    // Mark this request as paid in the requests context
     setRequests((prev: any) =>
       prev.map((r: any) =>
         r.id === payingRequest.id ? { ...r, paid: true, status: 'paid' } : r
@@ -466,9 +486,17 @@ export default function BuyerMessagesPage() {
                               </span>
                             )}
                           </p>
-                          {msg.type !== 'customRequest' && (
-                            <p className="text-black">{msg.content}</p>
+                           {/* Display image if type is 'image' */}
+                          {msg.type === 'image' && msg.meta?.imageUrl && (
+                            <div className="mt-2">
+                              <img src={msg.meta.imageUrl} alt="Shared image" className="max-w-xs max-h-48 rounded" />
+                            </div>
                           )}
+                          {/* Display text content if not an image message or if there's text */}
+                          {(msg.type !== 'image' || msg.content) && (
+                             <p className="text-black">{msg.content}</p>
+                          )}
+
                           {msg.type === 'customRequest' && msg.meta && (
                             <div className="mt-2 text-sm text-pink-700">
                               <p><strong>⚙️ Custom Request</strong></p>
@@ -611,16 +639,54 @@ export default function BuyerMessagesPage() {
 
                   {!isUserBlocked && (
                     <div className="border-t pt-4 mt-auto">
+                       {/* Display selected image preview */}
+                      {selectedImage && (
+                        <div className="mb-2">
+                          <img src={selectedImage} alt="Preview" className="max-w-xs max-h-32 rounded" />
+                          <button
+                            onClick={() => {
+                              setSelectedImage(null);
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = ''; // Clear file input
+                              }
+                            }}
+                            className="ml-2 text-red-500 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 mb-2">
                         <input
                           type="checkbox"
                           checked={sendAsRequest}
                           onChange={() => setSendAsRequest((prev) => !prev)}
                           id="sendAsRequest"
+                          disabled={!!selectedImage} // Disable if image is selected
                         />
-                        <label htmlFor="sendAsRequest" className="text-sm font-medium text-gray-700">
+                        <label htmlFor="sendAsRequest" className={`text-sm font-medium ${selectedImage ? 'text-gray-400' : 'text-gray-700'}`}>
                           Send as custom request
                         </label>
+                         {/* Hidden file input */}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          style={{ display: 'none' }}
+                          onChange={handleImageSelect}
+                        />
+                         {/* Paperclip icon button */}
+                        <button
+                          onClick={triggerFileInput}
+                          className="p-1 rounded hover:bg-gray-200"
+                          title="Attach Image"
+                          disabled={sendAsRequest} // Disable if sending as request
+                        >
+                           {/* Simple paperclip SVG icon */}
+                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${sendAsRequest ? 'text-gray-400' : 'text-gray-600'}`} viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                          </svg>
+                        </button>
                       </div>
                       {sendAsRequest && (
                         <div className="space-y-2 mb-2">
@@ -650,13 +716,15 @@ export default function BuyerMessagesPage() {
                       <textarea
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder="Type your reply..."
+                        placeholder={selectedImage ? "Add a caption..." : "Type your reply..."}
                         className="w-full p-2 border rounded mb-2 text-black"
+                        disabled={sendAsRequest && !selectedImage} // Disable text area if sending request without image
                       />
                       <div className="text-right">
                         <button
                           onClick={handleReply}
                           className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded"
+                          disabled={!replyMessage.trim() && !selectedImage} // Disable send button if no text or image
                         >
                           Send Reply
                         </button>

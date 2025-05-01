@@ -13,12 +13,16 @@ type SellerProfile = {
   pic: string | null;
 };
 
+// Define possible wear time options
+const wearTimeOptions = ['All', 'New', 'Lightly Used', 'Well Worn'];
+
 export default function BrowsePage() {
   const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
 
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]); // Renamed for clarity
+  const [selectedWearTime, setSelectedWearTime] = useState<string>('All'); // New state for wear time filter
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [minPrice, setMinPrice] = useState('');
@@ -56,12 +60,24 @@ export default function BrowsePage() {
 
   const filteredListings = listings
     .filter(listing => {
+      // Existing premium filter
       if (listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller))) return false;
       if (filter === 'standard' && listing.isPremium) return false;
       if (filter === 'premium' && !listing.isPremium) return false;
-      if (activeFilters.length > 0 && (!listing.tags || !activeFilters.some(tag => listing.tags?.includes(tag)))) {
+
+      // Existing tag filters (using renamed state)
+      if (activeTagFilters.length > 0 && (!listing.tags || !activeTagFilters.some(tag => listing.tags?.includes(tag)))) {
         return false;
       }
+
+      // New wear time filter
+      if (selectedWearTime !== 'All') {
+        if (!listing.wearTime || listing.wearTime !== selectedWearTime) {
+          return false;
+        }
+      }
+
+      // Existing search filter
       const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
         .join(' ')
         .toLowerCase()
@@ -69,6 +85,7 @@ export default function BrowsePage() {
 
       if (!matchesSearch) return false;
 
+      // Existing price filter
       const price = listing.markedUpPrice || listing.price;
       const min = parseFloat(minPrice) || 0;
       const max = parseFloat(maxPrice) || Infinity;
@@ -79,7 +96,7 @@ export default function BrowsePage() {
     .sort((a, b) => {
       if (sortBy === 'priceAsc') return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
       if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? a.price);
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+      return new Date(b.date).getTime() - new Date(b.date).getTime(); // Sort by date (newest first)
     });
 
   const allTags = Array.from(new Set(listings.flatMap(l => l.tags || []))).sort();
@@ -103,12 +120,14 @@ export default function BrowsePage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-3xl font-bold text-white">Browse Listings</h1>
           <div className="flex gap-2 flex-wrap">
+            {/* Search Input */}
             <input
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Search..."
               className="px-3 py-2 rounded border text-sm"
             />
+            {/* Price Inputs */}
             <input
               value={minPrice}
               onChange={e => setMinPrice(e.target.value)}
@@ -121,6 +140,7 @@ export default function BrowsePage() {
               placeholder="Max Price"
               className="px-3 py-2 rounded border text-sm w-24"
             />
+            {/* Sort By */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
@@ -129,6 +149,16 @@ export default function BrowsePage() {
               <option value="newest">Newest</option>
               <option value="priceAsc">Price: Low → High</option>
               <option value="priceDesc">Price: High → Low</option>
+            </select>
+             {/* Wear Time Filter */}
+             <select
+              value={selectedWearTime}
+              onChange={(e) => setSelectedWearTime(e.target.value)}
+              className="px-3 py-2 rounded border text-sm"
+            >
+              {wearTimeOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -145,14 +175,14 @@ export default function BrowsePage() {
                 <button
                   key={tag}
                   onClick={() =>
-                    setActiveFilters(prev =>
+                    setActiveTagFilters(prev =>
                       prev.includes(tag)
                         ? prev.filter(t => t !== tag)
                         : [...prev, tag]
                     )
                   }
                   className={`px-2 py-1 text-xs rounded-full ${
-                    activeFilters.includes(tag)
+                    activeTagFilters.includes(tag)
                       ? 'bg-pink-600 text-white'
                       : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                   }`}
@@ -160,12 +190,12 @@ export default function BrowsePage() {
                   {tag}
                 </button>
               ))}
-              {activeFilters.length > 0 && (
+              {activeTagFilters.length > 0 && (
                 <button
-                  onClick={() => setActiveFilters([])}
+                  onClick={() => setActiveTagFilters([])}
                   className="px-2 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
                 >
-                  Clear Filters
+                  Clear Tag Filters
                 </button>
               )}
             </div>

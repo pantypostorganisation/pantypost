@@ -30,6 +30,8 @@ export default function SellerMessagesPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null); // State for selected image Data URL
+  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the hidden file input
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
 
@@ -79,12 +81,45 @@ export default function SellerMessagesPage() {
     }
   }, [activeThread, user, markMessagesAsRead]);
 
-  const handleReply = () => {
-    if (!replyMessage.trim() || !activeThread || !user) return;
+   // Handle image file selection
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-    sendMessage(user.username, activeThread, replyMessage);
+  // Trigger hidden file input click
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleReply = () => {
+    if (!activeThread || !user) return;
+
+    const textContent = replyMessage.trim();
+
+    if (!textContent && !selectedImage) {
+      // Don't send empty messages
+      return;
+    }
+
+    // Sellers cannot send custom requests from this page, only normal or image messages
+    sendMessage(user.username, activeThread, textContent, {
+      type: selectedImage ? 'image' : 'normal', // Set type based on image presence
+      meta: selectedImage ? { imageUrl: selectedImage } : undefined, // Include image URL in meta
+    });
+
     addSellerNotification(user.username, `💌 You replied to buyer: ${activeThread}`);
     setReplyMessage('');
+    setSelectedImage(null); // Clear selected image after sending
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // Clear file input
+    }
     setTimeout(() => forceRerender((v) => v + 1), 0);
   };
 
@@ -129,7 +164,6 @@ export default function SellerMessagesPage() {
     setEditMessage(req.description || '');
   };
 
-  // When editing, always set status to 'pending'
   const handleEditSubmit = (req: typeof sellerRequests[number]) => {
     if (!user || !activeThread || !editRequestId) return;
     respondToRequest(
@@ -143,21 +177,10 @@ export default function SellerMessagesPage() {
         description: editMessage,
       }
     );
-    sendMessage(
-      user.username,
-      activeThread,
-      `[PantyPost Custom Request Edited] ${editTitle}`,
-      {
-        type: 'customRequest',
-        meta: {
-          id: req.id,
-          title: editTitle,
-          price: Number(editPrice),
-          tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
-          message: editMessage,
-        },
-      }
-    );
+    // We don't send a new message here, the request context update is enough
+    // If you want a message indicating the edit, you could send a 'normal' message
+    // sendMessage(user.username, activeThread, `[PantyPost Custom Request Edited] ${editTitle}`);
+
     setEditRequestId(null);
     setEditPrice('');
     setEditTitle('');
@@ -330,9 +353,17 @@ export default function SellerMessagesPage() {
                               </span>
                             )}
                           </p>
-                          {msg.type !== 'customRequest' && (
-                            <p className="text-black">{msg.content}</p>
+                           {/* Display image if type is 'image' */}
+                          {msg.type === 'image' && msg.meta?.imageUrl && (
+                            <div className="mt-2">
+                              <img src={msg.meta.imageUrl} alt="Shared image" className="max-w-xs max-h-48 rounded" />
+                            </div>
                           )}
+                          {/* Display text content if not an image message or if there's text */}
+                          {(msg.type !== 'image' || msg.content) && (
+                             <p className="text-black">{msg.content}</p>
+                          )}
+
                           {msg.type === 'customRequest' && msg.meta && (
                             <div className="mt-2 text-sm text-orange-700 space-y-1">
                               <p className="font-semibold">🛠️ Custom Request</p>
@@ -427,16 +458,55 @@ export default function SellerMessagesPage() {
 
                   {!isUserBlocked && (
                     <div className="border-t pt-4 mt-auto">
+                       {/* Display selected image preview */}
+                      {selectedImage && (
+                        <div className="mb-2">
+                          <img src={selectedImage} alt="Preview" className="max-w-xs max-h-32 rounded" />
+                          <button
+                            onClick={() => {
+                              setSelectedImage(null);
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = ''; // Clear file input
+                              }
+                            }}
+                            className="ml-2 text-red-500 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mb-2">
+                         {/* Hidden file input */}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          style={{ display: 'none' }}
+                          onChange={handleImageSelect}
+                        />
+                         {/* Paperclip icon button */}
+                        <button
+                          onClick={triggerFileInput}
+                          className="p-1 rounded hover:bg-gray-200"
+                          title="Attach Image"
+                        >
+                           {/* Simple paperclip SVG icon */}
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
                       <textarea
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder="Type your reply..."
+                        placeholder={selectedImage ? "Add a caption..." : "Type your reply..."}
                         className="w-full p-2 border rounded mb-2 text-black"
                       />
                       <div className="text-right">
                         <button
                           onClick={handleReply}
                           className="bg-black hover:bg-[#ff950e] hover:text-black text-white px-4 py-2 rounded"
+                          disabled={!replyMessage.trim() && !selectedImage} // Disable send button if no text or image
                         >
                           Send Reply
                         </button>
