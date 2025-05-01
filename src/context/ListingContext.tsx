@@ -42,11 +42,16 @@ export type Listing = {
   imageUrl: string;
   date: string;
   seller: string;
+
+
   isPremium?: boolean;
   tags?: string[];
-  // wearTime?: string; // Removed wearTime
   hoursWorn?: number; // <-- Added hoursWorn as a number
 };
+
+
+export type NewListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
+export type AddListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
 
 type NotificationStore = Record<string, string[]>;
 
@@ -56,9 +61,10 @@ type ListingContextType = {
   users: { [username: string]: User };
   login: (username: string, role: Role) => void;
   logout: () => void;
+
   isAuthReady: boolean;
   listings: Listing[];
-  addListing: (listing: Omit<Listing, 'id' | 'date' | 'markedUpPrice'>) => void; // Updated signature to match how it's likely used
+  addListing: (listing: AddListingInput) => void; // Updated signature to match how it's likely used
   removeListing: (id: string) => void;
   updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => void; // <-- Added updateListing
   subscriptions: { [buyer: string]: string[] };
@@ -156,13 +162,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   // Updated addListing to match the new Listing type and generate ID/date/markedUpPrice
-  const addListing = (listing: Omit<Listing, 'id' | 'date' | 'markedUpPrice'>) => {
-     const newListing: Listing = {
-       id: uuidv4(),
-       date: new Date().toISOString(),
-       markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100, // 10% markup
-       ...listing, // This will include hoursWorn if provided
-     };
+  const addListing = (listing: NewListingInput) => {
+    const newListing: Listing = {
+      id: uuidv4(),
+      date: new Date().toISOString(),
+      markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100, // 10% markup
+      ...listing, // This will include hoursWorn if provided
+    };
     setListings((prev) => {
       const updated = [...prev, newListing];
       localStorage.setItem('listings', JSON.stringify(updated));
@@ -189,7 +195,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           };
           // Recalculate markedUpPrice if price is updated
           if (updatedListing.price !== undefined) {
-             updated.markedUpPrice = Math.round(updatedListing.price * 1.1 * 100) / 100;
+            updated.markedUpPrice = Math.round(updatedListing.price * 1.1 * 100) / 100;
           }
           return updated;
         }
