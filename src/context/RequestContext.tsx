@@ -42,19 +42,35 @@ export const useRequests = () => {
 
 export const RequestProvider = ({ children }: { children: React.ReactNode }) => {
   const [requests, setRequests] = useState<CustomRequest[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
+  // Load initial data from localStorage only once
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('panty_custom_requests');
-      if (stored) setRequests(JSON.parse(stored));
+    if (typeof window !== 'undefined' && !isInitialized) {
+      try {
+        const stored = localStorage.getItem('panty_custom_requests');
+        if (stored) {
+          const parsedRequests = JSON.parse(stored);
+          setRequests(parsedRequests);
+        }
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading requests from localStorage:', error);
+        setIsInitialized(true);
+      }
     }
-  }, []);
+  }, [isInitialized]);
 
+  // Save to localStorage whenever requests change
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_custom_requests', JSON.stringify(requests));
+    if (typeof window !== 'undefined' && isInitialized) {
+      try {
+        localStorage.setItem('panty_custom_requests', JSON.stringify(requests));
+      } catch (error) {
+        console.error('Error saving requests to localStorage:', error);
+      }
     }
-  }, [requests]);
+  }, [requests, isInitialized]);
 
   const addRequest = (req: CustomRequest) => {
     setRequests((prev) => [...prev, req]);
@@ -99,3 +115,4 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     </RequestContext.Provider>
   );
 };
+
