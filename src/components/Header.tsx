@@ -43,22 +43,22 @@ export default function Header() {
       const filtered = (sellerNotifications || []).filter(notif => {
         // Skip null/undefined notifications
         if (!notif) return false;
-        
+
         // Trim notification text for more reliable matching
         const trimmedNotif = notif.trim();
-        
+
         if (trimmedNotif.includes('purchased:')) {
           // Improved regex with better error handling
           try {
             const itemMatch = trimmedNotif.match(/purchased:\s*["']?([^"']+)["']?/i);
             if (!itemMatch?.[1]) return false;
-            
+
             const itemTitle = itemMatch[1].trim();
             // Check if this seller has a listing with this title
             const sellerHasItem = Array.isArray(listings) && listings.some(
-              listing => 
-                listing && 
-                listing.seller === user.username && 
+              listing =>
+                listing &&
+                listing.seller === user.username &&
                 listing.title === itemTitle
             );
             return sellerHasItem;
@@ -67,15 +67,15 @@ export default function Header() {
             return false;
           }
         }
-        
+
         if (trimmedNotif.includes('subscriber:') || trimmedNotif.includes('subscribed')) {
           return user.username && trimmedNotif.toLowerCase().includes(user.username.toLowerCase());
         }
-        
+
         // Default case - check if notification mentions the user
         return user.username && trimmedNotif.toLowerCase().includes(user.username.toLowerCase());
       });
-      
+
       setFilteredNotifications(filtered);
     } else {
       setFilteredNotifications([]);
@@ -120,7 +120,8 @@ export default function Header() {
   }, [user?.username]);
 
   return (
-    <header className="bg-black text-white shadow-lg border-b border-[#222] px-8 py-3 flex justify-between items-center z-50 relative">
+    // Removed border-b border-[#222]
+    <header className="bg-black text-white shadow-lg px-8 py-3 flex justify-between items-center z-50 relative">
       <Link href="/" className="flex items-center gap-3">
         <img src="/logo.png" alt="PantyPost Logo" className="w-24 h-auto drop-shadow-lg" />
       </Link>
