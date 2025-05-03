@@ -47,20 +47,6 @@ export default function ListingDetailPage() {
   const isSubscribedToSeller = user?.username && listing?.seller ? isSubscribed(user.username, listing.seller) : false;
   const needsSubscription = listing?.isPremium && !isSubscribedToSeller;
 
-  // Increment view count in localStorage ONCE per session per listing
-  useEffect(() => {
-    if (!listing?.id) return;
-    if (typeof window !== 'undefined') {
-      const sessionKey = `viewed_listing_${listing.id}`;
-      if (!sessionStorage.getItem(sessionKey)) {
-        const viewsData = JSON.parse(localStorage.getItem('listing_views') || '{}');
-        viewsData[listing.id] = (viewsData[listing.id] || 0) + 1;
-        localStorage.setItem('listing_views', JSON.stringify(viewsData));
-        sessionStorage.setItem(sessionKey, 'true');
-      }
-    }
-  }, [listing?.id]);
-
   useEffect(() => {
     if (listing?.seller) {
       const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
@@ -96,34 +82,16 @@ export default function ListingDetailPage() {
   const handleSend = () => {
     if (!user || !listing?.seller || !message.trim()) return;
 
-    // Always include the listing id in meta for ALL messages
-    sendMessage(
-      user.username,
-      listing.seller,
-      message.trim(),
-      {
-        type: sendAsRequest ? 'customRequest' : 'normal',
-        meta: {
-          id: listing.id,
-          ...(sendAsRequest
-            ? {
-                title: requestTitle.trim(),
-                price: Number(requestPrice),
-                tags: requestTags.split(',').map(tag => tag.trim()).filter(Boolean),
-                message: message.trim(),
-              }
-            : {})
-        }
-      }
-    );
-
     if (sendAsRequest) {
       if (!requestTitle.trim() || !requestPrice || isNaN(Number(requestPrice))) {
         alert('Please enter a valid title and price for your custom request.');
         return;
       }
+
       const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
       const requestId = uuidv4();
+
+      // 1. Save the request in RequestContext
       addRequest({
         id: requestId,
         buyer: user.username,
@@ -135,6 +103,25 @@ export default function ListingDetailPage() {
         status: 'pending',
         date: new Date().toISOString(),
       });
+
+      // 2. Send the message with meta
+      sendMessage(
+        user.username,
+        listing.seller,
+        `[PantyPost Custom Request] ${requestTitle.trim()}`,
+        {
+          type: 'customRequest',
+          meta: {
+            id: requestId,
+            title: requestTitle.trim(),
+            price: Number(requestPrice),
+            tags: tagsArray,
+            message: message.trim(),
+          }
+        }
+      );
+    } else {
+      sendMessage(user.username, listing.seller, message.trim());
     }
 
     setSent(true);
@@ -154,11 +141,10 @@ export default function ListingDetailPage() {
             alt={listing.title}
             className="w-full h-64 object-cover rounded-xl shadow-md mb-4"
           />
-          {/* Show hoursWorn if available */}
-          {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
+          {listing.wearTime && (
             <div className="mt-2 flex items-center gap-2 text-gray-400">
               <Clock className="w-5 h-5" />
-              <span>{listing.hoursWorn} hours worn</span>
+              <span>{listing.wearTime}</span>
             </div>
           )}
           {/* Seller profile quick link */}
