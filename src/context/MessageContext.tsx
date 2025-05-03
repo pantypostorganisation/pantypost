@@ -52,7 +52,8 @@ type MessageContextType = {
     content: string,
     title: string,
     price: number,
-    tags: string[]
+    tags: string[],
+    listingId: string // Add listingId parameter
   ) => void;
   getMessagesForSeller: (seller: string) => Message[];
   markMessagesAsRead: (userA: string, userB: string) => void;
@@ -139,7 +140,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     content: string,
     title: string,
     price: number,
-    tags: string[]
+    tags: string[],
+    listingId: string // Add listingId parameter
   ) => {
     if (isBlocked(seller, buyer)) return;
 
@@ -151,6 +153,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       read: false,
       type: 'customRequest',
       meta: {
+        id: listingId, // Ensure meta includes id
         title,
         price,
         tags,
@@ -166,7 +169,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       };
     });
   };
-
 
   const getMessagesForSeller = (seller: string): Message[] => {
     return messages[seller] || [];

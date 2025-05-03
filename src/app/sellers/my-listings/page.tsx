@@ -2,11 +2,10 @@
 
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
-import { useMessages } from '@/context/MessageContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Crown, Sparkles, Trash2, Clock, BarChart2, MessageCircle } from 'lucide-react';
+import { Crown, Sparkles, Trash2, Clock, BarChart2 } from 'lucide-react';
 import { Listing } from '@/context/ListingContext';
 
 function timeSinceListed(dateString: string) {
@@ -22,15 +21,9 @@ function timeSinceListed(dateString: string) {
   return 'Listed just now';
 }
 
-// Helper to get a stable count of all messages for dependency
-function getMessageCount(messages: any) {
-  return Object.values(messages || {}).reduce((acc: number, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0);
-}
-
 export default function MyListingsPage() {
   const { listings = [], addListing, removeListing, user } = useListings();
   const { orderHistory } = useWallet();
-  const { messages } = useMessages();
 
   // Form state
   const [title, setTitle] = useState('');
@@ -45,10 +38,7 @@ export default function MyListingsPage() {
   // Analytics state
   const [viewsData, setViewsData] = useState<Record<string, number>>({});
 
-  // Use a stable message count for the dependency array
-  const messageCount = getMessageCount(messages);
-
-  // Load views from localStorage and update on storage event or messages change
+  // Load views from localStorage and update on storage event and window focus
   useEffect(() => {
     function loadViews() {
       if (typeof window !== 'undefined') {
@@ -58,8 +48,12 @@ export default function MyListingsPage() {
     }
     loadViews();
     window.addEventListener('storage', loadViews);
-    return () => window.removeEventListener('storage', loadViews);
-  }, [listings, messageCount]);
+    window.addEventListener('focus', loadViews);
+    return () => {
+      window.removeEventListener('storage', loadViews);
+      window.removeEventListener('focus', loadViews);
+    };
+  }, [listings]);
 
   const handleAddListing = () => {
     if (!title || !description || !price || !imageUrl) {
@@ -113,28 +107,8 @@ export default function MyListingsPage() {
   const getListingAnalytics = (listing: Listing) => {
     const views = viewsData[listing.id] || 0;
 
-    // Count unique buyers who have messaged about this listing
-    let interestCount = 0;
-    if (messages && listing.id && user?.username) {
-      // Flatten all messages arrays into one array
-      const allMsgs = Object.values(messages).flat();
-      // Filter for messages about this listing, sent to this seller, and not from the seller
-      const messagesToMeAboutThisListing = allMsgs.filter(
-        msg =>
-          msg.receiver === user.username &&
-          msg.meta?.id === listing.id &&
-          msg.sender !== user.username
-      );
-      const interestedBuyers = new Set<string>();
-      messagesToMeAboutThisListing.forEach(msg => {
-        interestedBuyers.add(msg.sender);
-      });
-      interestCount = interestedBuyers.size;
-    }
-
     return {
       views,
-      interestCount,
     };
   };
 
@@ -291,7 +265,7 @@ export default function MyListingsPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {myListings.map((listing) => {
-                    const { views, interestCount } = getListingAnalytics(listing);
+                    const { views } = getListingAnalytics(listing);
                     return (
                       <div
                         key={listing.id}
@@ -336,12 +310,9 @@ export default function MyListingsPage() {
                           )}
 
                           {/* Analytics */}
-                          <div className="flex justify-between items-center mt-3 text-xs text-gray-600 bg-gray-50 rounded p-2">
+                          <div className="flex justify-center items-center mt-3 text-xs text-gray-600 bg-gray-50 rounded p-2 gap-4">
                             <span>👁️ {views} views</span>
                             <span>⏰ {timeSinceListed(listing.date)}</span>
-                            <span className="flex items-center gap-1">
-                              <MessageCircle className="w-4 h-4" /> {interestCount} interested
-                            </span>
                           </div>
 
                           <div className="flex justify-between items-center mt-3">

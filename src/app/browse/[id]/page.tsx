@@ -7,7 +7,7 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
-import { Crown, Clock, MessageCircle, ShoppingBag, User, Lock, Star, ArrowRight, BadgeCheck, AlertTriangle } from 'lucide-react';
+import { Clock, User, ArrowRight, BadgeCheck, AlertTriangle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function ListingDetailPage() {
@@ -47,17 +47,15 @@ export default function ListingDetailPage() {
   const isSubscribedToSeller = user?.username && listing?.seller ? isSubscribed(user.username, listing.seller) : false;
   const needsSubscription = listing?.isPremium && !isSubscribedToSeller;
 
-  // Increment view count in localStorage ONCE per session per listing
+  // FIX: Only increment view ONCE per mount, even in React Strict Mode
+  const hasIncrementedView = useRef(false);
   useEffect(() => {
     if (!listing?.id) return;
-    if (typeof window !== 'undefined') {
-      const sessionKey = `viewed_listing_${listing.id}`;
-      if (!sessionStorage.getItem(sessionKey)) {
-        const viewsData = JSON.parse(localStorage.getItem('listing_views') || '{}');
-        viewsData[listing.id] = (viewsData[listing.id] || 0) + 1;
-        localStorage.setItem('listing_views', JSON.stringify(viewsData));
-        sessionStorage.setItem(sessionKey, 'true');
-      }
+    if (typeof window !== 'undefined' && !hasIncrementedView.current) {
+      hasIncrementedView.current = true;
+      const viewsData = JSON.parse(localStorage.getItem('listing_views') || '{}');
+      viewsData[listing.id] = (viewsData[listing.id] || 0) + 1;
+      localStorage.setItem('listing_views', JSON.stringify(viewsData));
     }
   }, [listing?.id]);
 
