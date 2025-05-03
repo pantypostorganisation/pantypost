@@ -39,7 +39,7 @@ export type Listing = {
   description: string;
   price: number;
   markedUpPrice: number;
-  imageUrl: string;
+  imageUrls: string[];
   date: string;
   seller: string;
 

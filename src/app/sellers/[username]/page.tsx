@@ -7,7 +7,10 @@ import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import StarRating from '@/components/StarRating';
-import { Lock, Mail, Gift, UserPlus, DollarSign, MessageCircle, ArrowRight, BadgeCheck, AlertTriangle } from 'lucide-react';
+import {
+  Lock, Mail, Gift, UserPlus, DollarSign, MessageCircle, ArrowRight,
+  BadgeCheck, AlertTriangle, Camera, Video, Users, Star, Crown, Clock
+} from 'lucide-react';
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
@@ -169,82 +172,95 @@ export default function SellerProfilePage() {
     }, 1500);
   };
 
-  // Action buttons
-  const showSubscribe =
+  // Action buttons visibility
+  const showSubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
     !isSubscribed(user.username, username);
 
-  const showUnsubscribe =
+  const showUnsubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
     isSubscribed(user.username, username);
 
   // UI
   return (
-    <main className="max-w-2xl mx-auto px-4 py-10">
-      {/* Just bring the card down 10px */}
-      <div className="mt-[10px]" />
-      {showToast && (
-        <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
-          ✅ Subscribed to {username} successfully!
-        </div>
-      )}
+    <main className="min-h-screen bg-black text-white">
+      {/* Banner/Background Image (Optional) */}
+      <div className="w-full h-48 bg-gradient-to-r from-[#ff950e] to-yellow-600 relative" />
 
-      {/* Profile Card */}
-      <div className="bg-[#171717] rounded-2xl shadow-xl p-8 flex flex-col items-center mb-10 border border-[#222]">
-        <div className="w-32 h-32 rounded-full border-4 border-primary bg-black flex items-center justify-center overflow-hidden -mt-20 mb-4 shadow-lg">
-          {profilePic ? (
-            <img
-              src={profilePic}
-              alt={`${username}'s profile`}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-800" />
-          )}
-        </div>
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl font-bold text-white">{username}</span>
-            {isVerified ? (
-              <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-0.5 rounded-full font-semibold">
-                <BadgeCheck className="w-4 h-4 mr-1" />
-                Verified Seller
-              </span>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 -mt-24">
+        {showToast && (
+          <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
+            ✅ Subscribed to {username} successfully!
+          </div>
+        )}
+
+        {/* Profile Card */}
+        <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
+          {/* Profile Picture */}
+          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden mb-4 shadow-lg">
+            {profilePic ? (
+              <img
+                src={profilePic}
+                alt={`${username}'s profile`}
+                className="w-full h-full object-cover"
+              />
             ) : (
-              <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-0.5 rounded-full font-semibold">
-                <AlertTriangle className="w-4 h-4 mr-1" />
-                Unverified Seller
-              </span>
+              <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-6xl font-bold">
+                {username ? username.charAt(0).toUpperCase() : '?'}
+              </div>
             )}
-            <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-semibold">
-              Active Now
-            </span>
           </div>
-          <div className="text-sm text-gray-400 mb-2">Location: Private</div>
-          <div className="text-center text-base text-gray-200 font-medium mb-4 max-w-md">
-            {bio || '🧾 Seller bio goes here.'}
+
+          {/* Seller Info */}
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <span className="text-2xl sm:text-3xl font-bold text-white">{username}</span>
+              {isVerified ? (
+                <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold shadow">
+                  <BadgeCheck className="w-4 h-4" />
+                  Verified
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-1 rounded-full font-bold shadow">
+                  <AlertTriangle className="w-4 h-4" />
+                  Unverified
+                </span>
+              )}
+              <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
+                Active Now
+              </span>
+            </div>
+            <div className="text-sm text-gray-400 mb-3">Location: Private</div>
+            <p className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
+              {bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
+            </p>
           </div>
+
           {/* Stats */}
-          <div className="flex gap-6 mb-6">
+          <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
             <div className="flex flex-col items-center">
+              <Camera className="w-6 h-6 text-[#ff950e] mb-1" />
               <span className="text-lg font-bold text-white">{totalPhotos}</span>
               <span className="text-xs text-gray-400">Photos</span>
             </div>
             <div className="flex flex-col items-center">
+              <Video className="w-6 h-6 text-gray-500 mb-1" />
               <span className="text-lg font-bold text-white">{totalVideos}</span>
               <span className="text-xs text-gray-400">Videos</span>
             </div>
             <div className="flex flex-col items-center">
+              <Users className="w-6 h-6 text-[#ff950e] mb-1" />
               <span className="text-lg font-bold text-white">{followers}</span>
               <span className="text-xs text-gray-400">Followers</span>
             </div>
             <div className="flex flex-col items-center">
+              <Star className="w-6 h-6 text-[#ff950e] mb-1" />
               {averageRating !== null ? (
                 <>
-                  <StarRating rating={averageRating} />
-                  <span className="text-xs text-gray-400 mt-1">{averageRating.toFixed(1)}</span>
+                  <span className="text-lg font-bold text-white">{averageRating.toFixed(1)}</span>
+                  <span className="text-xs text-gray-400 mt-1">({reviews.length} reviews)</span>
                 </>
               ) : (
                 <>
@@ -254,256 +270,295 @@ export default function SellerProfilePage() {
               )}
             </div>
           </div>
+
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 justify-center mb-2 w-full">
-            <button
-              className="flex items-center gap-2 bg-primary text-black font-bold px-5 py-2 rounded-full shadow hover:bg-primary-dark transition"
-              onClick={() => setShowTipModal(true)}
-            >
-              <Gift className="w-4 h-4" />
-              Tip Seller
-            </button>
-            {/* Follow button removed */}
-            {showSubscribe && (
+          <div className="flex flex-wrap gap-3 justify-center w-full max-w-lg">
+            {showSubscribeButton && (
               <button
-                onClick={handleConfirmSubscribe}
-                className="flex items-center gap-2 bg-primary text-black font-bold px-5 py-2 rounded-full shadow hover:bg-primary-dark transition"
+                onClick={() => setShowSubscribeModal(true)}
+                className="flex items-center gap-2 bg-[#ff950e] text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-[#e0850d] transition text-base"
               >
-                <DollarSign className="w-4 h-4" />
+                <DollarSign className="w-5 h-5" />
                 Subscribe {subscriptionPrice ? `($${subscriptionPrice.toFixed(2)}/mo)` : ''}
               </button>
             )}
-            {showUnsubscribe && (
+            {showUnsubscribeButton && (
               <button
-                onClick={handleConfirmUnsubscribe}
-                className="flex items-center gap-2 bg-[#333] text-white font-bold px-5 py-2 rounded-full shadow hover:bg-red-600 transition"
+                onClick={() => setShowUnsubscribeModal(true)}
+                className="flex items-center gap-2 bg-gray-700 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-red-600 transition text-base"
               >
-                <Lock className="w-4 h-4" />
+                <Lock className="w-5 h-5" />
                 Unsubscribe
               </button>
             )}
-            <Link
-              href={`/buyers/messages`}
-              className="flex items-center gap-2 bg-[#222] text-primary font-bold px-5 py-2 rounded-full shadow hover:bg-primary hover:text-black transition"
-            >
-              <Mail className="w-4 h-4" />
-              Message
-            </Link>
-            <button
-              className="flex items-center gap-2 bg-[#222] text-primary font-bold px-5 py-2 rounded-full shadow hover:bg-primary hover:text-black transition"
-              disabled
-            >
-              <MessageCircle className="w-4 h-4" />
-              Custom Request
-            </button>
+            {user?.role === 'buyer' && user.username !== username && (
+              <button
+                className="flex items-center gap-2 bg-gray-800 text-[#ff950e] font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+                onClick={() => setShowTipModal(true)}
+              >
+                <Gift className="w-5 h-5" />
+                Tip Seller
+              </button>
+            )}
+            {user?.role === 'buyer' && user.username !== username && (
+              <Link
+                href={`/buyers/messages?recipient=${username}`}
+                className="flex items-center gap-2 bg-gray-800 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+              >
+                <Mail className="w-5 h-5" />
+                Message
+              </Link>
+            )}
+            {user?.role === 'buyer' && user.username !== username && (
+              <button
+                className="flex items-center gap-2 bg-gray-800 text-gray-500 font-bold px-6 py-3 rounded-full shadow-lg cursor-not-allowed text-base"
+                disabled
+              >
+                <MessageCircle className="w-5 h-5" />
+                Custom Request
+              </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Listings Section */}
-      <div className="mt-10">
-        <h2 className="text-2xl font-semibold mb-4 text-white">Listings by {username}</h2>
-        {standardListings.length === 0 && premiumListings.length === 0 ? (
-          <p className="text-gray-500 italic">This seller has no active listings.</p>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-6 mb-10">
-            {[...standardListings, ...premiumListings].map((listing) => (
-              <div
-                key={listing.id}
-                className="rounded-2xl border border-[#222] bg-[#171717] shadow-lg p-4 relative flex flex-col"
-              >
-                <div className="relative mb-3">
-                  <img
-                    src={listing.imageUrl}
-                    alt={listing.title}
-                    className={`w-full h-48 object-cover rounded-xl ${
-                      listing.isPremium && !hasAccess ? 'blur-sm' : ''
-                    }`}
-                  />
-                  {listing.isPremium && !hasAccess && (
-                    <div className="absolute inset-0 flex items-center justify-center text-sm bg-black bg-opacity-60 text-white font-semibold rounded-xl">
-                      <Lock className="w-6 h-6 mr-2" />
-                      Subscribe to unlock
+        {/* Listings Section */}
+        <div className="mt-12">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Listings by {username}</h2>
+          {standardListings.length === 0 && premiumListings.length === 0 ? (
+            <div className="text-center py-10 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+              <p className="text-lg mb-2">This seller has no active listings.</p>
+              {user?.username === username && (
+                <p className="text-sm mt-1">Go to <Link href="/sellers/my-listings" className="text-[#ff950e] hover:underline">My Listings</Link> to create one.</p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...standardListings, ...premiumListings].map((listing) => (
+                <div
+                  key={listing.id}
+                  className="rounded-xl border border-gray-800 bg-[#1a1a1a] shadow-lg hover:shadow-xl transition relative flex flex-col overflow-hidden"
+                >
+                  <div className="relative w-full h-56 overflow-hidden">
+                    <img
+                      src={listing.imageUrls?.[0]}
+                      alt={listing.title}
+                      className={`w-full h-full object-cover transition-transform duration-300 hover:scale-105 ${listing.isPremium && !hasAccess ? 'blur-sm' : ''
+                        }`}
+                    />
+                    {listing.isPremium && !hasAccess && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-black bg-opacity-70 text-white font-bold rounded-xl p-4">
+                        <Lock className="w-8 h-8 mb-2 text-[#ff950e]" />
+                        <span className="text-lg mb-2">Premium Content</span>
+                        <p className="text-sm text-gray-300 mb-4">Subscribe to {username} to unlock this listing.</p>
+                        {user?.role === 'buyer' && user.username !== username && (
+                          <button
+                            onClick={() => setShowSubscribeModal(true)}
+                            className="bg-[#ff950e] text-black text-sm font-bold px-4 py-2 rounded-full hover:bg-[#e0850d] transition"
+                          >
+                            Subscribe Now
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {listing.isPremium && hasAccess && (
+                      <div className="absolute top-3 right-3 z-10">
+                        <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+                          <Crown className="w-4 h-4 mr-1" /> Premium
+                        </span>
+                      </div>
+                    )}
+                    {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
+                      <div className="absolute bottom-3 left-3 bg-black bg-opacity-70 text-white text-xs px-2.5 py-1.5 rounded-full flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {listing.hoursWorn} Hours Worn
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 flex flex-col flex-grow">
+                    <h3 className="text-lg font-bold text-white mb-2">{listing.title}</h3>
+                    <p className="text-sm text-gray-400 mb-3 line-clamp-2 flex-grow">
+                      {listing.description}
+                    </p>
+                    {listing.tags && listing.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-auto mb-3">
+                        {listing.tags.map((tag, idx) => (
+                          <span key={idx} className="bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded-full">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-auto pt-3 border-t border-gray-700">
+                      <p className="text-[#ff950e] font-bold text-xl">
+                        ${listing.markedUpPrice.toFixed(2)}
+                      </p>
+                      {(!listing.isPremium || hasAccess) && (
+                        <Link
+                          href={`/browse/${listing.id}`}
+                          className="inline-flex items-center gap-1 text-sm bg-[#ff950e] text-black px-4 py-2 rounded-full hover:bg-[#e0850d] font-bold transition"
+                        >
+                          View <ArrowRight className="w-4 h-4" />
+                        </Link>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold flex items-center gap-2 text-white">
-                  {listing.title}
-                  {listing.isPremium && (
-                    <span className="text-xs bg-primary text-black px-2 py-0.5 rounded-full">
-                      Premium
-                    </span>
-                  )}
-                </h3>
-                <p className="text-sm text-gray-400 mb-2">
-                  {listing.description.length > 100
-                    ? listing.description.slice(0, 100) + '...'
-                    : listing.description}
-                </p>
-                <p className="text-primary font-bold mb-2">
-                  ${listing.markedUpPrice.toFixed(2)}
-                </p>
-                {(!listing.isPremium || hasAccess) && (
-                  <Link
-                    href={`/browse/${listing.id}`}
-                    className="inline-block text-sm bg-primary text-black px-4 py-2 rounded-full hover:bg-primary-dark font-bold transition"
-                  >
-                    View Listing
-                  </Link>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Reviews Section */}
-      <div className="mt-10">
-        <h2 className="text-2xl font-semibold mb-4 text-white">Reviews</h2>
-        {reviews.length === 0 ? (
-          <p className="text-gray-500 italic">No reviews yet.</p>
-        ) : (
-          <ul className="space-y-4 mb-8">
-            {reviews.map((review, i) => (
-              <li key={i} className="bg-[#171717] border border-[#222] rounded-2xl p-4 shadow">
-                <div className="flex items-center gap-2 mb-1">
-                  <StarRating rating={review.rating} />
-                  <span className="text-gray-400 text-xs">
-                    by {review.reviewer} on{' '}
-                    {new Date(review.date).toLocaleDateString()}
-                  </span>
-                </div>
-                <p className="text-sm text-white">{review.comment}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {user?.role === 'buyer' && hasPurchased && !alreadyReviewed && (
-          <div className="border-t border-[#222] pt-6 mt-6" id="review-form">
-            <h3 className="text-xl font-bold mb-2 text-white">Leave a Review</h3>
-            <label className="block text-sm mb-1 text-white">Rating</label>
-            <select
-              value={rating}
-              onChange={(e) => setRating(Number(e.target.value))}
-              className="mb-3 border rounded px-2 py-1 bg-black text-white"
-            >
-              {[5, 4, 3, 2, 1].map((r) => (
-                <option key={r} value={r}>
-                  {r} Star{r > 1 ? 's' : ''}
-                </option>
               ))}
-            </select>
+            </div>
+          )}
+        </div>
 
-            <label className="block text-sm mb-1 text-white">Comment</label>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              className="w-full border rounded p-2 mb-3 bg-black text-white"
-              rows={3}
-            />
+        {/* Reviews Section */}
+        <div className="mt-12">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
+          {reviews.length === 0 ? (
+            <div className="text-center py-10 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+              <p className="text-lg">No reviews yet.</p>
+            </div>
+          ) : (
+            <ul className="space-y-6 mb-8">
+              {reviews.map((review, i) => (
+                <li key={i} className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 shadow-lg">
+                  <div className="flex items-center gap-3 mb-3">
+                    <StarRating rating={review.rating} />
+                    <span className="text-gray-400 text-sm">
+                      by <span className="font-semibold text-white">{review.reviewer}</span> on{' '}
+                      {new Date(review.date).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="text-base text-gray-300 leading-relaxed">{review.comment}</p>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            <button
-              onClick={handleSubmit}
-              className="bg-primary text-black px-4 py-2 rounded-full hover:bg-primary-dark font-bold transition"
-            >
-              Submit Review
-            </button>
+          {user?.role === 'buyer' && hasPurchased && !alreadyReviewed && (
+            <div className="border-t border-gray-700 pt-8 mt-8" id="review-form">
+              <h3 className="text-xl font-bold mb-4 text-white">Leave a Review</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Rating</label>
+                <select
+                  value={rating}
+                  onChange={(e) => setRating(Number(e.target.value))}
+                  className="block w-full max-w-[100px] border border-gray-700 rounded-lg px-3 py-2 bg-black text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                >
+                  {[5, 4, 3, 2, 1].map((r) => (
+                    <option key={r} value={r}>
+                      {r} Star{r > 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Comment</label>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  className="w-full border border-gray-700 rounded-lg p-3 bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                  rows={4}
+                  placeholder="Share your experience..."
+                />
+              </div>
+              <button
+                onClick={handleSubmit}
+                className="bg-[#ff950e] text-black px-6 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg"
+              >
+                Submit Review
+              </button>
+              {submitted && (
+                <p className="text-green-500 mt-4 text-sm font-semibold">✅ Review submitted successfully!</p>
+              )}
+            </div>
+          )}
+        </div>
 
-            {submitted && (
-              <p className="text-green-500 mt-2 text-sm">✅ Review submitted!</p>
-            )}
+        {/* Modals (Tip, Subscribe, Unsubscribe) - Styled to match theme */}
+        {showTipModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
+            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
+              <h2 className="text-2xl font-bold text-[#ff950e] mb-6 text-center">Tip {username}</h2>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={tipAmount}
+                onChange={e => setTipAmount(e.target.value)}
+                className="w-full p-3 rounded-lg border border-gray-700 bg-black text-white mb-4 text-lg placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                placeholder="Enter tip amount ($)"
+              />
+              {tipError && <div className="text-red-500 text-sm mb-4 text-center">{tipError}</div>}
+              {tipSuccess && <div className="text-green-500 text-sm mb-4 text-center">Tip sent successfully! 🎉</div>}
+              <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                <button
+                  onClick={() => setShowTipModal(false)}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleTip}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#ff950e] text-black font-bold hover:bg-[#e0850d] transition text-lg"
+                >
+                  Send Tip
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSubscribeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
+            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
+              <h2 className="text-2xl font-bold text-[#ff950e] mb-6 text-center">Confirm Subscription</h2>
+              <p className="mb-6 text-center text-white text-base">
+                Subscribe to <strong className="text-[#ff950e]">{username}</strong> for{' '}
+                <span className="text-[#ff950e] font-bold">
+                  ${subscriptionPrice?.toFixed(2) ?? '...'}/month
+                </span>
+                ?
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                <button
+                  onClick={() => setShowSubscribeModal(false)}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmSubscribe}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#ff950e] text-black font-bold hover:bg-[#e0850d] transition text-lg"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showUnsubscribeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
+            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
+              <h2 className="text-2xl font-bold text-red-500 mb-6 text-center">Confirm Unsubscription</h2>
+              <p className="mb-6 text-center text-white text-base">
+                Are you sure you want to unsubscribe from <strong className="text-red-400">{username}</strong>? This will remove your access to premium listings.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                <button
+                  onClick={() => setShowUnsubscribeModal(false)}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmUnsubscribe}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-red-600 text-white font-bold hover:bg-red-700 transition text-lg"
+                >
+                  Unsubscribe
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Modals (Tip, Subscribe, Unsubscribe) remain unchanged */}
-      {showTipModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
-          <div className="bg-[#171717] p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-[#222]">
-            <h2 className="text-xl font-bold text-primary mb-4 text-center">Tip {username}</h2>
-            <input
-              type="number"
-              min="1"
-              step="0.01"
-              value={tipAmount}
-              onChange={e => setTipAmount(e.target.value)}
-              className="w-full p-3 rounded-lg border border-[#333] bg-black text-white mb-4 text-lg"
-              placeholder="Enter tip amount"
-            />
-            {tipError && <div className="text-red-500 text-sm mb-2">{tipError}</div>}
-            {tipSuccess && <div className="text-green-500 text-sm mb-2">Tip sent! 🎉</div>}
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowTipModal(false)}
-                className="px-4 py-2 rounded-full bg-[#222] text-white hover:bg-[#333] transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleTip}
-                className="px-4 py-2 rounded-full bg-primary text-black font-bold hover:bg-primary-dark transition"
-              >
-                Send Tip
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSubscribeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
-          <div className="bg-[#171717] p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-[#222]">
-            <h2 className="text-xl font-bold text-primary mb-4 text-center">Confirm Subscription</h2>
-            <p className="mb-6 text-center text-white">
-              Subscribe to <strong>{username}</strong> for{' '}
-              <span className="text-primary font-bold">
-                ${subscriptionPrice?.toFixed(2) ?? '...'}/month
-              </span>
-              ?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowSubscribeModal(false)}
-                className="px-4 py-2 rounded-full bg-[#222] text-white hover:bg-[#333] transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmSubscribe}
-                className="px-4 py-2 rounded-full bg-primary text-black font-bold hover:bg-primary-dark transition"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showUnsubscribeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50">
-          <div className="bg-[#171717] p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-[#222]">
-            <h2 className="text-xl font-bold text-red-500 mb-4 text-center">Confirm Unsubscription</h2>
-            <p className="mb-6 text-center text-white">
-              Are you sure you want to unsubscribe from <strong>{username}</strong>?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowUnsubscribeModal(false)}
-                className="px-4 py-2 rounded-full bg-[#222] text-white hover:bg-[#333] transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmUnsubscribe}
-                className="px-4 py-2 rounded-full bg-red-600 text-white font-bold hover:bg-red-700 transition"
-              >
-                Unsubscribe
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
