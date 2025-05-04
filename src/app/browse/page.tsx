@@ -257,7 +257,7 @@ export default function BrowsePage() {
 
         {/* Tag filters */}
         {(allTags.length > 0 && (showFilters || typeof window === 'undefined' || window.innerWidth >= 1280)) && (
-          <div className="mb-8 max-w-[1700px] mx-auto bg-[#181818]/80 backdrop-blur-md p-4 rounded-2xl shadow border border-gray-800">
+          <div className="mb-8 max-w-[1700px] mx-auto bg-[#181818]/80 backdrop-blur-md p-4 rounded-2xl shadow border border-gray-800 px-6"> {/* Added px-6 here */}
             <div className="flex items-center gap-2 mb-2">
               <Filter className="w-4 h-4 text-[#ff950e]" />
               <h2 className="text-sm font-semibold text-white">Filter by Tags:</h2>
@@ -296,7 +296,7 @@ export default function BrowsePage() {
 
         {/* Premium Seller Prompt */}
         {premiumSellers.length > 0 && (
-          <div className="mb-10 max-w-[1700px] mx-auto bg-gradient-to-r from-yellow-700 to-yellow-500 rounded-2xl p-6 border border-yellow-400 shadow-lg text-white">
+          <div className="mb-10 max-w-[1700px] mx-auto bg-gradient-to-r from-yellow-700 to-yellow-500 rounded-2xl p-6 border border-yellow-400 shadow-lg text-white px-6"> {/* Added px-6 here */}
             <div className="flex items-center gap-2 mb-3">
               <Crown className="text-yellow-200 w-5 h-5" />
               <h2 className="text-lg font-semibold">Unlock Premium Content</h2>
@@ -345,7 +345,7 @@ export default function BrowsePage() {
         )}
 
         {/* Listings */}
-        <div className="max-w-[1700px] mx-auto">
+        <div className="max-w-[1700px] mx-auto px-6"> {/* Added px-6 here */}
           {paginatedListings.length === 0 ? (
             <div className="text-center py-20 bg-[#181818] rounded-2xl border border-dashed border-gray-700 shadow-lg mt-10">
               <ShoppingBag className="w-16 h-16 text-gray-500 mx-auto mb-4" />
