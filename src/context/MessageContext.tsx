@@ -1,3 +1,4 @@
+// File: src/context/MessageContext.tsx
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
@@ -5,14 +6,13 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 // Sanitization utilities
 const sanitizeString = (str: string): string => {
   if (typeof str !== 'string') return '';
-  
   return str
     .replace(/[<>]/g, '') // Remove < and > to prevent HTML
     .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/data:/gi, '') // Remove data: URLs
+    .replace(/data:/gi, '') // Remove data: URLs (except for images, see below)
     .replace(/\u0000/g, '') // Remove null bytes
     .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
+    .replace(/\"/g, '&quot;')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;')
     .trim();
@@ -26,6 +26,21 @@ const sanitizeNumber = (num: number): number => {
 const sanitizeArray = (arr: string[]): string[] => {
   if (!Array.isArray(arr)) return [];
   return arr.map(item => sanitizeString(item)).filter(Boolean);
+};
+
+// Allow only safe image URLs: data:image/, blob:, or relative URLs
+const sanitizeImageUrl = (url: string): string => {
+  if (typeof url !== 'string') return '';
+  if (
+    url.startsWith('data:image/') ||
+    url.startsWith('blob:') ||
+    url.startsWith('/')
+  ) {
+    return url;
+  }
+  // Optionally, allow certain trusted domains:
+  // if (url.match(/^https:\/\/your-trusted-domain\.com\//)) return url;
+  return '';
 };
 
 export type Message = {
@@ -109,18 +124,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   useEffect(() => {
-    const messagesToSave = Object.entries(messages).reduce((acc, [key, msgList]) => {
-      acc[key] = msgList.map(msg => {
-        if (msg.type === 'image' && msg.meta?.imageUrl) {
-          const { imageUrl, ...restMeta } = msg.meta;
-          return { ...msg, meta: restMeta };
-        }
-        return msg;
-      });
-      return acc;
-    }, {} as { [seller: string]: Message[] });
-
-    localStorage.setItem('panty_messages', JSON.stringify(messagesToSave));
+    // No longer strip imageUrl, just save as is
+    localStorage.setItem('panty_messages', JSON.stringify(messages));
   }, [messages]);
 
   useEffect(() => {
@@ -143,7 +148,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const sanitizedSender = sanitizeString(sender);
     const sanitizedReceiver = sanitizeString(receiver);
     const sanitizedContent = sanitizeString(content);
-    
+
     let sanitizedMeta = undefined;
     if (options?.meta) {
       sanitizedMeta = {
@@ -152,7 +157,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         price: options.meta.price ? sanitizeNumber(options.meta.price) : undefined,
         tags: options.meta.tags ? sanitizeArray(options.meta.tags) : undefined,
         message: options.meta.message ? sanitizeString(options.meta.message) : undefined,
-        imageUrl: options.meta.imageUrl ? sanitizeString(options.meta.imageUrl) : undefined,
+        imageUrl: options.meta.imageUrl ? sanitizeImageUrl(options.meta.imageUrl) : undefined,
       };
     }
 
