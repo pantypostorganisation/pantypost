@@ -162,6 +162,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
+    // Transaction Locking
+    const transactionLockKey = `transaction_lock_${buyerUsername}_${seller}`;
+    if (localStorage.getItem(transactionLockKey)) {
+      return false; // Transaction is already in progress
+    }
+    localStorage.setItem(transactionLockKey, 'locked');
+
+    // Input Validation
+    if (price <= 0 || !listing.title || !listing.id || !seller) {
+      localStorage.removeItem(transactionLockKey);
+      return false;
+    }
+
     setBuyerBalance(buyerUsername, currentBuyerBalance - price);
 
     setSellerBalancesState((prev) => ({
@@ -188,6 +201,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       `💸 New sale: "${listing.title}" for $${displayPrice}`
     );
 
+    localStorage.removeItem(transactionLockKey);
     return true;
   };
 
@@ -196,40 +210,97 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     seller: string,
     amount: number
   ): boolean => {
-    const buyerBalance = getBuyerBalance(buyer);
-    if (buyerBalance < amount) {
+    // Input validation
+    if (!buyer || !seller || amount <= 0) {
       return false;
     }
 
-    const sellerCut = amount * 0.75;
-    const adminCut = amount * 0.25;
+    // Transaction locking
+    const transactionLockKey = `subscription_lock_${buyer}_${seller}`;
+    if (localStorage.getItem(transactionLockKey)) {
+      return false; // Subscription transaction is already in progress
+    }
+    localStorage.setItem(transactionLockKey, 'locked');
 
-    setBuyerBalance(buyer, buyerBalance - amount);
-    setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
+    try {
+      const buyerBalance = getBuyerBalance(buyer);
+      if (buyerBalance < amount) {
+        return false;
+      }
 
-    updateWallet('oakley', adminCut);
+      const sellerCut = amount * 0.75;
+      const adminCut = amount * 0.25;
 
-    addSellerNotificationToStorage(
-      seller,
-      `💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
-    );
+      setBuyerBalance(buyer, buyerBalance - amount);
+      setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
 
-    return true;
+      updateWallet('oakley', adminCut);
+
+      addSellerNotificationToStorage(
+        seller,
+        `💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
+      );
+
+      return true;
+    } finally {
+      localStorage.removeItem(transactionLockKey);
+    }
   };
 
   const addSellerWithdrawal = (username: string, amount: number) => {
-    const date = new Date().toISOString();
-    setSellerWithdrawals((prev) => ({
-      ...prev,
-      [username]: [...(prev[username] || []), { amount, date }],
-    }));
-    setSellerBalance(username, getSellerBalance(username) - amount);
+    // Input validation
+    if (!username || amount <= 0) {
+      throw new Error("Invalid withdrawal parameters");
+    }
+
+    const currentBalance = getSellerBalance(username);
+    if (currentBalance < amount) {
+      throw new Error("Insufficient balance for withdrawal");
+    }
+
+    // Transaction locking
+    const withdrawalLockKey = `withdrawal_lock_${username}`;
+    if (localStorage.getItem(withdrawalLockKey)) {
+      throw new Error("Another withdrawal is in progress");
+    }
+    localStorage.setItem(withdrawalLockKey, 'locked');
+
+    try {
+      const date = new Date().toISOString();
+      setSellerWithdrawals((prev) => ({
+        ...prev,
+        [username]: [...(prev[username] || []), { amount, date }],
+      }));
+      setSellerBalance(username, currentBalance - amount);
+    } finally {
+      localStorage.removeItem(withdrawalLockKey);
+    }
   };
 
   const addAdminWithdrawal = (amount: number) => {
-    const date = new Date().toISOString();
-    setAdminWithdrawals((prev) => [...prev, { amount, date }]);
-    setAdminBalanceState((prev) => prev - amount);
+    // Input validation
+    if (amount <= 0) {
+      throw new Error("Invalid withdrawal amount");
+    }
+
+    if (adminBalance < amount) {
+      throw new Error("Insufficient admin balance for withdrawal");
+    }
+
+    // Transaction locking
+    const adminWithdrawalLockKey = 'admin_withdrawal_lock';
+    if (localStorage.getItem(adminWithdrawalLockKey)) {
+      throw new Error("Another admin withdrawal is in progress");
+    }
+    localStorage.setItem(adminWithdrawalLockKey, 'locked');
+
+    try {
+      const date = new Date().toISOString();
+      setAdminWithdrawals((prev) => [...prev, { amount, date }]);
+      setAdminBalanceState((prev) => prev - amount);
+    } finally {
+      localStorage.removeItem(adminWithdrawalLockKey);
+    }
   };
 
   const wallet: { [username: string]: number } = {
