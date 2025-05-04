@@ -2,6 +2,32 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
+// Sanitization utilities
+const sanitizeString = (str: string): string => {
+  if (typeof str !== 'string') return '';
+  
+  return str
+    .replace(/[<>]/g, '') // Remove < and > to prevent HTML
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/data:/gi, '') // Remove data: URLs
+    .replace(/\u0000/g, '') // Remove null bytes
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .trim();
+};
+
+const sanitizeNumber = (num: number): number => {
+  const parsed = parseFloat(String(num));
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+const sanitizeArray = (arr: string[]): string[] => {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(item => sanitizeString(item)).filter(Boolean);
+};
+
 export type Message = {
   sender: string;
   receiver: string;
@@ -10,12 +36,12 @@ export type Message = {
   read?: boolean;
   type?: 'normal' | 'customRequest' | 'image';
   meta?: {
-    id?: string; // For custom requests
-    title?: string; // For custom requests
-    price?: number; // For custom requests
-    tags?: string[]; // For custom requests message body
-    message?: string; // For custom requests message body
-    imageUrl?: string; // Added imageUrl here for image messages
+    id?: string;
+    title?: string;
+    price?: number;
+    tags?: string[];
+    message?: string;
+    imageUrl?: string;
   };
 };
 
@@ -34,7 +60,7 @@ type MessageOptions = {
     price?: number;
     tags?: string[];
     message?: string;
-    imageUrl?: string; // Added imageUrl here too
+    imageUrl?: string;
   };
 };
 
@@ -53,7 +79,7 @@ type MessageContextType = {
     title: string,
     price: number,
     tags: string[],
-    listingId: string // Add listingId parameter
+    listingId: string
   ) => void;
   getMessagesForSeller: (seller: string) => Message[];
   markMessagesAsRead: (userA: string, userB: string) => void;
@@ -83,11 +109,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   useEffect(() => {
-    // When saving to localStorage, exclude imageUrl from meta to avoid quota issues
     const messagesToSave = Object.entries(messages).reduce((acc, [key, msgList]) => {
       acc[key] = msgList.map(msg => {
         if (msg.type === 'image' && msg.meta?.imageUrl) {
-          // Exclude imageUrl when saving, but keep other meta properties if any
           const { imageUrl, ...restMeta } = msg.meta;
           return { ...msg, meta: restMeta };
         }
@@ -115,21 +139,38 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   ) => {
     if (isBlocked(receiver, sender)) return;
 
+    // Sanitize inputs
+    const sanitizedSender = sanitizeString(sender);
+    const sanitizedReceiver = sanitizeString(receiver);
+    const sanitizedContent = sanitizeString(content);
+    
+    let sanitizedMeta = undefined;
+    if (options?.meta) {
+      sanitizedMeta = {
+        id: options.meta.id ? sanitizeString(options.meta.id) : undefined,
+        title: options.meta.title ? sanitizeString(options.meta.title) : undefined,
+        price: options.meta.price ? sanitizeNumber(options.meta.price) : undefined,
+        tags: options.meta.tags ? sanitizeArray(options.meta.tags) : undefined,
+        message: options.meta.message ? sanitizeString(options.meta.message) : undefined,
+        imageUrl: options.meta.imageUrl ? sanitizeString(options.meta.imageUrl) : undefined,
+      };
+    }
+
     const newMessage: Message = {
-      sender,
-      receiver,
-      content,
+      sender: sanitizedSender,
+      receiver: sanitizedReceiver,
+      content: sanitizedContent,
       date: new Date().toISOString(),
       read: false,
       type: options?.type || 'normal',
-      meta: options?.meta, // Include meta (which can contain imageUrl for in-memory state)
+      meta: sanitizedMeta,
     };
 
     setMessages((prev) => {
-      const updatedReceiverMessages = [...(prev[receiver] || []), newMessage];
+      const updatedReceiverMessages = [...(prev[sanitizedReceiver] || []), newMessage];
       return {
         ...prev,
-        [receiver]: updatedReceiverMessages,
+        [sanitizedReceiver]: updatedReceiverMessages,
       };
     });
   };
@@ -141,81 +182,99 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     title: string,
     price: number,
     tags: string[],
-    listingId: string // Add listingId parameter
+    listingId: string
   ) => {
     if (isBlocked(seller, buyer)) return;
 
+    // Sanitize inputs
+    const sanitizedBuyer = sanitizeString(buyer);
+    const sanitizedSeller = sanitizeString(seller);
+    const sanitizedContent = sanitizeString(content);
+    const sanitizedTitle = sanitizeString(title);
+    const sanitizedPrice = sanitizeNumber(price);
+    const sanitizedTags = sanitizeArray(tags);
+    const sanitizedListingId = sanitizeString(listingId);
+
     const newMessage: Message = {
-      sender: buyer,
-      receiver: seller,
-      content,
+      sender: sanitizedBuyer,
+      receiver: sanitizedSeller,
+      content: sanitizedContent,
       date: new Date().toISOString(),
       read: false,
       type: 'customRequest',
       meta: {
-        id: listingId, // Ensure meta includes id
-        title,
-        price,
-        tags,
-        message: content,
+        id: sanitizedListingId,
+        title: sanitizedTitle,
+        price: sanitizedPrice,
+        tags: sanitizedTags,
+        message: sanitizedContent,
       },
     };
 
     setMessages((prev) => {
-      const updatedReceiverMessages = [...(prev[seller] || []), newMessage];
+      const updatedReceiverMessages = [...(prev[sanitizedSeller] || []), newMessage];
       return {
         ...prev,
-        [seller]: updatedReceiverMessages,
+        [sanitizedSeller]: updatedReceiverMessages,
       };
     });
   };
 
   const getMessagesForSeller = (seller: string): Message[] => {
-    return messages[seller] || [];
+    const sanitizedSeller = sanitizeString(seller);
+    return messages[sanitizedSeller] || [];
   };
 
-  // --- READ RECEIPTS LOGIC (REFINED) ---
-  // Mark all messages between userA and userB as read for userA (the reader)
   const markMessagesAsRead = (userA: string, userB: string) => {
+    const sanitizedUserA = sanitizeString(userA);
+    const sanitizedUserB = sanitizeString(userB);
+
     setMessages((prev) => {
-      // Update messages stored under userA
-      const updatedA = (prev[userA] || []).map((msg) =>
-        msg.receiver === userA && msg.sender === userB && !msg.read
+      const updatedA = (prev[sanitizedUserA] || []).map((msg) =>
+        msg.receiver === sanitizedUserA && msg.sender === sanitizedUserB && !msg.read
           ? { ...msg, read: true }
           : msg
       );
-      // Update messages stored under userB
-      const updatedB = (prev[userB] || []).map((msg) =>
-        msg.receiver === userA && msg.sender === userB && !msg.read
+      const updatedB = (prev[sanitizedUserB] || []).map((msg) =>
+        msg.receiver === sanitizedUserA && msg.sender === sanitizedUserB && !msg.read
           ? { ...msg, read: true }
           : msg
       );
       return {
         ...prev,
-        [userA]: updatedA,
-        [userB]: updatedB,
+        [sanitizedUserA]: updatedA,
+        [sanitizedUserB]: updatedB,
       };
     });
   };
 
   const blockUser = (blocker: string, blockee: string) => {
+    const sanitizedBlocker = sanitizeString(blocker);
+    const sanitizedBlockee = sanitizeString(blockee);
+
     setBlockedUsers((prev) => {
-      const updated = [...(prev[blocker] || []), blockee];
-      return { ...prev, [blocker]: Array.from(new Set(updated)) };
+      const updated = [...(prev[sanitizedBlocker] || []), sanitizedBlockee];
+      return { ...prev, [sanitizedBlocker]: Array.from(new Set(updated)) };
     });
   };
 
   const unblockUser = (blocker: string, blockee: string) => {
+    const sanitizedBlocker = sanitizeString(blocker);
+    const sanitizedBlockee = sanitizeString(blockee);
+
     setBlockedUsers((prev) => {
-      const updated = (prev[blocker] || []).filter((u) => u !== blockee);
-      return { ...prev, [blocker]: updated };
+      const updated = (prev[sanitizedBlocker] || []).filter((u) => u !== sanitizedBlockee);
+      return { ...prev, [sanitizedBlocker]: updated };
     });
   };
 
   const reportUser = (reporter: string, reportee: string) => {
+    const sanitizedReporter = sanitizeString(reporter);
+    const sanitizedReportee = sanitizeString(reportee);
+
     setReportedUsers((prev) => {
-      const updated = [...(prev[reporter] || []), reportee];
-      return { ...prev, [reporter]: Array.from(new Set(updated)) };
+      const updated = [...(prev[sanitizedReporter] || []), sanitizedReportee];
+      return { ...prev, [sanitizedReporter]: Array.from(new Set(updated)) };
     });
 
     const pantyMessages = JSON.parse(localStorage.getItem('panty_messages') || '{}');
@@ -224,7 +283,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     (Object.values(pantyMessages) as Message[][]).forEach((msgList) => {
       msgList.forEach((msg) => {
         const between = [msg.sender, msg.receiver];
-        if (between.includes(reporter) && between.includes(reportee)) {
+        if (between.includes(sanitizedReporter) && between.includes(sanitizedReportee)) {
           allMessages.push(msg);
         }
       });
@@ -233,8 +292,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const existingReports: ReportLog[] = JSON.parse(localStorage.getItem('panty_report_logs') || '[]');
 
     existingReports.push({
-      reporter,
-      reportee,
+      reporter: sanitizedReporter,
+      reportee: sanitizedReportee,
       messages: allMessages,
       date: new Date().toISOString(),
     });
@@ -243,11 +302,15 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const isBlocked = (blocker: string, blockee: string) => {
-    return blockedUsers[blocker]?.includes(blockee) || false;
+    const sanitizedBlocker = sanitizeString(blocker);
+    const sanitizedBlockee = sanitizeString(blockee);
+    return blockedUsers[sanitizedBlocker]?.includes(sanitizedBlockee) || false;
   };
 
   const hasReported = (reporter: string, reportee: string) => {
-    return reportedUsers[reporter]?.includes(reportee) || false;
+    const sanitizedReporter = sanitizeString(reporter);
+    const sanitizedReportee = sanitizeString(reportee);
+    return reportedUsers[sanitizedReporter]?.includes(sanitizedReportee) || false;
   };
 
   return (
@@ -278,7 +341,6 @@ export const useMessages = () => {
   return context;
 };
 
-// Export getReportCount for use in Header.tsx
 export const getReportCount = () => {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('panty_report_logs');
