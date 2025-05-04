@@ -29,14 +29,14 @@ export default function BrowsePage() {
   const { purchaseListing } = useWallet();
 
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
-  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]);
+  // Removed activeTagFilters state
   const [selectedHourRange, setSelectedHourRange] = useState(hourRangeOptions[0]);
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc'>('newest');
-  const [showFilters, setShowFilters] = useState(false);
+  // Removed showFilters state
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -55,10 +55,15 @@ export default function BrowsePage() {
   // Reset to first page when filters/search change
   useEffect(() => {
     setPage(0);
-  }, [filter, activeTagFilters, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
+  }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]); // Removed activeTagFilters dependency
 
   const handlePurchase = (listing: Listing) => {
     if (!user || !listing.seller) return;
+    // Check if premium and not subscribed before allowing purchase attempt
+    if (listing.isPremium && !isSubscribed(user.username, listing.seller)) {
+      alert('You must be subscribed to this seller to purchase their premium listings.');
+      return;
+    }
     const success = purchaseListing(listing, user.username);
     if (success) {
       removeListing(listing.id);
@@ -69,19 +74,19 @@ export default function BrowsePage() {
     }
   };
 
+  // Filter logic remains largely the same, but the display logic will handle visibility
   const filteredListings = listings
     .filter((listing: Listing) => {
-      if (listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller))) return false;
+      // Keep premium listings in the filtered list, even if not subscribed
+      // Visibility check will happen during render
       if (filter === 'standard' && listing.isPremium) return false;
       if (filter === 'premium' && !listing.isPremium) return false;
-      if (activeTagFilters.length > 0 && (!listing.tags || !activeTagFilters.some(tag => listing.tags?.includes(tag)))) {
-        return false;
-      }
+      // Removed tag filter logic
       const hoursWorn = listing.hoursWorn ?? 0;
       if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
         return false;
       }
-      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
+      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])] // Keep tags for search matching
         .join(' ')
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
@@ -101,12 +106,8 @@ export default function BrowsePage() {
   const paginatedListings = filteredListings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filteredListings.length / PAGE_SIZE);
 
-  const allTags = Array.from(new Set(listings.flatMap((l: Listing) => l.tags || []))).sort();
-
-  const premiumSellers = listings
-    .filter((l: Listing) => l.isPremium)
-    .map((l: Listing) => l.seller)
-    .filter((seller, i, self) => self.indexOf(seller) === i && (!user?.username || !isSubscribed(user.username, seller)));
+  // Removed allTags calculation
+  // Removed premiumSellers calculation as the prompt is removed
 
   // Helper for pagination display
   function renderPageIndicators() {
@@ -245,107 +246,16 @@ export default function BrowsePage() {
               <option value="standard">Standard</option>
               <option value="premium">Premium</option>
             </select>
-            <button
-              className="ml-2 xl:hidden flex items-center gap-1 px-3 py-2 rounded-lg bg-[#ff950e] text-black font-bold hover:bg-[#e0850d] transition"
-              onClick={() => setShowFilters(f => !f)}
-            >
-              <Filter className="w-4 h-4" />
-              Filters
-            </button>
+            {/* Removed mobile Filters button */}
           </div>
         </div>
 
-        {/* Tag filters */}
-        {(allTags.length > 0 && (showFilters || typeof window === 'undefined' || window.innerWidth >= 1280)) && (
-          <div className="mb-8 max-w-[1700px] mx-auto bg-[#181818]/80 backdrop-blur-md p-4 rounded-2xl shadow border border-gray-800 px-6"> {/* Added px-6 here */}
-            <div className="flex items-center gap-2 mb-2">
-              <Filter className="w-4 h-4 text-[#ff950e]" />
-              <h2 className="text-sm font-semibold text-white">Filter by Tags:</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {allTags.map((tag: string) => (
-                <button
-                  key={tag}
-                  onClick={() =>
-                    setActiveTagFilters((prev: string[]) =>
-                      prev.includes(tag)
-                        ? prev.filter((t: string) => t !== tag)
-                        : [...prev, tag]
-                    )
-                  }
-                  className={`px-3 py-1 text-xs rounded-full border transition ${
-                    activeTagFilters.includes(tag)
-                      ? 'bg-[#ff950e] text-black border-[#ff950e] shadow'
-                      : 'bg-black text-white border-gray-700 hover:bg-[#222]'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-              {activeTagFilters.length > 0 && (
-                <button
-                  onClick={() => setActiveTagFilters([])}
-                  className="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700 flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" /> Clear
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Removed Tag filters section */}
 
-        {/* Premium Seller Prompt */}
-        {premiumSellers.length > 0 && (
-          <div className="mb-10 max-w-[1700px] mx-auto bg-gradient-to-r from-yellow-700 to-yellow-500 rounded-2xl p-6 border border-yellow-400 shadow-lg text-white px-6"> {/* Added px-6 here */}
-            <div className="flex items-center gap-2 mb-3">
-              <Crown className="text-yellow-200 w-5 h-5" />
-              <h2 className="text-lg font-semibold">Unlock Premium Content</h2>
-            </div>
-            <p className="text-sm mb-4">
-              Subscribe to these sellers to unlock their exclusive premium listings!
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
-              {premiumSellers.slice(0, 6).map(seller => {
-                const profile = sellerProfiles[seller] || { bio: null, pic: null };
-                return (
-                  <Link
-                    href={`/sellers/${seller}`}
-                    key={seller}
-                    className="flex items-center gap-3 bg-black p-3 rounded-lg border border-yellow-300 hover:shadow-md transition"
-                  >
-                    {profile.pic ? (
-                      <img
-                        src={profile.pic}
-                        alt={seller}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center">
-                        <span className="text-yellow-400 text-xs font-bold">
-                          {seller.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="font-semibold text-white">{seller}</h3>
-                      <span className="text-xs text-yellow-300 flex items-center">
-                        <Lock className="w-3 h-3 mr-1" /> Premium content
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })}
-              {premiumSellers.length > 6 && (
-                <div className="flex items-center justify-center bg-black p-3 rounded-lg border border-yellow-300">
-                  <span className="text-sm text-yellow-300">+{premiumSellers.length - 6} more</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Removed Premium Seller Prompt section */}
 
         {/* Listings */}
-        <div className="max-w-[1700px] mx-auto px-6"> {/* Added px-6 here */}
+        <div className="max-w-[1700px] mx-auto px-6">
           {paginatedListings.length === 0 ? (
             <div className="text-center py-20 bg-[#181818] rounded-2xl border border-dashed border-gray-700 shadow-lg mt-10">
               <ShoppingBag className="w-16 h-16 text-gray-500 mx-auto mb-4" />
@@ -353,106 +263,135 @@ export default function BrowsePage() {
               <p className="text-md text-gray-400 mt-2">
                 Try changing your filter settings or check back later
               </p>
+              {/* Message remains relevant if filtering by premium */}
               {filter === 'premium' && (
-                <p className="mt-6 text-md text-yellow-400">
-                  You may need to subscribe to sellers to see their premium listings
-                </p>
+                 <p className="mt-6 text-md text-yellow-400">
+                   Premium listings require subscribing to the seller to view fully.
+                 </p>
               )}
             </div>
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-10">
-                {paginatedListings.map((listing) => (
-                  <div
-                    key={listing.id}
-                    className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden group hover:border-[#ff950e] min-h-[480px]`}
-                    style={{
-                      boxShadow: '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
-                    }}
-                  >
-                    {listing.isPremium && (
-                      <div className="absolute top-4 right-4 z-10">
-                        <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow animate-pulse">
-                          <Crown className="w-4 h-4 mr-1" /> Premium
-                        </span>
-                      </div>
-                    )}
-                    <Link href={`/browse/${listing.id}`}>
+                {paginatedListings.map((listing) => {
+                  // Determine if the listing is premium and if the user is NOT subscribed
+                  const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller));
+
+                  return (
+                    <div
+                      key={listing.id}
+                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden group hover:border-[#ff950e] min-h-[480px]`}
+                      style={{
+                        boxShadow: '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
+                      }}
+                    >
+                      {/* Premium Tag - always show if premium */}
+                      {listing.isPremium && (
+                        <div className="absolute top-4 right-4 z-10">
+                          <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow animate-pulse">
+                            <Crown className="w-4 h-4 mr-1" /> Premium
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Image container */}
                       <div className="relative">
-                        {/* Display the first image from the array */}
+                        {/* Image */}
                         {listing.imageUrls && listing.imageUrls.length > 0 && (
                            <img
                             src={listing.imageUrls[0]}
                             alt={listing.title}
-                            className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
+                            className={`w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300 ${isLockedPremium ? 'blur-[4.5px]' : ''}`} // Apply blur-[4px] (blur-sm) if locked
                             style={{ borderTopLeftRadius: '1.5rem', borderTopRightRadius: '1.5rem' }}
                           />
                         )}
-                      </div>
-                    </Link>
-                    <div className="p-6 flex flex-col flex-grow">
-                      <Link href={`/browse/${listing.id}`}>
-                        <h2 className="text-2xl font-bold text-white mb-1">{listing.title}</h2>
-                        <p className="text-base text-gray-300 mb-2 line-clamp-2">{listing.description}</p>
-                        {listing.tags && (
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {listing.tags.slice(0, 3).map((tag, i) => (
-                              <span key={i} className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
-                                {tag}
-                              </span>
-                            ))}
-                            {listing.tags.length > 3 && (
-                              <span className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
-                                +{listing.tags.length - 3}
-                              </span>
-                            )}
+                        {/* Lock Overlay for Premium (if not subscribed) */}
+                        {isLockedPremium && (
+                          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-4" style={{ borderTopLeftRadius: '1.5rem', borderTopRightRadius: '1.5rem' }}>
+                            <Lock className="w-10 h-10 text-[#ff950e] mb-3" />
+                            <p className="text-sm font-semibold text-white">
+                              Subscribe to <Link href={`/sellers/${listing.seller}`} className="underline hover:text-[#ff950e]">{listing.seller}</Link> to view
+                            </p>
                           </div>
                         )}
-                      </Link>
-                      <div className="flex justify-between items-center mt-auto">
-                        <p className="font-bold text-[#ff950e] text-2xl">
-                          ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
-                        </p>
-                        <Link
-                          href={`/sellers/${listing.seller}`}
-                          className="flex items-center gap-2 text-xs text-gray-400 hover:text-[#ff950e] font-semibold group/seller"
-                          title={sellerProfiles[listing.seller]?.bio || listing.seller}
-                        >
-                          {sellerProfiles[listing.seller]?.pic ? (
-                            <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-[#ff950e] rounded-full transition">
-                              <img
-                                src={sellerProfiles[listing.seller]?.pic!}
-                                alt={listing.seller}
-                                className="w-8 h-8 rounded-full object-cover border-2 border-[#ff950e]"
-                              />
-                            </span>
-                          ) : (
-                            <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-[#ff950e] font-bold border-2 border-[#ff950e]">
-                              {listing.seller.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                          {listing.seller}
-                        </Link>
                       </div>
-                      {user?.role === 'buyer' ? (
-                        <button
-                          onClick={() => handlePurchase(listing)}
-                          className="mt-6 w-full bg-[#ff950e] text-black px-4 py-3 rounded-lg hover:bg-[#e0850d] font-bold transition text-lg shadow focus:scale-105 active:scale-95"
-                          style={{
-                            boxShadow: '0 2px 12px 0 #ff950e44',
-                            transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
-                          }}
-                        >
-                          Buy Now
-                        </button>
-                      ) : user?.role === 'seller' ? (
-                        <div className="mt-6 text-center text-sm text-gray-500">
-                          Sellers cannot purchase listings
+
+                      {/* Card Content */}
+                      <div className="p-6 flex flex-col flex-grow">
+                        {/* Title/Desc Link - Link only works if not locked */}
+                        <Link href={isLockedPremium ? '#' : `/browse/${listing.id}`} className={isLockedPremium ? 'cursor-default' : ''}>
+                          <h2 className={`text-2xl font-bold text-white mb-1 ${!isLockedPremium ? 'hover:text-[#ff950e]' : ''}`}>{listing.title}</h2>
+                          <p className="text-base text-gray-300 mb-2 line-clamp-2">{listing.description}</p>
+                          {listing.tags && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {listing.tags.slice(0, 3).map((tag, i) => (
+                                <span key={i} className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
+                                  {tag}
+                                </span>
+                              ))}
+                              {listing.tags.length > 3 && (
+                                <span className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
+                                  +{listing.tags.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </Link>
+                        <div className="flex justify-between items-center mt-auto">
+                          <p className="font-bold text-[#ff950e] text-2xl">
+                            ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
+                          </p>
+                          <Link
+                            href={`/sellers/${listing.seller}`}
+                            className="flex items-center gap-2 text-xs text-gray-400 hover:text-[#ff950e] font-semibold group/seller"
+                            title={sellerProfiles[listing.seller]?.bio || listing.seller}
+                          >
+                            {sellerProfiles[listing.seller]?.pic ? (
+                              <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-[#ff950e] rounded-full transition">
+                                <img
+                                  src={sellerProfiles[listing.seller]?.pic!}
+                                  alt={listing.seller}
+                                  className="w-8 h-8 rounded-full object-cover border-2 border-[#ff950e]"
+                                />
+                              </span>
+                            ) : (
+                              <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-[#ff950e] font-bold border-2 border-[#ff950e]">
+                                {listing.seller.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            {listing.seller}
+                          </Link>
                         </div>
-                      ) : null}
+                        {/* Conditional Buy Button */}
+                        {user?.role === 'buyer' ? (
+                          isLockedPremium ? (
+                            <Link
+                              href={`/sellers/${listing.seller}`} // Link to seller page to subscribe
+                              className="mt-6 w-full bg-gray-600 text-white px-4 py-3 rounded-lg hover:bg-gray-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
+                            >
+                              <Lock className="w-5 h-5 mr-1" /> Subscribe to Buy
+                            </Link>
+                          ) : (
+                            <button
+                              onClick={() => handlePurchase(listing)}
+                              className="mt-6 w-full bg-[#ff950e] text-black px-4 py-3 rounded-lg hover:bg-[#e0850d] font-bold transition text-lg shadow focus:scale-105 active:scale-95"
+                              style={{
+                                boxShadow: '0 2px 12px 0 #ff950e44',
+                                transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
+                              }}
+                            >
+                              Buy Now
+                            </button>
+                          )
+                        ) : user?.role === 'seller' ? (
+                          <div className="mt-6 text-center text-sm text-gray-500">
+                            Sellers cannot purchase listings
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {/* Pagination */}
               {(filteredListings.length > PAGE_SIZE || page > 0) && (
