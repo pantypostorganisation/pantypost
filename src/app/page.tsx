@@ -191,7 +191,7 @@ export default function Home() {
             <img
               src="/phone-mockup.png"
               alt="App on phone"
-              className="h-[220px] sm:h-72 md:h-80 lg:h-96 w-auto transform transition-transform duration-500 hover:scale-105 hover:rotate-3" // Increased heights
+              className="h-[280px] sm:h-96 md:h-[440px] lg:h-[520px] w-auto transform transition-transform duration-500 hover:scale-105 hover:rotate-3" // Increased heights again
               style={{
                 background: 'none', border: 'none', borderRadius: 0, boxShadow: 'none', objectFit: 'contain',
                 filter: 'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))',
