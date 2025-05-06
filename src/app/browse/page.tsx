@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -27,6 +28,7 @@ const PAGE_SIZE = 40;
 export default function BrowsePage() {
   const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
+  const router = useRouter();
 
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
   const [selectedHourRange, setSelectedHourRange] = useState(hourRangeOptions[0]);
@@ -54,7 +56,8 @@ export default function BrowsePage() {
     setPage(0);
   }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
 
-  const handlePurchase = (listing: Listing) => {
+  const handlePurchase = (listing: Listing, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     if (!user || !listing.seller) return;
     if (listing.isPremium && !isSubscribed(user.username, listing.seller)) {
       alert('You must be subscribed to this seller to purchase their premium listings.');
@@ -253,12 +256,17 @@ export default function BrowsePage() {
                 {paginatedListings.map((listing) => {
                   const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
 
+                  // Card is a div with onClick, not a Link
                   return (
                     <div
                       key={listing.id}
-                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden group hover:border-[#ff950e] min-h-[480px]`}
+                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden hover:border-[#ff950e] min-h-[480px] cursor-pointer`}
                       style={{
                         boxShadow: '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
+                      }}
+                      tabIndex={0}
+                      onClick={() => {
+                        if (!isLockedPremium) router.push(`/browse/${listing.id}`);
                       }}
                     >
                       {listing.isPremium && (
@@ -269,44 +277,51 @@ export default function BrowsePage() {
                         </div>
                       )}
 
-                      <div className="relative">
-                        {listing.imageUrls && listing.imageUrls.length > 0 && (
-                          <img
-                            src={listing.imageUrls[0]}
-                            alt={listing.title}
-                            className={`w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300 ${isLockedPremium ? 'blur-[4.5px]' : ''}`}
-                            style={{ borderTopLeftRadius: '1.5rem', borderTopRightRadius: '1.5rem' }}
+                      {/* Embedded image with 10px padding and matching rounded-3xl, taller image */}
+                      <div className="relative p-[10px] pb-0">
+                        <div className="relative w-full h-[290px] rounded-3xl overflow-hidden">
+                          {listing.imageUrls && listing.imageUrls.length > 0 && (
+                            <img
+                              src={listing.imageUrls[0]}
+                              alt={listing.title}
+                              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isLockedPremium ? 'blur-[4.5px]' : ''} rounded-3xl`}
+                            />
+                          )}
+                          {/* Soft black gradient overlay at the bottom */}
+                          <div
+                            className="pointer-events-none absolute left-0 bottom-0 w-full h-20 rounded-b-3xl"
+                            style={{
+                              background: 'linear-gradient(0deg, rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.18) 60%, rgba(0,0,0,0.00) 100%)'
+                            }}
                           />
-                        )}
-                        {isLockedPremium && (
-                          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-4" style={{ borderTopLeftRadius: '1.5rem', borderTopRightRadius: '1.5rem' }}>
-                            <Lock className="w-10 h-10 text-[#ff950e] mb-3" />
-                            <p className="text-sm font-semibold text-white">
-                              Subscribe to <Link href={`/sellers/${listing.seller}`} className="underline hover:text-[#ff950e]">{listing.seller}</Link> to view
-                            </p>
-                          </div>
-                        )}
+                          {isLockedPremium && (
+                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-4 rounded-3xl z-10">
+                              <Lock className="w-10 h-10 text-[#ff950e] mb-3" />
+                              <p className="text-sm font-semibold text-white">
+                                Subscribe to <Link href={`/sellers/${listing.seller}`} className="underline hover:text-[#ff950e]" onClick={e => e.stopPropagation()}>{listing.seller}</Link> to view
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       <div className="p-6 flex flex-col flex-grow">
-                        <Link href={isLockedPremium ? '#' : `/browse/${listing.id}`} className={isLockedPremium ? 'cursor-default' : ''}>
-                          <h2 className={`text-2xl font-bold text-white mb-1 ${!isLockedPremium ? 'hover:text-[#ff950e]' : ''}`}>{listing.title}</h2>
-                          <p className="text-base text-gray-300 mb-2 line-clamp-2">{listing.description}</p>
-                          {listing.tags && (
-                            <div className="flex flex-wrap gap-1 mb-2">
-                              {listing.tags.slice(0, 3).map((tag, i) => (
-                                <span key={i} className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
-                                  {tag}
-                                </span>
-                              ))}
-                              {listing.tags.length > 3 && (
-                                <span className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
-                                  +{listing.tags.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </Link>
+                        <h2 className={`text-2xl font-bold text-white mb-1 group-hover:text-[#ff950e]`}>{listing.title}</h2>
+                        <p className="text-base text-gray-300 mb-2 line-clamp-2">{listing.description}</p>
+                        {listing.tags && (
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {listing.tags.slice(0, 3).map((tag, i) => (
+                              <span key={i} className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
+                                {tag}
+                              </span>
+                            ))}
+                            {listing.tags.length > 3 && (
+                              <span className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
+                                +{listing.tags.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="flex justify-between items-center mt-auto">
                           <p className="font-bold text-[#ff950e] text-2xl">
                             ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
@@ -315,6 +330,7 @@ export default function BrowsePage() {
                             href={`/sellers/${listing.seller}`}
                             className="flex items-center gap-2 text-xs text-gray-400 hover:text-[#ff950e] font-semibold group/seller"
                             title={sellerProfiles[listing.seller]?.bio || listing.seller}
+                            onClick={e => e.stopPropagation()}
                           >
                             {sellerProfiles[listing.seller]?.pic ? (
                               <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-[#ff950e] rounded-full transition">
@@ -343,12 +359,13 @@ export default function BrowsePage() {
                             <Link
                               href={`/sellers/${listing.seller}`}
                               className="mt-6 w-full bg-gray-600 text-white px-4 py-3 rounded-lg hover:bg-gray-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
+                              onClick={e => e.stopPropagation()}
                             >
                               <Lock className="w-5 h-5 mr-1" /> Subscribe to Buy
                             </Link>
                           ) : (
                             <button
-                              onClick={() => handlePurchase(listing)}
+                              onClick={e => handlePurchase(listing, e)}
                               className="mt-6 w-full bg-[#ff950e] text-black px-4 py-3 rounded-lg hover:bg-[#e0850d] font-bold transition text-lg shadow focus:scale-105 active:scale-95"
                               style={{
                                 boxShadow: '0 2px 12px 0 #ff950e44',
