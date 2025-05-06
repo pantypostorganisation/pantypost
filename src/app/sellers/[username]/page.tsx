@@ -18,12 +18,18 @@ export default function SellerProfilePage() {
     listings,
     user,
     users,
-    subscribeToSeller,
+    // Removed subscribeToSeller and unsubscribeFromSeller from here
     isSubscribed,
-    unsubscribeFromSeller,
-    subscriptions,
+    subscriptions, // Keep subscriptions state for UI checks
   } = useListings();
-  const { orderHistory, getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance } = useWallet();
+  const {
+    orderHistory,
+    getBuyerBalance,
+    setBuyerBalance,
+    getSellerBalance,
+    setSellerBalance,
+    subscribeToSellerWithPayment // Import the payment function
+  } = useWallet();
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
   // Profile info
@@ -35,7 +41,7 @@ export default function SellerProfilePage() {
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
   const [showTipModal, setShowTipModal] = useState(false);
-  const [showToast, setShowToast] = useState(false);
+  const [showToast, setShowToast] = useState(false); // For subscribe success
 
   // Tip
   const [tipAmount, setTipAmount] = useState('');
@@ -47,11 +53,12 @@ export default function SellerProfilePage() {
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  // Subscription
-  const [justSubscribed, setJustSubscribed] = useState(false);
+  // Subscription state (derived from localStorage for consistency with dashboard)
+  const [buyerSubscriptions, setBuyerSubscriptions] = useState<string[]>([]);
 
   // Listings
-  const hasAccess = user?.username && isSubscribed(user.username, username);
+  // Check subscription status based on local state derived from localStorage
+  const hasAccess = user?.username && buyerSubscriptions.includes(username);
   const standardListings = listings.filter(
     (listing) => listing.seller === username && !listing.isPremium
   );
@@ -66,14 +73,18 @@ export default function SellerProfilePage() {
   );
   const alreadyReviewed = user?.username && hasReviewed(username, user.username);
 
-  // Followers (subscriptions)
-  const followers = Object.entries(subscriptions).filter(([_, sellers]) =>
-    sellers.includes(username)
-  ).length;
+  // Calculate total photos and videos from listings
+  const sellerListings = listings.filter(listing => listing.seller === username);
+  const totalPhotos = sellerListings.filter(listing => listing.imageUrls && listing.imageUrls.length > 0).length;
+  const totalVideos = 0; // Assuming no video count available from current data structure
 
-  // Stats for media
-  const totalPhotos = [...standardListings, ...premiumListings].length;
-  const totalVideos = 0; // Placeholder, add video support if needed
+  // Followers (subscriptions) - Calculate from the source of truth (localStorage)
+  const followers = Object.entries(
+      typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}') : {}
+    ).filter(([_, sellers]) =>
+      Array.isArray(sellers) && sellers.includes(username)
+    ).length;
+
 
   // Average rating
   const averageRating =
@@ -85,6 +96,7 @@ export default function SellerProfilePage() {
   const sellerUser = users?.[username];
   const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
+  // Load profile info and subscriptions from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedBio = sessionStorage.getItem(`profile_bio_${username}`);
@@ -93,8 +105,14 @@ export default function SellerProfilePage() {
       if (storedBio) setBio(storedBio);
       if (storedPic) setProfilePic(storedPic);
       if (storedSub) setSubscriptionPrice(parseFloat(storedSub));
+
+      // Load buyer subscriptions from localStorage
+      if (user?.username) {
+        const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
+        setBuyerSubscriptions(subs[user.username] || []);
+      }
     }
-  }, [username]);
+  }, [username, user?.username]); // Depend on username and user.username
 
   // Review submit
   const handleSubmit = () => {
@@ -119,25 +137,55 @@ export default function SellerProfilePage() {
     }
   }, [submitted]);
 
-  // Subscribe
+  // Subscribe - Use subscribeToSellerWithPayment and update localStorage
   const handleConfirmSubscribe = () => {
-    if (user?.username && user.role === 'buyer') {
-      subscribeToSeller(user.username, username, subscriptionPrice ?? 0);
-      setJustSubscribed(true);
+    if (!user?.username || user.role !== 'buyer' || subscriptionPrice === null) {
+      alert('Cannot subscribe. Please check your login status and seller subscription price.');
+      return;
+    }
+
+    // subscribeToSellerWithPayment is expected to handle the balance check
+    const success = subscribeToSellerWithPayment(user.username, username, subscriptionPrice);
+
+    if (success) {
+      // Update localStorage subscriptions on success
+      const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
+      if (!subs[user.username]) subs[user.username] = [];
+      if (!subs[user.username].includes(username)) {
+        subs[user.username].push(username);
+        localStorage.setItem('buyer_subscriptions', JSON.stringify(subs));
+        setBuyerSubscriptions(subs[user.username]); // Update local state
+      }
+
       setShowSubscribeModal(false);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
+      // Optionally notify seller via a separate mechanism if needed
+      // addSellerNotification(username, `🎉 ${user.username} subscribed to you!`);
+    } else {
+      // subscribeToSellerWithPayment returns false on insufficient balance or other errors
+      alert('Subscription failed. Insufficient balance or another error occurred.');
+      setShowSubscribeModal(false); // Close modal even on failure
     }
   };
 
-  // Unsubscribe
+  // Unsubscribe - Update localStorage
   const handleConfirmUnsubscribe = () => {
-    if (user?.username && user.role === 'buyer') {
-      unsubscribeFromSeller(user.username, username);
-      setJustSubscribed(false);
-      setShowUnsubscribeModal(false);
+    if (!user?.username || user.role !== 'buyer') return;
+
+    // Update localStorage subscriptions
+    const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
+    if (subs[user.username]) {
+      subs[user.username] = subs[user.username].filter((seller: string) => seller !== username);
+      localStorage.setItem('buyer_subscriptions', JSON.stringify(subs));
+      setBuyerSubscriptions(subs[user.username]); // Update local state
     }
+
+    setShowUnsubscribeModal(false);
+    // Optionally notify seller via a separate mechanism if needed
+    // addSellerNotification(username, `❌ ${user.username} unsubscribed from you.`);
   };
+
 
   // Tip Seller
   const handleTip = () => {
@@ -172,16 +220,16 @@ export default function SellerProfilePage() {
     }, 1500);
   };
 
-  // Action buttons visibility
+  // Action buttons visibility - Use buyerSubscriptions state
   const showSubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
-    !isSubscribed(user.username, username);
+    !buyerSubscriptions.includes(username);
 
   const showUnsubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
-    isSubscribed(user.username, username);
+    buyerSubscriptions.includes(username);
 
   // UI
   return (

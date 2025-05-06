@@ -5,11 +5,21 @@ import { useWallet } from '@/context/WalletContext';
 import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
 import RequireAuth from '@/components/RequireAuth';
+import { useEffect, useState } from 'react';
 
 export default function BuyerDashboardPage() {
-  const { user, subscriptions, unsubscribeFromSeller, addSellerNotification } = useListings();
+  const { user } = useListings();
   const { orderHistory } = useWallet();
   const { getRequestsForUser } = useRequests();
+
+  const [subscribedSellers, setSubscribedSellers] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && user?.username) {
+      const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
+      setSubscribedSellers(subs[user.username] || []);
+    }
+  }, [user?.username]);
 
   if (!user || user.role !== 'buyer') {
     return (
@@ -28,7 +38,6 @@ export default function BuyerDashboardPage() {
     )
   );
 
-  const subscribedSellers = subscriptions[user.username] || [];
   const customRequests = getRequestsForUser(user.username, 'buyer');
 
   return (
@@ -99,15 +108,7 @@ export default function BuyerDashboardPage() {
                       <span className="text-xs text-orange-600 font-bold">
                         ${price || 'N/A'}/mo
                       </span>
-                      <button
-                        onClick={() => {
-                          unsubscribeFromSeller(user.username, seller);
-                          addSellerNotification(seller, `❌ ${user.username} unsubscribed from you.`);
-                        }}
-                        className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                      >
-                        Unsubscribe
-                      </button>
+                      {/* Unsubscribe logic can be added here if needed */}
                     </li>
                   );
                 })}
