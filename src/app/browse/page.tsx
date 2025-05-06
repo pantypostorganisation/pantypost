@@ -7,7 +7,7 @@ import RequireAuth from '@/components/RequireAuth';
 import { Listing } from '@/context/ListingContext';
 import { useState, useEffect } from 'react';
 import {
-  Crown, Filter, Clock, ShoppingBag, Lock, Search, X
+  Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle
 } from 'lucide-react';
 
 type SellerProfile = {
@@ -331,7 +331,7 @@ export default function BrowsePage() {
                             )}
                             {listing.seller}
                             {user?.username && isSubscribed(user.username, listing.seller) && (
-                              <span className="ml-1 text-green-500 text-xs">✔️ Verified</span>
+                              <span className="ml-1 text-green-500 text-xs font-bold bg-[#ff950e] text-black px-2 py-1 rounded-full">✔️ Verified</span>
                             )}
                           </Link>
                         </div>
