@@ -29,14 +29,12 @@ export default function BrowsePage() {
   const { purchaseListing } = useWallet();
 
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
-  // Removed activeTagFilters state
   const [selectedHourRange, setSelectedHourRange] = useState(hourRangeOptions[0]);
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc'>('newest');
-  // Removed showFilters state
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -52,14 +50,12 @@ export default function BrowsePage() {
     }
   }, [listings]);
 
-  // Reset to first page when filters/search change
   useEffect(() => {
     setPage(0);
-  }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]); // Removed activeTagFilters dependency
+  }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
 
   const handlePurchase = (listing: Listing) => {
     if (!user || !listing.seller) return;
-    // Check if premium and not subscribed before allowing purchase attempt
     if (listing.isPremium && !isSubscribed(user.username, listing.seller)) {
       alert('You must be subscribed to this seller to purchase their premium listings.');
       return;
@@ -74,19 +70,15 @@ export default function BrowsePage() {
     }
   };
 
-  // Filter logic remains largely the same, but the display logic will handle visibility
   const filteredListings = listings
     .filter((listing: Listing) => {
-      // Keep premium listings in the filtered list, even if not subscribed
-      // Visibility check will happen during render
       if (filter === 'standard' && listing.isPremium) return false;
       if (filter === 'premium' && !listing.isPremium) return false;
-      // Removed tag filter logic
       const hoursWorn = listing.hoursWorn ?? 0;
       if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
         return false;
       }
-      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])] // Keep tags for search matching
+      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
         .join(' ')
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
@@ -106,10 +98,6 @@ export default function BrowsePage() {
   const paginatedListings = filteredListings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filteredListings.length / PAGE_SIZE);
 
-  // Removed allTags calculation
-  // Removed premiumSellers calculation as the prompt is removed
-
-  // Helper for pagination display
   function renderPageIndicators() {
     if (totalPages <= 1) return null;
     const indicators = [];
@@ -171,10 +159,8 @@ export default function BrowsePage() {
   return (
     <RequireAuth role={user?.role || 'buyer'}>
       <main className="relative min-h-screen bg-black text-white pb-16">
-        {/* Animated Glow/Gradient Bar */}
         <div className="fixed top-0 left-0 w-full h-2 z-30 bg-gradient-to-r from-[#ff950e] via-pink-500 to-[#ff950e] animate-pulse opacity-70 pointer-events-none" />
 
-        {/* Seller warning */}
         {user?.role === 'seller' && (
           <div className="bg-blue-700 text-white p-4 rounded-xl mb-6 shadow-lg max-w-3xl mx-auto mt-8">
             <p className="text-sm">
@@ -183,7 +169,6 @@ export default function BrowsePage() {
           </div>
         )}
 
-        {/* Sticky/Glassy Filter Bar */}
         <div className="sticky top-4 z-20 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-8 max-w-[1700px] mx-auto px-2 sm:px-6">
           <h1
             className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#ff950e] drop-shadow-[0_2px_8px_rgba(255,149,14,0.18)] relative"
@@ -246,15 +231,8 @@ export default function BrowsePage() {
               <option value="standard">Standard</option>
               <option value="premium">Premium</option>
             </select>
-            {/* Removed mobile Filters button */}
           </div>
         </div>
-
-        {/* Removed Tag filters section */}
-
-        {/* Removed Premium Seller Prompt section */}
-
-        {/* Listings */}
         <div className="max-w-[1700px] mx-auto px-6">
           {paginatedListings.length === 0 ? (
             <div className="text-center py-20 bg-[#181818] rounded-2xl border border-dashed border-gray-700 shadow-lg mt-10">
@@ -263,19 +241,17 @@ export default function BrowsePage() {
               <p className="text-md text-gray-400 mt-2">
                 Try changing your filter settings or check back later
               </p>
-              {/* Message remains relevant if filtering by premium */}
               {filter === 'premium' && (
-                 <p className="mt-6 text-md text-yellow-400">
-                   Premium listings require subscribing to the seller to view fully.
-                 </p>
+                <p className="mt-6 text-md text-yellow-400">
+                  Premium listings require subscribing to the seller to view fully.
+                </p>
               )}
             </div>
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-10">
                 {paginatedListings.map((listing) => {
-                  // Determine if the listing is premium and if the user is NOT subscribed
-                  const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user.username, listing.seller));
+                  const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
 
                   return (
                     <div
@@ -285,7 +261,6 @@ export default function BrowsePage() {
                         boxShadow: '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
                       }}
                     >
-                      {/* Premium Tag - always show if premium */}
                       {listing.isPremium && (
                         <div className="absolute top-4 right-4 z-10">
                           <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow animate-pulse">
@@ -294,18 +269,15 @@ export default function BrowsePage() {
                         </div>
                       )}
 
-                      {/* Image container */}
                       <div className="relative">
-                        {/* Image */}
                         {listing.imageUrls && listing.imageUrls.length > 0 && (
-                           <img
+                          <img
                             src={listing.imageUrls[0]}
                             alt={listing.title}
-                            className={`w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300 ${isLockedPremium ? 'blur-[4.5px]' : ''}`} // Apply blur-[4px] (blur-sm) if locked
+                            className={`w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300 ${isLockedPremium ? 'blur-[4.5px]' : ''}`}
                             style={{ borderTopLeftRadius: '1.5rem', borderTopRightRadius: '1.5rem' }}
                           />
                         )}
-                        {/* Lock Overlay for Premium (if not subscribed) */}
                         {isLockedPremium && (
                           <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-4" style={{ borderTopLeftRadius: '1.5rem', borderTopRightRadius: '1.5rem' }}>
                             <Lock className="w-10 h-10 text-[#ff950e] mb-3" />
@@ -316,9 +288,7 @@ export default function BrowsePage() {
                         )}
                       </div>
 
-                      {/* Card Content */}
                       <div className="p-6 flex flex-col flex-grow">
-                        {/* Title/Desc Link - Link only works if not locked */}
                         <Link href={isLockedPremium ? '#' : `/browse/${listing.id}`} className={isLockedPremium ? 'cursor-default' : ''}>
                           <h2 className={`text-2xl font-bold text-white mb-1 ${!isLockedPremium ? 'hover:text-[#ff950e]' : ''}`}>{listing.title}</h2>
                           <p className="text-base text-gray-300 mb-2 line-clamp-2">{listing.description}</p>
@@ -360,13 +330,15 @@ export default function BrowsePage() {
                               </span>
                             )}
                             {listing.seller}
+                            {user?.username && isSubscribed(user.username, listing.seller) && (
+                              <span className="ml-1 text-green-500 text-xs">✔️ Verified</span>
+                            )}
                           </Link>
                         </div>
-                        {/* Conditional Buy Button */}
                         {user?.role === 'buyer' ? (
                           isLockedPremium ? (
                             <Link
-                              href={`/sellers/${listing.seller}`} // Link to seller page to subscribe
+                              href={`/sellers/${listing.seller}`}
                               className="mt-6 w-full bg-gray-600 text-white px-4 py-3 rounded-lg hover:bg-gray-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
                             >
                               <Lock className="w-5 h-5 mr-1" /> Subscribe to Buy
@@ -393,7 +365,6 @@ export default function BrowsePage() {
                   );
                 })}
               </div>
-              {/* Pagination */}
               {(filteredListings.length > PAGE_SIZE || page > 0) && (
                 <div className="flex flex-col items-center mt-12 gap-2">
                   <div className="flex gap-4">
