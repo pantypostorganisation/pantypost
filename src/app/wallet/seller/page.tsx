@@ -34,7 +34,9 @@ export default function SellerWalletPage() {
       return;
     }
 
-    addSellerWithdrawal(user!.username, rounded);
+    if (user && user.username) {
+      addSellerWithdrawal(user.username, rounded);
+    }
     setMessage(`✅ Successfully withdrew $${rounded.toFixed(2)}.`);
     setWithdrawAmount('');
     setTimeout(() => setMessage(''), 3000);
@@ -72,11 +74,10 @@ export default function SellerWalletPage() {
 
         {message && (
           <p
-            className={`text-sm font-medium ${
-              message.startsWith('✅')
-                ? 'text-green-600'
-                : 'text-red-500'
-            }`}
+            className={`text-sm font-medium ${message.startsWith('✅')
+              ? 'text-green-600'
+              : 'text-red-500'
+              }`}
           >
             {message}
           </p>
