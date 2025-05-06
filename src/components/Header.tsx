@@ -227,8 +227,10 @@ export default function Header() {
                           <span className="text-gray-200 leading-snug">{note}</span>
                           <button
                             onClick={() => {
-                              const origIndex = sellerNotifications.indexOf(note);
-                              if (origIndex !== -1) clearSellerNotification(origIndex);
+                              if (sellerNotifications && sellerNotifications.indexOf(note) !== -1) {
+                                const origIndex = sellerNotifications.indexOf(note);
+                                clearSellerNotification(origIndex);
+                              }
                             }}
                             className="text-xs text-primary hover:text-primary-light ml-2 font-bold"
                           >
