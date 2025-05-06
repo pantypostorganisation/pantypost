@@ -43,7 +43,7 @@ export type Listing = {
   date: string;
   seller: string;
 
-
+  isVerified?: boolean; // Added isVerified property
   isPremium?: boolean;
   tags?: string[];
   hoursWorn?: number; // <-- Added hoursWorn as a number
@@ -167,6 +167,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       id: uuidv4(),
       date: new Date().toISOString(),
       markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100, // 10% markup
+      isVerified: user?.verified ?? false, // Set isVerified based on seller's verification status
       ...listing, // This will include hoursWorn if provided
     };
     setListings((prev) => {
@@ -324,10 +325,19 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       ...users,
       [username]: updatedUser,
     });
+
+    // Update isVerified property on all listings by that seller
+    setListings(prev => {
+      return prev.map(listing => {
+        if (listing.seller === username) {
+          return { ...listing, isVerified: status === 'verified' };
+        }
+        return listing;
+      });
+    });
   };
 
   const sellerNotifications = getCurrentSellerNotifications();
-
   return (
     <ListingContext.Provider
       value={{
