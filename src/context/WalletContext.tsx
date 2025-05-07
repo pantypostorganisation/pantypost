@@ -169,40 +169,42 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
     localStorage.setItem(transactionLockKey, 'locked');
 
-    // Input Validation
-    if (price <= 0 || !listing.title || !listing.id || !seller) {
+    try {
+      // Input Validation
+      if (price <= 0 || !listing.title || !listing.id || !seller) {
+        return false;
+      }
+
+      setBuyerBalance(buyerUsername, currentBuyerBalance - price);
+
+      setSellerBalancesState((prev) => ({
+        ...prev,
+        [seller]: (prev[seller] || 0) + sellerCut,
+      }));
+
+      updateWallet('oakley', platformCut);
+
+      const order: Order = {
+        ...listing,
+        buyer: buyerUsername,
+        date: new Date().toISOString(),
+      } as Order;
+
+      addOrder(order);
+
+      const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
+        ? listing.markedUpPrice.toFixed(2)
+        : listing.price.toFixed(2);
+
+      addSellerNotificationToStorage(
+        seller,
+        `💸 New sale: "${listing.title}" for $${displayPrice}`
+      );
+
+      return true;
+    } finally {
       localStorage.removeItem(transactionLockKey);
-      return false;
     }
-
-    setBuyerBalance(buyerUsername, currentBuyerBalance - price);
-
-    setSellerBalancesState((prev) => ({
-      ...prev,
-      [seller]: (prev[seller] || 0) + sellerCut,
-    }));
-
-    updateWallet('oakley', platformCut);
-
-    const order: Order = {
-      ...listing,
-      buyer: buyerUsername,
-      date: new Date().toISOString(),
-    } as Order;
-
-    addOrder(order);
-
-    const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
-      ? listing.markedUpPrice.toFixed(2)
-      : listing.price.toFixed(2);
-
-    addSellerNotificationToStorage(
-      seller,
-      `💸 New sale: "${listing.title}" for $${displayPrice}`
-    );
-
-    localStorage.removeItem(transactionLockKey);
-    return true;
   };
 
   const subscribeToSellerWithPayment = (
