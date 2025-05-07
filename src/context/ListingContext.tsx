@@ -49,7 +49,6 @@ export type Listing = {
   hoursWorn?: number; // <-- Added hoursWorn as a number
 };
 
-
 export type NewListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
 export type AddListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
 
@@ -64,9 +63,9 @@ type ListingContextType = {
 
   isAuthReady: boolean;
   listings: Listing[];
-  addListing: (listing: AddListingInput) => void; // Updated signature to match how it's likely used
+  addListing: (listing: AddListingInput) => void;
   removeListing: (id: string) => void;
-  updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => void; // <-- Added updateListing
+  updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => void;
   subscriptions: { [buyer: string]: string[] };
   subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
   unsubscribeFromSeller: (buyer: string, seller: string) => void;
@@ -161,14 +160,29 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     localStorage.removeItem('user');
   };
 
-  // Updated addListing to match the new Listing type and generate ID/date/markedUpPrice
+  // Enforce listing limits for sellers
   const addListing = (listing: NewListingInput) => {
+    if (!user || user.role !== 'seller') return;
+
+    const myListings = listings.filter(l => l.seller === user.username);
+    const isVerified = user.verified || user.verificationStatus === 'verified';
+    const maxListings = isVerified ? 25 : 2;
+
+    if (myListings.length >= maxListings) {
+      alert(
+        isVerified
+          ? 'You have reached the maximum of 25 listings for verified sellers.'
+          : 'Unverified sellers can only have 2 active listings. Please verify your account to add more.'
+      );
+      return;
+    }
+
     const newListing: Listing = {
       id: uuidv4(),
       date: new Date().toISOString(),
       markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100, // 10% markup
-      isVerified: user?.verified ?? false, // Set isVerified based on seller's verification status
-      ...listing, // This will include hoursWorn if provided
+      isVerified: isVerified,
+      ...listing,
     };
     setListings((prev) => {
       const updated = [...prev, newListing];
@@ -204,7 +218,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       })
     );
   };
-
 
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
     const success = subscribeToSellerWithPayment(buyer, seller, price);
@@ -350,7 +363,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         listings,
         addListing,
         removeListing,
-        updateListing, // <-- Added to context value
+        updateListing,
         subscriptions,
         subscribeToSeller,
         unsubscribeFromSeller,

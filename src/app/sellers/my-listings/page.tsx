@@ -3,9 +3,10 @@
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { useState, useEffect, useRef } from 'react'; // Added useRef
+import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { v4 as uuidv4 } from 'uuid';
-import { Crown, Sparkles, Trash2, Clock, BarChart2, Eye, Edit, MoveVertical, Image as ImageIcon, X, Upload } from 'lucide-react'; // Added Upload
+import { Crown, Sparkles, Trash2, Clock, BarChart2, Eye, Edit, MoveVertical, Image as ImageIcon, X, Upload } from 'lucide-react';
 import { Listing } from '@/context/ListingContext';
 
 // Helper function to calculate time since listed
@@ -30,7 +31,7 @@ export default function MyListingsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]); // Changed to array
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [tags, setTags] = useState('');
   const [hoursWorn, setHoursWorn] = useState<number | ''>('');
@@ -73,8 +74,8 @@ export default function MyListingsPage() {
     setTitle('');
     setDescription('');
     setPrice('');
-    setImageUrls([]); // Reset image URLs array
-    setSelectedFiles([]); // Reset selected files
+    setImageUrls([]);
+    setSelectedFiles([]);
     setIsPremium(false);
     setTags('');
     setHoursWorn('');
@@ -86,12 +87,8 @@ export default function MyListingsPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
-    // Convert FileList to array and add to selectedFiles
     const newFiles = Array.from(files);
     setSelectedFiles(prev => [...prev, ...newFiles]);
-
-    // Reset the input
     e.target.value = '';
   };
 
@@ -103,21 +100,12 @@ export default function MyListingsPage() {
   // Upload all selected files
   const handleUploadFiles = async () => {
     if (selectedFiles.length === 0) return;
-
     try {
       setIsUploading(true);
-
-      // Upload each file and get URLs
-      // This is a placeholder - replace with your actual file upload logic
       const uploadPromises = selectedFiles.map(uploadImageToStorage);
       const uploadedUrls = await Promise.all(uploadPromises);
-
-      // Add all URLs to the imageUrls array
       setImageUrls(prev => [...prev, ...uploadedUrls]);
-
-      // Clear selected files after successful upload
       setSelectedFiles([]);
-
     } catch (error) {
       console.error("Error uploading images:", error);
       alert("Failed to upload one or more images. Please try again.");
@@ -127,7 +115,6 @@ export default function MyListingsPage() {
   };
 
   // This function converts a file to a data URL (base64)
-  // In a real app, you would replace this with actual file upload to a server/cloud storage
   const uploadImageToStorage = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -169,10 +156,9 @@ export default function MyListingsPage() {
     setImageUrls(_imageUrls);
   };
 
-
   // Handle adding or updating a listing
   const handleSaveListing = () => {
-    if (!title || !description || !price || imageUrls.length === 0) { // Check imageUrls array
+    if (!title || !description || !price || imageUrls.length === 0) {
       alert('Please fill in all required fields (title, description, price) and add at least one image.');
       return;
     }
@@ -189,7 +175,7 @@ export default function MyListingsPage() {
       title,
       description,
       price: numericPrice,
-      imageUrls, // Use the array
+      imageUrls,
       seller: user?.username || 'unknown',
       isPremium,
       tags: tagsList,
@@ -215,8 +201,8 @@ export default function MyListingsPage() {
     setTitle(listing.title);
     setDescription(listing.description);
     setPrice(listing.price.toString());
-    setImageUrls(listing.imageUrls || []); // Set image URLs array
-    setSelectedFiles([]); // Clear selected files
+    setImageUrls(listing.imageUrls || []);
+    setSelectedFiles([]);
     setIsPremium(listing.isPremium ?? false);
     setTags(listing.tags ? listing.tags.join(', ') : '');
     setHoursWorn(listing.hoursWorn !== undefined && listing.hoursWorn !== null ? listing.hoursWorn : '');
@@ -237,11 +223,13 @@ export default function MyListingsPage() {
   // Robust analytics for each listing
   const getListingAnalytics = (listing: Listing) => {
     const views = viewsData[listing.id] || 0;
-
-    return {
-      views,
-    };
+    return { views };
   };
+
+  // --- Listing Limit Logic ---
+  const isVerified = user?.verified || user?.verificationStatus === 'verified';
+  const maxListings = isVerified ? 25 : 2;
+  const atLimit = myListings.length >= maxListings;
 
   return (
     <RequireAuth role="seller">
@@ -250,7 +238,7 @@ export default function MyListingsPage() {
           {/* Page Title */}
           <div className="mb-8">
             <h1 className="text-3xl sm:text-4xl font-bold text-white">My Listings</h1>
-            <div className="w-16 h-1 bg-[#ff950e] mt-2 rounded-full"></div> {/* Orange underline */}
+            <div className="w-16 h-1 bg-[#ff950e] mt-2 rounded-full"></div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
@@ -278,18 +266,46 @@ export default function MyListingsPage() {
                 </div>
               </div>
 
+              {/* Listing Limit Message */}
+              {atLimit && !isEditing && (
+                <div className="bg-yellow-900 border border-yellow-700 text-yellow-200 rounded-lg p-4 my-4 text-center font-semibold">
+                  {isVerified ? (
+                    <>
+                      You have reached the maximum of <span className="text-[#ff950e] font-bold">25</span> listings for verified sellers.
+                    </>
+                  ) : (
+                    <>
+                      Unverified sellers can only have <span className="text-[#ff950e] font-bold">2</span> active listings.<br />
+                      <span className="block mt-2">
+                        <Link
+                          href="/sellers/verify"
+                          className="text-[#ff950e] font-bold underline hover:text-white transition"
+                        >
+                          Verify your account
+                        </Link>{' '}
+                        to add up to 25 listings!
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* Create Listing Button or Form */}
-              {!showForm && !isEditing ? ( // Only show create button if form is hidden and not editing
+              {!showForm && !isEditing && (
                 <div className="flex justify-center">
                   <button
                     onClick={() => setShowForm(true)}
                     className="px-8 py-3 rounded-full bg-[#ff950e] text-black font-bold text-lg shadow-lg hover:bg-[#e0850d] transition flex items-center gap-2"
+                    disabled={atLimit}
+                    style={atLimit ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
                   >
                     <Sparkles className="w-5 h-5" />
                     Create New Listing
                   </button>
                 </div>
-              ) : ( // Show form if showForm is true OR if editing
+              )}
+
+              {(showForm || isEditing) && (
                 <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
                   <h2 className="text-2xl font-bold mb-6 text-white">
                     {isEditing ? 'Edit Listing' : 'Create New Listing'}
@@ -327,7 +343,6 @@ export default function MyListingsPage() {
                           min="0"
                         />
                       </div>
-
                       {/* Image Upload Section */}
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Add Images</label>
@@ -344,7 +359,6 @@ export default function MyListingsPage() {
                         </label>
                       </div>
                     </div>
-
                     {/* Selected Files Preview */}
                     {selectedFiles.length > 0 && (
                       <div className="mt-3">
@@ -389,7 +403,6 @@ export default function MyListingsPage() {
                         </div>
                       </div>
                     )}
-
                     {/* Image Preview and Reordering */}
                     {imageUrls.length > 0 && (
                       <div className="mt-4">
@@ -397,18 +410,18 @@ export default function MyListingsPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                           {imageUrls.map((url, index) => (
                             <div
-                              key={url} // Using URL as key, assuming unique URLs
+                              key={url}
                               draggable
                               onDragStart={() => handleDragStart(index)}
                               onDragEnter={() => handleDragEnter(index)}
                               onDragEnd={handleDrop}
-                              onDragOver={(e) => e.preventDefault()} // Needed to allow dropping
+                              onDragOver={(e) => e.preventDefault()}
                               className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'}`}
                             >
                               <img
                                 src={url}
                                 alt={`Listing Image ${index + 1}`}
-                                className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`} // First image slightly larger
+                                className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`}
                               />
                               {index === 0 && (
                                 <span className="absolute top-2 left-2 bg-[#ff950e] text-black text-xs px-2 py-0.5 rounded-full font-bold">
@@ -423,16 +436,14 @@ export default function MyListingsPage() {
                               >
                                 <X className="w-4 h-4" />
                               </button>
-                               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black bg-opacity-20">
-                                  <MoveVertical className="w-6 h-6 text-white" />
-                               </div>
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black bg-opacity-20">
+                                <MoveVertical className="w-6 h-6 text-white" />
+                              </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
-
-
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma separated)</label>
                       <input
@@ -529,9 +540,9 @@ export default function MyListingsPage() {
                           )}
 
                           <div className="relative w-full h-48 sm:h-56 overflow-hidden">
-                             {/* Display the first image from the array */}
+                            {/* Display the first image from the array */}
                             {listing.imageUrls && listing.imageUrls.length > 0 && (
-                               <img
+                              <img
                                 src={listing.imageUrls[0]}
                                 alt={listing.title}
                                 className="w-full h-full object-cover"
@@ -638,15 +649,13 @@ export default function MyListingsPage() {
                         className="border border-gray-700 p-4 rounded-lg text-sm bg-black hover:border-[#ff950e] transition"
                       >
                         <div className="flex items-center gap-4">
-                           {/* Display the first image from the order */}
-                           {/* NOTE: Assuming order history also stores imageUrl array */}
-                           {order.imageUrl && ( // Use order.imageUrl here
-                              <img
-                                src={order.imageUrl} // Use order.imageUrl here
-                                alt={order.title}
-                                className="w-16 h-16 object-cover rounded-md border border-gray-600"
-                              />
-                           )}
+                          {order.imageUrl && (
+                            <img
+                              src={order.imageUrl}
+                              alt={order.title}
+                              className="w-16 h-16 object-cover rounded-md border border-gray-600"
+                            />
+                          )}
                           <div className="flex-1">
                             <h3 className="font-semibold text-white text-base">{order.title}</h3>
                             <p className="text-[#ff950e] font-bold text-lg mt-1">
