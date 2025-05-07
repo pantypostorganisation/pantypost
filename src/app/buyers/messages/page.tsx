@@ -998,7 +998,7 @@ export default function BuyerMessagesPage() {
                           {/* Tip button */}
                           <button
                             onClick={() => setShowTipModal(true)}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-xl font-bold"
+                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
                             title="Send Tip"
                             aria-label="Send Tip"
                           >
@@ -1008,12 +1008,14 @@ export default function BuyerMessagesPage() {
                           {/* Attachment button */}
                           <button
                             onClick={triggerFileInput}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-xl font-bold"
+                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
                             disabled={showCustomRequestForm}
                             title="Attach Image"
                             aria-label="Attach Image"
                           >
-                            📎
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path>
+                            </svg>
                           </button>
                           
                           {/* Custom Request button */}
@@ -1027,7 +1029,7 @@ export default function BuyerMessagesPage() {
                                 }
                               }
                             }}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-xl font-bold"
+                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
                             title="Custom Request"
                             aria-label="Custom Request"
                           >
@@ -1036,11 +1038,16 @@ export default function BuyerMessagesPage() {
                           
                           {/* Voice Message button */}
                           <button 
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-xl font-bold"
+                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl"
                             title="Voice Message"
                             aria-label="Voice Message"
                           >
-                            🎤
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                              <line x1="12" y1="19" x2="12" y2="23"></line>
+                              <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
                           </button>
                           
                           {/* Hidden file input */}
@@ -1057,7 +1064,7 @@ export default function BuyerMessagesPage() {
                         <button
                           onClick={handleReply}
                           disabled={!replyMessage.trim() && !selectedImage}
-                          className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-black text-xl font-bold ${
+                          className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-black text-2xl ${
                             (!replyMessage.trim() && !selectedImage)
                               ? 'bg-[#c17200] cursor-not-allowed'
                               : 'bg-[#ff950e] hover:bg-[#e88800]'
