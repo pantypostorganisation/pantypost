@@ -89,6 +89,33 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [notificationStore, setNotificationStore] = useState<NotificationStore>({});
   const [isAuthReady, setIsAuthReady] = useState(false);
 
+  // Health check: context state
+  useEffect(() => {
+    if (!user) {
+      console.warn('[PantyPost] ListingContext: No user loaded from localStorage.');
+    }
+    if (!Array.isArray(listings)) {
+      console.error('[PantyPost] ListingContext: Listings is not an array!', listings);
+    }
+    if (typeof subscriptions !== 'object') {
+      console.error('[PantyPost] ListingContext: Subscriptions is not an object!', subscriptions);
+    }
+    if (user?.role === 'seller' && !Array.isArray(notificationStore[user.username])) {
+      console.error('[PantyPost] sellerNotifications is not an array:', notificationStore[user.username]);
+    }
+  }, [user, listings, subscriptions, notificationStore]);
+
+  // LocalStorage integrity check
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr && typeof JSON.parse(userStr) !== 'object') throw new Error('User data corrupted');
+      // Add more keys as needed
+    } catch (e) {
+      console.error('[PantyPost] LocalStorage integrity check failed:', e);
+    }
+  }, []);
+
   // Memoized notification function to avoid infinite render loop
   const addSellerNotification = useCallback((seller: string, message: string) => {
     if (!seller) {
@@ -161,6 +188,16 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       setIsAuthReady(true);
     }
+  }, []);
+
+  // Storage quota warning
+  useEffect(() => {
+    try {
+      const used = new Blob(Object.values(localStorage)).size;
+      if (used > 4 * 1024 * 1024) {
+        console.warn('[PantyPost] LocalStorage usage high:', used, 'bytes');
+      }
+    } catch {}
   }, []);
 
   const persistUsers = (updated: { [username: string]: User }) => {

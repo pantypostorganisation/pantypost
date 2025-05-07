@@ -8,6 +8,7 @@ import { WalletProvider } from '../context/WalletContext';
 import { MessageProvider } from '../context/MessageContext';
 import { ReviewProvider } from '../context/ReviewContext';
 import { RequestProvider } from '../context/RequestContext';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,20 +25,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* IMPORTANT: WalletProvider must come before ListingProvider */}
-        <WalletProvider>
-          <MessageProvider>
-            <ReviewProvider>
-              <RequestProvider>
-                <ListingProvider>
-                  <Header />
-                  <AgeVerificationModal />
-                  {children}
-                </ListingProvider>
-              </RequestProvider>
-            </ReviewProvider>
-          </MessageProvider>
-        </WalletProvider>
+        <ErrorBoundary>
+          <WalletProvider>
+            <MessageProvider>
+              <ReviewProvider>
+                <RequestProvider>
+                  <ListingProvider>
+                    <Header />
+                    <AgeVerificationModal />
+                    {children}
+                  </ListingProvider>
+                </RequestProvider>
+              </ReviewProvider>
+            </MessageProvider>
+          </WalletProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );
