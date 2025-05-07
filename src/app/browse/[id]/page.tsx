@@ -104,8 +104,8 @@ export default function ListingDetailPage() {
         <div className="bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl flex flex-col lg:flex-row gap-8 overflow-hidden p-0">
           {/* Left: Image Gallery */}
           <div className="flex-1 flex flex-col items-center lg:items-start p-4 sm:p-6 lg:p-6">
-            {/* Main Image Card with arrows */}
-            <div ref={imageRef} className="relative w-full max-w-md lg:max-w-none p-[10px] pb-0">
+            {/* Main Image with arrows only (no orange pill) */}
+            <div ref={imageRef} className="relative w-full max-w-md lg:max-w-none pb-0">
               <div className="relative w-full h-[520px] rounded-3xl overflow-hidden shadow-xl bg-[#232323] border border-[#232323] flex items-center justify-center">
                 {images.length > 0 ? (
                   <>
@@ -119,18 +119,18 @@ export default function ListingDetailPage() {
                         <button
                           aria-label="Previous image"
                           onClick={handlePrevImage}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-[#ff950e] rounded-full p-2 z-10 transition"
-                          style={{ backdropFilter: 'blur(2px)' }}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-transparent text-[#ff950e] rounded-full z-10 transition"
+                          style={{ opacity: 0.6, padding: 0 }}
                         >
-                          <ChevronLeft className="w-6 h-6" />
+                          <ChevronLeft className="w-10 h-10" />
                         </button>
                         <button
                           aria-label="Next image"
                           onClick={handleNextImage}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-[#ff950e] rounded-full p-2 z-10 transition"
-                          style={{ backdropFilter: 'blur(2px)' }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent text-[#ff950e] rounded-full z-10 transition"
+                          style={{ opacity: 0.6, padding: 0 }}
                         >
-                          <ChevronRight className="w-6 h-6" />
+                          <ChevronRight className="w-10 h-10" />
                         </button>
                       </>
                     )}
@@ -144,7 +144,7 @@ export default function ListingDetailPage() {
             </div>
             {/* Thumbnails */}
             {images.length > 1 && (
-              <div className="w-full max-w-md lg:max-w-none overflow-x-auto flex gap-3 pb-2 mt-2 px-[10px]">
+              <div className="w-full max-w-md lg:max-w-none overflow-x-auto flex gap-3 pb-2 mt-2">
                 {images.map((url, index) => (
                   <div
                     key={index}

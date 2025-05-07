@@ -100,7 +100,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (typeof subscriptions !== 'object') {
       console.error('[PantyPost] ListingContext: Subscriptions is not an object!', subscriptions);
     }
-    if (user?.role === 'seller' && !Array.isArray(notificationStore[user.username])) {
+    // Only log if the value is defined and not an array (undefined is fine for no notifications)
+    if (
+      user?.role === 'seller' &&
+      notificationStore[user.username] !== undefined &&
+      !Array.isArray(notificationStore[user.username])
+    ) {
       console.error('[PantyPost] sellerNotifications is not an array:', notificationStore[user.username]);
     }
   }, [user, listings, subscriptions, notificationStore]);
