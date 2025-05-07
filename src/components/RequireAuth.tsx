@@ -14,21 +14,23 @@ export default function RequireAuth({
   const { user, isAuthReady } = useListings();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
+  let isMounted = true;
 
   useEffect(() => {
     if (!isAuthReady) return;
-
     const userRole = user?.role;
     const isAdmin = userRole === 'admin';
 
     // Allow access if role matches or if admin accessing buyer/seller page
     const hasAccess = user && (userRole === role || (role !== 'admin' && isAdmin));
-
     if (!hasAccess) {
       router.push('/login');
-    } else {
+    } else if (isMounted) {
       setAuthorized(true);
     }
+    return () => {
+      isMounted = false;
+    };
   }, [isAuthReady, user, role, router]);
 
   if (!isAuthReady || !authorized) return null;
