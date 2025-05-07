@@ -6,7 +6,7 @@ import { useMessages } from '@/context/MessageContext';
 import { useState } from 'react';
 
 export default function SellerSubscribersPage() {
-  const { user, subscriptions } = useListings();
+  const { user, subscriptions, users } = useListings();
   const { sendMessage } = useMessages();
   const [messageModal, setMessageModal] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState('');
@@ -14,22 +14,10 @@ export default function SellerSubscribersPage() {
 
   if (!user || user.role !== 'seller') return null;
 
-  const allSubscriptions = Object.entries(subscriptions);
-  const subscribers = allSubscriptions
-    .filter(([_, sellers]) => sellers.includes(user.username))
+  // Find all buyers who have subscribed to this seller
+  const subscribers: string[] = Object.entries(subscriptions)
+    .filter(([_, sellers]) => Array.isArray(sellers) && sellers.includes(user.username))
     .map(([buyer]) => buyer);
-
-  const sendToSubscriber = (subscriber: string) => {
-    const trimmed = messageContent.trim();
-    if (!trimmed) return;
-    sendMessage(user.username, subscriber, trimmed);
-    setMessageSent(true);
-    setTimeout(() => {
-      setMessageModal(null);
-      setMessageContent('');
-      setMessageSent(false);
-    }, 1500);
-  };
 
   return (
     <RequireAuth role="seller">
@@ -79,7 +67,17 @@ export default function SellerSubscribersPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => sendToSubscriber(messageModal)}
+                  onClick={() => {
+                    const trimmed = messageContent.trim();
+                    if (!trimmed) return;
+                    sendMessage(user.username, messageModal, trimmed);
+                    setMessageSent(true);
+                    setTimeout(() => {
+                      setMessageModal(null);
+                      setMessageContent('');
+                      setMessageSent(false);
+                    }, 1500);
+                  }}
                   className="bg-pink-600 text-white px-4 py-2 rounded hover:bg-pink-700"
                 >
                   {messageSent ? '✅ Sent!' : 'Send'}

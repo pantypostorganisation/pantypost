@@ -6,16 +6,17 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from 'react';
 import { useWallet } from './WalletContext';
-import { v4 as uuidv4 } from 'uuid'; // Import uuid for generating IDs
+import { v4 as uuidv4 } from 'uuid';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 
 export type VerificationDocs = {
-  codePhoto?: string; // base64 or URL
+  codePhoto?: string;
   idFront?: string;
   idBack?: string;
   passport?: string;
@@ -43,10 +44,10 @@ export type Listing = {
   date: string;
   seller: string;
 
-  isVerified?: boolean; // Added isVerified property
+  isVerified?: boolean;
   isPremium?: boolean;
   tags?: string[];
-  hoursWorn?: number; // <-- Added hoursWorn as a number
+  hoursWorn?: number;
 };
 
 export type NewListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
@@ -74,7 +75,6 @@ type ListingContextType = {
   addSellerNotification: (seller: string, message: string) => void;
   clearSellerNotification: (index: number) => void;
 
-  // Verification
   requestVerification: (docs: VerificationDocs) => void;
   setVerificationStatus: (username: string, status: VerificationStatus, rejectionReason?: string) => void;
 };
@@ -89,7 +89,46 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [notificationStore, setNotificationStore] = useState<NotificationStore>({});
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  const { subscribeToSellerWithPayment } = useWallet();
+  // Memoized notification function to avoid infinite render loop
+  const addSellerNotification = useCallback((seller: string, message: string) => {
+    if (!seller) {
+      console.warn("Attempted to add notification without seller ID");
+      return;
+    }
+    setNotificationStore(prev => {
+      const sellerNotifications = prev[seller] || [];
+      const updated = {
+        ...prev,
+        [seller]: [...sellerNotifications, message]
+      };
+      localStorage.setItem('seller_notifications_store', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback } = useWallet();
+
+  // On mount, set the notification callback in WalletContext
+  useEffect(() => {
+    if (setAddSellerNotificationCallback) {
+      setAddSellerNotificationCallback(addSellerNotification);
+    }
+  }, [setAddSellerNotificationCallback, addSellerNotification]);
+
+  // Listen for notification changes in localStorage (for header live updates)
+  useEffect(() => {
+    function handleStorageChange(e: StorageEvent) {
+      if (e.key === 'seller_notifications_store') {
+        try {
+          setNotificationStore(JSON.parse(e.newValue || '{}'));
+        } catch {
+          setNotificationStore({});
+        }
+      }
+    }
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -134,7 +173,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const actualRole: Role =
       normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
 
-    // If user exists, preserve verification fields
     let existingUser: User | undefined = users[normalized];
     const newUser: User = {
       username: normalized,
@@ -180,7 +218,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const newListing: Listing = {
       id: uuidv4(),
       date: new Date().toISOString(),
-      markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100, // 10% markup
+      markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100,
       isVerified: isVerified,
       ...listing,
     };
@@ -199,7 +237,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
-  // Added updateListing function
   const updateListing = (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => {
     setListings(prev =>
       prev.map(listing => {
@@ -208,7 +245,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             ...listing,
             ...updatedListing,
           };
-          // Recalculate markedUpPrice if price is updated
           if (updatedListing.price !== undefined) {
             updated.markedUpPrice = Math.round(updatedListing.price * 1.1 * 100) / 100;
           }
@@ -219,6 +255,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   };
 
+  // --- NOTIFICATION ON SUBSCRIBE ---
   const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
     const success = subscribeToSellerWithPayment(buyer, seller, price);
     if (success) {
@@ -230,6 +267,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         localStorage.setItem('subscriptions', JSON.stringify(updated));
         return updated;
       });
+      // Add notification for the seller
+      addSellerNotification(
+        seller,
+        `🎉 ${buyer} subscribed to you!`
+      );
     }
     return success;
   };
@@ -247,23 +289,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const isSubscribed = (buyer: string, seller: string): boolean => {
     return subscriptions[buyer]?.includes(seller) ?? false;
-  };
-
-  const addSellerNotification = (seller: string, message: string) => {
-    if (!seller) {
-      console.warn("Attempted to add notification without seller ID");
-      return;
-    }
-
-    setNotificationStore(prev => {
-      const sellerNotifications = prev[seller] || [];
-      const updated = {
-        ...prev,
-        [seller]: [...sellerNotifications, message]
-      };
-      localStorage.setItem('seller_notifications_store', JSON.stringify(updated));
-      return updated;
-    });
   };
 
   const getCurrentSellerNotifications = (): string[] => {
@@ -339,7 +364,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       [username]: updatedUser,
     });
 
-    // Update isVerified property on all listings by that seller
     setListings(prev => {
       return prev.map(listing => {
         if (listing.seller === username) {
@@ -371,7 +395,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         sellerNotifications,
         addSellerNotification,
         clearSellerNotification,
-        // Verification
         requestVerification,
         setVerificationStatus,
       }}

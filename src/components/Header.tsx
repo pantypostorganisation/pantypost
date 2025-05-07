@@ -22,8 +22,8 @@ import {
 export default function Header() {
   const { user, logout, sellerNotifications, clearSellerNotification, listings } = useListings();
   const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory } = useWallet();
-  const { messages } = useMessages();
   const { getRequestsForUser } = useRequests();
+  const { messages } = useMessages();
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
@@ -35,52 +35,20 @@ export default function Header() {
   const role = user?.role ?? null;
   const username = user?.username ?? '';
 
-  const [filteredNotifications, setFilteredNotifications] = useState<string[]>([]);
+  // Show all notifications for the seller, no over-filtering
+  const notifications = user?.role === 'seller' ? sellerNotifications || [] : [];
 
-  useEffect(() => {
-    if (user && user.role === 'seller') {
-      // Fix: Add null check for sellerNotifications and improve regex handling
-      const filtered = (sellerNotifications || []).filter(notif => {
-        // Skip null/undefined notifications
-        if (!notif) return false;
-
-        // Trim notification text for more reliable matching
-        const trimmedNotif = notif.trim();
-
-        if (trimmedNotif.includes('purchased:')) {
-          // Improved regex with better error handling
-          try {
-            const itemMatch = trimmedNotif.match(/purchased:\s*["']?([^"']+)["']?/i);
-            if (!itemMatch?.[1]) return false;
-
-            const itemTitle = itemMatch[1].trim();
-            // Check if this seller has a listing with this title
-            const sellerHasItem = Array.isArray(listings) && listings.some(
-              listing =>
-                listing &&
-                listing.seller === user.username &&
-                listing.title === itemTitle
-            );
-            return sellerHasItem;
-          } catch (e) {
-            console.error("Error matching purchase notification:", e);
-            return false;
-          }
-        }
-
-        if (trimmedNotif.includes('subscriber:') || trimmedNotif.includes('subscribed')) {
-          return user.username && trimmedNotif.toLowerCase().includes(user.username.toLowerCase());
-        }
-
-        // Default case - check if notification mentions the user
-        return user.username && trimmedNotif.toLowerCase().includes(user.username.toLowerCase());
-      });
-
-      setFilteredNotifications(filtered);
-    } else {
-      setFilteredNotifications([]);
-    }
-  }, [user, sellerNotifications, listings]);
+  // Unread messages counter (works for both buyer and seller)
+  const unreadMessages = user?.username
+    ? Object.values(messages)
+        .flat()
+        .filter(
+          (msg) =>
+            msg.receiver === user.username &&
+            msg.read === false
+        )
+    : [];
+  const unreadCount = unreadMessages.length;
 
   useEffect(() => {
     if (user && user.role === 'seller') {
@@ -120,13 +88,12 @@ export default function Header() {
   }, [user?.username]);
 
   return (
-    // Removed border-b border-[#222]
     <header className="bg-black text-white shadow-lg px-8 py-3 flex justify-between items-center z-50 relative">
       <Link href="/" className="flex items-center gap-3">
         <img src="/logo.png" alt="PantyPost Logo" className="w-24 h-auto drop-shadow-lg" />
       </Link>
 
-      <nav className="flex items-center gap-2 relative">
+      <nav className="flex items-center gap-x-4">
         <Link href="/browse" className="flex items-center gap-1 text-white hover:text-primary text-xs px-2 py-1 rounded transition">
           <ShoppingBag className="w-4 h-4" />
           <span>Browse</span>
@@ -181,8 +148,24 @@ export default function Header() {
                 <span>${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </span>
             </Link>
-            <Link href="/sellers/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+            <Link href="/sellers/messages" className="relative text-white hover:text-primary text-xs px-2 py-1 rounded transition flex items-center">
               <MessageSquare className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span
+                  className="absolute -top-1 -right-2 bg-white text-[#ff950e] text-[10px] rounded-full flex items-center justify-center"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    fontWeight: 700,
+                    border: '2px solid #ff950e',
+                    zIndex: 2,
+                    fontSize: '11px',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  {unreadCount}
+                </span>
+              )}
             </Link>
             <Link href="/sellers/subscribers" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <Users className="w-4 h-4" />
@@ -208,21 +191,39 @@ export default function Header() {
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
                 className="relative flex items-center justify-center w-10 h-10 bg-[#ff950e] border border-white rounded-full shadow hover:scale-105 transition"
+                style={{ padding: 0 }}
               >
-                <Bell className="w-5 h-5 text-white" />
-                {filteredNotifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-white text-[#ff950e] text-[10px] rounded-full px-1 py-0.5 min-w-[14px] text-center border-2 border-[#ff950e] font-bold">
-                    {filteredNotifications.length}
+                <Bell className="w-6 h-6 text-black" style={{ zIndex: 1 }} />
+                {notifications.length > 0 && (
+                  <span
+                    className="absolute flex items-center justify-center"
+                    style={{
+                      top: '-6px',
+                      right: '-6px',
+                      background: '#fff',
+                      color: '#ff950e',
+                      borderRadius: '9999px',
+                      fontSize: '11px',
+                      width: '18px',
+                      height: '18px',
+                      textAlign: 'center',
+                      border: '2px solid #ff950e',
+                      fontWeight: 700,
+                      zIndex: 2,
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {notifications.length}
                   </span>
                 )}
               </button>
               {showNotifDropdown && (
                 <div className="absolute right-0 top-12 w-80 bg-card text-white rounded-xl shadow-2xl z-50 border border-[#333]">
                   <ul className="divide-y divide-gray-800 max-h-64 overflow-y-auto">
-                    {filteredNotifications.length === 0 ? (
+                    {notifications.length === 0 ? (
                       <li className="p-3 text-sm text-center text-gray-400">No notifications</li>
                     ) : (
-                      filteredNotifications.map((note, i) => (
+                      notifications.map((note, i) => (
                         <li key={i} className="flex justify-between items-start p-3 text-sm hover:bg-[#222] transition">
                           <span className="text-gray-200 leading-snug">{note}</span>
                           <button
@@ -257,8 +258,24 @@ export default function Header() {
                 <span>${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </span>
             </Link>
-            <Link href="/buyers/messages" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
+            <Link href="/buyers/messages" className="relative text-white hover:text-primary text-xs px-2 py-1 rounded transition flex items-center">
               <MessageSquare className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span
+                  className="absolute -top-1 -right-2 bg-white text-[#ff950e] text-[10px] rounded-full flex items-center justify-center"
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    fontWeight: 700,
+                    border: '2px solid #ff950e',
+                    zIndex: 2,
+                    fontSize: '11px',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  {unreadCount}
+                </span>
+              )}
             </Link>
           </>
         )}

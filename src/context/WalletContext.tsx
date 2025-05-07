@@ -8,15 +8,6 @@ import {
   ReactNode,
 } from "react";
 
-const addSellerNotificationToStorage = (seller: string, message: string) => {
-  if (typeof window !== 'undefined') {
-    const notifs = JSON.parse(localStorage.getItem('seller_notifications') || '[]');
-    notifs.push(message);
-    localStorage.setItem('seller_notifications', JSON.stringify(notifs));
-    window.dispatchEvent(new CustomEvent('newSellerNotification'));
-  }
-};
-
 type Order = {
   id: string;
   title: string;
@@ -59,9 +50,12 @@ type WalletContextType = {
   addAdminWithdrawal: (amount: number) => void;
   wallet: { [username: string]: number };
   updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void;
+  sendTip: (buyer: string, seller: string, amount: number) => boolean;
+  setAddSellerNotificationCallback?: (fn: (seller: string, message: string) => void) => void;
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
@@ -69,6 +63,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
+
+  // Notification callback injected by ListingContext
+  const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
+
+  // Allow ListingContext to inject the notification function
+  const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
+    setAddSellerNotification(() => fn);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -196,10 +198,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ? listing.markedUpPrice.toFixed(2)
         : listing.price.toFixed(2);
 
-      addSellerNotificationToStorage(
-        seller,
-        `💸 New sale: "${listing.title}" for $${displayPrice}`
-      );
+      if (addSellerNotification) {
+        addSellerNotification(
+          seller,
+          `💸 New sale: "${listing.title}" for $${displayPrice}`
+        );
+      }
 
       return true;
     } finally {
@@ -212,15 +216,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     seller: string,
     amount: number
   ): boolean => {
-    // Input validation
     if (!buyer || !seller || amount <= 0) {
       return false;
     }
 
-    // Transaction locking
     const transactionLockKey = `subscription_lock_${buyer}_${seller}`;
     if (localStorage.getItem(transactionLockKey)) {
-      return false; // Subscription transaction is already in progress
+      return false;
     }
     localStorage.setItem(transactionLockKey, 'locked');
 
@@ -238,10 +240,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       updateWallet('oakley', adminCut);
 
-      addSellerNotificationToStorage(
-        seller,
-        `💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
-      );
+      if (addSellerNotification) {
+        addSellerNotification(
+          seller,
+          `💰 New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
+        );
+      }
 
       return true;
     } finally {
@@ -250,7 +254,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const addSellerWithdrawal = (username: string, amount: number) => {
-    // Input validation
     if (!username || amount <= 0) {
       throw new Error("Invalid withdrawal parameters");
     }
@@ -260,7 +263,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw new Error("Insufficient balance for withdrawal");
     }
 
-    // Transaction locking
     const withdrawalLockKey = `withdrawal_lock_${username}`;
     if (localStorage.getItem(withdrawalLockKey)) {
       throw new Error("Another withdrawal is in progress");
@@ -280,7 +282,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const addAdminWithdrawal = (amount: number) => {
-    // Input validation
     if (amount <= 0) {
       throw new Error("Invalid withdrawal amount");
     }
@@ -289,7 +290,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw new Error("Insufficient admin balance for withdrawal");
     }
 
-    // Transaction locking
     const adminWithdrawalLockKey = 'admin_withdrawal_lock';
     if (localStorage.getItem(adminWithdrawalLockKey)) {
       throw new Error("Another admin withdrawal is in progress");
@@ -320,10 +320,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setSellerBalance(username, (sellerBalances[username] || 0) + amount);
       if (orderToFulfil) {
         addOrder(orderToFulfil);
-        addSellerNotificationToStorage(
-          username,
-          `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
-        );
+        if (addSellerNotification) {
+          addSellerNotification(
+            username,
+            `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
+          );
+        }
       }
     } else if (username in buyerBalances) {
       setBuyerBalance(username, (buyerBalances[username] || 0) + amount);
@@ -332,15 +334,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setSellerBalance(username, (sellerBalances[username] || 0) + amount);
         if (orderToFulfil) {
           addOrder(orderToFulfil);
-          addSellerNotificationToStorage(
-            username,
-            `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
-          );
+          if (addSellerNotification) {
+            addSellerNotification(
+              username,
+              `🛒 New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
+            );
+          }
         }
       } else {
         setBuyerBalance(username, (buyerBalances[username] || 0) + amount);
       }
     }
+  };
+
+  // --- TIP LOGIC WITH NOTIFICATION ---
+  const sendTip = (buyer: string, seller: string, amount: number): boolean => {
+    if (!buyer || !seller || amount <= 0) return false;
+    const buyerBalance = getBuyerBalance(buyer);
+    if (buyerBalance < amount) return false;
+
+    setBuyerBalance(buyer, buyerBalance - amount);
+    setSellerBalance(seller, getSellerBalance(seller) + amount);
+
+    // Add notification for the seller
+    if (addSellerNotification) {
+      addSellerNotification(
+        seller,
+        `💸 Tip received from ${buyer} - $${amount.toFixed(2)}`
+      );
+    }
+
+    return true;
   };
 
   return (
@@ -364,6 +388,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         addAdminWithdrawal,
         wallet,
         updateWallet,
+        sendTip,
+        setAddSellerNotificationCallback,
       }}
     >
       {children}

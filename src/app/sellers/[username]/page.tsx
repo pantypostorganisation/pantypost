@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import StarRating from '@/components/StarRating';
 import {
-  Lock, Mail, Gift, UserPlus, DollarSign, MessageCircle, ArrowRight,
+  Lock, Mail, Gift, DollarSign, MessageCircle, ArrowRight,
   BadgeCheck, AlertTriangle, Camera, Video, Users, Star, Crown, Clock
 } from 'lucide-react';
 
@@ -18,17 +18,16 @@ export default function SellerProfilePage() {
     listings,
     user,
     users,
-    // Removed subscribeToSeller and unsubscribeFromSeller from here
     isSubscribed,
-    subscriptions, // Keep subscriptions state for UI checks
+    subscribeToSeller,
+    unsubscribeFromSeller,
+    subscriptions,
   } = useListings();
   const {
     orderHistory,
     getBuyerBalance,
-    setBuyerBalance,
     getSellerBalance,
-    setSellerBalance,
-    subscribeToSellerWithPayment // Import the payment function
+    sendTip,
   } = useWallet();
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
@@ -53,12 +52,8 @@ export default function SellerProfilePage() {
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  // Subscription state (derived from localStorage for consistency with dashboard)
-  const [buyerSubscriptions, setBuyerSubscriptions] = useState<string[]>([]);
-
   // Listings
-  // Check subscription status based on local state derived from localStorage
-  const hasAccess = user?.username && buyerSubscriptions.includes(username);
+  const hasAccess = user?.username && isSubscribed(user.username, username);
   const standardListings = listings.filter(
     (listing) => listing.seller === username && !listing.isPremium
   );
@@ -78,13 +73,10 @@ export default function SellerProfilePage() {
   const totalPhotos = sellerListings.filter(listing => listing.imageUrls && listing.imageUrls.length > 0).length;
   const totalVideos = 0; // Assuming no video count available from current data structure
 
-  // Followers (subscriptions) - Calculate from the source of truth (localStorage)
-  const followers = Object.entries(
-      typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}') : {}
-    ).filter(([_, sellers]) =>
-      Array.isArray(sellers) && sellers.includes(username)
-    ).length;
-
+  // Followers (subscriptions) - Use context subscriptions object
+  const followers = Object.entries(subscriptions)
+    .filter(([_, sellers]) => Array.isArray(sellers) && sellers.includes(username))
+    .length;
 
   // Average rating
   const averageRating =
@@ -96,7 +88,7 @@ export default function SellerProfilePage() {
   const sellerUser = users?.[username];
   const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
-  // Load profile info and subscriptions from localStorage on mount
+  // Load profile info from sessionStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedBio = sessionStorage.getItem(`profile_bio_${username}`);
@@ -105,14 +97,8 @@ export default function SellerProfilePage() {
       if (storedBio) setBio(storedBio);
       if (storedPic) setProfilePic(storedPic);
       if (storedSub) setSubscriptionPrice(parseFloat(storedSub));
-
-      // Load buyer subscriptions from localStorage
-      if (user?.username) {
-        const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
-        setBuyerSubscriptions(subs[user.username] || []);
-      }
     }
-  }, [username, user?.username]); // Depend on username and user.username
+  }, [username]);
 
   // Review submit
   const handleSubmit = () => {
@@ -137,57 +123,31 @@ export default function SellerProfilePage() {
     }
   }, [submitted]);
 
-  // Subscribe - Use subscribeToSellerWithPayment and update localStorage
+  // Subscribe - Use subscribeToSeller from context
   const handleConfirmSubscribe = () => {
     if (!user?.username || user.role !== 'buyer' || subscriptionPrice === null) {
       alert('Cannot subscribe. Please check your login status and seller subscription price.');
       return;
     }
-
-    // subscribeToSellerWithPayment is expected to handle the balance check
-    const success = subscribeToSellerWithPayment(user.username, username, subscriptionPrice);
-
+    const success = subscribeToSeller(user.username, username, subscriptionPrice);
     if (success) {
-      // Update localStorage subscriptions on success
-      const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
-      if (!subs[user.username]) subs[user.username] = [];
-      if (!subs[user.username].includes(username)) {
-        subs[user.username].push(username);
-        localStorage.setItem('buyer_subscriptions', JSON.stringify(subs));
-        setBuyerSubscriptions(subs[user.username]); // Update local state
-      }
-
       setShowSubscribeModal(false);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
-      // Optionally notify seller via a separate mechanism if needed
-      // addSellerNotification(username, `🎉 ${user.username} subscribed to you!`);
     } else {
-      // subscribeToSellerWithPayment returns false on insufficient balance or other errors
       alert('Subscription failed. Insufficient balance or another error occurred.');
-      setShowSubscribeModal(false); // Close modal even on failure
+      setShowSubscribeModal(false);
     }
   };
 
-  // Unsubscribe - Update localStorage
+  // Unsubscribe - Use unsubscribeFromSeller from context
   const handleConfirmUnsubscribe = () => {
     if (!user?.username || user.role !== 'buyer') return;
-
-    // Update localStorage subscriptions
-    const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
-    if (subs[user.username]) {
-      subs[user.username] = subs[user.username].filter((seller: string) => seller !== username);
-      localStorage.setItem('buyer_subscriptions', JSON.stringify(subs));
-      setBuyerSubscriptions(subs[user.username]); // Update local state
-    }
-
+    unsubscribeFromSeller(user.username, username);
     setShowUnsubscribeModal(false);
-    // Optionally notify seller via a separate mechanism if needed
-    // addSellerNotification(username, `❌ ${user.username} unsubscribed from you.`);
   };
 
-
-  // Tip Seller
+  // Tip Seller - Use sendTip from context
   const handleTip = () => {
     setTipError('');
     setTipSuccess(false);
@@ -200,18 +160,11 @@ export default function SellerProfilePage() {
       setTipError('Enter a valid tip amount.');
       return;
     }
-    const balance = getBuyerBalance(user.username);
-    if (balance < amount) {
+    const success = sendTip(user.username, username, amount);
+    if (!success) {
       setTipError('Insufficient wallet balance.');
       return;
     }
-    setBuyerBalance(user.username, balance - amount);
-
-    // CREDIT THE SELLER
-    if (username) {
-      setSellerBalance(username, getSellerBalance(username) + amount);
-    }
-
     setTipSuccess(true);
     setTipAmount('');
     setTimeout(() => {
@@ -220,16 +173,16 @@ export default function SellerProfilePage() {
     }, 1500);
   };
 
-  // Action buttons visibility - Use buyerSubscriptions state
+  // Action buttons visibility
   const showSubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
-    !buyerSubscriptions.includes(username);
+    !isSubscribed(user.username, username);
 
   const showUnsubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
-    buyerSubscriptions.includes(username);
+    isSubscribed(user.username, username);
 
   // UI
   return (
@@ -513,13 +466,15 @@ export default function SellerProfilePage() {
                 Submit Review
               </button>
               {submitted && (
-                <p className="text-green-500 mt-4 text-sm font-semibold">✅ Review submitted successfully!</p>
+                <p className="text-green-500 mt-4 text-sm font-semibold">
+                  ✅ Review submitted successfully!
+                </p>
               )}
             </div>
           )}
         </div>
 
-        {/* Modals (Tip, Subscribe, Unsubscribe) - Styled to match theme */}
+        {/* Modals (Tip, Subscribe, Unsubscribe) */}
         {showTipModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
             <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
