@@ -8,6 +8,8 @@ import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
+import VirtualMessageList from '@/components/messaging/VirtualMessageList';
+import MessageInput from '@/components/messaging/MessageInput';
 import { 
   Search, 
   DollarSign, 
@@ -84,6 +86,8 @@ export default function BuyerMessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, messages]);
 
+  const username = user?.username || '';
+
   // Prepare threads and messages
   const threads: { [seller: string]: any[] } = {};
   const unreadCounts: { [seller: string]: number } = {};
@@ -150,7 +154,7 @@ export default function BuyerMessagesPage() {
       }
       setActiveThread(threadParam);
     }
-  }, [threadParam, user?.username]);
+  }, [threadParam, user]);
 
   useEffect(() => {
     if (user && activeThread && !markedThreadsRef.current.has(activeThread)) {
@@ -448,7 +452,7 @@ export default function BuyerMessagesPage() {
     return lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Helper function to format date
+  // Format time function
   const formatTimeAgo = (date: string) => {
     const now = new Date();
     const messageDate = new Date(date);
@@ -701,219 +705,221 @@ export default function BuyerMessagesPage() {
                   </div>
                 </div>
                 
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    {threadMessages.map((msg, index) => {
-                      const isFromMe = msg.sender === user?.username;
-                      const time = new Date(msg.date).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-                      
-                      // Get custom request info if available
-                      let customReq: any = undefined;
-                      if (
-                        msg.type === 'customRequest' &&
-                        msg.meta &&
-                        typeof msg.meta.id === 'string'
-                      ) {
-                        customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
-                      }
-                      
-                      const isLatestCustom =
-                        !!customReq &&
-                        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
-                        index === (threadMessages.length - 1) &&
-                        msg.type === 'customRequest';
-                      
-                      const showPayNow =
-                        !!customReq &&
-                        customReq.status === 'accepted' &&
-                        index === (threadMessages.length - 1) &&
-                        msg.type === 'customRequest';
-                      
-                      const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
-                      const canPay = customReq && buyerBalance >= markupPrice;
-                      const isPaid = customReq && customReq.paid;
-                      
-                      const showActionButtons =
-                        !!customReq &&
-                        isLatestCustom &&
-                        customReq.status === 'pending' &&
-                        !isLastEditor(customReq);
-                      
-                      return (
-                        <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`rounded-lg p-3 max-w-[75%] ${
-                            isFromMe 
-                              ? 'bg-[#ff950e] text-white' 
-                              : 'bg-[#333] text-white'
-                          }`}
-                          >
-                            {/* Message header */}
-                            <div className="flex items-center text-xs mb-1">
-                              <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                                {isFromMe ? 'You' : msg.sender} • {time}
-                              </span>
-                              {isFromMe && (
-                                <span className="ml-2 text-[10px]">
-                                  {msg.read ? (
-                                    <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
-                                      <CheckCheck size={12} className="mr-1" /> Read
-                                    </span>
-                                  ) : (
-                                    <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
-                                  )}
+                {/* Messages - use either direct implementation or VirtualMessageList */}
+                {activeThread ? (
+                  <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+                    <div className="max-w-3xl mx-auto space-y-4">
+                      {threadMessages.map((msg, index) => {
+                        const isFromMe = msg.sender === user?.username;
+                        const time = new Date(msg.date).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                        
+                        // Get custom request info if available
+                        let customReq: any = undefined;
+                        if (
+                          msg.type === 'customRequest' &&
+                          msg.meta &&
+                          typeof msg.meta.id === 'string'
+                        ) {
+                          customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
+                        }
+                        
+                        const isLatestCustom =
+                          !!customReq &&
+                          (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+                          index === (threadMessages.length - 1) &&
+                          msg.type === 'customRequest';
+                        
+                        const showPayNow =
+                          !!customReq &&
+                          customReq.status === 'accepted' &&
+                          index === (threadMessages.length - 1) &&
+                          msg.type === 'customRequest';
+                        
+                        const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
+                        const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
+                        const canPay = customReq && buyerBalance >= markupPrice;
+                        const isPaid = customReq && customReq.paid;
+                        
+                        const showActionButtons =
+                          !!customReq &&
+                          isLatestCustom &&
+                          customReq.status === 'pending' &&
+                          !isLastEditor(customReq);
+                        
+                        return (
+                          <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`rounded-lg p-3 max-w-[75%] ${
+                              isFromMe 
+                                ? 'bg-[#ff950e] text-white' 
+                                : 'bg-[#333] text-white'
+                            }`}
+                            >
+                              {/* Message header */}
+                              <div className="flex items-center text-xs mb-1">
+                                <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
+                                  {isFromMe ? 'You' : msg.sender} • {time}
                                 </span>
-                              )}
-                            </div>
-                            
-                            {/* Image message */}
-                            {msg.type === 'image' && msg.meta?.imageUrl && (
-                              <div className="mt-1 mb-2">
-                                <img 
-                                  src={msg.meta.imageUrl} 
-                                  alt="Shared image" 
-                                  className="max-w-full rounded"
-                                />
-                              </div>
-                            )}
-                            
-                            {/* Text content */}
-                            {(msg.type !== 'image' || msg.content) && (
-                              <p className="text-white">
-                                {msg.content}
-                              </p>
-                            )}
-                            
-                            {/* Custom request */}
-                            {msg.type === 'customRequest' && msg.meta && (
-                              <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
-                                <p><strong>⚙️ Custom Request</strong></p>
-                                <p>📌 Title: {customReq ? customReq.title : msg.meta.title}</p>
-                                <p>💰 Price: {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price.toFixed(2)}`}</p>
-                                <p>🏷️ Tags: {customReq ? customReq.tags.join(', ') : msg.meta.tags?.join(', ')}</p>
-                                {(customReq ? customReq.description : msg.meta.message) && (
-                                  <p>📝 {customReq ? customReq.description : msg.meta.message}</p>
-                                )}
-                                {customReq && (
-                                  <div className="mt-1">
-                                    <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>Status:</span>
-                                    <StatusBadge status={customReq.status} />
-                                  </div>
-                                )}
-                                
-                                {/* Action buttons for custom requests */}
-                                {showActionButtons && (
-                                  <div className="flex flex-wrap gap-2 pt-2">
-                                    <button
-                                      onClick={() => customReq && handleAccept(customReq)}
-                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
-                                    >
-                                      Accept
-                                    </button>
-                                    <button
-                                      onClick={() => customReq && handleDecline(customReq)}
-                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700"
-                                    >
-                                      Decline
-                                    </button>
-                                    <button
-                                      onClick={() => customReq && handleEditRequest(customReq)}
-                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
-                                    >
-                                      Edit
-                                    </button>
-                                  </div>
-                                )}
-                                
-                                {/* Pay now button */}
-                                {showPayNow && (
-                                  <div className="flex flex-col gap-2 pt-2">
-                                    {isPaid ? (
-                                      <span className="text-green-400 font-bold">Paid ✅</span>
+                                {isFromMe && (
+                                  <span className="ml-2 text-[10px]">
+                                    {msg.read ? (
+                                      <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
+                                        <CheckCheck size={12} className="mr-1" /> Read
+                                      </span>
                                     ) : (
-                                      <>
-                                        <button
-                                          onClick={() => customReq && canPay && handlePayNow(customReq)}
-                                          className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-[#ff950e] ${
-                                            !canPay ? 'opacity-50 cursor-not-allowed' : ''
-                                          }`}
-                                          disabled={!canPay}
-                                        >
-                                          Pay {customReq ? `$${markupPrice.toFixed(2)}` : ''} Now
-                                        </button>
-                                        {!canPay && (
-                                          <span className="text-xs text-red-400">
-                                            Insufficient balance to pay ${markupPrice.toFixed(2)}
-                                          </span>
-                                        )}
-                                      </>
+                                      <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
                                     )}
-                                  </div>
+                                  </span>
                                 )}
-                                
-                                {/* Edit form */}
-                                {editRequestId === customReq?.id && customReq && (
-                                  <div className="mt-2 space-y-2">
-                                    <input
-                                      type="text"
-                                      placeholder="Title"
-                                      value={editTitle}
-                                      onChange={e => setEditTitle(e.target.value)}
-                                      className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="Price (USD)"
-                                      value={editPrice}
-                                      onChange={e => setEditPrice(Number(e.target.value))}
-                                      className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                    />
-                                    <input
-                                      type="text"
-                                      placeholder="Tags (comma-separated)"
-                                      value={editTags}
-                                      onChange={e => setEditTags(e.target.value)}
-                                      className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                    />
-                                    <textarea
-                                      placeholder="Message"
-                                      value={editMessage}
-                                      onChange={e => setEditMessage(e.target.value)}
-                                      className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                    />
-                                    <div className="flex gap-2">
+                              </div>
+                              
+                              {/* Image message */}
+                              {msg.type === 'image' && msg.meta?.imageUrl && (
+                                <div className="mt-1 mb-2">
+                                  <img 
+                                    src={msg.meta.imageUrl} 
+                                    alt="Shared image" 
+                                    className="max-w-full rounded"
+                                  />
+                                </div>
+                              )}
+                              
+                              {/* Text content */}
+                              {(msg.type !== 'image' || msg.content) && (
+                                <p className="text-white">
+                                  {msg.content}
+                                </p>
+                              )}
+                              
+                              {/* Custom request */}
+                              {msg.type === 'customRequest' && msg.meta && (
+                                <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
+                                  <p><strong>⚙️ Custom Request</strong></p>
+                                  <p>📌 Title: {customReq ? customReq.title : msg.meta.title}</p>
+                                  <p>💰 Price: {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
+                                  <p>🏷️ Tags: {customReq ? customReq.tags.join(', ') : msg.meta.tags?.join(', ')}</p>
+                                  {(customReq ? customReq.description : msg.meta.message) && (
+                                    <p>📝 {customReq ? customReq.description : msg.meta.message}</p>
+                                  )}
+                                  {customReq && (
+                                    <div className="mt-1">
+                                      <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>Status:</span>
+                                      <StatusBadge status={customReq.status} />
+                                    </div>
+                                  )}
+                                  
+                                  {/* Action buttons for custom requests */}
+                                  {showActionButtons && (
+                                    <div className="flex flex-wrap gap-2 pt-2">
                                       <button
-                                        onClick={() => customReq && handleEditSubmit(customReq)}
+                                        onClick={() => customReq && handleAccept(customReq)}
+                                        className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                                      >
+                                        Accept
+                                      </button>
+                                      <button
+                                        onClick={() => customReq && handleDecline(customReq)}
+                                        className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700"
+                                      >
+                                        Decline
+                                      </button>
+                                      <button
+                                        onClick={() => customReq && handleEditRequest(customReq)}
                                         className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
                                       >
-                                        Submit Edit
-                                      </button>
-                                      <button
-                                        onClick={() => setEditRequestId(null)}
-                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600"
-                                      >
-                                        Cancel
+                                        Edit
                                       </button>
                                     </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                                  )}
+                                  
+                                  {/* Pay now button */}
+                                  {showPayNow && (
+                                    <div className="flex flex-col gap-2 pt-2">
+                                      {isPaid ? (
+                                        <span className="text-green-400 font-bold">Paid ✅</span>
+                                      ) : (
+                                        <>
+                                          <button
+                                            onClick={() => customReq && canPay && handlePayNow(customReq)}
+                                            className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-[#ff950e] ${
+                                              !canPay ? 'opacity-50 cursor-not-allowed' : ''
+                                            }`}
+                                            disabled={!canPay}
+                                          >
+                                            Pay {customReq ? `$${markupPrice.toFixed(2)}` : ''} Now
+                                          </button>
+                                          {!canPay && (
+                                            <span className="text-xs text-red-400">
+                                              Insufficient balance to pay ${markupPrice.toFixed(2)}
+                                            </span>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Edit form */}
+                                  {editRequestId === customReq?.id && customReq && (
+                                    <div className="mt-2 space-y-2">
+                                      <input
+                                        type="text"
+                                        placeholder="Title"
+                                        value={editTitle}
+                                        onChange={e => setEditTitle(e.target.value)}
+                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
+                                      />
+                                      <input
+                                        type="number"
+                                        placeholder="Price (USD)"
+                                        value={editPrice}
+                                        onChange={e => setEditPrice(Number(e.target.value))}
+                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
+                                      />
+                                      <input
+                                        type="text"
+                                        placeholder="Tags (comma-separated)"
+                                        value={editTags}
+                                        onChange={e => setEditTags(e.target.value)}
+                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
+                                      />
+                                      <textarea
+                                        placeholder="Message"
+                                        value={editMessage}
+                                        onChange={e => setEditMessage(e.target.value)}
+                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => customReq && handleEditSubmit(customReq)}
+                                          className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
+                                        >
+                                          Submit Edit
+                                        </button>
+                                        <button
+                                          onClick={() => setEditRequestId(null)}
+                                          className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Auto-scroll anchor */}
-                    <div ref={messagesEndRef} />
+                        );
+                      })}
+                      
+                      {/* Auto-scroll anchor */}
+                      <div ref={messagesEndRef} />
+                    </div>
                   </div>
-                </div>
+                ) : null}
                 
-                {/* Message input */}
+                {/* Message input - either traditional or using MessageInput component */}
                 {!isUserBlocked && (
                   <div className="px-4 py-3 border-t border-gray-800 bg-[#1a1a1a]">
                     {/* Selected image preview */}
@@ -1081,7 +1087,7 @@ export default function BuyerMessagesPage() {
                 
                 {isUserBlocked && (
                   <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a]">
-                    You have blocked this seller
+                    You have blocked this user
                   </div>
                 )}
               </>
