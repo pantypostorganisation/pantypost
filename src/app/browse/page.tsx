@@ -26,7 +26,8 @@ const hourRangeOptions = [
 const PAGE_SIZE = 40;
 
 export default function BrowsePage() {
-  const { listings, removeListing, user, isSubscribed, addSellerNotification } = useListings();
+  // Added 'users' to the useListings hook
+  const { listings, removeListing, user, users, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
   const router = useRouter();
 
@@ -94,7 +95,7 @@ export default function BrowsePage() {
     })
     .sort((a: Listing, b: Listing) => {
       if (sortBy === 'priceAsc') return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
-      if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? a.price);
+      if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? b.price);
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
 
@@ -255,6 +256,10 @@ export default function BrowsePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-10">
                 {paginatedListings.map((listing) => {
                   const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
+                  // Check seller's current verification status from users context
+                  const sellerUser = users?.[listing.seller];
+                  const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+
 
                   // Card is a div with onClick, not a Link
                   return (
@@ -328,7 +333,7 @@ export default function BrowsePage() {
                           </p>
                           <Link
                             href={`/sellers/${listing.seller}`}
-                            className="flex items-center gap-2 text-xs text-gray-400 hover:text-[#ff950e] font-semibold group/seller"
+                            className="flex items-center gap-2 text-xs text-gray-400 hover:text-[#ff950e] font-semibold group/seller" // Added group/seller here
                             title={sellerProfiles[listing.seller]?.bio || listing.seller}
                             onClick={e => e.stopPropagation()}
                           >
@@ -346,11 +351,18 @@ export default function BrowsePage() {
                               </span>
                             )}
                             {listing.seller}
-                            {user?.username && (isSubscribed(user.username, listing.seller) || listing.isVerified) && (
-                              <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold shadow">
-                                <BadgeCheck className="w-4 h-4" />
-                                Verified
-                              </span>
+                            {/* Verified Badge - Check seller's current status */}
+                            {isSellerVerified && (
+                              <div className="relative"> {/* Removed group here */}
+                                <img
+                                  src="/verification_badge.png"
+                                  alt="Verified"
+                                  className="w-4 h-4" // Adjusted size
+                                />
+                                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover/seller:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20"> {/* Used group-hover/seller */}
+                                  Verified Seller
+                                </div>
+                              </div>
                             )}
                           </Link>
                         </div>

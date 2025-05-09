@@ -69,7 +69,7 @@ export default function ListingDetailPage() {
   }, [listing?.seller, currentUsername, markMessagesAsRead]);
 
   const sellerUser = users?.[listing?.seller ?? ''];
-  const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+  const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified'; // Use isSellerVerified
 
   if (!listingId) {
     return <div className="text-white text-center p-10">Invalid listing URL.</div>;
@@ -142,7 +142,7 @@ export default function ListingDetailPage() {
                 )}
               </div>
             </div>
-            {/* Thumbnails */}
+            {/* Thumbnails */}\
             {images.length > 1 && (
               <div className="w-full max-w-md lg:max-w-none overflow-x-auto flex gap-3 pb-2 mt-2">
                 {images.map((url, index) => (
@@ -175,22 +175,50 @@ export default function ListingDetailPage() {
                     <span key={i} className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
                       {tag}
                     </span>
-                  ))}
+                  ))}\
                 </div>
               )}
 
-              {/* Seller Badges */}
-              <div className="flex gap-3 mb-5">
-                {isVerified ? (
-                  <span className="flex items-center gap-1 text-xs bg-[#232323] text-[#ff950e] px-3 py-1 rounded-full font-semibold">
-                    <BadgeCheck className="w-4 h-4" /> Verified Seller
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-3 py-1 rounded-full font-semibold">
-                    <AlertTriangle className="w-4 h-4" /> Unverified Seller
-                  </span>
-                )}
-              </div>
+              {/* Seller Info Card below buttons */}
+              {user?.role === 'buyer' && (
+                <div className="flex items-center gap-4 bg-[#181818]/80 border border-[#232323] rounded-2xl px-5 py-4 mt-6 mb-2 shadow-inner w-full">
+                  {sellerProfile.pic ? (
+                    <img
+                      src={sellerProfile.pic}
+                      alt={listing.seller}
+                      className="w-14 h-14 rounded-full object-cover border-2 border-[#ff950e] shadow"
+                    />
+                  ) : (
+                    <User className="w-12 h-12 text-[#ff950e] bg-black rounded-full p-2 border-2 border-[#ff950e]" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {/* Seller Name and Verified Badge */}
+                    <div className="flex items-center gap-2 group"> {/* Added group class here */}
+                      <span className="font-bold text-lg text-white truncate">{listing.seller}</span>
+                      {/* Verified Badge - Check seller's current status */}
+                      {isSellerVerified && (
+                        <div className="relative">
+                          <img
+                            src="/verification_badge.png"
+                            alt="Verified"
+                            className="w-5 h-5" // Slightly larger badge for detail page
+                          />
+                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                            Verified Seller
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1 truncate">{sellerProfile.bio || 'No bio provided.'}</p>
+                    <Link
+                      href={`/sellers/${listing.seller}`}
+                      className="inline-block mt-2 bg-black border border-[#ff950e] text-[#ff950e] font-bold px-3 py-1.5 rounded-full text-xs hover:bg-[#ff950e] hover:text-black transition"
+                    >
+                      View Profile
+                    </Link>
+                  </div>
+                </div>
+              )}
 
               {/* Info Row: Hours worn */}
               {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
@@ -240,7 +268,7 @@ export default function ListingDetailPage() {
                     >
                       {isProcessing ? (
                         <span className="flex items-center justify-center gap-2">
-                          <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...
+                          <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...\
                         </span>
                       ) : (
                         <span className="flex items-center justify-center gap-2">
@@ -256,43 +284,6 @@ export default function ListingDetailPage() {
                       <MessageCircle className="w-5 h-5" />
                       Message {listing.seller}
                     </Link>
-                  </div>
-                )}
-                {/* Seller Info Card below buttons */}
-                {user?.role === 'buyer' && (
-                  <div className="flex items-center gap-4 bg-[#181818]/80 border border-[#232323] rounded-2xl px-5 py-4 mt-6 mb-2 shadow-inner w-full">
-                    {sellerProfile.pic ? (
-                      <img
-                        src={sellerProfile.pic}
-                        alt={listing.seller}
-                        className="w-14 h-14 rounded-full object-cover border-2 border-[#ff950e] shadow"
-                      />
-                    ) : (
-                      <User className="w-12 h-12 text-[#ff950e] bg-black rounded-full p-2 border-2 border-[#ff950e]" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-lg text-white truncate">{listing.seller}</span>
-                        {isVerified ? (
-                          <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold shadow">
-                            <BadgeCheck className="w-4 h-4" />
-                            Verified
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-1 rounded-full font-bold shadow">
-                            <AlertTriangle className="w-4 h-4" />
-                            Unverified
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1 truncate">{sellerProfile.bio || 'No bio provided.'}</p>
-                      <Link
-                        href={`/sellers/${listing.seller}`}
-                        className="inline-block mt-2 bg-black border border-[#ff950e] text-[#ff950e] font-bold px-3 py-1.5 rounded-full text-xs hover:bg-[#ff950e] hover:text-black transition"
-                      >
-                        View Profile
-                      </Link>
-                    </div>
                   </div>
                 )}
               </div>
@@ -356,7 +347,7 @@ export default function ListingDetailPage() {
                 >
                   {isProcessing ? (
                     <>
-                      <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...
+                      <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...\
                     </>
                   ) : (
                     <>

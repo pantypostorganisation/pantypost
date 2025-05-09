@@ -220,7 +220,16 @@ export default function SellerProfilePage() {
             <div className="flex items-center justify-center gap-3 mb-2">
               <span className="text-2xl sm:text-3xl font-bold text-white">{username}</span>
               {isVerified ? (
-                <img src="/verification_badge.png" alt="Verified" className="w-6 h-6" />
+                <div className="relative group">
+                  <img 
+                    src="/verification_badge.png" 
+                    alt="Verified" 
+                    className="w-6 h-6"
+                  />
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                    Verified Seller
+                  </div>
+                </div>
               ) : (
                 <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-1 rounded-full font-bold shadow">
                   <AlertTriangle className="w-4 h-4" />

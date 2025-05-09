@@ -14,12 +14,12 @@ type Order = {
   description: string;
   price: number;
   markedUpPrice: number;
-  imageUrl?: string;
+  imageUrl?: string; // This is where the first image URL will be stored
   date: string;
   seller: string;
   buyer: string;
   tags?: string[];
-  wearTime?: string;
+  wearTime?: string; // Note: This seems to correspond to 'hoursWorn' in Listing type
 };
 
 type Withdrawal = {
@@ -36,7 +36,8 @@ type WalletContextType = {
   setAdminBalance: (balance: number) => void;
   setSellerBalance: (seller: string, balance: number) => void;
   getSellerBalance: (seller: string) => number;
-  purchaseListing: (listing: Omit<Order, 'buyer'>, buyerUsername: string) => boolean;
+  // Updated type to expect the full Listing object
+  purchaseListing: (listing: any, buyerUsername: string) => boolean; // Using 'any' temporarily for simplicity, ideally define a specific type if Listing is not directly usable
   subscribeToSellerWithPayment: (
     buyer: string,
     seller: string,
@@ -150,7 +151,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setOrderHistory((prev) => [...prev, order]);
   };
 
-  const purchaseListing = (listing: Omit<Order, 'buyer'>, buyerUsername: string): boolean => {
+  // Modified purchaseListing to save the image URL
+  const purchaseListing = (listing: any, buyerUsername: string): boolean => {
     const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
       ? listing.markedUpPrice
       : listing.price;
@@ -190,6 +192,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...listing,
         buyer: buyerUsername,
         date: new Date().toISOString(),
+        imageUrl: listing.imageUrls?.[0] || undefined, // Explicitly add the first image URL
+        // Note: 'wearTime' in Order type seems to correspond to 'hoursWorn' in Listing type.
+        // If you need hoursWorn in the order, you might need to map it explicitly too.
+        // For now, keeping it as is based on the original Order type.
       } as Order;
 
       addOrder(order);

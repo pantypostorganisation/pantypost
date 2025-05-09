@@ -32,6 +32,7 @@ export type User = {
   verificationRequestedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
+  profilePic?: string | null; // Added profilePic property here
 };
 
 export type Listing = {
@@ -205,6 +206,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch {}
   }, []);
 
+
   const persistUsers = (updated: { [username: string]: User }) => {
     setUsers(updated);
     localStorage.setItem('all_users_v2', JSON.stringify(updated));
@@ -225,6 +227,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       verificationRequestedAt: existingUser?.verificationRequestedAt,
       verificationReviewedAt: existingUser?.verificationReviewedAt,
       verificationRejectionReason: existingUser?.verificationRejectionReason,
+      profilePic: existingUser?.profilePic ?? null, // Added profilePic here
     };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
