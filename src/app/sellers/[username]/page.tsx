@@ -9,8 +9,9 @@ import { useEffect, useState } from 'react';
 import StarRating from '@/components/StarRating';
 import {
   Lock, Mail, Gift, DollarSign, MessageCircle, ArrowRight,
-  BadgeCheck, AlertTriangle, Camera, Video, Users, Star, Crown, Clock
+  AlertTriangle, Camera, Video, Users, Star, Crown, Clock
 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
@@ -219,10 +220,7 @@ export default function SellerProfilePage() {
             <div className="flex items-center justify-center gap-3 mb-2">
               <span className="text-2xl sm:text-3xl font-bold text-white">{username}</span>
               {isVerified ? (
-                <span className="flex items-center gap-1 text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold shadow">
-                  <BadgeCheck className="w-4 h-4" />
-                  Verified
-                </span>
+                <img src="/verification_badge.png" alt="Verified" className="w-6 h-6" />
               ) : (
                 <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-1 rounded-full font-bold shadow">
                   <AlertTriangle className="w-4 h-4" />
