@@ -6,9 +6,37 @@ import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
+import {
+  Search,
+  CheckCheck,
+  Send,
+  MessageSquare,
+  Paperclip,
+  X,
+  BadgeCheck,
+  User
+} from 'lucide-react';
+
+type Message = {
+  sender: string;
+  receiver: string;
+  content: string;
+  date: string;
+  read?: boolean;
+  type?: 'normal' | 'customRequest' | 'image';
+  meta?: {
+    id?: string;
+    title?: string;
+    price?: number;
+    tags?: string[];
+    message?: string;
+    imageUrl?: string;
+  };
+};
 
 export default function SellerMessagesPage() {
-  const { user, addSellerNotification } = useListings();
+  const { user, addSellerNotification, users } = useListings();
   const {
     getMessagesForSeller,
     markMessagesAsRead,
@@ -22,6 +50,7 @@ export default function SellerMessagesPage() {
   } = useMessages();
   const { getRequestsForUser, respondToRequest, requests } = useRequests();
   const { wallet } = useWallet();
+  const searchParams = useSearchParams();
 
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
@@ -30,27 +59,41 @@ export default function SellerMessagesPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null); // State for selected image Data URL
-  const fileInputRef = useRef<HTMLInputElement>(null); // Ref for the hidden file input
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Initialize the thread based on URL thread parameter
+  const threadParam = searchParams?.get('thread');
 
   useEffect(() => {
     forceRerender((v) => v + 1);
   }, [requests, wallet]);
 
-  let sellerMessages: any[] = [];
+  useEffect(() => {
+    if (threadParam && user) {
+      setActiveThread(threadParam);
+    }
+  }, [threadParam, user]);
+
+  let sellerMessages: Message[] = [];
   if (user) {
     sellerMessages = Object.values(messages)
       .flat()
       .filter(
-        (msg: any) =>
+        (msg: Message) =>
           msg.sender === user.username || msg.receiver === user.username
       );
   }
   const sellerRequests = user ? getRequestsForUser(user.username, 'seller') : [];
 
-  const threads: { [buyer: string]: typeof sellerMessages } = {};
+  const threads: { [buyer: string]: Message[] } = {};
   if (user) {
     sellerMessages.forEach((msg) => {
       const otherParty =
@@ -65,11 +108,25 @@ export default function SellerMessagesPage() {
   );
 
   const unreadCounts: { [buyer: string]: number } = {};
-  sellerMessages.forEach((msg) => {
-    if (!msg.read && msg.receiver === user?.username) {
-      const otherParty = msg.sender === user?.username ? msg.receiver : msg.sender;
-      unreadCounts[otherParty] = (unreadCounts[otherParty] || 0) + 1;
-    }
+  const lastMessages: { [buyer: string]: Message } = {};
+  const buyerProfiles: { [buyer: string]: { pic: string | null, verified: boolean } } = {};
+
+  Object.entries(threads).forEach(([buyer, msgs]) => {
+    lastMessages[buyer] = msgs[msgs.length - 1];
+    
+    // Get buyer profile picture and verification status
+    const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
+    const buyerInfo = users?.[buyer];
+    const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+    
+    buyerProfiles[buyer] = { 
+      pic: storedPic, 
+      verified: isVerified
+    };
+    
+    unreadCounts[buyer] = msgs.filter(
+      (msg) => !msg.read && msg.receiver === user?.username
+    ).length;
   });
 
   useEffect(() => {
@@ -81,7 +138,12 @@ export default function SellerMessagesPage() {
     }
   }, [activeThread, user, markMessagesAsRead]);
 
-   // Handle image file selection
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeThread, messages]);
+
+  // Handle image file selection
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -120,7 +182,18 @@ export default function SellerMessagesPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = ''; // Clear file input
     }
-    setTimeout(() => forceRerender((v) => v + 1), 0);
+    
+    // Focus back on input
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleReply();
+    }
   };
 
   const handleBlockToggle = () => {
@@ -156,7 +229,7 @@ export default function SellerMessagesPage() {
     );
   }
 
-  const handleEditRequest = (req: typeof sellerRequests[number]) => {
+  const handleEditRequest = (req: any) => {
     setEditRequestId(req.id);
     setEditPrice(req.price);
     setEditTitle(req.title);
@@ -164,7 +237,7 @@ export default function SellerMessagesPage() {
     setEditMessage(req.description || '');
   };
 
-  const handleEditSubmit = (req: typeof sellerRequests[number]) => {
+  const handleEditSubmit = (req: any) => {
     if (!user || !activeThread || !editRequestId) return;
     respondToRequest(
       editRequestId,
@@ -177,9 +250,6 @@ export default function SellerMessagesPage() {
         description: editMessage,
       }
     );
-    // We don't send a new message here, the request context update is enough
-    // If you want a message indicating the edit, you could send a 'normal' message
-    // sendMessage(user.username, activeThread, `[PantyPost Custom Request Edited] ${editTitle}`);
 
     setEditRequestId(null);
     setEditPrice('');
@@ -189,13 +259,14 @@ export default function SellerMessagesPage() {
     setTimeout(() => forceRerender((v) => v + 1), 0);
   };
 
-  const handleAccept = (req: typeof sellerRequests[number]) => {
+  const handleAccept = (req: any) => {
     if (req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
       setTimeout(() => forceRerender((v) => v + 1), 0);
     }
   };
-  const handleDecline = (req: typeof sellerRequests[number]) => {
+  
+  const handleDecline = (req: any) => {
     if (req.status === 'pending') {
       respondToRequest(req.id, 'rejected');
       setTimeout(() => forceRerender((v) => v + 1), 0);
@@ -219,7 +290,24 @@ export default function SellerMessagesPage() {
     return result;
   }
 
-  const inboxBuyers = Object.keys(threads);
+  // Filter threads by search query and unread status
+  const filteredThreads = Object.keys(threads).filter(buyer => {
+    const matchesSearch = searchQuery ? buyer.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+    
+    if (!matchesSearch) return false;
+    
+    if (filterBy === 'unread' && unreadCounts[buyer] === 0) return false;
+    
+    return true;
+  });
+  
+  // Sort threads by most recent message first
+  const sortedThreads = filteredThreads.sort((a, b) => {
+    const dateA = new Date(lastMessages[a]?.date || 0).getTime();
+    const dateB = new Date(lastMessages[b]?.date || 0).getTime();
+    return dateB - dateA;
+  });
+
   const threadMessages =
     activeThread
       ? getLatestCustomRequestMessages(threads[activeThread] || [], sellerRequests)
@@ -238,80 +326,225 @@ export default function SellerMessagesPage() {
     return lastMsg && lastMsg.sender === user?.username;
   }
 
+  // Get the initial for avatar placeholder
+  const getInitial = (username: string) => {
+    return username.charAt(0).toUpperCase();
+  };
+
+  // Format time function
+  const formatTimeAgo = (date: string) => {
+    const now = new Date();
+    const messageDate = new Date(date);
+    const diffMs = now.getTime() - messageDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      return diffDays === 1 ? '1d ago' : `${diffDays}d ago`;
+    }
+    
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours > 0) {
+      return diffHours === 1 ? '1h ago' : `${diffHours}h ago`;
+    }
+    
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffMinutes > 0) {
+      return diffMinutes === 1 ? '1m ago' : `${diffMinutes}m ago`;
+    }
+    
+    return 'Just now';
+  };
+
+  // Check if user is admin
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+
   return (
     <RequireAuth role="seller">
-      <main className="p-8 max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">📩 Messages</h1>
-
-        {inboxBuyers.length === 0 ? (
-          <p className="text-gray-600">You haven’t received any messages yet.</p>
-        ) : (
-          <div className="grid md:grid-cols-3 gap-6">
-            <aside className="bg-white rounded border shadow p-4">
-              <h2 className="font-semibold mb-4">Inbox</h2>
-              <ul className="space-y-2">
-                {inboxBuyers.map((buyer) => {
-                  const unread = unreadCounts[buyer] || 0;
-                  const latest = threads[buyer][threads[buyer].length - 1];
+      <div className="h-screen bg-black flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
+          {/* Left column - Message threads */}
+          <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
+            {/* Seller header */}
+            <div className="px-4 pt-4 pb-2">
+              <h2 className="text-2xl font-bold text-[#ff950e] mb-2">
+                {isAdmin ? 'Admin Messages' : 'My Messages'}
+              </h2>
+              <div className="flex space-x-2 mb-3">
+                <button 
+                  onClick={() => setFilterBy('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                    filterBy === 'all' 
+                      ? 'bg-[#ff950e] text-black' 
+                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                  }`}
+                >
+                  All Messages
+                </button>
+                <button 
+                  onClick={() => setFilterBy('unread')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                    filterBy === 'unread' 
+                      ? 'bg-[#ff950e] text-black' 
+                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                  }`}
+                >
+                  Unread
+                </button>
+              </div>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="px-4 pb-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search Buyers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+                />
+                <div className="absolute right-3 top-2.5 text-gray-400">
+                  <Search size={18} />
+                </div>
+              </div>
+            </div>
+            
+            {/* Thread list */}
+            <div className="flex-1 overflow-y-auto bg-[#121212]">
+              {sortedThreads.length === 0 ? (
+                <div className="p-4 text-center text-gray-400">
+                  No conversations found
+                </div>
+              ) : (
+                sortedThreads.map((buyer) => {
+                  const thread = threads[buyer];
+                  const lastMessage = lastMessages[buyer];
+                  const unreadCount = unreadCounts[buyer] || 0;
+                  const isActive = activeThread === buyer;
+                  const buyerProfile = buyerProfiles[buyer];
+                  
                   return (
-                    <li key={buyer}>
-                      <button
-                        onClick={() => setActiveThread(buyer)}
-                        className={`block w-full text-left px-3 py-2 rounded hover:bg-orange-50 ${
-                          activeThread === buyer ? 'bg-orange-100' : 'bg-gray-50'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold">{buyer}</span>
-                          {unread > 0 && activeThread !== buyer && (
-                            <span className="text-xs text-white bg-[#ff950e] rounded-full px-2 py-0.5">
-                              {unread}
-                            </span>
+                    <div 
+                      key={buyer}
+                      onClick={() => setActiveThread(buyer)}
+                      className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
+                        isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
+                      }`}
+                    >
+                      {/* Active indicator */}
+                      {isActive && (
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
+                      )}
+                      
+                      {/* Avatar with unread indicator */}
+                      <div className="relative mr-3">
+                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden">
+                          {buyerProfile?.pic ? (
+                            <img src={buyerProfile.pic} alt={buyer} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitial(buyer)
+                          )}
+                          
+                          {/* Verified badge if applicable */}
+                          {buyerProfile?.verified && (
+                            <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
+                              <BadgeCheck size={12} className="text-[#ff950e]" />
+                            </div>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 truncate">
-                          {latest.content.slice(0, 40)}...
+                        
+                        {/* Unread indicator */}
+                        {unreadCount > 0 && (
+                          <div className="absolute top-0 right-0 w-5 h-5 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212]">
+                            {unreadCount}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Message preview */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between">
+                          <h3 className="font-bold text-white truncate">{buyer}</h3>
+                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1">
+                            {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-400 truncate">
+                          {lastMessage ? (
+                            lastMessage.type === 'customRequest' 
+                              ? '🛠️ Custom Request'
+                              : lastMessage.type === 'image'
+                                ? '📷 Image'
+                                : lastMessage.content
+                          ) : ''}
                         </p>
-                      </button>
-                    </li>
+                      </div>
+                    </div>
                   );
-                })}
-              </ul>
-            </aside>
-
-            <section className="md:col-span-2 bg-white rounded border shadow p-4 flex flex-col">
-              {activeThread ? (
-                <>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="font-semibold">Conversation with {activeThread}</h2>
-                    <div className="space-x-2">
-                      <button
-                        onClick={handleBlockToggle}
-                        className={`text-xs px-2 py-1 border rounded ${
-                          isUserBlocked
-                            ? 'text-green-600 border-green-600 hover:bg-green-50'
-                            : 'text-red-500 border-red-500 hover:bg-red-50'
-                        }`}
-                      >
-                        {isUserBlocked ? 'Unblock' : 'Block'}
-                      </button>
-                      <button
-                        onClick={handleReport}
-                        disabled={isUserReported}
-                        className={`text-xs px-2 py-1 border rounded ${
-                          isUserReported
-                            ? 'text-gray-400 border-gray-300 cursor-not-allowed'
-                            : 'text-orange-500 border-orange-500 hover:bg-orange-50'
-                        }`}
-                      >
-                        {isUserReported ? 'Reported' : 'Report'}
-                      </button>
+                })
+              )}
+            </div>
+          </div>
+          
+          {/* Right column - Active conversation */}
+          <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
+            {activeThread ? (
+              <>
+                {/* Conversation header */}
+                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
+                  <div className="flex items-center">
+                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden">
+                      {buyerProfiles[activeThread]?.pic ? (
+                        <img src={buyerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
+                      ) : (
+                        getInitial(activeThread)
+                      )}
+                      
+                      {/* Verified badge if applicable */}
+                      {buyerProfiles[activeThread]?.verified && (
+                        <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
+                          <BadgeCheck size={12} className="text-[#ff950e]" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-lg text-white">{activeThread}</h2>
+                      <p className="text-xs text-[#ff950e]">Active now</p>
                     </div>
                   </div>
-
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 mb-4">
+                  
+                  <div className="flex space-x-2 text-white">
+                    <button 
+                      onClick={handleReport}
+                      disabled={isUserReported}
+                      className={`px-3 py-1 text-xs border rounded ${
+                        isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                      }`}
+                    >
+                      {isUserReported ? 'Reported' : 'Report'}
+                    </button>
+                    <button
+                      onClick={handleBlockToggle}
+                      className={`px-3 py-1 text-xs border rounded ${
+                        isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                      }`}
+                    >
+                      {isUserBlocked ? 'Unblock' : 'Block'}
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+                  <div className="max-w-3xl mx-auto space-y-4">
                     {threadMessages.map((msg, index) => {
-                      let customReq: typeof sellerRequests[number] | undefined = undefined;
+                      const isFromMe = msg.sender === user?.username;
+                      const time = new Date(msg.date).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                      
+                      let customReq: any = undefined;
                       let metaId: string | undefined = undefined;
                       if (
                         msg.type === 'customRequest' &&
@@ -337,196 +570,249 @@ export default function SellerMessagesPage() {
                         isLatestCustom &&
                         customReq.status === 'pending' &&
                         !isLastEditor(customReq);
-
+                      
                       return (
-                        <div key={index} className="bg-gray-50 p-3 rounded border">
-                          <p className="text-sm mb-1 text-black">
-                            <strong>{msg.sender === user?.username ? 'You' : msg.sender}</strong> on{' '}
-                            {new Date(msg.date).toLocaleString()}
-                            {msg.sender === user?.username && (
-                              <span className="ml-2 text-[10px] font-semibold">
-                                {msg.read ? (
-                                  <span className="text-green-600">Read</span>
-                                ) : (
-                                  <span className="text-gray-400">Unread</span>
-                                )}
+                        <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`rounded-lg p-3 max-w-[75%] ${
+                            isFromMe 
+                              ? 'bg-[#ff950e] text-white' 
+                              : 'bg-[#333] text-white'
+                          }`}
+                          >
+                            {/* Message header */}
+                            <div className="flex items-center text-xs mb-1">
+                              <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
+                                {isFromMe ? 'You' : msg.sender} • {time}
                               </span>
-                            )}
-                          </p>
-                           {/* Display image if type is 'image' */}
-                          {msg.type === 'image' && msg.meta?.imageUrl && (
-                            <div className="mt-2">
-                              <img src={msg.meta.imageUrl} alt="Shared image" className="max-w-xs max-h-48 rounded" />
+                              {isFromMe && (
+                                <span className="ml-2 text-[10px]">
+                                  {msg.read ? (
+                                    <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
+                                      <CheckCheck size={12} className="mr-1" /> Read
+                                    </span>
+                                  ) : (
+                                    <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
+                                  )}
+                                </span>
+                              )}
                             </div>
-                          )}
-                          {/* Display text content if not an image message or if there's text */}
-                          {(msg.type !== 'image' || msg.content) && (
-                             <p className="text-black">{msg.content}</p>
-                          )}
-
-                          {msg.type === 'customRequest' && msg.meta && (
-                            <div className="mt-2 text-sm text-orange-700 space-y-1">
-                              <p className="font-semibold">🛠️ Custom Request</p>
-                              <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-                              <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price.toFixed(2)}`}</p>
-                              <p><b>Tags:</b> {customReq ? customReq.tags.join(', ') : msg.meta.tags.join(', ')}</p>
-                              {(customReq ? customReq.description : msg.meta.message) && (
-                                <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
-                              )}
-                              {customReq && (
-                                <p>
-                                  <b>Status:</b>
-                                  {statusBadge(customReq.status)}
-                                </p>
-                              )}
-                              {isPaid && (
-                                <span className="text-green-700 font-bold">Paid ✅</span>
-                              )}
-                              {showActionButtons && !isPaid && (
-                                <div className="flex gap-2 pt-2">
-                                  <button
-                                    onClick={() => customReq && handleAccept(customReq)}
-                                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800"
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    onClick={() => customReq && handleDecline(customReq)}
-                                    className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800"
-                                  >
-                                    Decline
-                                  </button>
-                                  <button
-                                    onClick={() => customReq && handleEditRequest(customReq)}
-                                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
-                                  >
-                                    Edit
-                                  </button>
-                                </div>
-                              )}
-                              {editRequestId === customReq?.id && customReq && (
-                                <div className="mt-2 space-y-2">
-                                  <input
-                                    type="text"
-                                    placeholder="Title"
-                                    value={editTitle}
-                                    onChange={e => setEditTitle(e.target.value)}
-                                    className="w-full p-2 border rounded text-black"
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="Price (USD)"
-                                    value={editPrice}
-                                    onChange={e => setEditPrice(Number(e.target.value))}
-                                    className="w-full p-2 border rounded text-black"
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder="Tags (comma-separated)"
-                                    value={editTags}
-                                    onChange={e => setEditTags(e.target.value)}
-                                    className="w-full p-2 border rounded text-black"
-                                  />
-                                  <textarea
-                                    placeholder="Message"
-                                    value={editMessage}
-                                    onChange={e => setEditMessage(e.target.value)}
-                                    className="w-full p-2 border rounded text-black"
-                                  />
-                                  <div className="flex gap-2">
+                            
+                            {/* Image message */}
+                            {msg.type === 'image' && msg.meta?.imageUrl && (
+                              <div className="mt-1 mb-2">
+                                <img 
+                                  src={msg.meta.imageUrl} 
+                                  alt="Shared image" 
+                                  className="max-w-full rounded"
+                                />
+                              </div>
+                            )}
+                            
+                            {/* Text content */}
+                            {(msg.type !== 'image' || msg.content) && (
+                              <p className="text-white">
+                                {msg.content}
+                              </p>
+                            )}
+                            
+                            {/* Custom request content */}
+                            {msg.type === 'customRequest' && msg.meta && (
+                              <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
+                                <p className="font-semibold">🛠️ Custom Request</p>
+                                <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
+                                <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
+                                <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
+                                {(customReq ? customReq.description : msg.meta.message) && (
+                                  <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
+                                )}
+                                {customReq && (
+                                  <p>
+                                    <b>Status:</b>
+                                    {statusBadge(customReq.status)}
+                                  </p>
+                                )}
+                                {isPaid && (
+                                  <span className="text-green-400 font-bold">Paid ✅</span>
+                                )}
+                                {showActionButtons && !isPaid && (
+                                  <div className="flex flex-wrap gap-2 pt-2">
                                     <button
-                                      onClick={() => customReq && handleEditSubmit(customReq)}
+                                      onClick={() => customReq && handleAccept(customReq)}
+                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800"
+                                    >
+                                      Accept
+                                    </button>
+                                    <button
+                                      onClick={() => customReq && handleDecline(customReq)}
+                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800"
+                                    >
+                                      Decline
+                                    </button>
+                                    <button
+                                      onClick={() => customReq && handleEditRequest(customReq)}
                                       className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
                                     >
-                                      Submit Edit
-                                    </button>
-                                    <button
-                                      onClick={() => setEditRequestId(null)}
-                                      className="bg-gray-300 text-black px-3 py-1 rounded text-xs hover:bg-gray-400"
-                                    >
-                                      Cancel
+                                      Edit
                                     </button>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                                )}
+                                {editRequestId === customReq?.id && customReq && (
+                                  <div className="mt-2 space-y-2 bg-black/30 p-2 rounded">
+                                    <input
+                                      type="text"
+                                      placeholder="Title"
+                                      value={editTitle}
+                                      onChange={e => setEditTitle(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="Price (USD)"
+                                      value={editPrice}
+                                      onChange={e => setEditPrice(Number(e.target.value))}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Tags (comma-separated)"
+                                      value={editTags}
+                                      onChange={e => setEditTags(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                    />
+                                    <textarea
+                                      placeholder="Message"
+                                      value={editMessage}
+                                      onChange={e => setEditMessage(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                    />
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => customReq && handleEditSubmit(customReq)}
+                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
+                                      >
+                                        Submit Edit
+                                      </button>
+                                      <button
+                                        onClick={() => setEditRequestId(null)}
+                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
+                    
+                    {/* Auto-scroll anchor */}
+                    <div ref={messagesEndRef} />
                   </div>
-
-                  {!isUserBlocked && (
-                    <div className="border-t pt-4 mt-auto">
-                       {/* Display selected image preview */}
-                      {selectedImage && (
-                        <div className="mb-2">
-                          <img src={selectedImage} alt="Preview" className="max-w-xs max-h-32 rounded" />
+                </div>
+                
+                {/* Message input */}
+                {!isUserBlocked && (
+                  <div className="px-4 py-3 border-t border-gray-800 bg-[#1a1a1a]">
+                    {/* Selected image preview */}
+                    {selectedImage && (
+                      <div className="mb-2">
+                        <div className="relative inline-block">
+                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded" />
                           <button
                             onClick={() => {
                               setSelectedImage(null);
                               if (fileInputRef.current) {
-                                fileInputRef.current.value = ''; // Clear file input
+                                fileInputRef.current.value = '';
                               }
                             }}
-                            className="ml-2 text-red-500 text-xs"
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs"
+                            style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           >
-                            Remove
+                            <X size={14} />
                           </button>
                         </div>
-                      )}
-                      <div className="flex items-center gap-2 mb-2">
-                         {/* Hidden file input */}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          ref={fileInputRef}
-                          style={{ display: 'none' }}
-                          onChange={handleImageSelect}
-                        />
-                         {/* Paperclip icon button */}
-                        <button
-                          onClick={triggerFileInput}
-                          className="p-1 rounded hover:bg-gray-200"
-                          title="Attach Image"
-                        >
-                           {/* Simple paperclip SVG icon */}
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                          </svg>
-                        </button>
                       </div>
-                      <textarea
-                        value={replyMessage}
-                        onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder={selectedImage ? "Add a caption..." : "Type your reply..."}
-                        className="w-full p-2 border rounded mb-2 text-black"
-                      />
-                      <div className="text-right">
+                    )}
+                    
+                    <div className="flex flex-col gap-2">
+                      {/* Message input */}
+                      <div className="relative">
+                        <textarea
+                          ref={inputRef}
+                          value={replyMessage}
+                          onChange={(e) => setReplyMessage(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder={selectedImage ? "Add a caption..." : "Type a message"}
+                          className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] max-h-28 resize-none"
+                          rows={2}
+                        />
+                        <div className="absolute bottom-2 right-2">
+                          <span className="text-xs text-gray-400">{replyMessage.length}/250</span>
+                        </div>
+                      </div>
+                      
+                      {/* Input actions */}
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2">
+                          {/* Attachment button */}
+                          <button
+                            onClick={triggerFileInput}
+                            className="p-2 rounded-full bg-[#ff950e] text-black hover:bg-[#e88800]"
+                            title="Attach Image"
+                          >
+                            <Paperclip size={20} />
+                          </button>
+                          
+                          {/* Hidden file input */}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={handleImageSelect}
+                          />
+                        </div>
+                        
+                        {/* Send button */}
                         <button
                           onClick={handleReply}
-                          className="bg-black hover:bg-[#ff950e] hover:text-black text-white px-4 py-2 rounded"
-                          disabled={!replyMessage.trim() && !selectedImage} // Disable send button if no text or image
+                          disabled={!replyMessage.trim() && !selectedImage}
+                          className={`px-4 py-2 rounded-full flex items-center gap-2 ${
+                            (!replyMessage.trim() && !selectedImage)
+                              ? 'bg-[#333] text-gray-500 cursor-not-allowed'
+                              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
+                          }`}
                         >
-                          Send Reply
+                          <Send size={18} /> Send
                         </button>
                       </div>
                     </div>
-                  )}
-
-                  {isUserBlocked && (
-                    <p className="text-center text-sm text-red-500 italic">
-                      You have blocked this buyer.
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-gray-500">Select a conversation to view messages.</p>
-              )}
-            </section>
+                  </div>
+                )}
+                
+                {isUserBlocked && (
+                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a]">
+                    You have blocked this buyer
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-400">
+                <div className="text-center p-4">
+                  <div className="flex justify-center mb-4">
+                    <MessageSquare size={64} className="text-gray-600" />
+                  </div>
+                  <p className="text-xl mb-2">Select a conversation to view messages</p>
+                  <p className="text-sm">Your messages will appear here</p>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </main>
+        </div>
+      </div>
     </RequireAuth>
   );
 }

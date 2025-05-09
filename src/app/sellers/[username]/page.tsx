@@ -310,7 +310,7 @@ export default function SellerProfilePage() {
             )}
             {user?.role === 'buyer' && user.username !== username && (
               <Link
-                href={`/buyers/messages?recipient=${username}`}
+                href={`/buyers/messages?thread=${username}`}
                 className="flex items-center gap-2 bg-gray-800 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
               >
                 <Mail className="w-5 h-5" />
