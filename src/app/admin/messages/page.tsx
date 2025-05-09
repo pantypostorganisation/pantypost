@@ -49,14 +49,15 @@ export default function AdminMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  if (!user || (user.username !== 'oakley' && user.username !== 'gerome')) return null;
+  // Check if user is admin - do this after all hooks are defined
+  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, messages]);
 
-  const username = user.username;
+  const username = user?.username || '';
 
   // Prepare threads and messages
   const threads: { [user: string]: Message[] } = {};
@@ -229,6 +230,20 @@ export default function AdminMessagesPage() {
     
     return 'Just now';
   };
+
+  // Render the component only if user is admin
+  if (!isAdmin) {
+    return (
+      <RequireAuth role="admin">
+        <div className="h-screen flex items-center justify-center bg-black">
+          <div className="bg-[#121212] rounded-lg shadow-lg p-8 max-w-md">
+            <h1 className="text-2xl font-bold text-[#ff950e] mb-4">Access Denied</h1>
+            <p className="text-gray-300">Only admin users can access this page.</p>
+          </div>
+        </div>
+      </RequireAuth>
+    );
+  }
 
   return (
     <RequireAuth role="admin">
