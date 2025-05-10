@@ -30,23 +30,20 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // Only username check for admin links
   const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
   const username = user?.username ?? '';
 
-  // Show all notifications for the seller, no over-filtering
   const notifications = user?.role === 'seller' ? sellerNotifications || [] : [];
 
-  // Unread messages counter (works for both buyer and seller)
   const unreadMessages = user?.username
     ? Object.values(messages)
-        .flat()
-        .filter(
-          (msg) =>
-            msg.receiver === user.username &&
-            msg.read === false
-        )
+      .flat()
+      .filter(
+        (msg) =>
+          (msg.receiver === user.username || msg.sender === user.username) &&
+          msg.read === false
+      )
     : [];
   const unreadCount = unreadMessages.length;
 
@@ -99,7 +96,6 @@ export default function Header() {
           <span>Browse</span>
         </Link>
 
-        {/* ADMIN BUTTONS (for oakley/gerome, regardless of role) */}
         {mounted && isAdminUser && (
           <>
             <div className="relative flex items-center min-w-[60px]">
@@ -133,7 +129,6 @@ export default function Header() {
           </>
         )}
 
-        {/* SELLER BUTTONS (for non-admin sellers) */}
         {mounted && role === 'seller' && !isAdminUser && (
           <>
             <Link href="/sellers/my-listings" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">My Listings</Link>
@@ -170,7 +165,6 @@ export default function Header() {
             <Link href="/sellers/subscribers" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <Users className="w-4 h-4" />
             </Link>
-            {/* Orders to Fulfil - Prominent button with badge */}
             <div className="relative flex items-center">
               <Link
                 href="/sellers/orders-to-fulfil"
@@ -186,7 +180,6 @@ export default function Header() {
                 </span>
               )}
             </div>
-            {/* Notification Bell */}
             <div className="relative flex items-center" ref={notifRef}>
               <button
                 onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -247,7 +240,6 @@ export default function Header() {
           </>
         )}
 
-        {/* BUYER BUTTONS */}
         {mounted && role === 'buyer' && !isAdminUser && (
           <>
             <Link href="/buyers/dashboard" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">Dashboard</Link>
