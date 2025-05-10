@@ -187,7 +187,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         [seller]: (prev[seller] || 0) + sellerCut,
       }));
 
-      updateWallet('oakley', platformCut);
+      updateWallet('admin', platformCut);
 
       const order: Order = {
         ...listing,
@@ -241,7 +241,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setBuyerBalance(buyer, buyerBalance - amount);
       setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
 
-      updateWallet('oakley', adminCut);
+      updateWallet('admin', adminCut);
 
       if (addSellerNotification) {
         addSellerNotification(
@@ -311,13 +311,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const wallet: { [username: string]: number } = {
     ...buyerBalances,
     ...sellerBalances,
-    oakley: adminBalance,
-    gerome: adminBalance,
     admin: adminBalance,
   };
-
   const updateWallet = (username: string, amount: number, orderToFulfil?: Order) => {
-    if (["oakley", "gerome", "admin"].includes(username)) {
+    if (username === "admin") {
       setAdminBalanceState((prev) => prev + amount);
     } else if (username in sellerBalances || (orderToFulfil && orderToFulfil.seller === username)) {
       setSellerBalance(username, (sellerBalances[username] || 0) + amount);
