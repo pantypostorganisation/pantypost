@@ -41,36 +41,36 @@ export function usePaginatedMessages(
     sortDirection = 'ascending',
     loadMoreTriggerIndex = 5
   } = options;
-  
+
   // Keep original messages reference to detect changes
   const messagesRef = useRef<Message[]>([]);
-  
+
   // State for pagination
   const [page, setPage] = useState(initialPage);
   const [displayedMessages, setDisplayedMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
-  
+
   // Track conversation to reset pagination when it changes
   const conversationId = useRef<string | null>(null);
-  
+
   // Generate a conversation ID based on participants
   const getConversationId = useCallback((messages: Message[]): string => {
     if (messages.length === 0) return 'empty';
     const sampleMessage = messages[0];
     return `${sampleMessage.sender}-${sampleMessage.receiver}`;
   }, []);
-  
+
   // Reset pagination when conversation changes
   useEffect(() => {
     const currentConversationId = getConversationId(messages);
-    
+
     if (currentConversationId !== conversationId.current) {
       // New conversation detected
       conversationId.current = currentConversationId;
       setPage(initialPage);
       setAllLoaded(false);
-      
+
       // Get initial page of messages
       if (messages.length > 0) {
         const sorted = sortMessages(messages, sortDirection);
@@ -83,7 +83,7 @@ export function usePaginatedMessages(
       }
     }
   }, [messages, initialPage, pageSize, sortDirection, getConversationId]);
-  
+
   // Helper function to sort messages
   const sortMessages = (messages: Message[], direction: 'ascending' | 'descending'): Message[] => {
     return [...messages].sort((a, b) => {
@@ -92,36 +92,36 @@ export function usePaginatedMessages(
       return direction === 'ascending' ? timeA - timeB : timeB - timeA;
     });
   };
-  
+
   // Effect to load more messages when page changes
   useEffect(() => {
     // Skip initial page (already handled)
     if (page === initialPage) return;
-    
+
     const loadMoreMessages = async () => {
       setIsLoading(true);
-      
+
       try {
         // Simulate network delay for smoother UX
         await new Promise(resolve => setTimeout(resolve, 200));
-        
+
         const sorted = sortMessages(messages, sortDirection);
-        const start = 0;
+        const start = page * pageSize;
         const end = Math.min((page + 1) * pageSize, sorted.length);
-        
-        // Get all messages up to the current page
+
+        // Get messages for the current page
         const newDisplayedMessages = sorted.slice(start, end);
-        
-        setDisplayedMessages(newDisplayedMessages);
+
+        setDisplayedMessages(prevMessages => [...prevMessages, ...newDisplayedMessages]);
         setAllLoaded(end >= sorted.length);
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     loadMoreMessages();
   }, [page, messages, pageSize, sortDirection, initialPage]);
-  
+
   // Check for new messages and add them to the displayed messages
   useEffect(() => {
     // Skip if initial render or no messages displayed yet
@@ -129,39 +129,39 @@ export function usePaginatedMessages(
       messagesRef.current = messages;
       return;
     }
-    
+
     // If message count changed, check if we need to update displayed messages
     if (messages.length !== messagesRef.current.length) {
       const oldConversationId = getConversationId(messagesRef.current);
       const newConversationId = getConversationId(messages);
-      
+
       // If same conversation, check for new messages
       if (oldConversationId === newConversationId) {
         const oldLatestDate = new Date(
           messagesRef.current[messagesRef.current.length - 1]?.date || 0
         ).getTime();
-        
+
         // Find new messages (those with date newer than the latest in our ref)
-        const newMessages = messages.filter(msg => 
+        const newMessages = messages.filter(msg =>
           new Date(msg.date).getTime() > oldLatestDate
         );
-        
+
         // If there are new messages, add them to displayed messages
         if (newMessages.length > 0) {
           const sorted = sortMessages(newMessages, sortDirection);
           setDisplayedMessages(prev => [...prev, ...sorted]);
         }
       }
-      
+
       // Update reference
       messagesRef.current = messages;
     }
   }, [messages, displayedMessages, getConversationId, sortDirection]);
-  
+
   // Check if we're approaching the end of the list
   useEffect(() => {
     if (isLoading || allLoaded) return;
-    
+
     // If we're showing the last {loadMoreTriggerIndex} messages from the current page,
     // automatically load more
     const threshold = displayedMessages.length - loadMoreTriggerIndex;
@@ -169,19 +169,19 @@ export function usePaginatedMessages(
       loadMore();
     }
   }, [displayedMessages.length, isLoading, allLoaded, loadMoreTriggerIndex]);
-  
+
   // Function to load more messages
   const loadMore = useCallback(() => {
     if (isLoading || allLoaded) return;
     setPage(prevPage => prevPage + 1);
   }, [isLoading, allLoaded]);
-  
+
   // Reset pagination data
   const reset = useCallback(() => {
     setPage(initialPage);
     setAllLoaded(false);
     conversationId.current = null;
-    
+
     // Load initial page
     if (messages.length > 0) {
       const sorted = sortMessages(messages, sortDirection);
@@ -192,10 +192,10 @@ export function usePaginatedMessages(
       setDisplayedMessages([]);
       setAllLoaded(true);
     }
-    
+
     messagesRef.current = messages;
   }, [messages, initialPage, pageSize, sortDirection]);
-  
+
   return {
     displayedMessages,
     isLoading,
