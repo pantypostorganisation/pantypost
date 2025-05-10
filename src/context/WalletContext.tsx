@@ -22,6 +22,16 @@ type Order = {
   wearTime?: string; // Note: This seems to correspond to 'hoursWorn' in Listing type
 };
 
+type Listing = {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  markedUpPrice?: number;
+  seller: string;
+  imageUrls?: string[];
+};
+
 type Withdrawal = {
   amount: number;
   date: string;
@@ -35,9 +45,9 @@ type WalletContextType = {
   getBuyerBalance: (username: string) => number;
   setAdminBalance: (balance: number) => void;
   setSellerBalance: (seller: string, balance: number) => void;
+
   getSellerBalance: (seller: string) => number;
-  // Updated type to expect the full Listing object
-  purchaseListing: (listing: any, buyerUsername: string) => boolean; // Using 'any' temporarily for simplicity, ideally define a specific type if Listing is not directly usable
+  purchaseListing: (listing: Listing, buyerUsername: string) => boolean;
   subscribeToSellerWithPayment: (
     buyer: string,
     seller: string,
@@ -63,16 +73,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
+
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
 
-  // Notification callback injected by ListingContext
   const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
 
-  // Allow ListingContext to inject the notification function
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -150,23 +158,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const addOrder = (order: Order) => {
     setOrderHistory((prev) => [...prev, order]);
   };
-
-  // Modified purchaseListing to save the image URL
-  const purchaseListing = (listing: any, buyerUsername: string): boolean => {
+  const purchaseListing = (listing: Listing, buyerUsername: string): boolean => {
     const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
       ? listing.markedUpPrice
       : listing.price;
-
     const seller = listing.seller;
     const sellerCut = listing.price * 0.9;
     const platformCut = price - sellerCut;
     const currentBuyerBalance = getBuyerBalance(buyerUsername);
-
     if (currentBuyerBalance < price) {
       return false;
     }
 
-    // Transaction Locking
     const transactionLockKey = `transaction_lock_${buyerUsername}_${seller}`;
     if (localStorage.getItem(transactionLockKey)) {
       return false; // Transaction is already in progress
@@ -174,11 +177,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(transactionLockKey, 'locked');
 
     try {
-      // Input Validation
       if (price <= 0 || !listing.title || !listing.id || !seller) {
         return false;
       }
-
       setBuyerBalance(buyerUsername, currentBuyerBalance - price);
 
       setSellerBalancesState((prev) => ({
@@ -192,14 +193,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...listing,
         buyer: buyerUsername,
         date: new Date().toISOString(),
-        imageUrl: listing.imageUrls?.[0] || undefined, // Explicitly add the first image URL
-        // Note: 'wearTime' in Order type seems to correspond to 'hoursWorn' in Listing type.
-        // If you need hoursWorn in the order, you might need to map it explicitly too.
-        // For now, keeping it as is based on the original Order type.
+        imageUrl: listing.imageUrls?.[0] || undefined,
       } as Order;
 
       addOrder(order);
-
       const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
         ? listing.markedUpPrice.toFixed(2)
         : listing.price.toFixed(2);
@@ -353,7 +350,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // --- TIP LOGIC WITH NOTIFICATION ---
   const sendTip = (buyer: string, seller: string, amount: number): boolean => {
     if (!buyer || !seller || amount <= 0) return false;
     const buyerBalance = getBuyerBalance(buyer);
@@ -362,7 +358,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setBuyerBalance(buyer, buyerBalance - amount);
     setSellerBalance(seller, getSellerBalance(seller) + amount);
 
-    // Add notification for the seller
     if (addSellerNotification) {
       addSellerNotification(
         seller,
