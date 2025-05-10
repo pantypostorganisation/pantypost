@@ -10,7 +10,7 @@ export default function LoginPage() {
   const { login, isAuthReady, user } = useListings();
 
   const [username, setUsername] = useState('');
-  const [role, setRole] = useState<'buyer' | 'seller' | null>(null);
+  const [role, setRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -24,10 +24,13 @@ export default function LoginPage() {
       setError('Please enter a username and select a role.');
       return;
     }
+    if (role === 'admin' && username.trim() !== 'gerome' && username.trim() !== 'oakley') {
+      setError('Invalid admin username. Please use "gerome" or "oakley".');
+      return;
+    }
     setError('');
     login(username.trim(), role);
   };
-
   return (
     <div className="min-h-screen flex items-start justify-center pt-6 bg-black">
       <main className="w-full max-w-md mx-auto p-8 bg-[#1a1a1a] rounded-3xl shadow-xl flex flex-col items-center text-white">
@@ -93,6 +96,16 @@ export default function LoginPage() {
           >
             <User className="w-5 h-5" />
             Seller
+          </button>
+          <button
+            type="button"
+            onClick={() => setRole('admin')}
+            className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg font-semibold border transition
+                  ${role === 'admin'
+                ? 'bg-[#ff950e] text-black border-[#ff950e] shadow'
+                : 'bg-black text-white border-gray-600 hover:bg-[#1a1a1a]'}`}
+          >
+            Admin
           </button>
         </div>
 

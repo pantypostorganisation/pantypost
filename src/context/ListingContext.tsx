@@ -215,14 +215,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const login = (username: string, selectedRole: Role) => {
     const normalized = username.trim().toLowerCase();
     const actualRole: Role =
-      normalized === 'gerome' || normalized === 'oakley' ? 'admin' : selectedRole;
+      (normalized === 'gerome' || normalized === 'oakley') ? 'admin' : selectedRole;
 
     let existingUser: User | undefined = users[normalized];
-    if (existingUser && existingUser.role !== selectedRole) {
+    if (existingUser && existingUser.role !== selectedRole && actualRole !== 'admin') {
       alert("User already exists with a different role. You cannot sign up as both a seller and buyer.");
       return;
     }
-
     const newUser: User = {
       username: normalized,
       role: actualRole,
