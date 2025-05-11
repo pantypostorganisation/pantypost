@@ -701,22 +701,34 @@ export default function SellerVerifyPage() {
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
                 <div className="bg-[#1a1a1a] p-4 rounded-lg border border-gray-800">
-                  <div className="w-10 h-10 rounded-full bg-[#ff950e] bg-opacity-20 flex items-center justify-center mb-3">
-                    <BadgeCheck className="w-5 h-5 text-[#ff950e]" />
+                  <div className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center mb-3">
+                    <img 
+                      src="/verification_badge.png" 
+                      alt="Verification Badge" 
+                      className="w-6 h-6 object-contain"
+                    />
                   </div>
                   <h3 className="font-medium mb-1">Verified Badge</h3>
                   <p className="text-gray-400 text-xs">Display a verified badge on your profile and listings</p>
                 </div>
                 <div className="bg-[#1a1a1a] p-4 rounded-lg border border-gray-800">
-                  <div className="w-10 h-10 rounded-full bg-[#ff950e] bg-opacity-20 flex items-center justify-center mb-3">
-                    <Shield className="w-5 h-5 text-[#ff950e]" />
+                  <div className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center mb-3">
+                    <img 
+                      src="/more_listings_icon.png" 
+                      alt="More Listings" 
+                      className="w-6 h-6 object-contain"
+                    />
                   </div>
                   <h3 className="font-medium mb-1">More Listings</h3>
                   <p className="text-gray-400 text-xs">Post up to 25 listings (unverified sellers can post only 2)</p>
                 </div>
                 <div className="bg-[#1a1a1a] p-4 rounded-lg border border-gray-800">
-                  <div className="w-10 h-10 rounded-full bg-[#ff950e] bg-opacity-20 flex items-center justify-center mb-3">
-                    <DollarSign className="w-5 h-5 text-[#ff950e]" />
+                  <div className="w-10 h-10 rounded-full bg-[#181818] flex items-center justify-center mb-3">
+                    <img 
+                      src="/more_sales_icon.png" 
+                      alt="More Sales" 
+                      className="w-6 h-6 object-contain"
+                    />
                   </div>
                   <h3 className="font-medium mb-1">More Sales</h3>
                   <p className="text-gray-400 text-xs">Verified sellers typically get more sales due to higher trust</p>
