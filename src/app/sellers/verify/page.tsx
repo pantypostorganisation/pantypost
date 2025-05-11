@@ -679,15 +679,7 @@ export default function SellerVerifyPage() {
               <div className="flex items-center gap-4 mb-4">
                 <p className="text-gray-300 text-sm leading-relaxed flex-1">
                   Verified sellers gain more trust from buyers and can post up to 25 listings (vs just 2 for unverified sellers).
-                  Complete the verification process below to get your account verified and receive your 
-                  <span className="relative inline-flex items-center mx-1">
-                    verification badge
-                    <img 
-                      src="/verification_badge.png" 
-                      alt="Verification Badge"
-                      className="w-5 h-5 inline-block ml-1"
-                    />
-                  </span>
+                  Complete the verification process below to get your account verified and receive your verification badge.
                 </p>
                 {/* Preview of the verification badge */}
                 <div className="flex-shrink-0 w-20 h-20">
