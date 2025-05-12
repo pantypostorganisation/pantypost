@@ -37,6 +37,16 @@ type Withdrawal = {
   date: string;
 };
 
+type AdminAction = {
+  adminUser: string;
+  username: string;
+  role: 'buyer' | 'seller';
+  amount: number;
+  type: 'credit' | 'debit';
+  reason: string;
+  date: string;
+};
+
 type WalletContextType = {
   buyerBalances: { [username: string]: number };
   adminBalance: number;
@@ -45,7 +55,6 @@ type WalletContextType = {
   getBuyerBalance: (username: string) => number;
   setAdminBalance: (balance: number) => void;
   setSellerBalance: (seller: string, balance: number) => void;
-
   getSellerBalance: (seller: string) => number;
   purchaseListing: (listing: Listing, buyerUsername: string) => boolean;
   subscribeToSellerWithPayment: (
@@ -63,6 +72,10 @@ type WalletContextType = {
   updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void;
   sendTip: (buyer: string, seller: string, amount: number) => boolean;
   setAddSellerNotificationCallback?: (fn: (seller: string, message: string) => void) => void;
+  // New admin functions
+  adminCreditUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
+  adminDebitUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
+  adminActions: AdminAction[];
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -73,9 +86,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
-
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
-
+  const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
   const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
@@ -90,6 +102,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const orders = localStorage.getItem("wallet_orders");
     const sellerWds = localStorage.getItem("wallet_sellerWithdrawals");
     const adminWds = localStorage.getItem("wallet_adminWithdrawals");
+    const actions = localStorage.getItem("wallet_adminActions");
 
     if (buyers) setBuyerBalancesState(JSON.parse(buyers));
     if (admin) setAdminBalanceState(parseFloat(admin));
@@ -97,6 +110,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (orders) setOrderHistory(JSON.parse(orders));
     if (sellerWds) setSellerWithdrawals(JSON.parse(sellerWds));
     if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
+    if (actions) setAdminActions(JSON.parse(actions));
   }, []);
 
   useEffect(() => {
@@ -129,6 +143,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("wallet_adminWithdrawals", JSON.stringify(adminWithdrawals));
   }, [adminWithdrawals]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem("wallet_adminActions", JSON.stringify(adminActions));
+  }, [adminActions]);
+
   const getBuyerBalance = (username: string): number => {
     return buyerBalances[username] || 0;
   };
@@ -158,6 +177,94 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const addOrder = (order: Order) => {
     setOrderHistory((prev) => [...prev, order]);
   };
+
+  // New admin functions
+  const adminCreditUser = (username: string, role: 'buyer' | 'seller', amount: number, reason: string): boolean => {
+    if (!username || amount <= 0 || !reason) {
+      return false;
+    }
+
+    // Get the current admin user from localStorage if available
+    const currentUser = typeof window !== 'undefined' ? 
+      localStorage.getItem('panty_currentUser') : null;
+    const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
+
+    try {
+      if (role === 'buyer') {
+        const currentBalance = getBuyerBalance(username);
+        setBuyerBalance(username, currentBalance + amount);
+      } else if (role === 'seller') {
+        const currentBalance = getSellerBalance(username);
+        setSellerBalance(username, currentBalance + amount);
+      } else {
+        return false;
+      }
+
+      // Log the admin action
+      const action: AdminAction = {
+        adminUser,
+        username,
+        role,
+        amount,
+        type: 'credit',
+        reason,
+        date: new Date().toISOString()
+      };
+
+      setAdminActions(prev => [...prev, action]);
+      return true;
+    } catch (error) {
+      console.error("Error crediting user:", error);
+      return false;
+    }
+  };
+
+  const adminDebitUser = (username: string, role: 'buyer' | 'seller', amount: number, reason: string): boolean => {
+    if (!username || amount <= 0 || !reason) {
+      return false;
+    }
+
+    // Get the current admin user from localStorage if available
+    const currentUser = typeof window !== 'undefined' ? 
+      localStorage.getItem('panty_currentUser') : null;
+    const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
+
+    try {
+      if (role === 'buyer') {
+        const currentBalance = getBuyerBalance(username);
+        if (currentBalance < amount) {
+          return false; // Insufficient funds
+        }
+        setBuyerBalance(username, currentBalance - amount);
+      } else if (role === 'seller') {
+        const currentBalance = getSellerBalance(username);
+        if (currentBalance < amount) {
+          return false; // Insufficient funds
+        }
+        setSellerBalance(username, currentBalance - amount);
+      } else {
+        return false;
+      }
+
+      // Log the admin action
+      const action: AdminAction = {
+        adminUser,
+        username,
+        role,
+        amount,
+        type: 'debit',
+        reason,
+        date: new Date().toISOString()
+      };
+
+      setAdminActions(prev => [...prev, action]);
+      return true;
+    } catch (error) {
+      console.error("Error debiting user:", error);
+      return false;
+    }
+  };
+  
   const purchaseListing = (listing: Listing, buyerUsername: string): boolean => {
     const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
       ? listing.markedUpPrice
@@ -388,6 +495,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         updateWallet,
         sendTip,
         setAddSellerNotificationCallback,
+        // Add new admin functions
+        adminCreditUser,
+        adminDebitUser,
+        adminActions
       }}
     >
       {children}

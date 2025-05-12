@@ -17,6 +17,7 @@ import {
   Package,
   ShieldCheck,
   ClipboardCheck,
+  DollarSign
 } from 'lucide-react';
 
 export default function Header() {
@@ -121,6 +122,13 @@ export default function Header() {
             <Link href="/admin/verification-requests" className="flex items-center text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <ClipboardCheck className="w-4 h-4 mr-1" />
               Review Verifications
+            </Link>
+            <Link 
+              href="/admin/wallet-management" 
+              className="flex items-center text-white hover:text-primary text-xs px-2 py-1 rounded transition"
+            >
+              <DollarSign className="w-4 h-4 mr-1" />
+              Wallet Management
             </Link>
             <Link href="/wallet/admin" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               Admin Wallet
