@@ -9,9 +9,9 @@ import { useEffect, useState } from 'react';
 import StarRating from '@/components/StarRating';
 import {
   Lock, Mail, Gift, DollarSign, MessageCircle, ArrowRight,
-  AlertTriangle, Camera, Video, Users, Star, Crown, Clock
+  AlertTriangle, Camera, Video, Users, Star, Crown, Clock, Image as ImageIcon, X,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
-import Image from 'next/image';
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
@@ -26,34 +26,31 @@ export default function SellerProfilePage() {
   } = useListings();
   const {
     orderHistory,
-    getBuyerBalance,
-    getSellerBalance,
     sendTip,
   } = useWallet();
   const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
-  // Profile info
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
 
-  // Modals
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
   const [showTipModal, setShowTipModal] = useState(false);
-  const [showToast, setShowToast] = useState(false); // For subscribe success
+  const [showToast, setShowToast] = useState(false);
 
-  // Tip
   const [tipAmount, setTipAmount] = useState('');
   const [tipSuccess, setTipSuccess] = useState(false);
   const [tipError, setTipError] = useState('');
 
-  // Review
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  // Listings
   const hasAccess = user?.username && isSubscribed(user.username, username);
   const standardListings = listings.filter(
     (listing) => listing.seller === username && !listing.isPremium
@@ -62,56 +59,64 @@ export default function SellerProfilePage() {
     (listing) => listing.seller === username && listing.isPremium
   );
 
-  // Stats
   const reviews = getReviewsForSeller(username);
   const hasPurchased = orderHistory.some(
     (order) => order.seller === username && order.buyer === user?.username
   );
   const alreadyReviewed = user?.username && hasReviewed(username, user.username);
 
-  // Calculate total photos and videos from listings
   const sellerListings = listings.filter(listing => listing.seller === username);
   const totalPhotos = sellerListings.filter(listing => listing.imageUrls && listing.imageUrls.length > 0).length;
-  const totalVideos = 0; // Assuming no video count available from current data structure
+  const totalVideos = 0;
 
-  // Followers (subscriptions) - Use context subscriptions object
   const followers = Object.entries(subscriptions)
     .filter(([_, sellers]) => Array.isArray(sellers) && sellers.includes(username))
     .length;
 
-  // Average rating
   const averageRating =
     reviews.length > 0
       ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
       : null;
 
-  // --- VERIFIED BADGE LOGIC ---
   const sellerUser = users?.[username];
   const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
-  // Load profile info from sessionStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedBio = sessionStorage.getItem(`profile_bio_${username}`);
       const storedPic = sessionStorage.getItem(`profile_pic_${username}`);
       const storedSub = sessionStorage.getItem(`subscription_price_${username}`);
+      const storedGallery = localStorage.getItem(`profile_gallery_${username}`);
+
       if (storedBio) setBio(storedBio);
       if (storedPic) setProfilePic(storedPic);
       if (storedSub) setSubscriptionPrice(parseFloat(storedSub));
+      if (storedGallery) {
+        try {
+          const parsedGallery = JSON.parse(storedGallery);
+          if (Array.isArray(parsedGallery)) {
+            setGalleryImages(parsedGallery);
+          } else {
+            setGalleryImages([]);
+          }
+        } catch (error) {
+          console.error('Failed to parse stored gallery data:', error);
+          setGalleryImages([]);
+        }
+      } else {
+        setGalleryImages([]);
+      }
     }
   }, [username]);
 
-  // Review submit
   const handleSubmit = () => {
     if (!user?.username || rating < 1 || rating > 5 || !comment.trim()) return;
-
     addReview(username, {
       reviewer: user.username,
       rating,
       comment,
       date: new Date().toISOString(),
     });
-
     setSubmitted(true);
     setComment('');
     setRating(5);
@@ -124,7 +129,6 @@ export default function SellerProfilePage() {
     }
   }, [submitted]);
 
-  // Subscribe - Use subscribeToSeller from context
   const handleConfirmSubscribe = () => {
     if (!user?.username || user.role !== 'buyer' || subscriptionPrice === null) {
       alert('Cannot subscribe. Please check your login status and seller subscription price.');
@@ -141,14 +145,12 @@ export default function SellerProfilePage() {
     }
   };
 
-  // Unsubscribe - Use unsubscribeFromSeller from context
   const handleConfirmUnsubscribe = () => {
     if (!user?.username || user.role !== 'buyer') return;
     unsubscribeFromSeller(user.username, username);
     setShowUnsubscribeModal(false);
   };
 
-  // Tip Seller - Use sendTip from context
   const handleTip = () => {
     setTipError('');
     setTipSuccess(false);
@@ -174,7 +176,35 @@ export default function SellerProfilePage() {
     }, 1500);
   };
 
-  // Action buttons visibility
+  const openGalleryModal = (index: number) => {
+    if (galleryImages[index]) {
+      setCurrentImageIndex(index);
+      setSelectedImage(galleryImages[index]);
+      setShowGalleryModal(true);
+    }
+  };
+
+  const closeGalleryModal = () => {
+    setShowGalleryModal(false);
+    setSelectedImage(null);
+  };
+
+  const showNextImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation(); // Prevent modal close if clicked on button
+    if (galleryImages.length === 0) return;
+    const nextIndex = (currentImageIndex + 1) % galleryImages.length;
+    setCurrentImageIndex(nextIndex);
+    setSelectedImage(galleryImages[nextIndex]);
+  };
+
+  const showPrevImage = (e?: React.MouseEvent) => {
+    e?.stopPropagation(); // Prevent modal close if clicked on button
+    if (galleryImages.length === 0) return;
+    const prevIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
+    setCurrentImageIndex(prevIndex);
+    setSelectedImage(galleryImages[prevIndex]);
+  };
+
   const showSubscribeButton =
     user?.role === 'buyer' &&
     user.username !== username &&
@@ -185,22 +215,16 @@ export default function SellerProfilePage() {
     user.username !== username &&
     isSubscribed(user.username, username);
 
-  // UI
   return (
     <main className="min-h-screen bg-black text-white">
-      {/* Banner/Background Image (Optional) */}
-      <div className="w-full h-48 bg-gradient-to-r from-[#ff950e] to-yellow-600 relative" />
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 -mt-24">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {showToast && (
           <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
             ✅ Subscribed to {username} successfully!
           </div>
         )}
 
-        {/* Profile Card */}
         <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
-          {/* Profile Picture */}
           <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden mb-4 shadow-lg">
             {profilePic ? (
               <img
@@ -214,16 +238,14 @@ export default function SellerProfilePage() {
               </div>
             )}
           </div>
-
-          {/* Seller Info */}
           <div className="flex flex-col items-center text-center mb-6">
             <div className="flex items-center justify-center gap-3 mb-2">
               <span className="text-2xl sm:text-3xl font-bold text-white">{username}</span>
               {isVerified ? (
                 <div className="relative group">
-                  <img 
-                    src="/verification_badge.png" 
-                    alt="Verified" 
+                  <img
+                    src="/verification_badge.png"
+                    alt="Verified"
                     className="w-6 h-6"
                   />
                   <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
@@ -245,8 +267,6 @@ export default function SellerProfilePage() {
               {bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
             </p>
           </div>
-
-          {/* Stats */}
           <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
             <div className="flex flex-col items-center">
               <Camera className="w-6 h-6 text-[#ff950e] mb-1" />
@@ -278,8 +298,6 @@ export default function SellerProfilePage() {
               )}
             </div>
           </div>
-
-          {/* Action Buttons */}
           <div className="flex flex-wrap gap-3 justify-center w-full max-w-lg">
             {showSubscribeButton && (
               <button
@@ -329,7 +347,6 @@ export default function SellerProfilePage() {
           </div>
         </div>
 
-        {/* Listings Section */}
         <div className="mt-12">
           <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Listings by {username}</h2>
           {standardListings.length === 0 && premiumListings.length === 0 ? (
@@ -415,7 +432,38 @@ export default function SellerProfilePage() {
           )}
         </div>
 
-        {/* Reviews Section */}
+        <div className="mt-12">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white flex items-center gap-2">
+            <ImageIcon className="w-7 h-7 text-[#ff950e]" />
+            Photo Gallery
+          </h2>
+          {galleryImages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-6 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+              <ImageIcon className="w-12 h-12 text-gray-600 mb-3" />
+              <p className="text-lg">No gallery photos yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {galleryImages.map((image, index) => (
+                <div
+                  key={index}
+                  className="relative cursor-pointer overflow-hidden rounded-lg border border-gray-800 bg-[#1a1a1a] group"
+                  onClick={() => openGalleryModal(index)}
+                >
+                  <img
+                    src={image}
+                    alt={`Gallery photo ${index + 1}`}
+                    className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ImageIcon className="w-10 h-10 text-white" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="mt-12">
           <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
           {reviews.length === 0 ? (
@@ -438,7 +486,6 @@ export default function SellerProfilePage() {
               ))}
             </ul>
           )}
-
           {user?.role === 'buyer' && hasPurchased && !alreadyReviewed && (
             <div className="border-t border-gray-700 pt-8 mt-8" id="review-form">
               <h3 className="text-xl font-bold mb-4 text-white">Leave a Review</h3>
@@ -481,7 +528,6 @@ export default function SellerProfilePage() {
           )}
         </div>
 
-        {/* Modals (Tip, Subscribe, Unsubscribe) */}
         {showTipModal && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
             <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
@@ -565,6 +611,57 @@ export default function SellerProfilePage() {
                   Unsubscribe
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+                {/* Gallery Modal with Navigation */}
+        {showGalleryModal && selectedImage && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100] p-4"
+            onClick={closeGalleryModal} // Close modal on backdrop click
+          >
+            <div
+              className="relative max-w-4xl max-h-[90vh] w-auto h-auto flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()} // Prevent modal close when clicking inside
+            >
+              {/* Previous Button */}
+              {galleryImages.length > 1 && (
+                 <button
+                    onClick={showPrevImage}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-[110] bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all ml-2 sm:ml-4"
+                    aria-label="Previous image"
+                 >
+                    <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
+                 </button>
+              )}
+
+              {/* Image */}
+              <img
+                src={selectedImage}
+                alt="Gallery image"
+                className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+              />
+
+              {/* Next Button */}
+              {galleryImages.length > 1 && (
+                <button
+                  onClick={showNextImage}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-[110] bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all mr-2 sm:mr-4"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
+                </button>
+              )}
+
+              {/* Close Button for Modal */}
+              <button
+                onClick={closeGalleryModal}
+                className="absolute top-2 right-2 z-[110] bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
+                aria-label="Close gallery"
+              >
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
             </div>
           </div>
         )}
