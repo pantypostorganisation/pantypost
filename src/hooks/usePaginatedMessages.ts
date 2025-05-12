@@ -124,6 +124,8 @@ export function usePaginatedMessages(
 
   // Check for new messages and add them to the displayed messages
   useEffect(() => {
+    let isCurrent = true;
+
     // Skip if initial render or no messages displayed yet
     if (messagesRef.current.length === 0 || displayedMessages.length === 0) {
       messagesRef.current = messages;
@@ -147,7 +149,7 @@ export function usePaginatedMessages(
         );
 
         // If there are new messages, add them to displayed messages
-        if (newMessages.length > 0) {
+        if (newMessages.length > 0 && isCurrent) {
           const sorted = sortMessages(newMessages, sortDirection);
           setDisplayedMessages(prev => [...prev, ...sorted]);
         }
@@ -156,6 +158,10 @@ export function usePaginatedMessages(
       // Update reference
       messagesRef.current = messages;
     }
+
+    return () => {
+      isCurrent = false;
+    };
   }, [messages, displayedMessages, getConversationId, sortDirection]);
 
   // Check if we're approaching the end of the list
