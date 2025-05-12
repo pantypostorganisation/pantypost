@@ -14,64 +14,31 @@ export default function SellerWalletPage() {
   const [balance, setBalance] = useState(0);
   const logs = user ? sellerWithdrawals[user.username] || [] : [];
 
-  // Function to format currency consistently throughout the app
-  const formatCurrency = (amount: number): number => {
-    // Round to 2 decimal places, consistent with header display
-    return Math.round(amount * 100) / 100;
-  };
-
   useEffect(() => {
     if (user?.username) {
       const raw = getSellerBalance(user.username);
-      // Use the consistent formatting function
-      setBalance(formatCurrency(raw));
+      setBalance(parseFloat(raw.toFixed(2)));
     }
   }, [user, getSellerBalance, logs]);
 
   const handleWithdraw = () => {
-    if (!user?.username) {
-      setMessage('❌ User not authenticated.');
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setMessage('❌ Enter a valid amount.');
       return;
     }
 
-    try {
-      const amount = parseFloat(withdrawAmount);
-      if (isNaN(amount) || amount <= 0) {
-        setMessage('❌ Enter a valid amount.');
-        return;
-      }
-
-      // Format consistently using the same function
-      const formattedAmount = formatCurrency(amount);
-      
-      // Ensure the amount doesn't exceed available balance with a tiny buffer for floating-point issues
-      if (formattedAmount > balance + 0.001) {
-        setMessage('❌ Withdrawal exceeds available balance.');
-        return;
-      }
-
-      // Get the real-time balance directly from the context
-      const currentBalance = formatCurrency(getSellerBalance(user.username));
-      if (formattedAmount > currentBalance) {
-        setMessage('❌ Withdrawal exceeds available balance.');
-        return;
-      }
-
-      // Always withdraw exactly what the user asked for (after formatting)
-      addSellerWithdrawal(user.username, formattedAmount);
-      setMessage(`✅ Successfully withdrew $${formattedAmount.toFixed(2)}.`);
-      setWithdrawAmount('');
-    } catch (error) {
-      // Handle any errors from the withdrawal process
-      if (error instanceof Error) {
-        setMessage(`❌ ${error.message}`);
-      } else {
-        setMessage('❌ An error occurred during withdrawal.');
-      }
-      console.error('Withdrawal error:', error);
+    const rounded = parseFloat(amount.toFixed(2));
+    if (rounded > balance) {
+      setMessage('❌ Withdrawal exceeds available balance.');
+      return;
     }
-    
-    // Set a timeout to clear the message after 3 seconds
+
+    if (user && user.username) {
+      addSellerWithdrawal(user.username, rounded);
+    }
+    setMessage(`✅ Successfully withdrew $${rounded.toFixed(2)}.`);
+    setWithdrawAmount('');
     setTimeout(() => setMessage(''), 3000);
   };
 
@@ -95,7 +62,6 @@ export default function SellerWalletPage() {
             placeholder="Enter amount to withdraw"
             className="w-full border rounded p-2"
             min="0"
-            max={balance}
           />
           <button
             onClick={handleWithdraw}
@@ -127,7 +93,7 @@ export default function SellerWalletPage() {
             <ul className="text-sm space-y-1">
               {logs.map((entry, index) => (
                 <li key={index} className="text-gray-700">
-                  • Withdrew ${formatCurrency(entry.amount).toFixed(2)} on{' '}
+                  • Withdrew ${entry.amount.toFixed(2)} on{' '}
                   {new Date(entry.date).toLocaleString()}
                 </li>
               ))}
