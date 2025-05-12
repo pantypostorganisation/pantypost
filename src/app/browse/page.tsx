@@ -6,9 +6,11 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { Listing } from '@/context/ListingContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck
+  Crown, Sparkles, Trash2, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck,
+  Sliders, Tag, History, Calendar, TrendingUp, Heart, Filter, ChevronDown, ChevronUp, ChevronRight,
+  DollarSign, Eye
 } from 'lucide-react';
 
 type SellerProfile = {
@@ -16,30 +18,94 @@ type SellerProfile = {
   pic: string | null;
 };
 
+// Enhanced hour range options
 const hourRangeOptions = [
   { label: 'Any Hours', min: 0, max: Infinity },
   { label: '12+ Hours', min: 12, max: Infinity },
   { label: '24+ Hours', min: 24, max: Infinity },
   { label: '48+ Hours', min: 48, max: Infinity },
+  { label: '72+ Hours', min: 72, max: Infinity },
+];
+
+// Sort options
+const sortOptions = [
+  { label: 'Newest First', value: 'newest' },
+  { label: 'Price: Low to High', value: 'priceAsc' },
+  { label: 'Price: High to Low', value: 'priceDesc' },
+  { label: 'Most Popular', value: 'popular' },
+  { label: 'Most Viewed', value: 'viewed' },
+];
+
+// Added new popular tags for better browsing
+const popularTags = [
+  'thong', 'panties', 'lingerie', 'cotton', 'lace', 'satin', 'gym', 'workout',
+  'yoga', 'worn', 'used', 'new', 'black', 'red', 'pink', 'custom'
+];
+
+// Price range options
+const priceRangeOptions = [
+  { label: 'Under $50', min: '', max: '50' },
+  { label: '$50 - $100', min: '50', max: '100' },
+  { label: '$100 - $200', min: '100', max: '200' },
+  { label: '$200+', min: '200', max: '' },
 ];
 
 const PAGE_SIZE = 40;
 
 export default function BrowsePage() {
-  // Added 'users' to the useListings hook
   const { listings, removeListing, user, users, isSubscribed, addSellerNotification } = useListings();
   const { purchaseListing } = useWallet();
   const router = useRouter();
 
+  // State management for filters
   const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
   const [selectedHourRange, setSelectedHourRange] = useState(hourRangeOptions[0]);
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [searchTerm, setSearchTerm] = useState<string>('');
+  
+  // Enhanced price filtering
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
-  const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc'>('newest');
+  const [activePriceOption, setActivePriceOption] = useState<string>('');
+  
+  // Enhanced sort options
+  const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc' | 'popular' | 'viewed'>('newest');
+  
+  // Date filtering
+  const [daysAgo, setDaysAgo] = useState<number | null>(null);
+  
+  // Tag filtering
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
+  // UI state management
   const [page, setPage] = useState(0);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showTagSelector, setShowTagSelector] = useState(false);
+  const [showPriceRange, setShowPriceRange] = useState(false);
+  const [showSearchHistory, setShowSearchHistory] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [viewsData, setViewsData] = useState<Record<string, number>>({});
+  const [mobileFiltersVisible, setMobileFiltersVisible] = useState(false);
 
+  // Refs
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const priceDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (priceDropdownRef.current && !priceDropdownRef.current.contains(event.target as Node)) {
+        setShowPriceRange(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Load seller profiles
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const sellers = new Set(listings.map(listing => listing.seller));
@@ -50,13 +116,47 @@ export default function BrowsePage() {
         profiles[seller] = { bio, pic };
       });
       setSellerProfiles(profiles);
+      
+      // Load search history
+      const history = localStorage.getItem('search_history');
+      if (history) setSearchHistory(JSON.parse(history));
+      
+      // Load views data
+      const views = localStorage.getItem('listing_views');
+      if (views) setViewsData(JSON.parse(views));
     }
   }, [listings]);
 
+  // Reset to first page when any filter changes
   useEffect(() => {
     setPage(0);
-  }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
+  }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy, daysAgo, selectedTags]);
 
+  // Save search term to history when user searches
+  const saveSearchToHistory = useCallback(() => {
+    if (!searchTerm.trim()) return;
+    
+    const updatedHistory = [
+      searchTerm,
+      ...searchHistory.filter(term => term !== searchTerm)
+    ].slice(0, 10); // Keep only 10 most recent searches
+    
+    setSearchHistory(updatedHistory);
+    localStorage.setItem('search_history', JSON.stringify(updatedHistory));
+  }, [searchTerm, searchHistory]);
+
+  // Handle search with debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (searchTerm.trim()) {
+        saveSearchToHistory();
+      }
+    }, 1000);
+    
+    return () => clearTimeout(handler);
+  }, [searchTerm, saveSearchToHistory]);
+
+  // Purchase handler
   const handlePurchase = (listing: Listing, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!user || !listing.seller) return;
@@ -74,34 +174,161 @@ export default function BrowsePage() {
     }
   };
 
+  // Increment view count when navigating to a listing
+  const handleListingClick = (listingId: string) => {
+    // Update view count in localStorage
+    const currentViews = viewsData[listingId] || 0;
+    const updatedViews = { ...viewsData, [listingId]: currentViews + 1 };
+    setViewsData(updatedViews);
+    localStorage.setItem('listing_views', JSON.stringify(updatedViews));
+    
+    // Navigate to listing
+    router.push(`/browse/${listingId}`);
+  };
+
+  // Apply price range
+  const applyPriceRange = (range: { label: string, min: string, max: string }) => {
+    setMinPrice(range.min);
+    setMaxPrice(range.max);
+    setActivePriceOption(range.label);
+    setShowPriceRange(false);
+  };
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setMinPrice('');
+    setMaxPrice('');
+    setActivePriceOption('');
+    setSelectedHourRange(hourRangeOptions[0]);
+    setFilter('all');
+    setSortBy('newest');
+    setDaysAgo(null);
+    setSelectedTags([]);
+    if (searchInputRef.current) searchInputRef.current.focus();
+  };
+
+  // Toggle tag selection
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag) 
+        : [...prev, tag]
+    );
+  };
+
+  // Apply search from history
+  const applyHistorySearch = (term: string) => {
+    setSearchTerm(term);
+    setShowSearchHistory(false);
+  };
+
+  // Clear search history
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem('search_history');
+  };
+
+  // Get price filter display text
+  const getPriceDisplayText = () => {
+    if (activePriceOption) return activePriceOption;
+    if (minPrice && maxPrice) return `$${minPrice} - $${maxPrice}`;
+    if (minPrice) return `$${minPrice}+`;
+    if (maxPrice) return `Under $${maxPrice}`;
+    return 'Price';
+  };
+
+  // Apply filters to listings
   const filteredListings = listings
     .filter((listing: Listing) => {
+      // Filter by listing type (standard/premium)
       if (filter === 'standard' && listing.isPremium) return false;
       if (filter === 'premium' && !listing.isPremium) return false;
+      
+      // Filter by hours worn
       const hoursWorn = listing.hoursWorn ?? 0;
       if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
         return false;
       }
-      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
-        .join(' ')
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+      
+      // Filter by search term (in title, description, or tags)
+      const matchesSearch = !searchTerm.trim() || [
+        listing.title, 
+        listing.description, 
+        ...(listing.tags || [])
+      ].join(' ').toLowerCase().includes(searchTerm.toLowerCase());
+      
       if (!matchesSearch) return false;
+      
+      // Filter by price range
       const price = listing.markedUpPrice || listing.price;
       const min = parseFloat(minPrice) || 0;
       const max = parseFloat(maxPrice) || Infinity;
       if (price < min || price > max) return false;
+      
+      // Filter by date listed
+      if (daysAgo !== null) {
+        const now = new Date();
+        const listingDate = new Date(listing.date);
+        const diffTime = Math.abs(now.getTime() - listingDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > daysAgo) return false;
+      }
+      
+      // Filter by selected tags
+      if (selectedTags.length > 0) {
+        return selectedTags.every(tag => 
+          listing.tags && listing.tags.some(t => 
+            t.toLowerCase().includes(tag.toLowerCase())
+          )
+        );
+      }
+      
       return true;
     })
     .sort((a: Listing, b: Listing) => {
-      if (sortBy === 'priceAsc') return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
-      if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? b.price);
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
+      // Apply sorting options
+      switch (sortBy) {
+        case 'priceAsc':
+          return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
+        case 'priceDesc':
+          return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? a.price);
+        case 'popular':
+          // Sort by popularity (seller subscription count + views)
+          const aSeller = users[a.seller] || {};
+          const bSeller = users[b.seller] || {};
+          // Use 'as any' to bypass TypeScript type checking for subscriberCount
+          const aPopularity = ((aSeller as any).subscriberCount || 0) + (viewsData[a.id] || 0);
+          const bPopularity = ((bSeller as any).subscriberCount || 0) + (viewsData[b.id] || 0);
+          return bPopularity - aPopularity;
+        case 'viewed':
+          // Sort by view count
+          return (viewsData[b.id] || 0) - (viewsData[a.id] || 0);
+        case 'newest':
+        default:
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
     });
 
   const paginatedListings = filteredListings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filteredListings.length / PAGE_SIZE);
 
+  // Summary of active filters count
+  const getActiveFilterCount = () => {
+    let count = 0;
+    if (searchTerm) count++;
+    if (minPrice || maxPrice) count++;
+    if (filter !== 'all') count++;
+    if (selectedHourRange.label !== 'Any Hours') count++;
+    if (daysAgo !== null) count++;
+    if (selectedTags.length > 0) count++;
+    if (sortBy !== 'newest') count++;
+    return count;
+  };
+  
+  const activeFilterCount = getActiveFilterCount();
+
+  // Pagination navigation UI
   function renderPageIndicators() {
     if (totalPages <= 1) return null;
     const indicators = [];
@@ -173,7 +400,8 @@ export default function BrowsePage() {
           </div>
         )}
 
-        <div className="sticky top-4 z-20 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-8 max-w-[1700px] mx-auto px-2 sm:px-6">
+        {/* Enhanced Search Header - Desktop */}
+        <div className="sticky top-4 z-20 flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-8 max-w-[1700px] mx-auto px-2 sm:px-6 hidden md:flex">
           <h1
             className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#ff950e] drop-shadow-[0_2px_8px_rgba(255,149,14,0.18)] relative"
             style={{
@@ -183,60 +411,497 @@ export default function BrowsePage() {
             Browse Listings
             <span className="absolute left-1/2 -translate-x-1/2 bottom-[-6px] w-20 h-1 bg-[#ff950e] blur-sm opacity-40 rounded-full pointer-events-none" />
           </h1>
+          
+          {/* Search & Filter Bar */}
           <div className="flex flex-wrap gap-2 items-center bg-[#181818]/80 backdrop-blur-md p-3 rounded-2xl shadow border border-gray-800 w-full xl:w-auto">
-            <div className="relative flex items-center">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#ff950e] w-5 h-5" />
-              <input
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search listings..."
-                className="pl-10 pr-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-2 focus:ring-[#ff950e] w-32 sm:w-48"
-              />
+            <div className="relative">
+              <div className="relative flex items-center">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#ff950e] w-5 h-5" />
+                <input
+                  ref={searchInputRef}
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search listings..."
+                  className="pl-10 pr-8 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-2 focus:ring-[#ff950e] w-32 sm:w-48"
+                  onFocus={() => setShowSearchHistory(true)}
+                  onBlur={() => setTimeout(() => setShowSearchHistory(false), 200)}
+                />
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+              
+              {/* Search History Dropdown */}
+              {showSearchHistory && searchHistory.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-[#222] border border-gray-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+                  <div className="flex items-center justify-between p-2 border-b border-gray-700">
+                    <span className="text-xs text-gray-400">Recent Searches</span>
+                    <button 
+                      onClick={clearSearchHistory}
+                      className="text-xs text-[#ff950e] hover:text-[#e88800]"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  <ul>
+                    {searchHistory.map((term, index) => (
+                      <li 
+                        key={index}
+                        className="flex items-center gap-2 p-2 hover:bg-[#333] cursor-pointer text-sm text-gray-300"
+                        onClick={() => applyHistorySearch(term)}
+                      >
+                        <History size={14} className="text-gray-500" />
+                        {term}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <input
-              value={minPrice}
-              onChange={e => setMinPrice(e.target.value)}
-              placeholder="Min $"
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 w-20"
-            />
-            <input
-              value={maxPrice}
-              onChange={e => setMaxPrice(e.target.value)}
-              placeholder="Max $"
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 w-20"
-            />
+            
+            {/* Price Filter - COMPLETELY REVAMPED for GOD MODE */}
+            <div className="relative" ref={priceDropdownRef}>
+              <button 
+                onClick={() => setShowPriceRange(!showPriceRange)}
+                className={`flex items-center gap-1 px-3 py-2 rounded-lg bg-black border ${showPriceRange ? 'border-[#ff950e]' : 'border-gray-700'} text-sm text-white hover:border-[#ff950e] transition-colors`}
+              >
+                <DollarSign className="w-4 h-4 text-[#ff950e]" />
+                <span className="whitespace-nowrap">{getPriceDisplayText()}</span>
+                <ChevronDown size={16} className={`ml-1 transition-transform duration-200 ${showPriceRange ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {/* Price Range Dropdown - Stylish clean implementation */}
+              {showPriceRange && (
+                <div className="absolute top-full left-0 mt-2 bg-[#222] border border-gray-700 rounded-lg shadow-xl z-50 p-3 w-64 animate-fadeIn">
+                  <div className="pb-3 border-b border-gray-700 mb-3">
+                    <h4 className="text-xs font-semibold mb-2 text-gray-400">Custom Range</h4>
+                    <div className="flex items-center gap-2">
+                      <div className="relative w-full">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          value={minPrice}
+                          onChange={e => {
+                            setMinPrice(e.target.value);
+                            setActivePriceOption('');
+                          }}
+                          placeholder="Min"
+                          className="pl-6 pr-2 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-500 w-full focus:outline-none focus:border-[#ff950e]"
+                          type="number"
+                          min="0"
+                        />
+                      </div>
+                      <span className="text-gray-500">-</span>
+                      <div className="relative w-full">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                        <input
+                          value={maxPrice}
+                          onChange={e => {
+                            setMaxPrice(e.target.value);
+                            setActivePriceOption('');
+                          }}
+                          placeholder="Max"
+                          className="pl-6 pr-2 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-500 w-full focus:outline-none focus:border-[#ff950e]"
+                          type="number"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <h4 className="text-xs font-semibold mb-2 text-gray-400">Quick Ranges</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {priceRangeOptions.map(range => (
+                      <button 
+                        key={range.label}
+                        onClick={() => applyPriceRange(range)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          activePriceOption === range.label
+                            ? 'bg-[#ff950e] text-black'
+                            : 'bg-[#333] text-gray-300 hover:bg-[#444]'
+                        }`}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-gray-700 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setMinPrice('');
+                        setMaxPrice(''); 
+                        setActivePriceOption('');
+                        setShowPriceRange(false);
+                      }}
+                      className="text-xs text-[#ff950e] hover:text-[#e88800] mr-3"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      onClick={() => setShowPriceRange(false)}
+                      className="text-xs text-white bg-[#ff950e] hover:bg-[#e88800] px-3 py-1 rounded-lg font-medium"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sort Options */}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white"
+              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white appearance-none cursor-pointer"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.5rem center',
+                paddingRight: '2rem'
+              }}
             >
-              <option value="newest">Newest</option>
-              <option value="priceAsc">Price: Low → High</option>
-              <option value="priceDesc">Price: High → Low</option>
+              {sortOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
+            
+            {/* Hours Worn */}
             <select
               value={selectedHourRange.label}
               onChange={(e) => {
                 const selectedOption = hourRangeOptions.find(opt => opt.label === e.target.value);
                 if (selectedOption) setSelectedHourRange(selectedOption);
               }}
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white"
+              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white appearance-none cursor-pointer"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.5rem center',
+                paddingRight: '2rem'
+              }}
             >
               {hourRangeOptions.map(option => (
                 <option key={option.label} value={option.label}>{option.label}</option>
               ))}
             </select>
+            
+            {/* Listing Type Filter */}
             <select
               value={filter}
               onChange={e => setFilter(e.target.value as any)}
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white"
+              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white appearance-none cursor-pointer"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.5rem center',
+                paddingRight: '2rem'
+              }}
             >
-              <option value="all">All</option>
+              <option value="all">All Types</option>
               <option value="standard">Standard</option>
               <option value="premium">Premium</option>
             </select>
+            
+            {/* Date Filter */}
+            <select
+              value={daysAgo === null ? '' : daysAgo.toString()}
+              onChange={e => setDaysAgo(e.target.value ? parseInt(e.target.value) : null)}
+              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white appearance-none cursor-pointer"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.5rem center',
+                paddingRight: '2rem'
+              }}
+            >
+              <option value="">Any Time</option>
+              <option value="1">Last 24 Hours</option>
+              <option value="3">Last 3 Days</option>
+              <option value="7">Last Week</option>
+              <option value="30">Last Month</option>
+            </select>
+            
+            {/* Tag Selector Button - Keep this orange as requested */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowTagSelector(!showTagSelector)}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-[#ff950e] text-black text-sm font-medium hover:bg-[#e0850d] transition-colors"
+              >
+                <Tag className="w-4 h-4" />
+                Tags
+                {selectedTags.length > 0 && (
+                  <span className="flex items-center justify-center w-4 h-4 ml-1 bg-black text-white text-xs rounded-full">
+                    {selectedTags.length}
+                  </span>
+                )}
+                <ChevronDown size={16} className={`ml-1 transition-transform duration-200 ${showTagSelector ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {/* Tag Selector Dropdown */}
+              {showTagSelector && (
+                <div className="absolute top-full right-0 mt-2 bg-[#222] border border-gray-700 rounded-lg shadow-xl z-50 p-3 w-64 animate-fadeIn">
+                  <h4 className="text-sm font-semibold mb-2 text-gray-300">Filter by Tags</h4>
+                  <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                    {popularTags.map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        className={`px-2 py-1 rounded-full text-xs ${
+                          selectedTags.includes(tag)
+                            ? 'bg-[#ff950e] text-black'
+                            : 'bg-[#333] text-gray-300 hover:bg-[#444]'
+                        } transition-colors`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Clear Filters Button - Only show when filters are active */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={handleClearFilters}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-900 hover:bg-red-800 text-white text-sm transition-colors"
+              >
+                <X size={14} />
+                Clear ({activeFilterCount})
+              </button>
+            )}
           </div>
         </div>
+        
+        {/* Mobile Search Header */}
+        <div className="md:hidden sticky top-0 z-30 bg-black bg-opacity-90 backdrop-blur-sm pb-2 pt-4 px-4">
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-xl font-bold text-[#ff950e]">Browse Listings</h1>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setMobileFiltersVisible(!mobileFiltersVisible)}
+                className={`p-2 rounded-lg ${mobileFiltersVisible ? 'bg-[#ff950e] text-black' : 'bg-[#181818] text-white'} transition-colors`}
+              >
+                <Filter size={20} />
+              </button>
+            </div>
+          </div>
+          
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#ff950e] w-5 h-5" />
+            <input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search listings..."
+              className="w-full py-2 pl-10 pr-8 rounded-lg bg-[#181818] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          
+          {/* Mobile Filters Panel */}
+          {mobileFiltersVisible && (
+            <div className="bg-[#181818] rounded-xl mt-2 p-3 border border-gray-800 shadow-lg animate-slideDown">
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Price Range</label>
+                  <div className="flex items-center gap-1">
+                    <div className="relative w-full">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                      <input
+                        value={minPrice}
+                        onChange={e => {
+                          setMinPrice(e.target.value);
+                          setActivePriceOption('');
+                        }}
+                        placeholder="Min"
+                        className="pl-5 pr-2 py-1 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-500 w-full"
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                    <span className="text-gray-500">-</span>
+                    <div className="relative w-full">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                      <input
+                        value={maxPrice}
+                        onChange={e => {
+                          setMaxPrice(e.target.value);
+                          setActivePriceOption('');
+                        }}
+                        placeholder="Max"
+                        className="pl-5 pr-2 py-1 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-500 w-full"
+                        type="number"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="w-full px-2 py-1 rounded-lg bg-black border border-gray-700 text-sm text-white"
+                  >
+                    {sortOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Hours Worn</label>
+                  <select
+                    value={selectedHourRange.label}
+                    onChange={(e) => {
+                      const selectedOption = hourRangeOptions.find(opt => opt.label === e.target.value);
+                      if (selectedOption) setSelectedHourRange(selectedOption);
+                    }}
+                    className="w-full px-2 py-1 rounded-lg bg-black border border-gray-700 text-sm text-white"
+                  >
+                    {hourRangeOptions.map(option => (
+                      <option key={option.label} value={option.label}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Type</label>
+                  <select
+                    value={filter}
+                    onChange={e => setFilter(e.target.value as any)}
+                    className="w-full px-2 py-1 rounded-lg bg-black border border-gray-700 text-sm text-white"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="standard">Standard</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Date Listed</label>
+                  <select
+                    value={daysAgo === null ? '' : daysAgo.toString()}
+                    onChange={e => setDaysAgo(e.target.value ? parseInt(e.target.value) : null)}
+                    className="w-full px-2 py-1 rounded-lg bg-black border border-gray-700 text-sm text-white"
+                  >
+                    <option value="">Any Time</option>
+                    <option value="1">Last 24 Hours</option>
+                    <option value="3">Last 3 Days</option>
+                    <option value="7">Last Week</option>
+                    <option value="30">Last Month</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Quick Price Ranges - Mobile */}
+              <div className="mb-3">
+                <label className="text-xs text-gray-400 block mb-1">Quick Price Ranges</label>
+                <div className="flex flex-wrap gap-1">
+                  {priceRangeOptions.map(range => (
+                    <button 
+                      key={range.label}
+                      onClick={() => applyPriceRange(range)}
+                      className={`px-2 py-1 rounded-lg text-xs ${
+                        activePriceOption === range.label
+                          ? 'bg-[#ff950e] text-black'
+                          : 'bg-[#333] text-gray-300'
+                      } transition-colors`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Tag Filters - Mobile */}
+              <div className="mb-2">
+                <label className="text-xs text-gray-400 block mb-1">Popular Tags</label>
+                <div className="flex flex-wrap gap-1">
+                  {popularTags.slice(0, 10).map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className={`px-2 py-0.5 rounded-full text-xs ${
+                        selectedTags.includes(tag)
+                          ? 'bg-[#ff950e] text-black'
+                          : 'bg-[#333] text-gray-300'
+                      } transition-colors`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Active Filters Summary & Clear Button */}
+              <div className="flex items-center justify-between text-xs text-gray-400 mt-2 pt-2 border-t border-gray-700">
+                <div>
+                  {activeFilterCount === 0 
+                    ? 'No filters applied' 
+                    : `${activeFilterCount} active filter${activeFilterCount !== 1 ? 's' : ''}`}
+                </div>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={handleClearFilters}
+                    className="text-[#ff950e]"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Selected Tags Display - When tags are selected */}
+        {selectedTags.length > 0 && (
+          <div className="max-w-[1700px] mx-auto px-6 mt-4 mb-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-400">Active Tags:</span>
+              {selectedTags.map(tag => (
+                <span 
+                  key={tag}
+                  className="bg-[#ff950e] text-black text-xs px-3 py-1 rounded-full flex items-center gap-1"
+                >
+                  {tag}
+                  <button 
+                    onClick={() => toggleTag(tag)}
+                    className="ml-1 hover:bg-black hover:text-white rounded-full w-4 h-4 flex items-center justify-center transition-colors"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Results Count */}
+        <div className="max-w-[1700px] mx-auto px-6 mt-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-400">
+              {filteredListings.length === 0 ? (
+                'No listings found'
+              ) : (
+                <>
+                  Found <span className="text-white font-semibold">{filteredListings.length}</span> listings
+                  {searchTerm ? ` matching "${searchTerm}"` : ''}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        
         <div className="max-w-[1700px] mx-auto px-6">
           {paginatedListings.length === 0 ? (
             <div className="text-center py-20 bg-[#181818] rounded-2xl border border-dashed border-gray-700 shadow-lg mt-10">
@@ -250,6 +915,12 @@ export default function BrowsePage() {
                   Premium listings require subscribing to the seller to view fully.
                 </p>
               )}
+              <button
+                onClick={handleClearFilters}
+                className="mt-6 px-6 py-2 bg-[#ff950e] text-black rounded-full font-bold transition-colors hover:bg-[#e0850d]"
+              >
+                Clear All Filters
+              </button>
             </div>
           ) : (
             <>
@@ -259,7 +930,6 @@ export default function BrowsePage() {
                   // Check seller's current verification status from users context
                   const sellerUser = users?.[listing.seller];
                   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-
 
                   // Card is a div with onClick, not a Link
                   return (
@@ -271,13 +941,22 @@ export default function BrowsePage() {
                       }}
                       tabIndex={0}
                       onClick={() => {
-                        if (!isLockedPremium) router.push(`/browse/${listing.id}`);
+                        if (!isLockedPremium) handleListingClick(listing.id);
                       }}
                     >
                       {listing.isPremium && (
                         <div className="absolute top-4 right-4 z-10">
                           <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow animate-pulse">
                             <Crown className="w-4 h-4 mr-1" /> Premium
+                          </span>
+                        </div>
+                      )}
+
+                      {/* View count badge */}
+                      {viewsData[listing.id] && viewsData[listing.id] > 0 && (
+                        <div className="absolute top-4 left-4 z-10">
+                          <span className="bg-black bg-opacity-70 text-white text-xs px-3 py-1 rounded-full flex items-center">
+                            <Eye className="w-3 h-3 mr-1 text-gray-400" /> {viewsData[listing.id]}
                           </span>
                         </div>
                       )}
@@ -422,6 +1101,33 @@ export default function BrowsePage() {
               )}
             </>
           )}
+        </div>
+
+        {/* Mobile Fixed Bottom Navigation */}
+        <div className="fixed bottom-0 left-0 w-full z-40 md:hidden bg-black border-t border-gray-800 px-4 py-3">
+          <div className="flex justify-between items-center">
+            <div className="text-xs text-gray-400">
+              {filteredListings.length} listings found
+            </div>
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={handleClearFilters}
+                  className="px-3 py-1.5 rounded-lg bg-red-900 text-white text-xs flex items-center"
+                >
+                  <X size={12} className="mr-1" /> Clear ({activeFilterCount})
+                </button>
+              )}
+              <button
+                onClick={() => setMobileFiltersVisible(!mobileFiltersVisible)}
+                className={`px-3 py-1.5 rounded-lg flex items-center text-xs ${
+                  mobileFiltersVisible ? 'bg-[#ff950e] text-black' : 'bg-[#232323] text-white'
+                }`}
+              >
+                <Filter size={12} className="mr-1" /> Filters
+              </button>
+            </div>
+          </div>
         </div>
       </main>
     </RequireAuth>
