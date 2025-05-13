@@ -5,12 +5,12 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import StarRating from '@/components/StarRating';
 import {
   Lock, Mail, Gift, DollarSign, MessageCircle, ArrowRight,
   AlertTriangle, Camera, Video, Users, Star, Crown, Clock, Image as ImageIcon, X,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Maximize
 } from 'lucide-react';
 
 export default function SellerProfilePage() {
@@ -37,6 +37,12 @@ export default function SellerProfilePage() {
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
+  
+  // Slideshow state
+  const [slideIndex, setSlideIndex] = useState(0);
+  const slideshowRef = useRef<NodeJS.Timeout | null>(null);
+  const slideshowInterval = 4000; // 4 seconds between slides
+  const [isPaused, setIsPaused] = useState(false);
 
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
@@ -108,6 +114,21 @@ export default function SellerProfilePage() {
       }
     }
   }, [username]);
+
+  // Setup slideshow with pause functionality
+  useEffect(() => {
+    if (galleryImages.length > 1 && !isPaused) {
+      slideshowRef.current = setInterval(() => {
+        setSlideIndex(prevIndex => (prevIndex + 1) % galleryImages.length);
+      }, slideshowInterval);
+    }
+    
+    return () => {
+      if (slideshowRef.current) {
+        clearInterval(slideshowRef.current);
+      }
+    };
+  }, [galleryImages.length, isPaused]);
 
   const handleSubmit = () => {
     if (!user?.username || rating < 1 || rating > 5 || !comment.trim()) return;
@@ -181,12 +202,14 @@ export default function SellerProfilePage() {
       setCurrentImageIndex(index);
       setSelectedImage(galleryImages[index]);
       setShowGalleryModal(true);
+      setIsPaused(true);
     }
   };
 
   const closeGalleryModal = () => {
     setShowGalleryModal(false);
     setSelectedImage(null);
+    setIsPaused(false);
   };
 
   const showNextImage = (e?: React.MouseEvent) => {
@@ -203,6 +226,36 @@ export default function SellerProfilePage() {
     const prevIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
     setCurrentImageIndex(prevIndex);
     setSelectedImage(galleryImages[prevIndex]);
+  };
+  
+  // Navigation functions
+  const goToPrevSlide = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSlideIndex(prevIndex => (prevIndex - 1 + galleryImages.length) % galleryImages.length);
+    
+    // Reset the timer and pause temporarily
+    if (slideshowRef.current) {
+      clearInterval(slideshowRef.current);
+      setIsPaused(true);
+      setTimeout(() => setIsPaused(false), 5000); // Resume after 5 seconds of inactivity
+    }
+  };
+  
+  const goToNextSlide = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSlideIndex(prevIndex => (prevIndex + 1) % galleryImages.length);
+    
+    // Reset the timer and pause temporarily
+    if (slideshowRef.current) {
+      clearInterval(slideshowRef.current);
+      setIsPaused(true);
+      setTimeout(() => setIsPaused(false), 5000); // Resume after 5 seconds of inactivity
+    }
+  };
+
+  const togglePause = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setIsPaused(prev => !prev);
   };
 
   const showSubscribeButton =
@@ -432,6 +485,7 @@ export default function SellerProfilePage() {
           )}
         </div>
 
+        {/* Simplified Photo Gallery with smaller controls */}
         <div className="mt-12">
           <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white flex items-center gap-2">
             <ImageIcon className="w-7 h-7 text-[#ff950e]" />
@@ -443,23 +497,85 @@ export default function SellerProfilePage() {
               <p className="text-lg">No gallery photos yet.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {galleryImages.map((image, index) => (
-                <div
-                  key={index}
-                  className="relative cursor-pointer overflow-hidden rounded-lg border border-gray-800 bg-[#1a1a1a] group"
-                  onClick={() => openGalleryModal(index)}
+            <div className="relative rounded-xl overflow-hidden border border-gray-800 shadow-xl bg-gradient-to-b from-[#1a1a1a] to-black">
+              {/* Slideshow Container */}
+              <div className="relative h-96 sm:h-[480px] overflow-hidden">
+                <div 
+                  className="flex transition-transform duration-700 ease-in-out h-full"
+                  style={{ transform: `translateX(-${slideIndex * 100}%)` }}
                 >
-                  <img
-                    src={image}
-                    alt={`Gallery photo ${index + 1}`}
-                    className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ImageIcon className="w-10 h-10 text-white" />
+                  {galleryImages.map((image, index) => (
+                    <div 
+                      key={index} 
+                      className="min-w-full h-full flex-shrink-0 flex items-center justify-center bg-black"
+                    >
+                      <img
+                        src={image}
+                        alt={`Gallery photo ${index + 1}`}
+                        className="h-full w-auto max-w-full object-contain cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
+                        onClick={() => openGalleryModal(index)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Navigation Arrows - 50% smaller */}
+                {galleryImages.length > 1 && (
+                  <>
+                    <button 
+                      className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
+                      onClick={goToPrevSlide}
+                      aria-label="Previous image"
+                    >
+                      <ChevronLeft strokeWidth={3} className="w-3 h-3" />
+                    </button>
+                    
+                    <button 
+                      className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
+                      onClick={goToNextSlide}
+                      aria-label="Next image"
+                    >
+                      <ChevronRight strokeWidth={3} className="w-3 h-3" />
+                    </button>
+                  </>
+                )}
+                
+                {/* Controls and image counter overlay */}
+                <div className="absolute bottom-0 left-0 right-0 flex justify-between items-center p-4 bg-gradient-to-t from-black to-transparent z-10">
+                  {/* Current slide indicator - keeps original size */}
+                  <div className="text-white font-medium text-sm bg-black bg-opacity-60 px-3 py-1 rounded-full">
+                    {slideIndex + 1} / {galleryImages.length}
+                  </div>
+                  
+                  {/* Controls - 50% smaller */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={togglePause}
+                      className="bg-black bg-opacity-60 text-white p-1 rounded-full hover:bg-opacity-80 transition-all"
+                      aria-label={isPaused ? "Play slideshow" : "Pause slideshow"}
+                    >
+                      {isPaused ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="6" y="4" width="4" height="16"></rect>
+                          <rect x="14" y="4" width="4" height="16"></rect>
+                        </svg>
+                      )}
+                    </button>
+                    
+                    <button
+                      onClick={() => openGalleryModal(slideIndex)}
+                      className="bg-black bg-opacity-60 text-white p-1 rounded-full hover:bg-opacity-80 transition-all flex items-center justify-center"
+                      aria-label="View fullscreen"
+                    >
+                      <Maximize className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
           )}
         </div>
@@ -615,53 +731,60 @@ export default function SellerProfilePage() {
           </div>
         )}
 
-                {/* Gallery Modal with Navigation */}
+        {/* Gallery Modal with Enhanced Navigation */}
         {showGalleryModal && selectedImage && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100] p-4"
+            className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[100] p-4"
             onClick={closeGalleryModal} // Close modal on backdrop click
           >
             <div
-              className="relative max-w-4xl max-h-[90vh] w-auto h-auto flex items-center justify-center"
+              className="relative max-w-5xl max-h-[90vh] w-auto h-auto flex items-center justify-center"
               onClick={(e) => e.stopPropagation()} // Prevent modal close when clicking inside
             >
-              {/* Previous Button */}
-              {galleryImages.length > 1 && (
-                 <button
-                    onClick={showPrevImage}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-[110] bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all ml-2 sm:ml-4"
-                    aria-label="Previous image"
-                 >
-                    <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
-                 </button>
-              )}
-
-              {/* Image */}
-              <img
-                src={selectedImage}
-                alt="Gallery image"
-                className="max-h-[85vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-              />
-
-              {/* Next Button */}
+              {/* Previous Button - 50% smaller */}
               {galleryImages.length > 1 && (
                 <button
-                  onClick={showNextImage}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-[110] bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all mr-2 sm:mr-4"
-                  aria-label="Next image"
+                  onClick={showPrevImage}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 z-[110] bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-90 transition-all shadow-lg"
+                  aria-label="Previous image"
                 >
-                  <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
+                  <ChevronLeft strokeWidth={3} className="w-3 h-3" />
                 </button>
               )}
 
-              {/* Close Button for Modal */}
+              {/* Image with gradient border */}
+              <div className="relative rounded-lg overflow-hidden p-[3px] bg-gradient-to-r from-[#ff950e] via-yellow-500 to-[#ff950e]">
+                <img
+                  src={selectedImage}
+                  alt="Gallery image"
+                  className="max-h-[85vh] max-w-[85vw] object-contain bg-black rounded"
+                />
+              </div>
+
+              {/* Next Button - 50% smaller */}
+              {galleryImages.length > 1 && (
+                <button
+                  onClick={showNextImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 z-[110] bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-90 transition-all shadow-lg"
+                  aria-label="Next image"
+                >
+                  <ChevronRight strokeWidth={3} className="w-3 h-3" />
+                </button>
+              )}
+
+              {/* Close Button for Modal - 50% smaller */}
               <button
                 onClick={closeGalleryModal}
-                className="absolute top-2 right-2 z-[110] bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
+                className="absolute top-4 right-4 z-[110] bg-white text-black p-1 rounded-full hover:bg-gray-200 transition-all"
                 aria-label="Close gallery"
               >
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                <X strokeWidth={3} className="w-3 h-3" />
               </button>
+              
+              {/* Image counter - same size */}
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-full font-medium text-sm">
+                {currentImageIndex + 1} / {galleryImages.length}
+              </div>
             </div>
           </div>
         )}
