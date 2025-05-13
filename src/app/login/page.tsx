@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { User, ShoppingBag } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function LoginPage() {
     if (isAuthReady && user) {
       router.push('/');
     }
-  }, [isAuthReady, user]);
+  }, [isAuthReady, user, router]);
 
   const handleLogin = () => {
     if (!username.trim() || !role) {
@@ -31,6 +32,7 @@ export default function LoginPage() {
     setError('');
     login(username.trim(), role);
   };
+  
   return (
     <div className="min-h-screen flex items-start justify-center pt-6 bg-black">
       <main className="w-full max-w-md mx-auto p-8 bg-[#1a1a1a] rounded-3xl shadow-xl flex flex-col items-center text-white">
@@ -115,6 +117,13 @@ export default function LoginPage() {
         >
           Log In
         </button>
+        
+        <div className="mt-6 text-center text-sm text-gray-400">
+          Don't have an account?{' '}
+          <Link href="/signup" className="text-[#ff950e] hover:underline font-medium">
+            Sign Up Now
+          </Link>
+        </div>
       </main>
     </div>
   );

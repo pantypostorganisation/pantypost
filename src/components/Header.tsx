@@ -39,12 +39,12 @@ export default function Header() {
 
   const unreadMessages = user?.username
     ? Object.values(messages)
-      .flat()
-      .filter(
-        (msg) =>
-          (msg.receiver === user.username || msg.sender === user.username) &&
-          msg.read === false
-      )
+        .flat()
+        .filter(
+          (msg) =>
+            (msg.receiver === user.username || msg.sender === user.username) &&
+            msg.read === false
+        )
     : [];
   const unreadCount = unreadMessages.length;
 
@@ -281,12 +281,20 @@ export default function Header() {
         )}
 
         {!user && (
-          <Link
-            href="/login"
-            className="bg-primary hover:bg-primary-dark text-white text-xs px-3 py-1 rounded-full transition font-bold shadow-lg"
-          >
-            Login
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="bg-primary text-white text-xs font-bold px-4 py-1.5 rounded-full transition hover:bg-primary-dark"
+            >
+              Log In
+            </Link>
+            <Link
+              href="/signup"
+              className="bg-primary text-white text-xs font-bold px-4 py-1.5 rounded-full transition hover:bg-primary-dark"
+            >
+              Sign Up
+            </Link>
+          </div>
         )}
 
         {mounted && user && (
