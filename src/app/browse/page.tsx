@@ -6,9 +6,10 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { Listing } from '@/context/ListingContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck
+  Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck,
+  Gavel, ArrowUp, Calendar, BarChart2, User, AlertTriangle
 } from 'lucide-react';
 
 type SellerProfile = {
@@ -27,11 +28,11 @@ const PAGE_SIZE = 40;
 
 export default function BrowsePage() {
   // Added 'users' to the useListings hook
-  const { listings, removeListing, user, users, isSubscribed, addSellerNotification } = useListings();
+  const { listings, removeListing, user, users, isSubscribed, addSellerNotification, placeBid } = useListings();
   const { purchaseListing } = useWallet();
   const router = useRouter();
 
-  const [filter, setFilter] = useState<'all' | 'standard' | 'premium'>('all');
+  const [filter, setFilter] = useState<'all' | 'standard' | 'premium' | 'auction'>('all');
   const [selectedHourRange, setSelectedHourRange] = useState(hourRangeOptions[0]);
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -57,108 +58,250 @@ export default function BrowsePage() {
     setPage(0);
   }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
 
-  const handlePurchase = (listing: Listing, e?: React.MouseEvent) => {
+  const handlePurchase = useCallback((listing: Listing, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!user || !listing.seller) return;
+    
+    // Check for premium access
     if (listing.isPremium && !isSubscribed(user.username, listing.seller)) {
       alert('You must be subscribed to this seller to purchase their premium listings.');
       return;
     }
-    const success = purchaseListing(listing, user.username);
-    if (success) {
-      removeListing(listing.id);
-      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-      alert('Purchase successful! 🎉');
-    } else {
-      alert('Insufficient balance. Please top up your wallet.');
+    
+    // Check for auction listings
+    if (listing.auction) {
+      router.push(`/browse/${listing.id}`);
+      return;
     }
+    
+    try {
+      const success = purchaseListing(listing, user.username);
+      if (success) {
+        removeListing(listing.id);
+        addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
+        alert('Purchase successful! 🎉');
+      } else {
+        alert('Insufficient balance. Please top up your wallet.');
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      alert('An error occurred during the purchase. Please try again.');
+    }
+  }, [user, isSubscribed, router, purchaseListing, removeListing, addSellerNotification]);
+
+  // Helper function to format time remaining for auction with memoization to improve performance
+  const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
+  
+  const formatTimeRemaining = (endTimeStr: string) => {
+    const now = new Date();
+    const nowTime = now.getTime();
+    
+    // Check cache first to avoid repetitive calculations
+    if (timeCache.current[endTimeStr] && timeCache.current[endTimeStr].expires > nowTime) {
+      return timeCache.current[endTimeStr].formatted;
+    }
+    
+    const endTime = new Date(endTimeStr);
+    
+    if (endTime <= now) {
+      return 'Ended';
+    }
+    
+    const diffMs = endTime.getTime() - nowTime;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    let formatted;
+    if (diffDays > 0) {
+      formatted = `${diffDays}d ${diffHours}h left`;
+    } else if (diffHours > 0) {
+      formatted = `${diffHours}h ${diffMinutes}m left`;
+    } else if (diffMinutes > 0) {
+      formatted = `${diffMinutes}m left`;
+    } else {
+      formatted = 'Ending soon!';
+    }
+    
+    // Cache the result for 1 minute to avoid recalculating for the same endTimeStr too frequently
+    timeCache.current[endTimeStr] = {
+      formatted,
+      expires: nowTime + 60000  // 1 minute expiration
+    };
+    
+    return formatted;
   };
 
-  const filteredListings = listings
-    .filter((listing: Listing) => {
-      if (filter === 'standard' && listing.isPremium) return false;
-      if (filter === 'premium' && !listing.isPremium) return false;
-      const hoursWorn = listing.hoursWorn ?? 0;
-      if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
-        return false;
-      }
-      const matchesSearch = [listing.title, listing.description, ...(listing.tags || [])]
-        .join(' ')
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      if (!matchesSearch) return false;
-      const price = listing.markedUpPrice || listing.price;
-      const min = parseFloat(minPrice) || 0;
-      const max = parseFloat(maxPrice) || Infinity;
-      if (price < min || price > max) return false;
-      return true;
-    })
-    .sort((a: Listing, b: Listing) => {
-      if (sortBy === 'priceAsc') return (a.markedUpPrice ?? a.price) - (b.markedUpPrice ?? b.price);
-      if (sortBy === 'priceDesc') return (b.markedUpPrice ?? b.price) - (a.markedUpPrice ?? b.price);
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
+  // Memoized filtering and sorting for better performance
+  const filteredListings = useMemo(() => {
+    return listings
+      .filter((listing: Listing) => {
+        // Filter by listing type
+        if (filter === 'standard' && (listing.isPremium || listing.auction)) return false;
+        if (filter === 'premium' && !listing.isPremium) return false;
+        if (filter === 'auction' && !listing.auction) return false;
+        
+        // Skip inactive auctions
+        if (listing.auction) {
+          // Check if the auction is active
+          const isActive = listing.auction.status === 'active';
+          // Additionally check if the end time hasn't passed
+          const endTimeNotPassed = new Date(listing.auction.endTime) > new Date();
+          if (!isActive || !endTimeNotPassed) return false;
+        }
+        
+        // Filter by hours worn
+        const hoursWorn = listing.hoursWorn ?? 0;
+        if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
+          return false;
+        }
+        
+        // Filter by search term (case-insensitive)
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          const matchesSearch = 
+            (listing.title?.toLowerCase().includes(searchLower)) || 
+            (listing.description?.toLowerCase().includes(searchLower)) || 
+            (listing.tags?.some(tag => tag.toLowerCase().includes(searchLower)) || false);
+          
+          if (!matchesSearch) return false;
+        }
+        
+        // Filter by price
+        const price = listing.auction 
+          ? (listing.auction.highestBid || listing.auction.startingPrice)
+          : (listing.markedUpPrice || listing.price);
+        const min = parseFloat(minPrice) || 0;
+        const max = parseFloat(maxPrice) || Infinity;
+        if (price < min || price > max) return false;
+        
+        return true;
+      })
+      .sort((a: Listing, b: Listing) => {
+        // Sort listings
+        if (sortBy === 'priceAsc') {
+          const aPrice = a.auction 
+            ? (a.auction.highestBid || a.auction.startingPrice)
+            : (a.markedUpPrice ?? a.price);
+          const bPrice = b.auction 
+            ? (b.auction.highestBid || b.auction.startingPrice)
+            : (b.markedUpPrice ?? b.price);
+          return aPrice - bPrice;
+        }
+        if (sortBy === 'priceDesc') {
+          const aPrice = a.auction 
+            ? (a.auction.highestBid || a.auction.startingPrice)
+            : (a.markedUpPrice ?? a.price);
+          const bPrice = b.auction 
+            ? (b.auction.highestBid || b.auction.startingPrice)
+            : (b.markedUpPrice ?? b.price);
+          return bPrice - aPrice;
+        }
+        
+        // Special handling for auctions - prioritize those ending soon
+        if (a.auction && b.auction) {
+          const aEndTime = new Date(a.auction.endTime).getTime();
+          const bEndTime = new Date(b.auction.endTime).getTime();
+          if (Math.abs(aEndTime - bEndTime) < 86400000) { // If end times are within a day of each other
+            return new Date(b.date).getTime() - new Date(a.date).getTime(); // Then fall back to newest first
+          }
+          return aEndTime - bEndTime; // Otherwise, sort by end time (soonest first)
+        } 
+        else if (a.auction) {
+          return -1; // Auctions before non-auctions
+        }
+        else if (b.auction) {
+          return 1;  // Auctions before non-auctions
+        }
+        
+        // Default sort by newest first
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+  }, [listings, filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
 
-  const paginatedListings = filteredListings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.ceil(filteredListings.length / PAGE_SIZE);
+  const paginatedListings = useMemo(() => {
+    return filteredListings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  }, [filteredListings, page]);
+  
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredListings.length / PAGE_SIZE);
+  }, [filteredListings.length]);
 
-  function renderPageIndicators() {
+  // Memoized function to render page indicators
+  const renderPageIndicators = useCallback(() => {
     if (totalPages <= 1) return null;
+    
     const indicators = [];
-    if (page > 1) {
+    const maxVisiblePages = 5; // Maximum number of page buttons to show
+    
+    // Always include first page
+    if (page > 0) {
       indicators.push(
         <span key={0} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(0)}>
           1
         </span>
       );
-      if (page > 2) {
+    }
+    
+    // Show ellipsis if needed
+    if (page > 2) {
+      indicators.push(
+        <span key="start-ellipsis" className="px-2 py-1 text-sm text-gray-500">...</span>
+      );
+    }
+    
+    // Calculate range of visible pages
+    let startPage = Math.max(1, page - 1);
+    let endPage = Math.min(totalPages - 2, page + 1);
+    
+    // Ensure at least 3 pages are shown if available
+    if (endPage - startPage < 2 && totalPages > 3) {
+      if (startPage === 1) {
+        endPage = Math.min(totalPages - 2, 3);
+      } else if (endPage === totalPages - 2) {
+        startPage = Math.max(1, totalPages - 4);
+      }
+    }
+    
+    // Generate page buttons
+    for (let i = startPage; i <= endPage; i++) {
+      if (i === page) {
         indicators.push(
-          <span key="start-ellipsis" className="px-2 py-1 text-sm text-gray-500">...</span>
+          <span key={i} className="px-2 py-1 text-sm font-bold text-[#ff950e] border-b-2 border-[#ff950e]">
+            {i + 1}
+          </span>
+        );
+      } else {
+        indicators.push(
+          <span key={i} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(i)}>
+            {i + 1}
+          </span>
         );
       }
     }
-    if (page > 0) {
-      indicators.push(
-        <span key={page - 1} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(page - 1)}>
-          {page}
-        </span>
-      );
-    }
-    indicators.push(
-      <span key={page} className="px-2 py-1 text-sm font-bold text-[#ff950e] border-b-2 border-[#ff950e]">
-        {page + 1}
-      </span>
-    );
-    if (page < totalPages - 1) {
-      indicators.push(
-        <span key={page + 1} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(page + 1)}>
-          {page + 2}
-        </span>
-      );
-    }
-    if (page < totalPages - 2) {
-      indicators.push(
-        <span key={page + 2} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(page + 2)}>
-          {page + 3}
-        </span>
-      );
-    }
-    if (page < totalPages - 3) {
+    
+    // Show ellipsis if needed
+    if (endPage < totalPages - 2) {
       indicators.push(
         <span key="end-ellipsis" className="px-2 py-1 text-sm text-gray-500">...</span>
       );
+    }
+    
+    // Always include last page
+    if (page < totalPages - 1) {
       indicators.push(
         <span key={totalPages - 1} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(totalPages - 1)}>
           {totalPages}
         </span>
       );
     }
+    
     return (
       <div className="flex justify-center items-center gap-1 mt-4">
         {indicators}
       </div>
     );
-  }
+  }, [page, totalPages, setPage]);
 
   return (
     <RequireAuth role={user?.role || 'buyer'}>
@@ -234,6 +377,7 @@ export default function BrowsePage() {
               <option value="all">All</option>
               <option value="standard">Standard</option>
               <option value="premium">Premium</option>
+              <option value="auction">Auctions</option>
             </select>
           </div>
         </div>
@@ -259,22 +403,52 @@ export default function BrowsePage() {
                   // Check seller's current verification status from users context
                   const sellerUser = users?.[listing.seller];
                   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-
+                  const isAuctionListing = !!listing.auction;
+                  
+                  // Determine the displayed price based on listing type
+                  let displayPrice = '';
+                  let priceLabel = '';
+                  
+                  if (isAuctionListing) {
+                    const hasActiveBids = listing.auction.bids && listing.auction.bids.length > 0;
+                    const highestBid = listing.auction.highestBid;
+                    
+                    if (hasActiveBids && highestBid) {
+                      displayPrice = highestBid.toFixed(2);
+                      priceLabel = 'Current Bid';
+                    } else {
+                      displayPrice = listing.auction.startingPrice.toFixed(2);
+                      priceLabel = 'Starting Bid';
+                    }
+                  } else {
+                    displayPrice = listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2);
+                    priceLabel = 'Price';
+                  }
 
                   // Card is a div with onClick, not a Link
                   return (
                     <div
                       key={listing.id}
-                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden hover:border-[#ff950e] min-h-[480px] cursor-pointer`}
+                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border ${isAuctionListing ? 'border-purple-800' : 'border-gray-800'} rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden ${isAuctionListing ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'} min-h-[480px] cursor-pointer`}
                       style={{
-                        boxShadow: '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
+                        boxShadow: isAuctionListing 
+                          ? '0 4px 32px 0 #000a, 0 2px 8px 0 rgba(168, 85, 247, 0.2)' 
+                          : '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
                       }}
                       tabIndex={0}
                       onClick={() => {
                         if (!isLockedPremium) router.push(`/browse/${listing.id}`);
                       }}
                     >
-                      {listing.isPremium && (
+                      {isAuctionListing && (
+                        <div className="absolute top-4 right-4 z-10">
+                          <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+                            <Gavel className="w-4 h-4 mr-1" /> Auction
+                          </span>
+                        </div>
+                      )}
+                      
+                      {!isAuctionListing && listing.isPremium && (
                         <div className="absolute top-4 right-4 z-10">
                           <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow animate-pulse">
                             <Crown className="w-4 h-4 mr-1" /> Premium
@@ -307,6 +481,16 @@ export default function BrowsePage() {
                               </p>
                             </div>
                           )}
+                          
+                          {/* Auction timer badge */}
+                          {isAuctionListing && (
+                            <div className="absolute bottom-3 left-3 z-10">
+                              <span className="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full font-semibold flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-purple-400" />
+                                {formatTimeRemaining(listing.auction.endTime)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -327,10 +511,67 @@ export default function BrowsePage() {
                             )}
                           </div>
                         )}
+                        
+                        {/* Auction details for auction listings */}
+                        {isAuctionListing && (
+                          <div className="bg-purple-900/30 rounded-lg p-3 mb-3 border border-purple-800/50">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm text-purple-300 flex items-center gap-1">
+                                <BarChart2 className="w-3.5 h-3.5" /> {priceLabel}:
+                              </span>
+                              <span className="font-bold text-white text-lg flex items-center gap-1">
+                                {listing.auction.bids && listing.auction.bids.length > 0 && (
+                                  <ArrowUp className="w-3.5 h-3.5 text-green-400" />
+                                )}
+                                ${displayPrice}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-purple-300 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> Ends:
+                              </span>
+                              <span className="text-xs font-medium text-white">
+                                {formatTimeRemaining(listing.auction.endTime)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-400 mt-2">
+                              <span>{listing.auction.bids?.length || 0} {listing.auction.bids?.length === 1 ? 'bid' : 'bids'}</span>
+                              
+                              {listing.auction.reservePrice && (
+                                <span className="flex items-center gap-1 ml-2">
+                                  {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice) ? (
+                                    <span className="flex items-center gap-1 text-yellow-400">
+                                      <AlertTriangle className="w-3 h-3" /> Reserve not met
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-green-400">
+                                      <CheckCircle className="w-3 h-3" /> Reserve met
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
                         <div className="flex justify-between items-center mt-auto">
-                          <p className="font-bold text-[#ff950e] text-2xl">
-                            ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
-                          </p>
+                          {!isAuctionListing && (
+                            <p className="font-bold text-[#ff950e] text-2xl">
+                              ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
+                            </p>
+                          )}
+                          
+                          {isAuctionListing && (
+                            <div className="flex items-center gap-1">
+                              {listing.auction.bids.length > 0 ? (
+                                <ArrowUp className="w-4 h-4 text-green-400" />
+                              ) : null}
+                              <p className={`font-bold text-2xl ${listing.auction.bids.length > 0 ? 'text-green-400' : 'text-purple-400'}`}>
+                                ${displayPrice}
+                              </p>
+                            </div>
+                          )}
+                          
                           <Link
                             href={`/sellers/${listing.seller}`}
                             className="flex items-center gap-2 text-xs text-gray-400 hover:text-[#ff950e] font-semibold group/seller" // Added group/seller here
@@ -375,6 +616,20 @@ export default function BrowsePage() {
                             >
                               <Lock className="w-5 h-5 mr-1" /> Subscribe to Buy
                             </Link>
+                          ) : isAuctionListing ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/browse/${listing.id}`);
+                              }}
+                              className="mt-6 w-full bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-500 font-bold transition text-lg shadow focus:scale-105 active:scale-95"
+                              style={{
+                                boxShadow: '0 2px 12px 0 rgba(168, 85, 247, 0.4)',
+                                transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
+                              }}
+                            >
+                              Place Bid
+                            </button>
                           ) : (
                             <button
                               onClick={e => handlePurchase(listing, e)}

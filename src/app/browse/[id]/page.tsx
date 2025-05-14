@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
@@ -9,12 +9,13 @@ import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
 import {
   Clock, User, ArrowRight, BadgeCheck, AlertTriangle, Crown, MessageCircle,
-  DollarSign, ShoppingBag, Lock, ChevronLeft, ChevronRight
+  DollarSign, ShoppingBag, Lock, ChevronLeft, ChevronRight, Gavel, Calendar,
+  BarChart2, ArrowUp, History, AlertCircle, CheckCircle, X, Info
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function ListingDetailPage() {
-  const { listings, user, removeListing, addSellerNotification, isSubscribed, users } = useListings();
+  const { listings, user, removeListing, addSellerNotification, isSubscribed, users, placeBid } = useListings();
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id;
   const listing = listings.find((item) => item.id === listingId);
@@ -27,12 +28,51 @@ export default function ListingDetailPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [sellerProfile, setSellerProfile] = useState<{ bio?: string | null; pic?: string | null; subscriptionPrice?: string | null; }>({});
   const [showStickyBuy, setShowStickyBuy] = useState(false);
+  const [bidAmount, setBidAmount] = useState<string>('');
+  const [bidStatus, setBidStatus] = useState<{success?: boolean; message?: string}>({});
+  const [biddingEnabled, setBiddingEnabled] = useState(true);
+  const [bidsHistory, setBidsHistory] = useState<{bidder: string, amount: number, date: string}[]>([]);
+  const [showBidHistory, setShowBidHistory] = useState(false);
+
+  // Enhanced bid validation and submission with debouncing
+  const [isBidding, setIsBidding] = useState(false);
+  const [bidError, setBidError] = useState<string | null>(null);
+  const [bidSuccess, setBidSuccess] = useState<string | null>(null);
+  const bidButtonRef = useRef<HTMLButtonElement>(null);
+  const bidInputRef = useRef<HTMLInputElement>(null);
+  const lastBidTime = useRef<number>(0);
 
   const currentUsername = user?.username || '';
   const hasMarkedRef = useRef(false);
   const isSubscribedToSeller = user?.username && listing?.seller ? isSubscribed(user.username, listing.seller) : false;
   const needsSubscription = listing?.isPremium && !isSubscribedToSeller;
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Is this an auction listing?
+  const isAuctionListing = listing?.auction ? true : false;
+  
+  // Has the auction ended?
+  const isAuctionEnded = isAuctionListing && 
+    (listing?.auction?.status === 'ended' || listing?.auction?.status === 'cancelled' || 
+     new Date(listing?.auction?.endTime || '') <= new Date());
+     
+  // Auto-suggest bid amounts
+  const suggestedBidAmount = useMemo(() => {
+    if (!isAuctionListing || !listing?.auction) return null;
+    
+    const currentBid = listing.auction.highestBid || listing.auction.startingPrice;
+    let increment = 0;
+    
+    // Scale increment based on current bid
+    if (currentBid < 10) increment = 0.5;
+    else if (currentBid < 50) increment = 1;
+    else if (currentBid < 100) increment = 2;
+    else if (currentBid < 250) increment = 5;
+    else if (currentBid < 500) increment = 10;
+    else increment = 20;
+    
+    return (Math.ceil(currentBid / increment) * increment + increment).toFixed(2);
+  }, [isAuctionListing, listing?.auction]);
 
   // Sticky Buy Now logic
   const imageRef = useRef<HTMLDivElement | null>(null);
@@ -67,9 +107,138 @@ export default function ListingDetailPage() {
       hasMarkedRef.current = true;
     }
   }, [listing?.seller, currentUsername, markMessagesAsRead]);
+  
+  // Initialize bids history
+  useEffect(() => {
+    if (isAuctionListing && listing?.auction?.bids) {
+      // Sort bids by date, newest first
+      const sortedBids = [...listing.auction.bids].sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setBidsHistory(sortedBids);
+    }
+  }, [isAuctionListing, listing?.auction?.bids]);
+  
+  // Memoize and optimize time remaining calculation for better performance
+  const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
+  
+  // Format time remaining for auction
+  const formatTimeRemaining = useCallback((endTimeStr: string) => {
+    const now = new Date();
+    const nowTime = now.getTime();
+    
+    // Check cache first to avoid repetitive calculations
+    if (timeCache.current[endTimeStr] && timeCache.current[endTimeStr].expires > nowTime) {
+      return timeCache.current[endTimeStr].formatted;
+    }
+    
+    const endTime = new Date(endTimeStr);
+    
+    if (endTime <= now) {
+      return 'Auction ended';
+    }
+    
+    const diffMs = endTime.getTime() - nowTime;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+    
+    let formatted;
+    if (diffDays > 0) {
+      formatted = `${diffDays} day${diffDays !== 1 ? 's' : ''}, ${diffHours} hour${diffHours !== 1 ? 's' : ''} remaining`;
+    } else if (diffHours > 0) {
+      formatted = `${diffHours} hour${diffHours !== 1 ? 's' : ''}, ${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} remaining`;
+    } else if (diffMinutes > 0) {
+      formatted = `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}, ${diffSeconds} second${diffSeconds !== 1 ? 's' : ''} remaining`;
+    } else {
+      formatted = `${diffSeconds} second${diffSeconds !== 1 ? 's' : ''} remaining`;
+    }
+    
+    // Cache the result based on granularity - shorter times need more frequent updates
+    const cacheTime = diffDays > 0 ? 60000 : // 1 minute for days remaining
+                      diffHours > 0 ? 30000 : // 30 seconds for hours remaining
+                      diffMinutes > 0 ? 5000 : // 5 seconds for minutes remaining
+                      1000; // 1 second for seconds remaining
+                      
+    timeCache.current[endTimeStr] = {
+      formatted,
+      expires: nowTime + cacheTime
+    };
+    
+    return formatted;
+  }, []);
+  
+  // Update timer for auctions that are about to end
+  useEffect(() => {
+    if (!isAuctionListing || isAuctionEnded) return;
+    
+    // Get remaining time
+    const getTimeRemaining = () => {
+      if (!listing?.auction?.endTime) return Infinity;
+      const now = new Date();
+      const endTime = new Date(listing.auction.endTime);
+      return endTime.getTime() - now.getTime();
+    };
+    
+    const remaining = getTimeRemaining();
+    
+    // For auctions with less than 10 minutes remaining, update more frequently
+    let interval: NodeJS.Timeout | null = null;
+    if (remaining < 600000) { // less than 10 minutes
+      interval = setInterval(() => {
+        // Force re-render by updating a state variable
+        setBiddingEnabled(prev => {
+          // Check if auction has ended
+          const timeLeft = getTimeRemaining();
+          if (timeLeft <= 0) {
+            if (interval) clearInterval(interval);
+            return false;
+          }
+          return prev;
+        });
+      }, remaining < 60000 ? 1000 : 5000); // Update every second for last minute, otherwise every 5 seconds
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isAuctionListing, isAuctionEnded, listing?.auction?.endTime]);
+  
+  // Periodically check if the auction has ended
+  useEffect(() => {
+    if (!isAuctionListing || isAuctionEnded) return;
+    
+    const checkAuctionStatus = () => {
+      if (listing?.auction?.endTime && new Date(listing.auction.endTime) <= new Date()) {
+        setBiddingEnabled(false);
+      }
+    };
+    
+    checkAuctionStatus();
+    const interval = setInterval(checkAuctionStatus, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [isAuctionListing, isAuctionEnded, listing?.auction?.endTime]);
+  
+  // Automatically update bid status when the listing updates
+  useEffect(() => {
+    if (isAuctionListing && listing?.auction?.highestBidder === user?.username) {
+      setBidStatus({
+        success: true,
+        message: 'You are the highest bidder!'
+      });
+    } else if (bidStatus.success && isAuctionListing && listing?.auction?.highestBidder !== user?.username) {
+      // If user was highest bidder but got outbid
+      setBidStatus({
+        success: false,
+        message: 'You have been outbid!'
+      });
+    }
+  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username]);
 
   const sellerUser = users?.[listing?.seller ?? ''];
-  const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified'; // Use isSellerVerified
+  const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
   if (!listingId) {
     return <div className="text-white text-center p-10">Invalid listing URL.</div>;
@@ -88,6 +257,109 @@ export default function ListingDetailPage() {
   const handleNextImage = () => {
     setCurrentImageIndex((prev) => (prev + 1) % images.length);
   };
+  
+  // Format date for bid history
+  const formatBidDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+  
+  // Handle keypress in bid input
+  const handleBidKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleBidSubmit();
+    }
+  }, []);
+  
+  // Handle bid submission with improved validation
+  const handleBidSubmit = useCallback(async () => {
+    if (isBidding) return; // Prevent multiple submissions
+    
+    // Clear previous messages
+    setBidError(null);
+    setBidSuccess(null);
+    
+    if (!user?.username || user.role !== 'buyer' || !listing || !isAuctionListing) {
+      setBidError('You must be logged in as a buyer to place bids.');
+      return;
+    }
+    
+    // Check if auction has ended since page load
+    if (listing.auction?.endTime && new Date(listing.auction.endTime) <= new Date()) {
+      setBidError('This auction has ended.');
+      setBiddingEnabled(false);
+      return;
+    }
+    
+    // Check for bid cooldown (5 second limit between bids)
+    const now = Date.now();
+    if (now - lastBidTime.current < 5000) {
+      setBidError('Please wait a moment before placing another bid.');
+      return;
+    }
+    
+    // Validate bid amount
+    const numericBid = parseFloat(bidAmount);
+    if (isNaN(numericBid) || numericBid <= 0) {
+      setBidError('Please enter a valid bid amount.');
+      if (bidInputRef.current) bidInputRef.current.focus();
+      return;
+    }
+    
+    // Ensure bid is higher than starting price
+    if (numericBid < listing.auction.startingPrice) {
+      setBidError(`Your bid must be at least $${listing.auction.startingPrice.toFixed(2)}.`);
+      return;
+    }
+    
+    // Ensure bid is higher than current highest bid
+    const currentHighestBid = listing.auction.highestBid || 0;
+    if (numericBid <= currentHighestBid) {
+      setBidError(`Your bid must be higher than the current highest bid of $${currentHighestBid.toFixed(2)}.`);
+      return;
+    }
+    
+    // Set bidding state
+    setIsBidding(true);
+    
+    try {
+      // Place the bid
+      const success = placeBid(listing.id, user.username, numericBid);
+      lastBidTime.current = Date.now();
+      
+      if (success) {
+        setBidSuccess(`Your bid of $${numericBid.toFixed(2)} has been placed successfully!`);
+        setBidAmount(''); // Clear the input
+        
+        // Add the new bid to history
+        const newBid = {
+          bidder: user.username,
+          amount: numericBid,
+          date: new Date().toISOString()
+        };
+        setBidsHistory(prev => [newBid, ...prev]);
+        
+        // Auto-focus input for another bid
+        setTimeout(() => {
+          if (bidInputRef.current) bidInputRef.current.focus();
+        }, 500);
+      } else {
+        setBidError('Failed to place your bid. You may not have sufficient funds.');
+      }
+    } catch (error) {
+      console.error('Bid error:', error);
+      setBidError('An error occurred while placing your bid. Please try again.');
+    } finally {
+      setIsBidding(false);
+    }
+  }, [user, listing, isAuctionListing, bidAmount, placeBid, isBidding]);
 
   return (
     <main className="min-h-screen bg-black text-white py-6 px-2 sm:px-4 lg:px-8">
@@ -101,7 +373,7 @@ export default function ListingDetailPage() {
         </div>
 
         {/* Listing Detail Card */}
-        <div className="bg-gradient-to-br from-[#181818] via-black to-[#181818] border border-gray-800 rounded-3xl shadow-2xl flex flex-col lg:flex-row gap-8 overflow-hidden p-0">
+        <div className={`bg-gradient-to-br from-[#181818] via-black to-[#181818] border ${isAuctionListing ? 'border-purple-800' : 'border-gray-800'} rounded-3xl shadow-2xl flex flex-col lg:flex-row gap-8 overflow-hidden p-0`}>
           {/* Left: Image Gallery */}
           <div className="flex-1 flex flex-col items-center lg:items-start p-4 sm:p-6 lg:p-6">
             {/* Main Image with arrows only (no orange pill) */}
@@ -140,9 +412,18 @@ export default function ListingDetailPage() {
                     No Image Available
                   </div>
                 )}
+                
+                {/* Auction Badge */}
+                {isAuctionListing && (
+                  <div className="absolute top-3 right-3 z-10">
+                    <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+                      <Gavel className="w-4 h-4 mr-1" /> Auction
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-            {/* Thumbnails */}\
+            {/* Thumbnails */}
             {images.length > 1 && (
               <div className="w-full max-w-md lg:max-w-none overflow-x-auto flex gap-3 pb-2 mt-2">
                 {images.map((url, index) => (
@@ -175,7 +456,7 @@ export default function ListingDetailPage() {
                     <span key={i} className="bg-[#232323] text-[#ff950e] text-xs px-3 py-1 rounded-full font-semibold shadow-sm">
                       {tag}
                     </span>
-                  ))}\
+                  ))}
                 </div>
               )}
 
@@ -233,49 +514,307 @@ export default function ListingDetailPage() {
               {/* Description */}
               <p className="text-base text-gray-300 leading-relaxed mb-6">{listing.description}</p>
 
+              {/* Auction Details Section with Enhanced UI */}
+              {isAuctionListing && (
+                <div className={`mb-6 p-5 rounded-2xl border ${isAuctionEnded ? 'border-gray-700 bg-gray-900/30' : 'border-purple-700 bg-purple-900/20'}`}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <Gavel className={`w-5 h-5 ${isAuctionEnded ? 'text-gray-400' : 'text-purple-400'}`} />
+                    <h3 className="text-lg font-bold text-white">
+                      {isAuctionEnded ? 'Auction Ended' : 'Auction Details'}
+                    </h3>
+                    
+                    {/* Auction status badge */}
+                    {isAuctionEnded ? (
+                      <span className="ml-auto text-sm bg-gray-800 text-gray-300 px-3 py-1 rounded-full">
+                        {listing.auction.status === 'cancelled' ? 'Cancelled' : 'Ended'}
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-sm bg-green-800/70 text-green-300 px-3 py-1 rounded-full flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="bg-black/30 rounded-xl p-4 border border-gray-800 space-y-3">
+                    {/* Time remaining with progress bar */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-300 flex items-center gap-1">
+                          <Clock className="w-4 h-4 text-purple-400" /> Time Remaining:
+                        </span>
+                        <span className={`font-semibold ${
+                          isAuctionEnded ? 'text-gray-400' : 'text-green-400'
+                        }`}>
+                          {isAuctionEnded ? (
+                            listing.auction.status === 'cancelled' ? 'Auction Cancelled' : 'Auction Ended'
+                          ) : (
+                            formatTimeRemaining(listing.auction.endTime)
+                          )}
+                        </span>
+                      </div>
+                      
+                      {!isAuctionEnded && (
+                        <>
+                          {/* Progress bar */}
+                          <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                            {(() => {
+                              // Calculate progress percentage
+                              const startTime = new Date(listing.date).getTime();
+                              const endTime = new Date(listing.auction.endTime).getTime();
+                              const currentTime = new Date().getTime();
+                              const totalDuration = endTime - startTime;
+                              const elapsed = currentTime - startTime;
+                              const progress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+                              
+                              return (
+                                <div
+                                  className="h-full bg-gradient-to-r from-purple-600 to-purple-400"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              );
+                            })()}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Bid information */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-black/40 p-3 rounded-lg border border-gray-800">
+                        <div className="text-xs text-gray-400 mb-1">Starting Bid</div>
+                        <div className="font-bold text-white text-lg">${listing.auction.startingPrice.toFixed(2)}</div>
+                      </div>
+                      
+                      <div className={`p-3 rounded-lg border ${
+                        listing.auction.highestBid ? 'bg-green-900/20 border-green-800/40' : 'bg-black/40 border-gray-800'
+                      }`}>
+                        <div className="text-xs text-gray-400 mb-1">Current Bid</div>
+                        {listing.auction.highestBid ? (
+                          <div className="font-bold text-green-400 text-lg flex items-center gap-1">
+                            <ArrowUp className="w-4 h-4" />
+                            ${listing.auction.highestBid.toFixed(2)}
+                          </div>
+                        ) : (
+                          <div className="text-gray-400 italic">No bids yet</div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Reserve price and bid count */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <BarChart2 className="w-4 h-4 text-purple-400" />
+                        <span className="text-sm text-gray-300">
+                          {listing.auction.bids?.length || 0} {listing.auction.bids?.length === 1 ? 'bid' : 'bids'} placed
+                        </span>
+                      </div>
+                      
+                      {listing.auction.reservePrice && (
+                        <div>
+                          {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice) ? (
+                            <span className="flex items-center gap-1.5 text-yellow-400 text-sm">
+                              <AlertTriangle className="w-4 h-4" />
+                              Reserve price not met
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-green-400 text-sm">
+                              <CheckCircle className="w-4 h-4" />
+                              Reserve price met
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Highest bidder information */}
+                    {listing.auction.highestBidder && (
+                      <div className="border-t border-gray-800/60 pt-3 mt-2">
+                        <div className="flex justify-between items-center">
+                          <div className="text-sm text-gray-300">Highest Bidder:</div>
+                          <div className="font-medium text-white">
+                            {listing.auction.highestBidder === user?.username ? (
+                              <span className="text-green-400 flex items-center gap-1.5">
+                                <CheckCircle className="w-4 h-4" /> You
+                              </span>
+                            ) : (
+                              listing.auction.highestBidder
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Additional auction information */}
+                    {listing.auction.highestBidder && listing.auction.highestBidder === user?.username && (
+                      <div className="bg-green-900/30 border border-green-800/50 rounded-lg p-3 text-sm text-green-300 flex items-start gap-2">
+                        <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span>
+                          You are the highest bidder! If the auction ends now, you will win this item.
+                          {isAuctionEnded && " The item will be automatically processed for you."}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Bid history button */}
+                    {listing.auction.bids && listing.auction.bids.length > 0 && (
+                      <button 
+                        className="mt-1 text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1.5 transition-colors"
+                        onClick={() => setShowBidHistory(true)}
+                      >
+                        <History className="w-4 h-4" />
+                        View complete bid history
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Bid input form - only show if auction is active */}
+                  {!isAuctionEnded && user?.role === 'buyer' && user.username !== listing.seller && (
+                    <div className="mt-4 pt-4 border-t border-purple-800/50">
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                            <input
+                              ref={bidInputRef}
+                              type="number"
+                              placeholder={`${listing.auction.highestBid ? 'Enter higher bid amount' : 'Enter bid amount'}`}
+                              value={bidAmount}
+                              onChange={(e) => setBidAmount(e.target.value)}
+                              onKeyPress={handleBidKeyPress}
+                              min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
+                              step="0.01"
+                              className="w-full pl-8 pr-3 py-2 rounded-lg bg-black border border-purple-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          ref={bidButtonRef}
+                          onClick={handleBidSubmit}
+                          disabled={isBidding || !biddingEnabled}
+                          className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                        >
+                          {isBidding ? (
+                            <>
+                              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-1"></div>
+                              Placing...
+                            </>
+                          ) : (
+                            <>
+                              <Gavel className="w-4 h-4" /> Place Bid
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      
+                      {/* Suggested bid buttons */}
+                      {suggestedBidAmount && (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => setBidAmount(suggestedBidAmount)}
+                            className="text-xs bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full hover:bg-purple-800/50 transition border border-purple-700/50"
+                          >
+                            Bid ${suggestedBidAmount}
+                          </button>
+                          <button
+                            onClick={() => setBidAmount((parseFloat(suggestedBidAmount) * 1.5).toFixed(2))}
+                            className="text-xs bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full hover:bg-purple-800/50 transition border border-purple-700/50"
+                          >
+                            Bid ${(parseFloat(suggestedBidAmount) * 1.5).toFixed(2)}
+                          </button>
+                          <button
+                            onClick={() => setBidAmount((parseFloat(suggestedBidAmount) * 2).toFixed(2))}
+                            className="text-xs bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full hover:bg-purple-800/50 transition border border-purple-700/50"
+                          >
+                            Bid ${(parseFloat(suggestedBidAmount) * 2).toFixed(2)}
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Minimum bid hint */}
+                      <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                        <Info className="w-3 h-3" />
+                        {listing.auction.highestBid
+                          ? `Minimum bid: $${(listing.auction.highestBid + 0.01).toFixed(2)}`
+                          : `Minimum bid: $${listing.auction.startingPrice.toFixed(2)}`}
+                      </p>
+                      
+                      {/* Error message */}
+                      {bidError && (
+                        <div className="mt-3 p-2 rounded-lg text-sm bg-red-900/40 text-red-400 border border-red-800">
+                          {bidError}
+                        </div>
+                      )}
+                      
+                      {/* Success message */}
+                      {bidSuccess && (
+                        <div className="mt-3 p-2 rounded-lg text-sm bg-green-900/40 text-green-400 border border-green-800">
+                          {bidSuccess}
+                        </div>
+                      )}
+                      
+                      {/* Status message */}
+                      {bidStatus.message && !bidError && !bidSuccess && (
+                        <div className={`mt-3 p-2 rounded-lg text-sm ${
+                          bidStatus.success ? 'bg-green-900/40 text-green-400 border border-green-800' : 'bg-red-900/40 text-red-400 border border-red-800'
+                        }`}>
+                          {bidStatus.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Price and Action Buttons */}
               <div className="w-full max-w-sm mx-0 flex flex-col items-center mb-6">
-                <div className="flex justify-center w-full mb-4">
-                  <span className="flex items-center gap-2 text-3xl font-extrabold text-[#ff950e] bg-[#232323] px-6 py-3 rounded-full shadow border border-[#232323] w-fit mx-auto">
-                    <DollarSign className="w-6 h-6" style={{ marginRight: '0.15em' }} />
-                    <span className="ml-1">{listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}</span>
-                  </span>
-                </div>
+                {!isAuctionListing && (
+                  <div className="flex justify-center w-full mb-4">
+                    <span className="flex items-center gap-2 text-3xl font-extrabold text-[#ff950e] bg-[#232323] px-6 py-3 rounded-full shadow border border-[#232323] w-fit mx-auto">
+                      <DollarSign className="w-6 h-6" style={{ marginRight: '0.15em' }} />
+                      <span className="ml-1">{listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}</span>
+                    </span>
+                  </div>
+                )}
+                
                 {user?.role === 'buyer' && (
                   <div className="flex flex-col sm:flex-row gap-3 w-full">
-                    <button
-                      onClick={() => {
-                        setIsProcessing(true);
-                        const success = purchaseListing(listing, user.username);
-                        if (success) {
-                          removeListing(listing.id);
-                          addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-                          setPurchaseStatus('Purchase successful! 🎉');
-                          setTimeout(() => {
-                            window.location.href = `/buyers/messages?seller=${listing.seller}`;
-                          }, 1000);
-                        } else {
-                          setPurchaseStatus('Insufficient balance. Please top up your wallet.');
-                          setIsProcessing(false);
-                        }
-                      }}
-                      className="flex-1 bg-[#ff950e] text-black px-4 py-2 rounded-full hover:bg-[#e0850d] font-bold text-base shadow-lg transition focus:scale-105 active:scale-95"
-                      disabled={isProcessing}
-                      style={{
-                        boxShadow: '0 2px 12px 0 #ff950e44',
-                        transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
-                      }}
-                    >
-                      {isProcessing ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...\
-                        </span>
-                      ) : (
-                        <span className="flex items-center justify-center gap-2">
-                          <ShoppingBag className="w-5 h-5" /> Buy Now
-                        </span>
-                      )}
-                    </button>
+                    {!isAuctionListing && (
+                      <button
+                        onClick={() => {
+                          setIsProcessing(true);
+                          const success = purchaseListing(listing, user.username);
+                          if (success) {
+                            removeListing(listing.id);
+                            addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
+                            setPurchaseStatus('Purchase successful! 🎉');
+                            setTimeout(() => {
+                              window.location.href = `/buyers/messages?seller=${listing.seller}`;
+                            }, 1000);
+                          } else {
+                            setPurchaseStatus('Insufficient balance. Please top up your wallet.');
+                            setIsProcessing(false);
+                          }
+                        }}
+                        className="flex-1 bg-[#ff950e] text-black px-4 py-2 rounded-full hover:bg-[#e0850d] font-bold text-base shadow-lg transition focus:scale-105 active:scale-95"
+                        disabled={isProcessing}
+                        style={{
+                          boxShadow: '0 2px 12px 0 #ff950e44',
+                          transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
+                        }}
+                      >
+                        {isProcessing ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...
+                          </span>
+                        ) : (
+                          <span className="flex items-center justify-center gap-2">
+                            <ShoppingBag className="w-5 h-5" /> Buy Now
+                          </span>
+                        )}
+                      </button>
+                    )}
+                    
                     <Link
                       href={`/buyers/messages?thread=${listing.seller}`}
                       className="flex-1 flex items-center justify-center gap-2 bg-gray-700 text-white px-4 py-2 rounded-full hover:bg-gray-600 font-bold text-base shadow-lg transition"
@@ -317,8 +856,111 @@ export default function ListingDetailPage() {
           </div>
         </div>
 
-        {/* Sticky Buy Now for mobile */}
-        {user?.role === 'buyer' && !needsSubscription && (
+        {/* Enhanced Bid History Modal */}
+        {showBidHistory && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-[#1a1a1a] rounded-xl border border-purple-800 w-full max-w-lg p-6 relative">
+              {/* Animated decoration */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-800 via-purple-500 to-purple-800 rounded-t-xl"></div>
+              
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <History className="w-5 h-5 text-purple-400" />
+                  Bid History for "{listing.title}"
+                </h3>
+                <button
+                  onClick={() => setShowBidHistory(false)}
+                  className="text-gray-400 hover:text-white bg-black/40 p-1.5 rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {bidsHistory.length === 0 ? (
+                <div className="text-center py-12 bg-black/30 rounded-lg border border-dashed border-gray-700">
+                  <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400 text-lg">No bids placed yet</p>
+                  <p className="text-gray-500 text-sm mt-2">Be the first to bid on this item!</p>
+                </div>
+              ) : (
+                <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar bg-black/40 rounded-lg border border-gray-800">
+                  <table className="w-full">
+                    <thead className="text-left text-gray-400 text-sm border-b border-gray-700">
+                      <tr>
+                        <th className="py-3 px-4">Bidder</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {bidsHistory.map((bid, index) => (
+                        <tr key={index} className={`transition-colors ${bid.bidder === currentUsername ? 'bg-purple-900/30' : index % 2 === 0 ? 'bg-black/20' : ''}`}>
+                          <td className="py-3 px-4 font-medium">
+                            {bid.bidder === currentUsername ? (
+                              <span className="text-purple-400 flex items-center gap-1">
+                                <User className="w-3.5 h-3.5" /> You
+                              </span>
+                            ) : (
+                              bid.bidder
+                            )}
+                            {index === 0 && (
+                              <span className="ml-2 text-xs bg-green-600/80 text-white px-1.5 py-0.5 rounded-sm">
+                                Highest
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`font-bold ${index === 0 ? 'text-green-400' : 'text-white'}`}>
+                              ${bid.amount.toFixed(2)}
+                            </span>
+                            {index > 0 && index < bidsHistory.length - 1 && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                +${(bid.amount - bidsHistory[index + 1].amount).toFixed(2)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-400">{formatBidDate(bid.date)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              
+              <div className="mt-5 pt-4 border-t border-gray-700 flex justify-between">
+                {bidsHistory.length > 0 && user?.role === 'buyer' && user.username !== listing.seller && !isAuctionEnded && (
+                  <button
+                    onClick={() => {
+                      // Close modal and focus bid input
+                      setShowBidHistory(false);
+                      setTimeout(() => {
+                        if (bidInputRef.current) {
+                          bidInputRef.current.focus();
+                          // If a suggested bid amount exists, use it
+                          if (suggestedBidAmount) {
+                            setBidAmount(suggestedBidAmount);
+                          }
+                        }
+                      }, 100);
+                    }}
+                    className="bg-purple-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-purple-500 transition flex-1 mr-2"
+                  >
+                    Place My Bid
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowBidHistory(false)}
+                  className={`${bidsHistory.length > 0 && user?.role === 'buyer' && user.username !== listing.seller && !isAuctionEnded ? 'bg-gray-700 text-white' : 'bg-purple-600 text-white'} py-2 px-4 rounded-lg font-bold hover:bg-opacity-90 transition ${bidsHistory.length > 0 && user?.role === 'buyer' && user.username !== listing.seller && !isAuctionEnded ? '' : 'w-full'}`}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sticky Buy Now for mobile - only for standard listings */}
+        {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
           <div className={`fixed bottom-0 left-0 w-full z-40 pointer-events-none sm:hidden`}>
             <div className={`transition-all duration-300 ${showStickyBuy ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
               <div className="max-w-md mx-auto px-4 pb-4">
@@ -347,7 +989,7 @@ export default function ListingDetailPage() {
                 >
                   {isProcessing ? (
                     <>
-                      <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...\
+                      <ShoppingBag className="w-5 h-5 animate-pulse" /> Processing...
                     </>
                   ) : (
                     <>
@@ -355,6 +997,102 @@ export default function ListingDetailPage() {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Sticky Place Bid for mobile - only for auction listings */}
+        {user?.role === 'buyer' && !isAuctionEnded && isAuctionListing && user.username !== listing.seller && (
+          <div className={`fixed bottom-0 left-0 w-full z-40 pointer-events-none sm:hidden`}>
+            <div className={`transition-all duration-300 ${showStickyBuy ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
+              <div className="max-w-md mx-auto px-4 pb-4">
+                <div className="bg-black/90 backdrop-blur-sm rounded-xl p-3 border border-purple-800 shadow-lg">
+                  <div className="flex flex-col gap-2">
+                    {/* Compact auction status */}
+                    <div className="w-full flex justify-between items-center text-sm text-purple-300 px-2">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> {formatTimeRemaining(listing.auction.endTime)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <BarChart2 className="w-3.5 h-3.5" /> 
+                        {listing.auction.highestBid 
+                          ? `Highest: $${listing.auction.highestBid.toFixed(2)}` 
+                          : `Start: $${listing.auction.startingPrice.toFixed(2)}`}
+                      </span>
+                    </div>
+                    
+                    {/* Bid input and button */}
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                          <input
+                            type="number"
+                            placeholder="Enter bid"
+                            value={bidAmount}
+                            onChange={(e) => setBidAmount(e.target.value)}
+                            onKeyPress={handleBidKeyPress}
+                            min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
+                            step="0.01"
+                            className="w-full pl-8 pr-3 py-3 rounded-lg bg-black border border-purple-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleBidSubmit}
+                        disabled={isBidding || !biddingEnabled}
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                      >
+                        {isBidding ? (
+                          <>
+                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-1"></div>
+                            Bidding...
+                          </>
+                        ) : (
+                          <>
+                            <Gavel className="w-5 h-5" /> Bid
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {/* Quick bid buttons */}
+                    {suggestedBidAmount && (
+                      <div className="flex justify-between gap-2 px-1">
+                        <button
+                          onClick={() => setBidAmount(suggestedBidAmount)}
+                          className="flex-1 text-xs bg-purple-900/60 text-purple-300 px-2 py-1.5 rounded-lg hover:bg-purple-800/60 transition border border-purple-700/50"
+                        >
+                          Bid ${suggestedBidAmount}
+                        </button>
+                        <button
+                          onClick={() => setBidAmount((parseFloat(suggestedBidAmount) * 1.5).toFixed(2))}
+                          className="flex-1 text-xs bg-purple-900/60 text-purple-300 px-2 py-1.5 rounded-lg hover:bg-purple-800/60 transition border border-purple-700/50"
+                        >
+                          Bid ${(parseFloat(suggestedBidAmount) * 1.5).toFixed(2)}
+                        </button>
+                        <button
+                          onClick={() => setShowBidHistory(true)}
+                          className="text-xs bg-gray-800/80 text-gray-300 px-2 py-1.5 rounded-lg hover:bg-gray-700/80 transition flex items-center"
+                        >
+                          <History className="w-3 h-3 mr-1" /> 
+                          {listing.auction.bids?.length || 0}
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Display status messages in sticky bar */}
+                    {(bidError || bidSuccess) && (
+                      <div className={`text-xs p-1.5 rounded ${
+                        bidSuccess ? 'bg-green-900/40 text-green-400 border border-green-800/50' : 
+                                   'bg-red-900/40 text-red-400 border border-red-800/50'
+                      }`}>
+                        {bidSuccess || bidError}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
