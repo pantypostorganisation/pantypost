@@ -32,7 +32,7 @@ export type User = {
   verificationRequestedAt?: string;
   verificationReviewedAt?: string;
   verificationRejectionReason?: string;
-  profilePic?: string | null; // Added profilePic property here
+  profilePic?: string | null;
 };
 
 export type Bid = {
@@ -42,6 +42,7 @@ export type Bid = {
   date: string;
 };
 
+// Define as a proper string union type instead of an enum
 export type AuctionStatus = 'active' | 'ended' | 'cancelled';
 
 export type AuctionSettings = {
@@ -283,7 +284,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       verificationRequestedAt: existingUser?.verificationRequestedAt,
       verificationReviewedAt: existingUser?.verificationReviewedAt,
       verificationRejectionReason: existingUser?.verificationRejectionReason,
-      profilePic: existingUser?.profilePic ?? null, // Added profilePic here
+      profilePic: existingUser?.profilePic ?? null,
     };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
@@ -360,7 +361,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         reservePrice: auctionSettings.reservePrice,
         endTime: auctionSettings.endTime,
         bids: [],
-        status: 'active'
+        status: 'active' as AuctionStatus
       }
     };
 
@@ -426,7 +427,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         ...listing,
         auction: {
           ...listing.auction,
-          status: 'ended'
+          status: 'ended' as AuctionStatus
         }
       };
       setListings(updatedListings);
@@ -519,17 +520,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           
           if (highestBidder && highestBid) {
             // Create a copy of the listing for purchase
-            const purchaseListing = {
+            const purchaseListingCopy = {
               ...listing,
               price: highestBid,
               markedUpPrice: Math.round(highestBid * 1.1 * 100) / 100
             };
             
             // Process the purchase
-            if (purchaseListing && highestBidder) {
+            if (purchaseListingCopy && highestBidder) {
               setTimeout(() => {
                 // Using a timeout to avoid state update conflicts
-                const success = purchaseListing(purchaseListing, highestBidder);
+                const success = purchaseListing(purchaseListingCopy, highestBidder);
                 
                 if (success) {
                   // Add notifications
@@ -560,7 +561,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           ...listing,
           auction: {
             ...listing.auction,
-            status: 'ended'
+            status: 'ended' as AuctionStatus
           }
         };
       }
@@ -595,7 +596,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       ...listing,
       auction: {
         ...listing.auction,
-        status: 'cancelled'
+        status: 'cancelled' as AuctionStatus
       }
     };
     

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { Listing } from '@/context/ListingContext';
+import { Listing, AuctionSettings } from '@/context/ListingContext';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck,
@@ -25,6 +25,11 @@ const hourRangeOptions = [
 ];
 
 const PAGE_SIZE = 40;
+
+// Type guard for auction listings
+const isAuctionListing = (listing: Listing): listing is Listing & { auction: AuctionSettings } => {
+  return !!listing.auction;
+};
 
 export default function BrowsePage() {
   // Added 'users' to the useListings hook
@@ -69,7 +74,7 @@ export default function BrowsePage() {
     }
     
     // Check for auction listings
-    if (listing.auction) {
+    if (isAuctionListing(listing)) {
       router.push(`/browse/${listing.id}`);
       return;
     }
@@ -168,9 +173,13 @@ export default function BrowsePage() {
         }
         
         // Filter by price
-        const price = listing.auction 
-          ? (listing.auction.highestBid || listing.auction.startingPrice)
-          : (listing.markedUpPrice || listing.price);
+        let price: number;
+        if (isAuctionListing(listing)) {
+          price = listing.auction.highestBid || listing.auction.startingPrice;
+        } else {
+          price = listing.markedUpPrice || listing.price;
+        }
+        
         const min = parseFloat(minPrice) || 0;
         const max = parseFloat(maxPrice) || Infinity;
         if (price < min || price > max) return false;
@@ -180,26 +189,43 @@ export default function BrowsePage() {
       .sort((a: Listing, b: Listing) => {
         // Sort listings
         if (sortBy === 'priceAsc') {
-          const aPrice = a.auction 
-            ? (a.auction.highestBid || a.auction.startingPrice)
-            : (a.markedUpPrice ?? a.price);
-          const bPrice = b.auction 
-            ? (b.auction.highestBid || b.auction.startingPrice)
-            : (b.markedUpPrice ?? b.price);
+          let aPrice: number, bPrice: number;
+          
+          if (isAuctionListing(a)) {
+            aPrice = a.auction.highestBid || a.auction.startingPrice;
+          } else {
+            aPrice = a.markedUpPrice ?? a.price;
+          }
+          
+          if (isAuctionListing(b)) {
+            bPrice = b.auction.highestBid || b.auction.startingPrice;
+          } else {
+            bPrice = b.markedUpPrice ?? b.price;
+          }
+          
           return aPrice - bPrice;
         }
+        
         if (sortBy === 'priceDesc') {
-          const aPrice = a.auction 
-            ? (a.auction.highestBid || a.auction.startingPrice)
-            : (a.markedUpPrice ?? a.price);
-          const bPrice = b.auction 
-            ? (b.auction.highestBid || b.auction.startingPrice)
-            : (b.markedUpPrice ?? b.price);
+          let aPrice: number, bPrice: number;
+          
+          if (isAuctionListing(a)) {
+            aPrice = a.auction.highestBid || a.auction.startingPrice;
+          } else {
+            aPrice = a.markedUpPrice ?? a.price;
+          }
+          
+          if (isAuctionListing(b)) {
+            bPrice = b.auction.highestBid || b.auction.startingPrice;
+          } else {
+            bPrice = b.markedUpPrice ?? b.price;
+          }
+          
           return bPrice - aPrice;
         }
         
         // Special handling for auctions - prioritize those ending soon
-        if (a.auction && b.auction) {
+        if (isAuctionListing(a) && isAuctionListing(b)) {
           const aEndTime = new Date(a.auction.endTime).getTime();
           const bEndTime = new Date(b.auction.endTime).getTime();
           if (Math.abs(aEndTime - bEndTime) < 86400000) { // If end times are within a day of each other
@@ -207,10 +233,10 @@ export default function BrowsePage() {
           }
           return aEndTime - bEndTime; // Otherwise, sort by end time (soonest first)
         } 
-        else if (a.auction) {
+        else if (isAuctionListing(a)) {
           return -1; // Auctions before non-auctions
         }
-        else if (b.auction) {
+        else if (isAuctionListing(b)) {
           return 1;  // Auctions before non-auctions
         }
         
@@ -403,13 +429,13 @@ export default function BrowsePage() {
                   // Check seller's current verification status from users context
                   const sellerUser = users?.[listing.seller];
                   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-                  const isAuctionListing = !!listing.auction;
+                  const hasAuction = isAuctionListing(listing);
                   
                   // Determine the displayed price based on listing type
                   let displayPrice = '';
                   let priceLabel = '';
                   
-                  if (isAuctionListing) {
+                  if (hasAuction) {
                     const hasActiveBids = listing.auction.bids && listing.auction.bids.length > 0;
                     const highestBid = listing.auction.highestBid;
                     
@@ -429,9 +455,9 @@ export default function BrowsePage() {
                   return (
                     <div
                       key={listing.id}
-                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border ${isAuctionListing ? 'border-purple-800' : 'border-gray-800'} rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden ${isAuctionListing ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'} min-h-[480px] cursor-pointer`}
+                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border ${hasAuction ? 'border-purple-800' : 'border-gray-800'} rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden ${hasAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'} min-h-[480px] cursor-pointer`}
                       style={{
-                        boxShadow: isAuctionListing 
+                        boxShadow: hasAuction 
                           ? '0 4px 32px 0 #000a, 0 2px 8px 0 rgba(168, 85, 247, 0.2)' 
                           : '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
                       }}
@@ -440,7 +466,7 @@ export default function BrowsePage() {
                         if (!isLockedPremium) router.push(`/browse/${listing.id}`);
                       }}
                     >
-                      {isAuctionListing && (
+                      {hasAuction && (
                         <div className="absolute top-4 right-4 z-10">
                           <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
                             <Gavel className="w-4 h-4 mr-1" /> Auction
@@ -448,7 +474,7 @@ export default function BrowsePage() {
                         </div>
                       )}
                       
-                      {!isAuctionListing && listing.isPremium && (
+                      {!hasAuction && listing.isPremium && (
                         <div className="absolute top-4 right-4 z-10">
                           <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow animate-pulse">
                             <Crown className="w-4 h-4 mr-1" /> Premium
@@ -483,7 +509,7 @@ export default function BrowsePage() {
                           )}
                           
                           {/* Auction timer badge */}
-                          {isAuctionListing && (
+                          {hasAuction && (
                             <div className="absolute bottom-3 left-3 z-10">
                               <span className="bg-black/70 text-white text-xs px-3 py-1.5 rounded-full font-semibold flex items-center gap-1">
                                 <Clock className="w-3.5 h-3.5 text-purple-400" />
@@ -513,7 +539,7 @@ export default function BrowsePage() {
                         )}
                         
                         {/* Auction details for auction listings */}
-                        {isAuctionListing && (
+                        {hasAuction && (
                           <div className="bg-purple-900/30 rounded-lg p-3 mb-3 border border-purple-800/50">
                             <div className="flex justify-between items-center mb-1">
                               <span className="text-sm text-purple-300 flex items-center gap-1">
@@ -555,18 +581,18 @@ export default function BrowsePage() {
                         )}
                         
                         <div className="flex justify-between items-center mt-auto">
-                          {!isAuctionListing && (
+                          {!hasAuction && (
                             <p className="font-bold text-[#ff950e] text-2xl">
                               ${listing.markedUpPrice?.toFixed(2) ?? 'N/A'}
                             </p>
                           )}
                           
-                          {isAuctionListing && (
+                          {hasAuction && (
                             <div className="flex items-center gap-1">
-                              {listing.auction.bids.length > 0 ? (
+                              {listing.auction.bids && listing.auction.bids.length > 0 ? (
                                 <ArrowUp className="w-4 h-4 text-green-400" />
                               ) : null}
-                              <p className={`font-bold text-2xl ${listing.auction.bids.length > 0 ? 'text-green-400' : 'text-purple-400'}`}>
+                              <p className={`font-bold text-2xl ${listing.auction.bids && listing.auction.bids.length > 0 ? 'text-green-400' : 'text-purple-400'}`}>
                                 ${displayPrice}
                               </p>
                             </div>
@@ -616,7 +642,7 @@ export default function BrowsePage() {
                             >
                               <Lock className="w-5 h-5 mr-1" /> Subscribe to Buy
                             </Link>
-                          ) : isAuctionListing ? (
+                          ) : hasAuction ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
