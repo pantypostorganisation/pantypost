@@ -180,7 +180,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   }, []);
 
-  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing } = useWallet();
+  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance } = useWallet();
 
   // On mount, set the notification callback in WalletContext
   useEffect(() => {
@@ -442,6 +442,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const currentHighestBid = listing.auction.highestBid || 0;
     if (amount <= currentHighestBid) return false;
     
+    // Check if bidder has sufficient funds in wallet
+    const bidderBalance = getBuyerBalance(bidder);
+    if (bidderBalance < amount) {
+      return false; // Insufficient funds
+    }
+    
     // Add the bid
     const bid: Bid = {
       id: uuidv4(),
@@ -495,10 +501,34 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   };
 
+  // Find the highest bidder with sufficient funds
+  const findValidWinner = (bids: Bid[], reservePrice: number | undefined): Bid | null => {
+    // Sort bids from highest to lowest
+    const sortedBids = [...bids].sort((a, b) => b.amount - a.amount);
+    
+    // Filter out bids below reserve price if any
+    const validBids = reservePrice 
+      ? sortedBids.filter(bid => bid.amount >= reservePrice)
+      : sortedBids;
+      
+    if (validBids.length === 0) return null;
+    
+    // Check each bidder in order until finding one with sufficient funds
+    for (const bid of validBids) {
+      const bidderBalance = getBuyerBalance(bid.bidder);
+      if (bidderBalance >= bid.amount) {
+        return bid;
+      }
+    }
+    
+    return null; // No valid winners found
+  };
+
   // Check for ended auctions and process them
   const checkEndedAuctions = () => {
     const now = new Date();
     let updated = false;
+    let removedListings: string[] = [];
     
     const updatedListings = listings.map(listing => {
       // Skip non-auction listings or already ended auctions
@@ -510,53 +540,79 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (new Date(listing.auction.endTime) <= now) {
         updated = true;
         
-        // Check if there are any bids and if highest bid meets reserve price
-        if (listing.auction.bids.length > 0 && 
-            (listing.auction.highestBid || 0) >= (listing.auction.reservePrice || 0)) {
+        // Process auction if there are bids
+        if (listing.auction.bids.length > 0) {
+          // Find a valid winner (someone with sufficient funds)
+          const validWinner = findValidWinner(
+            listing.auction.bids, 
+            listing.auction.reservePrice
+          );
           
-          // Process the winning bid
-          const highestBidder = listing.auction.highestBidder;
-          const highestBid = listing.auction.highestBid;
-          
-          if (highestBidder && highestBid) {
-            // Create a copy of the listing for purchase
+          if (validWinner) {
+            // Process the winning bid
+            const winningBidder = validWinner.bidder;
+            const winningBid = validWinner.amount;
+            
+            // Create a copy of the listing for purchase with proper pricing
             const purchaseListingCopy = {
               ...listing,
-              price: highestBid,
-              markedUpPrice: Math.round(highestBid * 1.1 * 100) / 100
+              price: winningBid,
+              markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100
             };
             
             // Process the purchase
-            if (purchaseListingCopy && highestBidder) {
-              setTimeout(() => {
-                // Using a timeout to avoid state update conflicts
-                const success = purchaseListing(purchaseListingCopy, highestBidder);
-                
-                if (success) {
-                  // Add notifications
-                  addSellerNotification(
-                    listing.seller,
-                    `🏆 Auction ended: "${listing.title}" sold to ${highestBidder} for $${highestBid.toFixed(2)}`
-                  );
-                } else {
-                  // Failed due to insufficient funds
-                  addSellerNotification(
-                    listing.seller,
-                    `⚠️ Auction payment failed: ${highestBidder} didn't have sufficient funds for "${listing.title}"`
-                  );
-                }
-              }, 100);
+            const success = purchaseListing(purchaseListingCopy, winningBidder);
+            
+            if (success) {
+              // Notify seller of the winner
+              addSellerNotification(
+                listing.seller,
+                `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)}`
+              );
+              
+              // If the winning bidder is not the highest bidder, notify both
+              if (listing.auction.highestBidder && winningBidder !== listing.auction.highestBidder) {
+                addSellerNotification(
+                  listing.seller,
+                  `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
+                );
+              }
+              
+              // Mark listing for removal since it has been sold
+              removedListings.push(listing.id);
+              return null;
+            } else {
+              // This shouldn't happen since we verified funds above, but just in case
+              addSellerNotification(
+                listing.seller,
+                `⚠️ Auction payment error: Couldn't process payment for "${listing.title}"`
+              );
+            }
+          } else {
+            // No valid winner with sufficient funds
+            if (listing.auction.reservePrice && listing.auction.highestBid && listing.auction.highestBid < listing.auction.reservePrice) {
+              // Reserve price not met
+              addSellerNotification(
+                listing.seller,
+                `🔨 Auction ended: Reserve price not met for "${listing.title}"`
+              );
+            } else if (listing.auction.highestBidder) {
+              // Highest bidder had insufficient funds (and no other valid bidders)
+              addSellerNotification(
+                listing.seller,
+                `⚠️ Auction ended: Bidder ${listing.auction.highestBidder} had insufficient funds for "${listing.title}" and no other valid bidders were found.`
+              );
             }
           }
         } else {
-          // No valid bids - notify seller
+          // No bids placed
           addSellerNotification(
             listing.seller,
-            `🔨 Auction ended: No valid bids for "${listing.title}"`
+            `🔨 Auction ended: No bids were placed on "${listing.title}"`
           );
         }
         
-        // Mark auction as ended
+        // Mark auction as ended if it wasn't removed
         return {
           ...listing,
           auction: {
@@ -567,11 +623,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
       
       return listing;
-    });
+    }).filter(listing => listing !== null) as Listing[]; // Filter out null entries (sold listings)
     
-    if (updated) {
-      setListings(updatedListings);
-      localStorage.setItem('listings', JSON.stringify(updatedListings));
+    // Remove listings that were sold
+    const finalListings = updatedListings.filter(listing => !removedListings.includes(listing.id));
+    
+    if (updated || removedListings.length > 0) {
+      setListings(finalListings);
+      localStorage.setItem('listings', JSON.stringify(finalListings));
     }
   };
 
