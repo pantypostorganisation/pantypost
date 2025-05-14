@@ -157,10 +157,12 @@ export default function MyListingsPage() {
 
   // Handle drag end (drop)
   const handleDrop = () => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+    
     const _imageUrls = [...imageUrls];
-    const draggedItemContent = _imageUrls[dragItem.current!];
-    _imageUrls.splice(dragItem.current!, 1);
-    _imageUrls.splice(dragOverItem.current!, 0, draggedItemContent);
+    const draggedItemContent = _imageUrls[dragItem.current];
+    _imageUrls.splice(dragItem.current, 1);
+    _imageUrls.splice(dragOverItem.current, 0, draggedItemContent);
     dragItem.current = null;
     dragOverItem.current = null;
     setImageUrls(_imageUrls);
@@ -176,7 +178,7 @@ export default function MyListingsPage() {
 
   // Handle adding or updating a listing
   const handleSaveListing = () => {
-    if (!title || !description || !imageUrls.length === 0) {
+    if (!title || !description || imageUrls.length === 0) {
       alert('Please fill in all required fields (title, description) and add at least one image.');
       return;
     }
@@ -295,13 +297,15 @@ export default function MyListingsPage() {
     (listing: Listing) => listing.seller === user?.username
   ) ?? [];
 
+  // Count listing types
+  const auctionCount = myListings.filter(listing => !!listing.auction).length;
   const premiumCount = myListings.filter(listing => listing.isPremium).length;
-  const standardCount = myListings.length - premiumCount;
-  const auctionCount = myListings.filter(listing => listing.auction).length;
+  const standardCount = myListings.length - (premiumCount + auctionCount);
 
-  const sellerOrders = orderHistory.filter(
-    (order) => order.seller === user?.username
-  );
+  // Get seller orders and sort by date (newest first)
+  const sellerOrders = orderHistory
+    .filter(order => order.seller === user?.username)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Robust analytics for each listing
   const getListingAnalytics = (listing: Listing) => {
@@ -821,14 +825,14 @@ export default function MyListingsPage() {
                             )}
 
                             {/* Auction info */}
-                            {isAuctionListing && (
+                            {isAuctionListing && listing.auction && (
                               <div className="bg-purple-900 bg-opacity-20 rounded-lg p-3 mb-3 border border-purple-800">
                                 <div className="flex justify-between items-center mb-1">
                                   <span className="text-sm text-purple-300 flex items-center gap-1">
                                     <Gavel className="w-3 h-3" /> Current Bid:
                                   </span>
                                   <span className="font-bold text-white">
-                                    ${listing.auction?.highestBid || listing.auction?.startingPrice.toFixed(2)}
+                                    ${listing.auction.highestBid || listing.auction.startingPrice.toFixed(2)}
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center">
@@ -836,11 +840,11 @@ export default function MyListingsPage() {
                                     <Calendar className="w-3 h-3" /> Ends:
                                   </span>
                                   <span className="text-sm text-white">
-                                    {formatTimeRemaining(listing.auction?.endTime || '')}
+                                    {formatTimeRemaining(listing.auction.endTime)}
                                   </span>
                                 </div>
                                 <div className="text-xs text-gray-400 mt-1">
-                                  {listing.auction?.bids.length || 0} {listing.auction?.bids.length === 1 ? 'bid' : 'bids'} placed
+                                  {listing.auction.bids?.length || 0} {listing.auction.bids?.length === 1 ? 'bid' : 'bids'} placed
                                 </div>
                               </div>
                             )}
@@ -857,8 +861,8 @@ export default function MyListingsPage() {
 
                             <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
                               <p className={`font-bold text-xl ${isAuctionListing ? 'text-purple-400' : 'text-[#ff950e]'}`}>
-                                {isAuctionListing 
-                                  ? `$${listing.auction?.startingPrice.toFixed(2)} start` 
+                                {isAuctionListing && listing.auction
+                                  ? `$${listing.auction.startingPrice.toFixed(2)} start` 
                                   : `$${listing.price.toFixed(2)}`}
                               </p>
                               <div className="flex gap-2">
@@ -874,7 +878,7 @@ export default function MyListingsPage() {
                                   </button>
                                 )}
                                 {/* Edit Button - only for standard listings or ended auctions */}
-                                {(!isAuctionListing || listing.auction?.status !== 'active') && (
+                                {(!isAuctionListing || (listing.auction && listing.auction.status !== 'active')) && (
                                   <button
                                     onClick={() => handleEditClick(listing)}
                                     className="text-blue-400 p-2 rounded-full hover:bg-gray-800 transition"

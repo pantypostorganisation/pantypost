@@ -49,7 +49,7 @@ export default function ListingDetailPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   // Is this an auction listing?
-  const isAuctionListing = listing?.auction ? true : false;
+  const isAuctionListing = !!listing?.auction;
   
   // Has the auction ended?
   const isAuctionEnded = isAuctionListing && 
@@ -235,7 +235,7 @@ export default function ListingDetailPage() {
         message: 'You have been outbid!'
       });
     }
-  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username]);
+  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username, bidStatus.success]);
 
   const sellerUser = users?.[listing?.seller ?? ''];
   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
@@ -271,28 +271,28 @@ export default function ListingDetailPage() {
   };
   
   // Handle keypress in bid input
-  const handleBidKeyPress = useCallback((e: React.KeyboardEvent) => {
+  const handleBidKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleBidSubmit();
     }
-  }, []);
+  };
   
   // Handle bid submission with improved validation
-  const handleBidSubmit = useCallback(async () => {
+  const handleBidSubmit = async () => {
     if (isBidding) return; // Prevent multiple submissions
     
     // Clear previous messages
     setBidError(null);
     setBidSuccess(null);
     
-    if (!user?.username || user.role !== 'buyer' || !listing || !isAuctionListing) {
+    if (!user?.username || user.role !== 'buyer' || !listing || !isAuctionListing || !listing.auction) {
       setBidError('You must be logged in as a buyer to place bids.');
       return;
     }
     
     // Check if auction has ended since page load
-    if (listing.auction?.endTime && new Date(listing.auction.endTime) <= new Date()) {
+    if (listing.auction.endTime && new Date(listing.auction.endTime) <= new Date()) {
       setBidError('This auction has ended.');
       setBiddingEnabled(false);
       return;
@@ -359,7 +359,7 @@ export default function ListingDetailPage() {
     } finally {
       setIsBidding(false);
     }
-  }, [user, listing, isAuctionListing, bidAmount, placeBid, isBidding]);
+  };
 
   return (
     <main className="min-h-screen bg-black text-white py-6 px-2 sm:px-4 lg:px-8">
@@ -515,7 +515,7 @@ export default function ListingDetailPage() {
               <p className="text-base text-gray-300 leading-relaxed mb-6">{listing.description}</p>
 
               {/* Auction Details Section with Enhanced UI */}
-              {isAuctionListing && (
+              {isAuctionListing && listing.auction && (
                 <div className={`mb-6 p-5 rounded-2xl border ${isAuctionEnded ? 'border-gray-700 bg-gray-900/30' : 'border-purple-700 bg-purple-900/20'}`}>
                   <div className="flex items-center gap-3 mb-3">
                     <Gavel className={`w-5 h-5 ${isAuctionEnded ? 'text-gray-400' : 'text-purple-400'}`} />
@@ -857,7 +857,7 @@ export default function ListingDetailPage() {
         </div>
 
         {/* Enhanced Bid History Modal */}
-        {showBidHistory && (
+        {showBidHistory && isAuctionListing && listing.auction && (
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-[#1a1a1a] rounded-xl border border-purple-800 w-full max-w-lg p-6 relative">
               {/* Animated decoration */}
@@ -1003,7 +1003,7 @@ export default function ListingDetailPage() {
         )}
         
         {/* Sticky Place Bid for mobile - only for auction listings */}
-        {user?.role === 'buyer' && !isAuctionEnded && isAuctionListing && user.username !== listing.seller && (
+        {user?.role === 'buyer' && !isAuctionEnded && isAuctionListing && listing.auction && user.username !== listing.seller && (
           <div className={`fixed bottom-0 left-0 w-full z-40 pointer-events-none sm:hidden`}>
             <div className={`transition-all duration-300 ${showStickyBuy ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
               <div className="max-w-md mx-auto px-4 pb-4">
