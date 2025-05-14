@@ -19,7 +19,7 @@ export default function ListingDetailPage() {
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id;
   const listing = listings.find((item) => item.id === listingId);
-  const { purchaseListing } = useWallet();
+  const { purchaseListing, getBuyerBalance } = useWallet();
   const { sendMessage, getMessagesForSeller, markMessagesAsRead } = useMessages();
   const { addRequest } = useRequests();
   const router = useRouter();
@@ -55,6 +55,21 @@ export default function ListingDetailPage() {
   const isAuctionEnded = isAuctionListing && 
     (listing?.auction?.status === 'ended' || listing?.auction?.status === 'cancelled' || 
      new Date(listing?.auction?.endTime || '') <= new Date());
+     
+  // Calculate total payable amount (bid + 10% markup) for display purposes
+  const calculateTotalPayable = (bidPrice: number): number => {
+    return Math.round(bidPrice * 1.1 * 100) / 100;
+  };
+  
+  // For current highest bid display
+  const currentHighestBid = isAuctionListing && listing?.auction?.highestBid 
+    ? listing.auction.highestBid 
+    : isAuctionListing && listing?.auction 
+      ? listing.auction.startingPrice 
+      : 0;
+      
+  // Calculate total payable for current highest bid
+  const currentTotalPayable = calculateTotalPayable(currentHighestBid);
      
   // Auto-suggest bid amounts
   const suggestedBidAmount = useMemo(() => {
@@ -118,6 +133,49 @@ export default function ListingDetailPage() {
       setBidsHistory(sortedBids);
     }
   }, [isAuctionListing, listing?.auction?.bids]);
+  
+  // Check if current user has sufficient funds for their bid
+  const checkCurrentUserFunds = useCallback(() => {
+    if (!user?.username || !isAuctionListing || !listing?.auction?.highestBidder) return true;
+    
+    // Only check if the current user is the highest bidder
+    if (listing.auction.highestBidder === user.username) {
+      const highestBid = listing.auction.highestBid || 0;
+      const userBalance = getBuyerBalance(user.username);
+      
+      // Update bid status based on available funds
+      if (userBalance < highestBid) {
+        setBidStatus({
+          success: false,
+          message: 'Warning: You do not have sufficient funds to win this auction.'
+        });
+        return false;
+      } else {
+        // Clear any previous warnings if funds are now sufficient
+        if (bidStatus.message?.includes('Warning')) {
+          setBidStatus({
+            success: true,
+            message: 'You are the highest bidder!'
+          });
+        }
+        return true;
+      }
+    }
+    return true;
+  }, [user?.username, isAuctionListing, listing?.auction?.highestBidder, listing?.auction?.highestBid, getBuyerBalance, bidStatus.message]);
+  
+  // Periodically check if highest bidder has sufficient funds
+  useEffect(() => {
+    if (!isAuctionListing || isAuctionEnded) return;
+    
+    checkCurrentUserFunds();
+    
+    const interval = setInterval(() => {
+      checkCurrentUserFunds();
+    }, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [isAuctionListing, isAuctionEnded, checkCurrentUserFunds]);
   
   // Memoize and optimize time remaining calculation for better performance
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -224,10 +282,21 @@ export default function ListingDetailPage() {
   // Automatically update bid status when the listing updates
   useEffect(() => {
     if (isAuctionListing && listing?.auction?.highestBidder === user?.username) {
-      setBidStatus({
-        success: true,
-        message: 'You are the highest bidder!'
-      });
+      // Check if user has sufficient funds for their highest bid
+      const highestBid = listing.auction.highestBid || 0;
+      const userBalance = user ? getBuyerBalance(user.username) : 0;
+      
+      if (userBalance < highestBid) {
+        setBidStatus({
+          success: false,
+          message: 'Warning: You do not have sufficient funds to win this auction.'
+        });
+      } else {
+        setBidStatus({
+          success: true,
+          message: 'You are the highest bidder!'
+        });
+      }
     } else if (bidStatus.success && isAuctionListing && listing?.auction?.highestBidder !== user?.username) {
       // If user was highest bidder but got outbid
       setBidStatus({
@@ -235,7 +304,7 @@ export default function ListingDetailPage() {
         message: 'You have been outbid!'
       });
     }
-  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username, bidStatus.success]);
+  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username, bidStatus.success, listing?.auction?.highestBid, getBuyerBalance]);
 
   const sellerUser = users?.[listing?.seller ?? ''];
   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
@@ -326,6 +395,13 @@ export default function ListingDetailPage() {
       return;
     }
     
+    // Check if user has sufficient funds to place this bid
+    const userBalance = getBuyerBalance(user.username);
+    if (userBalance < numericBid) {
+      setBidError(`Insufficient funds. Your wallet balance is $${userBalance.toFixed(2)}.`);
+      return;
+    }
+    
     // Set bidding state
     setIsBidding(true);
     
@@ -346,12 +422,21 @@ export default function ListingDetailPage() {
         };
         setBidsHistory(prev => [newBid, ...prev]);
         
+        // Calculate the total with markup
+        const totalPayable = calculateTotalPayable(numericBid);
+        
+        // Update bid status to show highest bidder status with total payable amount
+        setBidStatus({
+          success: true,
+          message: `You are the highest bidder! Total payable if you win: $${totalPayable.toFixed(2)}`
+        });
+        
         // Auto-focus input for another bid
         setTimeout(() => {
           if (bidInputRef.current) bidInputRef.current.focus();
         }, 500);
       } else {
-        setBidError('Failed to place your bid. You may not have sufficient funds.');
+        setBidError('Failed to place your bid. You may not have sufficient funds or the auction has ended.');
       }
     } catch (error) {
       console.error('Bid error:', error);
@@ -579,7 +664,7 @@ export default function ListingDetailPage() {
                       )}
                     </div>
                     
-                    {/* Bid information */}
+                    {/* Bid information with price + markup display */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-black/40 p-3 rounded-lg border border-gray-800">
                         <div className="text-xs text-gray-400 mb-1">Starting Bid</div>
@@ -599,6 +684,21 @@ export default function ListingDetailPage() {
                           <div className="text-gray-400 italic">No bids yet</div>
                         )}
                       </div>
+                    </div>
+                    
+                    {/* Total payable amount (with markup) */}
+                    <div className="bg-purple-900/30 p-3 rounded-lg border border-purple-800/40">
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm text-purple-200 flex items-center gap-1">
+                          <DollarSign className="w-4 h-4" /> Total Payable (incl. 10% fee):
+                        </div>
+                        <div className="font-bold text-white text-lg">
+                          ${currentTotalPayable.toFixed(2)}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        A 10% fee is added to the final bid amount at auction end.
+                      </p>
                     </div>
                     
                     {/* Reserve price and bid count */}
@@ -647,11 +747,20 @@ export default function ListingDetailPage() {
                     
                     {/* Additional auction information */}
                     {listing.auction.highestBidder && listing.auction.highestBidder === user?.username && (
-                      <div className="bg-green-900/30 border border-green-800/50 rounded-lg p-3 text-sm text-green-300 flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div className={`rounded-lg p-3 text-sm flex items-start gap-2 ${
+                        bidStatus.success 
+                          ? 'bg-green-900/30 border border-green-800/50 text-green-300' 
+                          : 'bg-yellow-900/30 border border-yellow-800/50 text-yellow-300'
+                      }`}>
+                        {bidStatus.success ? (
+                          <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        )}
                         <span>
-                          You are the highest bidder! If the auction ends now, you will win this item.
-                          {isAuctionEnded && " The item will be automatically processed for you."}
+                          {bidStatus.message || (bidStatus.success 
+                            ? `You are the highest bidder! Total payable if you win: $${currentTotalPayable.toFixed(2)}`
+                            : 'Warning: Please check your wallet balance.')}
                         </span>
                       </div>
                     )}
@@ -706,6 +815,14 @@ export default function ListingDetailPage() {
                           )}
                         </button>
                       </div>
+                      
+                      {/* Total payable with fee for this bid */}
+                      {bidAmount && !isNaN(parseFloat(bidAmount)) && parseFloat(bidAmount) > 0 && (
+                        <p className="text-xs text-purple-300 mt-2 flex items-center gap-1">
+                          <InfoIcon className="w-3 h-3" />
+                          If you win with this bid, you'll pay: ${calculateTotalPayable(parseFloat(bidAmount)).toFixed(2)} (includes 10% fee)
+                        </p>
+                      )}
                       
                       {/* Suggested bid buttons */}
                       {suggestedBidAmount && (
@@ -918,6 +1035,9 @@ export default function ListingDetailPage() {
                                 +${(bid.amount - bidsHistory[index + 1].amount).toFixed(2)}
                               </span>
                             )}
+                            <div className="text-xs text-gray-500">
+                              Total payable: ${calculateTotalPayable(bid.amount).toFixed(2)}
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-sm text-gray-400">{formatBidDate(bid.date)}</td>
                         </tr>
@@ -1017,7 +1137,7 @@ export default function ListingDetailPage() {
                       <span className="flex items-center gap-1">
                         <BarChart2 className="w-3.5 h-3.5" /> 
                         {listing.auction.highestBid 
-                          ? `Highest: $${listing.auction.highestBid.toFixed(2)}` 
+                          ? `Current: $${listing.auction.highestBid.toFixed(2)}` 
                           : `Start: $${listing.auction.startingPrice.toFixed(2)}`}
                       </span>
                     </div>
@@ -1057,6 +1177,13 @@ export default function ListingDetailPage() {
                       </button>
                     </div>
                     
+                    {/* Total payable info */}
+                    {bidAmount && !isNaN(parseFloat(bidAmount)) && parseFloat(bidAmount) > 0 && (
+                      <p className="text-xs text-purple-300 px-2">
+                        Total with fee: ${calculateTotalPayable(parseFloat(bidAmount)).toFixed(2)}
+                      </p>
+                    )}
+                    
                     {/* Quick bid buttons */}
                     {suggestedBidAmount && (
                       <div className="flex justify-between gap-2 px-1">
@@ -1074,7 +1201,8 @@ export default function ListingDetailPage() {
                         </button>
                         <button
                           onClick={() => setShowBidHistory(true)}
-                          className="text-xs bg-gray-800/80 text-gray-300 px-2 py-1.5 rounded-lg hover:bg-gray-700/80 transition flex items-center"
+                          className="
+                          text-xs bg-gray-800/80 text-gray-300 px-2 py-1.5 rounded-lg hover:bg-gray-700/80 transition flex items-center"
                         >
                           <History className="w-3 h-3 mr-1" /> 
                           {listing.auction.bids?.length || 0}
