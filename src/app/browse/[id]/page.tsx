@@ -283,7 +283,7 @@ export default function ListingDetailPage() {
   useEffect(() => {
     if (isAuctionListing && listing?.auction?.highestBidder === user?.username) {
       // Check if user has sufficient funds for their highest bid
-      const highestBid = listing.auction.highestBid || 0;
+      const highestBid = listing.auction?.highestBid || 0;
       const userBalance = user ? getBuyerBalance(user.username) : 0;
       
       if (userBalance < highestBid) {
@@ -819,7 +819,7 @@ export default function ListingDetailPage() {
                       {/* Total payable with fee for this bid */}
                       {bidAmount && !isNaN(parseFloat(bidAmount)) && parseFloat(bidAmount) > 0 && (
                         <p className="text-xs text-purple-300 mt-2 flex items-center gap-1">
-                          <InfoIcon className="w-3 h-3" />
+                          <Info className="w-3 h-3" />
                           If you win with this bid, you'll pay: ${calculateTotalPayable(parseFloat(bidAmount)).toFixed(2)} (includes 10% fee)
                         </p>
                       )}
