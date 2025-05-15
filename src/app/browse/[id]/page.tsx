@@ -10,7 +10,8 @@ import Link from 'next/link';
 import {
   Clock, User, ArrowRight, BadgeCheck, AlertTriangle, Crown, MessageCircle,
   DollarSign, ShoppingBag, Lock, ChevronLeft, ChevronRight, Gavel, Calendar,
-  BarChart2, ArrowUp, History, AlertCircle, CheckCircle, X, Info
+  BarChart2, ArrowUp, History, AlertCircle, CheckCircle, X, Info, Award,
+  ExternalLink, ShoppingCart
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -57,6 +58,7 @@ export default function ListingDetailPage() {
   const [bidsHistory, setBidsHistory] = useState<{bidder: string, amount: number, date: string}[]>([]);
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [forceUpdateTimer, setForceUpdateTimer] = useState<Record<string, unknown>>({});
+  const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
 
   // Enhanced bid validation and submission with debouncing
   const [isBidding, setIsBidding] = useState(false);
@@ -79,7 +81,19 @@ export default function ListingDetailPage() {
   const isAuctionEnded = isAuctionListing && 
     (listing?.auction?.status === 'ended' || listing?.auction?.status === 'cancelled' || 
      new Date(listing?.auction?.endTime || '') <= new Date());
-     
+
+  // Did current user place any bids?
+  const didUserBid = useMemo(() => {
+    if (!isAuctionListing || !listing?.auction?.bids || !user?.username) return false;
+    return listing.auction.bids.some(bid => bid.bidder === user.username);
+  }, [isAuctionListing, listing?.auction?.bids, user?.username]);
+
+  // Is current user the highest bidder?
+  const isUserHighestBidder = useMemo(() => {
+    if (!isAuctionListing || !listing?.auction?.highestBidder || !user?.username) return false;
+    return listing.auction.highestBidder === user.username;
+  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username]);
+
   // Calculate total payable amount (bid + 10% markup) for display purposes
   const calculateTotalPayable = (bidPrice: number): number => {
     return Math.round(bidPrice * 1.1 * 100) / 100;
@@ -348,6 +362,24 @@ export default function ListingDetailPage() {
     }
   };
   
+  // Handle purchase for standard (non-auction) listings
+  const handlePurchase = () => {
+    if (!user?.username || !listing || isProcessing) return;
+    
+    setIsProcessing(true);
+    const success = purchaseListing(listing, user.username);
+    
+    if (success) {
+      removeListing(listing.id);
+      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
+      setPurchaseStatus('Purchase successful! 🎉');
+      setShowPurchaseSuccess(true);
+    } else {
+      setPurchaseStatus('Insufficient balance. Please top up your wallet.');
+      setIsProcessing(false);
+    }
+  };
+  
   // Handle bid submission with improved validation
   const handleBidSubmit = async () => {
     if (isBidding) return; // Prevent multiple submissions
@@ -447,6 +479,225 @@ export default function ListingDetailPage() {
     }
   };
 
+  // AUCTION ENDING SCREENS
+  // Check if we should show one of the auction ending screens
+  const renderAuctionEndedScreen = () => {
+    if (!isAuctionListing || !isAuctionEnded || !listing.auction) return null;
+    
+    const hasBids = listing.auction.bids && listing.auction.bids.length > 0;
+    const isHighestBidder = isUserHighestBidder;
+    const isSeller = user?.username === listing.seller;
+    const hasUserBid = didUserBid && !isHighestBidder;
+    
+    // Generic auction ended screen (for sellers and non-bidders)
+    if ((isSeller || (!hasUserBid && !isHighestBidder)) && !(user?.role === "buyer" && isHighestBidder)) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
+            <div className="mb-6">
+              {listing.auction.status === 'cancelled' ? (
+                <AlertCircle className="mx-auto w-16 h-16 text-red-500 mb-4" />
+              ) : hasBids ? (
+                <Gavel className="mx-auto w-16 h-16 text-purple-500 mb-4" />
+              ) : (
+                <Clock className="mx-auto w-16 h-16 text-[#ff950e] mb-4" />
+              )}
+              
+              <h2 className="text-2xl font-bold text-white mb-2">
+                {listing.auction.status === 'cancelled' 
+                  ? 'Auction Cancelled' 
+                  : 'Auction Ended'}
+              </h2>
+              
+              <div className="text-gray-300">
+                {listing.auction.status === 'cancelled' ? (
+                  <p>This auction was cancelled by the seller.</p>
+                ) : isSeller ? (
+                  hasBids ? (
+                    <p>
+                      Your auction for "<span className="text-[#ff950e]">{listing.title}</span>" has ended 
+                      with a final bid of <span className="font-bold text-green-400">${listing.auction.highestBid?.toFixed(2)}</span> 
+                      from <span className="font-bold">{listing.auction.highestBidder}</span>.
+                    </p>
+                  ) : (
+                    <p>
+                      Your auction for "<span className="text-[#ff950e]">{listing.title}</span>" has ended without 
+                      receiving any bids.
+                    </p>
+                  )
+                ) : (
+                  hasBids ? (
+                    <p>
+                      This auction has ended with a final bid of <span className="font-bold text-green-400">${listing.auction.highestBid?.toFixed(2)}</span>.
+                    </p>
+                  ) : (
+                    <p>
+                      This auction has ended without receiving any bids.
+                    </p>
+                  )
+                )}
+              </div>
+            </div>
+            
+            <button
+              onClick={() => router.push('/browse')}
+              className="w-full bg-purple-600 text-white px-4 py-3 rounded-full hover:bg-purple-500 font-bold transition text-lg shadow"
+            >
+              Return to Browse
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Screen for users who bid but didn't win
+    if (hasUserBid) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
+            <div className="mb-6">
+              <AlertTriangle className="mx-auto w-16 h-16 text-yellow-500 mb-4" />
+              
+              <h2 className="text-2xl font-bold text-white mb-2">
+                Auction Ended
+              </h2>
+              
+              <div className="text-gray-300">
+                <p className="mb-2">
+                  Your bid of <span className="font-bold text-yellow-400">
+                    ${bidsHistory.find(bid => bid.bidder === user?.username)?.amount.toFixed(2) || '0.00'}
+                  </span> was not the highest bid.
+                </p>
+                
+                <p>
+                  The auction for "<span className="text-[#ff950e]">{listing.title}</span>" ended 
+                  with a final bid of <span className="font-bold text-green-400">${listing.auction.highestBid?.toFixed(2)}</span> 
+                  from <span className="font-bold">{listing.auction.highestBidder}</span>.
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => router.push('/browse')}
+              className="w-full bg-purple-600 text-white px-4 py-3 rounded-full hover:bg-purple-500 font-bold transition text-lg shadow"
+            >
+              Browse More Auctions
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Screen for auction winner
+    if (user?.role === "buyer" && isHighestBidder) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
+            <div className="mb-6">
+              <div className="relative mx-auto w-20 h-20 mb-4">
+                <Award className="w-20 h-20 text-yellow-500 animate-pulse" />
+                <CheckCircle className="absolute bottom-0 right-0 w-8 h-8 text-green-500 bg-[#1a1a1a] rounded-full p-1" />
+              </div>
+              
+              <h2 className="text-2xl font-bold text-white mb-2">
+                Congratulations! You Won!
+              </h2>
+              
+              <div className="text-gray-300">
+                <p className="mb-4">
+                  Your winning bid of <span className="font-bold text-green-400">${listing.auction.highestBid?.toFixed(2)}</span> secured 
+                  "<span className="text-[#ff950e]">{listing.title}</span>" from <span className="font-bold">{listing.seller}</span>.
+                </p>
+                
+                <div className="bg-black/30 p-4 rounded-xl border border-gray-700 mb-4">
+                  <p className="text-sm mb-2">Your purchase has been processed and added to your order history.</p>
+                  <p className="text-sm text-[#ff950e] font-medium">
+                    Total paid: ${calculateTotalPayable(listing.auction.highestBid || 0).toFixed(2)} 
+                    <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => router.push('/buyers/my-orders')}
+                className="w-full bg-green-600 text-white px-4 py-3 rounded-full hover:bg-green-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" /> View My Orders
+              </button>
+              
+              <button
+                onClick={() => router.push('/browse')}
+                className="w-full bg-purple-600 text-white px-4 py-3 rounded-full hover:bg-purple-500 font-bold transition text-lg shadow"
+              >
+                Browse More Items
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
+  // Render purchase success screen for standard (non-auction) listings
+  const renderPurchaseSuccessScreen = () => {
+    if (!showPurchaseSuccess || !listing) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
+          <div className="mb-6">
+            <div className="relative mx-auto w-20 h-20 mb-4">
+              <ShoppingBag className="w-20 h-20 text-[#ff950e] animate-pulse" />
+              <CheckCircle className="absolute bottom-0 right-0 w-8 h-8 text-green-500 bg-[#1a1a1a] rounded-full p-1" />
+            </div>
+            
+            <h2 className="text-2xl font-bold text-white mb-2">
+              Purchase Successful!
+            </h2>
+            
+            <div className="text-gray-300">
+              <p className="mb-4">
+                You have successfully purchased <span className="text-[#ff950e] font-medium">"{listing.title}"</span> from <span className="font-bold">{listing.seller}</span>.
+              </p>
+              
+              <div className="bg-black/30 p-4 rounded-xl border border-gray-700 mb-4">
+                <p className="text-sm mb-2">Your order has been added to your order history.</p>
+                <p className="text-sm text-[#ff950e] font-medium">
+                  Total paid: ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
+                  <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
+                </p>
+              </div>
+              
+              <p className="text-sm text-green-400">
+                The seller has been notified and will contact you soon.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => router.push('/buyers/my-orders')}
+              className="w-full bg-green-600 text-white px-4 py-3 rounded-full hover:bg-green-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
+            >
+              <ShoppingCart className="w-5 h-5" /> View My Orders
+            </button>
+            
+            <button
+              onClick={() => router.push('/browse')}
+              className="w-full bg-[#ff950e] text-black px-4 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg shadow"
+            >
+              Browse More Items
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <main className="min-h-screen bg-black text-white py-6 px-2 sm:px-4 lg:px-8">
       <div className="max-w-5xl mx-auto">
@@ -503,7 +754,8 @@ export default function ListingDetailPage() {
                 {isAuctionListing && (
                   <div className="absolute top-3 right-3 z-10">
                     <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
-                      <Gavel className="w-4 h-4 mr-1" /> Auction
+                      <Gavel className="w-4 h-4 mr-1" /> 
+                      {isAuctionEnded ? 'Auction Ended' : 'Auction'}
                     </span>
                   </div>
                 )}
@@ -899,21 +1151,7 @@ export default function ListingDetailPage() {
                   <div className="flex flex-col sm:flex-row gap-3 w-full">
                     {!isAuctionListing && (
                       <button
-                        onClick={() => {
-                          setIsProcessing(true);
-                          const success = purchaseListing(listing, user.username);
-                          if (success) {
-                            removeListing(listing.id);
-                            addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-                            setPurchaseStatus('Purchase successful! 🎉');
-                            setTimeout(() => {
-                              window.location.href = `/buyers/messages?seller=${listing.seller}`;
-                            }, 1000);
-                          } else {
-                            setPurchaseStatus('Insufficient balance. Please top up your wallet.');
-                            setIsProcessing(false);
-                          }
-                        }}
+                        onClick={handlePurchase}
                         className="flex-1 bg-[#ff950e] text-black px-4 py-2 rounded-full hover:bg-[#e0850d] font-bold text-base shadow-lg transition focus:scale-105 active:scale-95"
                         disabled={isProcessing}
                         style={{
@@ -1080,27 +1318,19 @@ export default function ListingDetailPage() {
           </div>
         )}
 
+        {/* Render Auction Ended Screens */}
+        {renderAuctionEndedScreen()}
+        
+        {/* Render Purchase Success Screen */}
+        {renderPurchaseSuccessScreen()}
+
         {/* Sticky Buy Now for mobile - only for standard listings */}
         {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
           <div className={`fixed bottom-0 left-0 w-full z-40 pointer-events-none sm:hidden`}>
             <div className={`transition-all duration-300 ${showStickyBuy ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
               <div className="max-w-md mx-auto px-4 pb-4">
                 <button
-                  onClick={() => {
-                    setIsProcessing(true);
-                    const success = purchaseListing(listing, user.username);
-                    if (success) {
-                      removeListing(listing.id);
-                      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-                      setPurchaseStatus('Purchase successful! 🎉');
-                      setTimeout(() => {
-                        window.location.href = `/buyers/messages?seller=${listing.seller}`;
-                      }, 1000);
-                    } else {
-                      setPurchaseStatus('Insufficient balance. Please top up your wallet.');
-                      setIsProcessing(false);
-                    }
-                  }}
+                  onClick={handlePurchase}
                   className="w-full flex items-center justify-center gap-2 bg-[#ff950e] text-black px-6 py-3 rounded-full font-bold text-lg shadow-lg hover:bg-[#e0850d] transition focus:scale-105 active:scale-95"
                   style={{
                     boxShadow: '0 2px 12px 0 #ff950e44',
