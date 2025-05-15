@@ -20,6 +20,8 @@ type Order = {
   buyer: string;
   tags?: string[];
   wearTime?: string; // Note: This seems to correspond to 'hoursWorn' in Listing type
+  wasAuction?: boolean; // Flag to indicate if this was an auction purchase
+  finalBid?: number; // The final winning bid amount for auctions
 };
 
 type Listing = {

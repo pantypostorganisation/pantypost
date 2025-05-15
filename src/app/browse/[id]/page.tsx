@@ -14,10 +14,33 @@ import {
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
+// Add custom hook for interval with proper TypeScript typing
+function useInterval(callback: () => void, delay: number | null): void {
+  const savedCallback = useRef<() => void>(() => {});
+
+  // Remember the latest callback
+  useEffect(() => {
+    savedCallback.current = callback;
+  }, [callback]);
+
+  // Set up the interval
+  useEffect(() => {
+    function tick() {
+      savedCallback.current();
+    }
+    
+    if (delay !== null) {
+      const id = setInterval(tick, delay);
+      return () => clearInterval(id);
+    }
+    return undefined;
+  }, [delay]);
+}
+
 export default function ListingDetailPage() {
   const { listings, user, removeListing, addSellerNotification, isSubscribed, users, placeBid } = useListings();
   const { id } = useParams();
-  const listingId = Array.isArray(id) ? id[0] : id;
+  const listingId = Array.isArray(id) ? id[0] : id as string;
   const listing = listings.find((item) => item.id === listingId);
   const { purchaseListing, getBuyerBalance } = useWallet();
   const { sendMessage, getMessagesForSeller, markMessagesAsRead } = useMessages();
@@ -33,6 +56,7 @@ export default function ListingDetailPage() {
   const [biddingEnabled, setBiddingEnabled] = useState(true);
   const [bidsHistory, setBidsHistory] = useState<{bidder: string, amount: number, date: string}[]>([]);
   const [showBidHistory, setShowBidHistory] = useState(false);
+  const [forceUpdateTimer, setForceUpdateTimer] = useState<Record<string, unknown>>({});
 
   // Enhanced bid validation and submission with debouncing
   const [isBidding, setIsBidding] = useState(false);
@@ -227,57 +251,34 @@ export default function ListingDetailPage() {
     return formatted;
   }, []);
   
-  // Update timer for auctions that are about to end
-  useEffect(() => {
-    if (!isAuctionListing || isAuctionEnded) return;
-    
-    // Get remaining time
-    const getTimeRemaining = () => {
-      if (!listing?.auction?.endTime) return Infinity;
-      const now = new Date();
-      const endTime = new Date(listing.auction.endTime);
-      return endTime.getTime() - now.getTime();
-    };
-    
-    const remaining = getTimeRemaining();
-    
-    // For auctions with less than 10 minutes remaining, update more frequently
-    let interval: NodeJS.Timeout | null = null;
-    if (remaining < 600000) { // less than 10 minutes
-      interval = setInterval(() => {
-        // Force re-render by updating a state variable
-        setBiddingEnabled(prev => {
-          // Check if auction has ended
-          const timeLeft = getTimeRemaining();
-          if (timeLeft <= 0) {
-            if (interval) clearInterval(interval);
-            return false;
-          }
-          return prev;
-        });
-      }, remaining < 60000 ? 1000 : 5000); // Update every second for last minute, otherwise every 5 seconds
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isAuctionListing, isAuctionEnded, listing?.auction?.endTime]);
-  
-  // Periodically check if the auction has ended
-  useEffect(() => {
-    if (!isAuctionListing || isAuctionEnded) return;
-    
-    const checkAuctionStatus = () => {
-      if (listing?.auction?.endTime && new Date(listing.auction.endTime) <= new Date()) {
+  // Set up real-time countdown timer with useInterval
+  useInterval(
+    () => {
+      if (!isAuctionListing || isAuctionEnded || !listing?.auction?.endTime) return;
+      
+      // Force re-render by updating state
+      setForceUpdateTimer({});
+      
+      // Check if auction has ended
+      if (new Date(listing.auction.endTime) <= new Date()) {
         setBiddingEnabled(false);
       }
-    };
-    
-    checkAuctionStatus();
-    const interval = setInterval(checkAuctionStatus, 30000); // Check every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [isAuctionListing, isAuctionEnded, listing?.auction?.endTime]);
+    },
+    // Update more frequently when less time remains
+    isAuctionListing && !isAuctionEnded && listing?.auction?.endTime ? 
+      (() => {
+        const now = new Date();
+        const endTime = new Date(listing.auction.endTime);
+        const diffMs = endTime.getTime() - now.getTime();
+        
+        if (diffMs <= 0) return null; // Stop interval if auction ended
+        if (diffMs < 60000) return 1000; // Every second for last minute
+        if (diffMs < 300000) return 5000; // Every 5 seconds for last 5 minutes
+        if (diffMs < 3600000) return 15000; // Every 15 seconds for last hour
+        return 60000; // Every minute otherwise
+      })() : 
+      null // No interval if not an auction or already ended
+  );
   
   // Automatically update bid status when the listing updates
   useEffect(() => {
@@ -1201,8 +1202,7 @@ export default function ListingDetailPage() {
                         </button>
                         <button
                           onClick={() => setShowBidHistory(true)}
-                          className="
-                          text-xs bg-gray-800/80 text-gray-300 px-2 py-1.5 rounded-lg hover:bg-gray-700/80 transition flex items-center"
+                          className="text-xs bg-gray-800/80 text-gray-300 px-2 py-1.5 rounded-lg hover:bg-gray-700/80 transition flex items-center"
                         >
                           <History className="w-3 h-3 mr-1" /> 
                           {listing.auction.bids?.length || 0}

@@ -180,7 +180,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   }, []);
 
-  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance } = useWallet();
+  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance, addOrder } = useWallet();
 
   // On mount, set the notification callback in WalletContext
   useEffect(() => {
@@ -577,6 +577,16 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                   `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
                 );
               }
+              
+              // Add to order history with auction flag to track auction orders
+              addOrder({
+                ...purchaseListingCopy,
+                buyer: winningBidder,
+                date: new Date().toISOString(),
+                imageUrl: listing.imageUrls?.[0] || undefined,
+                wasAuction: true, // Add flag to indicate this was an auction
+                finalBid: winningBid
+              });
               
               // Mark listing for removal since it has been sold
               removedListings.push(listing.id);

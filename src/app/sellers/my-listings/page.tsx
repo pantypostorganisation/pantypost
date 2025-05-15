@@ -171,8 +171,16 @@ export default function MyListingsPage() {
   // Calculate auction end time
   const calculateAuctionEndTime = (): string => {
     const now = new Date();
-    const days = parseInt(auctionDuration, 10);
-    now.setDate(now.getDate() + days);
+    
+    // Special case for 1-minute test option
+    if (auctionDuration === '0.017') {
+      const future = new Date(now.getTime() + 60 * 1000); // Exactly 1 minute in milliseconds
+      return future.toISOString();
+    }
+    
+    // Normal case for days
+    const days = parseFloat(auctionDuration);
+    now.setDate(now.getDate() + Math.floor(days));
     return now.toISOString();
   };
 
@@ -325,11 +333,14 @@ export default function MyListingsPage() {
     const diffMs = endTime.getTime() - now.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     
     if (diffDays > 0) {
       return `${diffDays}d ${diffHours}h left`;
+    } else if (diffHours > 0) {
+      return `${diffHours}h ${diffMinutes}m left`;
     } else {
-      return `${diffHours}h ${Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))}m left`;
+      return `${diffMinutes}m ${Math.floor((diffMs % (1000 * 60)) / 1000)}s left`;
     }
   };
 
@@ -517,6 +528,7 @@ export default function MyListingsPage() {
                             onChange={(e) => setAuctionDuration(e.target.value)}
                             className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
                           >
+                            <option value="0.017">1 Minute (Testing)</option>
                             <option value="1">1 Day</option>
                             <option value="3">3 Days</option>
                             <option value="5">5 Days</option>
@@ -710,7 +722,7 @@ export default function MyListingsPage() {
                           <div>
                             <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
                             <ul className="text-sm text-gray-300 space-y-1">
-                              <li>• Auctions run for {auctionDuration} day{parseInt(auctionDuration) !== 1 ? 's' : ''} from the time you create the listing</li>
+                              <li>• Auctions run for {auctionDuration === '0.017' ? '1 minute' : `${auctionDuration} day${parseInt(auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing</li>
                               <li>• Bidders must have sufficient funds in their wallet to place a bid</li>
                               <li>• If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
                               <li>• You can cancel an auction at any time before it ends</li>

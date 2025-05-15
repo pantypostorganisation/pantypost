@@ -5,12 +5,11 @@ import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import RequireAuth from '@/components/RequireAuth';
-import Link from 'next/link'; // Import Link
-import { User } from 'lucide-react'; // Import User icon
+import Link from 'next/link';
+import { User, Award, Gavel } from 'lucide-react'; // Added Gavel icon
 
 export default function MyOrdersPage() {
   const { orderHistory } = useWallet();
-  // Added 'users' to the useListings hook
   const { user, users } = useListings();
   const { getRequestsForUser } = useRequests();
 
@@ -20,41 +19,139 @@ export default function MyOrdersPage() {
       ? getRequestsForUser(user.username, 'buyer').filter((r) => r.status === 'accepted')
       : [];
 
+  // Filter order history for current user
+  const userOrders = user && user.username 
+    ? orderHistory.filter(order => order.buyer === user.username)
+    : [];
+
+  // Separate auction orders for special display
+  const auctionOrders = userOrders.filter(order => order.wasAuction);
+  const directOrders = userOrders.filter(order => !order.wasAuction);
+
   return (
     <RequireAuth role="buyer">
       <main className="p-10">
         <h1 className="text-3xl font-bold mb-6">My Orders</h1>
 
-        {/* Direct Purchases */}
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold mb-4">Direct Purchases</h2>
-          {orderHistory.length === 0 ? (
-            <p className="text-gray-600">You haven’t purchased anything yet.</p>
-          ) : (
+        {/* Auction Purchases Section */}
+        {auctionOrders.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <Gavel className="w-5 h-5 mr-2 text-purple-600" />
+              Auction Purchases
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {orderHistory.map((order) => {
+              {auctionOrders.map((order) => {
                 // Get seller info from users context
                 const sellerUser = users?.[order.seller ?? ''];
                 const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-                const sellerProfilePic = sellerUser?.profilePic; // Assuming profilePic is available on user object
+                const sellerProfilePic = sessionStorage.getItem(`profile_pic_${order.seller}`);
 
                 return (
                   <div
                     key={`${order.id}-${order.date}`}
-                    className="border rounded-xl p-4 shadow hover:shadow-md transition flex flex-col" // Added flex-col
+                    className="border border-purple-200 rounded-xl p-4 shadow hover:shadow-md transition flex flex-col bg-gradient-to-b from-purple-50 to-white"
                   >
-                    <img
-                      src={order.imageUrl || '/default-image.jpg'} // Existing logic to display image
-                      alt={order.title}
-                      className="w-full h-48 object-cover mb-4 rounded"
-                    />
+                    <div className="relative">
+                      <img
+                        src={order.imageUrl || '/default-image.jpg'}
+                        alt={order.title}
+                        className="w-full h-48 object-cover mb-4 rounded"
+                      />
+                      <span className="absolute top-2 right-2 bg-purple-600 text-white text-xs px-3 py-1 rounded-full font-semibold flex items-center">
+                        <Gavel className="w-3 h-3 mr-1" /> Auction
+                      </span>
+                    </div>
                     <h2 className="text-xl font-semibold mb-1">{order.title}</h2>
-                    <p className="text-sm text-gray-600 mb-2 flex-grow">{order.description}</p> {/* Added flex-grow */}
+                    <p className="text-sm text-gray-600 mb-2 flex-grow">{order.description}</p>
+
+                    {/* Bid information */}
+                    <div className="bg-purple-50 p-3 rounded-lg mb-3 border border-purple-100">
+                      <p className="text-sm font-semibold text-purple-700 mb-1">
+                        Your winning bid: ${order.finalBid?.toFixed(2) || order.price.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Auction ended: {new Date(order.date).toLocaleDateString()}
+                      </p>
+                    </div>
 
                     {/* Seller Info */}
                     <Link
                       href={`/sellers/${order.seller}`}
-                      className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-800 font-semibold mt-auto mb-3 group/seller" // Added group/seller
+                      className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-800 font-semibold mt-auto mb-3 group/seller"
+                    >
+                      {sellerProfilePic ? (
+                        <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-gray-400 rounded-full transition">
+                          <img
+                            src={sellerProfilePic}
+                            alt={order.seller}
+                            className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                          />
+                        </span>
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold border border-gray-300">
+                          {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
+                        </span>
+                      )}
+                      {order.seller}
+                      {/* Verified Badge */}
+                      {isSellerVerified && (
+                        <div className="relative">
+                          <img
+                            src="/verification_badge.png"
+                            alt="Verified"
+                            className="w-4 h-4"
+                          />
+                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover/seller:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                            Verified Seller
+                          </div>
+                        </div>
+                      )}
+                    </Link>
+
+                    <p className="font-bold text-purple-700">
+                      Total Paid: ${order.markedUpPrice?.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Includes 10% platform fee
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Direct Purchases */}
+        <section className="mb-10">
+          <h2 className="text-xl font-semibold mb-4">Direct Purchases</h2>
+          {directOrders.length === 0 ? (
+            <p className="text-gray-600">You haven't purchased anything directly yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {directOrders.map((order) => {
+                // Get seller info from users context
+                const sellerUser = users?.[order.seller ?? ''];
+                const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+                const sellerProfilePic = sessionStorage.getItem(`profile_pic_${order.seller}`);
+
+                return (
+                  <div
+                    key={`${order.id}-${order.date}`}
+                    className="border rounded-xl p-4 shadow hover:shadow-md transition flex flex-col"
+                  >
+                    <img
+                      src={order.imageUrl || '/default-image.jpg'}
+                      alt={order.title}
+                      className="w-full h-48 object-cover mb-4 rounded"
+                    />
+                    <h2 className="text-xl font-semibold mb-1">{order.title}</h2>
+                    <p className="text-sm text-gray-600 mb-2 flex-grow">{order.description}</p>
+
+                    {/* Seller Info */}
+                    <Link
+                      href={`/sellers/${order.seller}`}
+                      className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-800 font-semibold mt-auto mb-3 group/seller"
                     >
                       {sellerProfilePic ? (
                         <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-gray-400 rounded-full transition">
