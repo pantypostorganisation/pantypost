@@ -5,7 +5,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Bell,
   ShoppingBag,
@@ -21,15 +21,19 @@ import {
 } from 'lucide-react';
 
 export default function Header() {
-  const { user, logout, sellerNotifications, clearSellerNotification, listings } = useListings();
-  const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory } = useWallet();
+  const { user, logout, sellerNotifications, clearSellerNotification, listings, checkEndedAuctions } = useListings();
+  const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory, wallet } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [balanceKey, setBalanceKey] = useState(0); // Force rerender key
   const notifRef = useRef<HTMLDivElement>(null);
+  
+  // For balance polling
+  const balancePollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
@@ -47,6 +51,54 @@ export default function Header() {
         )
     : [];
   const unreadCount = unreadMessages.length;
+
+  // Function to force update balances
+  const forceUpdateBalances = useCallback(() => {
+    setBalanceKey(prev => prev + 1);
+  }, []);
+
+  // Enhanced auction check function that updates balances immediately after checking
+  const checkAuctionsAndUpdateBalances = useCallback(() => {
+    if (checkEndedAuctions) {
+      // Check for ended auctions
+      const endedAny = checkEndedAuctions();
+      
+      // Force balance update after auction check
+      forceUpdateBalances();
+      
+      return endedAny;
+    }
+    return false;
+  }, [checkEndedAuctions, forceUpdateBalances]);
+
+  // Set up auction checking with immediate balance updates
+  useEffect(() => {
+    // Initial check on mount
+    checkAuctionsAndUpdateBalances();
+    
+    // Set up polling that's more frequent than before
+    const auctionCheckInterval = setInterval(() => {
+      checkAuctionsAndUpdateBalances();
+    }, 3000); // Check every 3 seconds
+    
+    return () => clearInterval(auctionCheckInterval);
+  }, [checkAuctionsAndUpdateBalances]);
+
+  // Set up more frequent balance polling separate from auction checks
+  useEffect(() => {
+    if (!username) return;
+    
+    // Start polling balances
+    balancePollingRef.current = setInterval(() => {
+      forceUpdateBalances();
+    }, 1000); // Poll every second
+    
+    return () => {
+      if (balancePollingRef.current) {
+        clearInterval(balancePollingRef.current);
+      }
+    };
+  }, [username, forceUpdateBalances]);
 
   useEffect(() => {
     if (user && user.role === 'seller') {
@@ -79,11 +131,32 @@ export default function Header() {
     };
     document.addEventListener('mousedown', handleClickOutside);
 
+    // Custom auction end event listener
+    const handleAuctionEnd = () => {
+      forceUpdateBalances();
+    };
+    
+    window.addEventListener('auctionEnded', handleAuctionEnd);
+
     return () => {
       window.removeEventListener('updateReports', updateReportCount);
+      window.removeEventListener('auctionEnded', handleAuctionEnd);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [user?.username]);
+  }, [user?.username, forceUpdateBalances]);
+
+  // Add this to window
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).forceUpdateBalances = forceUpdateBalances;
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).forceUpdateBalances;
+      }
+    };
+  }, [forceUpdateBalances]);
 
   return (
     <header className="bg-black text-white shadow-lg px-8 py-3 flex justify-between items-center z-50 relative">
@@ -133,7 +206,7 @@ export default function Header() {
             <Link href="/wallet/admin" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               Admin Wallet
             </Link>
-            <span className="text-primary font-bold text-xs">${adminBalance.toFixed(2)}</span>
+            <span className="text-primary font-bold text-xs" key={`admin-balance-${balanceKey}`}>${adminBalance.toFixed(2)}</span>
           </>
         )}
 
@@ -148,7 +221,7 @@ export default function Header() {
             <Link href="/wallet/seller" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
-                <span>${Math.max(sellerBalance, 0).toFixed(2)}</span>
+                <span key={`seller-balance-${balanceKey}`}>${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </span>
             </Link>
             <Link href="/sellers/messages" className="relative text-white hover:text-primary text-xs px-2 py-1 rounded transition flex items-center">
@@ -255,7 +328,7 @@ export default function Header() {
             <Link href="/wallet/buyer" className="text-white hover:text-primary text-xs px-2 py-1 rounded transition">
               <span className="flex items-center gap-1">
                 <Wallet className="w-4 h-4" />
-                <span>${Math.max(buyerBalance, 0).toFixed(2)}</span>
+                <span key={`buyer-balance-${balanceKey}`}>${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </span>
             </Link>
             <Link href="/buyers/messages" className="relative text-white hover:text-primary text-xs px-2 py-1 rounded transition flex items-center">

@@ -610,7 +610,7 @@ export default function MyListingsPage() {
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                           {selectedFiles.map((file, index) => (
-                            <div key={index} className="relative border border-gray-700 rounded-lg overflow-hidden group">
+                            <div key={`selected-file-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">
                               <img
                                 src={URL.createObjectURL(file)}
                                 alt={`Selected ${index + 1}`}
@@ -638,7 +638,7 @@ export default function MyListingsPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                           {imageUrls.map((url, index) => (
                             <div
-                              key={url}
+                              key={`image-${index}-${url.substring(0, 20)}`}
                               draggable
                               onDragStart={() => handleDragStart(index)}
                               onDragEnter={() => handleDragEnter(index)}
@@ -786,7 +786,7 @@ export default function MyListingsPage() {
                       
                       return (
                         <div
-                          key={listing.id}
+                          key={`listing-${listing.id}`}
                           className={`border rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition relative flex flex-col h-full
                             ${isAuctionListing 
                               ? 'border-purple-700 bg-black' 
@@ -829,7 +829,7 @@ export default function MyListingsPage() {
                             {listing.tags && listing.tags.length > 0 && (
                               <div className="flex flex-wrap gap-2 mt-auto mb-3">
                                 {listing.tags.map((tag, idx) => (
-                                  <span key={idx} className="bg-gray-700 text-gray-300 text-xs px-2.5 py-1 rounded-full">
+                                  <span key={`tag-${idx}-${listing.id}`} className="bg-gray-700 text-gray-300 text-xs px-2.5 py-1 rounded-full">
                                     {tag}
                                   </span>
                                 ))}
@@ -981,9 +981,9 @@ export default function MyListingsPage() {
                       <p>No sales yet. Keep promoting your listings!</p>
                     </div>
                   ) : (
-                    sellerOrders.map((order) => (
+                    sellerOrders.map((order, index) => (
                       <div
-                        key={order.id + order.date}
+                        key={`order-${order.id}-${index}-${order.date}`}
                         className="border border-gray-700 p-4 rounded-lg text-sm bg-black hover:border-[#ff950e] transition"
                       >
                         <div className="flex items-center gap-4">
