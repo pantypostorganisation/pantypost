@@ -6,7 +6,7 @@ import RequireAuth from '@/components/RequireAuth';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { v4 as uuidv4 } from 'uuid';
-import { Crown, Sparkles, Trash2, Clock, BarChart2, Eye, Edit, MoveVertical, Image as ImageIcon, X, Upload, Gavel, AlertCircle, Calendar } from 'lucide-react';
+import { Crown, Sparkles, Trash2, Clock, BarChart2, Eye, Edit, MoveVertical, Image as ImageIcon, X, Upload, Gavel, AlertCircle, Calendar, LockIcon, ShieldCheck } from 'lucide-react';
 import { Listing } from '@/context/ListingContext';
 
 // Helper function to calculate time since listed
@@ -57,6 +57,9 @@ export default function MyListingsPage() {
   // Drag and drop state for image reordering
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+
+  // Verification status check
+  const isVerified = user?.verified || user?.verificationStatus === 'verified';
 
   // Load views from localStorage and update on storage event and window focus
   useEffect(() => {
@@ -192,6 +195,12 @@ export default function MyListingsPage() {
     }
 
     if (isAuction) {
+      // Check if seller is verified for auction
+      if (!isVerified) {
+        alert('You must be a verified seller to create auction listings.');
+        return;
+      }
+
       const startingBid = parseFloat(startingPrice);
       if (isNaN(startingBid) || startingBid <= 0) {
         alert('Please enter a valid starting bid for the auction.');
@@ -345,7 +354,6 @@ export default function MyListingsPage() {
   };
 
   // --- Listing Limit Logic ---
-  const isVerified = user?.verified || user?.verificationStatus === 'verified';
   const maxListings = isVerified ? 25 : 2;
   const atLimit = myListings.length >= maxListings;
 
@@ -476,19 +484,52 @@ export default function MyListingsPage() {
                           </div>
                         </label>
                         
-                        <label className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition flex-1 ${isAuction ? 'border-purple-600 bg-purple-600 bg-opacity-10' : 'border-gray-700 bg-black'}`}>
-                          <input
-                            type="radio"
-                            checked={isAuction}
-                            onChange={() => setIsAuction(true)}
-                            className="sr-only" // Hide actual radio button
-                          />
-                          <Gavel className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-gray-500'}`} />
-                          <div>
-                            <span className="font-medium">Auction</span>
-                            <p className="text-xs text-gray-400 mt-1">Let buyers bid, highest wins</p>
-                          </div>
-                        </label>
+                        <div className="relative flex-1">
+                          <label 
+                            className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition ${
+                              isAuction 
+                                ? 'border-purple-600 bg-purple-600 bg-opacity-10' 
+                                : 'border-gray-700 bg-black'
+                            } ${
+                              !isVerified 
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'hover:border-purple-500'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              checked={isAuction}
+                              onChange={() => {
+                                if (isVerified) {
+                                  setIsAuction(true);
+                                } else {
+                                  // Don't allow unverified sellers to create auctions
+                                }
+                              }}
+                              disabled={!isVerified}
+                              className="sr-only" // Hide actual radio button
+                            />
+                            <Gavel className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-gray-500'}`} />
+                            <div>
+                              <span className="font-medium">Auction</span>
+                              <p className="text-xs text-gray-400 mt-1">Let buyers bid, highest wins</p>
+                            </div>
+                          </label>
+                          
+                          {/* Lock overlay for unverified sellers */}
+                          {!isVerified && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-lg px-3 py-2">
+                              <LockIcon className="w-6 h-6 text-yellow-500 mb-1" />
+                              <span className="text-xs text-yellow-400 font-medium text-center">Verify your account to unlock auctions</span>
+                              <Link 
+                                href="/sellers/verify" 
+                                className="mt-1 text-xs text-white bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded-full font-medium transition"
+                              >
+                                Get Verified
+                              </Link>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
@@ -920,6 +961,50 @@ export default function MyListingsPage() {
 
             {/* Right side: order history and premium tips */}
             <div className="space-y-8">
+              {/* Verification Banner */}
+              {!isVerified && (
+                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-yellow-700">
+                  <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
+                    <ShieldCheck className="text-yellow-500 w-6 h-6" />
+                    Get Verified
+                  </h2>
+                  <div className="mb-5">
+                    <p className="text-gray-300 mb-3">
+                      Verified sellers get these exclusive benefits:
+                    </p>
+                    <ul className="space-y-2 text-gray-300 text-sm">
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                        <span>Post up to <span className="text-yellow-500 font-bold">25 listings</span> (vs only 2 for unverified)</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                        <span>Create <span className="text-purple-400 font-bold">auction listings</span> for higher bids</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                        <div className="flex items-center">
+                          <span>Display a verification badge </span>
+                          <img src="/verification_badge.png" alt="Verification Badge" className="w-4 h-4 mx-1" /> 
+                          <span> on your profile and listings</span>
+                        </div>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                        <span>Earn buyers' trust for more sales and higher prices</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <Link
+                    href="/sellers/verify"
+                    className="w-full bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-500 font-bold text-lg transition flex items-center justify-center gap-2"
+                  >
+                    <ShieldCheck className="w-5 h-5" />
+                    Verify My Account
+                  </Link>
+                </div>
+              )}
+
               {/* Auction Seller Tips */}
               <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-purple-700">
                 <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
@@ -944,6 +1029,16 @@ export default function MyListingsPage() {
                     <span>Auctions create excitement and can result in higher final prices than fixed listings.</span>
                   </li>
                 </ul>
+                {!isVerified && (
+                  <div className="mt-5 pt-4 border-t border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <LockIcon className="text-yellow-500 w-5 h-5" />
+                      <p className="text-yellow-400 text-sm">
+                        <Link href="/sellers/verify" className="underline hover:text-yellow-300">Get verified</Link> to unlock auction listings!
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Premium Seller Tips */}
