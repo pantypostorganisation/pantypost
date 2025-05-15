@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CheckCheck } from 'lucide-react';
+import ImagePreviewModal from './ImagePreviewModal';
 
 type MessageType = 'normal' | 'customRequest' | 'image';
 
@@ -46,6 +47,7 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
   const [initialHeight, setInitialHeight] = useState(0);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   
   // Setup intersection observer for infinite scrolling
   useEffect(() => {
@@ -107,8 +109,9 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
           <img 
             src={message.meta.imageUrl} 
             alt="Shared image" 
-            className="max-w-full rounded"
+            className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
             loading="lazy"
+            onClick={() => setPreviewImage(message.meta?.imageUrl || null)}
           />
           {message.content && (
             <p className="text-white mt-2">{message.content}</p>
@@ -230,6 +233,13 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
           </svg>
         </button>
       )}
+      
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        imageUrl={previewImage || ''}
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 };
