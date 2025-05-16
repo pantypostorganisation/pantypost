@@ -1,6 +1,5 @@
 'use client';
 
-import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { useMessages } from '@/context/MessageContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
@@ -68,7 +67,8 @@ export default function BuyerMessagesPage() {
   const [activeTab, setActiveTab] = useState<'messages' | 'favorites' | 'requests'>('messages');
   const [filterBy, setFilterBy] = useState<'all' | 'online'>('all');
   const [showTipModal, setShowTipModal] = useState(false);
-  const [tipAmount, setTipAmount] = useState<string>('');\r\n  const [tipResult, setTipResult] = useState<{success: boolean, message: string} | null>(null);\r\n  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [tipAmount, setTipAmount] = useState<string>('');
+  const [tipResult, setTipResult] = useState<{success: boolean, message: string} | null>(null);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -775,7 +775,16 @@ export default function BuyerMessagesPage() {
                                 )}
                               </div>
                               
-                              {/* Image message */}\r\n                              {msg.type === 'image' && msg.meta?.imageUrl && (\r\n                                <div className="mt-1 mb-2">\r\n                                  <img \r\n                                    src={msg.meta.imageUrl} \r\n                                    alt="Shared image" \r\n                                    className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"\r\n                                    onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}\r\n                                  />\r\n                                  {msg.content && (\r\n                                    <p className="text-white mt-2">{msg.content}</p>\r\n                                  )}\r\n                                </div>\r\n                              )}
+                              {/* Image message */}
+                              {msg.type === 'image' && msg.meta?.imageUrl && (
+                                <div className="mt-1 mb-2">
+                                  <img 
+                                    src={msg.meta.imageUrl} 
+                                    alt="Shared image" 
+                                    className="max-w-full rounded"
+                                  />
+                                </div>
+                              )}
                               
                               {/* Text content */}
                               {(msg.type !== 'image' || msg.content) && (
@@ -1193,7 +1202,7 @@ export default function BuyerMessagesPage() {
             </div>
           </div>
         )}
-        {/* Image Preview Modal */}\r\n        <ImagePreviewModal\r\n          imageUrl={previewImage || ''}\r\n          isOpen={!!previewImage}\r\n          onClose={() => setPreviewImage(null)}\r\n        />\r\n      </div>\r\n    </RequireAuth>\r\n  );
+      </div>
+    </RequireAuth>
+  );
 }
-
-
