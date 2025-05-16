@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
@@ -12,8 +12,27 @@ import {
   MessageSquare,
   Paperclip,
   User,
-  BadgeCheck
+  BadgeCheck,
+  Smile
 } from 'lucide-react';
+
+// Constants
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+// Emoji picker categories and default emojis
+const EMOJI_CATEGORIES = {
+  recent: '🕒',
+  smileys: '😀 😊 😍 🥰 😎 🤗 🤔 🙄 😴 😜',
+  people: '👋 👍 👎 👏 🙏 💪 👨 👩 👶 👮',
+  nature: '🐶 🐱 🐭 🦊 🐻 🐼 🐨 🦁 🐮 🐷',
+  food: '🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒',
+  activities: '⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🎯',
+  travel: '🚗 🚕 🚙 🚌 🚎 🏎 🚓 🚑 🚒 🚐',
+  objects: '⌚ 📱 💻 ⌨ 🖥 🖨 🖱 🖲 🕹 🗜',
+  symbols: '❤ 🧡 💛 💚 💙 💜 🖤 💔 ❣ 💕',
+  flags: '🏳 🏴 🏁 🚩 🏳️‍🌈 🏴‍☠️ 🇦🇨 🇦🇩 🇦🇪 🇦🇫',
+};
 
 type Message = {
   sender: string;
@@ -42,12 +61,57 @@ export default function AdminMessagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [filterBy, setFilterBy] = useState<'all' | 'buyers' | 'sellers'>('all');
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // Emoji picker state
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('smileys');
+  const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load recent emojis from localStorage on component mount
+  useEffect(() => {
+    const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
+    if (storedRecentEmojis) {
+      try {
+        const parsed = JSON.parse(storedRecentEmojis);
+        if (Array.isArray(parsed)) {
+          setRecentEmojis(parsed.slice(0, 20)); // Limit to 20 recent emojis
+        }
+      } catch (e) {
+        console.error('Failed to parse recent emojis', e);
+      }
+    }
+  }, []);
+
+  // Save recent emojis to localStorage when they change
+  useEffect(() => {
+    if (recentEmojis.length > 0) {
+      localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
+    }
+  }, [recentEmojis]);
+
+  // Handle clicks outside the emoji picker to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Check if user is admin - do this after all hooks are defined
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
@@ -59,68 +123,74 @@ export default function AdminMessagesPage() {
 
   const username = user?.username || '';
 
-  // Prepare threads and messages
-  const threads: { [user: string]: Message[] } = {};
-  const unreadCounts: { [user: string]: number } = {};
-  const lastMessages: { [user: string]: Message } = {};
-  const userProfiles: { [user: string]: { pic: string | null, verified: boolean, role: string } } = {};
-  
-  let activeMessages: Message[] = [];
+  // Prepare threads and messages using useMemo
+  const { threads, unreadCounts, lastMessages, userProfiles, activeMessages } = useMemo(() => {
+    const threads: { [user: string]: Message[] } = {};
+    const unreadCounts: { [user: string]: number } = {};
+    const lastMessages: { [user: string]: Message } = {};
+    const userProfiles: { [user: string]: { pic: string | null, verified: boolean, role: string } } = {};
+    
+    let activeMessages: Message[] = [];
 
-  Object.values(messages).flat().forEach((msg: Message) => {
-    if (msg.sender === username || msg.receiver === username) {
-      const otherParty = msg.sender === username ? msg.receiver : msg.sender;
-      if (!threads[otherParty]) threads[otherParty] = [];
-      threads[otherParty].push(msg);
+    Object.values(messages).flat().forEach((msg: Message) => {
+      if (msg.sender === username || msg.receiver === username) {
+        const otherParty = msg.sender === username ? msg.receiver : msg.sender;
+        if (!threads[otherParty]) threads[otherParty] = [];
+        threads[otherParty].push(msg);
+      }
+    });
+
+    Object.entries(threads).forEach(([userKey, msgs]) => {
+      msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      lastMessages[userKey] = msgs[msgs.length - 1];
+      
+      // Get user profile picture, verification status, and role
+      const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
+      const userInfo = users?.[userKey];
+      const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
+      const role = userInfo?.role || 'unknown';
+      
+      userProfiles[userKey] = { 
+        pic: storedPic, 
+        verified: isVerified,
+        role: role
+      };
+    });
+
+    Object.entries(threads).forEach(([userKey, msgs]) => {
+      unreadCounts[userKey] = msgs.filter(
+        (msg) => !msg.read && msg.receiver === username
+      ).length;
+    });
+
+    if (activeThread) {
+      activeMessages = threads[activeThread] || [];
     }
-  });
 
-  Object.entries(threads).forEach(([userKey, msgs]) => {
-    msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    lastMessages[userKey] = msgs[msgs.length - 1];
-    
-    // Get user profile picture, verification status, and role
-    const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
-    const userInfo = users?.[userKey];
-    const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
-    const role = userInfo?.role || 'unknown';
-    
-    userProfiles[userKey] = { 
-      pic: storedPic, 
-      verified: isVerified,
-      role: role
-    };
-  });
-
-  Object.entries(threads).forEach(([userKey, msgs]) => {
-    unreadCounts[userKey] = msgs.filter(
-      (msg) => !msg.read && msg.receiver === username
-    ).length;
-  });
-
-  if (activeThread) {
-    activeMessages = threads[activeThread] || [];
-  }
+    return { threads, unreadCounts, lastMessages, userProfiles, activeMessages };
+  }, [messages, username, activeThread, users]);
 
   // Filter threads by search query and role
-  const filteredThreads = Object.keys(threads).filter(userKey => {
-    const matchesSearch = searchQuery ? userKey.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+  const filteredAndSortedThreads = useMemo(() => {
+    const filteredThreads = Object.keys(threads).filter(userKey => {
+      const matchesSearch = searchQuery ? userKey.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      
+      if (!matchesSearch) return false;
+      
+      const userRole = userProfiles[userKey]?.role;
+      if (filterBy === 'buyers' && userRole !== 'buyer') return false;
+      if (filterBy === 'sellers' && userRole !== 'seller') return false;
+      
+      return true;
+    });
     
-    if (!matchesSearch) return false;
-    
-    const userRole = userProfiles[userKey]?.role;
-    if (filterBy === 'buyers' && userRole !== 'buyer') return false;
-    if (filterBy === 'sellers' && userRole !== 'seller') return false;
-    
-    return true;
-  });
-  
-  // Sort threads by most recent message first
-  const sortedThreads = filteredThreads.sort((a, b) => {
-    const dateA = new Date(lastMessages[a]?.date || 0).getTime();
-    const dateB = new Date(lastMessages[b]?.date || 0).getTime();
-    return dateB - dateA;
-  });
+    // Sort threads by most recent message first
+    return filteredThreads.sort((a, b) => {
+      const dateA = new Date(lastMessages[a]?.date || 0).getTime();
+      const dateB = new Date(lastMessages[b]?.date || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [threads, lastMessages, searchQuery, filterBy, userProfiles]);
 
   useEffect(() => {
     if (selectedUser && !activeThread) {
@@ -135,26 +205,70 @@ export default function AdminMessagesPage() {
       markedThreadsRef.current.add(activeThread);
       setTimeout(() => forceRerender((v) => v + 1), 0);
     }
-  }, [activeThread, username, markMessagesAsRead]);
+  }, [activeThread, username, markMessagesAsRead, user]);
 
-  // Handle image file selection
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image file selection with validation and error handling
+  const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    setImageError(null);
+    
+    if (!file) return;
+    
+    // Validate file type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
+      return;
     }
-  };
+    
+    // Validate file size
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageError(`Image too large. Maximum size is ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
+      return;
+    }
+    
+    setIsImageLoading(true);
+    
+    const reader = new FileReader();
+    
+    reader.onloadend = () => {
+      setSelectedImage(reader.result as string);
+      setIsImageLoading(false);
+    };
+    
+    reader.onerror = () => {
+      setImageError("Failed to read the image file. Please try again.");
+      setIsImageLoading(false);
+    };
+    
+    reader.readAsDataURL(file);
+  }, []);
 
   // Trigger hidden file input click
-  const triggerFileInput = () => {
+  const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
-  };
+  }, []);
 
-  const handleSend = () => {
+  // Handle emoji selection
+  const handleEmojiClick = useCallback((emoji: string) => {
+    setContent(prev => prev + emoji);
+    
+    // Update recent emojis
+    setRecentEmojis(prev => {
+      // Remove if already exists to prevent duplicates
+      const filtered = prev.filter(e => e !== emoji);
+      // Add to the front and return limited array
+      return [emoji, ...filtered].slice(0, 20);
+    });
+    
+    // Focus back on the input after inserting emoji
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  }, []);
+
+  const handleSend = useCallback(() => {
     if (!activeThread || (!content.trim() && !selectedImage)) {
       alert('Please enter a message.');
       return;
@@ -171,33 +285,36 @@ export default function AdminMessagesPage() {
       fileInputRef.current.value = '';
     }
     
+    // Close emoji picker if open
+    setShowEmojiPicker(false);
+    
     // Focus back on input
     setTimeout(() => {
       inputRef.current?.focus();
     }, 0);
-  };
+  }, [activeThread, content, selectedImage, username, sendMessage]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
 
-  const handleBlockToggle = () => {
+  const handleBlockToggle = useCallback(() => {
     if (!activeThread) return;
     if (isBlocked(username, activeThread)) {
       unblockUser(username, activeThread);
     } else {
       blockUser(username, activeThread);
     }
-  };
+  }, [activeThread, username, isBlocked, unblockUser, blockUser]);
 
-  const handleReport = () => {
+  const handleReport = useCallback(() => {
     if (activeThread && !hasReported(username, activeThread)) {
       reportUser(username, activeThread);
     }
-  };
+  }, [activeThread, username, hasReported, reportUser]);
 
   const isUserBlocked = !!(activeThread && isBlocked(username, activeThread));
   const isUserReported = !!(activeThread && hasReported(username, activeThread));
@@ -306,12 +423,12 @@ export default function AdminMessagesPage() {
             
             {/* Thread list */}
             <div className="flex-1 overflow-y-auto bg-[#121212]">
-              {sortedThreads.length === 0 ? (
+              {filteredAndSortedThreads.length === 0 ? (
                 <div className="p-4 text-center text-gray-400">
                   No conversations found
                 </div>
               ) : (
-                sortedThreads.map((userKey) => {
+                filteredAndSortedThreads.map((userKey) => {
                   const thread = threads[userKey];
                   const lastMessage = lastMessages[userKey];
                   const unreadCount = unreadCounts[userKey] || 0;
@@ -475,8 +592,12 @@ export default function AdminMessagesPage() {
                                 <img 
                                   src={msg.meta.imageUrl} 
                                   alt="Shared image" 
-                                  className="max-w-full rounded"
+                                  className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}
                                 />
+                                {msg.content && (
+                                  <p className="text-white mt-2">{msg.content}</p>
+                                )}
                               </div>
                             )}
                             
@@ -520,6 +641,83 @@ export default function AdminMessagesPage() {
                       </div>
                     )}
                     
+                    {/* Image loading and error states */}
+                    {isImageLoading && (
+                      <div className="mb-2 text-sm text-gray-400">
+                        Loading image...
+                      </div>
+                    )}
+                    
+                    {imageError && (
+                      <div className="mb-2 text-sm text-red-400">
+                        {imageError}
+                      </div>
+                    )}
+                    
+                    {/* Emoji Picker */}
+                    {showEmojiPicker && (
+                      <div 
+                        ref={emojiPickerRef}
+                        className="absolute bottom-[105px] left-4 bg-[#222] border border-gray-700 rounded-lg shadow-lg p-2 z-50"
+                        style={{ maxWidth: '320px' }}
+                      >
+                        {/* Emoji Categories */}
+                        <div className="flex mb-2 border-b border-gray-700 pb-2">
+                          {Object.entries(EMOJI_CATEGORIES).map(([category, _]) => (
+                            <button
+                              key={category}
+                              onClick={() => setActiveEmojiCategory(category as any)}
+                              className={`p-2 rounded-full text-lg ${
+                                activeEmojiCategory === category ? 'bg-[#333]' : ''
+                              }`}
+                              title={category.charAt(0).toUpperCase() + category.slice(1)}
+                            >
+                              {category === 'recent' ? '🕒' : 
+                               category === 'smileys' ? '😊' :
+                               category === 'people' ? '👋' :
+                               category === 'nature' ? '🐱' :
+                               category === 'food' ? '🍎' :
+                               category === 'activities' ? '⚽' :
+                               category === 'travel' ? '🚗' :
+                               category === 'objects' ? '💻' :
+                               category === 'symbols' ? '❤️' : '🏁'}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {/* Emoji Grid */}
+                        <div className="grid grid-cols-8 gap-1">
+                          {activeEmojiCategory === 'recent' ? (
+                            recentEmojis.length > 0 ? (
+                              recentEmojis.map((emoji, index) => (
+                                <button
+                                  key={`recent-${index}`}
+                                  onClick={() => handleEmojiClick(emoji)}
+                                  className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
+                                >
+                                  {emoji}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="col-span-8 text-center text-gray-400 py-3 text-sm">
+                                No recent emojis
+                              </p>
+                            )
+                          ) : (
+                            EMOJI_CATEGORIES[activeEmojiCategory].split(' ').map((emoji, index) => (
+                              <button
+                                key={`${activeEmojiCategory}-${index}`}
+                                onClick={() => handleEmojiClick(emoji)}
+                                className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
+                              >
+                                {emoji}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="flex flex-col gap-2">
                       {/* Message input */}
                       <div className="relative">
@@ -531,6 +729,7 @@ export default function AdminMessagesPage() {
                           placeholder={selectedImage ? "Add a caption..." : "Type a message"}
                           className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] max-h-28 resize-none"
                           rows={2}
+                          maxLength={250}
                         />
                         <div className="absolute bottom-2 right-2">
                           <span className="text-xs text-gray-400">{content.length}/250</span>
@@ -539,20 +738,30 @@ export default function AdminMessagesPage() {
                       
                       {/* Input actions */}
                       <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           {/* Attachment button */}
                           <button
                             onClick={triggerFileInput}
-                            className="p-2 rounded-full bg-[#ff950e] text-black hover:bg-[#e88800]"
+                            disabled={isImageLoading}
+                            className={`p-2 rounded-full ${isImageLoading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[#ff950e] text-black hover:bg-[#e88800]'}`}
                             title="Attach Image"
                           >
                             <Paperclip size={20} />
                           </button>
                           
+                          {/* Emoji button */}
+                          <button
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            className="p-2 rounded-full bg-[#ff950e] text-black hover:bg-[#e88800]"
+                            title="Emoji"
+                          >
+                            <Smile size={20} />
+                          </button>
+                          
                           {/* Hidden file input */}
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
                             ref={fileInputRef}
                             style={{ display: 'none' }}
                             onChange={handleImageSelect}
@@ -562,9 +771,9 @@ export default function AdminMessagesPage() {
                         {/* Send button */}
                         <button
                           onClick={handleSend}
-                          disabled={!content.trim() && !selectedImage}
+                          disabled={(!content.trim() && !selectedImage) || isImageLoading}
                           className={`px-4 py-2 rounded-full flex items-center gap-2 ${
-                            (!content.trim() && !selectedImage)
+                            (!content.trim() && !selectedImage) || isImageLoading
                               ? 'bg-[#333] text-gray-500 cursor-not-allowed'
                               : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
                           }`}
@@ -579,6 +788,12 @@ export default function AdminMessagesPage() {
                 {isUserBlocked && (
                   <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a]">
                     You have blocked this user
+                    <button 
+                      onClick={handleBlockToggle}
+                      className="ml-2 underline text-gray-400 hover:text-white"
+                    >
+                      Unblock
+                    </button>
                   </div>
                 )}
               </>
@@ -595,6 +810,28 @@ export default function AdminMessagesPage() {
             )}
           </div>
         </div>
+        
+        {/* Image Preview Modal */}
+        {previewImage && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50"
+            onClick={() => setPreviewImage(null)}
+          >
+            <div className="max-w-4xl max-h-[90vh] p-2">
+              <img 
+                src={previewImage} 
+                alt="Full size preview" 
+                className="max-w-full max-h-[85vh] object-contain"
+              />
+              <button 
+                className="absolute top-4 right-4 bg-[#333] text-white p-2 rounded-full hover:bg-[#444]"
+                onClick={() => setPreviewImage(null)}
+              >
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </RequireAuth>
   );
