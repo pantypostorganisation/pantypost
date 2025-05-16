@@ -29,9 +29,24 @@ import {
   MessageSquare
 } from 'lucide-react';
 
+// Constants
 const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+// Emoji picker categories and default emojis
+const EMOJI_CATEGORIES = {
+  recent: '🕒',
+  smileys: '😀 😊 😍 🥰 😎 🤗 🤔 🙄 😴 😜',
+  people: '👋 👍 👎 👏 🙏 💪 👨 👩 👶 👮',
+  nature: '🐶 🐱 🐭 🦊 🐻 🐼 🐨 🦁 🐮 🐷',
+  food: '🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒',
+  activities: '⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🎯',
+  travel: '🚗 🚕 🚙 🚌 🚎 🏎 🚓 🚑 🚒 🚐',
+  objects: '⌚ 📱 💻 ⌨ 🖥 🖨 🖱 🖲 🕹 🗜',
+  symbols: '❤ 🧡 💛 💚 💙 💜 🖤 💔 ❣ 💕',
+  flags: '🏳 🏴 🏁 🚩 🏳️‍🌈 🏴‍☠️ 🇦🇨 🇦🇩 🇦🇪 🇦🇫',
+};
 
 export default function BuyerMessagesPage() {
   const { user, users } = useListings();
@@ -76,12 +91,54 @@ export default function BuyerMessagesPage() {
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   
+  // Emoji picker state
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('smileys');
+  const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
+  
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
   const [_, forceRerender] = useState(0);
   const markedThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load recent emojis from localStorage on component mount
+  useEffect(() => {
+    const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
+    if (storedRecentEmojis) {
+      try {
+        const parsed = JSON.parse(storedRecentEmojis);
+        if (Array.isArray(parsed)) {
+          setRecentEmojis(parsed.slice(0, 20)); // Limit to 20 recent emojis
+        }
+      } catch (e) {
+        console.error('Failed to parse recent emojis', e);
+      }
+    }
+  }, []);
+
+  // Save recent emojis to localStorage when they change
+  useEffect(() => {
+    if (recentEmojis.length > 0) {
+      localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
+    }
+  }, [recentEmojis]);
+
+  // Handle clicks outside the emoji picker to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Forces rerender when requests or wallet updates
   useEffect(() => {
@@ -216,6 +273,26 @@ export default function BuyerMessagesPage() {
     fileInputRef.current?.click();
   }, []);
 
+  // Handle emoji selection
+  const handleEmojiClick = useCallback((emoji: string) => {
+    setReplyMessage(prev => prev + emoji);
+    
+    // Update recent emojis
+    setRecentEmojis(prev => {
+      // Remove if already exists to prevent duplicates
+      const filtered = prev.filter(e => e !== emoji);
+      // Add to the front and return limited array
+      return [emoji, ...filtered].slice(0, 20);
+    });
+    
+    // Focus back on the input after inserting emoji
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  }, []);
+
   // Message sending function - fixed validation logic
   const handleReply = useCallback(() => {
     if (!activeThread || !user) return;
@@ -282,6 +359,9 @@ export default function BuyerMessagesPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    
+    // Close emoji picker if open
+    setShowEmojiPicker(false);
     
     // Focus back on input
     setTimeout(() => {
@@ -1137,6 +1217,70 @@ export default function BuyerMessagesPage() {
                         </div>
                       </div>
                       
+                      {/* Emoji Picker */}
+                      {showEmojiPicker && (
+                        <div 
+                          ref={emojiPickerRef}
+                          className="absolute bottom-[105px] left-4 bg-[#222] border border-gray-700 rounded-lg shadow-lg p-2 z-50"
+                          style={{ maxWidth: '320px' }}
+                        >
+                          {/* Emoji Categories */}
+                          <div className="flex mb-2 border-b border-gray-700 pb-2">
+                            {Object.entries(EMOJI_CATEGORIES).map(([category, _]) => (
+                              <button
+                                key={category}
+                                onClick={() => setActiveEmojiCategory(category as any)}
+                                className={`p-2 rounded-full text-lg ${
+                                  activeEmojiCategory === category ? 'bg-[#333]' : ''
+                                }`}
+                                title={category.charAt(0).toUpperCase() + category.slice(1)}
+                              >
+                                {category === 'recent' ? '🕒' : 
+                                 category === 'smileys' ? '😊' :
+                                 category === 'people' ? '👋' :
+                                 category === 'nature' ? '🐱' :
+                                 category === 'food' ? '🍎' :
+                                 category === 'activities' ? '⚽' :
+                                 category === 'travel' ? '🚗' :
+                                 category === 'objects' ? '💻' :
+                                 category === 'symbols' ? '❤️' : '🏁'}
+                              </button>
+                            ))}
+                          </div>
+                          
+                          {/* Emoji Grid */}
+                          <div className="grid grid-cols-8 gap-1">
+                            {activeEmojiCategory === 'recent' ? (
+                              recentEmojis.length > 0 ? (
+                                recentEmojis.map((emoji, index) => (
+                                  <button
+                                    key={`recent-${index}`}
+                                    onClick={() => handleEmojiClick(emoji)}
+                                    className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="col-span-8 text-center text-gray-400 py-3 text-sm">
+                                  No recent emojis
+                                </p>
+                              )
+                            ) : (
+                              EMOJI_CATEGORIES[activeEmojiCategory].split(' ').map((emoji, index) => (
+                                <button
+                                  key={`${activeEmojiCategory}-${index}`}
+                                  onClick={() => handleEmojiClick(emoji)}
+                                  className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
+                                >
+                                  {emoji}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Input actions */}
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-4">
@@ -1161,6 +1305,16 @@ export default function BuyerMessagesPage() {
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path>
                             </svg>
+                          </button>
+                          
+                          {/* Emoji button */}
+                          <button
+                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
+                            title="Emoji"
+                            aria-label="Emoji"
+                          >
+                            <Smile size={26} />
                           </button>
                           
                           {/* Custom Request button */}
