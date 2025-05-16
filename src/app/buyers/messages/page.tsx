@@ -6,7 +6,7 @@ import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import VirtualMessageList from '@/components/messaging/VirtualMessageList';
@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 
 const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 export default function BuyerMessagesPage() {
   const { user, users } = useListings();
@@ -68,7 +70,11 @@ export default function BuyerMessagesPage() {
   const [activeTab, setActiveTab] = useState<'messages' | 'favorites' | 'requests'>('messages');
   const [filterBy, setFilterBy] = useState<'all' | 'online'>('all');
   const [showTipModal, setShowTipModal] = useState(false);
-  const [tipAmount, setTipAmount] = useState<string>('');\r\n  const [tipResult, setTipResult] = useState<{success: boolean, message: string} | null>(null);\r\n  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [tipAmount, setTipAmount] = useState<string>('');
+  const [tipResult, setTipResult] = useState<{success: boolean, message: string} | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,6 +83,7 @@ export default function BuyerMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Forces rerender when requests or wallet updates
   useEffect(() => {
     forceRerender((v) => v + 1);
   }, [requests, wallet]);
@@ -88,101 +95,129 @@ export default function BuyerMessagesPage() {
 
   const username = user?.username || '';
 
-  // Prepare threads and messages
-  const threads: { [seller: string]: any[] } = {};
-  const unreadCounts: { [seller: string]: number } = {};
-  const lastMessages: { [seller: string]: any } = {};
-  const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
-  
-  let activeMessages: any[] = [];
-
-  const buyerRequests = user ? getRequestsForUser(user.username, 'buyer') : [];
-
-  if (user) {
-    Object.values(messages).forEach((msgs) => {
-      msgs.forEach((msg) => {
-        if (msg.sender === user.username || msg.receiver === user.username) {
-          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-          if (!threads[otherParty]) threads[otherParty] = [];
-          threads[otherParty].push(msg);
-        }
+  // This function is memoized to avoid unnecessary recalculations
+  const { threads, unreadCounts, lastMessages, sellerProfiles } = useMemo(() => {
+    const threads: { [seller: string]: any[] } = {};
+    const unreadCounts: { [seller: string]: number } = {};
+    const lastMessages: { [seller: string]: any } = {};
+    const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+    
+    if (user) {
+      // Build threads
+      Object.values(messages).forEach((msgs) => {
+        msgs.forEach((msg) => {
+          if (msg.sender === user.username || msg.receiver === user.username) {
+            const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+            if (!threads[otherParty]) threads[otherParty] = [];
+            threads[otherParty].push(msg);
+          }
+        });
       });
-    });
 
-    Object.entries(threads).forEach(([seller, msgs]) => {
-      msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      lastMessages[seller] = msgs[msgs.length - 1];
-      
-      // Get seller profile picture and verification status
-      const storedPic = sessionStorage.getItem(`profile_pic_${seller}`);
-      const sellerUser = users?.[seller];
-      const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-      
-      sellerProfiles[seller] = { 
-        pic: storedPic, 
-        verified: isVerified
-      };
-    });
+      // Sort messages and get last message for each thread
+      Object.entries(threads).forEach(([seller, msgs]) => {
+        // Sort messages by date ascending
+        msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        lastMessages[seller] = msgs[msgs.length - 1];
+        
+        // Get seller profile picture and verification status
+        const storedPic = sessionStorage.getItem(`profile_pic_${seller}`);
+        const sellerUser = users?.[seller];
+        const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+        
+        sellerProfiles[seller] = { 
+          pic: storedPic, 
+          verified: isVerified
+        };
+      });
 
-    Object.entries(threads).forEach(([seller, msgs]) => {
-      unreadCounts[seller] = msgs.filter(
-        (msg) => !msg.read && msg.receiver === user.username
-      ).length;
-    });
-
-    if (activeThread) {
-      activeMessages = threads[activeThread] || [];
+      // Count unread messages
+      Object.entries(threads).forEach(([seller, msgs]) => {
+        unreadCounts[seller] = msgs.filter(
+          (msg) => !msg.read && msg.receiver === user.username
+        ).length;
+      });
     }
-  }
+    
+    return { threads, unreadCounts, lastMessages, sellerProfiles };
+  }, [user, messages, users]);
 
-  // Filter threads by search query if present
-  const filteredThreads = Object.keys(threads).filter(seller => 
-    searchQuery ? seller.toLowerCase().includes(searchQuery.toLowerCase()) : true
-  );
-  
-  // Sort threads by most recent message first
-  const sortedThreads = filteredThreads.sort((a, b) => {
-    const dateA = new Date(lastMessages[a]?.date || 0).getTime();
-    const dateB = new Date(lastMessages[b]?.date || 0).getTime();
-    return dateB - dateA;
-  });
+  // Get active messages for current thread
+  const activeMessages = activeThread ? threads[activeThread] || [] : [];
 
+  // Filter threads by search query and apply sorting
+  const filteredAndSortedThreads = useMemo(() => {
+    const filteredThreads = Object.keys(threads).filter(seller => 
+      searchQuery ? seller.toLowerCase().includes(searchQuery.toLowerCase()) : true
+    );
+    
+    // Sort threads by most recent message first
+    return filteredThreads.sort((a, b) => {
+      const dateA = new Date(lastMessages[a]?.date || 0).getTime();
+      const dateB = new Date(lastMessages[b]?.date || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [threads, lastMessages, searchQuery]);
+
+  // Set active thread based on URL param
   useEffect(() => {
     if (threadParam && user) {
-      if (!threads[threadParam]) {
-        threads[threadParam] = [];
-      }
       setActiveThread(threadParam);
     }
   }, [threadParam, user]);
 
+  // Mark messages as read when thread becomes active
   useEffect(() => {
     if (user && activeThread && !markedThreadsRef.current.has(activeThread)) {
-      markMessagesAsRead(user.username, activeThread);
+      // Only mark messages FROM seller TO buyer as read (fix for bidirectional marking)
       markMessagesAsRead(activeThread, user.username);
       markedThreadsRef.current.add(activeThread);
-      setTimeout(() => forceRerender((v) => v + 1), 0);
+      forceRerender((v) => v + 1);
     }
-  }, [activeThread, user?.username, markMessagesAsRead]);
+  }, [activeThread, user, markMessagesAsRead]);
 
-  // Image handling functions
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Image handling with validation and error handling
+  const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    setImageError(null);
+    
+    if (!file) return;
+    
+    // Validate file type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
+      return;
     }
-  };
+    
+    // Validate file size
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageError(`Image too large. Maximum size is ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
+      return;
+    }
+    
+    setIsImageLoading(true);
+    
+    const reader = new FileReader();
+    
+    reader.onloadend = () => {
+      setSelectedImage(reader.result as string);
+      setIsImageLoading(false);
+    };
+    
+    reader.onerror = () => {
+      setImageError("Failed to read the image file. Please try again.");
+      setIsImageLoading(false);
+    };
+    
+    reader.readAsDataURL(file);
+  }, []);
 
-  const triggerFileInput = () => {
+  const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
-  };
+  }, []);
 
-  // Message sending function
-  const handleReply = () => {
+  // Message sending function - fixed validation logic
+  const handleReply = useCallback(() => {
     if (!activeThread || !user) return;
 
     const textContent = replyMessage.trim();
@@ -193,10 +228,12 @@ export default function BuyerMessagesPage() {
     }
 
     if (showCustomRequestForm) {
-      if (!requestTitle.trim() || !requestPrice || isNaN(Number(requestPrice))) {
+      if (!requestTitle.trim() || requestPrice === '' || isNaN(Number(requestPrice)) || Number(requestPrice) <= 0) {
         alert('Please enter a valid title and price for your custom request.');
         return;
       }
+      
+      const priceValue = Number(requestPrice);
       const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
       const requestId = uuidv4();
 
@@ -206,7 +243,7 @@ export default function BuyerMessagesPage() {
         seller: activeThread,
         title: requestTitle.trim(),
         description: textContent,
-        price: Number(requestPrice),
+        price: priceValue,
         tags: tagsArray,
         status: 'pending',
         date: new Date().toISOString(),
@@ -221,7 +258,7 @@ export default function BuyerMessagesPage() {
           meta: {
             id: requestId,
             title: requestTitle.trim(),
-            price: Number(requestPrice),
+            price: priceValue,
             tags: tagsArray,
             message: textContent,
             imageUrl: selectedImage || undefined,
@@ -250,51 +287,74 @@ export default function BuyerMessagesPage() {
     setTimeout(() => {
       inputRef.current?.focus();
     }, 0);
-  };
+  }, [
+    activeThread, 
+    user, 
+    replyMessage, 
+    showCustomRequestForm, 
+    requestTitle, 
+    requestPrice, 
+    requestTags, 
+    selectedImage, 
+    addRequest, 
+    sendMessage
+  ]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleReply();
     }
-  };
+  }, [handleReply]);
 
-  const handleBlockToggle = () => {
+  const handleBlockToggle = useCallback(() => {
     if (!user || !activeThread) return;
     if (isBlocked(user.username, activeThread)) {
       unblockUser(user.username, activeThread);
     } else {
       blockUser(user.username, activeThread);
     }
-  };
+  }, [user, activeThread, isBlocked, unblockUser, blockUser]);
 
-  const handleReport = () => {
+  const handleReport = useCallback(() => {
     if (user && activeThread && !hasReported(user.username, activeThread)) {
       reportUser(user.username, activeThread);
     }
-  };
+  }, [user, activeThread, hasReported, reportUser]);
 
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
-  const handleEditRequest = (req: any) => {
-    setEditRequestId(req.id);
-    setEditPrice(req.price);
-    setEditTitle(req.title);
-    setEditTags(req.tags.join(', '));
+  const handleEditRequest = useCallback((req: any) => {
+    if (!req || typeof req !== 'object') return;
+    
+    setEditRequestId(req.id || null);
+    setEditPrice(typeof req.price === 'number' ? req.price : '');
+    setEditTitle(req.title || '');
+    setEditTags(Array.isArray(req.tags) ? req.tags.join(', ') : '');
     setEditMessage(req.description || '');
-  };
+  }, []);
 
-  const handleEditSubmit = (req: any) => {
+  const handleEditSubmit = useCallback(() => {
     if (!user || !activeThread || !editRequestId) return;
+    
+    // Validate inputs
+    if (!editTitle.trim() || editPrice === '' || isNaN(Number(editPrice)) || Number(editPrice) <= 0) {
+      alert('Please enter a valid title and price for your custom request.');
+      return;
+    }
+    
+    const priceValue = Number(editPrice);
+    const tagsArray = editTags.split(',').map((t) => t.trim()).filter(Boolean);
+    
     respondToRequest(
       editRequestId,
       'pending',
       editMessage,
       {
         title: editTitle,
-        price: Number(editPrice),
-        tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
+        price: priceValue,
+        tags: tagsArray,
         description: editMessage,
       }
     );
@@ -304,35 +364,59 @@ export default function BuyerMessagesPage() {
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
-    setTimeout(() => forceRerender((v) => v + 1), 0);
-  };
+    forceRerender((v) => v + 1);
+  }, [
+    user, 
+    activeThread, 
+    editRequestId, 
+    editTitle, 
+    editPrice, 
+    editTags, 
+    editMessage, 
+    respondToRequest
+  ]);
 
-  const handleAccept = (req: any) => {
+  const handleAccept = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
-      setTimeout(() => forceRerender((v) => v + 1), 0);
+      forceRerender((v) => v + 1);
     }
-  };
+  }, [respondToRequest]);
   
-  const handleDecline = (req: any) => {
+  const handleDecline = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'rejected');
-      setTimeout(() => forceRerender((v) => v + 1), 0);
+      forceRerender((v) => v + 1);
     }
-  };
+  }, [respondToRequest]);
 
-  // Payment handling
-  const handlePayNow = (req: any) => {
+  const handlePayNow = useCallback((req: any) => {
     setPayingRequest(req);
     setShowPayModal(true);
-  };
+  }, []);
 
-  const handleConfirmPay = () => {
+  // Payment handling with improved validation
+  const handleConfirmPay = useCallback(() => {
     if (!user || !payingRequest) return;
+    
     const basePrice = payingRequest.price;
+    if (typeof basePrice !== 'number' || isNaN(basePrice) || basePrice <= 0) {
+      alert('Invalid price for this request.');
+      setShowPayModal(false);
+      setPayingRequest(null);
+      return;
+    }
+    
     const markupPrice = Math.round(basePrice * 1.1 * 100) / 100;
     const seller = payingRequest.seller;
     const buyer = payingRequest.buyer;
+
+    if (!seller || !buyer) {
+      alert('Missing seller or buyer information.');
+      setShowPayModal(false);
+      setPayingRequest(null);
+      return;
+    }
 
     const sellerShare = Math.round(basePrice * 0.9 * 100) / 100;
     const adminCut = Math.round((markupPrice - sellerShare) * 100) / 100;
@@ -344,6 +428,7 @@ export default function BuyerMessagesPage() {
       return;
     }
 
+    // Process the payment
     updateWallet(buyer, -markupPrice);
     updateWallet('oakley', adminCut);
 
@@ -363,24 +448,24 @@ export default function BuyerMessagesPage() {
       }
     );
 
-    setRequests((prev: any) =>
-      prev.map((r: any) =>
+    setRequests((prev) =>
+      prev.map((r) =>
         r.id === payingRequest.id ? { ...r, paid: true, status: 'paid' } : r
       )
     );
 
     setShowPayModal(false);
     setPayingRequest(null);
-    setTimeout(() => forceRerender((v) => v + 1), 0);
-  };
+    forceRerender((v) => v + 1);
+  }, [user, payingRequest, wallet, updateWallet, setRequests]);
 
-  const handleCancelPay = () => {
+  const handleCancelPay = useCallback(() => {
     setShowPayModal(false);
     setPayingRequest(null);
-  };
+  }, []);
 
-  // Tip functionality
-  const handleSendTip = () => {
+  // Tip functionality with improved validation
+  const handleSendTip = useCallback(() => {
     if (!activeThread || !user) return;
     
     const amount = parseFloat(tipAmount);
@@ -388,6 +473,15 @@ export default function BuyerMessagesPage() {
       setTipResult({
         success: false,
         message: "Please enter a valid amount."
+      });
+      return;
+    }
+    
+    // Validate user has enough balance
+    if (wallet[user.username] === undefined || wallet[user.username] < amount) {
+      setTipResult({
+        success: false,
+        message: "Insufficient balance to send this tip."
       });
       return;
     }
@@ -415,8 +509,21 @@ export default function BuyerMessagesPage() {
         message: "Failed to send tip. Please check your wallet balance."
       });
     }
-  };
+  }, [
+    activeThread,
+    user,
+    tipAmount,
+    wallet,
+    sendTip,
+    sendMessage
+  ]);
 
+  // Calculate buyerRequests outside the render cycle
+  const buyerRequests = useMemo(() => {
+    return user ? getRequestsForUser(user.username, 'buyer') : [];
+  }, [user, getRequestsForUser]);
+
+  // Process messages to handle custom requests correctly
   function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
     const seen = new Set();
     const result: any[] = [];
@@ -434,10 +541,11 @@ export default function BuyerMessagesPage() {
     return result;
   }
 
-  const threadMessages =
-    activeThread
+  const threadMessages = useMemo(() => {
+    return activeThread
       ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
       : [];
+  }, [activeThread, threads, buyerRequests]);
 
   function isLastEditor(customReq: any) {
     if (!customReq) return false;
@@ -452,7 +560,7 @@ export default function BuyerMessagesPage() {
     return lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Format time function
+  // Helper functions
   const formatTimeAgo = (date: string) => {
     const now = new Date();
     const messageDate = new Date(date);
@@ -582,12 +690,12 @@ export default function BuyerMessagesPage() {
             
             {/* Thread list */}
             <div className="flex-1 overflow-y-auto bg-[#121212]">
-              {sortedThreads.length === 0 ? (
+              {filteredAndSortedThreads.length === 0 ? (
                 <div className="p-4 text-center text-gray-400">
                   No conversations found
                 </div>
               ) : (
-                sortedThreads.map((seller) => {
+                filteredAndSortedThreads.map((seller) => {
                   const thread = threads[seller];
                   const lastMessage = lastMessages[seller];
                   const unreadCount = unreadCounts[seller] || 0;
@@ -698,7 +806,10 @@ export default function BuyerMessagesPage() {
                       <Flag size={18} />
                     </button>
                     <div className="relative">
-                      <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#333] transition">
+                      <button 
+                        onClick={handleBlockToggle}
+                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#333] transition"
+                      >
                         <MoreVertical size={18} className="text-gray-400 hover:text-[#ff950e]" />
                       </button>
                     </div>
@@ -775,7 +886,20 @@ export default function BuyerMessagesPage() {
                                 )}
                               </div>
                               
-                              {/* Image message */}\r\n                              {msg.type === 'image' && msg.meta?.imageUrl && (\r\n                                <div className="mt-1 mb-2">\r\n                                  <img \r\n                                    src={msg.meta.imageUrl} \r\n                                    alt="Shared image" \r\n                                    className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"\r\n                                    onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}\r\n                                  />\r\n                                  {msg.content && (\r\n                                    <p className="text-white mt-2">{msg.content}</p>\r\n                                  )}\r\n                                </div>\r\n                              )}
+                              {/* Image message */}
+                              {msg.type === 'image' && msg.meta?.imageUrl && (
+                                <div className="mt-1 mb-2">
+                                  <img 
+                                    src={msg.meta.imageUrl} 
+                                    alt="Shared image" 
+                                    className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}
+                                  />
+                                  {msg.content && (
+                                    <p className="text-white mt-2">{msg.content}</p>
+                                  )}
+                                </div>
+                              )}
                               
                               {/* Text content */}
                               {(msg.type !== 'image' || msg.content) && (
@@ -865,7 +989,12 @@ export default function BuyerMessagesPage() {
                                         type="number"
                                         placeholder="Price (USD)"
                                         value={editPrice}
-                                        onChange={e => setEditPrice(Number(e.target.value))}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setEditPrice(val === '' ? '' : Number(val));
+                                        }}
+                                        min="0.01"
+                                        step="0.01"
                                         className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
                                       />
                                       <input
@@ -883,7 +1012,7 @@ export default function BuyerMessagesPage() {
                                       />
                                       <div className="flex gap-2">
                                         <button
-                                          onClick={() => customReq && handleEditSubmit(customReq)}
+                                          onClick={handleEditSubmit}
                                           className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
                                         >
                                           Submit Edit
@@ -934,6 +1063,19 @@ export default function BuyerMessagesPage() {
                       </div>
                     )}
                     
+                    {/* Image loading and error states */}
+                    {isImageLoading && (
+                      <div className="mb-2 text-sm text-gray-400">
+                        Loading image...
+                      </div>
+                    )}
+                    
+                    {imageError && (
+                      <div className="mb-2 text-sm text-red-400">
+                        {imageError}
+                      </div>
+                    )}
+                    
                     {/* Custom request form */}
                     {showCustomRequestForm && (
                       <div className="space-y-2 mb-3 p-3 bg-[#222] rounded-lg border border-gray-700">
@@ -958,7 +1100,12 @@ export default function BuyerMessagesPage() {
                             type="number"
                             placeholder="Price (USD)"
                             value={requestPrice}
-                            onChange={(e) => setRequestPrice(Number(e.target.value))}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRequestPrice(val === '' ? '' : Number(val));
+                            }}
+                            min="0.01"
+                            step="0.01"
                             className="flex-1 p-2 border rounded bg-[#222] border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
                           />
                           <input
@@ -983,6 +1130,7 @@ export default function BuyerMessagesPage() {
                           placeholder={selectedImage ? "Add a caption..." : "Type a message"}
                           className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] max-h-28 resize-none"
                           rows={2}
+                          maxLength={250}
                         />
                         <div className="absolute bottom-2 right-2">
                           <span className="text-xs text-gray-400">{replyMessage.length}/250</span>
@@ -1006,7 +1154,7 @@ export default function BuyerMessagesPage() {
                           <button
                             onClick={triggerFileInput}
                             className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
-                            disabled={showCustomRequestForm}
+                            disabled={showCustomRequestForm || isImageLoading}
                             title="Attach Image"
                             aria-label="Attach Image"
                           >
@@ -1050,7 +1198,7 @@ export default function BuyerMessagesPage() {
                           {/* Hidden file input */}
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
                             ref={fileInputRef}
                             style={{ display: 'none' }}
                             onChange={handleImageSelect}
@@ -1060,9 +1208,9 @@ export default function BuyerMessagesPage() {
                         {/* Send button */}
                         <button
                           onClick={handleReply}
-                          disabled={!replyMessage.trim() && !selectedImage}
+                          disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
                           className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-black text-2xl ${
-                            (!replyMessage.trim() && !selectedImage)
+                            (!replyMessage.trim() && !selectedImage) || isImageLoading
                               ? 'bg-[#c17200] cursor-not-allowed'
                               : 'bg-[#ff950e] hover:bg-[#e88800]'
                           }`}
@@ -1079,6 +1227,12 @@ export default function BuyerMessagesPage() {
                 {isUserBlocked && (
                   <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a]">
                     You have blocked this user
+                    <button 
+                      onClick={handleBlockToggle}
+                      className="ml-2 underline text-gray-400 hover:text-white"
+                    >
+                      Unblock
+                    </button>
                   </div>
                 )}
               </>
@@ -1193,7 +1347,14 @@ export default function BuyerMessagesPage() {
             </div>
           </div>
         )}
-        {/* Image Preview Modal */}\r\n        <ImagePreviewModal\r\n          imageUrl={previewImage || ''}\r\n          isOpen={!!previewImage}\r\n          onClose={() => setPreviewImage(null)}\r\n        />\r\n      </div>\r\n    </RequireAuth>\r\n  );
+        
+        {/* Image Preview Modal */}
+        <ImagePreviewModal
+          imageUrl={previewImage || ''}
+          isOpen={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      </div>
+    </RequireAuth>
+  );
 }
-
-
