@@ -223,17 +223,15 @@ export default function SellerMessagesPage() {
           verified: isVerified
         };
         
-        // Always calculate the actual unread count first
-        // Only count messages FROM buyer TO seller as unread
+        // Count only messages FROM buyer TO seller as unread (fix for notification issue)
         const threadUnreadCount = msgs.filter(
           (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
         ).length;
         
-        // If thread is in readThreadsRef, consider it UI-read, but still track actual count
         unreadCounts[buyer] = threadUnreadCount;
         
         // Only add to total if not in readThreadsRef
-        if (!readThreadsRef.current.has(buyer)) {
+        if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
           totalUnreadCount += threadUnreadCount;
         }
       });
@@ -324,28 +322,31 @@ export default function SellerMessagesPage() {
   // Set up UI tracking for active thread
   useEffect(() => {
     if (activeThread && user) {
-      // Create a custom event to notify other components (like Header) about thread selection
+      // Add to readThreadsRef if there are unread messages
+      if (unreadCounts[activeThread] > 0) {
+        if (!readThreadsRef.current.has(activeThread)) {
+          // Only add to readThreadsRef if there are actual unread messages
+          readThreadsRef.current.add(activeThread);
+          
+          // Save to localStorage immediately when thread is selected
+          if (typeof window !== 'undefined') {
+            const readThreadsKey = `panty_read_threads_${user.username}`;
+            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+          }
+          
+          setMessageUpdate(prev => prev + 1); // Force UI update only once
+        }
+      }
+      
+      // Create a custom event to notify other components about thread selection
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('threadSelected', { 
           detail: { thread: activeThread, username: user.username }
         });
         window.dispatchEvent(event);
       }
-      
-      // Only add to readThreadsRef if not already there (prevent unnecessary updates)
-      if (!readThreadsRef.current.has(activeThread)) {
-        readThreadsRef.current.add(activeThread);
-        
-        // Save to localStorage immediately when thread is selected
-        if (user && typeof window !== 'undefined') {
-          const readThreadsKey = `panty_read_threads_${user.username}`;
-          localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
-        }
-        
-        setMessageUpdate(prev => prev + 1); // Force UI update only once
-      }
     }
-  }, [activeThread, user]);
+  }, [activeThread, user, unreadCounts]);
 
   // Handle clicks outside the emoji picker to close it
   useEffect(() => {
@@ -444,7 +445,8 @@ export default function SellerMessagesPage() {
       meta: selectedImage ? { imageUrl: selectedImage } : undefined, // Include image URL in meta
     });
 
-    // Don't add notification for seller's own message
+    // Don't add notification for seller's own message - this is handled in MessageContext now
+
     setReplyMessage('');
     setSelectedImage(null); // Clear selected image after sending
     if (fileInputRef.current) {
@@ -547,7 +549,7 @@ export default function SellerMessagesPage() {
       
       if (!matchesSearch) return false;
       
-      // For 'unread' filter, consider thread as unread if it has messages AND is not in readThreadsRef
+      // For 'unread' filter, consider thread as unread if it has unread messages AND is not in readThreadsRef
       if (filterBy === 'unread') {
         const hasUnread = unreadCounts[buyer] > 0 && !readThreadsRef.current.has(buyer);
         if (!hasUnread) return false;
@@ -967,6 +969,7 @@ export default function SellerMessagesPage() {
                               <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
                                 {isFromMe ? 'You' : msg.sender} • {time}
                               </span>
+                              {/* Only show Read/Sent for messages that the seller sends, not messages they receive */}
                               {isFromMe && (
                                 <span className="ml-2 text-[10px]">
                                   {msg.read ? (
