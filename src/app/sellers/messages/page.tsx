@@ -1023,11 +1023,11 @@ export default function SellerMessagesPage() {
                       
                       {/* Bottom row with attachment and send buttons */}
                       <div className="flex justify-between items-center">
-                        {/* Attachment button - Left aligned */}
+                        {/* Attachment button - Left aligned with vertical adjustment */}
                         <button
                           onClick={triggerFileInput}
                           disabled={isImageLoading}
-                          className={`flex items-center justify-center h-10 w-10 rounded-full ${
+                          className={`flex items-center justify-center h-10 w-10 rounded-full mt-[-6px] ${
                             isImageLoading 
                               ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
                               : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
