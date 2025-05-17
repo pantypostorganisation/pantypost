@@ -320,7 +320,9 @@ export default function SellerMessagesPage() {
     
     // Focus back on input
     setTimeout(() => {
-      inputRef.current?.focus();
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }, 0);
   }, [activeThread, user, replyMessage, selectedImage, sendMessage, addSellerNotification]);
 
@@ -902,6 +904,42 @@ export default function SellerMessagesPage() {
                 {/* Message input and emoji picker */}
                 {!isUserBlocked && (
                   <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+                    {/* Emoji Picker - position ABOVE the input */}
+                    {showEmojiPicker && (
+                      <div 
+                        ref={emojiPickerRef}
+                        className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
+                      >
+                        <div className="grid grid-cols-8 gap-1 p-3 overflow-auto" style={{ maxHeight: '200px' }}>
+                          {ALL_EMOJIS.map((emoji, index) => (
+                            <span
+                              key={`emoji-${index}`}
+                              onClick={() => handleEmojiClick(emoji)}
+                              className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222]"
+                              dangerouslySetInnerHTML={{ __html: `
+                                <style>
+                                  .emoji-button::before {
+                                    content: "";
+                                    position: absolute;
+                                    width: 100%;
+                                    height: 100%;
+                                    border-radius: 50%;
+                                    background-color: black;
+                                    z-index: -1;
+                                  }
+                                  .emoji-button {
+                                    position: relative;
+                                    z-index: 1;
+                                  }
+                                </style>
+                                ${emoji}
+                              `}}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Selected image preview */}
                     {selectedImage && (
                       <div className="px-4 pt-3 pb-2">
@@ -936,32 +974,8 @@ export default function SellerMessagesPage() {
                       </div>
                     )}
                     
-                {/* Emoji Picker */}
-                {showEmojiPicker && (
-                  <div 
-                    ref={emojiPickerRef}
-                    className="absolute bottom-24 left-0 right-0 mx-auto bg-[#0f0f0f] border border-gray-800 shadow-lg z-50 overflow-hidden"
-                    style={{ width: '95%', maxHeight: '180px', borderRadius: '12px' }}
-                  >
-                    {/* Multi-row emoji grid with horizontal scroll */}
-                    <div className="overflow-x-auto py-2 px-1 h-[170px]">
-                      <div className="grid grid-rows-4 gap-1" style={{ gridAutoFlow: 'column', minWidth: '1200px' }}>
-                        {ALL_EMOJIS.map((emoji, index) => (
-                          <button
-                            key={`emoji-${index}`}
-                            onClick={() => handleEmojiClick(emoji)}
-                            className="w-10 h-10 flex items-center justify-center bg-black hover:bg-[#333] rounded-md text-xl"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                    
+                    {/* Message input */}
                     <div className="px-4 py-3">
-                      {/* Message input */}
                       <div className="relative mb-2">
                         <textarea
                           ref={inputRef}
@@ -969,21 +983,15 @@ export default function SellerMessagesPage() {
                           onChange={(e) => setReplyMessage(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                          className="w-full p-3 pr-16 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto"
-                          style={{ paddingTop: '10px', paddingBottom: '10px' }}
+                          className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto"
                           rows={1}
                           maxLength={250}
                         />
                         
-                        {/* Character count */}
-                        <div className="absolute right-16 top-2.5 text-xs text-gray-400">
-                          {replyMessage.length > 0 && `${replyMessage.length}/250`}
-                        </div>
-                        
-                        {/* Emoji button - Right aligned */}
+                        {/* Emoji button - inside textarea */}
                         <button
                           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                          className={`absolute right-3 top-1.5 p-1.5 rounded-full ${
+                          className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1.5 rounded-full ${
                             showEmojiPicker 
                               ? 'bg-[#ff950e] text-black' 
                               : 'text-[#ff950e] hover:bg-[#333]'
@@ -993,6 +1001,13 @@ export default function SellerMessagesPage() {
                           <Smile size={20} />
                         </button>
                       </div>
+                      
+                      {/* Character count */}
+                      {replyMessage.length > 0 && (
+                        <div className="text-xs text-gray-400 mb-2 text-right">
+                          {replyMessage.length}/250
+                        </div>
+                      )}
                       
                       {/* Bottom row with attachment and send buttons */}
                       <div className="flex justify-between items-center">
@@ -1062,6 +1077,23 @@ export default function SellerMessagesPage() {
             )}
           </div>
         </div>
+        
+        <style jsx global>{`
+          .emoji-button::before {
+            content: "";
+            display: block;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: black;
+            z-index: -1;
+          }
+          .emoji-button {
+            position: relative;
+            z-index: 1;
+          }
+        `}</style>
         
         {/* Image Preview Modal */}
         <ImagePreviewModal
