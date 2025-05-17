@@ -17,7 +17,22 @@ import {
   X,
   BadgeCheck,
   Smile,
-  User
+  User,
+  Image,
+  Heart,
+  AlertTriangle,
+  ShieldAlert,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  Sparkles,
+  ArrowRightCircle,
+  ShoppingBag,
+  Package,
+  Filter,
+  MessageCircle,
+  BellRing
 } from 'lucide-react';
 
 // Constants
@@ -355,13 +370,32 @@ export default function SellerMessagesPage() {
   function statusBadge(status: string) {
     let color = 'bg-yellow-500 text-white';
     let label = status.toUpperCase();
-    if (status === 'accepted') color = 'bg-green-600 text-white';
-    else if (status === 'rejected') color = 'bg-red-600 text-white';
-    else if (status === 'edited') color = 'bg-blue-600 text-white';
-    else if (status === 'paid') color = 'bg-green-800 text-white';
-    else if (status === 'pending') color = 'bg-yellow-500 text-white';
+    let icon = <Clock size={12} className="mr-1" />;
+    
+    if (status === 'accepted') {
+      color = 'bg-green-600 text-white';
+      icon = <CheckCircle2 size={12} className="mr-1" />;
+    }
+    else if (status === 'rejected') {
+      color = 'bg-red-600 text-white';
+      icon = <XCircle size={12} className="mr-1" />;
+    }
+    else if (status === 'edited') {
+      color = 'bg-blue-600 text-white';
+      icon = <Edit3 size={12} className="mr-1" />;
+    }
+    else if (status === 'paid') {
+      color = 'bg-green-800 text-white';
+      icon = <ShoppingBag size={12} className="mr-1" />;
+    }
+    else if (status === 'pending') {
+      color = 'bg-yellow-500 text-white';
+      icon = <Clock size={12} className="mr-1" />;
+    }
+    
     return (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
+      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold flex items-center ${color}`}>
+        {icon}
         {label}
       </span>
     );
@@ -543,28 +577,31 @@ export default function SellerMessagesPage() {
           <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
             {/* Seller header */}
             <div className="px-4 pt-4 pb-2">
-              <h2 className="text-2xl font-bold text-[#ff950e] mb-2">
+              <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
+                <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
                 {isAdmin ? 'Admin Messages' : 'My Messages'}
               </h2>
               <div className="flex space-x-2 mb-3">
                 <button 
                   onClick={() => setFilterBy('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
                     filterBy === 'all' 
                       ? 'bg-[#ff950e] text-black' 
                       : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
                   }`}
                 >
+                  <Filter size={14} className="mr-1" />
                   All Messages
                 </button>
                 <button 
                   onClick={() => setFilterBy('unread')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition ${
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
                     filterBy === 'unread' 
                       ? 'bg-[#ff950e] text-black' 
                       : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
                   }`}
                 >
+                  <BellRing size={14} className="mr-1" />
                   Unread
                 </button>
               </div>
@@ -606,7 +643,7 @@ export default function SellerMessagesPage() {
                       onClick={() => setActiveThread(buyer)}
                       className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
                         isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
-                      }`}
+                      } transition-colors duration-150 ease-in-out`}
                     >
                       {/* Active indicator */}
                       {isActive && (
@@ -615,7 +652,7 @@ export default function SellerMessagesPage() {
                       
                       {/* Avatar with unread indicator */}
                       <div className="relative mr-3">
-                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden">
+                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
                           {buyerProfile?.pic ? (
                             <img src={buyerProfile.pic} alt={buyer} className="w-full h-full object-cover" />
                           ) : (
@@ -632,7 +669,7 @@ export default function SellerMessagesPage() {
                         
                         {/* Unread indicator */}
                         {unreadCount > 0 && (
-                          <div className="absolute top-0 right-0 w-5 h-5 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212]">
+                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
                             {unreadCount}
                           </div>
                         )}
@@ -642,7 +679,8 @@ export default function SellerMessagesPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between">
                           <h3 className="font-bold text-white truncate">{buyer}</h3>
-                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1">
+                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
+                            <Clock size={12} className="mr-1" />
                             {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
                           </span>
                         </div>
@@ -670,7 +708,7 @@ export default function SellerMessagesPage() {
                 {/* Conversation header */}
                 <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
                   <div className="flex items-center">
-                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden">
+                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
                       {buyerProfiles[activeThread]?.pic ? (
                         <img src={buyerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
                       ) : (
@@ -686,7 +724,10 @@ export default function SellerMessagesPage() {
                     </div>
                     <div>
                       <h2 className="font-bold text-lg text-white">{activeThread}</h2>
-                      <p className="text-xs text-[#ff950e]">Active now</p>
+                      <p className="text-xs text-[#ff950e] flex items-center">
+                        <Sparkles size={12} className="mr-1 text-[#ff950e]" />
+                        Active now
+                      </p>
                     </div>
                   </div>
                   
@@ -694,18 +735,20 @@ export default function SellerMessagesPage() {
                     <button 
                       onClick={handleReport}
                       disabled={isUserReported}
-                      className={`px-3 py-1 text-xs border rounded ${
+                      className={`px-3 py-1 text-xs border rounded flex items-center ${
                         isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-                      }`}
+                      } transition-colors duration-150`}
                     >
+                      <AlertTriangle size={12} className="mr-1" />
                       {isUserReported ? 'Reported' : 'Report'}
                     </button>
                     <button
                       onClick={handleBlockToggle}
-                      className={`px-3 py-1 text-xs border rounded ${
+                      className={`px-3 py-1 text-xs border rounded flex items-center ${
                         isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-                      }`}
+                      } transition-colors duration-150`}
                     >
+                      <ShieldAlert size={12} className="mr-1" />
                       {isUserBlocked ? 'Unblock' : 'Block'}
                     </button>
                   </div>
@@ -755,8 +798,8 @@ export default function SellerMessagesPage() {
                         <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
                           <div className={`rounded-lg p-3 max-w-[75%] ${
                             isFromMe 
-                              ? 'bg-[#ff950e] text-white' 
-                              : 'bg-[#333] text-white'
+                              ? 'bg-[#ff950e] text-white shadow-lg' 
+                              : 'bg-[#333] text-white shadow-md'
                           }`}
                           >
                             {/* Message header */}
@@ -783,7 +826,7 @@ export default function SellerMessagesPage() {
                                 <img 
                                   src={msg.meta.imageUrl} 
                                   alt="Shared image" 
-                                  className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                                  className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
                                   onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}
                                 />
                                 {msg.content && (
@@ -795,7 +838,7 @@ export default function SellerMessagesPage() {
                             )}
                             
                             {/* Text content */}
-                            {msg.type !== 'image' && (
+                            {msg.type !== 'image' && msg.type !== 'customRequest' && (
                               <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                                 {msg.content}
                               </p>
@@ -804,7 +847,10 @@ export default function SellerMessagesPage() {
                             {/* Custom request content */}
                             {msg.type === 'customRequest' && msg.meta && (
                               <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
-                                <p className="font-semibold">🛠️ Custom Request</p>
+                                <p className="font-semibold flex items-center">
+                                  <Package size={16} className="mr-1" />
+                                  Custom Request
+                                </p>
                                 <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
                                 <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
                                 <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
@@ -812,32 +858,38 @@ export default function SellerMessagesPage() {
                                   <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
                                 )}
                                 {customReq && (
-                                  <p>
+                                  <p className="flex items-center">
                                     <b>Status:</b>
                                     {statusBadge(customReq.status)}
                                   </p>
                                 )}
                                 {isPaid && (
-                                  <span className="text-green-400 font-bold">Paid ✅</span>
+                                  <span className="text-green-400 font-bold flex items-center">
+                                    <ShoppingBag size={14} className="mr-1" />
+                                    Paid ✅
+                                  </span>
                                 )}
                                 {showActionButtons && !isPaid && (
                                   <div className="flex flex-wrap gap-2 pt-2">
                                     <button
                                       onClick={() => customReq && handleAccept(customReq)}
-                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800"
+                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
                                     >
+                                      <CheckCircle2 size={12} className="mr-1" />
                                       Accept
                                     </button>
                                     <button
                                       onClick={() => customReq && handleDecline(customReq)}
-                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800"
+                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
                                     >
+                                      <XCircle size={12} className="mr-1" />
                                       Decline
                                     </button>
                                     <button
                                       onClick={() => customReq && handleEditRequest(customReq)}
-                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
+                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
                                     >
+                                      <Edit3 size={12} className="mr-1" />
                                       Edit
                                     </button>
                                   </div>
@@ -879,14 +931,16 @@ export default function SellerMessagesPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={handleEditSubmit}
-                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800"
+                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
                                       >
+                                        <Edit3 size={12} className="mr-1" />
                                         Submit Edit
                                       </button>
                                       <button
                                         onClick={() => setEditRequestId(null)}
-                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600"
+                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
                                       >
+                                        <X size={12} className="mr-1" />
                                         Cancel
                                       </button>
                                     </div>
@@ -922,7 +976,7 @@ export default function SellerMessagesPage() {
                                 <span
                                   key={`recent-${index}`}
                                   onClick={() => handleEmojiClick(emoji)}
-                                  className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222]"
+                                  className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
                                 >
                                   {emoji}
                                 </span>
@@ -941,7 +995,7 @@ export default function SellerMessagesPage() {
                               <span
                                 key={`emoji-${index}`}
                                 onClick={() => handleEmojiClick(emoji)}
-                                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222]"
+                                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
                               >
                                 {emoji}
                               </span>
@@ -955,7 +1009,7 @@ export default function SellerMessagesPage() {
                     {selectedImage && (
                       <div className="px-4 pt-3 pb-2">
                         <div className="relative inline-block">
-                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded" />
+                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
                           <button
                             onClick={() => {
                               setSelectedImage(null);
@@ -963,7 +1017,7 @@ export default function SellerMessagesPage() {
                                 fileInputRef.current.value = '';
                               }
                             }}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs"
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs shadow-md transform transition-transform hover:scale-110"
                             style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           >
                             <X size={14} />
@@ -980,7 +1034,8 @@ export default function SellerMessagesPage() {
                     )}
                     
                     {imageError && (
-                      <div className="px-4 pt-3 pb-0 text-sm text-red-400">
+                      <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
+                        <AlertTriangle size={14} className="mr-1" />
                         {imageError}
                       </div>
                     )}
@@ -999,14 +1054,14 @@ export default function SellerMessagesPage() {
                           maxLength={250}
                         />
                         
-                        {/* Fixed emoji button position - adjusted vertical position with -translate-y-1/2 and margin-top */}
+                        {/* Fixed emoji button position */}
                         <button
                           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                           className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
                             showEmojiPicker 
                               ? 'bg-[#ff950e] text-black' 
                               : 'text-[#ff950e] hover:bg-[#333]'
-                          }`}
+                          } transition-colors duration-150`}
                           title="Emoji"
                           type="button"
                         >
@@ -1031,10 +1086,10 @@ export default function SellerMessagesPage() {
                             isImageLoading 
                               ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
                               : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                          }`}
+                          } transition-colors duration-150 shadow-md`}
                           title="Attach Image"
                         >
-                          <Paperclip size={20} className="flex-shrink-0" />
+                          <Image size={20} className="flex-shrink-0" />
                         </button>
                         
                         {/* Hidden file input */}
@@ -1054,10 +1109,10 @@ export default function SellerMessagesPage() {
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
                               ? 'bg-[#333] text-gray-500 cursor-not-allowed'
                               : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                          }`}
+                          } transition-colors duration-150 shadow-md`}
                         >
                           <span className="mr-1">Send</span>
-                          <Send size={16} className="flex-shrink-0" />
+                          <ArrowRightCircle size={16} className="flex-shrink-0" />
                         </button>
                       </div>
                     </div>
@@ -1065,11 +1120,12 @@ export default function SellerMessagesPage() {
                 )}
                 
                 {isUserBlocked && (
-                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a]">
+                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+                    <ShieldAlert size={16} className="mr-2" />
                     You have blocked this buyer
                     <button 
                       onClick={handleBlockToggle}
-                      className="ml-2 underline text-gray-400 hover:text-white"
+                      className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
                     >
                       Unblock
                     </button>
@@ -1080,7 +1136,7 @@ export default function SellerMessagesPage() {
               <div className="flex-1 flex items-center justify-center text-gray-400">
                 <div className="text-center p-4">
                   <div className="flex justify-center mb-4">
-                    <MessageSquare size={64} className="text-gray-600" />
+                    <MessageCircle size={64} className="text-gray-600" />
                   </div>
                   <p className="text-xl mb-2">Select a conversation to view messages</p>
                   <p className="text-sm">Your messages will appear here</p>
