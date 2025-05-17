@@ -534,6 +534,9 @@ export default function SellerMessagesPage() {
 
   return (
     <RequireAuth role="seller">
+      {/* Top Padding */}
+      <div className="py-3 bg-black"></div>
+      
       <div className="h-screen bg-black flex flex-col overflow-hidden">
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
           {/* Left column - Message threads */}
@@ -910,32 +913,40 @@ export default function SellerMessagesPage() {
                         ref={emojiPickerRef}
                         className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
                       >
-                        <div className="grid grid-cols-8 gap-1 p-3 overflow-auto" style={{ maxHeight: '200px' }}>
-                          {ALL_EMOJIS.map((emoji, index) => (
-                            <span
-                              key={`emoji-${index}`}
-                              onClick={() => handleEmojiClick(emoji)}
-                              className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222]"
-                              dangerouslySetInnerHTML={{ __html: `
-                                <style>
-                                  .emoji-button::before {
-                                    content: "";
-                                    position: absolute;
-                                    width: 100%;
-                                    height: 100%;
-                                    border-radius: 50%;
-                                    background-color: black;
-                                    z-index: -1;
-                                  }
-                                  .emoji-button {
-                                    position: relative;
-                                    z-index: 1;
-                                  }
-                                </style>
-                                ${emoji}
-                              `}}
-                            />
-                          ))}
+                        {/* Recent Emojis Section */}
+                        {recentEmojis.length > 0 && (
+                          <div className="px-3 pt-3">
+                            <div className="text-xs text-gray-400 mb-2">Recent</div>
+                            <div className="grid grid-cols-8 gap-1 mb-3">
+                              {recentEmojis.slice(0, 16).map((emoji, index) => (
+                                <span
+                                  key={`recent-${index}`}
+                                  onClick={() => handleEmojiClick(emoji)}
+                                  className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222]"
+                                >
+                                  {emoji}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* All Emojis */}
+                        <div className="px-3 pt-2 pb-3">
+                          {recentEmojis.length > 0 && (
+                            <div className="text-xs text-gray-400 mb-2">All Emojis</div>
+                          )}
+                          <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
+                            {ALL_EMOJIS.map((emoji, index) => (
+                              <span
+                                key={`emoji-${index}`}
+                                onClick={() => handleEmojiClick(emoji)}
+                                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222]"
+                              >
+                                {emoji}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1077,6 +1088,9 @@ export default function SellerMessagesPage() {
             )}
           </div>
         </div>
+        
+        {/* Bottom Padding */}
+        <div className="py-6 bg-black"></div>
         
         <style jsx global>{`
           .emoji-button::before {
