@@ -25,19 +25,25 @@ const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// Emoji picker categories and default emojis
-const EMOJI_CATEGORIES = {
-  recent: '🕒',
-  smileys: '😀 😊 😍 🥰 😎 🤗 🤔 🙄 😴 😜',
-  people: '👋 👍 👎 👏 🙏 💪 👨 👩 👶 👮',
-  nature: '🐶 🐱 🐭 🦊 🐻 🐼 🐨 🦁 🐮 🐷',
-  food: '🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒',
-  activities: '⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🎯',
-  travel: '🚗 🚕 🚙 🚌 🚎 🏎 🚓 🚑 🚒 🚐',
-  objects: '⌚ 📱 💻 ⌨ 🖥 🖨 🖱 🖲 🕹 🗜',
-  symbols: '❤ 🧡 💛 💚 💙 💜 🖤 💔 ❣ 💕',
-  flags: '🏳 🏴 🏁 🚩 🏳️‍🌈 🏴‍☠️ 🇦🇨 🇦🇩 🇦🇪 🇦🇫',
-};
+// All emojis in a single flat array
+const ALL_EMOJIS = [
+  // Smileys and people
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕',
+  // Animals and nature
+  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦆', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷', '🕸', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃',
+  // Food and drink
+  '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫑', '🥕', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚',
+  // Activities and sports
+  '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🏵', '🎗', '🎫', '🎟', '🎪', '🤹', '🎭', '🩰', '🎨', '🎬', '🎤',
+  // Travel and places
+  '🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🦯', '🦽', '🦼', '🛴', '🚲', '🛵', '🏍', '🛺', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩', '💺', '🛰', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥', '🛳', '⛴', '🚢', '⚓', '🪝', '⛽', '🚧', '🚦', '🚥', '🚏', '🗺', '🗿',
+  // Objects 
+  '⌚', '📱', '📲', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🕹', '🗜', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '🧭', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯', '🪔', '🧯', '🛢', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '💎', '⚖️', '🪜', '🧰', '🪛', '🔧', '🔨', '⚒', '🛠',
+  // Symbols
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑',
+  // Flags
+  '🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️'
+];
 
 type Message = {
   sender: string;
@@ -90,7 +96,6 @@ export default function SellerMessagesPage() {
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('smileys');
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   
   // Refs
@@ -108,7 +113,7 @@ export default function SellerMessagesPage() {
       try {
         const parsed = JSON.parse(storedRecentEmojis);
         if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 20)); // Limit to 20 recent emojis
+          setRecentEmojis(parsed.slice(0, 30)); // Limit to 30 recent emojis
         }
       } catch (e) {
         console.error('Failed to parse recent emojis', e);
@@ -275,7 +280,7 @@ export default function SellerMessagesPage() {
       // Remove if already exists to prevent duplicates
       const filtered = prev.filter(e => e !== emoji);
       // Add to the front and return limited array
-      return [emoji, ...filtered].slice(0, 20);
+      return [emoji, ...filtered].slice(0, 30);
     });
     
     // Focus back on the input after inserting emoji
@@ -515,6 +520,13 @@ export default function SellerMessagesPage() {
     return 'Just now';
   };
 
+  // Check if content is a single emoji
+  const isSingleEmoji = (content: string) => {
+    // Regex to match a single emoji (including compound emojis with ZWJ)
+    const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
+    return emojiRegex.test(content);
+  };
+
   // Check if user is admin
   const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
@@ -704,6 +716,9 @@ export default function SellerMessagesPage() {
                         minute: '2-digit'
                       });
                       
+                      // Check if message contains only a single emoji
+                      const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
+                      
                       let customReq: any = undefined;
                       let metaId: string | undefined = undefined;
                       if (
@@ -767,14 +782,16 @@ export default function SellerMessagesPage() {
                                   onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}
                                 />
                                 {msg.content && (
-                                  <p className="text-white mt-2">{msg.content}</p>
+                                  <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                                    {msg.content}
+                                  </p>
                                 )}
                               </div>
                             )}
                             
                             {/* Text content */}
-                            {(msg.type !== 'image' || msg.content) && (
-                              <p className="text-white">
+                            {msg.type !== 'image' && (
+                              <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                                 {msg.content}
                               </p>
                             )}
@@ -882,12 +899,12 @@ export default function SellerMessagesPage() {
                   </div>
                 </div>
                 
-                {/* Message input */}
+                {/* Message input and emoji picker */}
                 {!isUserBlocked && (
-                  <div className="px-4 py-3 border-t border-gray-800 bg-[#1a1a1a]">
+                  <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
                     {/* Selected image preview */}
                     {selectedImage && (
-                      <div className="mb-2">
+                      <div className="px-4 pt-3 pb-2">
                         <div className="relative inline-block">
                           <img src={selectedImage} alt="Preview" className="max-h-20 rounded" />
                           <button
@@ -908,142 +925,112 @@ export default function SellerMessagesPage() {
                     
                     {/* Image loading and error states */}
                     {isImageLoading && (
-                      <div className="mb-2 text-sm text-gray-400">
+                      <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
                         Loading image...
                       </div>
                     )}
                     
                     {imageError && (
-                      <div className="mb-2 text-sm text-red-400">
+                      <div className="px-4 pt-3 pb-0 text-sm text-red-400">
                         {imageError}
                       </div>
                     )}
                     
-                    {/* Emoji Picker */}
-                    {showEmojiPicker && (
-                      <div 
-                        ref={emojiPickerRef}
-                        className="absolute bottom-[105px] left-4 bg-[#222] border border-gray-700 rounded-lg shadow-lg p-2 z-50"
-                        style={{ maxWidth: '320px' }}
-                      >
-                        {/* Emoji Categories */}
-                        <div className="flex mb-2 border-b border-gray-700 pb-2">
-                          {Object.entries(EMOJI_CATEGORIES).map(([category, _]) => (
-                            <button
-                              key={category}
-                              onClick={() => setActiveEmojiCategory(category as any)}
-                              className={`p-2 rounded-full text-lg ${
-                                activeEmojiCategory === category ? 'bg-[#333]' : ''
-                              }`}
-                              title={category.charAt(0).toUpperCase() + category.slice(1)}
-                            >
-                              {category === 'recent' ? '🕒' : 
-                               category === 'smileys' ? '😊' :
-                               category === 'people' ? '👋' :
-                               category === 'nature' ? '🐱' :
-                               category === 'food' ? '🍎' :
-                               category === 'activities' ? '⚽' :
-                               category === 'travel' ? '🚗' :
-                               category === 'objects' ? '💻' :
-                               category === 'symbols' ? '❤️' : '🏁'}
-                            </button>
-                          ))}
-                        </div>
-                        
-                        {/* Emoji Grid */}
-                        <div className="grid grid-cols-8 gap-1">
-                          {activeEmojiCategory === 'recent' ? (
-                            recentEmojis.length > 0 ? (
-                              recentEmojis.map((emoji, index) => (
-                                <button
-                                  key={`recent-${index}`}
-                                  onClick={() => handleEmojiClick(emoji)}
-                                  className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
-                                >
-                                  {emoji}
-                                </button>
-                              ))
-                            ) : (
-                              <p className="col-span-8 text-center text-gray-400 py-3 text-sm">
-                                No recent emojis
-                              </p>
-                            )
-                          ) : (
-                            EMOJI_CATEGORIES[activeEmojiCategory].split(' ').map((emoji, index) => (
-                              <button
-                                key={`${activeEmojiCategory}-${index}`}
-                                onClick={() => handleEmojiClick(emoji)}
-                                className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
-                              >
-                                {emoji}
-                              </button>
-                            ))
-                          )}
-                        </div>
+                {/* Emoji Picker */}
+                {showEmojiPicker && (
+                  <div 
+                    ref={emojiPickerRef}
+                    className="absolute bottom-24 left-0 right-0 mx-auto bg-[#0f0f0f] border border-gray-800 shadow-lg z-50 overflow-hidden"
+                    style={{ width: '95%', maxHeight: '180px', borderRadius: '12px' }}
+                  >
+                    {/* Multi-row emoji grid with horizontal scroll */}
+                    <div className="overflow-x-auto py-2 px-1 h-[170px]">
+                      <div className="grid grid-rows-4 gap-1" style={{ gridAutoFlow: 'column', minWidth: '1200px' }}>
+                        {ALL_EMOJIS.map((emoji, index) => (
+                          <button
+                            key={`emoji-${index}`}
+                            onClick={() => handleEmojiClick(emoji)}
+                            className="w-10 h-10 flex items-center justify-center bg-black hover:bg-[#333] rounded-md text-xl"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
                       </div>
-                    )}
+                    </div>
+                  </div>
+                )}
                     
-                    <div className="flex flex-col gap-2">
+                    <div className="px-4 py-3">
                       {/* Message input */}
-                      <div className="relative">
+                      <div className="relative mb-2">
                         <textarea
                           ref={inputRef}
                           value={replyMessage}
                           onChange={(e) => setReplyMessage(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                          className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] max-h-28 resize-none"
-                          rows={2}
+                          className="w-full p-3 pr-16 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto"
+                          style={{ paddingTop: '10px', paddingBottom: '10px' }}
+                          rows={1}
                           maxLength={250}
                         />
-                        <div className="absolute bottom-2 right-2">
-                          <span className="text-xs text-gray-400">{replyMessage.length}/250</span>
-                        </div>
-                      </div>
-                      
-                      {/* Input actions */}
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2">
-                          {/* Attachment button */}
-                          <button
-                            onClick={triggerFileInput}
-                            disabled={isImageLoading}
-                            className={`p-2 rounded-full ${isImageLoading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-[#ff950e] text-black hover:bg-[#e88800]'}`}
-                            title="Attach Image"
-                          >
-                            <Paperclip size={20} />
-                          </button>
-                          
-                          {/* Emoji button */}
-                          <button
-                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                            className="p-2 rounded-full bg-[#ff950e] text-black hover:bg-[#e88800]"
-                            title="Emoji"
-                          >
-                            <Smile size={20} />
-                          </button>
-                          
-                          {/* Hidden file input */}
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/gif,image/webp"
-                            ref={fileInputRef}
-                            style={{ display: 'none' }}
-                            onChange={handleImageSelect}
-                          />
+                        
+                        {/* Character count */}
+                        <div className="absolute right-16 top-2.5 text-xs text-gray-400">
+                          {replyMessage.length > 0 && `${replyMessage.length}/250`}
                         </div>
                         
-                        {/* Send button */}
+                        {/* Emoji button - Right aligned */}
+                        <button
+                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          className={`absolute right-3 top-1.5 p-1.5 rounded-full ${
+                            showEmojiPicker 
+                              ? 'bg-[#ff950e] text-black' 
+                              : 'text-[#ff950e] hover:bg-[#333]'
+                          }`}
+                          title="Emoji"
+                        >
+                          <Smile size={20} />
+                        </button>
+                      </div>
+                      
+                      {/* Bottom row with attachment and send buttons */}
+                      <div className="flex justify-between items-center">
+                        {/* Attachment button - Left aligned */}
+                        <button
+                          onClick={triggerFileInput}
+                          disabled={isImageLoading}
+                          className={`p-2 rounded-full ${
+                            isImageLoading 
+                              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
+                          }`}
+                          title="Attach Image"
+                        >
+                          <Paperclip size={20} />
+                        </button>
+                        
+                        {/* Hidden file input */}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          ref={fileInputRef}
+                          style={{ display: 'none' }}
+                          onChange={handleImageSelect}
+                        />
+                        
+                        {/* Send Button - Right aligned */}
                         <button
                           onClick={handleReply}
                           disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
-                          className={`px-4 py-2 rounded-full flex items-center gap-2 ${
+                          className={`flex items-center justify-center px-5 py-2 rounded-full ${
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
                               ? 'bg-[#333] text-gray-500 cursor-not-allowed'
                               : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
                           }`}
                         >
-                          <Send size={18} /> Send
+                          <span className="mr-1">Send</span>
+                          <Send size={16} />
                         </button>
                       </div>
                     </div>
