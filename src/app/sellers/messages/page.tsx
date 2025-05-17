@@ -994,22 +994,23 @@ export default function SellerMessagesPage() {
                           onChange={(e) => setReplyMessage(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                          className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto"
+                          className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
                           rows={1}
                           maxLength={250}
                         />
                         
-                        {/* Emoji button - inside textarea */}
+                        {/* Fixed emoji button position - adjusted vertical position with -translate-y-1/2 and margin-top */}
                         <button
                           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                          className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1.5 rounded-full ${
+                          className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
                             showEmojiPicker 
                               ? 'bg-[#ff950e] text-black' 
                               : 'text-[#ff950e] hover:bg-[#333]'
                           }`}
                           title="Emoji"
+                          type="button"
                         >
-                          <Smile size={20} />
+                          <Smile size={20} className="flex-shrink-0" />
                         </button>
                       </div>
                       
@@ -1026,14 +1027,14 @@ export default function SellerMessagesPage() {
                         <button
                           onClick={triggerFileInput}
                           disabled={isImageLoading}
-                          className={`p-2 rounded-full ${
+                          className={`flex items-center justify-center h-10 w-10 rounded-full ${
                             isImageLoading 
                               ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
                               : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
                           }`}
                           title="Attach Image"
                         >
-                          <Paperclip size={20} />
+                          <Paperclip size={20} className="flex-shrink-0" />
                         </button>
                         
                         {/* Hidden file input */}
@@ -1056,7 +1057,7 @@ export default function SellerMessagesPage() {
                           }`}
                         >
                           <span className="mr-1">Send</span>
-                          <Send size={16} />
+                          <Send size={16} className="flex-shrink-0" />
                         </button>
                       </div>
                     </div>
