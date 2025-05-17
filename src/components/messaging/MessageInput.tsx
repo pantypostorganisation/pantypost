@@ -101,7 +101,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
   // Handle sending the message
   const handleSend = () => {
-    if (disabled || ((!content.trim() && !selectedImage) || isUploading)) {
+    if (disabled || !content.trim() && !selectedImage || isUploading) {
       return;
     }
     
