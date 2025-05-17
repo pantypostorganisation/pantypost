@@ -108,6 +108,7 @@ export default function SellerMessagesPage() {
   const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -116,10 +117,9 @@ export default function SellerMessagesPage() {
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const [_, forceRerender] = useState(0);
-  const markedThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const readThreadsRef = useRef<Set<string>>(new Set());
 
   // Load recent emojis from localStorage on component mount
   useEffect(() => {
@@ -134,7 +134,25 @@ export default function SellerMessagesPage() {
         console.error('Failed to parse recent emojis', e);
       }
     }
-  }, []);
+    
+    // Load previously read threads from localStorage
+    try {
+      // Get read threads from localStorage only if user exists
+      if (user) {
+        const readThreadsKey = `panty_read_threads_${user.username}`;
+        const readThreads = localStorage.getItem(readThreadsKey);
+        if (readThreads) {
+          const threads = JSON.parse(readThreads);
+          if (Array.isArray(threads)) {
+            readThreadsRef.current = new Set(threads);
+            setMessageUpdate(prev => prev + 1); // Force UI update
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load read threads', e);
+    }
+  }, [user]);
 
   // Save recent emojis to localStorage when they change
   useEffect(() => {
@@ -143,27 +161,8 @@ export default function SellerMessagesPage() {
     }
   }, [recentEmojis]);
 
-  // Handle clicks outside the emoji picker to close it
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
-        setShowEmojiPicker(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   // Initialize the thread based on URL thread parameter
   const threadParam = searchParams?.get('thread');
-
-  // Force rerender when requests or wallet updates
-  useEffect(() => {
-    forceRerender((v) => v + 1);
-  }, [requests, wallet]);
 
   // Set active thread from URL parameter
   useEffect(() => {
@@ -173,12 +172,20 @@ export default function SellerMessagesPage() {
   }, [threadParam, user]);
 
   // Memoize messages data to improve performance
-  const { sellerMessages, threads, unreadCounts, lastMessages, buyerProfiles } = useMemo(() => {
+  const { 
+    sellerMessages, 
+    threads, 
+    unreadCounts, 
+    lastMessages, 
+    buyerProfiles, 
+    totalUnreadCount 
+  } = useMemo(() => {
     let sellerMessages: Message[] = [];
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
     const lastMessages: { [buyer: string]: Message } = {};
     const buyerProfiles: { [buyer: string]: { pic: string | null, verified: boolean } } = {};
+    let totalUnreadCount = 0;
     
     if (user) {
       // Get all messages for the seller
@@ -216,34 +223,148 @@ export default function SellerMessagesPage() {
           verified: isVerified
         };
         
-        unreadCounts[buyer] = msgs.filter(
-          (msg) => !msg.read && msg.receiver === user?.username
+        // Always calculate the actual unread count first
+        // Only count messages FROM buyer TO seller as unread
+        const threadUnreadCount = msgs.filter(
+          (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
         ).length;
+        
+        // If thread is in readThreadsRef, consider it UI-read, but still track actual count
+        unreadCounts[buyer] = threadUnreadCount;
+        
+        // Only add to total if not in readThreadsRef
+        if (!readThreadsRef.current.has(buyer)) {
+          totalUnreadCount += threadUnreadCount;
+        }
       });
     }
     
-    return { sellerMessages, threads, unreadCounts, lastMessages, buyerProfiles };
-  }, [user, messages, users]);
+    return { sellerMessages, threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
+  }, [user, messages, users, messageUpdate]);
 
   // Memoize sellerRequests to avoid recalculation
   const sellerRequests = useMemo(() => {
     return user ? getRequestsForUser(user.username, 'seller') : [];
   }, [user, getRequestsForUser]);
 
-  // Mark messages as read when thread becomes active
-  useEffect(() => {
-    if (activeThread && user && !markedThreadsRef.current.has(activeThread)) {
-      // Only mark messages FROM buyer TO seller as read
-      markMessagesAsRead(activeThread, user.username);
-      markedThreadsRef.current.add(activeThread);
-      forceRerender((v) => v + 1);
+  // Process messages to handle custom requests correctly
+  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
+    const seen = new Set();
+    const result: any[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
+        if (!seen.has(msg.meta.id)) {
+          seen.add(msg.meta.id);
+          result.unshift(msg);
+        }
+      } else {
+        result.unshift(msg);
+      }
     }
-  }, [activeThread, user, markMessagesAsRead]);
+    return result;
+  }
 
-  // Auto-scroll to bottom when new messages arrive
+  // Get the messages for the active thread
+  const threadMessages = useMemo(() => {
+    return activeThread
+      ? getLatestCustomRequestMessages(threads[activeThread] || [], sellerRequests)
+      : [];
+  }, [activeThread, threads, sellerRequests]);
+
+  // Update UI when messages change
+  useEffect(() => {
+    // When messages change, update the UI to reflect message read status
+    setMessageUpdate(prev => prev + 1);
+  }, [messages]);
+  
+  // Reset the readThreadsRef when logging in/out
+  useEffect(() => {
+    // When user changes, reset the readThreadsRef
+    readThreadsRef.current = new Set();
+    setMessageUpdate(prev => prev + 1);
+  }, [user?.username]);
+  
+  // Calculate UI unread count indicators for the sidebar threads
+  const uiUnreadCounts = useMemo(() => {
+    const counts: { [buyer: string]: number } = {};
+    if (threads) {
+      Object.keys(threads).forEach(buyer => {
+        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
+        counts[buyer] = readThreadsRef.current.has(buyer) ? 0 : unreadCounts[buyer];
+      });
+    }
+    return counts;
+  }, [threads, unreadCounts, messageUpdate]);
+  
+  // Debug helper - log counts
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Total unread count:', totalUnreadCount);
+      console.log('UI unread counts:', uiUnreadCounts);
+      console.log('Read threads ref:', Array.from(readThreadsRef.current));
+    }
+  }, [totalUnreadCount, uiUnreadCounts]);
+  
+  // Save read threads to localStorage
+  useEffect(() => {
+    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
+      const readThreadsKey = `panty_read_threads_${user.username}`;
+      const threadsArray = Array.from(readThreadsRef.current);
+      localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
+      
+      // Dispatch a custom event to notify other components about the update
+      const event = new CustomEvent('readThreadsUpdated', { 
+        detail: { threads: threadsArray, username: user.username }
+      });
+      window.dispatchEvent(event);
+    }
+  }, [messageUpdate, user]);
+
+  // Set up UI tracking for active thread
+  useEffect(() => {
+    if (activeThread && user) {
+      // Create a custom event to notify other components (like Header) about thread selection
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('threadSelected', { 
+          detail: { thread: activeThread, username: user.username }
+        });
+        window.dispatchEvent(event);
+      }
+      
+      // Only add to readThreadsRef if not already there (prevent unnecessary updates)
+      if (!readThreadsRef.current.has(activeThread)) {
+        readThreadsRef.current.add(activeThread);
+        
+        // Save to localStorage immediately when thread is selected
+        if (user && typeof window !== 'undefined') {
+          const readThreadsKey = `panty_read_threads_${user.username}`;
+          localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+        }
+        
+        setMessageUpdate(prev => prev + 1); // Force UI update only once
+      }
+    }
+  }, [activeThread, user]);
+
+  // Handle clicks outside the emoji picker to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive or thread changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeThread, messages]);
+  }, [activeThread, threadMessages.length]);
 
   // Handle image file selection with validation and error handling
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,7 +444,7 @@ export default function SellerMessagesPage() {
       meta: selectedImage ? { imageUrl: selectedImage } : undefined, // Include image URL in meta
     });
 
-    addSellerNotification(user.username, `💌 You replied to buyer: ${activeThread}`);
+    // Don't add notification for seller's own message
     setReplyMessage('');
     setSelectedImage(null); // Clear selected image after sending
     if (fileInputRef.current) {
@@ -339,7 +460,7 @@ export default function SellerMessagesPage() {
         inputRef.current.focus();
       }
     }, 0);
-  }, [activeThread, user, replyMessage, selectedImage, sendMessage, addSellerNotification]);
+  }, [activeThread, user, replyMessage, selectedImage, sendMessage]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -363,8 +484,85 @@ export default function SellerMessagesPage() {
     }
   }, [user, activeThread, hasReported, reportUser]);
 
+  // Track which threads have been explicitly viewed and mark as read
+  const [viewedThreads, setViewedThreads] = useState<Set<string>>(new Set());
+
+  // Mark messages as read when explicitly viewed by user
+  const markAsRead = useCallback(() => {
+    if (!activeThread || !user) return;
+    
+    // Remember that this thread has been viewed
+    setViewedThreads(prev => {
+      const newSet = new Set(prev);
+      newSet.add(activeThread);
+      return newSet;
+    });
+    
+    const hasUnreadMessages = threads[activeThread]?.some(
+      msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+    );
+    
+    if (hasUnreadMessages) {
+      // Mark messages as read in the context
+      markMessagesAsRead(activeThread, user.username);
+      
+      // Make sure we update readThreadsRef for UI consistency
+      if (!readThreadsRef.current.has(activeThread)) {
+        readThreadsRef.current.add(activeThread);
+        
+        // Save to localStorage immediately when messages are read
+        if (typeof window !== 'undefined') {
+          const readThreadsKey = `panty_read_threads_${user.username}`;
+          localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+          
+          // Dispatch custom event to notify other components
+          const event = new CustomEvent('readThreadsUpdated', { 
+            detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+          });
+          window.dispatchEvent(event);
+        }
+        
+        setMessageUpdate(prev => prev + 1);
+      }
+    }
+  }, [activeThread, user, threads, markMessagesAsRead]);
+
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
+
+  // Handle thread selection without marking as read immediately
+  const handleThreadSelect = useCallback((buyerId: string) => {
+    if (activeThread === buyerId) return; // Prevent unnecessary state updates
+    
+    setActiveThread(buyerId);
+    
+    // Don't set messageUpdate here - it will be handled in the useEffect
+  }, [activeThread]);
+
+  // Filter and sort threads
+  const filteredAndSortedThreads = useMemo(() => {
+    // Filter threads by search query and unread status
+    const filteredThreads = Object.keys(threads).filter(buyer => {
+      const matchesSearch = searchQuery ? buyer.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      
+      if (!matchesSearch) return false;
+      
+      // For 'unread' filter, consider thread as unread if it has messages AND is not in readThreadsRef
+      if (filterBy === 'unread') {
+        const hasUnread = unreadCounts[buyer] > 0 && !readThreadsRef.current.has(buyer);
+        if (!hasUnread) return false;
+      }
+      
+      return true;
+    });
+    
+    // Sort threads by most recent message first
+    return filteredThreads.sort((a, b) => {
+      const dateA = new Date(lastMessages[a]?.date || 0).getTime();
+      const dateB = new Date(lastMessages[b]?.date || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [threads, lastMessages, unreadCounts, searchQuery, filterBy]);
 
   // Create a status badge component
   function statusBadge(status: string) {
@@ -441,7 +639,6 @@ export default function SellerMessagesPage() {
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
-    forceRerender((v) => v + 1);
   }, [
     user, 
     activeThread, 
@@ -456,62 +653,14 @@ export default function SellerMessagesPage() {
   const handleAccept = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
-      forceRerender((v) => v + 1);
     }
   }, [respondToRequest]);
   
   const handleDecline = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'rejected');
-      forceRerender((v) => v + 1);
     }
   }, [respondToRequest]);
-
-  // Process messages to handle custom requests correctly
-  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
-    const seen = new Set();
-    const result: any[] = [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
-        if (!seen.has(msg.meta.id)) {
-          seen.add(msg.meta.id);
-          result.unshift(msg);
-        }
-      } else {
-        result.unshift(msg);
-      }
-    }
-    return result;
-  }
-
-  // Filter and sort threads
-  const filteredAndSortedThreads = useMemo(() => {
-    // Filter threads by search query and unread status
-    const filteredThreads = Object.keys(threads).filter(buyer => {
-      const matchesSearch = searchQuery ? buyer.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-      
-      if (!matchesSearch) return false;
-      
-      if (filterBy === 'unread' && unreadCounts[buyer] === 0) return false;
-      
-      return true;
-    });
-    
-    // Sort threads by most recent message first
-    return filteredThreads.sort((a, b) => {
-      const dateA = new Date(lastMessages[a]?.date || 0).getTime();
-      const dateB = new Date(lastMessages[b]?.date || 0).getTime();
-      return dateB - dateA;
-    });
-  }, [threads, lastMessages, unreadCounts, searchQuery, filterBy]);
-
-  // Get the messages for the active thread
-  const threadMessages = useMemo(() => {
-    return activeThread
-      ? getLatestCustomRequestMessages(threads[activeThread] || [], sellerRequests)
-      : [];
-  }, [activeThread, threads, sellerRequests]);
 
   // Determine if the user is the last editor of a custom request
   function isLastEditor(customReq: any) {
@@ -603,6 +752,11 @@ export default function SellerMessagesPage() {
                 >
                   <BellRing size={14} className="mr-1" />
                   Unread
+                  {totalUnreadCount > 0 && (
+                    <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
+                      {totalUnreadCount}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -633,14 +787,13 @@ export default function SellerMessagesPage() {
                 filteredAndSortedThreads.map((buyer) => {
                   const thread = threads[buyer];
                   const lastMessage = lastMessages[buyer];
-                  const unreadCount = unreadCounts[buyer] || 0;
                   const isActive = activeThread === buyer;
                   const buyerProfile = buyerProfiles[buyer];
                   
                   return (
                     <div 
                       key={buyer}
-                      onClick={() => setActiveThread(buyer)}
+                      onClick={() => handleThreadSelect(buyer)}
                       className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
                         isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
                       } transition-colors duration-150 ease-in-out`}
@@ -667,10 +820,10 @@ export default function SellerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* Unread indicator */}
-                        {unreadCount > 0 && (
+                        {/* Unread indicator - only show when there are unread messages */}
+                        {uiUnreadCounts[buyer] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {unreadCount}
+                            {uiUnreadCounts[buyer]}
                           </div>
                         )}
                       </div>
@@ -754,8 +907,15 @@ export default function SellerMessagesPage() {
                   </div>
                 </div>
                 
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+                {/* Messages - This div now has onClick to mark messages as read */}
+                <div 
+                  className="flex-1 overflow-y-auto p-4 bg-[#121212]"
+                  onClick={() => {
+                    if (!viewedThreads.has(activeThread || '')) {
+                      markAsRead(); // Mark as read only when first interacting with messages
+                    }
+                  }}
+                >
                   <div className="max-w-3xl mx-auto space-y-4">
                     {threadMessages.map((msg, index) => {
                       const isFromMe = msg.sender === user?.username;
@@ -827,7 +987,10 @@ export default function SellerMessagesPage() {
                                   src={msg.meta.imageUrl} 
                                   alt="Shared image" 
                                   className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                                  onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent triggering the container's onClick
+                                    setPreviewImage(msg.meta?.imageUrl || null);
+                                  }}
                                 />
                                 {msg.content && (
                                   <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
@@ -872,21 +1035,30 @@ export default function SellerMessagesPage() {
                                 {showActionButtons && !isPaid && (
                                   <div className="flex flex-wrap gap-2 pt-2">
                                     <button
-                                      onClick={() => customReq && handleAccept(customReq)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleAccept(customReq);
+                                      }}
                                       className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
                                     >
                                       <CheckCircle2 size={12} className="mr-1" />
                                       Accept
                                     </button>
                                     <button
-                                      onClick={() => customReq && handleDecline(customReq)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleDecline(customReq);
+                                      }}
                                       className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
                                     >
                                       <XCircle size={12} className="mr-1" />
                                       Decline
                                     </button>
                                     <button
-                                      onClick={() => customReq && handleEditRequest(customReq)}
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleEditRequest(customReq);
+                                      }}
                                       className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
                                     >
                                       <Edit3 size={12} className="mr-1" />
@@ -902,6 +1074,7 @@ export default function SellerMessagesPage() {
                                       value={editTitle}
                                       onChange={e => setEditTitle(e.target.value)}
                                       className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
                                     />
                                     <input
                                       type="number"
@@ -914,6 +1087,7 @@ export default function SellerMessagesPage() {
                                       min="0.01"
                                       step="0.01"
                                       className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
                                     />
                                     <input
                                       type="text"
@@ -921,23 +1095,31 @@ export default function SellerMessagesPage() {
                                       value={editTags}
                                       onChange={e => setEditTags(e.target.value)}
                                       className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
                                     />
                                     <textarea
                                       placeholder="Message"
                                       value={editMessage}
                                       onChange={e => setEditMessage(e.target.value)}
                                       className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
                                     />
                                     <div className="flex gap-2">
                                       <button
-                                        onClick={handleEditSubmit}
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Prevent triggering the container's onClick
+                                          handleEditSubmit();
+                                        }}
                                         className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
                                       >
                                         <Edit3 size={12} className="mr-1" />
                                         Submit Edit
                                       </button>
                                       <button
-                                        onClick={() => setEditRequestId(null)}
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Prevent triggering the container's onClick
+                                          setEditRequestId(null);
+                                        }}
                                         className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
                                       >
                                         <X size={12} className="mr-1" />
@@ -1052,11 +1234,19 @@ export default function SellerMessagesPage() {
                           className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
                           rows={1}
                           maxLength={250}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering message container's onClick for marking as read
+                            markAsRead(); // But still mark messages as read when focusing the input
+                          }}
                         />
                         
                         {/* Fixed emoji button position */}
                         <button
-                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            setShowEmojiPicker(!showEmojiPicker);
+                            markAsRead(); // Mark messages as read when interacting with emoji button
+                          }}
                           className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
                             showEmojiPicker 
                               ? 'bg-[#ff950e] text-black' 
@@ -1080,7 +1270,11 @@ export default function SellerMessagesPage() {
                       <div className="flex justify-between items-center">
                         {/* Attachment button - Left aligned with vertical adjustment */}
                         <button
-                          onClick={triggerFileInput}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            triggerFileInput();
+                            markAsRead(); // Mark messages as read when interacting with attachment button
+                          }}
                           disabled={isImageLoading}
                           className={`flex items-center justify-center h-10 w-10 rounded-full mt-[-6px] ${
                             isImageLoading 
@@ -1103,7 +1297,11 @@ export default function SellerMessagesPage() {
                         
                         {/* Send Button - Right aligned */}
                         <button
-                          onClick={handleReply}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            handleReply();
+                            markAsRead(); // Mark messages as read when sending a message
+                          }}
                           disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
                           className={`flex items-center justify-center px-5 py-2 rounded-full ${
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
@@ -1124,7 +1322,10 @@ export default function SellerMessagesPage() {
                     <ShieldAlert size={16} className="mr-2" />
                     You have blocked this buyer
                     <button 
-                      onClick={handleBlockToggle}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBlockToggle();
+                      }}
                       className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
                     >
                       Unblock
