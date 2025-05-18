@@ -18,7 +18,9 @@ import {
   AlertTriangle, 
   Copy, 
   Check,
-  FileText
+  FileText,
+  ShieldAlert,
+  Box
 } from 'lucide-react';
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 
@@ -115,7 +117,7 @@ export default function OrdersToFulfilPage() {
           </div>
           <button 
             onClick={() => handleCopyAddress(address)}
-            className="text-blue-600 hover:text-blue-800 text-xs flex items-center p-1"
+            className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium flex items-center p-2 rounded-md transition-colors"
           >
             {copiedText === 'address' ? (
               <Check className="w-4 h-4 mr-1" />
@@ -125,16 +127,16 @@ export default function OrdersToFulfilPage() {
             {copiedText === 'address' ? 'Copied!' : 'Copy'}
           </button>
         </div>
-        <div className="p-4 bg-white text-sm">
-          <div className="font-semibold">{address.fullName}</div>
-          <div>{address.addressLine1}</div>
-          {address.addressLine2 && <div>{address.addressLine2}</div>}
-          <div>{address.city}, {address.state} {address.postalCode}</div>
-          <div>{address.country}</div>
+        <div className="p-4 bg-white">
+          <div className="font-semibold text-base text-gray-900">{address.fullName}</div>
+          <div className="text-gray-900 text-base">{address.addressLine1}</div>
+          {address.addressLine2 && <div className="text-gray-900 text-base">{address.addressLine2}</div>}
+          <div className="text-gray-900 text-base">{address.city}, {address.state} {address.postalCode}</div>
+          <div className="text-gray-900 text-base">{address.country}</div>
           {address.specialInstructions && (
-            <div className="mt-2 pt-2 border-t border-gray-100">
-              <div className="text-xs text-gray-500 font-medium">Special Instructions:</div>
-              <p className="text-gray-700 mt-1">{address.specialInstructions}</p>
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="text-sm text-gray-700 font-medium">Special Instructions:</div>
+              <p className="text-gray-900 mt-1">{address.specialInstructions}</p>
             </div>
           )}
         </div>
@@ -148,37 +150,37 @@ export default function OrdersToFulfilPage() {
     return (
       <div className="mt-4 border-t border-gray-200 pt-4">
         <div className="flex justify-between items-center">
-          <h4 className="font-medium text-gray-700 text-sm flex items-center">
+          <h4 className="font-medium text-gray-800 text-base flex items-center">
             <Truck className="w-4 h-4 mr-1.5 text-gray-600" />
             Shipping Status
           </h4>
           <div className="flex space-x-2">
             <button
               onClick={() => handleStatusChange(order.id, 'pending')}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-4 py-2 rounded text-sm font-medium ${
                 order.shippingStatus === 'pending' || !order.shippingStatus
-                  ? 'bg-yellow-100 text-yellow-800 font-semibold'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               Pending
             </button>
             <button
               onClick={() => handleStatusChange(order.id, 'processing')}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-4 py-2 rounded text-sm font-medium ${
                 order.shippingStatus === 'processing'
-                  ? 'bg-blue-100 text-blue-800 font-semibold'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               Processing
             </button>
             <button
               onClick={() => handleStatusChange(order.id, 'shipped')}
-              className={`px-2 py-1 rounded text-xs ${
+              className={`px-4 py-2 rounded text-sm font-medium ${
                 order.shippingStatus === 'shipped'
-                  ? 'bg-green-100 text-green-800 font-semibold'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               Shipped
@@ -207,21 +209,24 @@ export default function OrdersToFulfilPage() {
 
   return (
     <RequireAuth role="seller">
-      <main className="p-10 max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">📦 Orders to Fulfil</h1>
+      <main className="p-4 md:p-10 max-w-5xl mx-auto">
+        <h1 className="text-2xl md:text-3xl font-bold mb-8 text-white flex items-center">
+          <Box className="w-7 h-7 mr-3 text-orange-400" /> 
+          Orders to Fulfil
+        </h1>
 
         {/* Auction Sales */}
         {auctionOrders.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <Gavel className="w-5 h-5 mr-2 text-purple-600" />
+          <section className="mb-8 md:mb-10">
+            <h2 className="text-lg md:text-xl font-semibold mb-4 flex items-center text-white">
+              <Gavel className="w-5 h-5 mr-2 text-purple-400" />
               Auction Sales
             </h2>
             <ul className="space-y-4">
               {auctionOrders.map((order) => (
                 <li
                   key={order.id + order.date}
-                  className="border rounded-lg bg-gradient-to-r from-purple-50 to-white flex flex-col border-purple-200 overflow-hidden"
+                  className="border rounded-lg bg-gradient-to-r from-purple-50 to-white flex flex-col border-purple-200 overflow-hidden shadow-sm"
                 >
                   {/* Order Header (always visible) */}
                   <div 
@@ -231,33 +236,33 @@ export default function OrdersToFulfilPage() {
                     <img
                       src={order.imageUrl}
                       alt={order.title}
-                      className="w-20 h-20 object-cover rounded"
+                      className="w-20 h-20 object-cover rounded-md border border-gray-200"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{order.title}</h3>
-                        <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
+                        <h3 className="font-semibold text-base md:text-lg text-gray-900">{order.title}</h3>
+                        <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full border border-purple-200">
                           Auction
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600">Buyer: {order.buyer}</p>
-                      <p className="text-sm text-gray-600">Won on: {new Date(order.date).toLocaleDateString()}</p>
-                      <div className="flex flex-wrap mt-1 gap-x-4">
-                        <p className="text-purple-700 font-bold">
-                          Winning bid: ${order.finalBid?.toFixed(2) || order.price.toFixed(2)}
+                      <p className="text-sm md:text-base text-gray-700">Buyer: <span className="font-medium">{order.buyer}</span></p>
+                      <p className="text-sm md:text-base text-gray-700">Won on: <span className="font-medium">{new Date(order.date).toLocaleDateString()}</span></p>
+                      <div className="flex flex-wrap mt-2 gap-x-6">
+                        <p className="text-purple-700 font-bold text-sm md:text-base">
+                          Winning bid: <span className="text-lg">${order.finalBid?.toFixed(2) || order.price.toFixed(2)}</span>
                         </p>
-                        <p className="text-pink-700 font-bold">
-                          Total paid: ${order.markedUpPrice?.toFixed(2) || (order.price * 1.1).toFixed(2)}
+                        <p className="text-pink-700 font-bold text-sm md:text-base">
+                          Total paid: <span className="text-lg">${order.markedUpPrice?.toFixed(2) || (order.price * 1.1).toFixed(2)}</span>
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className={`inline-block px-3 py-1 rounded text-xs font-semibold mb-2 ${
+                      <span className={`inline-block px-4 py-2 rounded-md text-sm font-semibold mb-2 ${
                         order.shippingStatus === 'shipped' 
-                          ? 'bg-green-100 text-green-700' 
+                          ? 'bg-green-500 text-white' 
                           : order.shippingStatus === 'processing'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-yellow-100 text-yellow-700'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-yellow-500 text-white'
                       }`}>
                         {order.shippingStatus === 'shipped' 
                           ? 'Shipped' 
@@ -266,18 +271,18 @@ export default function OrdersToFulfilPage() {
                             : 'Pending Fulfillment'}
                       </span>
                       {order.deliveryAddress ? (
-                        <span className="text-xs text-green-600 flex items-center">
+                        <span className="text-sm text-green-600 flex items-center bg-green-50 px-2 py-1 rounded-md">
                           <MapPin className="w-3 h-3 mr-1" />
                           Address provided
                         </span>
                       ) : (
-                        <span className="text-xs text-yellow-600 flex items-center">
+                        <span className="text-sm text-yellow-600 flex items-center bg-yellow-50 px-2 py-1 rounded-md">
                           <AlertTriangle className="w-3 h-3 mr-1" />
                           No address yet
                         </span>
                       )}
                       <button
-                        className="text-purple-600 hover:text-purple-800 mt-2 text-sm flex items-center"
+                        className="text-purple-600 hover:text-purple-800 mt-3 text-sm font-medium flex items-center bg-purple-50 px-3 py-1 rounded-md hover:bg-purple-100 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleExpand(order.id);
@@ -306,14 +311,26 @@ export default function OrdersToFulfilPage() {
 
                       {order.deliveryAddress && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
-                          <h4 className="font-medium text-gray-700 text-sm flex items-center mb-2">
+                          <h4 className="font-medium text-gray-800 text-base flex items-center mb-2">
                             <FileText className="w-4 h-4 mr-1.5 text-gray-600" />
                             Shipping Label
                           </h4>
-                          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-xs whitespace-pre-line">
+                          
+                          {/* Warning about return address */}
+                          <div className="bg-red-50 border-2 border-red-500 rounded-lg p-3 mb-3 flex items-start">
+                            <ShieldAlert className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-red-700 font-bold text-sm uppercase tracking-wide">DO NOT WRITE A RETURN ADDRESS ON THE SHIPPING LABEL</p>
+                              <p className="text-red-600 text-sm mt-1">
+                                For your privacy and safety, never include your personal address on any package.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 font-mono text-base text-gray-900 whitespace-pre-line">
                             {getShippingLabel(order)}
                           </div>
-                          <p className="text-xs text-gray-500 mt-2">
+                          <p className="text-sm text-gray-700 mt-2">
                             This is the exact text you should write on the shipping label.
                           </p>
                         </div>
@@ -327,19 +344,19 @@ export default function OrdersToFulfilPage() {
         )}
 
         {/* Direct Sales */}
-        <section className="mb-10">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <ShoppingBag className="w-5 h-5 mr-2 text-pink-600" />
+        <section className="mb-8 md:mb-10">
+          <h2 className="text-lg md:text-xl font-semibold mb-4 flex items-center text-white">
+            <ShoppingBag className="w-5 h-5 mr-2 text-pink-400" />
             Direct Sales
           </h2>
           {orders.length === 0 ? (
-            <p className="text-gray-500 italic">No direct sales to fulfill yet.</p>
+            <p className="text-gray-300 italic text-base">No direct sales to fulfill yet.</p>
           ) : (
             <ul className="space-y-4">
               {orders.map((order) => (
                 <li
                   key={order.id + order.date}
-                  className="border rounded-lg bg-white flex flex-col overflow-hidden"
+                  className="border rounded-lg bg-white flex flex-col overflow-hidden shadow-sm"
                 >
                   {/* Order Header (always visible) */}
                   <div 
@@ -349,21 +366,21 @@ export default function OrdersToFulfilPage() {
                     <img
                       src={order.imageUrl}
                       alt={order.title}
-                      className="w-20 h-20 object-cover rounded"
+                      className="w-20 h-20 object-cover rounded-md border border-gray-200"
                     />
                     <div className="flex-1">
-                      <h3 className="font-semibold">{order.title}</h3>
-                      <p className="text-sm text-gray-600">Buyer: {order.buyer}</p>
-                      <p className="text-sm text-gray-600">Sold on: {new Date(order.date).toLocaleDateString()}</p>
-                      <p className="text-pink-700 font-bold mt-1">${order.markedUpPrice?.toFixed(2) ?? order.price.toFixed(2)}</p>
+                      <h3 className="font-semibold text-base md:text-lg text-gray-900">{order.title}</h3>
+                      <p className="text-sm md:text-base text-gray-700">Buyer: <span className="font-medium">{order.buyer}</span></p>
+                      <p className="text-sm md:text-base text-gray-700">Sold on: <span className="font-medium">{new Date(order.date).toLocaleDateString()}</span></p>
+                      <p className="text-pink-700 font-bold mt-2 text-base md:text-lg">${order.markedUpPrice?.toFixed(2) ?? order.price.toFixed(2)}</p>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className={`inline-block px-3 py-1 rounded text-xs font-semibold mb-2 ${
+                      <span className={`inline-block px-4 py-2 rounded-md text-sm font-semibold mb-2 ${
                         order.shippingStatus === 'shipped' 
-                          ? 'bg-green-100 text-green-700' 
+                          ? 'bg-green-500 text-white' 
                           : order.shippingStatus === 'processing'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-yellow-100 text-yellow-700'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-yellow-500 text-white'
                       }`}>
                         {order.shippingStatus === 'shipped' 
                           ? 'Shipped' 
@@ -372,18 +389,18 @@ export default function OrdersToFulfilPage() {
                             : 'Pending Fulfillment'}
                       </span>
                       {order.deliveryAddress ? (
-                        <span className="text-xs text-green-600 flex items-center">
+                        <span className="text-sm text-green-600 flex items-center bg-green-50 px-2 py-1 rounded-md">
                           <MapPin className="w-3 h-3 mr-1" />
                           Address provided
                         </span>
                       ) : (
-                        <span className="text-xs text-yellow-600 flex items-center">
+                        <span className="text-sm text-yellow-600 flex items-center bg-yellow-50 px-2 py-1 rounded-md">
                           <AlertTriangle className="w-3 h-3 mr-1" />
                           No address yet
                         </span>
                       )}
                       <button
-                        className="text-blue-600 hover:text-blue-800 mt-2 text-sm flex items-center"
+                        className="text-blue-600 hover:text-blue-800 mt-3 text-sm font-medium flex items-center bg-blue-50 px-3 py-1 rounded-md hover:bg-blue-100 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleExpand(order.id);
@@ -412,14 +429,26 @@ export default function OrdersToFulfilPage() {
 
                       {order.deliveryAddress && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
-                          <h4 className="font-medium text-gray-700 text-sm flex items-center mb-2">
+                          <h4 className="font-medium text-gray-800 text-base flex items-center mb-2">
                             <FileText className="w-4 h-4 mr-1.5 text-gray-600" />
                             Shipping Label
                           </h4>
-                          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-xs whitespace-pre-line">
+                          
+                          {/* Warning about return address */}
+                          <div className="bg-red-50 border-2 border-red-500 rounded-lg p-3 mb-3 flex items-start">
+                            <ShieldAlert className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-red-700 font-bold text-sm uppercase tracking-wide">DO NOT WRITE A RETURN ADDRESS ON THE SHIPPING LABEL</p>
+                              <p className="text-red-600 text-sm mt-1">
+                                For your privacy and safety, never include your personal address on any package.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 font-mono text-base text-gray-900 whitespace-pre-line">
                             {getShippingLabel(order)}
                           </div>
-                          <p className="text-xs text-gray-500 mt-2">
+                          <p className="text-sm text-gray-700 mt-2">
                             This is the exact text you should write on the shipping label.
                           </p>
                         </div>
@@ -434,36 +463,36 @@ export default function OrdersToFulfilPage() {
 
         {/* Accepted Custom Orders */}
         <section>
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <PenLine className="w-5 h-5 mr-2 text-blue-600" />
+          <h2 className="text-lg md:text-xl font-semibold mb-4 flex items-center text-white">
+            <PenLine className="w-5 h-5 mr-2 text-blue-400" />
             Accepted Custom Orders
           </h2>
           {customOrders.length === 0 ? (
-            <p className="text-gray-500 italic">No accepted custom requests to fulfill yet.</p>
+            <p className="text-gray-300 italic text-base">No accepted custom requests to fulfill yet.</p>
           ) : (
             <ul className="space-y-4">
               {customOrders.map((req) => (
                 <li
                   key={req.id}
-                  className="border rounded-lg p-4 bg-white"
+                  className="border rounded-lg p-5 bg-white shadow-sm"
                 >
                   <div className="flex-1">
-                    <h3 className="font-semibold">{req.title}</h3>
-                    <p className="text-sm text-gray-600">Buyer: {req.buyer}</p>
-                    <p className="text-sm text-gray-600">Requested: {new Date(req.date).toLocaleDateString()}</p>
-                    <p className="text-pink-700 font-bold mt-1">${req.price.toFixed(2)}</p>
+                    <h3 className="font-semibold text-base md:text-lg text-gray-900">{req.title}</h3>
+                    <p className="text-sm md:text-base text-gray-700">Buyer: <span className="font-medium">{req.buyer}</span></p>
+                    <p className="text-sm md:text-base text-gray-700">Requested: <span className="font-medium">{new Date(req.date).toLocaleDateString()}</span></p>
+                    <p className="text-pink-700 font-bold mt-2 text-base md:text-lg">${req.price.toFixed(2)}</p>
                     {req.tags && req.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
+                      <div className="flex flex-wrap gap-1 mt-3">
                         {req.tags.map((tag: string, idx: number) => (
-                          <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded">
+                          <span key={idx} className="bg-gray-200 text-gray-700 text-sm px-2 py-0.5 rounded border border-gray-300">
                             {tag}
                           </span>
                         ))}
                       </div>
                     )}
-                    <p className="text-gray-700 mt-2">{req.description}</p>
-                    <p className="text-xs text-yellow-600 mt-2 flex items-center">
-                      <Package className="w-3 h-3 mr-1" />
+                    <p className="text-gray-900 mt-3 text-base">{req.description}</p>
+                    <p className="text-sm bg-yellow-50 text-yellow-700 mt-3 flex items-center p-2 rounded-md border border-yellow-200">
+                      <Package className="w-4 h-4 mr-1.5" />
                       <span className="font-semibold">Payment received. Customer waiting for fulfillment.</span>
                     </p>
                   </div>
