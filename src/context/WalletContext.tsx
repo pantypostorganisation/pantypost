@@ -7,6 +7,7 @@ import {
   useEffect,
   ReactNode,
 } from "react";
+import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 
 type Order = {
   id: string;
@@ -22,6 +23,8 @@ type Order = {
   wearTime?: string; // Note: This seems to correspond to 'hoursWorn' in Listing type
   wasAuction?: boolean; // Flag to indicate if this was an auction purchase
   finalBid?: number; // The final winning bid amount for auctions
+  deliveryAddress?: DeliveryAddress; // Add this field
+  shippingStatus?: 'pending' | 'processing' | 'shipped'; // Add shipping status
 };
 
 type Listing = {
@@ -78,6 +81,9 @@ type WalletContextType = {
   adminCreditUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
   adminDebitUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
   adminActions: AdminAction[];
+  // New functions for delivery address and shipping status
+  updateOrderAddress: (orderId: string, address: DeliveryAddress) => void;
+  updateShippingStatus: (orderId: string, status: 'pending' | 'processing' | 'shipped') => void;
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -178,6 +184,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const addOrder = (order: Order) => {
     setOrderHistory((prev) => [...prev, order]);
+  };
+
+  // New function to update the delivery address for an order
+  const updateOrderAddress = (orderId: string, address: DeliveryAddress) => {
+    setOrderHistory((prev) => {
+      const updatedOrders = prev.map((order) => 
+        order.id === orderId ? { ...order, deliveryAddress: address } : order
+      );
+      localStorage.setItem("wallet_orders", JSON.stringify(updatedOrders));
+      return updatedOrders;
+    });
+  };
+
+  // New function to update shipping status
+  const updateShippingStatus = (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+    setOrderHistory((prev) => {
+      const updatedOrders = prev.map((order) => 
+        order.id === orderId ? { ...order, shippingStatus: status } : order
+      );
+      localStorage.setItem("wallet_orders", JSON.stringify(updatedOrders));
+      return updatedOrders;
+    });
   };
 
   // New admin functions
@@ -303,6 +331,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         buyer: buyerUsername,
         date: new Date().toISOString(),
         imageUrl: listing.imageUrls?.[0] || undefined,
+        shippingStatus: 'pending', // Default shipping status
       } as Order;
 
       addOrder(order);
@@ -497,10 +526,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         updateWallet,
         sendTip,
         setAddSellerNotificationCallback,
-        // Add new admin functions
+        // Admin functions
         adminCreditUser,
         adminDebitUser,
-        adminActions
+        adminActions,
+        // New delivery and shipping functions
+        updateOrderAddress,
+        updateShippingStatus
       }}
     >
       {children}

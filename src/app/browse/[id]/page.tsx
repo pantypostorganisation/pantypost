@@ -11,9 +11,10 @@ import {
   Clock, User, ArrowRight, BadgeCheck, AlertTriangle, Crown, MessageCircle,
   DollarSign, ShoppingBag, Lock, ChevronLeft, ChevronRight, Gavel, Calendar,
   BarChart2, ArrowUp, History, AlertCircle, CheckCircle, X, Info, Award,
-  ExternalLink, ShoppingCart
+  ExternalLink, ShoppingCart, MapPin
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
 
 // Add custom hook for interval with proper TypeScript typing
 function useInterval(callback: () => void, delay: number | null): void {
@@ -43,7 +44,7 @@ export default function ListingDetailPage() {
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id as string;
   const listing = listings.find((item) => item.id === listingId);
-  const { purchaseListing, getBuyerBalance } = useWallet();
+  const { purchaseListing, getBuyerBalance, updateOrderAddress } = useWallet();
   const { sendMessage, getMessagesForSeller, markMessagesAsRead } = useMessages();
   const { addRequest } = useRequests();
   const router = useRouter();
@@ -59,6 +60,8 @@ export default function ListingDetailPage() {
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [forceUpdateTimer, setForceUpdateTimer] = useState<Record<string, unknown>>({});
   const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
 
   // Enhanced bid validation and submission with debouncing
   const [isBidding, setIsBidding] = useState(false);
@@ -67,6 +70,7 @@ export default function ListingDetailPage() {
   const bidButtonRef = useRef<HTMLButtonElement>(null);
   const bidInputRef = useRef<HTMLInputElement>(null);
   const lastBidTime = useRef<number>(0);
+  const purchasedOrderId = useRef<string | null>(null);
 
   const currentUsername = user?.username || '';
   const hasMarkedRef = useRef(false);
@@ -94,6 +98,15 @@ export default function ListingDetailPage() {
     return listing.auction.highestBidder === user.username;
   }, [isAuctionListing, listing?.auction?.highestBidder, user?.username]);
 
+  // Handle address confirmation
+  const handleAddressConfirm = (address: DeliveryAddress) => {
+    setDeliveryAddress(address);
+    if (purchasedOrderId.current) {
+      updateOrderAddress(purchasedOrderId.current, address);
+    }
+    setAddressModalOpen(false);
+  };
+  
   // Calculate total payable amount (bid + 10% markup) for display purposes
   const calculateTotalPayable = (bidPrice: number): number => {
     return Math.round(bidPrice * 1.1 * 100) / 100;
@@ -370,9 +383,16 @@ export default function ListingDetailPage() {
     const success = purchaseListing(listing, user.username);
     
     if (success) {
+      // Find the order ID that was just created
+      const newOrderId = `${listing.id}-${new Date().toISOString()}`;
+      purchasedOrderId.current = newOrderId;
+      
       removeListing(listing.id);
       addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
       setPurchaseStatus('Purchase successful! 🎉');
+      
+      // Show the address modal after successful purchase
+      setAddressModalOpen(true);
       setShowPurchaseSuccess(true);
     } else {
       setPurchaseStatus('Insufficient balance. Please top up your wallet.');
@@ -616,6 +636,16 @@ export default function ListingDetailPage() {
                     <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
                   </p>
                 </div>
+                
+                {/* Add address button if no address is set yet */}
+                {!deliveryAddress && (
+                  <button
+                    onClick={() => setAddressModalOpen(true)}
+                    className="w-full bg-yellow-600 text-white px-4 py-3 rounded-lg mb-4 hover:bg-yellow-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
+                  >
+                    <MapPin className="w-5 h-5" /> Add Delivery Address
+                  </button>
+                )}
               </div>
             </div>
             
@@ -671,6 +701,21 @@ export default function ListingDetailPage() {
                   <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
                 </p>
               </div>
+              
+              {/* Show delivery address confirmation if not set yet */}
+              {!deliveryAddress && (
+                <div className="mb-4">
+                  <p className="text-yellow-400 text-sm mb-2 flex items-center justify-center gap-1">
+                    <AlertTriangle className="w-4 h-4" /> Please confirm your delivery address
+                  </p>
+                  <button
+                    onClick={() => setAddressModalOpen(true)}
+                    className="w-full bg-yellow-600 text-white px-4 py-3 rounded-lg hover:bg-yellow-500 font-bold transition flex items-center justify-center gap-2"
+                  >
+                    <MapPin className="w-5 h-5" /> Add Delivery Address
+                  </button>
+                </div>
+              )}
               
               <p className="text-sm text-green-400">
                 The seller has been notified and will contact you soon.
@@ -1323,6 +1368,15 @@ export default function ListingDetailPage() {
         
         {/* Render Purchase Success Screen */}
         {renderPurchaseSuccessScreen()}
+
+        {/* Address Confirmation Modal */}
+        <AddressConfirmationModal
+          isOpen={addressModalOpen}
+          onClose={() => setAddressModalOpen(false)}
+          onConfirm={handleAddressConfirm}
+          existingAddress={deliveryAddress}
+          orderId={purchasedOrderId.current || ''}
+        />
 
         {/* Sticky Buy Now for mobile - only for standard listings */}
         {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (

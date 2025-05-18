@@ -1,3 +1,5 @@
+// Modified src/app/browse/page.tsx
+
 'use client';
 
 import Link from 'next/link';
@@ -9,7 +11,7 @@ import { Listing, AuctionSettings } from '@/context/ListingContext';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck,
-  Gavel, ArrowUp, Calendar, BarChart2, User, AlertTriangle
+  Gavel, ArrowUp, Calendar, BarChart2, User, AlertTriangle, ExternalLink, Eye
 } from 'lucide-react';
 
 type SellerProfile = {
@@ -45,6 +47,7 @@ export default function BrowsePage() {
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc'>('newest');
   const [page, setPage] = useState(0);
+  const [hoveredListing, setHoveredListing] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -62,37 +65,6 @@ export default function BrowsePage() {
   useEffect(() => {
     setPage(0);
   }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
-
-  const handlePurchase = useCallback((listing: Listing, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!user || !listing.seller) return;
-    
-    // Check for premium access
-    if (listing.isPremium && !isSubscribed(user.username, listing.seller)) {
-      alert('You must be subscribed to this seller to purchase their premium listings.');
-      return;
-    }
-    
-    // Check for auction listings
-    if (isAuctionListing(listing)) {
-      router.push(`/browse/${listing.id}`);
-      return;
-    }
-    
-    try {
-      const success = purchaseListing(listing, user.username);
-      if (success) {
-        removeListing(listing.id);
-        addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-        alert('Purchase successful! 🎉');
-      } else {
-        alert('Insufficient balance. Please top up your wallet.');
-      }
-    } catch (error) {
-      console.error('Purchase error:', error);
-      alert('An error occurred during the purchase. Please try again.');
-    }
-  }, [user, isSubscribed, router, purchaseListing, removeListing, addSellerNotification]);
 
   // Helper function to format time remaining for auction with memoization to improve performance
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -451,20 +423,21 @@ export default function BrowsePage() {
                     priceLabel = 'Price';
                   }
 
-                  // Card is a div with onClick, not a Link
                   return (
                     <div
                       key={listing.id}
-                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border ${hasAuction ? 'border-purple-800' : 'border-gray-800'} rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden ${hasAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'} min-h-[480px] cursor-pointer`}
+                      className={`relative flex flex-col bg-gradient-to-br from-[#181818] via-black to-[#181818] border ${hasAuction ? 'border-purple-800' : 'border-gray-800'} rounded-3xl shadow-2xl hover:shadow-[0_8px_32px_0_rgba(255,149,14,0.25)] transition-all duration-300 overflow-hidden ${hasAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'} min-h-[480px] cursor-pointer group`}
                       style={{
                         boxShadow: hasAuction 
                           ? '0 4px 32px 0 #000a, 0 2px 8px 0 rgba(168, 85, 247, 0.2)' 
                           : '0 4px 32px 0 #000a, 0 2px 8px 0 #ff950e22',
                       }}
-                      tabIndex={0}
+                      onMouseEnter={() => setHoveredListing(listing.id)}
+                      onMouseLeave={() => setHoveredListing(null)}
                       onClick={() => {
                         if (!isLockedPremium) router.push(`/browse/${listing.id}`);
                       }}
+                      tabIndex={0}
                     >
                       {hasAuction && (
                         <div className="absolute top-4 right-4 z-10">
@@ -515,6 +488,23 @@ export default function BrowsePage() {
                                 <Clock className="w-3.5 h-3.5 text-purple-400" />
                                 {formatTimeRemaining(listing.auction.endTime)}
                               </span>
+                            </div>
+                          )}
+                          
+                          {/* View button - only shows on hover */}
+                          {hoveredListing === listing.id && !isLockedPremium && (
+                            <div 
+                              className="absolute bottom-3 right-3 z-20 transition-opacity duration-200 opacity-100"
+                            >
+                              <button 
+                                className="bg-[#ff950e] text-black text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg hover:bg-[#e88a0d] transition-all"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/browse/${listing.id}`);
+                                }}
+                              >
+                                <Eye className="w-3.5 h-3.5" /> View
+                              </button>
                             </div>
                           )}
                         </div>
@@ -642,32 +632,7 @@ export default function BrowsePage() {
                             >
                               <Lock className="w-5 h-5 mr-1" /> Subscribe to Buy
                             </Link>
-                          ) : hasAuction ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/browse/${listing.id}`);
-                              }}
-                              className="mt-6 w-full bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-500 font-bold transition text-lg shadow focus:scale-105 active:scale-95"
-                              style={{
-                                boxShadow: '0 2px 12px 0 rgba(168, 85, 247, 0.4)',
-                                transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
-                              }}
-                            >
-                              Place Bid
-                            </button>
-                          ) : (
-                            <button
-                              onClick={e => handlePurchase(listing, e)}
-                              className="mt-6 w-full bg-[#ff950e] text-black px-4 py-3 rounded-lg hover:bg-[#e0850d] font-bold transition text-lg shadow focus:scale-105 active:scale-95"
-                              style={{
-                                boxShadow: '0 2px 12px 0 #ff950e44',
-                                transition: 'all 0.15s cubic-bezier(.4,2,.6,1)'
-                              }}
-                            >
-                              Buy Now
-                            </button>
-                          )
+                          ) : null
                         ) : user?.role === 'seller' ? (
                           <div className="mt-6 text-center text-sm text-gray-500">
                             Sellers cannot purchase listings
