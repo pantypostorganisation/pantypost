@@ -16,13 +16,9 @@ import {
   CheckCheck, 
   ArrowRightCircle,
   MessageCircle,
-  Paperclip, 
   X, 
   BadgeCheck, 
   Smile, 
-  User, 
-  Image, 
-  Heart, 
   AlertTriangle, 
   ShieldAlert, 
   Clock, 
@@ -31,10 +27,8 @@ import {
   Edit3, 
   Sparkles, 
   ShoppingBag, 
-  Package, 
   Filter, 
-  BellRing,
-  DollarSign
+  BellRing
 } from 'lucide-react';
 
 // Constants
@@ -1166,7 +1160,7 @@ export default function BuyerMessagesPage() {
                             {msg.type === 'customRequest' && msg.meta && (
                               <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
                                 <p className="font-semibold flex items-center">
-                                  <Package size={16} className="mr-1" />
+                                  <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-4 h-4 mr-1" />
                                   Custom Request
                                 </p>
                                 <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
@@ -1414,7 +1408,7 @@ export default function BuyerMessagesPage() {
                       <div className="space-y-2 mb-3 p-3 mx-4 bg-[#222] rounded-lg border border-gray-700">
                         <div className="flex justify-between items-center mb-2">
                           <h3 className="font-medium text-white flex items-center">
-                            <Package size={16} className="mr-2 text-[#ff950e]" />
+                            <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-5 h-5 mr-2" />
                             Custom Request
                           </h3>
                           <button 
@@ -1499,62 +1493,57 @@ export default function BuyerMessagesPage() {
                         </div>
                       )}
                       
-                      {/* Bottom row with action buttons - FIXED LARGER SIZES */}
+                      {/* Bottom row with action buttons - COMPLETELY REPLACED WITH CUSTOM ICONS */}
                       <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                          {/* Tip button - INCREASED SIZE */}
-                          <button
+                        <div className="flex items-center gap-0">
+                          {/* Tip button */}
+                          <img 
+                            src="/Send_Tip_Icon.png" 
+                            alt="Send Tip" 
+                            className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity" 
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowTipModal(true);
                               markAsRead();
                             }}
-                            className="w-16 h-16 flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold transition-colors duration-150 shadow-md"
                             title="Send Tip"
-                            aria-label="Send Tip"
-                          >
-                            <DollarSign size={32} />
-                          </button>
+                          />
                           
-                          {/* Attachment button - INCREASED SIZE */}
-                          <button
+                          {/* Attachment button */}
+                          <img 
+                            src="/Attach_Image_Icon.png" 
+                            alt="Attach Image" 
+                            className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
+                              showCustomRequestForm || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                             onClick={(e) => {
+                              if (showCustomRequestForm || isImageLoading) return;
                               e.stopPropagation();
                               triggerFileInput();
                               markAsRead();
                             }}
-                            disabled={showCustomRequestForm || isImageLoading}
-                            className={`w-16 h-16 flex items-center justify-center rounded-full text-black text-2xl transition-colors duration-150 shadow-md ${
-                              showCustomRequestForm || isImageLoading
-                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                : 'bg-[#ff950e] hover:bg-[#e88800]'
-                            }`}
                             title="Attach Image"
-                            aria-label="Attach Image"
-                          >
-                            <Image size={32} />
-                          </button>
+                          />
                           
-                          {/* Emoji button (mobile) - INCREASED SIZE */}
+                          {/* Emoji button (mobile) - keeping this one as a button since it's not a custom image */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowEmojiPicker(!showEmojiPicker);
                               markAsRead();
                             }}
-                            className={`md:hidden w-16 h-16 flex items-center justify-center rounded-full shadow-md text-black text-2xl ${
-                              showEmojiPicker 
-                                ? 'bg-[#e88800]' 
-                                : 'bg-[#ff950e] hover:bg-[#e88800]'
-                            } transition-colors duration-150`}
+                            className="md:hidden border-none p-0 bg-transparent focus:outline-none"
                             title="Emoji"
                             aria-label="Emoji"
                           >
-                            <Smile size={32} />
+                            <Smile size={52} className="text-[#ff950e]" />
                           </button>
                           
-                          {/* Custom Request button - INCREASED SIZE */}
-                          <button
+                          {/* Custom Request button */}
+                          <img 
+                            src="/Custom_Request_Icon.png" 
+                            alt="Custom Request" 
+                            className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowCustomRequestForm(!showCustomRequestForm);
@@ -1566,16 +1555,8 @@ export default function BuyerMessagesPage() {
                               }
                               markAsRead();
                             }}
-                            className={`w-16 h-16 flex items-center justify-center rounded-full shadow-md text-black text-2xl ${
-                              showCustomRequestForm
-                                ? 'bg-[#e88800]'
-                                : 'bg-[#ff950e] hover:bg-[#e88800]'
-                            } transition-colors duration-150`}
                             title="Custom Request"
-                            aria-label="Custom Request"
-                          >
-                            <Package size={32} />
-                          </button>
+                          />
                           
                           {/* Hidden file input */}
                           <input
@@ -1587,7 +1568,7 @@ export default function BuyerMessagesPage() {
                           />
                         </div>
                         
-                        {/* Send Button - Right aligned and INCREASED SIZE */}
+                        {/* Send Button - Right aligned */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1678,7 +1659,7 @@ export default function BuyerMessagesPage() {
             <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-white flex items-center">
-                  <DollarSign size={20} className="mr-2 text-[#ff950e]" />
+                  <img src="/Send_Tip_Icon.png" alt="Send Tip" className="w-6 h-6 mr-2" />
                   Send a Tip
                 </h3>
                 <button 
@@ -1738,7 +1719,7 @@ export default function BuyerMessagesPage() {
                       className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] flex items-center transition-colors duration-150"
                       disabled={!tipAmount || parseFloat(tipAmount) <= 0}
                     >
-                      <DollarSign size={16} className="mr-1" />
+                      <img src="/Send_Tip_Icon.png" alt="Send Tip" className="w-4 h-4 mr-1" />
                       Send Tip
                     </button>
                   </div>
