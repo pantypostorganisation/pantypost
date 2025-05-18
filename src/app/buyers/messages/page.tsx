@@ -1568,23 +1568,22 @@ export default function BuyerMessagesPage() {
                           />
                         </div>
                         
-                        {/* Send Button - Right aligned */}
-                        <button
+                        {/* Send Button - Replaced with image */}
+                        <img
+                          src="/Send_Button.png"
+                          alt="Send"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleReply();
                             markAsRead();
                           }}
-                          disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
-                          className={`flex items-center justify-center px-6 py-4 rounded-full text-lg ${
+                          className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
-                              ? 'bg-[#c17200] cursor-not-allowed text-gray-300'
-                              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                          } transition-colors duration-150 shadow-md`}
-                        >
-                          <span className="mr-2">Send</span>
-                          <ArrowRightCircle size={24} className="flex-shrink-0" />
-                        </button>
+                              ? 'opacity-50 cursor-not-allowed'
+                              : ''
+                          }`}
+                          style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
+                        />
                       </div>
                     </div>
                   </div>
