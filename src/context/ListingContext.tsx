@@ -11,6 +11,7 @@ import {
 import { useWallet } from './WalletContext';
 import { Order } from './WalletContext'; // Import Order type from WalletContext
 import { v4 as uuidv4 } from 'uuid';
+import { getSellerTierMemoized } from '@/utils/sellerTiers';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -564,15 +565,27 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
               markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100
             };
             
+            // Calculate seller tier credit
+            const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
+            const tierCreditPercent = sellerTierInfo.credit;
+            const tierCreditAmount = winningBid * tierCreditPercent;
+            
             // Process the purchase
             const success = purchaseListing(purchaseListingCopy, winningBidder);
             
             if (success) {
-              // Notify seller of the winner
-              addSellerNotification(
-                listing.seller,
-                `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)}`
-              );
+              // Notify seller of the winner and any tier credit
+              if (tierCreditAmount > 0) {
+                addSellerNotification(
+                  listing.seller,
+                  `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+                );
+              } else {
+                addSellerNotification(
+                  listing.seller,
+                  `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)}`
+                );
+              }
               
               // If the winning bidder is not the highest bidder, notify both
               if (listing.auction.highestBidder && winningBidder !== listing.auction.highestBidder) {
@@ -589,7 +602,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                 date: new Date().toISOString(),
                 imageUrl: listing.imageUrls?.[0] || undefined,
                 wasAuction: true, // Add flag to indicate this was an auction
-                finalBid: winningBid
+                finalBid: winningBid,
+                tierCreditAmount: tierCreditAmount // Store the tier credit amount
               });
               
               // Mark listing for removal since it has been sold

@@ -2,11 +2,15 @@
 
 import { useListings } from '@/context/ListingContext';
 import { useEffect, useState, useRef } from 'react';
+import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { Upload, X, ImageIcon, Trash2, Save, PlusCircle, Image as ImageLucide } from 'lucide-react';
+import { Upload, X, ImageIcon, Trash2, Save, PlusCircle, Image as ImageLucide, Award, TrendingUp } from 'lucide-react';
+import TierBadge from '@/components/TierBadge';
+import { getSellerTierMemoized, TIER_LEVELS, TierLevel } from '@/utils/sellerTiers';
 
 export default function SellerProfileSettingsPage() {
   const { user } = useListings();
+  const { orderHistory } = useWallet();
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -18,6 +22,9 @@ export default function SellerProfileSettingsPage() {
 
   const multipleFileInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate seller tier for display
+  const sellerTierInfo = user ? getSellerTierMemoized(user.username, orderHistory) : null;
 
   useEffect(() => {
     if (typeof window !== 'undefined' && user?.username) {
@@ -192,6 +199,16 @@ export default function SellerProfileSettingsPage() {
       setGalleryImages([]); // Update state
       handleSaveWithGallery([]); // Auto-save after clearing
     }
+  };
+
+  // Function to get the next tier name
+  const getNextTier = (currentTier: TierLevel): TierLevel => {
+    const tiers: TierLevel[] = ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
+    const currentIndex = tiers.indexOf(currentTier);
+    if (currentIndex === -1 || currentIndex === tiers.length - 1) {
+      return currentTier; // Either not found or already at highest tier
+    }
+    return tiers[currentIndex + 1];
   };
 
   return (
@@ -430,6 +447,71 @@ export default function SellerProfileSettingsPage() {
                   )}
                 </div>
               </div>
+              
+              {/* Seller Tier Display - Moved below the photo gallery */}
+              {sellerTierInfo && (
+                <div className="mt-8 bg-gradient-to-r from-[#1a1a1a] to-[#272727] rounded-xl border border-gray-800 p-6 shadow-xl">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center">
+                      <div className="pr-6 flex-shrink-0">
+                        <TierBadge tier={sellerTierInfo.tier} size="xl" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-white mb-1 flex items-center">
+                          <Award className="w-5 h-5 mr-2 text-[#ff950e]" />
+                          Your Seller Tier: <span className="ml-2 text-[#ff950e]">{sellerTierInfo.tier}</span>
+                        </h2>
+                        <p className="text-gray-300">
+                          {sellerTierInfo.credit > 0 ? (
+                            <>You earn an additional <span className="font-bold text-green-400">{(sellerTierInfo.credit * 100).toFixed(0)}%</span> on all your sales!</>
+                          ) : (
+                            <>Make more sales to earn additional credits on your sales</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {sellerTierInfo.tier !== 'Goddess' && (
+                      <div className="bg-[#111] border border-gray-800 rounded-lg p-3 shadow-inner">
+                        <div className="text-sm text-gray-400">Next tier: <span className="font-medium text-purple-400">{getNextTier(sellerTierInfo.tier)}</span></div>
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4 text-green-400" />
+                          <span className="text-green-300 text-sm">
+                            Need: {TIER_LEVELS[getNextTier(sellerTierInfo.tier)].minSales} sales or ${TIER_LEVELS[getNextTier(sellerTierInfo.tier)].minAmount.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Tier progression overview */}
+                  <div className="mt-6 pt-4 border-t border-gray-700">
+                    <h3 className="text-sm font-medium text-gray-300 mb-3">Tier Benefits Overview</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
+                      <div className={`p-2 rounded ${sellerTierInfo.tier === 'Tease' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
+                        <div className="font-medium mb-1">Tease</div>
+                        <div className="text-gray-400">No credit</div>
+                      </div>
+                      <div className={`p-2 rounded ${sellerTierInfo.tier === 'Flirt' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
+                        <div className="font-medium mb-1">Flirt</div>
+                        <div className="text-gray-400">+1% credit</div>
+                      </div>
+                      <div className={`p-2 rounded ${sellerTierInfo.tier === 'Obsession' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
+                        <div className="font-medium mb-1">Obsession</div>
+                        <div className="text-gray-400">+2% credit</div>
+                      </div>
+                      <div className={`p-2 rounded ${sellerTierInfo.tier === 'Desire' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
+                        <div className="font-medium mb-1">Desire</div>
+                        <div className="text-gray-400">+3% credit</div>
+                      </div>
+                      <div className={`p-2 rounded ${sellerTierInfo.tier === 'Goddess' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
+                        <div className="font-medium mb-1">Goddess</div>
+                        <div className="text-gray-400">+5% credit</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

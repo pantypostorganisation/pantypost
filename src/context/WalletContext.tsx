@@ -8,6 +8,7 @@ import {
   ReactNode,
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
+import { getSellerTierMemoized } from '@/utils/sellerTiers';
 
 // Export Order type to make it available to other components
 export type Order = {
@@ -26,6 +27,7 @@ export type Order = {
   finalBid?: number; // The final winning bid amount for auctions
   deliveryAddress?: DeliveryAddress; // Add this field
   shippingStatus?: 'pending' | 'processing' | 'shipped'; // Add shipping status
+  tierCreditAmount?: number; // Track tier credit amount for transparency
 };
 
 type Listing = {
@@ -320,9 +322,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
       setBuyerBalance(buyerUsername, currentBuyerBalance - price);
 
+      // Calculate tier credit bonus
+      const sellerTierInfo = getSellerTierMemoized(seller, orderHistory);
+      const tierCreditPercent = sellerTierInfo.credit;
+      const tierCreditAmount = listing.price * tierCreditPercent;
+      
+      // Add base amount plus tier credit to seller balance
       setSellerBalancesState((prev) => ({
         ...prev,
-        [seller]: (prev[seller] || 0) + sellerCut,
+        [seller]: (prev[seller] || 0) + sellerCut + tierCreditAmount,
       }));
 
       updateWallet('admin', platformCut);
@@ -333,6 +341,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString(),
         imageUrl: listing.imageUrls?.[0] || undefined,
         shippingStatus: 'pending', // Default shipping status
+        tierCreditAmount: tierCreditAmount, // Store the tier credit amount in the order
       } as Order;
 
       addOrder(order);
@@ -341,10 +350,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         : listing.price.toFixed(2);
 
       if (addSellerNotification) {
-        addSellerNotification(
-          seller,
-          `💸 New sale: "${listing.title}" for $${displayPrice}`
-        );
+        // Include tier credit info in the notification
+        if (tierCreditAmount > 0) {
+          addSellerNotification(
+            seller,
+            `💸 New sale: "${listing.title}" for $${displayPrice} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+          );
+        } else {
+          addSellerNotification(
+            seller,
+            `💸 New sale: "${listing.title}" for $${displayPrice}`
+          );
+        }
       }
 
       return true;
