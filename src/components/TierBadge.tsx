@@ -6,10 +6,42 @@ import { TierInfo, TierLevel, TIER_LEVELS } from '@/utils/sellerTiers';
 
 interface TierBadgeProps {
   tier?: TierLevel | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   showTooltip?: boolean;
   className?: string;
 }
+
+// Helper functions defined outside the component
+// Get user-friendly tier number
+const getTierNumber = (tierName: TierLevel): string => {
+  const tierMap: Record<TierLevel, string> = {
+    None: "0",
+    Tease: "tier 1",
+    Flirt: "tier 2",
+    Obsession: "tier 3", 
+    Desire: "tier 4",
+    Goddess: "tier 5"
+  };
+  return tierMap[tierName];
+};
+
+// Get display name (capitalize first letter)
+const getTierDisplayName = (tierName: TierLevel): string => {
+  return tierName.charAt(0).toUpperCase() + tierName.slice(1);
+};
+
+// Get tier-specific colors for text
+const getTierColor = (tierName: TierLevel): string => {
+  const tierColorMap: Record<TierLevel, string> = {
+    None: "#ffffff",
+    Tease: "#e37c89",
+    Flirt: "#711b2a",
+    Obsession: "#2e0c29",
+    Desire: "#541831",
+    Goddess: "#fddc93"
+  };
+  return tierColorMap[tierName];
+};
 
 const TierBadge = ({
   tier = 'Tease',
@@ -29,80 +61,64 @@ const TierBadge = ({
   // Size mappings for the badge
   const sizeClasses = {
     sm: {
-      wrapper: 'h-4 w-4',
+      image: 16,
       tooltip: 'w-48',
     },
     md: {
-      wrapper: 'h-6 w-6',
+      image: 24,
       tooltip: 'w-52',
     },
     lg: {
-      wrapper: 'h-8 w-8',
+      image: 32,
       tooltip: 'w-56',
+    },
+    xl: {
+      image: 64,
+      tooltip: 'w-60',
     },
   };
   
-  // Color classes based on tier
-  const tierColorClasses = {
-    Tease: 'bg-gray-100 border-gray-300',
-    Flirt: 'bg-pink-100 border-pink-300',
-    Obsession: 'bg-purple-100 border-purple-300',
-    Desire: 'bg-blue-200 border-blue-400',
-    Goddess: 'bg-gradient-to-r from-yellow-300 to-amber-500 border-amber-600',
-  };
-  
-  // Display credit as percentage
-  const creditPercent = (tierInfo.credit * 100).toFixed(0);
+  // Get the image size based on the selected size
+  const imageSize = sizeClasses[size]?.image || 64;
   
   return (
-    <div 
+    <div
       className={`relative inline-block ${className}`}
       onMouseEnter={() => showTooltip && setShowDetails(true)}
       onMouseLeave={() => showTooltip && setShowDetails(false)}
     >
-      <div 
-        className={`${sizeClasses[size].wrapper} rounded-full overflow-hidden border-2 
-                   ${tierColorClasses[tier]} flex items-center justify-center cursor-help`}
-      >
-        {tierInfo.badgeImage ? (
-          <Image
-            src={tierInfo.badgeImage}
-            alt={`${tier} Seller Badge`}
-            width={size === 'lg' ? 32 : size === 'md' ? 24 : 16}
-            height={size === 'lg' ? 32 : size === 'md' ? 24 : 16}
-            className="object-contain"
-          />
-        ) : (
-          <span className={`text-${size === 'sm' ? 'xs' : size === 'md' ? 'sm' : 'base'} font-bold text-center`}>
+      {/* Badge image only - no background or border */}
+      {tierInfo.badgeImage ? (
+        <Image
+          src={tierInfo.badgeImage}
+          alt={`${tier} Seller Badge`}
+          width={imageSize}
+          height={imageSize}
+          className="object-contain"
+        />
+      ) : (
+        <div className="flex items-center justify-center">
+          <span className="font-bold text-center text-xl">
             {tier.charAt(0)}
           </span>
-        )}
-      </div>
+        </div>
+      )}
       
       {/* Tooltip */}
       {showDetails && showTooltip && (
-        <div 
-          className={`absolute z-10 ${sizeClasses[size].tooltip} bg-white rounded-md shadow-lg p-3 text-sm
-                     border border-gray-200 -translate-x-1/2 left-1/2 mt-1`}
+        <div
+          className={`absolute z-10 ${sizeClasses[size]?.tooltip || 'w-60'} bg-[#1a1a1a] rounded-md shadow-lg p-4 text-sm
+                   border border-gray-700 -translate-x-1/2 left-1/2 mt-1`}
         >
-          <div className="font-bold text-center mb-1">
-            {tier === 'Goddess' ? (
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-yellow-500 to-amber-700">
-                {tier} Seller
-              </span>
-            ) : (
-              <span>{tier} Seller</span>
-            )}
+          <div className="font-bold text-center mb-2" style={{ color: getTierColor(tier) }}>
+            {getTierDisplayName(tier)} {tier !== 'Goddess' ? 'Seller' : ''}
           </div>
           
-          <div className="text-xs space-y-1">
-            <p>• {creditPercent}% credit on all sales</p>
-            <p>• Unlocked at {tierInfo.minSales}+ sales</p>
-            <p>• Or ${tierInfo.minAmount.toLocaleString()}+ in total sales</p>
-            
-            {tier === 'Goddess' && (
-              <p className="text-amber-700 font-medium mt-1">• Top-tier seller status</p>
-            )}
+          <div className="text-gray-200 space-y-2">
+            <p>This seller is {getTierNumber(tier)} out of 5 as they have:</p>
+            <p>• {tierInfo.minSales}+ sales <span className="text-gray-400">OR</span></p>
+            <p>• ${tierInfo.minAmount.toLocaleString()}+ in total sales</p>
+            <p className="pt-1 text-[#ff950e] font-medium">This seller earns an extra {(tierInfo.credit * 100).toFixed(0)}% on all sales made</p>
           </div>
         </div>
       )}

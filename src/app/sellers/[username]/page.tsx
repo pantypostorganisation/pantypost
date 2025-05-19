@@ -1,3 +1,4 @@
+// src/app/sellers/[username]/page.tsx
 'use client';
 
 import { useParams } from 'next/navigation';
@@ -285,19 +286,31 @@ export default function SellerProfilePage() {
         )}
 
         <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
-          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden mb-4 shadow-lg">
-            {profilePic ? (
-              <img
-                src={profilePic}
-                alt={`${username}'s profile`}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-6xl font-bold">
-                {username ? username.charAt(0).toUpperCase() : '?'}
+          {/* Profile section with centered profile pic and badge to the right */}
+          <div className="flex flex-col items-center relative mb-6 w-full">
+            {/* Profile Picture - Centered */}
+            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg">
+              {profilePic ? (
+                <img
+                  src={profilePic}
+                  alt={`${username}'s profile`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-6xl font-bold">
+                  {username ? username.charAt(0).toUpperCase() : '?'}
+                </div>
+              )}
+            </div>
+            
+            {/* Badge positioned absolutely to the right of profile pic */}
+            {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
+              <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2">
+                <TierBadge tier={sellerTierInfo.tier} size="xl" />
               </div>
             )}
           </div>
+          
           <div className="flex flex-col items-center text-center mb-6">
             <div className="flex items-center justify-center gap-3 mb-2">
               <span className="text-2xl sm:text-3xl font-bold text-white">{username}</span>
@@ -318,15 +331,6 @@ export default function SellerProfilePage() {
                   Unverified
                 </span>
               )}
-              {/* Seller Tier Badge */}
-              {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-                <div className="relative group">
-                  <TierBadge tier={sellerTierInfo.tier} size="md" />
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
-                    {sellerTierInfo.tier} Seller
-                  </div>
-                </div>
-              )}
               <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
                 Active Now
               </span>
@@ -335,31 +339,8 @@ export default function SellerProfilePage() {
             <p className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
               {bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
             </p>
-            {/* Seller Tier Benefits */}
-            {sellerTierInfo && sellerTierInfo.tier !== 'Tease' && (
-              <div className={`mt-3 px-4 py-2 rounded-lg text-xs font-medium 
-                ${sellerTierInfo.tier === 'Goddess' 
-                  ? 'bg-gradient-to-r from-yellow-900/40 to-amber-900/40 text-amber-200 border border-amber-800/50' 
-                  : sellerTierInfo.tier === 'Desire' 
-                    ? 'bg-blue-900/30 text-blue-200 border border-blue-800/50'
-                    : sellerTierInfo.tier === 'Obsession'
-                      ? 'bg-purple-900/30 text-purple-200 border border-purple-800/50'
-                      : 'bg-pink-900/30 text-pink-200 border border-pink-800/50'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <TierBadge tier={sellerTierInfo.tier} size="sm" showTooltip={false} />
-                  <span className="font-bold">
-                    {sellerTierInfo.tier} Tier Seller
-                  </span>
-                  <span className="ml-auto">
-                    {(sellerTierInfo.credit * 100).toFixed(0)}% Bonus
-                  </span>
-                </div>
-                <p>Earns {(sellerTierInfo.credit * 100).toFixed(0)}% credit on all sales</p>
-              </div>
-            )}
           </div>
+          
           <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
             <div className="flex flex-col items-center">
               <Camera className="w-6 h-6 text-[#ff950e] mb-1" />
