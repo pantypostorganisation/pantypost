@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CheckCheck } from 'lucide-react';
@@ -124,11 +124,11 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
     if (message.type === 'customRequest' && message.meta) {
       return (
         <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
-          <p><strong>⚙️ Custom Request</strong></p>
-          <p>📌 Title: {message.meta.title}</p>
-          <p>💰 Price: ${message.meta.price?.toFixed(2)}</p>
-          <p>🏷️ Tags: {message.meta.tags?.join(', ')}</p>
-          {message.meta.message && <p>📝 {message.meta.message}</p>}
+          <p><strong> Custom Request</strong></p>
+          <p> Title: {message.meta.title}</p>
+          <p> Price: ${message.meta.price !== undefined ? message.meta.price.toFixed(2) : "0.00"}</p>
+          <p> Tags: {message.meta.tags?.join(', ')}</p>
+          {message.meta.message && <p> {message.meta.message}</p>}
         </div>
       );
     }
@@ -185,7 +185,7 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
                 {/* Message header */}
                 <div className="flex items-center text-xs mb-1">
                   <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                    {isFromMe ? 'You' : msg.sender} • {time}
+                    {isFromMe ? 'You' : msg.sender}  {time}
                   </span>
                   {isFromMe && (
                     <span className="ml-2 text-[10px]">
