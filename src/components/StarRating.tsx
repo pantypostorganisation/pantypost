@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import {
   FaStar as FullStar,
@@ -23,11 +23,11 @@ export default function StarRating({ rating, size = 'md' }: StarRatingProps) {
   return (
     <div className={`flex items-center text-yellow-500 ${iconClass}`}>
       {Array.from({ length: fullStars }).map((_, i) => (
-        <FullStar key={`full-${i}`} />
+        <FullStar key={`full-star-${i}-${rating}`} />
       ))}
-      {hasHalfStar && <HalfStar key="half" />}
+      {hasHalfStar && <HalfStar key={`half-star-${rating}`} />}
       {Array.from({ length: emptyStars }).map((_, i) => (
-        <EmptyStar key={`empty-${i}`} />
+        <EmptyStar key={`empty-star-${i}-${rating}`} />
       ))}
     </div>
   );
