@@ -5,8 +5,10 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useReviews } from '@/context/ReviewContext';
 import Link from 'next/link';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import StarRating from '@/components/StarRating';
+import TierBadge from '@/components/TierBadge';
+import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import {
   Lock, Mail, Gift, DollarSign, MessageCircle, ArrowRight,
   AlertTriangle, Camera, Video, Users, Star, Crown, Clock, Image as ImageIcon, X,
@@ -86,6 +88,11 @@ export default function SellerProfilePage() {
 
   const sellerUser = users?.[username];
   const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+
+  // Calculate the seller tier
+  const sellerTierInfo = useMemo(() => {
+    return getSellerTierMemoized(username, orderHistory);
+  }, [username, orderHistory]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -311,6 +318,15 @@ export default function SellerProfilePage() {
                   Unverified
                 </span>
               )}
+              {/* Seller Tier Badge */}
+              {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
+                <div className="relative group">
+                  <TierBadge tier={sellerTierInfo.tier} size="md" />
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                    {sellerTierInfo.tier} Seller
+                  </div>
+                </div>
+              )}
               <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
                 Active Now
               </span>
@@ -319,6 +335,30 @@ export default function SellerProfilePage() {
             <p className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
               {bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
             </p>
+            {/* Seller Tier Benefits */}
+            {sellerTierInfo && sellerTierInfo.tier !== 'Tease' && (
+              <div className={`mt-3 px-4 py-2 rounded-lg text-xs font-medium 
+                ${sellerTierInfo.tier === 'Goddess' 
+                  ? 'bg-gradient-to-r from-yellow-900/40 to-amber-900/40 text-amber-200 border border-amber-800/50' 
+                  : sellerTierInfo.tier === 'Desire' 
+                    ? 'bg-blue-900/30 text-blue-200 border border-blue-800/50'
+                    : sellerTierInfo.tier === 'Obsession'
+                      ? 'bg-purple-900/30 text-purple-200 border border-purple-800/50'
+                      : 'bg-pink-900/30 text-pink-200 border border-pink-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <TierBadge tier={sellerTierInfo.tier} size="sm" showTooltip={false} />
+                  <span className="font-bold">
+                    {sellerTierInfo.tier} Tier Seller
+                  </span>
+                  <span className="ml-auto">
+                    {(sellerTierInfo.credit * 100).toFixed(0)}% Bonus
+                  </span>
+                </div>
+                <p>Earns {(sellerTierInfo.credit * 100).toFixed(0)}% credit on all sales</p>
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
             <div className="flex flex-col items-center">

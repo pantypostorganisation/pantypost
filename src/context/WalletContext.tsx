@@ -9,7 +9,8 @@ import {
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 
-type Order = {
+// Export Order type to make it available to other components
+export type Order = {
   id: string;
   title: string;
   description: string;

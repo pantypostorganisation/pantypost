@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
+import TierBadge from '@/components/TierBadge';
+import { getSellerTierMemoized } from '@/utils/sellerTiers';
 
 // Add custom hook for interval with proper TypeScript typing
 function useInterval(callback: () => void, delay: number | null): void {
@@ -40,7 +42,7 @@ function useInterval(callback: () => void, delay: number | null): void {
 }
 
 export default function ListingDetailPage() {
-  const { listings, user, removeListing, addSellerNotification, isSubscribed, users, placeBid } = useListings();
+  const { listings, user, removeListing, addSellerNotification, isSubscribed, users, placeBid, orderHistory } = useListings();
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id as string;
   const listing = listings.find((item) => item.id === listingId);
@@ -97,6 +99,12 @@ export default function ListingDetailPage() {
     if (!isAuctionListing || !listing?.auction?.highestBidder || !user?.username) return false;
     return listing.auction.highestBidder === user.username;
   }, [isAuctionListing, listing?.auction?.highestBidder, user?.username]);
+
+  // Calculate the seller tier for display
+  const sellerTierInfo = useMemo(() => {
+    if (!listing?.seller) return null;
+    return getSellerTierMemoized(listing.seller, orderHistory);
+  }, [listing?.seller, orderHistory]);
 
   // Handle address confirmation
   const handleAddressConfirm = (address: DeliveryAddress) => {
@@ -872,6 +880,15 @@ export default function ListingDetailPage() {
                           </div>
                         </div>
                       )}
+                      {/* Seller Tier Badge */}
+                      {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
+                        <div className="relative group ml-1">
+                          <TierBadge tier={sellerTierInfo.tier} size="sm" />
+                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                            {sellerTierInfo.tier} Seller
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <p className="text-xs text-gray-400 mt-1 truncate">{sellerProfile.bio || 'No bio provided.'}</p>
                     <Link
@@ -1422,8 +1439,8 @@ export default function ListingDetailPage() {
                       <span className="flex items-center gap-1">
                         <BarChart2 className="w-3.5 h-3.5" /> 
                         {listing.auction.highestBid 
-                          ? `Current: $${listing.auction.highestBid.toFixed(2)}` 
-                          : `Start: $${listing.auction.startingPrice.toFixed(2)}`}
+                          ? `Current: ${listing.auction.highestBid.toFixed(2)}` 
+                          : `Start: ${listing.auction.startingPrice.toFixed(2)}`}
                       </span>
                     </div>
                     
