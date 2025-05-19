@@ -9,6 +9,7 @@ import {
   useCallback,
 } from 'react';
 import { useWallet } from './WalletContext';
+import { Order } from './WalletContext'; // Import Order type from WalletContext
 import { v4 as uuidv4 } from 'uuid';
 
 export type Role = 'buyer' | 'seller' | 'admin';
@@ -119,6 +120,9 @@ type ListingContextType = {
 
   requestVerification: (docs: VerificationDocs) => void;
   setVerificationStatus: (username: string, status: VerificationStatus, rejectionReason?: string) => void;
+  
+  // Add orderHistory property
+  orderHistory: Order[];
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -180,7 +184,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   }, []);
 
-  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance, addOrder } = useWallet();
+  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance, addOrder, orderHistory } = useWallet();
 
   // On mount, set the notification callback in WalletContext
   useEffect(() => {
@@ -837,6 +841,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         clearSellerNotification,
         requestVerification,
         setVerificationStatus,
+        orderHistory, // Add orderHistory to context value
       }}
     >
       {children}

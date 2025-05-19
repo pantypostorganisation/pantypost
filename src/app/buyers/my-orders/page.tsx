@@ -1,17 +1,21 @@
+// src/app/buyers/my-orders/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import RequireAuth from '@/components/RequireAuth';
 import Link from 'next/link';
-import { User, Award, Gavel } from 'lucide-react'; // Added Gavel icon
+import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
+import { User, Award, Gavel, MapPin, Truck, Package, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 
 export default function MyOrdersPage() {
-  const { orderHistory } = useWallet();
+  const { orderHistory, updateOrderAddress } = useWallet();
   const { user, users } = useListings();
   const { getRequestsForUser } = useRequests();
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
 
   // Accepted custom requests as "orders"
   const customOrders =
@@ -27,6 +31,51 @@ export default function MyOrdersPage() {
   // Separate auction orders for special display
   const auctionOrders = userOrders.filter(order => order.wasAuction);
   const directOrders = userOrders.filter(order => !order.wasAuction);
+
+  const handleOpenAddressModal = (orderId: string) => {
+    setSelectedOrder(orderId);
+    setAddressModalOpen(true);
+  };
+
+  const handleConfirmAddress = (address: DeliveryAddress) => {
+    if (selectedOrder) {
+      updateOrderAddress(selectedOrder, address);
+    }
+    setAddressModalOpen(false);
+    setSelectedOrder(null);
+  };
+
+  const getSelectedOrderAddress = (): DeliveryAddress | null => {
+    if (!selectedOrder) return null;
+    
+    const order = orderHistory.find(order => order.id === selectedOrder);
+    return order?.deliveryAddress || null;
+  };
+
+  const getShippingStatusBadge = (status?: string) => {
+    if (!status || status === 'pending') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+          <Clock className="w-3 h-3 mr-1" />
+          Awaiting Shipment
+        </span>
+      );
+    } else if (status === 'processing') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          <Package className="w-3 h-3 mr-1" />
+          Preparing
+        </span>
+      );
+    } else if (status === 'shipped') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          <Truck className="w-3 h-3 mr-1" />
+          Shipped
+        </span>
+      );
+    }
+  };
 
   return (
     <RequireAuth role="buyer">
@@ -46,6 +95,7 @@ export default function MyOrdersPage() {
                 const sellerUser = users?.[order.seller ?? ''];
                 const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
                 const sellerProfilePic = sessionStorage.getItem(`profile_pic_${order.seller}`);
+                const hasDeliveryAddress = !!order.deliveryAddress;
 
                 return (
                   <div
@@ -73,6 +123,32 @@ export default function MyOrdersPage() {
                       <p className="text-xs text-gray-500">
                         Auction ended: {new Date(order.date).toLocaleDateString()}
                       </p>
+                    </div>
+
+                    {/* Status and Shipping */}
+                    <div className="flex flex-col space-y-2 mb-3">
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-500">Status:</span>
+                        {getShippingStatusBadge(order.shippingStatus)}
+                      </div>
+                      
+                      {hasDeliveryAddress ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">Address:</span>
+                          <span className="inline-flex items-center text-xs text-green-600 font-medium">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Confirmed
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenAddressModal(order.id)}
+                          className="text-sm flex items-center justify-center gap-1 bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded-lg mt-1 transition-colors w-full"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                          Add Delivery Address
+                        </button>
+                      )}
                     </div>
 
                     {/* Seller Info */}
@@ -134,6 +210,7 @@ export default function MyOrdersPage() {
                 const sellerUser = users?.[order.seller ?? ''];
                 const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
                 const sellerProfilePic = sessionStorage.getItem(`profile_pic_${order.seller}`);
+                const hasDeliveryAddress = !!order.deliveryAddress;
 
                 return (
                   <div
@@ -147,6 +224,32 @@ export default function MyOrdersPage() {
                     />
                     <h2 className="text-xl font-semibold mb-1">{order.title}</h2>
                     <p className="text-sm text-gray-600 mb-2 flex-grow">{order.description}</p>
+
+                    {/* Status and Shipping */}
+                    <div className="flex flex-col space-y-2 mb-3">
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-500">Status:</span>
+                        {getShippingStatusBadge(order.shippingStatus)}
+                      </div>
+                      
+                      {hasDeliveryAddress ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">Address:</span>
+                          <span className="inline-flex items-center text-xs text-green-600 font-medium">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Confirmed
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenAddressModal(order.id)}
+                          className="text-sm flex items-center justify-center gap-1 bg-pink-100 hover:bg-pink-200 text-pink-800 px-3 py-1.5 rounded-lg mt-1 transition-colors w-full"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                          Add Delivery Address
+                        </button>
+                      )}
+                    </div>
 
                     {/* Seller Info */}
                     <Link
@@ -230,6 +333,18 @@ export default function MyOrdersPage() {
             </ul>
           )}
         </section>
+
+        {/* Address Confirmation Modal */}
+        <AddressConfirmationModal
+          isOpen={addressModalOpen}
+          onClose={() => {
+            setAddressModalOpen(false);
+            setSelectedOrder(null);
+          }}
+          onConfirm={handleConfirmAddress}
+          existingAddress={getSelectedOrderAddress()}
+          orderId={selectedOrder || ''}
+        />
       </main>
     </RequireAuth>
   );

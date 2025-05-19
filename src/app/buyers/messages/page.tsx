@@ -13,20 +13,22 @@ import VirtualMessageList from '@/components/messaging/VirtualMessageList';
 import MessageInput from '@/components/messaging/MessageInput';
 import { 
   Search, 
-  DollarSign, 
-  Paperclip, 
-  Send, 
-  Mic, 
-  Smile, 
-  Star, 
-  Flag, 
-  MoreVertical, 
   CheckCheck, 
-  PlusCircle,
-  X,
-  AlertTriangle,
-  BadgeCheck,
-  MessageSquare
+  ArrowRightCircle,
+  MessageCircle,
+  X, 
+  BadgeCheck, 
+  Smile, 
+  AlertTriangle, 
+  ShieldAlert, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  Edit3, 
+  Sparkles, 
+  ShoppingBag, 
+  Filter, 
+  BellRing
 } from 'lucide-react';
 
 // Constants
@@ -34,18 +36,41 @@ const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// Emoji picker categories and default emojis
-const EMOJI_CATEGORIES = {
-  recent: '🕒',
-  smileys: '😀 😊 😍 🥰 😎 🤗 🤔 🙄 😴 😜',
-  people: '👋 👍 👎 👏 🙏 💪 👨 👩 👶 👮',
-  nature: '🐶 🐱 🐭 🦊 🐻 🐼 🐨 🦁 🐮 🐷',
-  food: '🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒',
-  activities: '⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🎯',
-  travel: '🚗 🚕 🚙 🚌 🚎 🏎 🚓 🚑 🚒 🚐',
-  objects: '⌚ 📱 💻 ⌨ 🖥 🖨 🖱 🖲 🕹 🗜',
-  symbols: '❤ 🧡 💛 💚 💙 💜 🖤 💔 ❣ 💕',
-  flags: '🏳 🏴 🏁 🚩 🏳️‍🌈 🏴‍☠️ 🇦🇨 🇦🇩 🇦🇪 🇦🇫',
+// All emojis in a single flat array
+const ALL_EMOJIS = [
+  // Smileys and people
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕',
+  // Animals and nature
+  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦆', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷', '🕸', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃',
+  // Food and drink
+  '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫑', '🥕', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚',
+  // Activities and sports
+  '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🏵', '🎗', '🎫', '🎟', '🎪', '🤹', '🎭', '🩰', '🎨', '🎬', '🎤',
+  // Travel and places
+  '🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🦯', '🦽', '🦼', '🛴', '🚲', '🛵', '🏍', '🛺', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩', '💺', '🛰', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥', '🛳', '⛴', '🚢', '⚓', '🪝', '⛽', '🚧', '🚦', '🚥', '🚏', '🗺', '🗿',
+  // Objects 
+  '⌚', '📱', '📲', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🕹', '🗜', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '🧭', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯', '🪔', '🧯', '🛢', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '💎', '⚖️', '🪜', '🧰', '🪛', '🔧', '🔨', '⚒', '🛠',
+  // Symbols
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑',
+  // Flags
+  '🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️'
+];
+
+type Message = {
+  sender: string;
+  receiver: string;
+  content: string;
+  date: string;
+  read?: boolean;
+  type?: 'normal' | 'customRequest' | 'image';
+  meta?: {
+    id?: string;
+    title?: string;
+    price?: number;
+    tags?: string[];
+    message?: string;
+    imageUrl?: string;
+  };
 };
 
 export default function BuyerMessagesPage() {
@@ -90,10 +115,10 @@ export default function BuyerMessagesPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [activeEmojiCategory, setActiveEmojiCategory] = useState<keyof typeof EMOJI_CATEGORIES>('smileys');
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   
   // Refs
@@ -103,6 +128,7 @@ export default function BuyerMessagesPage() {
   const markedThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const readThreadsRef = useRef<Set<string>>(new Set());
 
   // Load recent emojis from localStorage on component mount
   useEffect(() => {
@@ -111,13 +137,31 @@ export default function BuyerMessagesPage() {
       try {
         const parsed = JSON.parse(storedRecentEmojis);
         if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 20)); // Limit to 20 recent emojis
+          setRecentEmojis(parsed.slice(0, 30)); // Limit to 30 recent emojis
         }
       } catch (e) {
         console.error('Failed to parse recent emojis', e);
       }
     }
-  }, []);
+    
+    // Load previously read threads from localStorage
+    try {
+      // Get read threads from localStorage only if user exists
+      if (user) {
+        const readThreadsKey = `panty_read_threads_${user.username}`;
+        const readThreads = localStorage.getItem(readThreadsKey);
+        if (readThreads) {
+          const threads = JSON.parse(readThreads);
+          if (Array.isArray(threads)) {
+            readThreadsRef.current = new Set(threads);
+            setMessageUpdate(prev => prev + 1); // Force UI update
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load read threads', e);
+    }
+  }, [user]);
 
   // Save recent emojis to localStorage when they change
   useEffect(() => {
@@ -125,6 +169,13 @@ export default function BuyerMessagesPage() {
       localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
     }
   }, [recentEmojis]);
+
+  // Initialize the thread based on URL thread parameter
+  useEffect(() => {
+    if (threadParam && user) {
+      setActiveThread(threadParam);
+    }
+  }, [threadParam, user]);
 
   // Handle clicks outside the emoji picker to close it
   useEffect(() => {
@@ -140,27 +191,34 @@ export default function BuyerMessagesPage() {
     };
   }, []);
 
-  // Forces rerender when requests or wallet updates
-  useEffect(() => {
-    forceRerender((v) => v + 1);
-  }, [requests, wallet]);
-
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, messages]);
 
+  // Forces rerender when requests or wallet updates
+  useEffect(() => {
+    forceRerender((v) => v + 1);
+  }, [requests, wallet]);
+
   const username = user?.username || '';
 
-  // This function is memoized to avoid unnecessary recalculations
-  const { threads, unreadCounts, lastMessages, sellerProfiles } = useMemo(() => {
+  // Memoize messages data to improve performance
+  const { 
+    threads, 
+    unreadCounts, 
+    lastMessages, 
+    sellerProfiles, 
+    totalUnreadCount 
+  } = useMemo(() => {
     const threads: { [seller: string]: any[] } = {};
     const unreadCounts: { [seller: string]: number } = {};
     const lastMessages: { [seller: string]: any } = {};
     const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+    let totalUnreadCount = 0;
     
     if (user) {
-      // Build threads
+      // Get all messages for the user
       Object.values(messages).forEach((msgs) => {
         msgs.forEach((msg) => {
           if (msg.sender === user.username || msg.receiver === user.username) {
@@ -171,10 +229,13 @@ export default function BuyerMessagesPage() {
         });
       });
 
-      // Sort messages and get last message for each thread
+      // Sort messages in each thread by date
+      Object.values(threads).forEach((thread) =>
+        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      );
+      
+      // Get last message and unread count for each thread
       Object.entries(threads).forEach(([seller, msgs]) => {
-        // Sort messages by date ascending
-        msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         lastMessages[seller] = msgs[msgs.length - 1];
         
         // Get seller profile picture and verification status
@@ -186,18 +247,23 @@ export default function BuyerMessagesPage() {
           pic: storedPic, 
           verified: isVerified
         };
-      });
-
-      // Count unread messages
-      Object.entries(threads).forEach(([seller, msgs]) => {
-        unreadCounts[seller] = msgs.filter(
-          (msg) => !msg.read && msg.receiver === user.username
+        
+        // Count only messages FROM seller TO buyer as unread
+        const threadUnreadCount = msgs.filter(
+          (msg) => !msg.read && msg.sender === seller && msg.receiver === user?.username
         ).length;
+        
+        unreadCounts[seller] = threadUnreadCount;
+        
+        // Only add to total if not in readThreadsRef
+        if (!readThreadsRef.current.has(seller) && threadUnreadCount > 0) {
+          totalUnreadCount += 1; // Count threads, not messages
+        }
       });
     }
     
-    return { threads, unreadCounts, lastMessages, sellerProfiles };
-  }, [user, messages, users]);
+    return { threads, unreadCounts, lastMessages, sellerProfiles, totalUnreadCount };
+  }, [user, messages, users, messageUpdate]);
 
   // Get active messages for current thread
   const activeMessages = activeThread ? threads[activeThread] || [] : [];
@@ -216,22 +282,125 @@ export default function BuyerMessagesPage() {
     });
   }, [threads, lastMessages, searchQuery]);
 
-  // Set active thread based on URL param
+  // Set up UI tracking for active thread
   useEffect(() => {
-    if (threadParam && user) {
-      setActiveThread(threadParam);
+    if (activeThread && user) {
+      // Add to readThreadsRef if there are unread messages
+      if (unreadCounts[activeThread] > 0) {
+        if (!readThreadsRef.current.has(activeThread)) {
+          // Only add to readThreadsRef if there are actual unread messages
+          readThreadsRef.current.add(activeThread);
+          
+          // Save to localStorage immediately when thread is selected
+          if (typeof window !== 'undefined') {
+            const readThreadsKey = `panty_read_threads_${user.username}`;
+            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+          }
+          
+          setMessageUpdate(prev => prev + 1); // Force UI update only once
+        }
+      }
+      
+      // Create a custom event to notify other components about thread selection
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('threadSelected', { 
+          detail: { thread: activeThread, username: user.username }
+        });
+        window.dispatchEvent(event);
+      }
     }
-  }, [threadParam, user]);
+  }, [activeThread, user, unreadCounts]);
 
-  // Mark messages as read when thread becomes active
+  // Save read threads to localStorage
   useEffect(() => {
-    if (user && activeThread && !markedThreadsRef.current.has(activeThread)) {
-      // Only mark messages FROM seller TO buyer as read (fix for bidirectional marking)
-      markMessagesAsRead(activeThread, user.username);
-      markedThreadsRef.current.add(activeThread);
-      forceRerender((v) => v + 1);
+    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
+      const readThreadsKey = `panty_read_threads_${user.username}`;
+      const threadsArray = Array.from(readThreadsRef.current);
+      localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
+      
+      // Dispatch a custom event to notify other components about the update
+      const event = new CustomEvent('readThreadsUpdated', { 
+        detail: { threads: threadsArray, username: user.username }
+      });
+      window.dispatchEvent(event);
     }
-  }, [activeThread, user, markMessagesAsRead]);
+  }, [messageUpdate, user]);
+
+  // Memoize buyerRequests to avoid recalculation
+  const buyerRequests = useMemo(() => {
+    return user ? getRequestsForUser(user.username, 'buyer') : [];
+  }, [user, getRequestsForUser]);
+
+  // Process messages to handle custom requests correctly
+  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
+    const seen = new Set();
+    const result: any[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
+        if (!seen.has(msg.meta.id)) {
+          seen.add(msg.meta.id);
+          result.unshift(msg);
+        }
+      } else {
+        result.unshift(msg);
+      }
+    }
+    return result;
+  }
+
+  // Get the messages for the active thread
+  const threadMessages = useMemo(() => {
+    return activeThread
+      ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
+      : [];
+  }, [activeThread, threads, buyerRequests]);
+
+  // Calculate UI unread count indicators for the sidebar threads
+  const uiUnreadCounts = useMemo(() => {
+    const counts: { [seller: string]: number } = {};
+    if (threads) {
+      Object.keys(threads).forEach(seller => {
+        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
+        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
+      });
+    }
+    return counts;
+  }, [threads, unreadCounts, messageUpdate]);
+
+  // Mark messages as read when explicitly viewed by user
+  const markAsRead = useCallback(() => {
+    if (!activeThread || !user) return;
+    
+    // Remember that this thread has been viewed
+    const hasUnreadMessages = threads[activeThread]?.some(
+      msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+    );
+    
+    if (hasUnreadMessages) {
+      // Mark messages as read in the context
+      markMessagesAsRead(activeThread, user.username);
+      
+      // Make sure we update readThreadsRef for UI consistency
+      if (!readThreadsRef.current.has(activeThread)) {
+        readThreadsRef.current.add(activeThread);
+        
+        // Save to localStorage immediately when messages are read
+        if (typeof window !== 'undefined') {
+          const readThreadsKey = `panty_read_threads_${user.username}`;
+          localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+          
+          // Dispatch custom event to notify other components
+          const event = new CustomEvent('readThreadsUpdated', { 
+            detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+          });
+          window.dispatchEvent(event);
+        }
+        
+        setMessageUpdate(prev => prev + 1);
+      }
+    }
+  }, [activeThread, user, threads, markMessagesAsRead]);
 
   // Image handling with validation and error handling
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,6 +438,7 @@ export default function BuyerMessagesPage() {
     reader.readAsDataURL(file);
   }, []);
 
+  // Trigger hidden file input click
   const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -282,7 +452,7 @@ export default function BuyerMessagesPage() {
       // Remove if already exists to prevent duplicates
       const filtered = prev.filter(e => e !== emoji);
       // Add to the front and return limited array
-      return [emoji, ...filtered].slice(0, 20);
+      return [emoji, ...filtered].slice(0, 30);
     });
     
     // Focus back on the input after inserting emoji
@@ -365,7 +535,9 @@ export default function BuyerMessagesPage() {
     
     // Focus back on input
     setTimeout(() => {
-      inputRef.current?.focus();
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     }, 0);
   }, [
     activeThread, 
@@ -598,35 +770,56 @@ export default function BuyerMessagesPage() {
     sendMessage
   ]);
 
-  // Calculate buyerRequests outside the render cycle
-  const buyerRequests = useMemo(() => {
-    return user ? getRequestsForUser(user.username, 'buyer') : [];
-  }, [user, getRequestsForUser]);
+  // Handle thread selection without marking as read immediately
+  const handleThreadSelect = useCallback((sellerId: string) => {
+    if (activeThread === sellerId) return; // Prevent unnecessary state updates
+    
+    setActiveThread(sellerId);
+  }, [activeThread]);
 
-  // Process messages to handle custom requests correctly
-  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
-    const seen = new Set();
-    const result: any[] = [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
-        if (!seen.has(msg.meta.id)) {
-          seen.add(msg.meta.id);
-          result.unshift(msg);
-        }
-      } else {
-        result.unshift(msg);
-      }
+  // Create a status badge component
+  function StatusBadge({ status }: { status: string }) {
+    let color = 'bg-yellow-500 text-white';
+    let label = status.toUpperCase();
+    let icon = <Clock size={12} className="mr-1" />;
+    
+    if (status === 'accepted') {
+      color = 'bg-green-600 text-white';
+      icon = <CheckCircle2 size={12} className="mr-1" />;
     }
-    return result;
+    else if (status === 'rejected') {
+      color = 'bg-red-600 text-white';
+      icon = <XCircle size={12} className="mr-1" />;
+    }
+    else if (status === 'edited') {
+      color = 'bg-blue-600 text-white';
+      icon = <Edit3 size={12} className="mr-1" />;
+    }
+    else if (status === 'paid') {
+      color = 'bg-green-800 text-white';
+      icon = <ShoppingBag size={12} className="mr-1" />;
+    }
+    else if (status === 'pending') {
+      color = 'bg-yellow-500 text-white';
+      icon = <Clock size={12} className="mr-1" />;
+    }
+    
+    return (
+      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold flex items-center ${color}`}>
+        {icon}
+        {label}
+      </span>
+    );
   }
 
-  const threadMessages = useMemo(() => {
-    return activeThread
-      ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
-      : [];
-  }, [activeThread, threads, buyerRequests]);
+  // Check if content is a single emoji
+  const isSingleEmoji = (content: string) => {
+    // Regex to match a single emoji (including compound emojis with ZWJ)
+    const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
+    return emojiRegex.test(content);
+  };
 
+  // Determine if the user is the last editor of a custom request
   function isLastEditor(customReq: any) {
     if (!customReq) return false;
     const lastMsg = threadMessages
@@ -640,7 +833,12 @@ export default function BuyerMessagesPage() {
     return lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Helper functions
+  // Get the initial for avatar placeholder
+  const getInitial = (username: string) => {
+    return username.charAt(0).toUpperCase();
+  };
+
+  // Format time function
   const formatTimeAgo = (date: string) => {
     const now = new Date();
     const messageDate = new Date(date);
@@ -664,68 +862,50 @@ export default function BuyerMessagesPage() {
     return 'Just now';
   };
 
-  // Status badge component
-  function StatusBadge({ status }: { status: string }) {
-    let color = 'bg-yellow-500 text-black';
-    let label = status.toUpperCase();
-    
-    if (status === 'accepted') color = 'bg-green-600 text-white';
-    else if (status === 'rejected') color = 'bg-red-600 text-white';
-    else if (status === 'edited') color = 'bg-blue-600 text-white';
-    else if (status === 'paid') color = 'bg-green-800 text-white';
-    else if (status === 'pending') color = 'bg-yellow-500 text-black';
-    
-    return (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
-        {label}
-      </span>
-    );
-  }
-
-  // Get the initial for avatar placeholder
-  const getInitial = (username: string) => {
-    return username.charAt(0).toUpperCase();
-  };
-
-  // Main UI rendering
   return (
     <RequireAuth role="buyer">
+      {/* Top Padding */}
+      <div className="py-3 bg-black"></div>
+      
       <div className="h-screen bg-black flex flex-col overflow-hidden">
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
           {/* Left column - Message threads */}
           <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
-            {/* Tab Navigation */}
-            <div className="flex space-x-2 px-4 pt-4 pb-2">
-              <button 
-                onClick={() => setActiveTab('messages')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  activeTab === 'messages' 
-                    ? 'bg-[#ff950e] text-black' 
-                    : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                }`}
-              >
-                Messages
-              </button>
-              <button 
-                onClick={() => setActiveTab('favorites')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  activeTab === 'favorites' 
-                    ? 'bg-[#ff950e] text-black' 
-                    : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                }`}
-              >
-                Favorites
-              </button>
-              <button 
-                onClick={() => setActiveTab('requests')}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-                  activeTab === 'requests' 
-                    ? 'bg-[#ff950e] text-black' 
-                    : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                }`}
-              >
-                Requests
-              </button>
+            {/* Buyer header */}
+            <div className="px-4 pt-4 pb-2">
+              <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
+                <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
+                My Messages
+              </h2>
+              <div className="flex space-x-2 mb-3">
+                <button 
+                  onClick={() => setFilterBy('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
+                    filterBy === 'all' 
+                      ? 'bg-[#ff950e] text-black' 
+                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                  }`}
+                >
+                  <Filter size={14} className="mr-1" />
+                  All Sellers
+                </button>
+                <button 
+                  onClick={() => setFilterBy('online')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
+                    filterBy === 'online' 
+                      ? 'bg-[#ff950e] text-black' 
+                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                  }`}
+                >
+                  <BellRing size={14} className="mr-1" />
+                  Online
+                  {totalUnreadCount > 0 && (
+                    <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
+                      {totalUnreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
             
             {/* Search Bar */}
@@ -743,30 +923,6 @@ export default function BuyerMessagesPage() {
                 </div>
               </div>
             </div>
-
-            {/* Filter Options */}
-            <div className="flex space-x-2 px-4 pb-3">
-              <button 
-                onClick={() => setFilterBy('all')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  filterBy === 'all' 
-                    ? 'bg-[#ff950e] text-black' 
-                    : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                }`}
-              >
-                All Users
-              </button>
-              <button 
-                onClick={() => setFilterBy('online')}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  filterBy === 'online' 
-                    ? 'bg-[#ff950e] text-black' 
-                    : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                }`}
-              >
-                Online Users
-              </button>
-            </div>
             
             {/* Thread list */}
             <div className="flex-1 overflow-y-auto bg-[#121212]">
@@ -778,17 +934,16 @@ export default function BuyerMessagesPage() {
                 filteredAndSortedThreads.map((seller) => {
                   const thread = threads[seller];
                   const lastMessage = lastMessages[seller];
-                  const unreadCount = unreadCounts[seller] || 0;
                   const isActive = activeThread === seller;
                   const sellerProfile = sellerProfiles[seller];
                   
                   return (
                     <div 
                       key={seller}
-                      onClick={() => setActiveThread(seller)}
+                      onClick={() => handleThreadSelect(seller)}
                       className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
                         isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
-                      }`}
+                      } transition-colors duration-150 ease-in-out`}
                     >
                       {/* Active indicator */}
                       {isActive && (
@@ -797,7 +952,7 @@ export default function BuyerMessagesPage() {
                       
                       {/* Avatar with unread indicator */}
                       <div className="relative mr-3">
-                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden">
+                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
                           {sellerProfile?.pic ? (
                             <img src={sellerProfile.pic} alt={seller} className="w-full h-full object-cover" />
                           ) : (
@@ -812,10 +967,10 @@ export default function BuyerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* Unread indicator */}
-                        {unreadCount > 0 && (
-                          <div className="absolute top-0 right-0 w-5 h-5 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212]">
-                            {unreadCount}
+                        {/* Unread indicator - only show when there are unread messages */}
+                        {uiUnreadCounts[seller] > 0 && (
+                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
+                            {uiUnreadCounts[seller]}
                           </div>
                         )}
                       </div>
@@ -824,7 +979,8 @@ export default function BuyerMessagesPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between">
                           <h3 className="font-bold text-white truncate">{seller}</h3>
-                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1">
+                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
+                            <Clock size={12} className="mr-1" />
                             {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
                           </span>
                         </div>
@@ -852,7 +1008,7 @@ export default function BuyerMessagesPage() {
                 {/* Conversation header */}
                 <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
                   <div className="flex items-center">
-                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden">
+                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
                       {sellerProfiles[activeThread]?.pic ? (
                         <img src={sellerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
                       ) : (
@@ -862,271 +1018,361 @@ export default function BuyerMessagesPage() {
                       {/* Verified badge if applicable */}
                       {sellerProfiles[activeThread]?.verified && (
                         <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
-                          <BadgeCheck size={10} className="text-[#ff950e]" />
+                          <BadgeCheck size={12} className="text-[#ff950e]" />
                         </div>
                       )}
                     </div>
                     <div>
                       <h2 className="font-bold text-lg text-white">{activeThread}</h2>
-                      <p className="text-xs text-[#ff950e]">Active now</p>
+                      <p className="text-xs text-[#ff950e] flex items-center">
+                        <Sparkles size={12} className="mr-1 text-[#ff950e]" />
+                        Active now
+                      </p>
                     </div>
                   </div>
                   
                   <div className="flex space-x-2 text-white">
-                    <button className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#333] transition">
-                      <Star size={18} className="text-gray-400 hover:text-[#ff950e]" />
-                    </button>
                     <button 
                       onClick={handleReport}
                       disabled={isUserReported}
-                      className={`w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#333] transition ${
-                        isUserReported ? 'text-red-500' : 'text-gray-400 hover:text-[#ff950e]'
-                      }`}
+                      className={`px-3 py-1 text-xs border rounded flex items-center ${
+                        isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                      } transition-colors duration-150`}
                     >
-                      <Flag size={18} />
+                      <AlertTriangle size={12} className="mr-1" />
+                      {isUserReported ? 'Reported' : 'Report'}
                     </button>
-                    <div className="relative">
-                      <button 
-                        onClick={handleBlockToggle}
-                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#333] transition"
-                      >
-                        <MoreVertical size={18} className="text-gray-400 hover:text-[#ff950e]" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={handleBlockToggle}
+                      className={`px-3 py-1 text-xs border rounded flex items-center ${
+                        isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                      } transition-colors duration-150`}
+                    >
+                      <ShieldAlert size={12} className="mr-1" />
+                      {isUserBlocked ? 'Unblock' : 'Block'}
+                    </button>
                   </div>
                 </div>
                 
-                {/* Messages - use either direct implementation or VirtualMessageList */}
-                {activeThread ? (
-                  <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
-                    <div className="max-w-3xl mx-auto space-y-4">
-                      {threadMessages.map((msg, index) => {
-                        const isFromMe = msg.sender === user?.username;
-                        const time = new Date(msg.date).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
-                        
-                        // Get custom request info if available
-                        let customReq: any = undefined;
-                        if (
-                          msg.type === 'customRequest' &&
-                          msg.meta &&
-                          typeof msg.meta.id === 'string'
-                        ) {
-                          customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
-                        }
-                        
-                        const isLatestCustom =
-                          !!customReq &&
-                          (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
-                          index === (threadMessages.length - 1) &&
-                          msg.type === 'customRequest';
-                        
-                        const showPayNow =
-                          !!customReq &&
-                          customReq.status === 'accepted' &&
-                          index === (threadMessages.length - 1) &&
-                          msg.type === 'customRequest';
-                        
-                        const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-                        const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
-                        const canPay = customReq && buyerBalance >= markupPrice;
-                        const isPaid = customReq && customReq.paid;
-                        
-                        const showActionButtons =
-                          !!customReq &&
-                          isLatestCustom &&
-                          customReq.status === 'pending' &&
-                          !isLastEditor(customReq);
-                        
-                        return (
-                          <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`rounded-lg p-3 max-w-[75%] ${
-                              isFromMe 
-                                ? 'bg-[#ff950e] text-white' 
-                                : 'bg-[#333] text-white'
-                            }`}
-                            >
-                              {/* Message header */}
-                              <div className="flex items-center text-xs mb-1">
-                                <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                                  {isFromMe ? 'You' : msg.sender} • {time}
+                {/* Messages - This div now has onClick to mark messages as read */}
+                <div 
+                  className="flex-1 overflow-y-auto p-4 bg-[#121212]"
+                  onClick={() => markAsRead()}
+                >
+                  <div className="max-w-3xl mx-auto space-y-4">
+                    {threadMessages.map((msg, index) => {
+                      const isFromMe = msg.sender === user?.username;
+                      const time = new Date(msg.date).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                      
+                      // Check if message contains only a single emoji
+                      const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
+                      
+                      // Get custom request info if available
+                      let customReq: any = undefined;
+                      if (
+                        msg.type === 'customRequest' &&
+                        msg.meta &&
+                        typeof msg.meta.id === 'string'
+                      ) {
+                        customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
+                      }
+                      
+                      const isLatestCustom =
+                        !!customReq &&
+                        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+                        index === (threadMessages.length - 1) &&
+                        msg.type === 'customRequest';
+                      
+                      const showPayNow =
+                        !!customReq &&
+                        customReq.status === 'accepted' &&
+                        index === (threadMessages.length - 1) &&
+                        msg.type === 'customRequest';
+                      
+                      const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
+                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
+                      const canPay = customReq && buyerBalance >= markupPrice;
+                      const isPaid = customReq && customReq.paid;
+                      
+                      const showActionButtons =
+                        !!customReq &&
+                        isLatestCustom &&
+                        customReq.status === 'pending' &&
+                        !isLastEditor(customReq);
+                      
+                      return (
+                        <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`rounded-lg p-3 max-w-[75%] ${
+                            isFromMe 
+                              ? 'bg-[#ff950e] text-white shadow-lg' 
+                              : 'bg-[#333] text-white shadow-md'
+                          }`}
+                          >
+                            {/* Message header */}
+                            <div className="flex items-center text-xs mb-1">
+                              <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
+                                {isFromMe ? 'You' : msg.sender} • {time}
+                              </span>
+                              {isFromMe && (
+                                <span className="ml-2 text-[10px]">
+                                  {msg.read ? (
+                                    <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
+                                      <CheckCheck size={12} className="mr-1" /> Read
+                                    </span>
+                                  ) : (
+                                    <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
+                                  )}
                                 </span>
-                                {isFromMe && (
-                                  <span className="ml-2 text-[10px]">
-                                    {msg.read ? (
-                                      <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
-                                        <CheckCheck size={12} className="mr-1" /> Read
-                                      </span>
-                                    ) : (
-                                      <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                              
-                              {/* Image message */}
-                              {msg.type === 'image' && msg.meta?.imageUrl && (
-                                <div className="mt-1 mb-2">
-                                  <img 
-                                    src={msg.meta.imageUrl} 
-                                    alt="Shared image" 
-                                    className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
-                                    onClick={() => setPreviewImage(msg.meta?.imageUrl || null)}
-                                  />
-                                  {msg.content && (
-                                    <p className="text-white mt-2">{msg.content}</p>
-                                  )}
-                                </div>
-                              )}
-                              
-                              {/* Text content */}
-                              {(msg.type !== 'image' || msg.content) && (
-                                <p className="text-white">
-                                  {msg.content}
-                                </p>
-                              )}
-                              
-                              {/* Custom request */}
-                              {msg.type === 'customRequest' && msg.meta && (
-                                <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
-                                  <p><strong>⚙️ Custom Request</strong></p>
-                                  <p>📌 Title: {customReq ? customReq.title : msg.meta.title}</p>
-                                  <p>💰 Price: {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
-                                  <p>🏷️ Tags: {customReq ? customReq.tags.join(', ') : msg.meta.tags?.join(', ')}</p>
-                                  {(customReq ? customReq.description : msg.meta.message) && (
-                                    <p>📝 {customReq ? customReq.description : msg.meta.message}</p>
-                                  )}
-                                  {customReq && (
-                                    <div className="mt-1">
-                                      <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>Status:</span>
-                                      <StatusBadge status={customReq.status} />
-                                    </div>
-                                  )}
-                                  
-                                  {/* Action buttons for custom requests */}
-                                  {showActionButtons && (
-                                    <div className="flex flex-wrap gap-2 pt-2">
-                                      <button
-                                        onClick={() => customReq && handleAccept(customReq)}
-                                        className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
-                                      >
-                                        Accept
-                                      </button>
-                                      <button
-                                        onClick={() => customReq && handleDecline(customReq)}
-                                        className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700"
-                                      >
-                                        Decline
-                                      </button>
-                                      <button
-                                        onClick={() => customReq && handleEditRequest(customReq)}
-                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
-                                      >
-                                        Edit
-                                      </button>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Pay now button */}
-                                  {showPayNow && (
-                                    <div className="flex flex-col gap-2 pt-2">
-                                      {isPaid ? (
-                                        <span className="text-green-400 font-bold">Paid ✅</span>
-                                      ) : (
-                                        <>
-                                          <button
-                                            onClick={() => customReq && canPay && handlePayNow(customReq)}
-                                            className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-[#ff950e] ${
-                                              !canPay ? 'opacity-50 cursor-not-allowed' : ''
-                                            }`}
-                                            disabled={!canPay}
-                                          >
-                                            Pay {customReq ? `$${markupPrice.toFixed(2)}` : ''} Now
-                                          </button>
-                                          {!canPay && (
-                                            <span className="text-xs text-red-400">
-                                              Insufficient balance to pay ${markupPrice.toFixed(2)}
-                                            </span>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
-                                  
-                                  {/* Edit form */}
-                                  {editRequestId === customReq?.id && customReq && (
-                                    <div className="mt-2 space-y-2">
-                                      <input
-                                        type="text"
-                                        placeholder="Title"
-                                        value={editTitle}
-                                        onChange={e => setEditTitle(e.target.value)}
-                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                      />
-                                      <input
-                                        type="number"
-                                        placeholder="Price (USD)"
-                                        value={editPrice}
-                                        onChange={e => {
-                                          const val = e.target.value;
-                                          setEditPrice(val === '' ? '' : Number(val));
-                                        }}
-                                        min="0.01"
-                                        step="0.01"
-                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                      />
-                                      <input
-                                        type="text"
-                                        placeholder="Tags (comma-separated)"
-                                        value={editTags}
-                                        onChange={e => setEditTags(e.target.value)}
-                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                      />
-                                      <textarea
-                                        placeholder="Message"
-                                        value={editMessage}
-                                        onChange={e => setEditMessage(e.target.value)}
-                                        className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white"
-                                      />
-                                      <div className="flex gap-2">
-                                        <button
-                                          onClick={handleEditSubmit}
-                                          className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700"
-                                        >
-                                          Submit Edit
-                                        </button>
-                                        <button
-                                          onClick={() => setEditRequestId(null)}
-                                          className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
                               )}
                             </div>
+                            
+                            {/* Image message */}
+                            {msg.type === 'image' && msg.meta?.imageUrl && (
+                              <div className="mt-1 mb-2">
+                                <img 
+                                  src={msg.meta.imageUrl} 
+                                  alt="Shared image" 
+                                  className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent triggering the container's onClick
+                                    setPreviewImage(msg.meta?.imageUrl || null);
+                                  }}
+                                />
+                                {msg.content && (
+                                  <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                                    {msg.content}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Text content */}
+                            {msg.type !== 'image' && msg.type !== 'customRequest' && (
+                              <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                                {msg.content}
+                              </p>
+                            )}
+                            
+                            {/* Custom request */}
+                            {msg.type === 'customRequest' && msg.meta && (
+                              <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
+                                <p className="font-semibold flex items-center">
+                                  <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-4 h-4 mr-1" />
+                                  Custom Request
+                                </p>
+                                <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
+                                <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
+                                <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
+                                {(customReq ? customReq.description : msg.meta.message) && (
+                                  <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
+                                )}
+                                {customReq && (
+                                  <p className="flex items-center">
+                                    <b>Status:</b>
+                                    <StatusBadge status={customReq.status} />
+                                  </p>
+                                )}
+                                
+                                {/* Edit form */}
+                                {editRequestId === customReq?.id && customReq && (
+                                  <div className="mt-2 space-y-2 bg-black/30 p-2 rounded">
+                                    <input
+                                      type="text"
+                                      placeholder="Title"
+                                      value={editTitle}
+                                      onChange={e => setEditTitle(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="Price (USD)"
+                                      value={editPrice}
+                                      onChange={e => {
+                                        const val = e.target.value;
+                                        setEditPrice(val === '' ? '' : Number(val));
+                                      }}
+                                      min="0.01"
+                                      step="0.01"
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Tags (comma-separated)"
+                                      value={editTags}
+                                      onChange={e => setEditTags(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <textarea
+                                      placeholder="Message"
+                                      value={editMessage}
+                                      onChange={e => setEditMessage(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Prevent triggering the container's onClick
+                                          handleEditSubmit();
+                                        }}
+                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
+                                      >
+                                        <Edit3 size={12} className="mr-1" />
+                                        Submit Edit
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Prevent triggering the container's onClick
+                                          setEditRequestId(null);
+                                        }}
+                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
+                                      >
+                                        <X size={12} className="mr-1" />
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Action buttons for custom requests */}
+                                {showActionButtons && !isPaid && (
+                                  <div className="flex flex-wrap gap-2 pt-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleAccept(customReq);
+                                      }}
+                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
+                                    >
+                                      <CheckCircle2 size={12} className="mr-1" />
+                                      Accept
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleDecline(customReq);
+                                      }}
+                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
+                                    >
+                                      <XCircle size={12} className="mr-1" />
+                                      Decline
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        customReq && handleEditRequest(customReq);
+                                      }}
+                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
+                                    >
+                                      <Edit3 size={12} className="mr-1" />
+                                      Edit
+                                    </button>
+                                  </div>
+                                )}
+                                
+                                {/* Pay now button */}
+                                {showPayNow && (
+                                  <div className="flex flex-col gap-2 pt-2">
+                                    {isPaid ? (
+                                      <span className="text-green-400 font-bold flex items-center">
+                                        <ShoppingBag size={14} className="mr-1" />
+                                        Paid ✅
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation(); // Prevent triggering the container's onClick
+                                            customReq && canPay && handlePayNow(customReq);
+                                          }}
+                                          className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-[#ff950e] hover:text-black ${
+                                            !canPay ? 'opacity-50 cursor-not-allowed' : ''
+                                          } transition-colors duration-150 flex items-center`}
+                                          disabled={!canPay}
+                                        >
+                                          <ShoppingBag size={12} className="mr-1" />
+                                          Pay {customReq ? `${markupPrice.toFixed(2)}` : ''} Now
+                                        </button>
+                                        {!canPay && (
+                                          <span className="text-xs text-red-400 flex items-center">
+                                            <AlertTriangle size={12} className="mr-1" />
+                                            Insufficient balance to pay ${markupPrice.toFixed(2)}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        );
-                      })}
-                      
-                      {/* Auto-scroll anchor */}
-                      <div ref={messagesEndRef} />
-                    </div>
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Auto-scroll anchor */}
+                    <div ref={messagesEndRef} />
                   </div>
-                ) : null}
+                </div>
                 
-                {/* Message input - either traditional or using MessageInput component */}
+                {/* Message input and emoji picker */}
                 {!isUserBlocked && (
-                  <div className="px-4 py-3 border-t border-gray-800 bg-[#1a1a1a]">
+                  <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+                    {/* Emoji Picker - position ABOVE the input */}
+                    {showEmojiPicker && (
+                      <div 
+                        ref={emojiPickerRef}
+                        className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
+                      >
+                        {/* Recent Emojis Section */}
+                        {recentEmojis.length > 0 && (
+                          <div className="px-3 pt-3">
+                            <div className="text-xs text-gray-400 mb-2">Recent</div>
+                            <div className="grid grid-cols-8 gap-1 mb-3">
+                              {recentEmojis.slice(0, 16).map((emoji, index) => (
+                                <span
+                                  key={`recent-${index}`}
+                                  onClick={() => handleEmojiClick(emoji)}
+                                  className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
+                                >
+                                  {emoji}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* All Emojis */}
+                        <div className="px-3 pt-2 pb-3">
+                          {recentEmojis.length > 0 && (
+                            <div className="text-xs text-gray-400 mb-2">All Emojis</div>
+                          )}
+                          <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
+                            {ALL_EMOJIS.map((emoji, index) => (
+                              <span
+                                key={`emoji-${index}`}
+                                onClick={() => handleEmojiClick(emoji)}
+                                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
+                              >
+                                {emoji}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Selected image preview */}
                     {selectedImage && (
-                      <div className="mb-2">
+                      <div className="px-4 pt-3 pb-2">
                         <div className="relative inline-block">
-                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded" />
+                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
                           <button
                             onClick={() => {
                               setSelectedImage(null);
@@ -1134,7 +1380,7 @@ export default function BuyerMessagesPage() {
                                 fileInputRef.current.value = '';
                               }
                             }}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs"
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs shadow-md transform transition-transform hover:scale-110"
                             style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           >
                             <X size={14} />
@@ -1145,25 +1391,29 @@ export default function BuyerMessagesPage() {
                     
                     {/* Image loading and error states */}
                     {isImageLoading && (
-                      <div className="mb-2 text-sm text-gray-400">
+                      <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
                         Loading image...
                       </div>
                     )}
                     
                     {imageError && (
-                      <div className="mb-2 text-sm text-red-400">
+                      <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
+                        <AlertTriangle size={14} className="mr-1" />
                         {imageError}
                       </div>
                     )}
                     
                     {/* Custom request form */}
                     {showCustomRequestForm && (
-                      <div className="space-y-2 mb-3 p-3 bg-[#222] rounded-lg border border-gray-700">
+                      <div className="space-y-2 mb-3 p-3 mx-4 bg-[#222] rounded-lg border border-gray-700">
                         <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-medium text-white">Custom Request</h3>
+                          <h3 className="font-medium text-white flex items-center">
+                            <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-5 h-5 mr-2" />
+                            Custom Request
+                          </h3>
                           <button 
                             onClick={() => setShowCustomRequestForm(false)}
-                            className="text-gray-400 hover:text-white"
+                            className="text-gray-400 hover:text-white transition-colors"
                           >
                             <X size={16} />
                           </button>
@@ -1199,127 +1449,103 @@ export default function BuyerMessagesPage() {
                       </div>
                     )}
                     
-                    <div className="flex flex-col gap-2">
-                      {/* Message input */}
-                      <div className="relative">
+                    {/* Message input */}
+                    <div className="px-4 py-3">
+                      <div className="relative mb-2">
                         <textarea
                           ref={inputRef}
                           value={replyMessage}
                           onChange={(e) => setReplyMessage(e.target.value)}
                           onKeyDown={handleKeyDown}
                           placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                          className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] max-h-28 resize-none"
-                          rows={2}
+                          className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+                          rows={1}
                           maxLength={250}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            markAsRead(); // But still mark messages as read when focusing the input
+                          }}
                         />
-                        <div className="absolute bottom-2 right-2">
-                          <span className="text-xs text-gray-400">{replyMessage.length}/250</span>
-                        </div>
+                        
+                        {/* Fixed emoji button position */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            setShowEmojiPicker(!showEmojiPicker);
+                            markAsRead(); // Mark messages as read when interacting with emoji button
+                          }}
+                          className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
+                            showEmojiPicker 
+                              ? 'bg-[#ff950e] text-black' 
+                              : 'text-[#ff950e] hover:bg-[#333]'
+                          } transition-colors duration-150`}
+                          title="Emoji"
+                          type="button"
+                        >
+                          <Smile size={20} className="flex-shrink-0" />
+                        </button>
                       </div>
                       
-                      {/* Emoji Picker */}
-                      {showEmojiPicker && (
-                        <div 
-                          ref={emojiPickerRef}
-                          className="absolute bottom-[105px] left-4 bg-[#222] border border-gray-700 rounded-lg shadow-lg p-2 z-50"
-                          style={{ maxWidth: '320px' }}
-                        >
-                          {/* Emoji Categories */}
-                          <div className="flex mb-2 border-b border-gray-700 pb-2">
-                            {Object.entries(EMOJI_CATEGORIES).map(([category, _]) => (
-                              <button
-                                key={category}
-                                onClick={() => setActiveEmojiCategory(category as any)}
-                                className={`p-2 rounded-full text-lg ${
-                                  activeEmojiCategory === category ? 'bg-[#333]' : ''
-                                }`}
-                                title={category.charAt(0).toUpperCase() + category.slice(1)}
-                              >
-                                {category === 'recent' ? '🕒' : 
-                                 category === 'smileys' ? '😊' :
-                                 category === 'people' ? '👋' :
-                                 category === 'nature' ? '🐱' :
-                                 category === 'food' ? '🍎' :
-                                 category === 'activities' ? '⚽' :
-                                 category === 'travel' ? '🚗' :
-                                 category === 'objects' ? '💻' :
-                                 category === 'symbols' ? '❤️' : '🏁'}
-                              </button>
-                            ))}
-                          </div>
-                          
-                          {/* Emoji Grid */}
-                          <div className="grid grid-cols-8 gap-1">
-                            {activeEmojiCategory === 'recent' ? (
-                              recentEmojis.length > 0 ? (
-                                recentEmojis.map((emoji, index) => (
-                                  <button
-                                    key={`recent-${index}`}
-                                    onClick={() => handleEmojiClick(emoji)}
-                                    className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))
-                              ) : (
-                                <p className="col-span-8 text-center text-gray-400 py-3 text-sm">
-                                  No recent emojis
-                                </p>
-                              )
-                            ) : (
-                              EMOJI_CATEGORIES[activeEmojiCategory].split(' ').map((emoji, index) => (
-                                <button
-                                  key={`${activeEmojiCategory}-${index}`}
-                                  onClick={() => handleEmojiClick(emoji)}
-                                  className="p-1 text-xl hover:bg-[#333] rounded cursor-pointer transition"
-                                >
-                                  {emoji}
-                                </button>
-                              ))
-                            )}
-                          </div>
+                      {/* Character count */}
+                      {replyMessage.length > 0 && (
+                        <div className="text-xs text-gray-400 mb-2 text-right">
+                          {replyMessage.length}/250
                         </div>
                       )}
                       
-                      {/* Input actions */}
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-4">
+                      {/* Bottom row with action buttons - COMPLETELY REPLACED WITH CUSTOM ICONS */}
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-0">
                           {/* Tip button */}
-                          <button
-                            onClick={() => setShowTipModal(true)}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
+                          <img 
+                            src="/Send_Tip_Icon.png" 
+                            alt="Send Tip" 
+                            className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowTipModal(true);
+                              markAsRead();
+                            }}
                             title="Send Tip"
-                            aria-label="Send Tip"
-                          >
-                            $
-                          </button>
+                          />
                           
                           {/* Attachment button */}
-                          <button
-                            onClick={triggerFileInput}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
-                            disabled={showCustomRequestForm || isImageLoading}
+                          <img 
+                            src="/Attach_Image_Icon.png" 
+                            alt="Attach Image" 
+                            className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
+                              showCustomRequestForm || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            onClick={(e) => {
+                              if (showCustomRequestForm || isImageLoading) return;
+                              e.stopPropagation();
+                              triggerFileInput();
+                              markAsRead();
+                            }}
                             title="Attach Image"
-                            aria-label="Attach Image"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path>
-                            </svg>
-                          </button>
+                          />
                           
-                          {/* Emoji button */}
+                          {/* Emoji button (mobile) - keeping this one as a button since it's not a custom image */}
                           <button
-                            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowEmojiPicker(!showEmojiPicker);
+                              markAsRead();
+                            }}
+                            className="md:hidden border-none p-0 bg-transparent focus:outline-none"
                             title="Emoji"
                             aria-label="Emoji"
                           >
-                            <Smile size={26} />
+                            <Smile size={52} className="text-[#ff950e]" />
                           </button>
                           
                           {/* Custom Request button */}
-                          <button
-                            onClick={() => {
+                          <img 
+                            src="/Custom_Request_Icon.png" 
+                            alt="Custom Request" 
+                            className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setShowCustomRequestForm(!showCustomRequestForm);
                               if (selectedImage) {
                                 setSelectedImage(null);
@@ -1327,27 +1553,10 @@ export default function BuyerMessagesPage() {
                                   fileInputRef.current.value = '';
                                 }
                               }
+                              markAsRead();
                             }}
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl font-bold"
                             title="Custom Request"
-                            aria-label="Custom Request"
-                          >
-                            +
-                          </button>
-                          
-                          {/* Voice Message button */}
-                          <button 
-                            className="w-[52px] h-[52px] flex items-center justify-center rounded-full bg-[#ff950e] hover:bg-[#e88800] text-black text-2xl"
-                            title="Voice Message"
-                            aria-label="Voice Message"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                              <line x1="12" y1="19" x2="12" y2="23"></line>
-                              <line x1="8" y1="23" x2="16" y2="23"></line>
-                            </svg>
-                          </button>
+                          />
                           
                           {/* Hidden file input */}
                           <input
@@ -1359,31 +1568,37 @@ export default function BuyerMessagesPage() {
                           />
                         </div>
                         
-                        {/* Send button */}
-                        <button
-                          onClick={handleReply}
-                          disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
-                          className={`w-[52px] h-[52px] rounded-full flex items-center justify-center text-black text-2xl ${
+                        {/* Send Button - Replaced with image */}
+                        <img
+                          src="/Send_Button.png"
+                          alt="Send"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReply();
+                            markAsRead();
+                          }}
+                          className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
-                              ? 'bg-[#c17200] cursor-not-allowed'
-                              : 'bg-[#ff950e] hover:bg-[#e88800]'
+                              ? 'opacity-50 cursor-not-allowed'
+                              : ''
                           }`}
-                          title="Send Message"
-                          aria-label="Send Message"
-                        >
-                          ➤
-                        </button>
+                          style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
+                        />
                       </div>
                     </div>
                   </div>
                 )}
                 
                 {isUserBlocked && (
-                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a]">
-                    You have blocked this user
+                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+                    <ShieldAlert size={16} className="mr-2" />
+                    You have blocked this seller
                     <button 
-                      onClick={handleBlockToggle}
-                      className="ml-2 underline text-gray-400 hover:text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBlockToggle();
+                      }}
+                      className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
                     >
                       Unblock
                     </button>
@@ -1394,7 +1609,7 @@ export default function BuyerMessagesPage() {
               <div className="flex-1 flex items-center justify-center text-gray-400">
                 <div className="text-center p-4">
                   <div className="flex justify-center mb-4">
-                    <MessageSquare size={64} className="text-gray-600" />
+                    <MessageCircle size={64} className="text-gray-600" />
                   </div>
                   <p className="text-xl mb-2">Select a conversation to view messages</p>
                   <p className="text-sm">Your messages will appear here</p>
@@ -1403,6 +1618,9 @@ export default function BuyerMessagesPage() {
             )}
           </div>
         </div>
+        
+        {/* Bottom Padding */}
+        <div className="py-6 bg-black"></div>
         
         {/* Payment confirmation modal */}
         {showPayModal && payingRequest && (
@@ -1419,13 +1637,13 @@ export default function BuyerMessagesPage() {
               <div className="flex justify-end gap-2 mt-6">
                 <button
                   onClick={handleCancelPay}
-                  className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600"
+                  className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors duration-150"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmPay}
-                  className="px-4 py-2 rounded bg-[#ff950e] text-white hover:bg-[#ff8500]"
+                  className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] transition-colors duration-150"
                 >
                   Confirm & Pay
                 </button>
@@ -1439,21 +1657,28 @@ export default function BuyerMessagesPage() {
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50">
             <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-white">Send a Tip</h3>
+                <h3 className="text-xl font-bold text-white flex items-center">
+                  <img src="/Send_Tip_Icon.png" alt="Send Tip" className="w-6 h-6 mr-2" />
+                  Send a Tip
+                </h3>
                 <button 
                   onClick={() => {
                     setShowTipModal(false);
                     setTipResult(null);
                     setTipAmount('');
                   }}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-400 hover:text-white transition-colors duration-150"
                 >
                   <X size={20} />
                 </button>
               </div>
               
               {tipResult ? (
-                <div className={`p-4 rounded-lg mb-4 ${tipResult.success ? 'bg-green-600 bg-opacity-20 text-green-400' : 'bg-red-600 bg-opacity-20 text-red-400'}`}>
+                <div className={`p-4 rounded-lg mb-4 ${tipResult.success ? 'bg-green-600 bg-opacity-20 text-green-400' : 'bg-red-600 bg-opacity-20 text-red-400'} flex items-center`}>
+                  {tipResult.success ? 
+                    <CheckCircle2 size={16} className="mr-2" /> : 
+                    <AlertTriangle size={16} className="mr-2" />
+                  }
                   {tipResult.message}
                 </div>
               ) : (
@@ -1471,7 +1696,7 @@ export default function BuyerMessagesPage() {
                         type="number"
                         value={tipAmount}
                         onChange={(e) => setTipAmount(e.target.value)}
-                        className="bg-[#333] text-white border-gray-700 focus:ring-[#ff950e] focus:border-[#ff950e] block w-full pl-7 pr-12 rounded-md"
+                        className="bg-[#333] text-white border-gray-700 focus:ring-[#ff950e] focus:border-[#ff950e] block w-full pl-7 pr-12 rounded-md p-2"
                         placeholder="0.00"
                         min="1"
                         step="0.01"
@@ -1484,15 +1709,16 @@ export default function BuyerMessagesPage() {
                         setShowTipModal(false);
                         setTipAmount('');
                       }}
-                      className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600"
+                      className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors duration-150"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSendTip}
-                      className="px-4 py-2 rounded bg-[#ff950e] text-white hover:bg-[#ff8500]"
+                      className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] flex items-center transition-colors duration-150"
                       disabled={!tipAmount || parseFloat(tipAmount) <= 0}
                     >
+                      <img src="/Send_Tip_Icon.png" alt="Send Tip" className="w-4 h-4 mr-1" />
                       Send Tip
                     </button>
                   </div>
@@ -1508,6 +1734,23 @@ export default function BuyerMessagesPage() {
           isOpen={!!previewImage}
           onClose={() => setPreviewImage(null)}
         />
+        
+        <style jsx global>{`
+          .emoji-button::before {
+            content: "";
+            display: block;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: black;
+            z-index: -1;
+          }
+          .emoji-button {
+            position: relative;
+            z-index: 1;
+          }
+        `}</style>
       </div>
     </RequireAuth>
   );
