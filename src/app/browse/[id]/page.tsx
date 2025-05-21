@@ -851,49 +851,59 @@ export default function ListingDetailPage() {
                 </div>
               )}
 
-              {/* Seller Info Card below buttons */}
+              {/* Seller Info Card with larger profile picture and badge overlay */}
               {user?.role === 'buyer' && (
-                <div className="flex items-center gap-4 bg-[#181818]/80 border border-[#232323] rounded-2xl px-5 py-4 mt-6 mb-2 shadow-inner w-full">
-                  {sellerProfile.pic ? (
-                    <img
-                      src={sellerProfile.pic}
-                      alt={listing.seller}
-                      className="w-14 h-14 rounded-full object-cover border-2 border-[#ff950e] shadow"
-                    />
-                  ) : (
-                    <User className="w-12 h-12 text-[#ff950e] bg-black rounded-full p-2 border-2 border-[#ff950e]" />
-                  )}
+                <div className="flex items-start gap-6 bg-[#181818]/80 border border-[#232323] rounded-2xl p-5 mt-6 mb-4 shadow-inner w-full">
+                  {/* Seller profile picture section - increased size by 70% */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-24 h-24 rounded-full border-2 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg">
+                      {sellerProfile.pic ? (
+                        <img
+                          src={sellerProfile.pic}
+                          alt={listing.seller}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-4xl font-bold">
+                          {listing.seller ? listing.seller.charAt(0).toUpperCase() : '?'}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Tier badge overlay on profile picture */}
+                    {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
+                      <div className="absolute -bottom-1 -right-2">
+                        <TierBadge tier={sellerTierInfo.tier} size="lg" showTooltip={true} />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Seller info content - shifted right */}
                   <div className="flex-1 min-w-0">
                     {/* Seller Name and Verified Badge */}
-                    <div className="flex items-center gap-2 group"> {/* Added group class here */}
-                      <span className="font-bold text-lg text-white truncate">{listing.seller}</span>
-                      {/* Verified Badge - Check seller's current status */}
+                    <div className="flex items-center gap-2 mb-1 group">
+                      <span className="font-bold text-xl text-white truncate">{listing.seller}</span>
                       {isSellerVerified && (
                         <div className="relative">
                           <img
                             src="/verification_badge.png"
                             alt="Verified"
-                            className="w-5 h-5" // Slightly larger badge for detail page
+                            className="w-5 h-5"
                           />
                           <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
                             Verified Seller
                           </div>
                         </div>
                       )}
-                      {/* Seller Tier Badge */}
-                      {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-                        <div className="relative group ml-1">
-                          <TierBadge tier={sellerTierInfo.tier} size="sm" />
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
-                            {sellerTierInfo.tier} Seller
-                          </div>
-                        </div>
-                      )}
                     </div>
-                    <p className="text-xs text-gray-400 mt-1 truncate">{sellerProfile.bio || 'No bio provided.'}</p>
+                    
+                    <p className="text-sm text-gray-400 mt-1 mb-3 line-clamp-2">
+                      {sellerProfile.bio || 'No bio provided.'}
+                    </p>
+                    
                     <Link
                       href={`/sellers/${listing.seller}`}
-                      className="inline-block mt-2 bg-black border border-[#ff950e] text-[#ff950e] font-bold px-3 py-1.5 rounded-full text-xs hover:bg-[#ff950e] hover:text-black transition"
+                      className="inline-block mt-1 bg-black border border-[#ff950e] text-[#ff950e] font-bold px-3 py-1.5 rounded-full text-xs hover:bg-[#ff950e] hover:text-black transition"
                     >
                       View Profile
                     </Link>
