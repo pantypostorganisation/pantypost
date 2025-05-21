@@ -306,7 +306,7 @@ export default function SellerProfilePage() {
             {/* Badge positioned absolutely to the right of profile pic */}
             {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
               <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2">
-                <TierBadge tier={sellerTierInfo.tier} size="xl" />
+                <TierBadge tier={sellerTierInfo.tier} size="2xl" showTooltip={true} />
               </div>
             )}
           </div>

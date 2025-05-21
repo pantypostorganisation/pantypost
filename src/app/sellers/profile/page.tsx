@@ -454,7 +454,7 @@ export default function SellerProfileSettingsPage() {
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center">
                       <div className="pr-6 flex-shrink-0">
-                        <TierBadge tier={sellerTierInfo.tier} size="xl" />
+                        <TierBadge tier={sellerTierInfo.tier} size="2xl" showTooltip={true} />
                       </div>
                       <div>
                         <h2 className="text-xl font-bold text-white mb-1 flex items-center">

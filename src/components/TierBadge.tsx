@@ -6,7 +6,7 @@ import { TierInfo, TierLevel, TIER_LEVELS } from '@/utils/sellerTiers';
 
 interface TierBadgeProps {
   tier?: TierLevel | null;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   showTooltip?: boolean;
   className?: string;
 }
@@ -58,23 +58,27 @@ const TierBadge = ({
   
   const tierInfo = TIER_LEVELS[tier] || TIER_LEVELS.Tease;
   
-  // Size mappings for the badge
+  // Size mappings for the badge with expanded sizes
   const sizeClasses = {
     sm: {
-      image: 16,
+      image: 20,
       tooltip: 'w-48',
     },
     md: {
-      image: 24,
+      image: 32,
       tooltip: 'w-52',
     },
     lg: {
-      image: 32,
+      image: 48,
       tooltip: 'w-56',
     },
     xl: {
       image: 64,
       tooltip: 'w-60',
+    },
+    '2xl': {
+      image: 96,
+      tooltip: 'w-64',
     },
   };
   
@@ -87,15 +91,19 @@ const TierBadge = ({
       onMouseEnter={() => showTooltip && setShowDetails(true)}
       onMouseLeave={() => showTooltip && setShowDetails(false)}
     >
-      {/* Badge image only - no background or border */}
+      {/* Badge image with higher quality and better rendering */}
       {tierInfo.badgeImage ? (
-        <Image
-          src={tierInfo.badgeImage}
-          alt={`${tier} Seller Badge`}
-          width={imageSize}
-          height={imageSize}
-          className="object-contain"
-        />
+        <div className="flex items-center justify-center">
+          <Image
+            src={tierInfo.badgeImage}
+            alt={`${tier} Seller Badge`}
+            width={imageSize}
+            height={imageSize}
+            className="object-contain drop-shadow-lg"
+            quality={100}
+            priority={size === 'xl' || size === '2xl'}
+          />
+        </div>
       ) : (
         <div className="flex items-center justify-center">
           <span className="font-bold text-center text-xl">
