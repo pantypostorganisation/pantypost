@@ -85,7 +85,7 @@ export const getSellerTier = (
   // Calculate total sales count and amount
   const totalSales = sellerOrders.length;
   const totalAmount = sellerOrders.reduce(
-    (sum, order) => sum + (order.price || 0),
+    (sum, order) => sum + (order?.price ?? 0),
     0
   );
 
