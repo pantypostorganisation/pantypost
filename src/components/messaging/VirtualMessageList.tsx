@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CheckCheck } from 'lucide-react';
@@ -126,7 +126,7 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
         <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
           <p><strong> Custom Request</strong></p>
           <p> Title: {message.meta.title}</p>
-          <p> Price: ${message.meta.price !== undefined ? message.meta.price.toFixed(2) : "0.00"}</p>
+          <p> Price: ${message.meta.price != null ? message.meta.price.toFixed(2) : "0.00"}</p>
           <p> Tags: {message.meta.tags?.join(', ')}</p>
           {message.meta.message && <p> {message.meta.message}</p>}
         </div>
