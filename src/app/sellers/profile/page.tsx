@@ -337,12 +337,12 @@ export default function SellerProfileSettingsPage() {
 
                  <div className="flex gap-2">
                    {galleryImages.length > 0 && (
-                     <button
+                     <img
+                       src="/Clear_All.png"
+                       alt="Clear All"
                        onClick={clearAllGalleryImages}
-                       className="text-xs px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded-full transition flex items-center gap-1"
-                     >
-                       <Trash2 className="w-3 h-3" /> Clear All
-                     </button>
+                       className="w-16 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                     />
                    )}
                  </div>
                </div>
