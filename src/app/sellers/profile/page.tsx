@@ -258,12 +258,12 @@ export default function SellerProfileSettingsPage() {
                    className="hidden"
                  />
 
-                 <button
+                 <img
+                   src="/Upload_New_Picture.png"
+                   alt="Upload New Picture"
                    onClick={() => profilePicInputRef.current?.click()}
-                   className="text-sm text-[#ff950e] hover:text-white transition"
-                 >
-                   Upload New Picture
-                 </button>
+                   className="w-24 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                 />
                </div>
 
                {/* Bio */}
@@ -309,13 +309,15 @@ export default function SellerProfileSettingsPage() {
                </div>
              </div>
 
-             {/* Save Button - Just the image, no background */}
-             <img
-               src="/Save_All_Button.png"
-               alt="Save All Profile Changes"
-               onClick={handleSave}
-               className="w-full h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200"
-             />
+             {/* Save Button */}
+             <div className="flex justify-center">
+               <img
+                 src="/Save_All_Button.png"
+                 alt="Save All Profile Changes"
+                 onClick={handleSave}
+                 className="w-24 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+               />
+             </div>
 
              {saveSuccess && (
                <div className="bg-green-900 text-green-100 p-3 rounded-lg mt-3 text-center">
@@ -371,18 +373,16 @@ export default function SellerProfileSettingsPage() {
                      </label>
                    </div>
 
-                   <button
+                   <img
+                     src="/Add_To_Gallery.png"
+                     alt="Add to Gallery"
                      onClick={handleUploadAll}
-                     disabled={selectedFiles.length === 0 || isUploading}
-                     className={`px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 ${
+                     className={`w-12 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${
                        selectedFiles.length === 0 || isUploading
-                         ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                         : 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
+                         ? 'opacity-50 cursor-not-allowed'
+                         : ''
                      }`}
-                   >
-                     <Upload className="w-4 h-4" />
-                     {isUploading ? 'Processing...' : `Add to Gallery (${selectedFiles.length})`}
-                   </button>
+                   />
                  </div>
 
                  {/* Selected Files Preview */}
