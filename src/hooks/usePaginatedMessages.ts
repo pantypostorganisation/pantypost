@@ -61,6 +61,13 @@ export function usePaginatedMessages(
     return `${sampleMessage.sender}-${sampleMessage.receiver}`;
   }, []);
 
+  // Helper function to find the latest message by date
+  const getLatestMessageDate = useCallback((messages: Message[]): number => {
+    if (messages.length === 0) return 0;
+    
+    return Math.max(...messages.map(msg => new Date(msg.date).getTime()));
+  }, []);
+
   // Reset pagination when conversation changes
   useEffect(() => {
     const currentConversationId = getConversationId(messages);
@@ -139,9 +146,8 @@ export function usePaginatedMessages(
 
       // If same conversation, check for new messages
       if (oldConversationId === newConversationId) {
-        const oldLatestDate = new Date(
-          messagesRef.current[messagesRef.current.length - 1]?.date || 0
-        ).getTime();
+        // FIX: Get the actual latest message date from all previous messages
+        const oldLatestDate = getLatestMessageDate(messagesRef.current);
 
         // Find new messages (those with date newer than the latest in our ref)
         const newMessages = messages.filter(msg =>
@@ -162,7 +168,7 @@ export function usePaginatedMessages(
     return () => {
       isCurrent = false;
     };
-  }, [messages, displayedMessages, getConversationId, sortDirection]);
+  }, [messages, displayedMessages, getConversationId, sortDirection, getLatestMessageDate]);
 
   // Check if we're approaching the end of the list
   useEffect(() => {
