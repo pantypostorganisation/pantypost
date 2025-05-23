@@ -61,6 +61,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
   // Handle image selection
   const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Fixed: Added null check for event.target
+    if (!event.target) return;
+    
     const file = event.target.files?.[0];
     if (!file) return;
     
