@@ -61,11 +61,11 @@ export function usePaginatedMessages(
     return `${sampleMessage.sender}-${sampleMessage.receiver}`;
   }, []);
 
-  // Helper function to find the latest message by date
-  const getLatestMessageDate = useCallback((messages: Message[]): number => {
-    if (messages.length === 0) return 0;
-    
-    return Math.max(...messages.map(msg => new Date(msg.date).getTime()));
+  // Helper function to create a unique identifier for a message
+  const getMessageKey = useCallback((message: Message): string => {
+    // Create a unique key based on message content and timestamp
+    // This assumes that the combination of sender, receiver, content, and date is unique
+    return `${message.sender}-${message.receiver}-${message.content}-${message.date}`;
   }, []);
 
   // Reset pagination when conversation changes
@@ -146,18 +146,25 @@ export function usePaginatedMessages(
 
       // If same conversation, check for new messages
       if (oldConversationId === newConversationId) {
-        // FIX: Get the actual latest message date from all previous messages
-        const oldLatestDate = getLatestMessageDate(messagesRef.current);
+        // FIXED: Use Set-based comparison to detect truly new messages
+        // Create a Set of message keys from the previous messages for O(1) lookup
+        const existingMessageKeys = new Set(
+          messagesRef.current.map(msg => getMessageKey(msg))
+        );
 
-        // Find new messages (those with date newer than the latest in our ref)
-        const newMessages = messages.filter(msg =>
-          new Date(msg.date).getTime() > oldLatestDate
+        // Find new messages by checking which ones don't exist in the previous set
+        const newMessages = messages.filter(msg => 
+          !existingMessageKeys.has(getMessageKey(msg))
         );
 
         // If there are new messages, add them to displayed messages
         if (newMessages.length > 0 && isCurrent) {
           const sorted = sortMessages(newMessages, sortDirection);
-          setDisplayedMessages(prev => [...prev, ...sorted]);
+          setDisplayedMessages(prev => {
+            // Merge and re-sort to handle out-of-order messages properly
+            const combined = [...prev, ...sorted];
+            return sortMessages(combined, sortDirection);
+          });
         }
       }
 
@@ -168,7 +175,7 @@ export function usePaginatedMessages(
     return () => {
       isCurrent = false;
     };
-  }, [messages, displayedMessages, getConversationId, sortDirection, getLatestMessageDate]);
+  }, [messages, displayedMessages, getConversationId, sortDirection, getMessageKey]);
 
   // Check if we're approaching the end of the list
   useEffect(() => {
