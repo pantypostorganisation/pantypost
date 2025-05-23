@@ -104,7 +104,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
   // Handle sending the message
   const handleSend = () => {
-    if (disabled || !content.trim() && !selectedImage || isUploading) {
+    if (disabled || (!content.trim() && !selectedImage) || isUploading) {
       return;
     }
     
@@ -216,9 +216,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
           <button
             type="button"
             onClick={handleSend}
-            disabled={disabled || !content.trim() && !selectedImage || isUploading}
+            disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
             className={`px-4 py-2 rounded-full flex items-center gap-2 transition-colors ${
-              disabled || !content.trim() && !selectedImage || isUploading
+              disabled || (!content.trim() && !selectedImage) || isUploading
                 ? 'bg-[#333] text-gray-500 cursor-not-allowed'
                 : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
             }`}
