@@ -129,22 +129,12 @@ export default function ListingDetailPage() {
   // Calculate total payable for current highest bid
   const currentTotalPayable = calculateTotalPayable(currentHighestBid);
      
-  // Auto-suggest bid amounts
+  // Auto-suggest bid amounts - simplified to just +$10
   const suggestedBidAmount = useMemo(() => {
     if (!isAuctionListing || !listing?.auction) return null;
     
     const currentBid = listing.auction.highestBid || listing.auction.startingPrice;
-    let increment = 0;
-    
-    // Scale increment based on current bid
-    if (currentBid < 10) increment = 0.5;
-    else if (currentBid < 50) increment = 1;
-    else if (currentBid < 100) increment = 2;
-    else if (currentBid < 250) increment = 5;
-    else if (currentBid < 500) increment = 10;
-    else increment = 20;
-    
-    return (Math.ceil(currentBid / increment) * increment + increment).toFixed(2);
+    return (currentBid + 10).toFixed(2);
   }, [isAuctionListing, listing?.auction]);
 
   // Sticky Buy Now logic
@@ -234,6 +224,20 @@ export default function ListingDetailPage() {
     
     return () => clearInterval(interval);
   }, [isAuctionListing, isAuctionEnded, checkCurrentUserFunds]);
+  
+  // NEW: Check if auction just ended and user won
+  useEffect(() => {
+    if (isAuctionListing && isAuctionEnded && user?.role === "buyer" && isUserHighestBidder && !showAuctionSuccess) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        setShowAuctionSuccess(true);
+        // Auto redirect after 10 seconds (reduced from 15)
+        setTimeout(() => {
+          router.push('/buyers/my-orders');
+        }, 10000);
+      }, 1000);
+    }
+  }, [isAuctionListing, isAuctionEnded, user?.role, isUserHighestBidder, showAuctionSuccess, router]);
   
   // Memoize and optimize time remaining calculation for better performance
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -398,7 +402,7 @@ export default function ListingDetailPage() {
       setTimeout(() => {
         removeListing(listing.id);
         router.push('/buyers/my-orders');
-      }, 15000); // 15 second delay to show success message
+      }, 10000); // Reduced from 15 seconds
     } else {
       setPurchaseStatus('Insufficient balance. Please top up your wallet.');
       setIsProcessing(false);
@@ -514,8 +518,13 @@ export default function ListingDetailPage() {
     const isSeller = user?.username === listing.seller;
     const hasUserBid = didUserBid && !isHighestBidder;
     
+    // Don't show generic screens if the user won (they'll see the winner modal)
+    if (user?.role === "buyer" && isHighestBidder) {
+      return null; // The winner modal will handle this case
+    }
+    
     // Generic auction ended screen (for sellers and non-bidders)
-    if ((isSeller || (!hasUserBid && !isHighestBidder)) && !(user?.role === "buyer" && isHighestBidder)) {
+    if ((isSeller || (!hasUserBid && !isHighestBidder))) {
       return (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
@@ -611,19 +620,6 @@ export default function ListingDetailPage() {
           </div>
         </div>
       );
-    }
-    
-    // Screen for auction winner - show success modal
-    if (user?.role === "buyer" && isHighestBidder) {
-      // Trigger the auction success modal instead of immediate redirect
-      if (!showAuctionSuccess) {
-        setShowAuctionSuccess(true);
-        // Auto redirect after 15 seconds
-        setTimeout(() => {
-          router.push('/buyers/my-orders');
-        }, 15000);
-        return null; // Don't render the old modal
-      }
     }
     
     return null;
@@ -776,7 +772,7 @@ export default function ListingDetailPage() {
               )}
             </div>
 
-            {/* Enhanced Seller Card */}
+            {/* Enhanced Seller Card - FIXED TIER BADGE POSITIONING */}
             {user?.role === 'buyer' && (
               <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/50 border border-gray-700 rounded-2xl p-6 backdrop-blur-sm">
                 <div className="flex items-start gap-4">
@@ -791,10 +787,10 @@ export default function ListingDetailPage() {
                       )}
                     </div>
                     
-                    {/* Tier Badge */}
+                    {/* FIXED: Tier Badge positioned to bottom-right of profile picture */}
                     {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-                      <div className="absolute -bottom-1 -right-1">
-                        <TierBadge tier={sellerTierInfo.tier} size="lg" showTooltip={true} />
+                      <div className="absolute -bottom-2 -right-2">
+                        <TierBadge tier={sellerTierInfo.tier} size="md" showTooltip={true} />
                       </div>
                     )}
                   </div>
@@ -998,23 +994,26 @@ export default function ListingDetailPage() {
                       </button>
                     </div>
                     
-                    {/* Quick Bid Buttons */}
-                    {suggestedBidAmount && (
-                      <div className="flex gap-2">
+                    {/* Quick Bid Buttons + Bid History Button */}
+                    <div className="flex gap-2">
+                      {suggestedBidAmount && (
                         <button
                           onClick={() => setBidAmount(suggestedBidAmount)}
-                          className="flex-1 bg-purple-900/50 text-purple-300 px-4 py-2 rounded-lg hover:bg-purple-800/50 transition border border-purple-700/50 text-sm font-medium"
+                          className="bg-purple-900/50 text-purple-300 px-4 py-2 rounded-lg hover:bg-purple-800/50 transition border border-purple-700/50 text-sm font-medium"
                         >
                           ${suggestedBidAmount}
                         </button>
-                        <button
-                          onClick={() => setBidAmount((parseFloat(suggestedBidAmount) * 1.5).toFixed(2))}
-                          className="flex-1 bg-purple-900/50 text-purple-300 px-4 py-2 rounded-lg hover:bg-purple-800/50 transition border border-purple-700/50 text-sm font-medium"
-                        >
-                          ${(parseFloat(suggestedBidAmount) * 1.5).toFixed(2)}
-                        </button>
-                      </div>
-                    )}
+                      )}
+                      {/* Bid History Button - takes remaining space with sheen effect */}
+                      <button
+                        onClick={() => setShowBidHistory(true)}
+                        className="flex-1 bg-gray-800/50 text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition border border-gray-700/50 text-sm font-medium flex items-center justify-center gap-2 relative overflow-hidden group"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                        <BarChart2 className="w-4 h-4 relative z-10" />
+                        <span className="relative z-10">Bid history ({listing.auction.bids?.length || 0})</span>
+                      </button>
+                    </div>
                     
                     {/* Status Messages */}
                     {bidError && (
@@ -1026,6 +1025,17 @@ export default function ListingDetailPage() {
                     {bidSuccess && (
                       <div className="bg-green-900/30 border border-green-800 text-green-400 p-4 rounded-xl text-sm">
                         {bidSuccess}
+                      </div>
+                    )}
+                    
+                    {/* Bid Status */}
+                    {bidStatus.message && (
+                      <div className={`p-3 rounded-xl text-sm border ${
+                        bidStatus.success 
+                          ? 'bg-green-900/20 border-green-800/40 text-green-400' 
+                          : 'bg-yellow-900/20 border-yellow-800/40 text-yellow-400'
+                      }`}>
+                        {bidStatus.message}
                       </div>
                     )}
                   </div>
@@ -1144,10 +1154,10 @@ export default function ListingDetailPage() {
           </div>
         </div>
 
-        {/* Enhanced Bid History Modal */}
+        {/* Enhanced Bid History Modal - RE-ADDED */}
         {showBidHistory && isAuctionListing && listing.auction && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-purple-800 w-full max-w-2xl p-8 relative shadow-2xl">
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-purple-800 w-full max-w-2xl max-h-[80vh] p-6 relative shadow-2xl">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-800 via-purple-500 to-purple-800 rounded-t-2xl"></div>
               
               <div className="flex justify-between items-center mb-6">
@@ -1243,49 +1253,49 @@ export default function ListingDetailPage() {
           </div>
         )}
 
-        {/* Enhanced Auction Success Modal */}
+        {/* FIXED: Smaller Auction Winner Modal */}
         {showAuctionSuccess && isAuctionListing && listing && user?.role === "buyer" && isUserHighestBidder && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-gradient-to-br from-yellow-900/20 via-gray-900 to-purple-900/20 p-8 rounded-3xl shadow-2xl border border-yellow-500/30 max-w-lg w-full text-center relative overflow-hidden">
+            <div className="bg-gradient-to-br from-yellow-900/20 via-gray-900 to-purple-900/20 p-6 rounded-3xl shadow-2xl border border-yellow-500/30 max-w-md w-full text-center relative overflow-hidden max-h-[90vh] overflow-y-auto">
               {/* Animated background effects */}
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-purple-500/10 to-yellow-500/10 animate-pulse"></div>
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 via-purple-500 to-yellow-500"></div>
               
-              <div className="relative z-10 mb-6">
-                <div className="relative mx-auto w-28 h-28 mb-6">
+              <div className="relative z-10 mb-4">
+                <div className="relative mx-auto w-20 h-20 mb-4">
                   {/* Animated trophy with multiple rings */}
                   <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping"></div>
                   <div className="absolute inset-2 bg-yellow-500/30 rounded-full animate-ping animation-delay-200"></div>
-                  <div className="relative bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full p-6 shadow-lg">
-                    <Award className="w-16 h-16 text-black" />
+                  <div className="relative bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full p-4 shadow-lg">
+                    <Award className="w-12 h-12 text-black" />
                   </div>
-                  <CheckCircle className="absolute -bottom-1 -right-1 w-12 h-12 text-green-500 bg-gray-900 rounded-full p-2 border-2 border-gray-900" />
+                  <CheckCircle className="absolute -bottom-1 -right-1 w-8 h-8 text-green-500 bg-gray-900 rounded-full p-1 border-2 border-gray-900" />
                   
                   {/* Floating particles */}
-                  <div className="absolute -top-2 -left-2 w-3 h-3 bg-yellow-400 rounded-full animate-bounce"></div>
-                  <div className="absolute -top-1 -right-3 w-2 h-2 bg-purple-400 rounded-full animate-bounce animation-delay-300"></div>
-                  <div className="absolute -bottom-2 -left-3 w-2 h-2 bg-yellow-400 rounded-full animate-bounce animation-delay-500"></div>
+                  <div className="absolute -top-2 -left-2 w-2 h-2 bg-yellow-400 rounded-full animate-bounce"></div>
+                  <div className="absolute -top-1 -right-3 w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce animation-delay-300"></div>
+                  <div className="absolute -bottom-2 -left-3 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce animation-delay-500"></div>
                 </div>
                 
-                <h2 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 bg-clip-text text-transparent mb-2">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 bg-clip-text text-transparent mb-2">
                   🏆 CONGRATULATIONS! 🏆
                 </h2>
                 
-                <p className="text-xl font-semibold text-white mb-4">
+                <p className="text-lg font-semibold text-white mb-3">
                   You Won the Auction!
                 </p>
                 
-                <div className="text-gray-300 space-y-4">
-                  <div className="bg-gradient-to-r from-yellow-900/30 to-purple-900/30 p-6 rounded-xl border border-yellow-500/30">
-                    <p className="text-lg mb-3">
-                      Your winning bid of <span className="font-bold text-yellow-400 text-2xl">${listing.auction?.highestBid?.toFixed(2)}</span>
+                <div className="text-gray-300 space-y-3 text-sm">
+                  <div className="bg-gradient-to-r from-yellow-900/30 to-purple-900/30 p-4 rounded-xl border border-yellow-500/30">
+                    <p className="mb-2">
+                      Your winning bid of <span className="font-bold text-yellow-400 text-lg">${listing.auction?.highestBid?.toFixed(2)}</span>
                     </p>
-                    <p className="text-base">
+                    <p className="text-sm">
                       secured <span className="text-[#ff950e] font-bold">"{listing.title}"</span> from <span className="font-bold text-white">{listing.seller}</span>
                     </p>
                   </div>
                   
-                  <div className="bg-black/40 p-6 rounded-xl border border-gray-700 space-y-3">
+                  <div className="bg-black/40 p-4 rounded-xl border border-gray-700 space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Winning Bid:</span>
                       <span className="font-bold text-yellow-400">${listing.auction?.highestBid?.toFixed(2)}</span>
@@ -1294,27 +1304,27 @@ export default function ListingDetailPage() {
                       <span className="text-gray-400">Platform Fee (10%):</span>
                       <span className="font-bold text-gray-300">${((listing.auction?.highestBid || 0) * 0.1).toFixed(2)}</span>
                     </div>
-                    <div className="border-t border-gray-600 pt-3">
+                    <div className="border-t border-gray-600 pt-2">
                       <div className="flex justify-between items-center">
                         <span className="text-white font-semibold">Total Paid:</span>
-                        <span className="text-2xl font-bold text-[#ff950e]">
+                        <span className="text-xl font-bold text-[#ff950e]">
                           ${calculateTotalPayable(listing.auction?.highestBid || 0).toFixed(2)}
                         </span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-center gap-3 text-green-400 bg-green-900/20 p-4 rounded-xl border border-green-700/30">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5" />
+                  <div className="flex items-center justify-center gap-4 text-green-400 bg-green-900/20 p-3 rounded-xl border border-green-700/30 text-xs">
+                    <div className="flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4" />
                       <span>Payment Processed</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Package className="w-5 h-5" />
+                    <div className="flex items-center gap-1">
+                      <Package className="w-4 h-4" />
                       <span>Order Created</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Truck className="w-5 h-5" />
+                    <div className="flex items-center gap-1">
+                      <Truck className="w-4 h-4" />
                       <span>Seller Notified</span>
                     </div>
                   </div>
@@ -1322,35 +1332,35 @@ export default function ListingDetailPage() {
               </div>
               
               {/* Enhanced Progress bar with auction theme */}
-              <div className="relative mb-6">
-                <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden border border-yellow-500/30">
+              <div className="relative mb-4">
+                <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden border border-yellow-500/30">
                   <div 
-                    className="h-full bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-500 rounded-full transition-all duration-[15000ms] ease-linear shadow-lg"
+                    className="h-full bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-500 rounded-full transition-all duration-[10000ms] ease-linear shadow-lg"
                     style={{
-                      animation: 'progress 15s linear forwards'
+                      animation: 'progress 10s linear forwards'
                     }}
                   ></div>
                 </div>
-                <p className="text-sm text-gray-400 mt-2 flex items-center justify-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Redirecting to your orders in 15 seconds...
+                <p className="text-xs text-gray-400 mt-2 flex items-center justify-center gap-2">
+                  <Clock className="w-3 h-3" />
+                  Redirecting to your orders in 10 seconds...
                 </p>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={() => router.push('/buyers/my-orders')}
-                  className="bg-gradient-to-r from-green-600 to-green-500 text-white px-6 py-4 rounded-2xl hover:shadow-lg hover:shadow-green-500/25 font-bold transition-all text-lg flex items-center justify-center gap-3 group"
+                  className="bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-3 rounded-2xl hover:shadow-lg hover:shadow-green-500/25 font-bold transition-all text-sm flex items-center justify-center gap-2 group"
                 >
-                  <ShoppingCart className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                  <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
                   View My Orders
                 </button>
                 
                 <button
                   onClick={() => router.push('/browse')}
-                  className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-6 py-4 rounded-2xl hover:shadow-lg hover:shadow-purple-500/25 font-bold transition-all text-lg flex items-center justify-center gap-3 group"
+                  className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-4 py-3 rounded-2xl hover:shadow-lg hover:shadow-purple-500/25 font-bold transition-all text-sm flex items-center justify-center gap-2 group"
                 >
-                  <Gavel className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                  <Gavel className="w-5 h-5 group-hover:scale-110 transition-transform" />
                   More Auctions
                 </button>
               </div>
@@ -1410,14 +1420,14 @@ export default function ListingDetailPage() {
               <div className="relative mb-6">
                 <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
                   <div 
-                    className="h-full bg-gradient-to-r from-[#ff950e] to-[#e0850d] rounded-full transition-all duration-[15000ms] ease-linear shadow-lg"
+                    className="h-full bg-gradient-to-r from-[#ff950e] to-[#e0850d] rounded-full transition-all duration-[10000ms] ease-linear shadow-lg"
                     style={{
-                      animation: 'progress 15s linear forwards'
+                      animation: 'progress 10s linear forwards'
                     }}
                   ></div>
                 </div>
                 <p className="text-sm text-gray-400 mt-2">
-                  Redirecting to your orders in 15 seconds...
+                  Redirecting to your orders in 10 seconds...
                 </p>
               </div>
               
@@ -1431,6 +1441,9 @@ export default function ListingDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Render auction ended screens for non-winners */}
+        {renderAuctionEndedScreen()}
 
         {/* Enhanced Sticky Buy Button for Mobile */}
         {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
@@ -1518,22 +1531,16 @@ export default function ListingDetailPage() {
                       <div className="flex gap-2">
                         <button
                           onClick={() => setBidAmount(suggestedBidAmount)}
-                          className="flex-1 bg-purple-800/50 text-purple-300 px-3 py-2 rounded-lg text-sm font-medium border border-purple-700/50"
+                          className="bg-purple-800/50 text-purple-300 px-3 py-2 rounded-lg text-sm font-medium border border-purple-700/50"
                         >
                           ${suggestedBidAmount}
                         </button>
                         <button
-                          onClick={() => setBidAmount((parseFloat(suggestedBidAmount) * 1.5).toFixed(2))}
-                          className="flex-1 bg-purple-800/50 text-purple-300 px-3 py-2 rounded-lg text-sm font-medium border border-purple-700/50"
-                        >
-                          ${(parseFloat(suggestedBidAmount) * 1.5).toFixed(2)}
-                        </button>
-                        <button
                           onClick={() => setShowBidHistory(true)}
-                          className="bg-gray-800/50 text-gray-300 px-3 py-2 rounded-lg text-sm flex items-center border border-gray-700/50"
+                          className="flex-1 bg-gray-800/50 text-gray-300 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 border border-gray-700/50"
                         >
-                          <History className="w-4 h-4 mr-1" />
-                          {listing.auction.bids?.length || 0}
+                          <History className="w-4 h-4" />
+                          History ({listing.auction.bids?.length || 0})
                         </button>
                       </div>
                     )}
@@ -1556,6 +1563,18 @@ export default function ListingDetailPage() {
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+          }
+          
+          .animation-delay-200 {
+            animation-delay: 200ms;
+          }
+          
+          .animation-delay-300 {
+            animation-delay: 300ms;
+          }
+          
+          .animation-delay-500 {
+            animation-delay: 500ms;
           }
         `}</style>
       </div>
