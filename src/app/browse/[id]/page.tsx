@@ -19,27 +19,33 @@ import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressC
 import TierBadge from '@/components/TierBadge';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 
-// Add custom hook for interval with proper TypeScript typing
+// FIXED: Add custom hook for interval with proper TypeScript typing and memory leak prevention
 function useInterval(callback: () => void, delay: number | null): void {
-  const savedCallback = useRef<() => void>(() => {});
+  const savedCallback = useRef<(() => void) | null>(null);
 
-  // Remember the latest callback
+  // Remember the latest callback without causing re-renders
   useEffect(() => {
     savedCallback.current = callback;
   }, [callback]);
 
-  // Set up the interval
+  // Set up the interval with proper cleanup
   useEffect(() => {
     function tick() {
-      savedCallback.current();
+      if (savedCallback.current) {
+        savedCallback.current();
+      }
     }
     
     if (delay !== null) {
       const id = setInterval(tick, delay);
-      return () => clearInterval(id);
+      return () => {
+        clearInterval(id);
+      };
     }
+    
+    // Return undefined when delay is null (no cleanup needed)
     return undefined;
-  }, [delay]);
+  }, [delay]); // Only depend on delay, not callback
 }
 
 export default function ListingDetailPage() {
