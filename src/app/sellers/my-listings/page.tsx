@@ -171,7 +171,7 @@ export default function MyListingsPage() {
     setImageUrls(_imageUrls);
   };
 
-  // Calculate auction end time
+  // 🔧 FIXED: Calculate auction end time without mutating the original Date object
   const calculateAuctionEndTime = (): string => {
     const now = new Date();
     
@@ -181,10 +181,11 @@ export default function MyListingsPage() {
       return future.toISOString();
     }
     
-    // Normal case for days
+    // Normal case for days - create new Date object instead of mutating
     const days = parseFloat(auctionDuration);
-    now.setDate(now.getDate() + Math.floor(days));
-    return now.toISOString();
+    const endTime = new Date(now); // Create a copy of the current time
+    endTime.setDate(endTime.getDate() + Math.floor(days)); // Mutate the copy, not the original
+    return endTime.toISOString();
   };
 
   // Handle adding or updating a listing
