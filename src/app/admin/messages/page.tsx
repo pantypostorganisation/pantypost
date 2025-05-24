@@ -78,37 +78,77 @@ export default function AdminMessagesPage() {
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
+  const [viewsData, setViewsData] = useState<Record<string, number>>({});
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   
+  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const [_, forceRerender] = useState(0);
-  const markedThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
+  const isMountedRef = useRef<boolean>(true); // Track if component is mounted
+  
+  // Check if user is admin - do this after all hooks are defined
+  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
+  const username = user?.username || '';
 
-  // Load recent emojis from localStorage on component mount
+  // 🔧 FIXED: Memoized loadViews function to prevent recreation on every render
+  const loadViews = useCallback(() => {
+    // Only update state if component is still mounted
+    if (!isMountedRef.current) return;
+    
+    try {
+      if (typeof window !== 'undefined') {
+        const data = localStorage.getItem('listing_views');
+        const parsedData = data ? JSON.parse(data) : {};
+        setViewsData(parsedData);
+      }
+    } catch (error) {
+      console.error('Failed to load views data:', error);
+      // Set empty object on error to prevent crashes
+      setViewsData({});
+    }
+  }, []); // No dependencies since it doesn't depend on any props or state
+
+  // 🔧 FIXED: Load views and handle localStorage events with proper cleanup
   useEffect(() => {
-    const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
-    if (storedRecentEmojis) {
-      try {
+    // Set mounted flag
+    isMountedRef.current = true;
+    
+    // Initial load
+    loadViews();
+    
+    // Add event listeners
+    window.addEventListener('storage', loadViews);
+    window.addEventListener('focus', loadViews);
+    
+    // Cleanup function
+    return () => {
+      isMountedRef.current = false;
+      window.removeEventListener('storage', loadViews);
+      window.removeEventListener('focus', loadViews);
+    };
+  }, [loadViews]); // Now depends on the memoized loadViews function
+
+  // 🔧 FIXED: Load recent emojis and read threads with proper error handling
+  useEffect(() => {
+    if (!isMountedRef.current) return;
+    
+    try {
+      // Load recent emojis
+      const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
+      if (storedRecentEmojis) {
         const parsed = JSON.parse(storedRecentEmojis);
         if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 30)); // Limit to 30 recent emojis
+          setRecentEmojis(parsed.slice(0, 30));
         }
-      } catch (e) {
-        console.error('Failed to parse recent emojis', e);
       }
-    }
-    
-    // Load previously read threads from localStorage
-    try {
-      // Get read threads from localStorage only if user exists
+      
+      // Load previously read threads
       if (user) {
         const readThreadsKey = `panty_read_threads_${user.username}`;
         const readThreads = localStorage.getItem(readThreadsKey);
@@ -116,26 +156,26 @@ export default function AdminMessagesPage() {
           const threads = JSON.parse(readThreads);
           if (Array.isArray(threads)) {
             readThreadsRef.current = new Set(threads);
-            setMessageUpdate(prev => prev + 1); // Force UI update
           }
         }
       }
-    } catch (e) {
-      console.error('Failed to load read threads', e);
+    } catch (error) {
+      console.error('Failed to load localStorage data:', error);
     }
-  }, [user]);
+  }, [user]); // Only depend on user, not on changing state
 
-  // Save recent emojis to localStorage when they change
+  // 🔧 FIXED: Save recent emojis with error handling
   useEffect(() => {
-    if (recentEmojis.length > 0) {
+    if (!isMountedRef.current || recentEmojis.length === 0) return;
+    
+    try {
       localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
+    } catch (error) {
+      console.error('Failed to save recent emojis:', error);
     }
   }, [recentEmojis]);
 
-  // Check if user is admin - do this after all hooks are defined
-  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
-
-  // Handle clicks outside the emoji picker to close it
+  // 🔧 FIXED: Handle clicks outside emoji picker with proper cleanup
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -147,16 +187,23 @@ export default function AdminMessagesPage() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, []); // No dependencies needed
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [activeThread, messages]);
 
-  const username = user?.username || '';
+  // 🔧 FIXED: Cleanup effect for component unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  // Prepare threads and messages using useMemo
+  // Prepare threads and messages using useMemo with proper dependencies
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
     const threads: { [user: string]: Message[] } = {};
     const unreadCounts: { [user: string]: number } = {};
@@ -166,6 +213,7 @@ export default function AdminMessagesPage() {
     
     let activeMessages: Message[] = [];
 
+    // Process messages
     Object.values(messages).flat().forEach((msg: Message) => {
       if (msg.sender === username || msg.receiver === username) {
         const otherParty = msg.sender === username ? msg.receiver : msg.sender;
@@ -174,23 +222,30 @@ export default function AdminMessagesPage() {
       }
     });
 
+    // Sort and process threads
     Object.entries(threads).forEach(([userKey, msgs]) => {
       msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       lastMessages[userKey] = msgs[msgs.length - 1];
       
-      // Get user profile picture, verification status, and role
-      const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
-      const userInfo = users?.[userKey];
-      const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
-      const role = userInfo?.role || 'unknown';
-      
-      userProfiles[userKey] = { 
-        pic: storedPic, 
-        verified: isVerified,
-        role: role
-      };
+      // Get user profile safely
+      try {
+        const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
+        const userInfo = users?.[userKey];
+        const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
+        const role = userInfo?.role || 'unknown';
+        
+        userProfiles[userKey] = { 
+          pic: storedPic, 
+          verified: isVerified,
+          role: role
+        };
+      } catch (error) {
+        console.error(`Error processing user profile for ${userKey}:`, error);
+        userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
+      }
     });
 
+    // Calculate unread counts
     Object.entries(threads).forEach(([userKey, msgs]) => {
       const threadUnreadCount = msgs.filter(
         (msg) => !msg.read && msg.receiver === username
@@ -200,7 +255,7 @@ export default function AdminMessagesPage() {
       
       // Only add to total if not in readThreadsRef
       if (!readThreadsRef.current.has(userKey) && threadUnreadCount > 0) {
-        totalUnreadCount += 1; // Count threads, not individual messages
+        totalUnreadCount += 1;
       }
     });
 
@@ -209,100 +264,46 @@ export default function AdminMessagesPage() {
     }
 
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
-  }, [messages, username, activeThread, users, messageUpdate]);
+  }, [messages, username, activeThread, users]); // Removed unstable dependencies
 
   // Calculate UI unread count indicators for the sidebar threads
   const uiUnreadCounts = useMemo(() => {
     const counts: { [user: string]: number } = {};
     if (threads) {
       Object.keys(threads).forEach(userKey => {
-        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
         counts[userKey] = readThreadsRef.current.has(userKey) ? 0 : unreadCounts[userKey];
       });
     }
     return counts;
-  }, [threads, unreadCounts, messageUpdate]);
+  }, [threads, unreadCounts]);
 
-  // Set up UI tracking for active thread
-  useEffect(() => {
-    if (activeThread && user) {
-      // Add to readThreadsRef if there are unread messages
-      if (unreadCounts[activeThread] > 0) {
-        if (!readThreadsRef.current.has(activeThread)) {
-          // Only add to readThreadsRef if there are actual unread messages
-          readThreadsRef.current.add(activeThread);
-          
-          // Save to localStorage immediately when thread is selected
-          if (typeof window !== 'undefined') {
-            const readThreadsKey = `panty_read_threads_${user.username}`;
-            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
-          }
-          
-          setMessageUpdate(prev => prev + 1); // Force UI update only once
-        }
-      }
-      
-      // Create a custom event to notify other components about thread selection
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('threadSelected', { 
-          detail: { thread: activeThread, username: user.username }
-        });
-        window.dispatchEvent(event);
-      }
-    }
-  }, [activeThread, user, unreadCounts]);
-
-  // Save read threads to localStorage
-  useEffect(() => {
-    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
-      const readThreadsKey = `panty_read_threads_${user.username}`;
-      const threadsArray = Array.from(readThreadsRef.current);
-      localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
-      
-      // Dispatch a custom event to notify other components about the update
-      const event = new CustomEvent('readThreadsUpdated', { 
-        detail: { threads: threadsArray, username: user.username }
-      });
-      window.dispatchEvent(event);
-    }
-  }, [messageUpdate, user]);
-
-  useEffect(() => {
-    if (selectedUser && !activeThread) {
-      setActiveThread(selectedUser);
-    }
-  }, [selectedUser]);
-
-  // Mark messages as read when explicitly viewed by user
+  // 🔧 FIXED: Memoized callbacks to prevent recreation
   const markAsRead = useCallback(() => {
-    if (!activeThread || !user) return;
+    if (!activeThread || !user || !isMountedRef.current) return;
     
-    // Remember that this thread has been viewed
     const hasUnreadMessages = threads[activeThread]?.some(
       msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
     );
     
     if (hasUnreadMessages) {
-      // Mark messages as read in the context
       markMessagesAsRead(activeThread, user.username);
       
-      // Make sure we update readThreadsRef for UI consistency
       if (!readThreadsRef.current.has(activeThread)) {
         readThreadsRef.current.add(activeThread);
         
-        // Save to localStorage immediately when messages are read
-        if (typeof window !== 'undefined') {
-          const readThreadsKey = `panty_read_threads_${user.username}`;
-          localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
-          
-          // Dispatch custom event to notify other components
-          const event = new CustomEvent('readThreadsUpdated', { 
-            detail: { threads: Array.from(readThreadsRef.current), username: user.username }
-          });
-          window.dispatchEvent(event);
+        try {
+          if (typeof window !== 'undefined') {
+            const readThreadsKey = `panty_read_threads_${user.username}`;
+            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+            
+            const event = new CustomEvent('readThreadsUpdated', { 
+              detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+            });
+            window.dispatchEvent(event);
+          }
+        } catch (error) {
+          console.error('Failed to save read threads:', error);
         }
-        
-        setMessageUpdate(prev => prev + 1);
       }
     }
   }, [activeThread, user, threads, markMessagesAsRead]);
@@ -331,45 +332,45 @@ export default function AdminMessagesPage() {
     const reader = new FileReader();
     
     reader.onloadend = () => {
-      setSelectedImage(reader.result as string);
-      setIsImageLoading(false);
+      if (isMountedRef.current) {
+        setSelectedImage(reader.result as string);
+        setIsImageLoading(false);
+      }
     };
     
     reader.onerror = () => {
-      setImageError("Failed to read the image file. Please try again.");
-      setIsImageLoading(false);
+      if (isMountedRef.current) {
+        setImageError("Failed to read the image file. Please try again.");
+        setIsImageLoading(false);
+      }
     };
     
     reader.readAsDataURL(file);
   }, []);
 
-  // Trigger hidden file input click
   const triggerFileInput = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  // Handle emoji selection
   const handleEmojiClick = useCallback((emoji: string) => {
+    if (!isMountedRef.current) return;
+    
     setContent(prev => prev + emoji);
     
-    // Update recent emojis
     setRecentEmojis(prev => {
-      // Remove if already exists to prevent duplicates
       const filtered = prev.filter(e => e !== emoji);
-      // Add to the front and return limited array
       return [emoji, ...filtered].slice(0, 30);
     });
     
-    // Focus back on the input after inserting emoji
     setTimeout(() => {
-      if (inputRef.current) {
+      if (inputRef.current && isMountedRef.current) {
         inputRef.current.focus();
       }
     }, 0);
   }, []);
 
   const handleSend = useCallback(() => {
-    if (!activeThread || (!content.trim() && !selectedImage)) {
+    if (!activeThread || (!content.trim() && !selectedImage) || !isMountedRef.current) {
       alert('Please enter a message.');
       return;
     }
@@ -385,12 +386,12 @@ export default function AdminMessagesPage() {
       fileInputRef.current.value = '';
     }
     
-    // Close emoji picker if open
     setShowEmojiPicker(false);
     
-    // Focus back on input
     setTimeout(() => {
-      inputRef.current?.focus();
+      if (inputRef.current && isMountedRef.current) {
+        inputRef.current.focus();
+      }
     }, 0);
   }, [activeThread, content, selectedImage, username, sendMessage]);
 
@@ -416,12 +417,16 @@ export default function AdminMessagesPage() {
     }
   }, [activeThread, username, hasReported, reportUser]);
 
-  // Handle thread selection without marking as read immediately
   const handleThreadSelect = useCallback((userId: string) => {
-    if (activeThread === userId) return; // Prevent unnecessary state updates
-    
+    if (activeThread === userId) return;
     setActiveThread(userId);
   }, [activeThread]);
+
+  useEffect(() => {
+    if (selectedUser && !activeThread) {
+      setActiveThread(selectedUser);
+    }
+  }, [selectedUser, activeThread]);
 
   const isUserBlocked = !!(activeThread && isBlocked(username, activeThread));
   const isUserReported = !!(activeThread && hasReported(username, activeThread));
@@ -440,7 +445,6 @@ export default function AdminMessagesPage() {
       return true;
     });
     
-    // Sort threads by most recent message first
     return filteredThreads.sort((a, b) => {
       const dateA = new Date(lastMessages[a]?.date || 0).getTime();
       const dateB = new Date(lastMessages[b]?.date || 0).getTime();
@@ -450,17 +454,14 @@ export default function AdminMessagesPage() {
 
   // Check if content is a single emoji
   const isSingleEmoji = (content: string) => {
-    // Regex to match a single emoji (including compound emojis with ZWJ)
     const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
     return emojiRegex.test(content);
   };
 
-  // Get the initial for avatar placeholder
   const getInitial = (username: string) => {
     return username.charAt(0).toUpperCase();
   };
 
-  // Format time function
   const formatTimeAgo = (date: string) => {
     const now = new Date();
     const messageDate = new Date(date);
@@ -705,7 +706,7 @@ export default function AdminMessagesPage() {
                   </div>
                 </div>
                 
-                {/* Messages - This div now has onClick to mark messages as read */}
+                {/* Messages */}
                 <div 
                   className="flex-1 overflow-y-auto p-4 bg-[#121212]"
                   onClick={() => markAsRead()}
@@ -718,7 +719,6 @@ export default function AdminMessagesPage() {
                         minute: '2-digit'
                       });
                       
-                      // Check if message contains only a single emoji
                       const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
                       
                       return (
@@ -755,7 +755,7 @@ export default function AdminMessagesPage() {
                                   alt="Shared image" 
                                   className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
                                   onClick={(e) => {
-                                    e.stopPropagation(); // Prevent triggering the container's onClick
+                                    e.stopPropagation();
                                     setPreviewImage(msg.meta?.imageUrl || null);
                                   }}
                                 />
@@ -892,17 +892,17 @@ export default function AdminMessagesPage() {
                           rows={1}
                           maxLength={250}
                           onClick={(e) => {
-                            e.stopPropagation(); // Prevent triggering message container's onClick
-                            markAsRead(); // But still mark messages as read when focusing the input
+                            e.stopPropagation();
+                            markAsRead();
                           }}
                         />
                         
                         {/* Fixed emoji button position */}
                         <button
                           onClick={(e) => {
-                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            e.stopPropagation();
                             setShowEmojiPicker(!showEmojiPicker);
-                            markAsRead(); // Mark messages as read when interacting with emoji button
+                            markAsRead();
                           }}
                           className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
                             showEmojiPicker 
@@ -929,9 +929,9 @@ export default function AdminMessagesPage() {
                           {/* Attachment button */}
                           <button
                             onClick={(e) => {
-                              e.stopPropagation(); // Prevent triggering message container's onClick
+                              e.stopPropagation();
                               triggerFileInput();
-                              markAsRead(); // Mark messages as read when interacting
+                              markAsRead();
                             }}
                             disabled={isImageLoading}
                             className={`w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md ${
