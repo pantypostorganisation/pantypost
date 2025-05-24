@@ -47,6 +47,16 @@ export default function BrowsePage() {
   const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc' | 'endingSoon'>('newest');
   const [page, setPage] = useState(0);
   const [hoveredListing, setHoveredListing] = useState<string | null>(null);
+  const [forceUpdateTimer, setForceUpdateTimer] = useState(0);
+
+  // Force re-render every second for auction timers
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setForceUpdateTimer(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -310,9 +320,9 @@ export default function BrowsePage() {
 
   return (
     <RequireAuth role={user?.role || 'buyer'}>
-      <main className="min-h-screen bg-black text-white pb-16">
+      <main className="min-h-screen bg-black text-white pb-16 pt-8">
         {user?.role === 'seller' && (
-          <div className="bg-blue-700/20 border border-blue-700 text-blue-400 p-4 rounded-lg mb-6 max-w-3xl mx-auto mt-8">
+          <div className="bg-blue-700/20 border border-blue-700 text-blue-400 p-4 rounded-lg mb-6 max-w-3xl mx-auto">
             <p className="text-sm">
               You are viewing this page as a seller. You can browse listings but cannot make purchases.
             </p>
@@ -320,64 +330,65 @@ export default function BrowsePage() {
         )}
 
         {/* Header Section */}
-        <div className="mb-8 max-w-[1700px] mx-auto px-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-[#ff950e] mb-2">
-                Browse Listings
-              </h1>
-              <p className="text-gray-400">
-                {filteredListings.length} {filter === 'all' ? 'total' : filter} listings available
-              </p>
-            </div>
+        <div className="mb-6 max-w-[1700px] mx-auto px-6">
+            <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
+              <div className="flex flex-col leading-tight">
+                <h1 className="text-xl font-bold text-[#ff950e]">
+                  Browse Listings
+                </h1>
+                <p className="text-gray-400 text-sm mt-0.5">
+                  {filteredListings.length} {filter === 'all' ? 'total' : filter} listings available
+                </p>
+              </div>
 
-            {/* Fixed: Category Filters with proper button styling to match header */}
+            {/* Category Filters - Updated to match Header.tsx styling */}
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-3 py-1.5 text-xs font-medium transition-all border ${
+                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
                   filter === 'all' 
-                    ? 'bg-[#ff950e] text-black border-[#ff950e]' 
-                    : 'bg-[#1a1a1a] text-[#ff950e] hover:bg-[#222] border-[#333] hover:border-[#ff950e]/50'
+                    ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
                 }`}
-                style={{ borderRadius: '0.5rem' }} // Explicitly set border-radius to match header
               >
-                All ({categoryCounts.all})
+                <Package className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">All ({categoryCounts.all})</span>
               </button>
+              
               <button
                 onClick={() => setFilter('standard')}
-                className={`px-3 py-1.5 text-xs font-medium transition-all border ${
+                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
                   filter === 'standard' 
-                    ? 'bg-[#ff950e] text-black border-[#ff950e]' 
-                    : 'bg-[#1a1a1a] text-[#ff950e] hover:bg-[#222] border-[#333] hover:border-[#ff950e]/50'
+                    ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
                 }`}
-                style={{ borderRadius: '0.5rem' }}
               >
-                Standard ({categoryCounts.standard})
+                <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">Standard ({categoryCounts.standard})</span>
               </button>
+              
               <button
                 onClick={() => setFilter('premium')}
-                className={`px-3 py-1.5 text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
                   filter === 'premium' 
-                    ? 'bg-[#ff950e] text-black border-[#ff950e]' 
-                    : 'bg-[#1a1a1a] text-[#ff950e] hover:bg-[#222] border-[#333] hover:border-[#ff950e]/50'
+                    ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
                 }`}
-                style={{ borderRadius: '0.5rem' }}
               >
-                <Crown size={14} className={filter === 'premium' ? 'text-black' : 'text-[#ff950e]'} />
-                Premium ({categoryCounts.premium})
+                <Crown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">Premium ({categoryCounts.premium})</span>
               </button>
+              
               <button
                 onClick={() => setFilter('auction')}
-                className={`px-3 py-1.5 text-xs font-medium transition-all flex items-center gap-1.5 border ${
+                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
                   filter === 'auction' 
-                    ? 'bg-[#8b5cf6] text-black border-[#8b5cf6]' 
-                    : 'bg-[#1a1a1a] text-[#8b5cf6] hover:bg-[#222] border-[#333] hover:border-[#8b5cf6]/50'
+                    ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white border border-white/20 hover:from-[#7c3aed] hover:to-[#8b5cf6] hover:shadow-2xl hover:shadow-[#8b5cf6]/30 transform hover:scale-105' 
+                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#8b5cf6] border border-[#333] hover:border-[#8b5cf6]/50 hover:shadow-[#8b5cf6]/20'
                 }`}
-                style={{ borderRadius: '0.5rem' }}
               >
-                <Gavel size={14} className={filter === 'auction' ? 'text-black' : 'text-[#8b5cf6]'} />
-                Auctions ({categoryCounts.auction})
+                <Gavel className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">Auctions ({categoryCounts.auction})</span>
               </button>
             </div>
           </div>
@@ -562,9 +573,9 @@ export default function BrowsePage() {
                           </div>
                         )}
                         
-                        {/* Auction timer */}
+                        {/* Auction timer - Force update with forceUpdateTimer dependency */}
                         {hasAuction && (
-                          <div className="absolute bottom-3 left-3 z-10">
+                          <div className="absolute bottom-3 left-3 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
                             <span className="bg-black/80 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center">
                               <Clock className="w-3.5 h-3.5 mr-1 text-purple-400" />
                               {formatTimeRemaining(listing.auction.endTime)}
