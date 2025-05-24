@@ -447,7 +447,7 @@ export default function SignupPage() {
               {/* Role selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-3">
-                  I want to be a:
+                  I want to:
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -577,7 +577,7 @@ export default function SignupPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            <p className="text-sm text-gray-500">
+            <p className="text-base text-gray-500">
               Already have an account?{' '}
               <Link href="/login" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
                 Log In

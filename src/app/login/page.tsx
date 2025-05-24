@@ -428,7 +428,7 @@ export default function LoginPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            <p className="text-sm text-gray-500">
+            <p className="text-base text-gray-500">
               Don't have an account?{' '}
               <Link href="/signup" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
                 Sign up
