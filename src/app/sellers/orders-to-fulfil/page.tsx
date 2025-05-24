@@ -124,7 +124,7 @@ export default function OrdersToFulfilPage() {
     const Icon = config.icon;
     
     return (
-      <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold ${config.bg} ${config.text} shadow-lg`}>
+      <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${config.bg} ${config.text} shadow-lg`}>
         <Icon className="w-4 h-4" />
         {config.label}
       </span>
@@ -144,7 +144,7 @@ export default function OrdersToFulfilPage() {
             <div className="mt-3">
               <Link
                 href={`/sellers/messages?thread=${order.buyer}`}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-4 py-2 rounded-xl transition-all text-sm shadow-lg hover:shadow-[#ff950e]/25"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-4 py-2 rounded-lg transition-all text-sm shadow-lg hover:shadow-[#ff950e]/25"
               >
                 <MessageCircle className="w-4 h-4" />
                 Message {order.buyer}
@@ -212,7 +212,7 @@ export default function OrdersToFulfilPage() {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => handleStatusChange(order.id, 'pending')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                 order.shippingStatus === 'pending' || !order.shippingStatus
                   ? 'bg-gradient-to-r from-yellow-500 to-yellow-400 text-black shadow-lg'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
@@ -222,7 +222,7 @@ export default function OrdersToFulfilPage() {
             </button>
             <button
               onClick={() => handleStatusChange(order.id, 'processing')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                 order.shippingStatus === 'processing'
                   ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white shadow-lg'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
@@ -232,7 +232,7 @@ export default function OrdersToFulfilPage() {
             </button>
             <button
               onClick={() => handleStatusChange(order.id, 'shipped')}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                 order.shippingStatus === 'shipped'
                   ? 'bg-gradient-to-r from-green-500 to-green-400 text-white shadow-lg'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
@@ -308,7 +308,7 @@ export default function OrdersToFulfilPage() {
                   <span className="font-semibold text-white">{order.buyer}</span>
                   <Link
                     href={`/sellers/messages?thread=${order.buyer}`}
-                    className="inline-flex items-center gap-1 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-lg hover:shadow-[#ff950e]/25"
+                    className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-lg hover:shadow-blue-500/25"
                   >
                     <MessageCircle className="w-3 h-3" />
                     Message
@@ -329,7 +329,7 @@ export default function OrdersToFulfilPage() {
                     </span>
                   </div>
                 )}
-                <div className={`px-4 py-2 rounded-lg border ${
+                <div className={`px-4 py-2 rounded-full border ${
                   isAuction ? 'bg-pink-900/30 border-pink-700/50' : 'bg-[#ff950e]/10 border-[#ff950e]/30'
                 }`}>
                   <span className={`text-sm ${isAuction ? 'text-pink-300' : 'text-[#ff950e]'}`}>Total paid:</span>
@@ -345,19 +345,19 @@ export default function OrdersToFulfilPage() {
               {getStatusBadge(order)}
               
               {order.deliveryAddress ? (
-                <div className="flex items-center gap-2 bg-green-900/30 px-3 py-2 rounded-xl border border-green-700/50">
+                <div className="flex items-center gap-2 bg-green-900/30 px-3 py-2 rounded-lg border border-green-700/50">
                   <MapPin className="w-4 h-4 text-green-400" />
                   <span className="text-green-300 text-sm font-medium">Address provided</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 bg-yellow-900/30 px-3 py-2 rounded-xl border border-yellow-700/50">
+                <div className="flex items-center gap-2 bg-yellow-900/30 px-3 py-2 rounded-lg border border-yellow-700/50">
                   <AlertTriangle className="w-4 h-4 text-yellow-400" />
                   <span className="text-yellow-300 text-sm font-medium">No address yet</span>
                 </div>
               )}
               
               <button
-                className={`flex items-center gap-2 font-semibold px-4 py-2 rounded-xl transition-all text-sm ${
+                className={`flex items-center gap-2 font-semibold px-4 py-2 rounded-lg transition-all text-sm ${
                   isAuction 
                     ? 'text-purple-300 bg-purple-900/30 hover:bg-purple-800/50 border border-purple-700/50 hover:border-purple-600' 
                     : 'text-[#ff950e] bg-[#ff950e]/10 hover:bg-[#ff950e]/20 border border-[#ff950e]/30 hover:border-[#ff950e]/50'
@@ -492,7 +492,7 @@ export default function OrdersToFulfilPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-4">
                           <h3 className="font-bold text-xl text-white">{req.title}</h3>
-                          <span className="bg-blue-500/20 text-blue-300 text-xs px-3 py-1 rounded-xl font-semibold border border-blue-500/30">
+                          <span className="bg-blue-500/20 text-blue-300 text-xs px-3 py-1 rounded-lg font-semibold border border-blue-500/30">
                             Custom Request
                           </span>
                         </div>
@@ -503,7 +503,7 @@ export default function OrdersToFulfilPage() {
                           <span className="font-semibold text-white">{req.buyer}</span>
                           <Link
                             href={`/sellers/messages?thread=${req.buyer}`}
-                            className="inline-flex items-center gap-1 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-all shadow-lg hover:shadow-[#ff950e]/25"
+                            className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-lg hover:shadow-blue-500/25"
                           >
                             <MessageCircle className="w-3 h-3" />
                             Message
@@ -522,7 +522,7 @@ export default function OrdersToFulfilPage() {
                         {req.tags && req.tags.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-4">
                             {req.tags.map((tag: string, idx: number) => (
-                              <span key={idx} className="bg-gray-700 text-gray-300 text-sm px-3 py-1.5 rounded-xl border border-gray-600">
+                              <span key={idx} className="bg-gray-700 text-gray-300 text-sm px-3 py-1.5 rounded-lg border border-gray-600">
                                 {tag}
                               </span>
                             ))}

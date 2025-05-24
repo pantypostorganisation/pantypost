@@ -62,15 +62,116 @@ export default function Header() {
   const username = user?.username ?? '';
   const isMessagesPage = pathname?.includes('/messages');
 
-  // Filter notifications by active/cleared status
+  // Helper function to add emojis based on notification type
+  const addNotificationEmojis = (message: string): string => {
+    // Standard/Direct listing sale (including premium)
+    if (message.includes('New sale:') && !message.includes('Auction ended:')) {
+      return `💰🛍️ ${message}`;
+    }
+    // Auction sale
+    else if (message.includes('Auction ended:') && message.includes('sold to')) {
+      return `💰🏆 ${message}`;
+    }
+    // Keep existing emojis for other types
+    else if (!message.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆💰🛍️]/)) {
+      // Only add emoji if message doesn't already start with an emoji
+      if (message.includes('subscribed to you')) return `🎉 ${message}`;
+      if (message.includes('Tip received')) return `💸 ${message}`;
+      if (message.includes('New custom order')) return `🛒 ${message}`;
+      if (message.includes('New bid')) return `💰 ${message}`;
+      if (message.includes('created a new auction')) return `🔨 ${message}`;
+      if (message.includes('cancelled your auction')) return `🛑 ${message}`;
+      if (message.includes('Reserve price not met')) return `🔨 ${message}`;
+      if (message.includes('No bids were placed')) return `🔨 ${message}`;
+      if (message.includes('insufficient funds')) return `⚠️ ${message}`;
+      if (message.includes('payment error')) return `⚠️ ${message}`;
+      if (message.includes('Original highest bidder')) return `ℹ️ ${message}`;
+    }
+    return message;
+  };
+
+  // Function to deduplicate notifications based on content and timing
+  const deduplicateNotifications = (notifications: any[]): any[] => {
+    const seen = new Map<string, any>();
+    const deduped: any[] = [];
+    
+    for (const notification of notifications) {
+      // Create a key based on message content (without emojis) and time window
+      const cleanMessage = notification.message.replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
+      const timestamp = new Date(notification.timestamp);
+      const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000)); // 1-minute windows
+      
+      const key = `${cleanMessage}_${timeWindow}`;
+      
+      if (!seen.has(key)) {
+        seen.set(key, notification);
+        deduped.push({
+          ...notification,
+          message: addNotificationEmojis(notification.message)
+        });
+      } else {
+        // If we find a duplicate, keep the one with the most recent timestamp
+        const existing = seen.get(key);
+        if (timestamp > new Date(existing.timestamp)) {
+          seen.set(key, notification);
+          // Replace the existing one in deduped array
+          const existingIndex = deduped.findIndex((n: any) => n.id === existing.id);
+          if (existingIndex !== -1) {
+            deduped[existingIndex] = {
+              ...notification,
+              message: addNotificationEmojis(notification.message)
+            };
+          }
+        }
+      }
+    }
+    
+    return deduped.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  };
+
+  // Filter notifications by active/cleared status with deduplication
   const allNotifications = user?.role === 'seller' ? sellerNotifications || [] : [];
-  const activeNotifications = allNotifications.filter(notification => !notification.cleared);
-  const clearedNotifications = allNotifications.filter(notification => notification.cleared);
+  const activeNotifications = deduplicateNotifications(allNotifications.filter(notification => !notification.cleared));
+  const clearedNotifications = deduplicateNotifications(allNotifications.filter(notification => notification.cleared));
   
   // Use active notifications for the badge count
   const notifications = activeNotifications;
 
-  // Load read threads from localStorage on mount - but only once
+  // Function to clear all active notifications at once
+  const clearAllNotifications = useCallback(() => {
+    if (!user || user.role !== 'seller') return;
+    
+    const username = user.username;
+    // Get fresh notifications directly from sellerNotifications
+    const userNotifications = sellerNotifications || [];
+    
+    // Get all active notifications (not cleared)
+    const activeNotifsToUpdate = userNotifications.filter(notification => !notification.cleared);
+    
+    if (activeNotifsToUpdate.length === 0) return;
+    
+    // Mark all active notifications as cleared
+    const updatedNotifications = userNotifications.map(notification => {
+      if (!notification.cleared) {
+        return {
+          ...notification,
+          cleared: true
+        };
+      }
+      return notification;
+    });
+    
+    // Update the notification store directly
+    const notificationStore = JSON.parse(localStorage.getItem('seller_notifications_store') || '{}');
+    notificationStore[username] = updatedNotifications;
+    localStorage.setItem('seller_notifications_store', JSON.stringify(notificationStore));
+    
+    // Force a re-render by dispatching a storage event
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'seller_notifications_store',
+      newValue: JSON.stringify(notificationStore)
+    }));
+  }, [user, sellerNotifications]);
   useEffect(() => {
     if (!mounted || !user || typeof window === 'undefined') return;
     
@@ -517,7 +618,17 @@ export default function Header() {
               {showNotifDropdown && (
                 <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-50 border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
                   <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
-                    <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
+                      {activeNotifications.length > 0 && (
+                        <button
+                          onClick={clearAllNotifications}
+                          className="text-xs text-white hover:text-[#ff950e] font-medium transition-colors px-2 py-1 rounded bg-black/20 hover:bg-[#ff950e]/10 border border-white/20 hover:border-[#ff950e]/30"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
                   </div>
                   
                   {/* Tab Navigation */}
