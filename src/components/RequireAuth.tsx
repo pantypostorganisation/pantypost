@@ -1,3 +1,4 @@
+// src/app/components/RequireAuth.tsx
 'use client';
 
 import { useListings } from '@/context/ListingContext';

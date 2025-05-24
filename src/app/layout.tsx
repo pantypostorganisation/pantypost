@@ -1,3 +1,6 @@
+// src/app/layout.tsx
+'use client';
+
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
@@ -9,19 +12,20 @@ import { MessageProvider } from '../context/MessageContext';
 import { ReviewProvider } from '../context/ReviewContext';
 import { RequestProvider } from '../context/RequestContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { usePathname } from 'next/navigation'; // Add this import
 
 const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: 'PantyPost',
-  description: 'Marketplace for used underwear',
-};
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname(); // Add this hook
+  
+  // Check if we're on auth pages
+  const isAuthPage = pathname === '/login' || pathname === '/signup';
+
   return (
     <html lang="en">
       <body className={inter.className}>
@@ -31,7 +35,7 @@ export default function RootLayout({
               <ReviewProvider>
                 <RequestProvider>
                   <ListingProvider>
-                    <Header />
+                    {!isAuthPage && <Header />} {/* Conditionally render Header */}
                     <AgeVerificationModal />
                     {children}
                   </ListingProvider>

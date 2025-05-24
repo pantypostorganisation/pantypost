@@ -28,11 +28,17 @@ import {
 import { usePathname } from 'next/navigation';
 
 export default function Header() {
+  const pathname = usePathname();
+  
+  // Don't render header on auth pages - MOVE THIS TO THE TOP BEFORE ANY OTHER HOOKS
+  if (pathname === '/login' || pathname === '/signup') {
+    return null;
+  }
+
   const { user, logout, sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions } = useListings();
   const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory, wallet } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
-  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
@@ -661,7 +667,8 @@ export default function Header() {
             </Link>
             <Link
               href="/signup"
-              className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-white text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105 border border-white/20"
+              className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105 border border-white/20"
+              style={{ color: '#000' }}
             >
               Sign Up
             </Link>
