@@ -66,10 +66,10 @@ const floatVariants = {
 };
 
 // Generate particle positions (deterministic based on index)
-const particlePositions = Array.from({ length: 15 }, (_, i) => ({
-  left: ((i * 37) % 90) + 5, // Creates pseudo-random horizontal distribution
-  top: ((i * 23) % 100), // Creates pseudo-random vertical distribution
-  delay: (i * 0.3) % 4, // Stagger the animations
+const particlePositions = Array.from({ length: 45 }, (_, i) => ({
+  left: ((i * 37 + i * 7) % 90) + 5, // Creates pseudo-random horizontal distribution
+  top: ((i * 23 + i * 13) % 100), // Creates pseudo-random vertical distribution
+  delay: (i * 0.2) % 4.5, // Stagger the animations
   duration: 8 + (i % 4) // Vary duration between 8-11 seconds
 }));
 
@@ -150,8 +150,11 @@ export default function Home() {
           {particlePositions.map((particle, i) => (
             <motion.div
               key={i}
-              className={`absolute bg-[#ff950e]/20 rounded-full ${
-                i % 3 === 0 ? 'w-1.5 h-1.5' : i % 3 === 1 ? 'w-1 h-1' : 'w-2 h-2'
+              className={`absolute rounded-full ${
+                i % 4 === 0 ? 'w-1.5 h-1.5 bg-[#ff950e]/10' : 
+                i % 4 === 1 ? 'w-1 h-1 bg-[#ff950e]/15' : 
+                i % 4 === 2 ? 'w-2 h-2 bg-[#ff950e]/10' :
+                'w-1 h-1 bg-[#ff950e]/20'
               }`}
               style={{ 
                 left: `${particle.left}%`,
