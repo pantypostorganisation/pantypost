@@ -60,6 +60,7 @@ export default function ListingDetailPage() {
 
   const [purchaseStatus, setPurchaseStatus] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
   const [sellerProfile, setSellerProfile] = useState<{ bio?: string | null; pic?: string | null; subscriptionPrice?: string | null; }>({});
   const [showStickyBuy, setShowStickyBuy] = useState(false);
   const [bidAmount, setBidAmount] = useState<string>('');
@@ -68,9 +69,6 @@ export default function ListingDetailPage() {
   const [bidsHistory, setBidsHistory] = useState<{bidder: string, amount: number, date: string}[]>([]);
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [forceUpdateTimer, setForceUpdateTimer] = useState<Record<string, unknown>>({});
-  const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
-  const [addressModalOpen, setAddressModalOpen] = useState(false);
-  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
 
   // Enhanced bid validation and submission with debouncing
   const [isBidding, setIsBidding] = useState(false);
@@ -79,7 +77,6 @@ export default function ListingDetailPage() {
   const bidButtonRef = useRef<HTMLButtonElement>(null);
   const bidInputRef = useRef<HTMLInputElement>(null);
   const lastBidTime = useRef<number>(0);
-  const purchasedOrderId = useRef<string | null>(null);
 
   const currentUsername = user?.username || '';
   const hasMarkedRef = useRef(false);
@@ -112,15 +109,6 @@ export default function ListingDetailPage() {
     if (!listing?.seller) return null;
     return getSellerTierMemoized(listing.seller, orderHistory);
   }, [listing?.seller, orderHistory]);
-
-  // Handle address confirmation
-  const handleAddressConfirm = (address: DeliveryAddress) => {
-    setDeliveryAddress(address);
-    if (purchasedOrderId.current) {
-      updateOrderAddress(purchasedOrderId.current, address);
-    }
-    setAddressModalOpen(false);
-  };
   
   // Calculate total payable amount (bid + 10% markup) for display purposes
   const calculateTotalPayable = (bidPrice: number): number => {
@@ -398,17 +386,15 @@ export default function ListingDetailPage() {
     const success = purchaseListing(listing, user.username);
     
     if (success) {
-      // Find the order ID that was just created
-      const newOrderId = `${listing.id}-${new Date().toISOString()}`;
-      purchasedOrderId.current = newOrderId;
-      
-      removeListing(listing.id);
-      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-      setPurchaseStatus('Purchase successful! 🎉');
-      
-      // Show the address modal after successful purchase
-      setAddressModalOpen(true);
+      // Show success overlay first, then redirect
       setShowPurchaseSuccess(true);
+      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
+      
+      // Remove listing and redirect after showing success message
+      setTimeout(() => {
+        removeListing(listing.id);
+        router.push('/buyers/my-orders');
+      }, 15000); // 15 second delay to show success message
     } else {
       setPurchaseStatus('Insufficient balance. Please top up your wallet.');
       setIsProcessing(false);
@@ -623,7 +609,7 @@ export default function ListingDetailPage() {
       );
     }
     
-    // Screen for auction winner
+    // Screen for auction winner - redirect to my-orders
     if (user?.role === "buyer" && isHighestBidder) {
       return (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -651,16 +637,6 @@ export default function ListingDetailPage() {
                     <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
                   </p>
                 </div>
-                
-                {/* Add address button if no address is set yet */}
-                {!deliveryAddress && (
-                  <button
-                    onClick={() => setAddressModalOpen(true)}
-                    className="w-full bg-yellow-600 text-white px-4 py-3 rounded-lg mb-4 hover:bg-yellow-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
-                  >
-                    <MapPin className="w-5 h-5" /> Add Delivery Address
-                  </button>
-                )}
               </div>
             </div>
             
@@ -685,77 +661,6 @@ export default function ListingDetailPage() {
     }
     
     return null;
-  };
-
-  // Render purchase success screen for standard (non-auction) listings
-  const renderPurchaseSuccessScreen = () => {
-    if (!showPurchaseSuccess || !listing) return null;
-    
-    return (
-      <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-        <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
-          <div className="mb-6">
-            <div className="relative mx-auto w-20 h-20 mb-4">
-              <ShoppingBag className="w-20 h-20 text-[#ff950e] animate-pulse" />
-              <CheckCircle className="absolute bottom-0 right-0 w-8 h-8 text-green-500 bg-[#1a1a1a] rounded-full p-1" />
-            </div>
-            
-            <h2 className="text-2xl font-bold text-white mb-2">
-              Purchase Successful!
-            </h2>
-            
-            <div className="text-gray-300">
-              <p className="mb-4">
-                You have successfully purchased <span className="text-[#ff950e] font-medium">"{listing.title}"</span> from <span className="font-bold">{listing.seller}</span>.
-              </p>
-              
-              <div className="bg-black/30 p-4 rounded-xl border border-gray-700 mb-4">
-                <p className="text-sm mb-2">Your order has been added to your order history.</p>
-                <p className="text-sm text-[#ff950e] font-medium">
-                  Total paid: ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
-                  <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
-                </p>
-              </div>
-              
-              {/* Show delivery address confirmation if not set yet */}
-              {!deliveryAddress && (
-                <div className="mb-4">
-                  <p className="text-yellow-400 text-sm mb-2 flex items-center justify-center gap-1">
-                    <AlertTriangle className="w-4 h-4" /> Please confirm your delivery address
-                  </p>
-                  <button
-                    onClick={() => setAddressModalOpen(true)}
-                    className="w-full bg-yellow-600 text-white px-4 py-3 rounded-lg hover:bg-yellow-500 font-bold transition flex items-center justify-center gap-2"
-                  >
-                    <MapPin className="w-5 h-5" /> Add Delivery Address
-                  </button>
-                </div>
-              )}
-              
-              <p className="text-sm text-green-400">
-                The seller has been notified and will contact you soon.
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => router.push('/buyers/my-orders')}
-              className="w-full bg-green-600 text-white px-4 py-3 rounded-full hover:bg-green-500 font-bold transition text-lg shadow flex items-center justify-center gap-2"
-            >
-              <ShoppingCart className="w-5 h-5" /> View My Orders
-            </button>
-            
-            <button
-              onClick={() => router.push('/browse')}
-              className="w-full bg-[#ff950e] text-black px-4 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg shadow"
-            >
-              Browse More Items
-            </button>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -1399,18 +1304,67 @@ export default function ListingDetailPage() {
 
         {/* Render Auction Ended Screens */}
         {renderAuctionEndedScreen()}
-        
-        {/* Render Purchase Success Screen */}
-        {renderPurchaseSuccessScreen()}
 
-        {/* Address Confirmation Modal */}
-        <AddressConfirmationModal
-          isOpen={addressModalOpen}
-          onClose={() => setAddressModalOpen(false)}
-          onConfirm={handleAddressConfirm}
-          existingAddress={deliveryAddress}
-          orderId={purchasedOrderId.current || ''}
-        />
+        {/* Render Purchase Success Screen for Standard Listings */}
+        {showPurchaseSuccess && !isAuctionListing && listing && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-[#1a1a1a] p-8 rounded-3xl shadow-2xl border border-gray-800 max-w-md w-full text-center">
+              <div className="mb-6">
+                <div className="relative mx-auto w-20 h-20 mb-4">
+                  <ShoppingBag className="w-20 h-20 text-[#ff950e] animate-pulse" />
+                  <CheckCircle className="absolute bottom-0 right-0 w-8 h-8 text-green-500 bg-[#1a1a1a] rounded-full p-1" />
+                </div>
+                
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Purchase Successful!
+                </h2>
+                
+                <div className="text-gray-300">
+                  <p className="mb-4">
+                    You have successfully purchased <span className="text-[#ff950e] font-medium">"{listing.title}"</span> from <span className="font-bold">{listing.seller}</span>.
+                  </p>
+                  
+                  <div className="bg-black/30 p-4 rounded-xl border border-gray-700 mb-4">
+                    <p className="text-sm mb-2">Your order has been added to your order history.</p>
+                    <p className="text-sm text-[#ff950e] font-medium">
+                      Total paid: ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
+                      <span className="text-gray-500 font-normal"> (includes 10% platform fee)</span>
+                    </p>
+                  </div>
+                  
+                  <p className="text-sm text-green-400">
+                    Redirecting to your orders...
+                  </p>
+                </div>
+              </div>
+              
+              {/* Progress bar for redirect countdown */}
+              <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
+                <div 
+                  className="bg-[#ff950e] h-2 rounded-full transition-all duration-[15000ms] ease-linear"
+                  style={{
+                    animation: 'progress 15s linear forwards'
+                  }}
+                ></div>
+              </div>
+              
+              <button
+                onClick={() => router.push('/buyers/my-orders')}
+                className="w-full bg-[#ff950e] text-black px-4 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg shadow flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" /> Go to My Orders Now
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Add CSS for progress bar animation */}
+        <style jsx>{`
+          @keyframes progress {
+            from { width: 0%; }
+            to { width: 100%; }
+          }
+        `}</style>
 
         {/* Sticky Buy Now for mobile - only for standard listings */}
         {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
