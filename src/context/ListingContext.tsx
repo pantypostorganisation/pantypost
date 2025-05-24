@@ -87,7 +87,18 @@ export type AuctionInput = {
   endTime: string; // ISO date string
 };
 
-type NotificationStore = Record<string, string[]>;
+// New notification structure
+export type Notification = {
+  id: string;
+  message: string;
+  timestamp: string;
+  cleared: boolean;
+};
+
+// Support both old string format and new object format for backwards compatibility
+export type NotificationItem = string | Notification;
+
+type NotificationStore = Record<string, NotificationItem[]>;
 
 type ListingContextType = {
   user: User | null;
@@ -115,9 +126,13 @@ type ListingContextType = {
   subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
   unsubscribeFromSeller: (buyer: string, seller: string) => void;
   isSubscribed: (buyer: string, seller: string) => boolean;
-  sellerNotifications: string[];
+  
+  // Updated notification system
+  sellerNotifications: Notification[];
   addSellerNotification: (seller: string, message: string) => void;
-  clearSellerNotification: (index: number) => void;
+  clearSellerNotification: (notificationId: string | number) => void; // Now supports both ID and index for backwards compatibility
+  restoreSellerNotification: (notificationId: string) => void;
+  permanentlyDeleteSellerNotification: (notificationId: string) => void;
 
   requestVerification: (docs: VerificationDocs) => void;
   setVerificationStatus: (username: string, status: VerificationStatus, rejectionReason?: string) => void;
@@ -168,19 +183,46 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, []);
 
+  // Helper function to normalize notification items to the new format
+  const normalizeNotification = (item: NotificationItem): Notification => {
+    if (typeof item === 'string') {
+      // Convert old string format to new object format
+      return {
+        id: uuidv4(),
+        message: item,
+        timestamp: new Date().toISOString(),
+        cleared: false
+      };
+    }
+    return item;
+  };
+
+  // Helper function to save notification store
+  const saveNotificationStore = (store: NotificationStore) => {
+    localStorage.setItem('seller_notifications_store', JSON.stringify(store));
+  };
+
   // Memoized notification function to avoid infinite render loop
   const addSellerNotification = useCallback((seller: string, message: string) => {
     if (!seller) {
       console.warn("Attempted to add notification without seller ID");
       return;
     }
+    
+    const newNotification: Notification = {
+      id: uuidv4(),
+      message,
+      timestamp: new Date().toISOString(),
+      cleared: false
+    };
+    
     setNotificationStore(prev => {
       const sellerNotifications = prev[seller] || [];
       const updated = {
         ...prev,
-        [seller]: [...sellerNotifications, message]
+        [seller]: [...sellerNotifications, newNotification]
       };
-      localStorage.setItem('seller_notifications_store', JSON.stringify(updated));
+      saveNotificationStore(updated);
       return updated;
     });
   }, []);
@@ -209,6 +251,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
+  // Migration function to convert old notifications to new format
+  const migrateNotifications = (notifications: NotificationItem[]): Notification[] => {
+    return notifications.map(normalizeNotification);
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem('user');
@@ -223,15 +270,25 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (storedSubs) setSubscriptions(JSON.parse(storedSubs));
       if (storedNotifications) {
         try {
-          setNotificationStore(JSON.parse(storedNotifications));
+          const parsed = JSON.parse(storedNotifications);
+          // Migrate old format to new format if needed
+          const migrated: NotificationStore = {};
+          Object.keys(parsed).forEach(username => {
+            if (Array.isArray(parsed[username])) {
+              migrated[username] = migrateNotifications(parsed[username]);
+            }
+          });
+          setNotificationStore(migrated);
+          // Save the migrated format back to localStorage
+          saveNotificationStore(migrated);
         } catch (e) {
           console.error("Error parsing notification store:", e);
           setNotificationStore({});
-          localStorage.setItem('seller_notifications_store', JSON.stringify({}));
+          saveNotificationStore({});
         }
       } else {
         setNotificationStore({});
-        localStorage.setItem('seller_notifications_store', JSON.stringify({}));
+        saveNotificationStore({});
       }
 
       localStorage.removeItem('seller_notifications');
@@ -742,14 +799,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return subscriptions[buyer]?.includes(seller) ?? false;
   };
 
-  const getCurrentSellerNotifications = (): string[] => {
+  const getCurrentSellerNotifications = (): Notification[] => {
     if (!user || user.role !== 'seller') {
       return [];
     }
-    return notificationStore[user.username] || [];
+    const userNotifications = notificationStore[user.username] || [];
+    // Ensure all notifications are in the new format
+    return userNotifications.map(normalizeNotification);
   };
 
-  const clearSellerNotification = (index: number) => {
+  // Updated clear function - now marks as cleared instead of deleting
+  const clearSellerNotification = (notificationId: string | number) => {
     if (!user || user.role !== 'seller') {
       return;
     }
@@ -757,21 +817,83 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const username = user.username;
     const userNotifications = notificationStore[username] || [];
 
-    if (index < 0 || index >= userNotifications.length) {
-      return;
-    }
-
-    const updatedNotifications = [
-      ...userNotifications.slice(0, index),
-      ...userNotifications.slice(index + 1)
-    ];
-
     setNotificationStore(prev => {
+      const updatedNotifications = userNotifications.map((item, index) => {
+        const notification = normalizeNotification(item);
+        
+        // Support both ID-based and index-based clearing for backwards compatibility
+        const shouldClear = typeof notificationId === 'string' 
+          ? notification.id === notificationId
+          : index === notificationId;
+          
+        if (shouldClear) {
+          return {
+            ...notification,
+            cleared: true
+          };
+        }
+        return notification;
+      });
+
       const updated = {
         ...prev,
         [username]: updatedNotifications
       };
-      localStorage.setItem('seller_notifications_store', JSON.stringify(updated));
+      saveNotificationStore(updated);
+      return updated;
+    });
+  };
+
+  // New function to restore a cleared notification
+  const restoreSellerNotification = (notificationId: string) => {
+    if (!user || user.role !== 'seller') {
+      return;
+    }
+
+    const username = user.username;
+    const userNotifications = notificationStore[username] || [];
+
+    setNotificationStore(prev => {
+      const updatedNotifications = userNotifications.map(item => {
+        const notification = normalizeNotification(item);
+        if (notification.id === notificationId) {
+          return {
+            ...notification,
+            cleared: false
+          };
+        }
+        return notification;
+      });
+
+      const updated = {
+        ...prev,
+        [username]: updatedNotifications
+      };
+      saveNotificationStore(updated);
+      return updated;
+    });
+  };
+
+  // New function to permanently delete a notification
+  const permanentlyDeleteSellerNotification = (notificationId: string) => {
+    if (!user || user.role !== 'seller') {
+      return;
+    }
+
+    const username = user.username;
+    const userNotifications = notificationStore[username] || [];
+
+    setNotificationStore(prev => {
+      const updatedNotifications = userNotifications.filter(item => {
+        const notification = normalizeNotification(item);
+        return notification.id !== notificationId;
+      });
+
+      const updated = {
+        ...prev,
+        [username]: updatedNotifications
+      };
+      saveNotificationStore(updated);
       return updated;
     });
   };
@@ -826,6 +948,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const sellerNotifications = getCurrentSellerNotifications();
+  
   return (
     <ListingContext.Provider
       value={{
@@ -853,6 +976,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         sellerNotifications,
         addSellerNotification,
         clearSellerNotification,
+        restoreSellerNotification,
+        permanentlyDeleteSellerNotification,
         requestVerification,
         setVerificationStatus,
         orderHistory, // Add orderHistory to context value
