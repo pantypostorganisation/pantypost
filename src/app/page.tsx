@@ -51,6 +51,28 @@ const shapeVariants = {
     }
 };
 
+// Floating animation for particles
+const floatVariants = {
+  initial: { y: 100, opacity: 0 },
+  animate: {
+    y: -100,
+    opacity: [0, 1, 1, 0],
+    transition: {
+      duration: 8,
+      repeat: Infinity,
+      ease: "linear"
+    }
+  }
+};
+
+// Generate particle positions (deterministic based on index)
+const particlePositions = Array.from({ length: 15 }, (_, i) => ({
+  left: ((i * 37) % 90) + 5, // Creates pseudo-random horizontal distribution
+  top: ((i * 23) % 100), // Creates pseudo-random vertical distribution
+  delay: (i * 0.3) % 4, // Stagger the animations
+  duration: 8 + (i % 4) // Vary duration between 8-11 seconds
+}));
+
 export default function Home() {
   const [showAgeVerification, setShowAgeVerification] = useState(false);
   const heroRef = useRef(null);
@@ -122,6 +144,30 @@ export default function Home() {
       <section ref={heroRef} className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 bg-gradient-to-b from-black via-[#080808] to-[#101010] overflow-hidden z-10">
         {/* Subtle Noise Overlay */}
         <div className="absolute inset-0 opacity-[0.02] bg-[url('/noise.png')] bg-repeat pointer-events-none"></div>
+        
+        {/* Floating particles */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {particlePositions.map((particle, i) => (
+            <motion.div
+              key={i}
+              className={`absolute bg-[#ff950e]/20 rounded-full ${
+                i % 3 === 0 ? 'w-1.5 h-1.5' : i % 3 === 1 ? 'w-1 h-1' : 'w-2 h-2'
+              }`}
+              style={{ 
+                left: `${particle.left}%`,
+                top: `${particle.top}%` 
+              }}
+              variants={floatVariants}
+              initial="initial"
+              animate="animate"
+              transition={{ 
+                delay: particle.delay,
+                duration: particle.duration
+              }}
+            />
+          ))}
+        </div>
+        
         <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between min-h-[70vh] md:min-h-[75vh] z-10">
           {/* LEFT: Info/CTA */}
           <motion.div
@@ -257,14 +303,22 @@ export default function Home() {
             ].map((feature, index) => (
               <motion.div
                 key={index}
-                className="bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
+                className="group relative bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
                 variants={itemVariants}
+                whileHover={{ y: -8 }}
               >
-                <div className="w-12 h-12 bg-gradient-to-br from-[#ff950e]/10 to-[#ff950e]/5 rounded-full flex items-center justify-center mb-5 border border-[#ff950e]/20">
-                  <feature.icon className="h-6 w-6 text-[#ff950e]" />
+                {/* Shine effect */}
+                <div className="absolute inset-0 rounded-xl overflow-hidden">
+                  <div className="absolute inset-0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">{feature.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{feature.desc}</p>
+                
+                <div className="relative">
+                  <div className="w-12 h-12 bg-gradient-to-br from-[#ff950e]/10 to-[#ff950e]/5 rounded-full flex items-center justify-center mb-5 border border-[#ff950e]/20">
+                    <feature.icon className="h-6 w-6 text-[#ff950e]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-white mb-3">{feature.title}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">{feature.desc}</p>
+                </div>
               </motion.div>
             ))}
           </motion.div>
