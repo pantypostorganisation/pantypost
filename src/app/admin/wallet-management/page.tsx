@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -12,7 +12,13 @@ import {
   Users,
   CheckCircle,
   XCircle,
-  Info
+  Info,
+  Crown,
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  Shield
 } from 'lucide-react';
 
 export default function AdminWalletManagementPage() {
@@ -28,6 +34,7 @@ export default function AdminWalletManagementPage() {
   const [showMessage, setShowMessage] = useState(false);
   const [allUsers, setAllUsers] = useState<{username: string, role: string}[]>([]);
   const [displayedUsers, setDisplayedUsers] = useState<{username: string, role: string}[]>([]);
+  const [roleFilter, setRoleFilter] = useState<'all' | 'buyer' | 'seller'>('all');
 
   // Check if user is admin
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
@@ -35,53 +42,52 @@ export default function AdminWalletManagementPage() {
   // Load all users on component mount and when users object changes
   useEffect(() => {
     if (users && Object.keys(users).length > 0) {
-      // Get all users excluding admins
       const nonAdminUsers = Object.entries(users)
-        .filter(([_, userData]) => userData.role !== 'admin');
-      
-      // Get all buyers, sort alphabetically
-      const buyers = nonAdminUsers
-        .filter(([_, userData]) => userData.role === 'buyer')
+        .filter(([_, userData]) => userData.role !== 'admin')
         .map(([username, userData]) => ({
           username,
           role: userData.role
-        }))
-        .sort((a, b) => a.username.localeCompare(b.username));
+        }));
       
-      // Get all sellers, sort alphabetically
-      const sellers = nonAdminUsers
-        .filter(([_, userData]) => userData.role === 'seller')
-        .map(([username, userData]) => ({
-          username,
-          role: userData.role
-        }))
-        .sort((a, b) => a.username.localeCompare(b.username));
-      
-      // Combine: all buyers first, then all sellers
-      const sortedUsers = [...buyers, ...sellers];
+      // Sort buyers first (alphabetically), then sellers (alphabetically)
+      const sortedUsers = nonAdminUsers.sort((a, b) => {
+        // If roles are different, buyers come first
+        if (a.role !== b.role) {
+          if (a.role === 'buyer' && b.role === 'seller') return -1;
+          if (a.role === 'seller' && b.role === 'buyer') return 1;
+        }
+        // If roles are the same, sort alphabetically by username
+        return a.username.localeCompare(b.username);
+      });
       
       setAllUsers(sortedUsers);
       setDisplayedUsers(sortedUsers);
     }
   }, [users]);
 
-  // Filter users based on search term
+  // Filter users based on search term and role filter
   useEffect(() => {
-    if (!searchTerm) {
-      setDisplayedUsers(allUsers);
-    } else {
-      const filtered = allUsers.filter(user => 
+    let filtered = allUsers;
+    
+    // Apply role filter
+    if (roleFilter !== 'all') {
+      filtered = filtered.filter(user => user.role === roleFilter);
+    }
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(user => 
         user.username.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setDisplayedUsers(filtered);
     }
-  }, [searchTerm, allUsers]);
+    
+    setDisplayedUsers(filtered);
+  }, [searchTerm, allUsers, roleFilter]);
 
   // Handle user selection
   const handleSelectUser = (username: string, role: string) => {
     setSelectedUser(username);
     setSelectedUserRole(role as 'buyer' | 'seller' | 'admin');
-    setSearchTerm(username);
   };
 
   // Handle the wallet action (credit or debit)
@@ -101,7 +107,6 @@ export default function AdminWalletManagementPage() {
       return;
     }
 
-    // Convert 'admin' role to 'buyer' when passing to the admin functions
     const roleForWallet: 'buyer' | 'seller' = selectedUserRole === 'admin' ? 'buyer' : selectedUserRole as 'buyer' | 'seller';
 
     let success = false;
@@ -123,9 +128,24 @@ export default function AdminWalletManagementPage() {
     setTimeout(() => setShowMessage(false), 3000);
   };
 
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedUser(null);
+    setSearchTerm('');
+    setAmount('');
+    setReason('');
+    setActionType('credit');
+  };
+
   // Format date for display
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   // Format role display
@@ -133,13 +153,21 @@ export default function AdminWalletManagementPage() {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
+  // Get user balance
+  const getUserBalance = (username: string) => {
+    return wallet[username] || 0;
+  };
+
   if (!isAdmin) {
     return (
       <RequireAuth role="admin">
-        <div className="min-h-screen bg-black flex items-center justify-center">
-          <div className="bg-[#1a1a1a] p-8 rounded-xl shadow-xl max-w-md w-full">
-            <h1 className="text-2xl font-bold text-[#ff950e] mb-4">Access Denied</h1>
-            <p className="text-white">Only admin accounts can access this page.</p>
+        <div className="min-h-screen bg-black flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1a] p-8 rounded-xl shadow-xl max-w-md w-full border border-gray-800">
+            <div className="text-center">
+              <Shield className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
+              <p className="text-gray-400">Only admin accounts can access this page.</p>
+            </div>
           </div>
         </div>
       </RequireAuth>
@@ -150,13 +178,24 @@ export default function AdminWalletManagementPage() {
     <RequireAuth role="admin">
       <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
+          {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-[#ff950e]">Wallet Management</h1>
-              <p className="text-gray-400 mt-1">Manage user wallet balances</p>
+              <h1 className="text-3xl font-bold text-[#ff950e] flex items-center gap-3">
+                <Wallet className="h-8 w-8" />
+                Wallet Management
+              </h1>
+              <p className="text-gray-400 mt-1">Manage user wallet balances and view transaction history</p>
             </div>
-            <div className="bg-[#1a1a1a] p-2 rounded-lg">
-              <Users className="h-6 w-6 text-[#ff950e]" />
+            <div className="flex items-center gap-4">
+              <div className="bg-[#1a1a1a] px-4 py-2 rounded-lg border border-gray-800 flex items-center gap-2">
+                <Crown className="h-5 w-5 text-[#ff950e]" />
+                <span className="text-sm font-medium text-white">Admin Panel</span>
+              </div>
+              <div className="bg-[#1a1a1a] px-4 py-2 rounded-lg border border-gray-800 flex items-center gap-2">
+                <Users className="h-5 w-5 text-[#ff950e]" />
+                <span className="text-sm font-medium text-white">{allUsers.length} Users</span>
+              </div>
             </div>
           </div>
 
@@ -164,7 +203,10 @@ export default function AdminWalletManagementPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
             {/* Search and Management Section */}
             <div className="md:col-span-1 bg-[#1a1a1a] p-6 rounded-xl border border-gray-800 shadow-lg">
-              <h2 className="text-xl font-bold mb-4">Find User</h2>
+              <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
+                <Search className="h-5 w-5 text-[#ff950e]" />
+                Find User
+              </h2>
               
               {/* Search input */}
               <div className="relative mb-6">
@@ -174,8 +216,37 @@ export default function AdminWalletManagementPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search by username..."
-                  className="w-full py-2 pl-10 pr-4 rounded-lg bg-[#252525] border border-gray-700 text-white"
+                  className="w-full py-2 pl-10 pr-4 rounded-lg bg-[#252525] border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
                 />
+              </div>
+
+              {/* Role Filter */}
+              <div className="mb-6">
+                <label className="block text-sm text-gray-400 mb-2">Filter by Role</label>
+                <div className="flex space-x-2">
+                  {[
+                    { value: 'all', label: 'All', icon: Users },
+                    { value: 'buyer', label: 'Buyers', icon: '👤' },
+                    { value: 'seller', label: 'Sellers', icon: '🏪' }
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      onClick={() => setRoleFilter(filter.value as any)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        roleFilter === filter.value
+                          ? 'bg-[#ff950e] text-black shadow-lg transform scale-105'
+                          : 'bg-[#252525] text-gray-300 hover:bg-[#333] border border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      {typeof filter.icon === 'string' ? (
+                        <span className="text-base">{filter.icon}</span>
+                      ) : (
+                        <filter.icon className="h-4 w-4" />
+                      )}
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               
               {/* Display available users */}
@@ -187,60 +258,123 @@ export default function AdminWalletManagementPage() {
                       {searchTerm && ` matching "${searchTerm}"`}
                     </p>
                     
-                    {searchTerm && (
+                    {(searchTerm || roleFilter !== 'all') && (
                       <button 
-                        onClick={() => setSearchTerm('')}
-                        className="text-xs text-[#ff950e] hover:text-[#ffb04e]"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setRoleFilter('all');
+                        }}
+                        className="text-xs text-[#ff950e] hover:text-[#ffb04e] transition-colors"
                       >
-                        Clear search
+                        Clear filters
                       </button>
                     )}
                   </div>
                   
-                  <div className="border border-gray-800 rounded-lg overflow-hidden">
+                  <div className="border border-gray-800 rounded-lg overflow-hidden max-h-80 overflow-y-auto">
                     {displayedUsers.length > 0 ? (
-                      displayedUsers.map((userItem, index) => (
-                        <div
-                          key={userItem.username}
-                          onClick={() => handleSelectUser(userItem.username, userItem.role)}
-                          className={`p-3 hover:bg-[#333] cursor-pointer flex justify-between items-center ${
-                            index !== displayedUsers.length - 1 ? 'border-b border-gray-800' : ''
-                          }`}
-                        >
-                          <span className="font-medium">{userItem.username}</span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            userItem.role === 'buyer' 
-                              ? 'bg-[#ff950e] text-black'
-                              : 'bg-[#83c8f2] text-black'
-                          }`}>
-                            {formatRole(userItem.role)}
-                          </span>
-                        </div>
-                      ))
+                      displayedUsers.map((userItem, index) => {
+                        const balance = getUserBalance(userItem.username);
+                        const isLowBalance = balance < 10;
+                        
+                        return (
+                          <div
+                            key={userItem.username}
+                            onClick={() => handleSelectUser(userItem.username, userItem.role)}
+                            className={`p-3 hover:bg-[#333] cursor-pointer flex justify-between items-center transition-all hover:scale-[1.02] group ${
+                              index !== displayedUsers.length - 1 ? 'border-b border-gray-800' : ''
+                            }`}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all group-hover:scale-110 ${
+                                userItem.role === 'buyer' 
+                                  ? 'bg-blue-900/50 border border-blue-600' 
+                                  : 'bg-green-900/50 border border-green-600'
+                              }`}>
+                                {userItem.role === 'buyer' ? '👤' : '🏪'}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-white">{userItem.username}</span>
+                                  {isLowBalance && (
+                                    <span className="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-0.5 rounded-full border border-yellow-600/50">
+                                      Low Balance
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-sm font-mono ${
+                                  balance > 50 ? 'text-green-400' : 
+                                  balance > 10 ? 'text-yellow-400' : 'text-red-400'
+                                }`}>
+                                  ${balance.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded font-medium ${
+                              userItem.role === 'buyer' 
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-green-600 text-white'
+                            }`}>
+                              {formatRole(userItem.role)}
+                            </span>
+                          </div>
+                        );
+                      })
                     ) : (
                       <div className="p-4 text-center text-gray-500">
-                        No users found matching your search
+                        <Users className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+                        <p>No users found matching your search</p>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
                 <div>
-                  <div className="p-4 bg-[#252525] rounded-lg border border-gray-700 mb-6">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-lg">{selectedUser}</span>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        selectedUserRole === 'buyer' 
-                          ? 'bg-[#ff950e] text-black'
-                          : selectedUserRole === 'seller'
-                            ? 'bg-[#83c8f2] text-black'
-                            : 'bg-[#83c8f2] text-black' // Admin will use same style as seller
-                      }`}>
-                        {formatRole(selectedUserRole)}
-                      </span>
+                  <div className="p-4 bg-gradient-to-r from-[#252525] to-[#1a1a1a] rounded-lg border border-gray-700 mb-6 relative overflow-hidden">
+                    {/* Background pattern */}
+                    <div className="absolute inset-0 opacity-5">
+                      <div className="h-full w-full bg-gradient-to-br from-[#ff950e] to-transparent"></div>
                     </div>
-                    <div className="text-[#ff950e] font-bold">
-                      Balance: ${(wallet[selectedUser] || 0).toFixed(2)}
+                    
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            selectedUserRole === 'buyer' 
+                              ? 'bg-blue-900/50 border border-blue-600' 
+                              : 'bg-green-900/50 border border-green-600'
+                          }`}>
+                            {selectedUserRole === 'buyer' ? '👤' : '🏪'}
+                          </div>
+                          <div>
+                            <span className="font-bold text-xl text-white">{selectedUser}</span>
+                            <span className={`ml-3 text-xs px-2 py-1 rounded font-medium ${
+                              selectedUserRole === 'buyer' 
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-green-600 text-white'
+                            }`}>
+                              {formatRole(selectedUserRole)}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={clearSelection}
+                          className="text-gray-400 hover:text-red-400 transition-colors p-1 hover:bg-red-900/20 rounded"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <DollarSign className="h-6 w-6 text-[#ff950e]" />
+                        <span className="text-2xl font-bold text-[#ff950e]">
+                          ${(wallet[selectedUser] || 0).toFixed(2)}
+                        </span>
+                        {(wallet[selectedUser] || 0) < 10 && (
+                          <span className="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded-full border border-yellow-600/50">
+                            Low Balance
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
@@ -249,10 +383,10 @@ export default function AdminWalletManagementPage() {
                     <label className="block text-sm text-gray-400 mb-1">Action Type</label>
                     <div className="flex border border-gray-700 rounded-lg overflow-hidden">
                       <button
-                        className={`flex-1 py-2 flex items-center justify-center gap-1 ${
+                        className={`flex-1 py-2 flex items-center justify-center gap-1 transition-colors ${
                           actionType === 'credit'
                             ? 'bg-green-800 text-white'
-                            : 'bg-[#252525] text-gray-300'
+                            : 'bg-[#252525] text-gray-300 hover:bg-[#333]'
                         }`}
                         onClick={() => setActionType('credit')}
                       >
@@ -260,10 +394,10 @@ export default function AdminWalletManagementPage() {
                         Credit
                       </button>
                       <button
-                        className={`flex-1 py-2 flex items-center justify-center gap-1 ${
+                        className={`flex-1 py-2 flex items-center justify-center gap-1 transition-colors ${
                           actionType === 'debit'
                             ? 'bg-red-800 text-white'
-                            : 'bg-[#252525] text-gray-300'
+                            : 'bg-[#252525] text-gray-300 hover:bg-[#333]'
                         }`}
                         onClick={() => setActionType('debit')}
                       >
@@ -285,7 +419,7 @@ export default function AdminWalletManagementPage() {
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="0.00"
-                        className="w-full py-2 pl-10 pr-4 rounded-lg bg-[#252525] border border-gray-700 text-white"
+                        className="w-full py-2 pl-10 pr-4 rounded-lg bg-[#252525] border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
                       />
                     </div>
                   </div>
@@ -298,7 +432,7 @@ export default function AdminWalletManagementPage() {
                       onChange={(e) => setReason(e.target.value)}
                       placeholder="Enter reason for this transaction..."
                       rows={3}
-                      className="w-full p-3 rounded-lg bg-[#252525] border border-gray-700 text-white resize-none"
+                      className="w-full p-3 rounded-lg bg-[#252525] border border-gray-700 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
                     ></textarea>
                   </div>
                   
@@ -306,22 +440,17 @@ export default function AdminWalletManagementPage() {
                   <div className="space-y-3">
                     <button
                       onClick={handleAction}
-                      className={`w-full py-3 rounded-lg font-bold ${
+                      className={`w-full py-3 rounded-lg font-bold transition-colors ${
                         actionType === 'credit'
-                          ? 'bg-green-600 hover:bg-green-700'
-                          : 'bg-red-600 hover:bg-red-700'
-                      } transition-colors`}
+                          ? 'bg-green-600 hover:bg-green-700 text-white'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
                     >
                       {actionType === 'credit' ? 'Add Funds' : 'Remove Funds'}
                     </button>
                     
                     <button 
-                      onClick={() => {
-                        setSelectedUser(null);
-                        setSearchTerm('');
-                        setAmount('');
-                        setReason('');
-                      }}
+                      onClick={clearSelection}
                       className="w-full py-2 rounded-lg font-medium bg-[#333] hover:bg-[#444] transition-colors text-gray-300"
                     >
                       Cancel
@@ -333,7 +462,24 @@ export default function AdminWalletManagementPage() {
             
             {/* Transaction History Section */}
             <div className="md:col-span-2 bg-[#1a1a1a] p-6 rounded-xl border border-gray-800 shadow-lg overflow-hidden">
-              <h2 className="text-xl font-bold mb-4">Admin Actions History</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-[#ff950e]" />
+                  Admin Actions History
+                </h2>
+                {adminActions.length > 0 && (
+                  <div className="flex items-center gap-4 text-sm text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      Credits: {adminActions.filter(a => a.type === 'credit').length}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      Debits: {adminActions.filter(a => a.type === 'debit').length}
+                    </span>
+                  </div>
+                )}
+              </div>
               
               {adminActions.length === 0 ? (
                 <div className="text-center py-10 text-gray-500">
@@ -354,25 +500,25 @@ export default function AdminWalletManagementPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {[...adminActions]
+                      {adminActions
                         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                         .map((action, index) => (
                           <tr 
                             key={index} 
-                            className={`border-b border-gray-800 hover:bg-[#252525] ${
+                            className={`border-b border-gray-800 hover:bg-[#252525] transition-colors ${
                               index % 2 === 0 ? 'bg-[#1f1f1f]' : ''
                             }`}
                           >
-                            <td className="py-3 px-4">{formatDate(action.date)}</td>
-                            <td className="py-3 px-4">{action.adminUser}</td>
-                            <td className="py-3 px-4">{action.username}</td>
-                            <td className="py-3 px-4">{formatRole(action.role)}</td>
+                            <td className="py-3 px-4 text-white">{formatDate(action.date)}</td>
+                            <td className="py-3 px-4 text-white">{action.adminUser}</td>
+                            <td className="py-3 px-4 text-white">{action.username}</td>
+                            <td className="py-3 px-4 text-white">{formatRole(action.role)}</td>
                             <td className={`py-3 px-4 text-right font-mono ${
                               action.type === 'credit' ? 'text-green-500' : 'text-red-500'
                             }`}>
                               {action.type === 'credit' ? '+' : '-'}${action.amount.toFixed(2)}
                             </td>
-                            <td className="py-3 px-4 truncate max-w-[200px]" title={action.reason}>
+                            <td className="py-3 px-4 truncate max-w-[200px] text-gray-300" title={action.reason}>
                               {action.reason}
                             </td>
                           </tr>
@@ -393,7 +539,7 @@ export default function AdminWalletManagementPage() {
                 ) : (
                   <XCircle className="h-5 w-5 text-red-500 mr-2" />
                 )}
-                <p className="text-sm">{message}</p>
+                <p className="text-sm text-white">{message}</p>
               </div>
             </div>
           )}
