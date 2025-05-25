@@ -1,4 +1,4 @@
-// src/app/browse/[id]/page.tsx
+// src/app/browse/[id]/page.tsx - Clean Version with Larger Profile Photo
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
@@ -9,11 +9,10 @@ import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import Link from 'next/link';
 import {
-  Clock, User, ArrowRight, BadgeCheck, AlertTriangle, Crown, MessageCircle,
+  Clock, User, ArrowLeft, AlertTriangle, Crown, MessageCircle,
   DollarSign, ShoppingBag, Lock, ChevronLeft, ChevronRight, Gavel, Calendar,
   BarChart2, ArrowUp, History, AlertCircle, CheckCircle, X, Info, Award,
-  ExternalLink, ShoppingCart, MapPin, Star, Heart, Share2, Eye, Package,
-  Shield, Truck, CreditCard, Gift
+  ShoppingCart, Shield, Truck, CreditCard, Gift, Package, Eye
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
@@ -71,7 +70,6 @@ export default function ListingDetailPage() {
   const [bidsHistory, setBidsHistory] = useState<{bidder: string, amount: number, date: string}[]>([]);
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [forceUpdateTimer, setForceUpdateTimer] = useState<Record<string, unknown>>({});
-  const [isLiked, setIsLiked] = useState(false);
   const [viewCount, setViewCount] = useState(Math.floor(Math.random() * 100) + 20); // Mock view count
 
   // Enhanced bid validation and submission with debouncing
@@ -266,13 +264,13 @@ export default function ListingDetailPage() {
     
     let formatted;
     if (diffDays > 0) {
-      formatted = `${diffDays} day${diffDays !== 1 ? 's' : ''}, ${diffHours} hour${diffHours !== 1 ? 's' : ''} remaining`;
+      formatted = `${diffDays}d ${diffHours}h remaining`;
     } else if (diffHours > 0) {
-      formatted = `${diffHours} hour${diffHours !== 1 ? 's' : ''}, ${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} remaining`;
+      formatted = `${diffHours}h ${diffMinutes}m remaining`;
     } else if (diffMinutes > 0) {
-      formatted = `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}, ${diffSeconds} second${diffSeconds !== 1 ? 's' : ''} remaining`;
+      formatted = `${diffMinutes}m ${diffSeconds}s remaining`;
     } else {
-      formatted = `${diffSeconds} second${diffSeconds !== 1 ? 's' : ''} remaining`;
+      formatted = `${diffSeconds}s remaining`;
     }
     
     // Cache the result based on granularity - shorter times need more frequent updates
@@ -626,49 +624,31 @@ export default function ListingDetailPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 text-white">
-      {/* Enhanced Header with Breadcrumbs */}
-      <div className="sticky top-0 z-30 bg-black/80 backdrop-blur-sm border-b border-gray-800/50">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 text-sm">
-              <Link href="/browse" className="flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition">
-                <ArrowRight className="w-4 h-4 rotate-180" />
-                Browse
-              </Link>
-              <span className="text-gray-600">/</span>
-              <span className="text-gray-300 truncate max-w-xs">{listing.title}</span>
-            </div>
-            
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setIsLiked(!isLiked)}
-                className={`p-2 rounded-full transition ${isLiked ? 'bg-red-500/20 text-red-400' : 'bg-gray-800/50 text-gray-400 hover:text-red-400'}`}
-              >
-                <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-              </button>
-              <button className="p-2 rounded-full bg-gray-800/50 text-gray-400 hover:text-blue-400 transition">
-                <Share2 className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
+    <main className="min-h-screen bg-black text-white">
+      {/* Back Button - Positioned above entire layout */}
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        <Link 
+          href="/browse" 
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors text-sm font-medium"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Browse
+        </Link>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Left: Enhanced Image Gallery */}
-          <div className="space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          {/* Left: Image Gallery */}
+          <div className="space-y-4">
             {/* Main Image Container */}
             <div ref={imageRef} className="relative group">
-              <div className="relative w-full h-[600px] rounded-2xl overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900 shadow-2xl">
+              <div className="relative w-full h-[500px] lg:h-[600px] rounded-xl overflow-hidden bg-gray-900 shadow-xl">
                 {images.length > 0 ? (
                   <>
                     <img
                       src={images[currentImageIndex]}
                       alt={`${listing.title} - Image ${currentImageIndex + 1}`}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="w-full h-full object-cover transition-transform duration-300"
                     />
                     
                     {/* Image Navigation */}
@@ -676,22 +656,22 @@ export default function ListingDetailPage() {
                       <>
                         <button
                           onClick={handlePrevImage}
-                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
                         >
-                          <ChevronLeft className="w-6 h-6" />
+                          <ChevronLeft className="w-5 h-5" />
                         </button>
                         <button
                           onClick={handleNextImage}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
                         >
-                          <ChevronRight className="w-6 h-6" />
+                          <ChevronRight className="w-5 h-5" />
                         </button>
                       </>
                     )}
                     
                     {/* Image Counter */}
                     {images.length > 1 && (
-                      <div className="absolute bottom-4 right-4 bg-black/70 text-white px-3 py-1 rounded-full text-sm">
+                      <div className="absolute bottom-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs">
                         {currentImageIndex + 1} / {images.length}
                       </div>
                     )}
@@ -699,39 +679,45 @@ export default function ListingDetailPage() {
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <div className="text-center text-gray-400">
-                      <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                      <p>No Image Available</p>
+                      <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p className="text-sm">No Image Available</p>
                     </div>
                   </div>
                 )}
                 
-                {/* Badges */}
-                <div className="absolute top-4 left-4 flex flex-col gap-2">
+                {/* Type Badges */}
+                <div className="absolute top-3 left-3 flex flex-col gap-2">
                   {isAuctionListing && (
-                    <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-sm px-4 py-2 rounded-full font-bold flex items-center shadow-lg">
-                      <Gavel className="w-4 h-4 mr-2" />
-                      {isAuctionEnded ? 'Auction Ended' : 'Live Auction'}
+                    <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
+                      <Gavel className="w-3 h-3 mr-1.5" />
+                      {isAuctionEnded ? 'Ended' : 'Live Auction'}
                     </span>
                   )}
                   {listing.isPremium && (
-                    <span className="bg-gradient-to-r from-yellow-600 to-yellow-500 text-black text-sm px-4 py-2 rounded-full font-bold flex items-center shadow-lg">
-                      <Crown className="w-4 h-4 mr-2" />
+                    <span className="bg-yellow-600 text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
+                      <Crown className="w-3 h-3 mr-1.5" />
                       Premium
                     </span>
                   )}
+                </div>
+                
+                {/* View Count */}
+                <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                  <Eye className="w-3 h-3" />
+                  {viewCount}
                 </div>
               </div>
             </div>
             
             {/* Thumbnail Gallery */}
             {images.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-2">
+              <div className="flex gap-2 overflow-x-auto pb-2">
                 {images.map((url, index) => (
                   <div
                     key={index}
-                    className={`flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
                       index === currentImageIndex 
-                        ? 'border-[#ff950e] ring-2 ring-[#ff950e]/30' 
+                        ? 'border-[#ff950e]' 
                         : 'border-gray-700 hover:border-gray-600'
                     }`}
                     onClick={() => setCurrentImageIndex(index)}
@@ -743,294 +729,156 @@ export default function ListingDetailPage() {
             )}
           </div>
 
-          {/* Right: Enhanced Product Details */}
-          <div className="space-y-8">
-            {/* Header Section */}
-            <div className="space-y-4">
-              <div className="flex items-start justify-between">
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent leading-tight">
-                  {listing.title}
-                </h1>
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Eye className="w-4 h-4" />
-                  {viewCount} views
-                </div>
-              </div>
+          {/* Right: Product Details - Now aligned with image top */}
+          <div className="space-y-4">
+            {/* Title & Basic Info */}
+            <div>
+              <h1 className="text-2xl font-bold text-white mb-2">{listing.title}</h1>
               
               {/* Tags */}
               {listing.tags && listing.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 mb-3">
                   {listing.tags.map((tag, i) => (
                     <span 
                       key={i} 
-                      className="bg-gradient-to-r from-gray-800 to-gray-700 text-gray-300 text-sm px-4 py-2 rounded-full border border-gray-600 hover:border-[#ff950e]/50 transition"
+                      className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full border border-gray-700"
                     >
                       {tag}
                     </span>
                   ))}
                 </div>
               )}
+              
+              {/* Hours Worn */}
+              {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Clock className="w-4 h-4" />
+                  <span>{listing.hoursWorn} hours worn</span>
+                </div>
+              )}
             </div>
-
-            {/* Enhanced Seller Card - FIXED TIER BADGE POSITIONING */}
-            {user?.role === 'buyer' && (
-              <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/50 border border-gray-700 rounded-2xl p-6 backdrop-blur-sm">
-                <div className="flex items-start gap-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-full border-3 border-[#ff950e] bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-lg">
-                      {sellerProfile.pic ? (
-                        <img src={sellerProfile.pic} alt={listing.seller} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-2xl font-bold text-[#ff950e]">
-                          {listing.seller?.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* FIXED: Tier Badge positioned to bottom-right of profile picture */}
-                    {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-                      <div className="absolute -bottom-2 -right-2">
-                        <TierBadge tier={sellerTierInfo.tier} size="md" showTooltip={true} />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-xl font-bold text-white">{listing.seller}</h3>
-                      {isSellerVerified && (
-                        <div className="relative group">
-                          <img src="/verification_badge.png" alt="Verified" className="w-5 h-5" />
-                          <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
-                            Verified Seller
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <p className="text-gray-400 text-sm mb-4 line-clamp-2">
-                      {sellerProfile.bio || 'No bio provided.'}
-                    </p>
-                    
-                    <Link
-                      href={`/sellers/${listing.seller}`}
-                      className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#e0850d] text-black font-bold px-4 py-2 rounded-full text-sm hover:shadow-lg hover:shadow-[#ff950e]/20 transition-all"
-                    >
-                      <User className="w-4 h-4" />
-                      View Profile
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Hours Worn Info */}
-            {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
-              <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-700/30 rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/20 rounded-full">
-                    <Clock className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-white font-semibold">{listing.hoursWorn} hours worn</p>
-                    <p className="text-gray-400 text-sm">Wear time verified by seller</p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Description */}
-            <div className="space-y-3">
-              <h3 className="text-xl font-semibold text-white">Description</h3>
-              <p className="text-gray-300 leading-relaxed text-lg">{listing.description}</p>
+            <div>
+              <h3 className="text-base font-semibold text-white mb-2">Description</h3>
+              <p className="text-gray-300 text-sm leading-relaxed">{listing.description}</p>
             </div>
 
-            {/* Enhanced Auction Details */}
+            {/* Auction Details */}
             {isAuctionListing && listing.auction && (
-              <div className={`rounded-2xl border backdrop-blur-sm p-6 ${
+              <div className={`rounded-xl border p-5 ${
                 isAuctionEnded 
                   ? 'border-gray-700 bg-gray-900/30' 
-                  : 'border-purple-700 bg-gradient-to-br from-purple-900/20 to-blue-900/20'
+                  : 'border-purple-700 bg-purple-900/20'
               }`}>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className={`p-2 rounded-full ${isAuctionEnded ? 'bg-gray-700' : 'bg-purple-500/20'}`}>
-                    <Gavel className={`w-6 h-6 ${isAuctionEnded ? 'text-gray-400' : 'text-purple-400'}`} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white">
-                      {isAuctionEnded ? 'Auction Ended' : 'Live Auction'}
-                    </h3>
-                    <p className="text-sm text-gray-400">
-                      {isAuctionEnded ? 'This auction has concluded' : 'Place your bid now'}
-                    </p>
-                  </div>
-                  
-                  {/* Status Badge */}
-                  {isAuctionEnded ? (
-                    <span className="bg-gray-800 text-gray-300 px-4 py-2 rounded-full text-sm font-medium">
-                      {listing.auction.status === 'cancelled' ? 'Cancelled' : 'Ended'}
-                    </span>
-                  ) : (
-                    <span className="bg-green-500/20 text-green-300 px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                      Active
-                    </span>
-                  )}
+                <div className="flex items-center gap-3 mb-4">
+                  <Gavel className={`w-5 h-5 ${isAuctionEnded ? 'text-gray-400' : 'text-purple-400'}`} />
+                  <h3 className="text-lg font-bold text-white">
+                    {isAuctionEnded ? 'Auction Ended' : 'Live Auction'}
+                  </h3>
                 </div>
                 
-                {/* Auction Stats Grid */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-black/30 rounded-xl p-4 border border-gray-800">
-                    <p className="text-gray-400 text-sm mb-1">Starting Bid</p>
-                    <p className="text-2xl font-bold text-white">${listing.auction.startingPrice.toFixed(2)}</p>
+                {/* Auction Stats */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-gray-400 text-sm">Starting Bid</p>
+                    <p className="text-xl font-bold text-white">${listing.auction.startingPrice.toFixed(2)}</p>
                   </div>
                   
-                  <div className={`rounded-xl p-4 border ${
-                    listing.auction.highestBid 
-                      ? 'bg-green-900/20 border-green-800/40' 
-                      : 'bg-black/30 border-gray-800'
-                  }`}>
-                    <p className="text-gray-400 text-sm mb-1">Current Bid</p>
+                  <div>
+                    <p className="text-gray-400 text-sm">Current Bid</p>
                     {listing.auction.highestBid ? (
-                      <div className="flex items-center gap-2">
-                        <ArrowUp className="w-5 h-5 text-green-400" />
-                        <p className="text-2xl font-bold text-green-400">
-                          ${listing.auction.highestBid.toFixed(2)}
-                        </p>
-                      </div>
+                      <p className="text-xl font-bold text-green-400">${listing.auction.highestBid.toFixed(2)}</p>
                     ) : (
-                      <p className="text-gray-400 italic text-lg">No bids yet</p>
+                      <p className="text-gray-400 italic">No bids yet</p>
                     )}
                   </div>
                 </div>
                 
                 {/* Time Remaining */}
                 {!isAuctionEnded && (
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-gray-300 flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-purple-400" />
-                        Time Remaining
-                      </span>
-                      <span className="font-bold text-green-400">
-                        {formatTimeRemaining(listing.auction.endTime)}
-                      </span>
-                    </div>
-                    
-                    {/* Progress Bar */}
-                    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                      {(() => {
-                        const startTime = new Date(listing.date).getTime();
-                        const endTime = new Date(listing.auction.endTime).getTime();
-                        const currentTime = new Date().getTime();
-                        const totalDuration = endTime - startTime;
-                        const elapsed = currentTime - startTime;
-                        const progress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
-                        
-                        return (
-                          <div
-                            className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-1000"
-                            style={{ width: `${progress}%` }}
-                          />
-                        );
-                      })()}
-                    </div>
+                  <div className="mb-4">
+                    <p className="text-gray-400 text-sm mb-1">Time Remaining</p>
+                    <p className="font-bold text-green-400">
+                      {formatTimeRemaining(listing.auction.endTime)}
+                    </p>
                   </div>
                 )}
                 
                 {/* Total Payable */}
-                <div className="bg-purple-900/30 rounded-xl p-4 border border-purple-800/40 mb-6">
+                <div className="bg-purple-900/30 rounded-lg p-3 mb-4">
                   <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-purple-400" />
-                      <span className="text-purple-200">Total if you win</span>
-                    </div>
-                    <span className="text-2xl font-bold text-white">
+                    <span className="text-purple-200 text-sm">Total if you win</span>
+                    <span className="text-lg font-bold text-white">
                       ${currentTotalPayable.toFixed(2)}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Includes 10% platform fee added to winning bid
+                  <p className="text-xs text-gray-400 mt-1">
+                    Includes 10% platform fee
                   </p>
                 </div>
 
                 {/* Bidding Section */}
                 {!isAuctionEnded && user?.role === 'buyer' && user.username !== listing.seller && (
-                  <div className="space-y-4">
-                    <div className="flex gap-3">
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
                       <div className="flex-1">
-                        <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                          <input
-                            ref={bidInputRef}
-                            type="number"
-                            placeholder="Enter your bid"
-                            value={bidAmount}
-                            onChange={(e) => setBidAmount(e.target.value)}
-                            onKeyPress={handleBidKeyPress}
-                            min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
-                            step="0.01"
-                            className="w-full pl-12 pr-4 py-4 rounded-xl bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg font-medium"
-                          />
-                        </div>
+                        <input
+                          ref={bidInputRef}
+                          type="number"
+                          placeholder="Enter your bid"
+                          value={bidAmount}
+                          onChange={(e) => setBidAmount(e.target.value)}
+                          onKeyPress={handleBidKeyPress}
+                          min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
+                          step="0.01"
+                          className="w-full px-3 py-2 rounded-lg bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
+                        />
                       </div>
                       <button
                         ref={bidButtonRef}
                         onClick={handleBidSubmit}
                         disabled={isBidding || !biddingEnabled}
-                        className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-8 py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-purple-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 whitespace-nowrap"
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-500 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                       >
-                        {isBidding ? (
-                          <>
-                            <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                            Placing...
-                          </>
-                        ) : (
-                          <>
-                            <Gavel className="w-5 h-5" />
-                            Place Bid
-                          </>
-                        )}
+                        {isBidding ? 'Placing...' : 'Bid'}
                       </button>
                     </div>
                     
-                    {/* Quick Bid Buttons + Bid History Button */}
+                    {/* Quick Bid + History */}
                     <div className="flex gap-2">
                       {suggestedBidAmount && (
                         <button
                           onClick={() => setBidAmount(suggestedBidAmount)}
-                          className="bg-purple-900/50 text-purple-300 px-4 py-2 rounded-lg hover:bg-purple-800/50 transition border border-purple-700/50 text-sm font-medium"
+                          className="bg-purple-800/50 text-purple-300 px-3 py-1 rounded text-sm hover:bg-purple-700/50 transition"
                         >
                           ${suggestedBidAmount}
                         </button>
                       )}
-                      {/* Bid History Button - takes remaining space with sheen effect */}
                       <button
                         onClick={() => setShowBidHistory(true)}
-                        className="flex-1 bg-gray-800/50 text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition border border-gray-700/50 text-sm font-medium flex items-center justify-center gap-2 relative overflow-hidden group"
+                        className="flex-1 bg-gray-800/50 text-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-700/50 transition flex items-center justify-center gap-1"
                       >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                        <BarChart2 className="w-4 h-4 relative z-10" />
-                        <span className="relative z-10">Bid history ({listing.auction.bids?.length || 0})</span>
+                        <BarChart2 className="w-3 h-3" />
+                        Bid history ({listing.auction.bids?.length || 0})
                       </button>
                     </div>
                     
                     {/* Status Messages */}
                     {bidError && (
-                      <div className="bg-red-900/30 border border-red-800 text-red-400 p-4 rounded-xl text-sm">
+                      <div className="bg-red-900/30 border border-red-800 text-red-400 p-3 rounded text-sm">
                         {bidError}
                       </div>
                     )}
                     
                     {bidSuccess && (
-                      <div className="bg-green-900/30 border border-green-800 text-green-400 p-4 rounded-xl text-sm">
+                      <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded text-sm">
                         {bidSuccess}
                       </div>
                     )}
                     
-                    {/* Bid Status */}
                     {bidStatus.message && (
-                      <div className={`p-3 rounded-xl text-sm border ${
+                      <div className={`p-3 rounded text-sm border ${
                         bidStatus.success 
                           ? 'bg-green-900/20 border-green-800/40 text-green-400' 
                           : 'bg-yellow-900/20 border-yellow-800/40 text-yellow-400'
@@ -1043,50 +891,44 @@ export default function ListingDetailPage() {
               </div>
             )}
 
-            {/* Enhanced Price & Actions */}
+            {/* Price & Actions for Standard Listings */}
             {!isAuctionListing && (
-              <div className="space-y-6">
-                {/* Price Display */}
-                <div className="text-center">
-                  <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] text-black px-8 py-4 rounded-2xl inline-flex items-center gap-3 shadow-lg shadow-[#ff950e]/20">
-                    <DollarSign className="w-8 h-8" />
-                    <span className="text-4xl font-bold">
-                      {listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
-                    </span>
+              <div className="space-y-3">
+                {/* Compact Price Display */}
+                <div className="bg-[#ff950e] text-black px-4 py-2 rounded-lg text-center">
+                  <div className="text-lg font-bold">
+                    ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
                   </div>
-                  <p className="text-gray-400 text-sm mt-2">Includes platform fee</p>
+                  <p className="text-xs opacity-75">Includes platform fee</p>
                 </div>
                 
-                {/* Action Buttons */}
+                {/* Compact Action Buttons */}
                 {user?.role === 'buyer' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={handlePurchase}
                       disabled={isProcessing}
-                      className="group relative bg-gradient-to-r from-[#ff950e] to-[#e0850d] text-black px-8 py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl hover:shadow-[#ff950e]/30 transition-all disabled:opacity-50 overflow-hidden"
+                      className="bg-[#ff950e] text-black px-3 py-2 rounded-lg font-medium hover:bg-[#e88800] transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
                     >
-                      <div className="relative z-10 flex items-center justify-center gap-3">
-                        {isProcessing ? (
-                          <>
-                            <div className="animate-spin h-6 w-6 border-2 border-black border-t-transparent rounded-full"></div>
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <ShoppingBag className="w-6 h-6" />
-                            Buy Now
-                          </>
-                        )}
-                      </div>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                      {isProcessing ? (
+                        <>
+                          <div className="animate-spin h-3.5 w-3.5 border-2 border-black border-t-transparent rounded-full"></div>
+                          Processing
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingBag className="w-4 h-4" />
+                          Buy Now
+                        </>
+                      )}
                     </button>
                     
                     <Link
                       href={`/buyers/messages?thread=${listing.seller}`}
-                      className="flex items-center justify-center gap-3 bg-gradient-to-r from-gray-800 to-gray-700 text-white px-8 py-4 rounded-2xl font-bold text-lg border border-gray-600 hover:border-[#ff950e]/50 hover:shadow-lg transition-all"
+                      className="flex items-center justify-center gap-1.5 bg-gray-800 text-white px-3 py-2 rounded-lg font-medium border border-gray-700 hover:bg-gray-700 transition text-sm"
                     >
-                      <MessageCircle className="w-6 h-6" />
-                      Message Seller
+                      <MessageCircle className="w-4 h-4" />
+                      Message
                     </Link>
                   </div>
                 )}
@@ -1095,7 +937,7 @@ export default function ListingDetailPage() {
 
             {/* Purchase Status */}
             {purchaseStatus && (
-              <div className={`p-4 rounded-xl font-semibold text-lg ${
+              <div className={`p-4 rounded-xl font-medium ${
                 purchaseStatus.includes('successful') 
                   ? 'bg-green-900/30 border border-green-800 text-green-400' 
                   : 'bg-red-900/30 border border-red-800 text-red-400'
@@ -1106,22 +948,20 @@ export default function ListingDetailPage() {
 
             {/* Premium Content Lock */}
             {needsSubscription && (
-              <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 border border-yellow-700 rounded-2xl p-6">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-yellow-500/20 rounded-full">
-                    <Lock className="w-8 h-8 text-yellow-400" />
-                  </div>
+              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Lock className="w-4 h-4 text-yellow-400 mt-0.5" />
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white mb-2">Premium Content</h3>
-                    <p className="text-gray-300 mb-4">
-                      This is a premium listing. Subscribe to {listing.seller} to view full details and make purchases.
+                    <h3 className="text-base font-bold text-white mb-1">Premium Content</h3>
+                    <p className="text-gray-300 mb-2 text-xs">
+                      Subscribe to {listing.seller} to view full details and make purchases.
                     </p>
                     {user?.role === 'buyer' && (
                       <Link
                         href={`/sellers/${listing.seller}`}
-                        className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-600 to-yellow-500 text-black font-bold px-6 py-3 rounded-xl hover:shadow-lg transition-all"
+                        className="inline-flex items-center gap-1.5 bg-yellow-600 text-black font-medium px-3 py-1.5 rounded-lg hover:bg-yellow-500 transition text-xs"
                       >
-                        <Crown className="w-5 h-5" />
+                        <Crown className="w-3.5 h-3.5" />
                         Subscribe Now
                       </Link>
                     )}
@@ -1130,90 +970,128 @@ export default function ListingDetailPage() {
               </div>
             )}
 
-            {/* Trust & Safety Badges */}
-            <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-800">
-              <div className="text-center">
-                <div className="p-3 bg-green-500/20 rounded-full w-fit mx-auto mb-2">
-                  <Shield className="w-6 h-6 text-green-400" />
+            {/* Seller Profile - ENHANCED with Larger Profile Photo */}
+            {user?.role === 'buyer' && (
+              <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+                <div className="flex items-center gap-4">
+                  {/* LARGER Profile Photo */}
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-2 border-[#ff950e] bg-gray-700 flex items-center justify-center overflow-hidden">
+                      {sellerProfile.pic ? (
+                        <img src={sellerProfile.pic} alt={listing.seller} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-lg font-bold text-[#ff950e]">
+                          {listing.seller?.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Tier Badge */}
+                    {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
+                      <div className="absolute -bottom-1.5 -right-1.5" style={{ transform: 'translate(6px, 6px)' }}>
+                        <TierBadge tier={sellerTierInfo.tier} size="md" showTooltip={true} />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-white font-medium">{listing.seller}</h3>
+                      {isSellerVerified && (
+                        <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
+                      )}
+                    </div>
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                      {sellerProfile.bio || 'No bio provided.'}
+                    </p>
+                  </div>
+                  
+                  <Link
+                    href={`/sellers/${listing.seller}`}
+                    className="text-[#ff950e] text-sm font-medium hover:text-[#e88800] transition-colors whitespace-nowrap"
+                  >
+                    View Profile
+                  </Link>
                 </div>
-                <p className="text-sm text-gray-400">Secure Payment</p>
+              </div>
+            )}
+
+            {/* Compact Trust & Safety */}
+            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-800">
+              <div className="text-center">
+                <Shield className="w-5 h-5 text-green-400 mx-auto mb-1" />
+                <p className="text-xs text-gray-400">Secure Payment</p>
               </div>
               <div className="text-center">
-                <div className="p-3 bg-blue-500/20 rounded-full w-fit mx-auto mb-2">
-                  <Truck className="w-6 h-6 text-blue-400" />
-                </div>
-                <p className="text-sm text-gray-400">Discreet Shipping</p>
+                <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+                <p className="text-xs text-gray-400">Discreet Shipping</p>
               </div>
               <div className="text-center">
-                <div className="p-3 bg-purple-500/20 rounded-full w-fit mx-auto mb-2">
-                  <Gift className="w-6 h-6 text-purple-400" />
-                </div>
-                <p className="text-sm text-gray-400">Quality Guaranteed</p>
+                <Gift className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+                <p className="text-xs text-gray-400">Quality Guaranteed</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Bid History Modal - RE-ADDED */}
+        {/* Bid History Modal */}
         {showBidHistory && isAuctionListing && listing.auction && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-purple-800 w-full max-w-2xl max-h-[80vh] p-6 relative shadow-2xl">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-800 via-purple-500 to-purple-800 rounded-t-2xl"></div>
-              
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                  <History className="w-6 h-6 text-purple-400" />
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-gray-900 rounded-xl border border-purple-800 w-full max-w-2xl max-h-[70vh] p-6 relative">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <History className="w-5 h-5 text-purple-400" />
                   Bid History
                 </h3>
                 <button
                   onClick={() => setShowBidHistory(false)}
-                  className="text-gray-400 hover:text-white bg-gray-800/50 p-2 rounded-full hover:bg-gray-700/50 transition"
+                  className="text-gray-400 hover:text-white p-1"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
               
               {bidsHistory.length === 0 ? (
-                <div className="text-center py-16 bg-gray-900/50 rounded-xl border border-gray-700">
-                  <Gavel className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-400 text-xl mb-2">No bids placed yet</p>
-                  <p className="text-gray-500">Be the first to bid on this item!</p>
+                <div className="text-center py-12">
+                  <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400">No bids placed yet</p>
+                  <p className="text-gray-500 text-sm">Be the first to bid on this item!</p>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
+                <div className="space-y-2 max-h-64 overflow-y-auto">
                   {bidsHistory.map((bid, index) => (
                     <div 
                       key={index} 
-                      className={`p-4 rounded-xl border transition-all ${
+                      className={`p-3 rounded-lg border ${
                         bid.bidder === currentUsername 
                           ? 'bg-purple-900/30 border-purple-700' 
-                          : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                          : 'bg-gray-800/50 border-gray-700'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                             bid.bidder === currentUsername ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-700 text-gray-300'
                           }`}>
                             {bid.bidder === currentUsername ? 'You' : bid.bidder.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-semibold text-white">
+                            <p className="font-medium text-white text-sm">
                               {bid.bidder === currentUsername ? 'Your bid' : bid.bidder}
                             </p>
-                            <p className="text-sm text-gray-400">{formatBidDate(bid.date)}</p>
+                            <p className="text-xs text-gray-400">{formatBidDate(bid.date)}</p>
                           </div>
                           {index === 0 && (
-                            <span className="bg-green-500/20 text-green-400 text-xs px-3 py-1 rounded-full font-medium">
+                            <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded font-medium">
                               Highest
                             </span>
                           )}
                         </div>
                         <div className="text-right">
-                          <p className={`text-xl font-bold ${index === 0 ? 'text-green-400' : 'text-white'}`}>
+                          <p className={`font-bold ${index === 0 ? 'text-green-400' : 'text-white'}`}>
                             ${bid.amount.toFixed(2)}
                           </p>
-                          <p className="text-sm text-gray-400">
+                          <p className="text-xs text-gray-400">
                             Total: ${calculateTotalPayable(bid.amount).toFixed(2)}
                           </p>
                         </div>
@@ -1223,28 +1101,10 @@ export default function ListingDetailPage() {
                 </div>
               )}
               
-              <div className="mt-6 pt-6 border-t border-gray-700 flex justify-between">
-                {bidsHistory.length > 0 && user?.role === 'buyer' && user.username !== listing.seller && !isAuctionEnded && (
-                  <button
-                    onClick={() => {
-                      setShowBidHistory(false);
-                      setTimeout(() => {
-                        if (bidInputRef.current) {
-                          bidInputRef.current.focus();
-                          if (suggestedBidAmount) {
-                            setBidAmount(suggestedBidAmount);
-                          }
-                        }
-                      }, 100);
-                    }}
-                    className="bg-gradient-to-r from-purple-600 to-purple-500 text-white py-3 px-6 rounded-xl font-bold hover:shadow-lg transition flex-1 mr-3"
-                  >
-                    Place My Bid
-                  </button>
-                )}
+              <div className="mt-4 pt-4 border-t border-gray-700">
                 <button
                   onClick={() => setShowBidHistory(false)}
-                  className={`${bidsHistory.length > 0 && user?.role === 'buyer' && user.username !== listing.seller && !isAuctionEnded ? 'bg-gray-700 text-white' : 'bg-gradient-to-r from-purple-600 to-purple-500 text-white'} py-3 px-6 rounded-xl font-bold hover:opacity-90 transition ${bidsHistory.length > 0 && user?.role === 'buyer' && user.username !== listing.seller && !isAuctionEnded ? '' : 'w-full'}`}
+                  className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-500 transition"
                 >
                   Close
                 </button>
@@ -1253,330 +1113,115 @@ export default function ListingDetailPage() {
           </div>
         )}
 
-        {/* FIXED: Smaller Auction Winner Modal */}
+        {/* Auction Winner Modal */}
         {showAuctionSuccess && isAuctionListing && listing && user?.role === "buyer" && isUserHighestBidder && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-gradient-to-br from-yellow-900/20 via-gray-900 to-purple-900/20 p-6 rounded-3xl shadow-2xl border border-yellow-500/30 max-w-md w-full text-center relative overflow-hidden max-h-[90vh] overflow-y-auto">
-              {/* Animated background effects */}
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-purple-500/10 to-yellow-500/10 animate-pulse"></div>
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-500 via-purple-500 to-yellow-500"></div>
-              
-              <div className="relative z-10 mb-4">
-                <div className="relative mx-auto w-20 h-20 mb-4">
-                  {/* Animated trophy with multiple rings */}
-                  <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping"></div>
-                  <div className="absolute inset-2 bg-yellow-500/30 rounded-full animate-ping animation-delay-200"></div>
-                  <div className="relative bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full p-4 shadow-lg">
-                    <Award className="w-12 h-12 text-black" />
-                  </div>
-                  <CheckCircle className="absolute -bottom-1 -right-1 w-8 h-8 text-green-500 bg-gray-900 rounded-full p-1 border-2 border-gray-900" />
-                  
-                  {/* Floating particles */}
-                  <div className="absolute -top-2 -left-2 w-2 h-2 bg-yellow-400 rounded-full animate-bounce"></div>
-                  <div className="absolute -top-1 -right-3 w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce animation-delay-300"></div>
-                  <div className="absolute -bottom-2 -left-3 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-bounce animation-delay-500"></div>
-                </div>
+            <div className="bg-gray-900 p-6 rounded-2xl border border-yellow-500/30 max-w-md w-full text-center">
+              <div className="mb-4">
+                <Award className="w-16 h-16 text-yellow-500 mx-auto mb-3" />
+                <h2 className="text-2xl font-bold text-white mb-2">🏆 Congratulations! 🏆</h2>
+                <p className="text-lg text-white mb-3">You Won the Auction!</p>
                 
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 bg-clip-text text-transparent mb-2">
-                  🏆 CONGRATULATIONS! 🏆
-                </h2>
-                
-                <p className="text-lg font-semibold text-white mb-3">
-                  You Won the Auction!
-                </p>
-                
-                <div className="text-gray-300 space-y-3 text-sm">
-                  <div className="bg-gradient-to-r from-yellow-900/30 to-purple-900/30 p-4 rounded-xl border border-yellow-500/30">
-                    <p className="mb-2">
-                      Your winning bid of <span className="font-bold text-yellow-400 text-lg">${listing.auction?.highestBid?.toFixed(2)}</span>
-                    </p>
-                    <p className="text-sm">
-                      secured <span className="text-[#ff950e] font-bold">"{listing.title}"</span> from <span className="font-bold text-white">{listing.seller}</span>
-                    </p>
+                <div className="bg-black/40 p-4 rounded-xl space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Winning Bid:</span>
+                    <span className="font-bold text-yellow-400">${listing.auction?.highestBid?.toFixed(2)}</span>
                   </div>
-                  
-                  <div className="bg-black/40 p-4 rounded-xl border border-gray-700 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Winning Bid:</span>
-                      <span className="font-bold text-yellow-400">${listing.auction?.highestBid?.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Platform Fee (10%):</span>
-                      <span className="font-bold text-gray-300">${((listing.auction?.highestBid || 0) * 0.1).toFixed(2)}</span>
-                    </div>
-                    <div className="border-t border-gray-600 pt-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-white font-semibold">Total Paid:</span>
-                        <span className="text-xl font-bold text-[#ff950e]">
-                          ${calculateTotalPayable(listing.auction?.highestBid || 0).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Platform Fee:</span>
+                    <span className="font-bold text-gray-300">${((listing.auction?.highestBid || 0) * 0.1).toFixed(2)}</span>
                   </div>
-                  
-                  <div className="flex items-center justify-center gap-4 text-green-400 bg-green-900/20 p-3 rounded-xl border border-green-700/30 text-xs">
-                    <div className="flex items-center gap-1">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Payment Processed</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Package className="w-4 h-4" />
-                      <span>Order Created</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Truck className="w-4 h-4" />
-                      <span>Seller Notified</span>
+                  <div className="border-t border-gray-600 pt-2">
+                    <div className="flex justify-between">
+                      <span className="text-white font-semibold">Total Paid:</span>
+                      <span className="text-xl font-bold text-[#ff950e]">
+                        ${calculateTotalPayable(listing.auction?.highestBid || 0).toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
               
-              {/* Enhanced Progress bar with auction theme */}
-              <div className="relative mb-4">
-                <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden border border-yellow-500/30">
-                  <div 
-                    className="h-full bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-500 rounded-full transition-all duration-[10000ms] ease-linear shadow-lg"
-                    style={{
-                      animation: 'progress 10s linear forwards'
-                    }}
-                  ></div>
-                </div>
-                <p className="text-xs text-gray-400 mt-2 flex items-center justify-center gap-2">
-                  <Clock className="w-3 h-3" />
-                  Redirecting to your orders in 10 seconds...
-                </p>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <button
                   onClick={() => router.push('/buyers/my-orders')}
-                  className="bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-3 rounded-2xl hover:shadow-lg hover:shadow-green-500/25 font-bold transition-all text-sm flex items-center justify-center gap-2 group"
+                  className="w-full bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-500 font-bold transition"
                 >
-                  <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
                   View My Orders
                 </button>
                 
                 <button
                   onClick={() => router.push('/browse')}
-                  className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-4 py-3 rounded-2xl hover:shadow-lg hover:shadow-purple-500/25 font-bold transition-all text-sm flex items-center justify-center gap-2 group"
+                  className="w-full bg-purple-600 text-white px-4 py-3 rounded-xl hover:bg-purple-500 font-bold transition"
                 >
-                  <Gavel className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  More Auctions
+                  Browse More Auctions
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Render Purchase Success Screen for Standard Listings */}
+        {/* Purchase Success Modal */}
         {showPurchaseSuccess && !isAuctionListing && listing && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-3xl shadow-2xl border border-[#ff950e]/30 max-w-md w-full text-center relative overflow-hidden">
-              {/* Animated background effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#ff950e]/10 to-transparent animate-pulse"></div>
-              
-              <div className="relative z-10 mb-6">
-                <div className="relative mx-auto w-24 h-24 mb-6">
-                  <div className="absolute inset-0 bg-[#ff950e]/20 rounded-full animate-ping"></div>
-                  <div className="relative bg-gradient-to-br from-[#ff950e] to-[#e0850d] rounded-full p-4">
-                    <ShoppingBag className="w-16 h-16 text-black" />
-                  </div>
-                  <CheckCircle className="absolute -bottom-2 -right-2 w-10 h-10 text-green-500 bg-gray-900 rounded-full p-1" />
-                </div>
+            <div className="bg-gray-900 p-6 rounded-2xl border border-[#ff950e]/30 max-w-md w-full text-center">
+              <div className="mb-4">
+                <ShoppingBag className="w-16 h-16 text-[#ff950e] mx-auto mb-3" />
+                <h2 className="text-2xl font-bold text-white mb-2">🎉 Purchase Successful!</h2>
                 
-                <h2 className="text-3xl font-bold text-white mb-4">
-                  🎉 Purchase Successful!
-                </h2>
-                
-                <div className="text-gray-300 space-y-4">
-                  <p className="text-lg">
-                    You successfully purchased <span className="text-[#ff950e] font-bold">"{listing.title}"</span>
-                  </p>
-                  
-                  <div className="bg-black/30 p-6 rounded-xl border border-gray-700">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-400">Seller:</span>
-                      <span className="font-bold text-white">{listing.seller}</span>
-                    </div>
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-gray-400">Total Paid:</span>
-                      <span className="text-2xl font-bold text-[#ff950e]">
-                        ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      ✓ Includes 10% platform fee • ✓ Payment processed securely
-                    </p>
+                <div className="bg-black/40 p-4 rounded-xl">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-400">Seller:</span>
+                    <span className="font-bold text-white">{listing.seller}</span>
                   </div>
-                  
-                  <div className="flex items-center justify-center gap-2 text-green-400">
-                    <Truck className="w-5 h-5" />
-                    <span>Order added to your history</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Total Paid:</span>
+                    <span className="text-xl font-bold text-[#ff950e]">
+                      ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
+                    </span>
                   </div>
                 </div>
-              </div>
-              
-              {/* Enhanced Progress bar */}
-              <div className="relative mb-6">
-                <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-[#ff950e] to-[#e0850d] rounded-full transition-all duration-[10000ms] ease-linear shadow-lg"
-                    style={{
-                      animation: 'progress 10s linear forwards'
-                    }}
-                  ></div>
-                </div>
-                <p className="text-sm text-gray-400 mt-2">
-                  Redirecting to your orders in 10 seconds...
-                </p>
               </div>
               
               <button
                 onClick={() => router.push('/buyers/my-orders')}
-                className="w-full bg-gradient-to-r from-[#ff950e] to-[#e0850d] text-black px-6 py-4 rounded-2xl hover:shadow-lg hover:shadow-[#ff950e]/30 font-bold transition-all text-lg flex items-center justify-center gap-3 group"
+                className="w-full bg-[#ff950e] text-black px-4 py-3 rounded-xl hover:bg-[#e88800] font-bold transition"
               >
-                <ShoppingCart className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                Go to My Orders Now
+                Go to My Orders
               </button>
             </div>
           </div>
         )}
 
-        {/* Render auction ended screens for non-winners */}
+        {/* Render auction ended screens */}
         {renderAuctionEndedScreen()}
 
-        {/* Enhanced Sticky Buy Button for Mobile */}
+        {/* Sticky Buy Button for Mobile */}
         {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
-          <div className={`fixed bottom-0 left-0 right-0 z-40 pointer-events-none lg:hidden`}>
-            <div className={`transition-all duration-300 ${showStickyBuy ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
-              <div className="bg-gradient-to-t from-black via-black/95 to-transparent p-4">
-                <div className="max-w-md mx-auto">
-                  <button
-                    onClick={handlePurchase}
-                    className="w-full bg-gradient-to-r from-[#ff950e] to-[#e0850d] text-black px-6 py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transition-all disabled:opacity-50 flex items-center justify-center gap-3"
-                    disabled={isProcessing}
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="animate-spin h-6 w-6 border-2 border-black border-t-transparent rounded-full"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingBag className="w-6 h-6" />
-                        Buy Now • ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+          <div className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden transition-all duration-300 ${
+            showStickyBuy ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
+          }`}>
+            <div className="bg-black/95 p-4">
+              <button
+                onClick={handlePurchase}
+                className="w-full bg-[#ff950e] text-black px-6 py-3 rounded-xl font-bold text-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <ShoppingBag className="w-5 h-5" />
+                    Buy Now • ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}
-
-        {/* Enhanced Sticky Auction Bidding for Mobile */}
-        {user?.role === 'buyer' && !isAuctionEnded && isAuctionListing && listing.auction && user.username !== listing.seller && (
-          <div className={`fixed bottom-0 left-0 right-0 z-40 pointer-events-none lg:hidden`}>
-            <div className={`transition-all duration-300 ${showStickyBuy ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-10 pointer-events-none'}`}>
-              <div className="bg-gradient-to-t from-black via-black/95 to-transparent p-4">
-                <div className="max-w-md mx-auto">
-                  <div className="bg-gradient-to-r from-purple-900/90 to-blue-900/90 backdrop-blur-lg rounded-2xl p-4 border border-purple-700 shadow-xl">
-                    {/* Auction Status */}
-                    <div className="flex justify-between items-center mb-3 text-sm text-purple-300">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {formatTimeRemaining(listing.auction.endTime)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <BarChart2 className="w-4 h-4" />
-                        Current: ${listing.auction.highestBid?.toFixed(2) ?? listing.auction.startingPrice.toFixed(2)}
-                      </span>
-                    </div>
-                    
-                    {/* Bid Input */}
-                    <div className="flex gap-3 mb-3">
-                      <div className="flex-1">
-                        <div className="relative">
-                          <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                          <input
-                            type="number"
-                            placeholder="Enter bid"
-                            value={bidAmount}
-                            onChange={(e) => setBidAmount(e.target.value)}
-                            onKeyPress={handleBidKeyPress}
-                            min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
-                            step="0.01"
-                            className="w-full pl-10 pr-3 py-3 rounded-xl bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleBidSubmit}
-                        disabled={isBidding || !biddingEnabled}
-                        className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {isBidding ? (
-                          <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                        ) : (
-                          <>
-                            <Gavel className="w-5 h-5" />
-                            Bid
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    
-                    {/* Quick Actions */}
-                    {suggestedBidAmount && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setBidAmount(suggestedBidAmount)}
-                          className="bg-purple-800/50 text-purple-300 px-3 py-2 rounded-lg text-sm font-medium border border-purple-700/50"
-                        >
-                          ${suggestedBidAmount}
-                        </button>
-                        <button
-                          onClick={() => setShowBidHistory(true)}
-                          className="flex-1 bg-gray-800/50 text-gray-300 px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-1 border border-gray-700/50"
-                        >
-                          <History className="w-4 h-4" />
-                          History ({listing.auction.bids?.length || 0})
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Custom CSS for animations */}
-        <style jsx>{`
-          @keyframes progress {
-            from { width: 0%; }
-            to { width: 100%; }
-          }
-          
-          .line-clamp-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-          }
-          
-          .animation-delay-200 {
-            animation-delay: 200ms;
-          }
-          
-          .animation-delay-300 {
-            animation-delay: 300ms;
-          }
-          
-          .animation-delay-500 {
-            animation-delay: 500ms;
-          }
-        `}</style>
       </div>
     </main>
   );
