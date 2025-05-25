@@ -1,7 +1,7 @@
 // src/app/login/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { User, ShoppingBag, Crown, Lock, ArrowRight } from 'lucide-react';
@@ -13,6 +13,25 @@ const FloatingParticle = ({ delay = 0, index = 0 }) => {
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
   const velocityRef = useRef({ x: 0, y: 0 });
   const animationRef = useRef<number | null>(null);
+
+  // Memoize particle properties to prevent recalculation on every render
+  const particleProps = useMemo(() => ({
+    size: Math.random() * 2 + 1, // Size between 1px and 3px
+    opacity: Math.random() * 0.3 + 0.1, // Opacity between 0.1 and 0.4
+    glowIntensity: Math.random() * 0.5 + 0.2, // Glow intensity
+  }), [index]);
+
+  // Memoize color selection
+  const particleColor = useMemo(() => {
+    const colors = [
+      { bg: 'bg-[#ff950e]', hex: '#ff950e' }, // Orange
+      { bg: 'bg-[#ff6b00]', hex: '#ff6b00' }, // Orange variant
+      { bg: 'bg-white', hex: '#ffffff' },     // White
+      { bg: 'bg-[#ffb347]', hex: '#ffb347' }, // Light orange
+      { bg: 'bg-[#ffa500]', hex: '#ffa500' }  // Another orange variant
+    ];
+    return colors[index % colors.length];
+  }, [index]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -43,7 +62,6 @@ const FloatingParticle = ({ delay = 0, index = 0 }) => {
   // Smooth animation loop
   useEffect(() => {
     const animateParticle = () => {
-
       setPosition(prev => {
         let newX = prev.x + velocityRef.current.x;
         let newY = prev.y + velocityRef.current.y;
@@ -78,32 +96,19 @@ const FloatingParticle = ({ delay = 0, index = 0 }) => {
     animationRef.current = requestAnimationFrame(animateParticle);
 
     return () => {
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
-  }, [dimensions, delay]);
+  }, [dimensions]);
 
-  // Random properties for each particle
-  const particleProps = {
-    size: Math.random() * 2 + 1, // Size between 1px and 3px
-    opacity: Math.random() * 0.3 + 0.1, // Opacity between 0.1 and 0.4
-    glowIntensity: Math.random() * 0.5 + 0.2, // Glow intensity
-  };
-
-  // Random color variation - mix orange and white particles
-  const colors = [
-    'bg-[#ff950e]', // Orange
-    'bg-[#ff6b00]', // Orange variant
-    'bg-white',     // White
-    'bg-[#ffb347]', // Light orange
-    'bg-[#ffa500]'  // Another orange variant
-  ];
-  const randomColor = colors[index % colors.length];
+  // Create proper hex color with alpha for box shadow
+  const glowColor = `${particleColor.hex}${Math.floor(particleProps.glowIntensity * 255).toString(16).padStart(2, '0')}`;
 
   return (
     <div
-      className={`absolute ${randomColor} rounded-full transition-opacity duration-1000 pointer-events-none`}
+      className={`absolute ${particleColor.bg} rounded-full transition-opacity duration-1000 pointer-events-none`}
       style={{
         left: position.x,
         top: position.y,
@@ -111,7 +116,7 @@ const FloatingParticle = ({ delay = 0, index = 0 }) => {
         height: particleProps.size,
         opacity: particleProps.opacity,
         filter: `blur(0.5px)`,
-        boxShadow: `0 0 ${particleProps.glowIntensity * 10}px ${randomColor.includes('ff950e') ? '#ff950e' : '#ffffff'}${Math.floor(particleProps.glowIntensity * 255).toString(16)}`,
+        boxShadow: `0 0 ${particleProps.glowIntensity * 10}px ${glowColor}`,
         transform: 'translate(-50%, -50%)', // Center the particle on its position
       }}
     />
@@ -297,9 +302,9 @@ export default function LoginPage() {
               <div className={`w-2 h-2 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-[#ff950e]' : 'bg-gray-600'}`} />
             </div>
 
-            {/* Admin Mode Indicator */}
+            {/* Admin Mode Indicator - Fixed CSS */}
             {showAdminMode && (
-              <div className="mt-4 text-xs text-[#ff950e] font-medium opacity-0 animate-pulse">
+              <div className="mt-4 text-xs text-[#ff950e] font-medium animate-pulse">
                 🔐 Admin Mode Enabled
               </div>
             )}
@@ -328,7 +333,7 @@ export default function LoginPage() {
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      onKeyPress={handleKeyPress}
+                      onKeyDown={handleKeyPress} // Changed from onKeyPress (deprecated)
                       placeholder="Enter your username"
                       className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
                       autoFocus
