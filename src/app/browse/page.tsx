@@ -1,4 +1,4 @@
-// src/app/browse/page.tsx - All Fixes Applied (1-10)
+// src/app/browse/page.tsx - Back to Grid View Only (No List View)
 'use client';
 
 import Link from 'next/link';
@@ -11,7 +11,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Crown, Filter, Clock, ShoppingBag, Lock, Search, X, CheckCircle, BadgeCheck,
   Gavel, ArrowUp, Calendar, BarChart2, User, AlertTriangle, ExternalLink, Eye,
-  ChevronDown, Package, DollarSign
+  ChevronDown, Package, DollarSign, Heart, Share2, Sparkles
 } from 'lucide-react';
 
 type SellerProfile = {
@@ -700,116 +700,135 @@ export default function BrowsePage() {
       <main className="min-h-screen bg-black text-white pb-16 pt-8">
         {user?.role === 'seller' && (
           <div className="bg-blue-700/20 border border-blue-700 text-blue-400 p-4 rounded-lg mb-6 max-w-3xl mx-auto">
-            <p className="text-sm">
+            <p className="text-sm flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
               You are viewing this page as a seller. You can browse listings but cannot make purchases.
             </p>
           </div>
         )}
 
-        {/* Header Section */}
-        <div className="mb-6 max-w-[1700px] mx-auto px-6">
-            <div className="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
-              <div className="flex flex-col leading-tight">
-                <h1 className="text-xl font-bold text-[#ff950e]">
-                  Browse Listings
-                </h1>
-                <p className="text-gray-400 text-sm mt-0.5">
-                  {filteredListings.length} {filter === 'all' ? 'total' : filter} listings available
-                </p>
-              </div>
+        {/* Compact Header Section */}
+        <div className="mb-4 max-w-[1700px] mx-auto px-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
+            <div className="flex flex-col leading-tight">
+              <h1 className="text-2xl font-bold text-white mb-1">
+                Browse <span className="text-[#ff950e]">Listings</span>
+              </h1>
+              <p className="text-gray-400 text-sm">
+                Discover {filteredListings.length} amazing {filter === 'all' ? 'total' : filter} listings from verified sellers
+              </p>
+            </div>
 
             {/* Category Filters */}
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFilter('all')}
-                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
-                  filter === 'all' 
-                    ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
-                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
-                }`}
-              >
-                <Package className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">All ({categoryCounts.all})</span>
-              </button>
-              
-              <button
-                onClick={() => setFilter('standard')}
-                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
-                  filter === 'standard' 
-                    ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
-                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
-                }`}
-              >
-                <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Standard ({categoryCounts.standard})</span>
-              </button>
-              
-              <button
-                onClick={() => setFilter('premium')}
-                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
-                  filter === 'premium' 
-                    ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
-                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
-                }`}
-              >
-                <Crown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Premium ({categoryCounts.premium})</span>
-              </button>
-              
-              <button
-                onClick={() => setFilter('auction')}
-                className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs ${
-                  filter === 'auction' 
-                    ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white border border-white/20 hover:from-[#7c3aed] hover:to-[#8b5cf6] hover:shadow-2xl hover:shadow-[#8b5cf6]/30 transform hover:scale-105' 
-                    : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#8b5cf6] border border-[#333] hover:border-[#8b5cf6]/50 hover:shadow-[#8b5cf6]/20'
-                }`}
-              >
-                <Gavel className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Auctions ({categoryCounts.auction})</span>
-              </button>
+            <div className="flex items-center gap-3">
+              {/* Category Filters */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                    filter === 'all' 
+                      ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
+                  }`}
+                >
+                  <Package className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>All</span>
+                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                    {categoryCounts.all}
+                  </span>
+                </button>
+                
+                <button
+                  onClick={() => setFilter('standard')}
+                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                    filter === 'standard' 
+                      ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
+                  }`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>Standard</span>
+                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                    {categoryCounts.standard}
+                  </span>
+                </button>
+                
+                <button
+                  onClick={() => setFilter('premium')}
+                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                    filter === 'premium' 
+                      ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
+                  }`}
+                >
+                  <Crown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>Premium</span>
+                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                    {categoryCounts.premium}
+                  </span>
+                </button>
+                
+                <button
+                  onClick={() => setFilter('auction')}
+                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                    filter === 'auction' 
+                      ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white border border-white/20 hover:from-[#7c3aed] hover:to-[#8b5cf6] hover:shadow-2xl hover:shadow-[#8b5cf6]/30 transform hover:scale-105' 
+                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#8b5cf6] border border-[#333] hover:border-[#8b5cf6]/50 hover:shadow-[#8b5cf6]/20'
+                  }`}
+                >
+                  <Gavel className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span>Auctions</span>
+                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                    {categoryCounts.auction}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Filters Bar */}
-          <div className="flex flex-wrap gap-3 items-center bg-[#1a1a1a]/50 backdrop-blur-sm p-4 rounded-lg border border-gray-800">
+          {/* Compact Filters Bar */}
+          <div className="flex flex-wrap gap-3 items-center bg-gradient-to-r from-[#1a1a1a]/80 to-[#222]/80 backdrop-blur-sm p-3 rounded-lg border border-gray-800 shadow-lg">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
               <input
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search listings..."
-                className="w-full pl-10 pr-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e]"
+                placeholder="Search by title, description, tags, or seller..."
+                className="w-full pl-10 pr-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
               />
             </div>
 
             <div className="flex gap-2 items-center">
-              <DollarSign size={16} className="text-gray-500" />
+              <div className="flex items-center gap-1 text-gray-400">
+                <DollarSign size={14} />
+                <span className="text-xs font-medium">Price</span>
+              </div>
               <input
                 value={minPrice}
                 onChange={e => setMinPrice(e.target.value)}
                 placeholder="Min"
                 type="number"
-                className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 w-20"
+                className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
               />
-              <span className="text-gray-500">-</span>
+              <span className="text-gray-500 text-xs">—</span>
               <input
                 value={maxPrice}
                 onChange={e => setMaxPrice(e.target.value)}
                 placeholder="Max"
                 type="number"
-                className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white placeholder-gray-400 w-20"
+                className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
               />
             </div>
 
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white cursor-pointer"
+              className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
             >
-              <option value="newest">Newest First</option>
-              <option value="priceAsc">Price: Low → High</option>
-              <option value="priceDesc">Price: High → Low</option>
-              <option value="endingSoon">Ending Soon</option>
+              <option value="newest">🕒 Newest First</option>
+              <option value="priceAsc">💰 Price: Low → High</option>
+              <option value="priceDesc">💎 Price: High → Low</option>
+              <option value="endingSoon">⏰ Ending Soon</option>
             </select>
 
             <select
@@ -818,10 +837,12 @@ export default function BrowsePage() {
                 const selectedOption = hourRangeOptions.find(opt => opt.label === e.target.value);
                 if (selectedOption) setSelectedHourRange(selectedOption);
               }}
-              className="px-3 py-2 rounded-lg bg-black border border-gray-700 text-sm text-white cursor-pointer"
+              className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
             >
               {hourRangeOptions.map(option => (
-                <option key={option.label} value={option.label}>{option.label}</option>
+                <option key={option.label} value={option.label}>
+                  {option.label === 'Any Hours' ? '⏱️ Any Hours' : `⏱️ ${option.label}`}
+                </option>
               ))}
             </select>
 
@@ -834,9 +855,9 @@ export default function BrowsePage() {
                   setSelectedHourRange(hourRangeOptions[0]);
                   setSortBy('newest');
                 }}
-                className="px-3 py-2 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-sm transition-all flex items-center gap-1"
+                className="px-3 py-2 rounded-lg bg-red-600/20 border border-red-700 text-red-400 hover:bg-red-600/30 text-xs transition-all flex items-center gap-1 font-medium"
               >
-                <X size={16} />
+                <X size={12} />
                 Clear
               </button>
             )}
@@ -846,11 +867,14 @@ export default function BrowsePage() {
         {/* Listings Grid */}
         <div className="max-w-[1700px] mx-auto px-6">
           {paginatedListings.length === 0 ? (
-            <div className="text-center py-20 bg-[#1a1a1a] rounded-2xl border border-gray-800 shadow-lg">
-              <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <p className="text-white font-bold text-xl mb-2">No listings found</p>
-              <p className="text-gray-400 mb-6">
-                Try adjusting your filters or check back later
+            <div className="text-center py-24 bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 shadow-2xl">
+              <div className="mb-6">
+                <ShoppingBag className="w-20 h-20 text-gray-600 mx-auto mb-4" />
+                <div className="w-24 h-1 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] mx-auto rounded-full mb-6"></div>
+              </div>
+              <h3 className="text-white font-bold text-2xl mb-3">No listings found</h3>
+              <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                We couldn't find any listings matching your criteria. Try adjusting your filters or check back later for new items.
               </p>
               <button
                 onClick={() => {
@@ -861,9 +885,9 @@ export default function BrowsePage() {
                   setSelectedHourRange(hourRangeOptions[0]);
                   setSortBy('newest');
                 }}
-                className="px-6 py-2 bg-[#ff950e] text-black rounded-lg font-medium hover:bg-[#e88800] transition-all"
+                className="px-8 py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black rounded-xl font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
               >
-                Reset Filters
+                Reset All Filters
               </button>
             </div>
           ) : (
@@ -894,28 +918,28 @@ export default function BrowsePage() {
                     return (
                       <div
                         key={listing.id}
-                        className={`relative flex flex-col bg-[#1a1a1a] border ${
+                        className={`relative flex flex-col bg-gradient-to-br from-[#1a1a1a] to-[#111] border ${
                           hasAuction ? 'border-purple-800' : 'border-gray-800'
-                        } rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden ${
+                        } rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden ${
                           hasAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'
-                        } cursor-pointer group`}
+                        } cursor-pointer group hover:transform hover:scale-[1.02]`}
                         onMouseEnter={() => handleMouseEnter(listing.id)}
                         onMouseLeave={handleMouseLeave}
                         onClick={() => handleListingClick(listing.id, Boolean(isLockedPremium))}
                       >
                         {/* Type Badge */}
                         {hasAuction && (
-                          <div className="absolute top-3 right-3 z-10">
-                            <span className="bg-purple-600 text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center">
-                              <Gavel className="w-3.5 h-3.5 mr-1" /> Auction
+                          <div className="absolute top-4 right-4 z-10">
+                            <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
+                              <Gavel className="w-3.5 h-3.5 mr-1.5" /> AUCTION
                             </span>
                           </div>
                         )}
                         
                         {!hasAuction && listing.isPremium && (
-                          <div className="absolute top-3 right-3 z-10">
-                            <span className="bg-[#ff950e] text-black text-xs px-2.5 py-1 rounded-lg font-medium flex items-center">
-                              <Crown className="w-3.5 h-3.5 mr-1" /> Premium
+                          <div className="absolute top-4 right-4 z-10">
+                            <span className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
+                              <Crown className="w-3.5 h-3.5 mr-1.5" /> PREMIUM
                             </span>
                           </div>
                         )}
@@ -926,102 +950,104 @@ export default function BrowsePage() {
                             <img
                               src={listing.imageUrls[0]}
                               alt={listing.title}
-                              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
+                              className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
                                 isLockedPremium ? 'blur-md' : ''
                               }`}
                               onError={(e) => {
                                 console.warn('Image failed to load:', listing.imageUrls?.[0]);
-                                // Set a fallback or hide the image
                                 (e.target as HTMLImageElement).style.display = 'none';
                               }}
                             />
                           )}
                           
-                          {/* Bottom gradient for better text readability */}
-                          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
+                          {/* Enhanced bottom gradient */}
+                          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
                           
                           {isLockedPremium && (
-                            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center">
-                              <Lock className="w-10 h-10 text-[#ff950e] mb-3" />
-                              <p className="text-sm font-medium text-white text-center px-4">
-                                Subscribe to view
+                            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
+                              <Lock className="w-12 h-12 text-[#ff950e] mb-4" />
+                              <p className="text-sm font-bold text-white text-center px-4">
+                                Subscribe to view premium content
                               </p>
                             </div>
                           )}
                           
-                          {/* Auction timer */}
+                          {/* Enhanced auction timer */}
                           {hasAuction && listing.auction && (
-                            <div className="absolute bottom-3 left-3 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
-                              <span className="bg-black/80 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center">
-                                <Clock className="w-3.5 h-3.5 mr-1 text-purple-400" />
+                            <div className="absolute bottom-4 left-4 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
+                              <span className="bg-black/90 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
+                                <Clock className="w-4 h-4 mr-2 text-purple-400" />
                                 {formatTimeRemaining(listing.auction.endTime)}
                               </span>
                             </div>
                           )}
                           
-                          {/* Quick view button on hover */}
+                          {/* Enhanced quick view button */}
                           {hoveredListing === listing.id && !isLockedPremium && (
-                            <div className="absolute bottom-3 right-3 z-10">
+                            <div className="absolute bottom-4 right-4 z-10">
                               <button 
-                                className="bg-[#ff950e] text-black text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-lg hover:bg-[#e88800] transition-all"
+                                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xl hover:from-[#e88800] hover:to-[#ff950e] transition-all transform hover:scale-105"
                                 onClick={(e) => handleQuickView(e, listing.id)}
                               >
-                                <Eye className="w-3.5 h-3.5" /> View
+                                <Eye className="w-4 h-4" /> Quick View
                               </button>
                             </div>
                           )}
                         </div>
 
-                        {/* Content */}
-                        <div className="p-4 flex flex-col flex-grow">
-                          <h2 className="text-lg font-bold text-white mb-1 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
-                            {listing.title}
-                          </h2>
-                          <p className="text-sm text-gray-400 mb-2 line-clamp-2">
-                            {listing.description}
-                          </p>
+                        {/* Enhanced Content */}
+                        <div className="p-5 flex flex-col flex-grow">
+                          <div>
+                            <h2 className="text-xl font-bold text-white mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
+                              {listing.title}
+                            </h2>
+                            <p className="text-sm text-gray-400 mb-3 line-clamp-2 leading-relaxed">
+                              {listing.description}
+                            </p>
+                          </div>
                           
-                          {/* Tags */}
+                          {/* Enhanced Tags */}
                           {listing.tags && listing.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-3">
-                              {listing.tags.slice(0, 2).map((tag, i) => (
-                                <span key={i} className="bg-black text-[#ff950e] text-xs px-2 py-0.5 rounded font-medium">
-                                  {tag}
+                            <div className="flex flex-wrap gap-2 mb-4">
+                              {listing.tags.slice(0, 3).map((tag, i) => (
+                                <span key={i} className="bg-black/50 text-[#ff950e] text-xs px-3 py-1 rounded-full font-medium border border-[#ff950e]/20">
+                                  #{tag}
                                 </span>
                               ))}
-                              {listing.tags.length > 2 && (
-                                <span className="text-gray-500 text-xs">
-                                  +{listing.tags.length - 2}
+                              {listing.tags.length > 3 && (
+                                <span className="text-gray-500 text-xs px-2 py-1">
+                                  +{listing.tags.length - 3} more
                                 </span>
                               )}
                             </div>
                           )}
                           
-                          {/* Auction info */}
+                          {/* Enhanced Auction info */}
                           {hasAuction && listing.auction && (
-                            <div className="bg-purple-900/20 rounded-lg p-2.5 mb-3 border border-purple-800/30">
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="text-purple-300">{priceLabel}</span>
-                                <span className="font-bold text-white flex items-center">
+                            <div className="bg-gradient-to-r from-purple-900/30 to-purple-800/20 rounded-xl p-4 mb-4 border border-purple-700/30 backdrop-blur-sm">
+                              <div className="flex justify-between items-center text-sm mb-2">
+                                <span className="text-purple-300 font-medium">{priceLabel}</span>
+                                <span className="font-bold text-white flex items-center text-lg">
                                   {listing.auction.bids && listing.auction.bids.length > 0 && (
-                                    <ArrowUp className="w-3.5 h-3.5 text-green-400 mr-1" />
+                                    <ArrowUp className="w-4 h-4 text-green-400 mr-1" />
                                   )}
                                   ${displayPrice}
                                 </span>
                               </div>
-                              <div className="flex justify-between items-center mt-1.5 text-xs">
-                                <span className="text-gray-400">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-400 flex items-center gap-1">
+                                  <Gavel className="w-3 h-3" />
                                   {listing.auction.bids?.length || 0} bids
                                 </span>
                                 {listing.auction.reservePrice && (
-                                  <span className={
+                                  <span className={`font-medium ${
                                     (!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
                                       ? 'text-yellow-400'
                                       : 'text-green-400'
-                                  }>
+                                  }`}>
                                     {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
-                                      ? 'Reserve not met'
-                                      : 'Reserve met'
+                                      ? '⚠️ Reserve not met'
+                                      : '✅ Reserve met'
                                     }
                                   </span>
                                 )}
@@ -1029,7 +1055,7 @@ export default function BrowsePage() {
                             </div>
                           )}
                           
-                          {/* Price and seller */}
+                          {/* Enhanced Price and seller */}
                           <div className="flex justify-between items-end mt-auto">
                             <Link
                               href={`/sellers/${listing.seller}`}
@@ -1040,47 +1066,56 @@ export default function BrowsePage() {
                                 <img
                                   src={sellerProfiles[listing.seller]?.pic!}
                                   alt={listing.seller}
-                                  className="w-10 h-10 rounded-full object-cover"
+                                  className="w-12 h-12 rounded-full object-cover border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors"
                                   onError={(e) => {
-                                    // Fallback to initials if profile pic fails
                                     (e.target as HTMLImageElement).style.display = 'none';
                                   }}
                                 />
                               ) : (
-                                <span className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-base font-bold text-[#ff950e]">
+                                <span className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center text-lg font-bold text-[#ff950e] border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors">
                                   {listing.seller.charAt(0).toUpperCase()}
                                 </span>
                               )}
                               <div className="flex flex-col">
-                                <span className="font-medium text-base flex items-center gap-1">
+                                <span className="font-bold text-base flex items-center gap-2">
                                   {listing.seller}
                                   {isSellerVerified && (
-                                    <BadgeCheck className="w-4 h-4 text-[#ff950e]" />
+                                    <img 
+                                      src="/verification_badge.png" 
+                                      alt="Verified" 
+                                      className="w-5 h-5"
+                                    />
                                   )}
                                 </span>
                                 {sellerSales > 0 && (
-                                  <span className="text-xs text-gray-500">
-                                    {sellerSales} sales
+                                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    {sellerSales} completed sales
                                   </span>
                                 )}
                               </div>
                             </Link>
                             
                             {!hasAuction && (
-                              <p className="font-bold text-[#ff950e] text-xl">
-                                ${displayPrice}
-                              </p>
+                              <div className="text-right">
+                                <p className="font-bold text-[#ff950e] text-2xl">
+                                  ${displayPrice}
+                                </p>
+                                <p className="text-xs text-gray-500 font-medium">
+                                  {priceLabel}
+                                </p>
+                              </div>
                             )}
                           </div>
                           
-                          {/* Action button for locked premium */}
+                          {/* Enhanced action button for locked premium */}
                           {user?.role === 'buyer' && isLockedPremium && (
                             <Link
                               href={`/sellers/${listing.seller}`}
-                              className="mt-3 w-full bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-600 font-medium transition text-sm text-center flex items-center justify-center gap-1"
+                              className="mt-4 w-full bg-gradient-to-r from-gray-700 to-gray-600 text-white px-4 py-3 rounded-xl hover:from-gray-600 hover:to-gray-500 font-bold transition-all text-sm text-center flex items-center justify-center gap-2 shadow-lg"
                               onClick={e => e.stopPropagation()}
                             >
-                              <Lock className="w-4 h-4" /> Subscribe
+                              <Lock className="w-4 h-4" /> Subscribe to Unlock
                             </Link>
                           )}
                         </div>
@@ -1093,24 +1128,24 @@ export default function BrowsePage() {
                 })}
               </div>
 
-              {/* Pagination */}
+              {/* Enhanced Pagination */}
               {(filteredListings.length > PAGE_SIZE || page > 0) && (
-                <div className="flex flex-col items-center mt-12 gap-2">
+                <div className="flex flex-col items-center mt-16 gap-4">
                   <div className="flex gap-4">
                     {page > 0 && (
                       <button
-                        className="px-6 py-2.5 rounded-lg bg-[#1a1a1a] text-white font-medium hover:bg-[#222] transition border border-gray-800"
+                        className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#1a1a1a] to-[#222] text-white font-bold hover:from-[#222] hover:to-[#333] transition-all border border-gray-800 shadow-lg hover:shadow-xl"
                         onClick={handlePreviousPage}
                       >
-                        Previous
+                        ← Previous
                       </button>
                     )}
                     {filteredListings.length > PAGE_SIZE * (page + 1) && (
                       <button
-                        className="px-6 py-2.5 rounded-lg bg-[#ff950e] text-black font-medium hover:bg-[#e88800] transition"
+                        className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
                         onClick={handleNextPage}
                       >
-                        Next
+                        Next →
                       </button>
                     )}
                   </div>
