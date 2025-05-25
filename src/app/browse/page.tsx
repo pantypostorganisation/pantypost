@@ -33,6 +33,16 @@ const isAuctionListing = (listing: Listing): listing is Listing & { auction: Auc
   return !!listing.auction;
 };
 
+// FIX 2: Helper function to check if listing is active
+const isListingActive = (listing: Listing): boolean => {
+  if (listing.auction) {
+    const isActive = listing.auction.status === 'active';
+    const endTimeNotPassed = new Date(listing.auction.endTime) > new Date();
+    return isActive && endTimeNotPassed;
+  }
+  return true; // Non-auction listings are always active
+};
+
 export default function BrowsePage() {
   const { listings, removeListing, user, users, isSubscribed, addSellerNotification, placeBid } = useListings();
   const { purchaseListing, orderHistory } = useWallet();
@@ -49,14 +59,92 @@ export default function BrowsePage() {
   const [hoveredListing, setHoveredListing] = useState<string | null>(null);
   const [forceUpdateTimer, setForceUpdateTimer] = useState(0);
 
-  // Force re-render every second for auction timers
+  // FIX 1: Improved timer with cleanup and cache management
+  const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
+  
+  // Clean up expired cache entries periodically
   useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const cache = timeCache.current;
+      
+      // Remove expired entries
+      Object.keys(cache).forEach(key => {
+        if (cache[key].expires < now) {
+          delete cache[key];
+        }
+      });
+    }, 60000); // Clean up every minute
+    
+    return () => clearInterval(cleanupInterval);
+  }, []);
+
+  // FIX 1: Optimized formatTimeRemaining with better cache management
+  const formatTimeRemaining = useCallback((endTimeStr: string) => {
+    const now = new Date();
+    const nowTime = now.getTime();
+    
+    // Check cache first
+    const cached = timeCache.current[endTimeStr];
+    if (cached && cached.expires > nowTime) {
+      return cached.formatted;
+    }
+    
+    const endTime = new Date(endTimeStr);
+    
+    if (endTime <= now) {
+      // Don't cache "Ended" state, return immediately
+      return 'Ended';
+    }
+    
+    const diffMs = endTime.getTime() - nowTime;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    let formatted;
+    let cacheTime;
+    
+    if (diffDays > 0) {
+      formatted = `${diffDays}d ${diffHours}h`;
+      cacheTime = 60000; // Cache for 1 minute
+    } else if (diffHours > 0) {
+      formatted = `${diffHours}h ${diffMinutes}m`;
+      cacheTime = 30000; // Cache for 30 seconds
+    } else if (diffMinutes > 0) {
+      formatted = `${diffMinutes}m`;
+      cacheTime = 10000; // Cache for 10 seconds
+    } else {
+      formatted = 'Soon';
+      cacheTime = 1000; // Cache for 1 second
+    }
+    
+    // Update cache
+    timeCache.current[endTimeStr] = {
+      formatted,
+      expires: nowTime + cacheTime
+    };
+    
+    return formatted;
+  }, []);
+
+  // Only update timer for active auctions to improve performance
+  const activeAuctionCount = useMemo(() => {
+    return listings.filter(listing => 
+      isAuctionListing(listing) && 
+      isListingActive(listing)
+    ).length;
+  }, [listings]);
+
+  useEffect(() => {
+    if (activeAuctionCount === 0) return;
+    
     const interval = setInterval(() => {
       setForceUpdateTimer(prev => prev + 1);
     }, 1000);
     
     return () => clearInterval(interval);
-  }, []);
+  }, [activeAuctionCount]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -75,97 +163,71 @@ export default function BrowsePage() {
     setPage(0);
   }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
 
-  // Helper function to format time remaining for auction
-  const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
-  
-  const formatTimeRemaining = (endTimeStr: string) => {
-    const now = new Date();
-    const nowTime = now.getTime();
-    
-    if (timeCache.current[endTimeStr] && timeCache.current[endTimeStr].expires > nowTime) {
-      return timeCache.current[endTimeStr].formatted;
-    }
-    
-    const endTime = new Date(endTimeStr);
-    
-    if (endTime <= now) {
-      return 'Ended';
-    }
-    
-    const diffMs = endTime.getTime() - nowTime;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
-    let formatted;
-    if (diffDays > 0) {
-      formatted = `${diffDays}d ${diffHours}h`;
-    } else if (diffHours > 0) {
-      formatted = `${diffHours}h ${diffMinutes}m`;
-    } else if (diffMinutes > 0) {
-      formatted = `${diffMinutes}m`;
-    } else {
-      formatted = 'Soon';
-    }
-    
-    timeCache.current[endTimeStr] = {
-      formatted,
-      expires: nowTime + 60000
-    };
-    
-    return formatted;
-  };
-
   // Get seller's total sales count
   const getSellerSalesCount = (seller: string) => {
     return orderHistory.filter(order => order.seller === seller).length;
   };
 
-  // Fixed: Category counts based on ACTIVE listings only
+  // FIX 3: Fixed category counts to match filtering logic exactly
   const categoryCounts = useMemo(() => {
-    // Filter to only include active listings (excluding ended auctions)
-    const activeListings = listings.filter(l => {
-      if (l.auction) {
-        const isActive = l.auction.status === 'active';
-        const endTimeNotPassed = new Date(l.auction.endTime) > new Date();
-        return isActive && endTimeNotPassed;
-      }
-      return true; // Non-auction listings are always active
-    });
-    
-    const activeAuctions = activeListings.filter(l => 
-      l.auction && 
-      l.auction.status === 'active' && 
-      new Date(l.auction.endTime) > new Date()
-    );
+    // Use the same filtering logic as the main filter
+    const activeListings = listings.filter(isListingActive);
     
     return {
-      all: activeListings.length, // Changed from listings.length to activeListings.length
+      all: activeListings.length,
       standard: activeListings.filter(l => !l.isPremium && !l.auction).length,
       premium: activeListings.filter(l => l.isPremium).length,
-      auction: activeAuctions.length
+      auction: activeListings.filter(l => l.auction).length
     };
   }, [listings]);
 
-  // Memoized filtering and sorting
+  // FIX 2: Fixed price display logic to handle 0 bids correctly
+  const getDisplayPrice = useCallback((listing: Listing) => {
+    if (isAuctionListing(listing)) {
+      const hasActiveBids = listing.auction.bids && listing.auction.bids.length > 0;
+      const highestBid = listing.auction.highestBid;
+      
+      // FIX 2: Check for null/undefined explicitly, not falsy (allows 0)
+      if (hasActiveBids && highestBid !== null && highestBid !== undefined) {
+        return {
+          price: highestBid.toFixed(2),
+          label: 'Current Bid'
+        };
+      } else {
+        return {
+          price: listing.auction.startingPrice.toFixed(2),
+          label: 'Starting Bid'
+        };
+      }
+    } else {
+      return {
+        price: listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2),
+        label: 'Buy Now'
+      };
+    }
+  }, []);
+
+  // FIX 3: Consistent filtering logic used everywhere
   const filteredListings = useMemo(() => {
     return listings
       .filter((listing: Listing) => {
+        // First check if listing is active (same logic as category counts)
+        if (!isListingActive(listing)) {
+          return false;
+        }
+        
+        // Then apply category filters
         if (filter === 'standard' && (listing.isPremium || listing.auction)) return false;
         if (filter === 'premium' && !listing.isPremium) return false;
         if (filter === 'auction' && !listing.auction) return false;
         
-        if (listing.auction) {
-          const isActive = listing.auction.status === 'active';
-          const endTimeNotPassed = new Date(listing.auction.endTime) > new Date();
-          if (!isActive || !endTimeNotPassed) return false;
-        }
-        
+        // Hours worn filter
         const hoursWorn = listing.hoursWorn ?? 0;
         if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
           return false;
         }
         
+        // Search filter
         if (searchTerm) {
           const searchLower = searchTerm.toLowerCase();
           const matchesSearch = 
@@ -177,9 +239,10 @@ export default function BrowsePage() {
           if (!matchesSearch) return false;
         }
         
+        // Price filter
         let price: number;
         if (isAuctionListing(listing)) {
-          price = listing.auction.highestBid || listing.auction.startingPrice;
+          price = listing.auction.highestBid ?? listing.auction.startingPrice;
         } else {
           price = listing.markedUpPrice || listing.price;
         }
@@ -205,13 +268,13 @@ export default function BrowsePage() {
           let aPrice: number, bPrice: number;
           
           if (isAuctionListing(a)) {
-            aPrice = a.auction.highestBid || a.auction.startingPrice;
+            aPrice = a.auction.highestBid ?? a.auction.startingPrice;
           } else {
             aPrice = a.markedUpPrice ?? a.price;
           }
           
           if (isAuctionListing(b)) {
-            bPrice = b.auction.highestBid || b.auction.startingPrice;
+            bPrice = b.auction.highestBid ?? b.auction.startingPrice;
           } else {
             bPrice = b.markedUpPrice ?? b.price;
           }
@@ -223,13 +286,13 @@ export default function BrowsePage() {
           let aPrice: number, bPrice: number;
           
           if (isAuctionListing(a)) {
-            aPrice = a.auction.highestBid || a.auction.startingPrice;
+            aPrice = a.auction.highestBid ?? a.auction.startingPrice;
           } else {
             aPrice = a.markedUpPrice ?? a.price;
           }
           
           if (isAuctionListing(b)) {
-            bPrice = b.auction.highestBid || b.auction.startingPrice;
+            bPrice = b.auction.highestBid ?? b.auction.startingPrice;
           } else {
             bPrice = b.markedUpPrice ?? b.price;
           }
@@ -499,24 +562,8 @@ export default function BrowsePage() {
                   const hasAuction = isAuctionListing(listing);
                   const sellerSales = getSellerSalesCount(listing.seller);
                   
-                  let displayPrice = '';
-                  let priceLabel = '';
-                  
-                  if (hasAuction) {
-                    const hasActiveBids = listing.auction.bids && listing.auction.bids.length > 0;
-                    const highestBid = listing.auction.highestBid;
-                    
-                    if (hasActiveBids && highestBid) {
-                      displayPrice = highestBid.toFixed(2);
-                      priceLabel = 'Current Bid';
-                    } else {
-                      displayPrice = listing.auction.startingPrice.toFixed(2);
-                      priceLabel = 'Starting Bid';
-                    }
-                  } else {
-                    displayPrice = listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2);
-                    priceLabel = 'Buy Now';
-                  }
+                  // FIX 2: Use the new getDisplayPrice function
+                  const { price: displayPrice, label: priceLabel } = getDisplayPrice(listing);
 
                   return (
                     <div
