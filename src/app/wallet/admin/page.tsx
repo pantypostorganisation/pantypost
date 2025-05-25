@@ -29,11 +29,21 @@ import {
   CheckCircle2,
   TrendingDown,
   Heart,
-  CreditCard
+  CreditCard,
+  PlusCircle,
+  Download
 } from 'lucide-react';
 
 export default function AdminProfitDashboard() {
-  const { adminBalance, adminActions, orderHistory, wallet } = useWallet();
+  const { 
+    adminBalance, 
+    adminActions, 
+    orderHistory, 
+    wallet, 
+    depositLogs, 
+    getTotalDeposits, 
+    getDepositsByTimeframe 
+  } = useWallet();
   const { user, users, listings } = useListings();
   const [showDetails, setShowDetails] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | '3months' | 'year' | 'all'>('today');
@@ -68,20 +78,41 @@ export default function AdminProfitDashboard() {
         filterDate.setFullYear(now.getFullYear() - 1);
         break;
       default:
-        return { actions: adminActions, orders: orderHistory };
+        return { 
+          actions: adminActions, 
+          orders: orderHistory, 
+          deposits: depositLogs 
+        };
     }
     
     const filteredActions = adminActions.filter(action => new Date(action.date) >= filterDate);
     const filteredOrders = orderHistory.filter(order => new Date(order.date) >= filterDate);
+    const filteredDeposits = depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
     
-    return { actions: filteredActions, orders: filteredOrders };
+    return { 
+      actions: filteredActions, 
+      orders: filteredOrders, 
+      deposits: filteredDeposits 
+    };
   };
 
-  const { actions: filteredActions, orders: filteredOrders } = getTimeFilteredData();
+  const { actions: filteredActions, orders: filteredOrders, deposits: filteredDeposits } = getTimeFilteredData();
 
-  // Revenue calculations - Updated to reflect time period
+  // 🚀 NEW: Deposit analytics
+  const totalDepositsAllTime = getTotalDeposits();
+  const periodTotalDeposits = filteredDeposits
+    .filter(deposit => deposit.status === 'completed')
+    .reduce((sum, deposit) => sum + deposit.amount, 0);
+  const periodDepositCount = filteredDeposits.filter(deposit => deposit.status === 'completed').length;
+  const averageDepositAmount = periodDepositCount > 0 ? periodTotalDeposits / periodDepositCount : 0;
+
+  // Revenue calculations - Updated to reflect time period (EXCLUDE deposit-related actions)
   const periodPlatformRevenue = filteredActions
-    .filter(action => action.type === 'credit')
+    .filter(action => 
+      action.type === 'credit' && 
+      !action.reason.toLowerCase().includes('deposit') &&
+      !action.reason.toLowerCase().includes('wallet')
+    )
     .reduce((sum, action) => sum + action.amount, 0);
   
   // Calculate total sales revenue for the period (what buyers actually paid)
@@ -95,19 +126,40 @@ export default function AdminProfitDashboard() {
   
   const periodAverageOrderValue = filteredOrders.length > 0 ? (periodSalesRevenue / filteredOrders.length) : 0;
   
-  // For "All" time, use total values; otherwise use period values
-  const displayPlatformRevenue = timeFilter === 'all' ? adminBalance : periodPlatformRevenue;
+  // For "All" time, use total values; otherwise use period values (EXCLUDE deposits from profit calculation)
+  const allTimePlatformRevenue = adminActions
+    .filter(action => 
+      action.type === 'credit' && 
+      !action.reason.toLowerCase().includes('deposit') &&
+      !action.reason.toLowerCase().includes('wallet')
+    )
+    .reduce((sum, action) => sum + action.amount, 0);
+    
+  const displayPlatformRevenue = timeFilter === 'all' ? allTimePlatformRevenue : periodPlatformRevenue;
   const displaySalesRevenue = timeFilter === 'all' ? 
     orderHistory.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0) : 
     periodSalesRevenue;
   const displayAverageOrderValue = timeFilter === 'all' ? 
     (orderHistory.length > 0 ? displaySalesRevenue / orderHistory.length : 0) : 
     periodAverageOrderValue;
+  const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
 
   // User engagement metrics
   const activeListings = listings.length;
   const avgListingsPerSeller = sellers.length > 0 ? activeListings / sellers.length : 0;
   const buyerToSellerRatio = sellers.length > 0 ? buyers.length / sellers.length : 0;
+
+  // 🚀 NEW: Top depositing users
+  const topDepositors = Object.entries(
+    filteredDeposits
+      .filter(deposit => deposit.status === 'completed')
+      .reduce((acc, deposit) => {
+        acc[deposit.username] = (acc[deposit.username] || 0) + deposit.amount;
+        return acc;
+      }, {} as Record<string, number>)
+  )
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 5);
 
   // Calculate growth metrics compared to previous period
   const getPreviousPeriodData = () => {
@@ -144,7 +196,7 @@ export default function AdminProfitDashboard() {
         previousPeriodStart.setFullYear(previousPeriodEnd.getFullYear() - 1);
         break;
       default:
-        return { actions: [], orders: [] };
+        return { actions: [], orders: [], deposits: [] };
     }
     
     const previousActions = adminActions.filter(action => {
@@ -156,18 +208,34 @@ export default function AdminProfitDashboard() {
       const orderDate = new Date(order.date);
       return orderDate >= previousPeriodStart && orderDate <= previousPeriodEnd;
     });
+
+    const previousDeposits = depositLogs.filter(deposit => {
+      const depositDate = new Date(deposit.date);
+      return depositDate >= previousPeriodStart && depositDate <= previousPeriodEnd;
+    });
     
-    return { actions: previousActions, orders: previousOrders };
+    return { actions: previousActions, orders: previousOrders, deposits: previousDeposits };
   };
 
-  const { actions: previousPeriodActions, orders: previousPeriodOrders } = getPreviousPeriodData();
+  const { actions: previousPeriodActions, orders: previousPeriodOrders, deposits: previousPeriodDeposits } = getPreviousPeriodData();
   
   const previousPeriodRevenue = previousPeriodActions
-    .filter(action => action.type === 'credit')
+    .filter(action => 
+      action.type === 'credit' && 
+      !action.reason.toLowerCase().includes('deposit') &&
+      !action.reason.toLowerCase().includes('wallet')
+    )
     .reduce((sum, action) => sum + action.amount, 0);
+
+  const previousPeriodDepositAmount = previousPeriodDeposits
+    .filter(deposit => deposit.status === 'completed')
+    .reduce((sum, deposit) => sum + deposit.amount, 0);
 
   const growthRate = timeFilter !== 'all' && previousPeriodRevenue > 0 ? 
     ((periodPlatformRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 : 0;
+
+  const depositGrowthRate = timeFilter !== 'all' && previousPeriodDepositAmount > 0 ? 
+    ((periodTotalDeposits - previousPeriodDepositAmount) / previousPeriodDepositAmount) * 100 : 0;
 
   // Top performing sellers by wallet balance
   const topSellers = Object.entries(wallet)
@@ -215,7 +283,11 @@ export default function AdminProfitDashboard() {
         });
         
         const hourRevenue = hourActions
-          .filter(action => action.type === 'credit')
+          .filter(action => 
+            action.type === 'credit' && 
+            !action.reason.toLowerCase().includes('deposit') &&
+            !action.reason.toLowerCase().includes('wallet')
+          )
           .reduce((sum, action) => sum + action.amount, 0);
         
         days.push({
@@ -232,7 +304,11 @@ export default function AdminProfitDashboard() {
         });
         
         const monthRevenue = monthActions
-          .filter(action => action.type === 'credit')
+          .filter(action => 
+            action.type === 'credit' && 
+            !action.reason.toLowerCase().includes('deposit') &&
+            !action.reason.toLowerCase().includes('wallet')
+          )
           .reduce((sum, action) => sum + action.amount, 0);
         
         days.push({
@@ -248,7 +324,11 @@ export default function AdminProfitDashboard() {
         });
         
         const dayRevenue = dayActions
-          .filter(action => action.type === 'credit')
+          .filter(action => 
+            action.type === 'credit' && 
+            !action.reason.toLowerCase().includes('deposit') &&
+            !action.reason.toLowerCase().includes('wallet')
+          )
           .reduce((sum, action) => sum + action.amount, 0);
         
         days.push({
@@ -362,8 +442,8 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Main Money Metrics - Updated to reflect time period */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* 🚀 NEW: Enhanced Main Money Metrics - Now includes deposits */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Total Money Made - Period Specific */}
             <div className="bg-gradient-to-br from-[#ff950e]/20 to-[#ff6b00]/10 rounded-xl p-6 border border-[#ff950e]/30 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#ff950e]/10 rounded-full -translate-y-16 translate-x-16"></div>
@@ -380,7 +460,7 @@ export default function AdminProfitDashboard() {
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-4xl font-bold text-white">{formatCurrency(displayPlatformRevenue)}</span>
+                  <span className="text-3xl font-bold text-white">{formatCurrency(displayPlatformRevenue)}</span>
                   <span className="text-lg text-[#ff950e] font-medium">💰</span>
                   {timeFilter !== 'all' && growthRate !== 0 && (
                     <span className={`text-sm flex items-center gap-1 ml-2 ${
@@ -395,13 +475,46 @@ export default function AdminProfitDashboard() {
               </div>
             </div>
 
-            {/* Total Platform Revenue - Period Specific */}
-            <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full -translate-y-10 translate-x-10"></div>
+            {/* 🚀 NEW: Total Deposits Collected */}
+            <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-6 border border-blue-500/30 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -translate-y-16 translate-x-16"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-3 bg-blue-500/20 rounded-lg">
-                    <BarChart3 className="w-6 h-6 text-blue-400" />
+                  <div className="p-3 bg-blue-500 rounded-lg">
+                    <PlusCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-300">
+                      {timeFilter === 'all' ? 'Total Deposits' : `Deposits - ${getPeriodDisplayName()}`}
+                    </h3>
+                    <p className="text-xs text-gray-500">Cash collected upfront</p>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-3xl font-bold text-white">{formatCurrency(displayTotalDeposits)}</span>
+                  <span className="text-lg text-blue-400 font-medium">💳</span>
+                  {timeFilter !== 'all' && depositGrowthRate !== 0 && (
+                    <span className={`text-sm flex items-center gap-1 ml-2 ${
+                      depositGrowthRate > 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {depositGrowthRate > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                      {Math.abs(depositGrowthRate).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400">
+                  {periodDepositCount} deposits • Avg: {formatCurrency(averageDepositAmount)}
+                </p>
+              </div>
+            </div>
+
+            {/* Total Platform Revenue - Period Specific */}
+            <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -translate-y-10 translate-x-10"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-purple-500/20 rounded-lg">
+                    <BarChart3 className="w-6 h-6 text-purple-400" />
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-300">
@@ -438,11 +551,11 @@ export default function AdminProfitDashboard() {
 
             {/* Average Order Value - Period Specific */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -translate-y-10 translate-x-10"></div>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -translate-y-10 translate-x-10"></div>
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-3 bg-purple-500/20 rounded-lg">
-                    <Target className="w-6 h-6 text-purple-400" />
+                  <div className="p-3 bg-green-500/20 rounded-lg">
+                    <Target className="w-6 h-6 text-green-400" />
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-300">
@@ -518,8 +631,8 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Platform Health & User Metrics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* 🚀 NEW: Enhanced Platform Health & User Metrics + Top Depositors */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             {/* Platform Health */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -604,6 +717,45 @@ export default function AdminProfitDashboard() {
                 )}
               </div>
             </div>
+
+            {/* 🚀 NEW: Top Depositors */}
+            <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-[#ff950e]" />
+                Top Depositors
+              </h3>
+              <div className="space-y-3">
+                {topDepositors.length > 0 ? topDepositors.map(([username, totalDeposited], index) => (
+                  <div key={username} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        index === 0 ? 'bg-blue-500 text-white' :
+                        index === 1 ? 'bg-blue-400 text-white' :
+                        index === 2 ? 'bg-blue-300 text-black' :
+                        'bg-[#333] text-gray-300'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{username}</p>
+                        <p className="text-xs text-gray-400">
+                          {users[username]?.role === 'buyer' ? '💳 Buyer' : '🏪 Seller'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-blue-400">{formatCurrency(totalDeposited)}</p>
+                      <p className="text-xs text-gray-500">deposited</p>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <CreditCard className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+                    <p>No deposits yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Money Flow Explanation */}
@@ -637,7 +789,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* 🚀 NEW: Enhanced Recent Activity - Now includes deposits */}
           <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -645,48 +797,92 @@ export default function AdminProfitDashboard() {
                 Recent Money Activity
               </h3>
               <div className="text-sm text-gray-400">
-                Last {filteredActions.length} actions {timeFilter !== 'all' ? `(${getPeriodDisplayName()})` : ''}
+                Last {Math.max(filteredActions.length, filteredDeposits.length)} actions {timeFilter !== 'all' ? `(${getPeriodDisplayName()})` : ''}
               </div>
             </div>
             
-            {filteredActions.length > 0 ? (
+            {(filteredActions.length > 0 || filteredDeposits.length > 0) ? (
               <div className="overflow-hidden">
                 <div className="max-h-80 overflow-y-auto">
                   <div className="space-y-3">
-                    {filteredActions
+                    {/* Combine and sort actions and deposits by date */}
+                    {[
+                      ...filteredActions.map(action => ({
+                        type: 'action' as const,
+                        data: action,
+                        date: action.date
+                      })),
+                      ...filteredDeposits
+                        .filter(deposit => deposit.status === 'completed')
+                        .map(deposit => ({
+                          type: 'deposit' as const,
+                          data: deposit,
+                          date: deposit.date
+                        }))
+                    ]
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .slice(0, 15)
-                      .map((action, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors">
-                          <div className="flex items-center gap-4 min-w-0 flex-1">
-                            <div className={`p-2 rounded-lg flex-shrink-0 ${
-                              action.type === 'credit' 
-                                ? 'bg-green-500/20 text-green-400'
-                                : 'bg-red-500/20 text-red-400'
-                            }`}>
-                              {action.type === 'credit' ? (
-                                <ArrowUpRight className="w-4 h-4" />
-                              ) : (
-                                <ArrowDownRight className="w-4 h-4" />
-                              )}
+                      .map((item, index) => {
+                        if (item.type === 'action') {
+                          const action = item.data;
+                          return (
+                            <div key={`action-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors">
+                              <div className="flex items-center gap-4 min-w-0 flex-1">
+                                <div className={`p-2 rounded-lg flex-shrink-0 ${
+                                  action.type === 'credit' 
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {action.type === 'credit' ? (
+                                    <ArrowUpRight className="w-4 h-4" />
+                                  ) : (
+                                    <ArrowDownRight className="w-4 h-4" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-white truncate">
+                                    {action.type === 'credit' ? '💰 Money In' : '🔧 Adjustment'}
+                                  </p>
+                                  <p className="text-sm text-gray-400 truncate">{action.reason}</p>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-4">
+                                <p className={`font-bold ${
+                                  action.type === 'credit' ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {action.type === 'credit' ? '+' : '-'}{formatCurrency(action.amount)}
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-white truncate">
-                                {action.type === 'credit' ? '💰 Money In' : '🔧 Adjustment'}
-                              </p>
-                              <p className="text-sm text-gray-400 truncate">{action.reason}</p>
+                          );
+                        } else {
+                          const deposit = item.data;
+                          return (
+                            <div key={`deposit-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-blue-500/50">
+                              <div className="flex items-center gap-4 min-w-0 flex-1">
+                                <div className="p-2 rounded-lg flex-shrink-0 bg-blue-500/20 text-blue-400">
+                                  <Download className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-white truncate">
+                                    💳 Deposit Received
+                                  </p>
+                                  <p className="text-sm text-gray-400 truncate">
+                                    {deposit.username} via {deposit.method.replace('_', ' ')}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-4">
+                                <p className="font-bold text-blue-400">
+                                  +{formatCurrency(deposit.amount)}
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(deposit.date)}</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="text-right flex-shrink-0 ml-4">
-                            <p className={`font-bold ${
-                              action.type === 'credit' ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {action.type === 'credit' ? '+' : '-'}{formatCurrency(action.amount)}
-                            </p>
-                            <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
-                          </div>
-                        </div>
-                      ))}
+                          );
+                        }
+                      })}
                   </div>
                 </div>
               </div>

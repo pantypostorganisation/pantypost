@@ -17,7 +17,12 @@ import {
 
 export default function BuyerWalletPage() {
   const { user } = useListings();
-  const { getBuyerBalance, setBuyerBalance, orderHistory } = useWallet();
+  const { 
+    getBuyerBalance, 
+    setBuyerBalance, 
+    orderHistory, 
+    addDeposit // 🚀 ADD: Import the deposit tracking function
+  } = useWallet();
   const [balance, setBalance] = useState(0);
   const [amountToAdd, setAmountToAdd] = useState('');
   const [message, setMessage] = useState('');
@@ -58,12 +63,20 @@ export default function BuyerWalletPage() {
     try {
       // Simulate a slight delay for better UX
       setTimeout(() => {
-        const newBalance = balance + amount;
-        setBuyerBalance(user.username!, newBalance);
-        setBalance(newBalance);
-        setAmountToAdd('');
-        setMessage(`Successfully added $${amount.toFixed(2)} to your wallet.`);
-        setMessageType('success');
+        // 🚀 NEW: Use the deposit tracking system instead of direct balance update
+        const success = addDeposit(user.username!, amount, 'credit_card', `Wallet deposit by ${user.username}`);
+        
+        if (success) {
+          // Update local balance state
+          const newBalance = balance + amount;
+          setBalance(newBalance);
+          setAmountToAdd('');
+          setMessage(`Successfully added $${amount.toFixed(2)} to your wallet.`);
+          setMessageType('success');
+        } else {
+          setMessage('An error occurred while adding funds.');
+          setMessageType('error');
+        }
         setIsLoading(false);
       }, 800);
     } catch (error) {

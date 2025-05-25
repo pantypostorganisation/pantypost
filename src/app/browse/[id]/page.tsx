@@ -1,4 +1,4 @@
-// src/app/browse/[id]/page.tsx - Updated with Seller Star Rating
+// src/app/browse/[id]/page.tsx - Updated with Purple Timer Progress Bar
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
@@ -149,6 +149,24 @@ export default function ListingDetailPage() {
     const currentBid = listing.auction.highestBid || listing.auction.startingPrice;
     return (currentBid + 10).toFixed(2);
   }, [isAuctionListing, listing?.auction]);
+
+  // 🚀 NEW: Calculate timer progress percentage
+  const getTimerProgress = useCallback(() => {
+    if (!isAuctionListing || !listing?.auction?.endTime || isAuctionEnded) return 0;
+    
+    // Use listing creation date as auction start time, or assume 24h auction duration
+    const listingCreatedTime = new Date(listing.date).getTime();
+    const endTime = new Date(listing.auction.endTime).getTime();
+    const now = new Date().getTime();
+    
+    // Calculate total duration and elapsed time
+    const totalDuration = endTime - listingCreatedTime;
+    const elapsed = now - listingCreatedTime;
+    
+    // Return percentage elapsed (0-100)
+    const progress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
+    return progress;
+  }, [isAuctionListing, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
   // Sticky Buy Now logic
   const imageRef = useRef<HTMLDivElement | null>(null);
@@ -315,20 +333,8 @@ export default function ListingDetailPage() {
         setBiddingEnabled(false);
       }
     },
-    // Update more frequently when less time remains
-    isAuctionListing && !isAuctionEnded && listing?.auction?.endTime ? 
-      (() => {
-        const now = new Date();
-        const endTime = new Date(listing.auction.endTime);
-        const diffMs = endTime.getTime() - now.getTime();
-        
-        if (diffMs <= 0) return null; // Stop interval if auction ended
-        if (diffMs < 60000) return 1000; // Every second for last minute
-        if (diffMs < 300000) return 5000; // Every 5 seconds for last 5 minutes
-        if (diffMs < 3600000) return 15000; // Every 15 seconds for last hour
-        return 60000; // Every minute otherwise
-      })() : 
-      null // No interval if not an auction or already ended
+    // Update every second for smooth progress bar animation
+    isAuctionListing && !isAuctionEnded && listing?.auction?.endTime ? 1000 : null
   );
   
   // Automatically update bid status when the listing updates
@@ -814,9 +820,19 @@ export default function ListingDetailPage() {
                 {!isAuctionEnded && (
                   <div className="mb-4">
                     <p className="text-gray-400 text-sm mb-1">Time Remaining</p>
-                    <p className="font-bold text-green-400">
+                    <p className="font-bold text-green-400 mb-2">
                       {formatTimeRemaining(listing.auction.endTime)}
                     </p>
+                    
+                    {/* 🚀 UPDATED: Purple Timer Progress Bar */}
+                    <div className="relative">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 rounded-full transition-all duration-1000 ease-linear"
+                          style={{ width: `${getTimerProgress()}%` }}
+                        ></div>
+                      </div>
+                    </div>
                   </div>
                 )}
                 

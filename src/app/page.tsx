@@ -37,11 +37,6 @@ const fadeInVariants = {
   visible: { opacity: 1, transition: { duration: 0.8, ease: 'easeOut' } },
 };
 
-const fadeInFastVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } },
-};
-
 // Variant for the glowing shapes
 const shapeVariants = {
     hidden: { opacity: 0, scale: 0.8 },
@@ -75,7 +70,7 @@ const particlePositions = Array.from({ length: 45 }, (_, i) => ({
 }));
 
 export default function Home() {
-  const [showAgeVerification, setShowAgeVerification] = useState(false);
+  // 🚀 REMOVED: Age verification state and logic (handled by global modal in layout.tsx)
   const heroRef = useRef(null);
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -84,61 +79,9 @@ export default function Home() {
   // Adjusted parallax: Start higher ('-5%') and move less ('20%')
   const y = useTransform(scrollYProgress, [0, 1], ['-5%', '20%']);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-        const verified = localStorage.getItem('ageVerified');
-        if (!verified) {
-          setShowAgeVerification(true);
-        }
-    }
-  }, []);
-
-  const handleAgeVerification = (isAdult: boolean) => {
-    if (isAdult) {
-      localStorage.setItem('ageVerified', 'true');
-      setShowAgeVerification(false);
-    } else {
-      alert('You must be 21 or older to enter.');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
-      {/* Age Verification Modal */}
-      {showAgeVerification && (
-        <motion.div
-          className="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4"
-          initial="hidden"
-          animate="visible"
-          variants={fadeInFastVariants}
-        >
-          <motion.div
-            className="bg-[#161616] border-2 border-[#ff950e]/50 p-8 rounded-2xl max-w-md w-full shadow-2xl shadow-[#ff950e]/10"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-          >
-            <h2 className="text-2xl font-bold text-[#ff950e] mb-4 text-center">Age Verification</h2>
-            <p className="mb-6 text-center text-gray-300">
-              You must be at least 21 years old to enter this site. By entering, you confirm you are at least 21 years old.
-            </p>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => handleAgeVerification(true)}
-                className="group relative inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-[#ff950e] to-[#ffb347] text-black font-bold rounded-full overflow-hidden transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-              >
-                <span className="relative z-10">I am 21+</span>
-              </button>
-              <button
-                onClick={() => handleAgeVerification(false)}
-                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-full transition-all duration-300 ease-out hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-              >
-                Exit
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
+      {/* 🚀 REMOVED: Age Verification Modal (now handled globally in layout.tsx) */}
 
       {/* Hero Section */}
       {/* Stays the same: Ends in #101010 */}
@@ -369,7 +312,7 @@ export default function Home() {
               href="/browse"
               className="group relative inline-flex items-center justify-center gap-2.5 rounded-full px-7 py-3 bg-black border border-[#ff950e]/60 text-[#ff950e] font-semibold text-base transition-all duration-300 ease-out hover:scale-105 hover:bg-[#111] hover:border-[#ff950e] hover:text-white active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
-              <ShoppingBag className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-[-2px]" />
+              <ShoppingBag className="h-5 h-5 transition-transform duration-300 group-hover:translate-x-[-2px]" />
               Explore Listings
             </Link>
           </motion.div>

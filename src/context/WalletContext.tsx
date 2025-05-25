@@ -56,6 +56,18 @@ type AdminAction = {
   date: string;
 };
 
+// 🚀 NEW: Deposit tracking type
+export type DepositLog = {
+  id: string;
+  username: string;
+  amount: number;
+  method: 'credit_card' | 'bank_transfer' | 'crypto' | 'admin_credit';
+  date: string;
+  status: 'pending' | 'completed' | 'failed';
+  transactionId?: string;
+  notes?: string;
+};
+
 type WalletContextType = {
   buyerBalances: { [username: string]: number };
   adminBalance: number;
@@ -88,6 +100,12 @@ type WalletContextType = {
   // New functions for delivery address and shipping status
   updateOrderAddress: (orderId: string, address: DeliveryAddress) => void;
   updateShippingStatus: (orderId: string, status: 'pending' | 'processing' | 'shipped') => void;
+  // 🚀 NEW: Deposit tracking functions
+  depositLogs: DepositLog[];
+  addDeposit: (username: string, amount: number, method: DepositLog['method'], notes?: string) => boolean;
+  getDepositsForUser: (username: string) => DepositLog[];
+  getTotalDeposits: () => number;
+  getDepositsByTimeframe: (timeframe: 'today' | 'week' | 'month' | 'year' | 'all') => DepositLog[];
 };
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -101,10 +119,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
   const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
   const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
+  // 🚀 NEW: Deposit logs state
+  const [depositLogs, setDepositLogs] = useState<DepositLog[]>([]);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -115,6 +136,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const sellerWds = localStorage.getItem("wallet_sellerWithdrawals");
     const adminWds = localStorage.getItem("wallet_adminWithdrawals");
     const actions = localStorage.getItem("wallet_adminActions");
+    // 🚀 NEW: Load deposit logs
+    const deposits = localStorage.getItem("wallet_depositLogs");
 
     if (buyers) setBuyerBalancesState(JSON.parse(buyers));
     if (admin) setAdminBalanceState(parseFloat(admin));
@@ -123,6 +146,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (sellerWds) setSellerWithdrawals(JSON.parse(sellerWds));
     if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
     if (actions) setAdminActions(JSON.parse(actions));
+    if (deposits) setDepositLogs(JSON.parse(deposits));
   }, []);
 
   useEffect(() => {
@@ -160,6 +184,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("wallet_adminActions", JSON.stringify(adminActions));
   }, [adminActions]);
 
+  // 🚀 NEW: Save deposit logs to localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem("wallet_depositLogs", JSON.stringify(depositLogs));
+  }, [depositLogs]);
+
   const getBuyerBalance = (username: string): number => {
     return buyerBalances[username] || 0;
   };
@@ -188,6 +218,88 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const addOrder = (order: Order) => {
     setOrderHistory((prev) => [...prev, order]);
+  };
+
+  // 🚀 NEW: Deposit tracking functions
+  const addDeposit = (username: string, amount: number, method: DepositLog['method'], notes?: string): boolean => {
+    if (!username || amount <= 0) {
+      return false;
+    }
+
+    try {
+      // Generate unique deposit ID
+      const depositId = `dep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create deposit log
+      const newDeposit: DepositLog = {
+        id: depositId,
+        username,
+        amount,
+        method,
+        date: new Date().toISOString(),
+        status: 'completed', // In production, this might start as 'pending'
+        transactionId: `txn_${depositId}`,
+        notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
+      };
+
+      // Add to deposit logs
+      setDepositLogs(prev => [...prev, newDeposit]);
+
+      // Update buyer balance
+      const currentBalance = getBuyerBalance(username);
+      setBuyerBalance(username, currentBalance + amount);
+
+      // Record as admin action for analytics
+      const adminAction: AdminAction = {
+        adminUser: 'system',
+        username: username,
+        role: 'buyer',
+        amount: amount,
+        type: 'credit',
+        reason: `Wallet deposit via ${method.replace('_', ' ')}`,
+        date: new Date().toISOString()
+      };
+      setAdminActions(prev => [...prev, adminAction]);
+
+      return true;
+    } catch (error) {
+      console.error('Error processing deposit:', error);
+      return false;
+    }
+  };
+
+  const getDepositsForUser = (username: string): DepositLog[] => {
+    return depositLogs.filter(deposit => deposit.username === username);
+  };
+
+  const getTotalDeposits = (): number => {
+    return depositLogs
+      .filter(deposit => deposit.status === 'completed')
+      .reduce((sum, deposit) => sum + deposit.amount, 0);
+  };
+
+  const getDepositsByTimeframe = (timeframe: 'today' | 'week' | 'month' | 'year' | 'all'): DepositLog[] => {
+    if (timeframe === 'all') return depositLogs;
+
+    const now = new Date();
+    const filterDate = new Date();
+
+    switch (timeframe) {
+      case 'today':
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        filterDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        filterDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'year':
+        filterDate.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+
+    return depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
   };
 
   // New function to update the delivery address for an order
@@ -227,6 +339,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (role === 'buyer') {
         const currentBalance = getBuyerBalance(username);
         setBuyerBalance(username, currentBalance + amount);
+        
+        // 🚀 NEW: If this is a wallet credit, also log as deposit
+        if (reason.toLowerCase().includes('deposit') || reason.toLowerCase().includes('wallet')) {
+          addDeposit(username, amount, 'admin_credit', `Admin credit: ${reason}`);
+        }
       } else if (role === 'seller') {
         const currentBalance = getSellerBalance(username);
         setSellerBalance(username, currentBalance + amount);
@@ -336,6 +453,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       updateWallet('admin', platformCut);
 
+      // Record platform profit as admin action for analytics
+      const platformProfitAction: AdminAction = {
+        adminUser: 'system',
+        username: 'platform',
+        role: 'buyer',
+        amount: platformCut,
+        type: 'credit',
+        reason: `Platform commission from "${listing.title}" sale`,
+        date: new Date().toISOString()
+      };
+      setAdminActions(prev => [...prev, platformProfitAction]);
+
       const order: Order = {
         ...listing,
         buyer: buyerUsername,
@@ -399,6 +528,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
 
       updateWallet('admin', adminCut);
+
+      // Record subscription profit as admin action for analytics
+      const subscriptionProfitAction: AdminAction = {
+        adminUser: 'system',
+        username: 'platform',
+        role: 'buyer',
+        amount: adminCut,
+        type: 'credit',
+        reason: `Subscription commission from ${buyer} to ${seller}`,
+        date: new Date().toISOString()
+      };
+      setAdminActions(prev => [...prev, subscriptionProfitAction]);
 
       if (addSellerNotification) {
         addSellerNotification(
@@ -551,7 +692,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         adminActions,
         // New delivery and shipping functions
         updateOrderAddress,
-        updateShippingStatus
+        updateShippingStatus,
+        // 🚀 NEW: Deposit tracking functions
+        depositLogs,
+        addDeposit,
+        getDepositsForUser,
+        getTotalDeposits,
+        getDepositsByTimeframe,
       }}
     >
       {children}
