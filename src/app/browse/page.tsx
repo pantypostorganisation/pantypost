@@ -1,4 +1,3 @@
-// src/app/browse/page.tsx - TypeScript Errors Fixed
 'use client';
 
 import Link from 'next/link';
