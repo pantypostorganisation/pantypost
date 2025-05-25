@@ -1,19 +1,34 @@
 // src/app/login/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { User, ShoppingBag, Crown, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
-// Floating particle component
-const FloatingParticle = ({ delay = 0 }) => {
+// Enhanced floating particle component with smooth movement
+const FloatingParticle = ({ delay = 0, index = 0 }) => {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+  const velocityRef = useRef({ x: 0, y: 0 });
+  const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      
+      // Set initial random position
+      setPosition({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight
+      });
+
+      // Set initial random velocity (speed and direction)
+      velocityRef.current = {
+        x: (Math.random() - 0.5) * 0.8, // Random speed between -0.4 and 0.4
+        y: (Math.random() - 0.5) * 0.8
+      };
       
       // Add window resize handler
       const handleResize = () => {
@@ -25,24 +40,79 @@ const FloatingParticle = ({ delay = 0 }) => {
     }
   }, []);
 
+  // Smooth animation loop
+  useEffect(() => {
+    const animateParticle = () => {
+
+      setPosition(prev => {
+        let newX = prev.x + velocityRef.current.x;
+        let newY = prev.y + velocityRef.current.y;
+        
+        // Bounce off edges and slightly randomize velocity
+        if (newX <= 0 || newX >= dimensions.width) {
+          velocityRef.current.x = -velocityRef.current.x + (Math.random() - 0.5) * 0.1;
+          newX = Math.max(0, Math.min(dimensions.width, newX));
+        }
+        
+        if (newY <= 0 || newY >= dimensions.height) {
+          velocityRef.current.y = -velocityRef.current.y + (Math.random() - 0.5) * 0.1;
+          newY = Math.max(0, Math.min(dimensions.height, newY));
+        }
+
+        // Add slight random drift to make movement more organic
+        if (Math.random() < 0.02) { // 2% chance each frame
+          velocityRef.current.x += (Math.random() - 0.5) * 0.1;
+          velocityRef.current.y += (Math.random() - 0.5) * 0.1;
+          
+          // Keep velocity within reasonable bounds
+          velocityRef.current.x = Math.max(-1, Math.min(1, velocityRef.current.x));
+          velocityRef.current.y = Math.max(-1, Math.min(1, velocityRef.current.y));
+        }
+        
+        return { x: newX, y: newY };
+      });
+
+      animationRef.current = requestAnimationFrame(animateParticle);
+    };
+
+    animationRef.current = requestAnimationFrame(animateParticle);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [dimensions, delay]);
+
+  // Random properties for each particle
+  const particleProps = {
+    size: Math.random() * 2 + 1, // Size between 1px and 3px
+    opacity: Math.random() * 0.3 + 0.1, // Opacity between 0.1 and 0.4
+    glowIntensity: Math.random() * 0.5 + 0.2, // Glow intensity
+  };
+
   // Random color variation - mix orange and white particles
   const colors = [
-    'bg-[#ff950e]/30', // Orange
-    'bg-[#ff950e]/20', // Lighter orange
-    'bg-white/20',     // White
-    'bg-white/30',     // Brighter white
-    'bg-[#ff6b00]/25'  // Orange variant
+    'bg-[#ff950e]', // Orange
+    'bg-[#ff6b00]', // Orange variant
+    'bg-white',     // White
+    'bg-[#ffb347]', // Light orange
+    'bg-[#ffa500]'  // Another orange variant
   ];
-  const randomColor = colors[Math.floor(Math.random() * colors.length)];
+  const randomColor = colors[index % colors.length];
 
   return (
     <div
-      className={`absolute w-1 h-1 ${randomColor} rounded-full animate-pulse`}
+      className={`absolute ${randomColor} rounded-full transition-opacity duration-1000 pointer-events-none`}
       style={{
-        left: Math.random() * dimensions.width,
-        top: Math.random() * dimensions.height,
-        animationDelay: `${delay}s`,
-        animationDuration: `${2 + Math.random() * 2}s`
+        left: position.x,
+        top: position.y,
+        width: particleProps.size,
+        height: particleProps.size,
+        opacity: particleProps.opacity,
+        filter: `blur(0.5px)`,
+        boxShadow: `0 0 ${particleProps.glowIntensity * 10}px ${randomColor.includes('ff950e') ? '#ff950e' : '#ffffff'}${Math.floor(particleProps.glowIntensity * 255).toString(16)}`,
+        transform: 'translate(-50%, -50%)', // Center the particle on its position
       }}
     />
   );
@@ -172,12 +242,19 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
-      {/* Floating Particles */}
-      <div className="absolute inset-0 pointer-events-none">
-        {Array.from({ length: 20 }).map((_, i) => (
-          <FloatingParticle key={i} delay={i * 0.4} />
+      {/* Enhanced Floating Particles Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <FloatingParticle 
+            key={i} 
+            delay={0} // Remove staggered delays so all particles move immediately
+            index={i}
+          />
         ))}
       </div>
+
+      {/* Subtle gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
       {/* Secret Admin Crown - Bottom Right */}
       <button
@@ -230,7 +307,7 @@ export default function LoginPage() {
 
           {/* Form Card */}
           <div 
-            className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl transition-all duration-500"
+            className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500"
           >
             {/* Error Message */}
             {error && (
@@ -253,7 +330,7 @@ export default function LoginPage() {
                       onChange={(e) => setUsername(e.target.value)}
                       onKeyPress={handleKeyPress}
                       placeholder="Enter your username"
-                      className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
+                      className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
                       autoFocus
                     />
                   </div>
