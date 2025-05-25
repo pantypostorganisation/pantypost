@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { User, ShoppingBag, Crown, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 
 // Floating particle component
 const FloatingParticle = ({ delay = 0 }) => {
@@ -15,6 +14,14 @@ const FloatingParticle = ({ delay = 0 }) => {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      
+      // Add window resize handler
+      const handleResize = () => {
+        setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      };
+      
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
     }
   }, []);
 
@@ -29,23 +36,13 @@ const FloatingParticle = ({ delay = 0 }) => {
   const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
   return (
-    <motion.div
-      className={`absolute w-1 h-1 ${randomColor} rounded-full`}
-      initial={{ 
-        x: Math.random() * dimensions.width, 
-        y: dimensions.height + 10,
-        opacity: 0 
-      }}
-      animate={{
-        y: -10,
-        opacity: [0, 1, 1, 0],
-        x: Math.random() * dimensions.width,
-      }}
-      transition={{
-        duration: 8 + Math.random() * 4,
-        delay: delay,
-        repeat: Infinity,
-        ease: "linear"
+    <div
+      className={`absolute w-1 h-1 ${randomColor} rounded-full animate-pulse`}
+      style={{
+        left: Math.random() * dimensions.width,
+        top: Math.random() * dimensions.height,
+        animationDelay: `${delay}s`,
+        animationDuration: `${2 + Math.random() * 2}s`
       }}
     />
   );
@@ -183,67 +180,34 @@ export default function LoginPage() {
       </div>
 
       {/* Secret Admin Crown - Bottom Right */}
-      <motion.button
+      <button
         onClick={handleCrownClick}
-        className={`fixed transition-all duration-300 z-50 rounded-full flex items-center justify-center ${
+        className={`fixed bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 z-50 hover:scale-110 active:scale-95 ${
           showAdminMode 
             ? 'bg-[#ff950e]/20 text-[#ff950e] border border-[#ff950e]/50' 
             : 'bg-black/50 text-gray-600 hover:text-gray-400 border border-gray-800 hover:border-gray-600'
         }`}
         style={{
-          bottom: '0.8vw',
-          right: '0.8vw',
-          width: '1.2vw',
-          height: '1.2vw',
-          minWidth: '12px',
-          maxWidth: '16px',
-          minHeight: '12px',
-          maxHeight: '16px',
-          padding: '0'
+          opacity: showAdminMode ? 1 : 0.2,
+          transform: showAdminMode ? 'scale(1)' : 'scale(0.7)'
         }}
-        initial={{ opacity: 0.2, scale: 0.7 }}
-        animate={{ 
-          opacity: showAdminMode ? 1 : 0.2, 
-          scale: showAdminMode ? 1 : 0.7 
-        }}
-        whileHover={{ 
-          scale: 1.1, 
-          opacity: 1,
-          transition: { duration: 0.2 }
-        }}
-        whileTap={{ scale: 0.8 }}
       >
-        <Crown style={{ width: '0.6vw', height: '0.6vw', minWidth: '6px', maxWidth: '10px', minHeight: '6px', maxHeight: '10px' }} />
-      </motion.button>
+        <Crown className="w-5 h-5" />
+      </button>
 
       {/* Main Content */}
       <div className={`relative z-10 flex items-center justify-center p-4 ${step === 1 ? 'min-h-[90vh] pt-4' : 'min-h-screen py-4'}`}>
         <div className="w-full max-w-md">
           {/* Header */}
-          <motion.div 
-            className={`text-center ${step === 1 ? 'mb-4' : 'mb-8'}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+          <div 
+            className={`text-center transition-all duration-500 ${step === 1 ? 'mb-4' : 'mb-8'}`}
           >
             <div className={`flex justify-center ${step === 1 ? 'mb-3' : 'mb-6'}`}>
-              <motion.img 
+              <img 
                 src="/logo.png" 
                 alt="PantyPost" 
-                className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer"
+                className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
                 style={{ width: '220px', height: '220px' }}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ 
-                  duration: 0.8, 
-                  delay: 0.2,
-                  ease: [0.16, 1, 0.3, 1]
-                }}
-                whileHover={{ 
-                  scale: 1.05,
-                  transition: { duration: 0.3 }
-                }}
-                whileTap={{ scale: 0.95 }}
                 onClick={() => router.push('/')}
               />
             </div>
@@ -257,51 +221,28 @@ export default function LoginPage() {
             </div>
 
             {/* Admin Mode Indicator */}
-            <AnimatePresence>
-              {showAdminMode && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="mt-4 text-xs text-[#ff950e] font-medium"
-                >
-                  🔐 Admin Mode Enabled
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            {showAdminMode && (
+              <div className="mt-4 text-xs text-[#ff950e] font-medium opacity-0 animate-pulse">
+                🔐 Admin Mode Enabled
+              </div>
+            )}
+          </div>
 
           {/* Form Card */}
-          <motion.div 
-            className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
+          <div 
+            className="bg-[#111] border border-gray-800 rounded-2xl p-6 shadow-xl transition-all duration-500"
           >
             {/* Error Message */}
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg"
-                >
-                  <p className="text-red-400 text-sm">{error}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {error && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg transition-all duration-300">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
 
             {/* Step Content */}
-            <AnimatePresence mode="wait">
+            <div className="transition-all duration-300">
               {step === 1 && (
-                <motion.div
-                  key="step1"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
+                <div className="transition-all duration-300">
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Username
@@ -320,23 +261,17 @@ export default function LoginPage() {
                   <button
                     onClick={handleUsernameSubmit}
                     disabled={!username.trim()}
-                    className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                    className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
                     style={{ color: !username.trim() ? undefined : '#000' }}
                   >
                     Continue
                     <ArrowRight className="w-4 h-4" />
                   </button>
-                </motion.div>
+                </div>
               )}
 
               {step === 2 && (
-                <motion.div
-                  key="step2"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
+                <div className="transition-all duration-300">
                   {/* Back Button */}
                   <button
                     onClick={goBack}
@@ -359,7 +294,7 @@ export default function LoginPage() {
                           <button
                             key={option.key}
                             onClick={() => setRole(option.key as typeof role)}
-                            className={`w-full p-3 rounded-lg border transition-all duration-200 text-left relative overflow-hidden group ${
+                            className={`w-full p-3 rounded-lg border transition-all duration-200 text-left relative overflow-hidden group hover:scale-[1.02] active:scale-[0.98] ${
                               isSelected 
                                 ? isAdminOption
                                   ? 'bg-purple-900/20 border-purple-500/70 text-white'
@@ -373,7 +308,7 @@ export default function LoginPage() {
                             <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12" />
                             
                             <div className="flex items-center gap-3 relative z-10">
-                              <div className={`p-2 rounded-lg ${
+                              <div className={`p-2 rounded-lg transition-colors ${
                                 isSelected 
                                   ? 'bg-[#ff950e] text-black' 
                                   : isAdminOption
@@ -396,7 +331,7 @@ export default function LoginPage() {
                   <button
                     onClick={handleLogin}
                     disabled={!role || isLoading || !!user}
-                    className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                    className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
                     style={{ color: (!role || isLoading || !!user) ? undefined : '#000' }}
                   >
                     {isLoading ? (
@@ -416,37 +351,27 @@ export default function LoginPage() {
                       </>
                     )}
                   </button>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
-          </motion.div>
+            </div>
+          </div>
 
           {/* Footer */}
-          <motion.div 
-            className="text-center mt-6"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
+          <div className="text-center mt-6 transition-all duration-500">
             <p className="text-base text-gray-500">
               Don't have an account?{' '}
               <Link href="/signup" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
                 Sign up
               </Link>
             </p>
-          </motion.div>
+          </div>
 
           {/* Trust Indicators */}
-          <motion.div 
-            className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-          >
+          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600 transition-all duration-500">
             <span>🔒 Secure</span>
             <span>🛡️ Encrypted</span>
             <span>✓ Verified</span>
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>
