@@ -1,4 +1,4 @@
-// src/app/browse/[id]/page.tsx - Clean Version with Larger Profile Photo
+// src/app/browse/[id]/page.tsx - Updated with Seller Star Rating
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
@@ -7,16 +7,18 @@ import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
+import { useReviews } from '@/context/ReviewContext'; // Import reviews context
 import Link from 'next/link';
 import {
   Clock, User, ArrowLeft, AlertTriangle, Crown, MessageCircle,
   DollarSign, ShoppingBag, Lock, ChevronLeft, ChevronRight, Gavel, Calendar,
   BarChart2, ArrowUp, History, AlertCircle, CheckCircle, X, Info, Award,
-  ShoppingCart, Shield, Truck, CreditCard, Gift, Package, Eye
+  ShoppingCart, Shield, Truck, CreditCard, Gift, Package, Eye, Star
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import TierBadge from '@/components/TierBadge';
+import StarRating from '@/components/StarRating'; // Import StarRating component
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 
 // FIXED: Add custom hook for interval with proper TypeScript typing and memory leak prevention
@@ -50,6 +52,7 @@ function useInterval(callback: () => void, delay: number | null): void {
 
 export default function ListingDetailPage() {
   const { listings, user, removeListing, addSellerNotification, isSubscribed, users, placeBid, orderHistory } = useListings();
+  const { getReviewsForSeller } = useReviews(); // Get reviews function
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id as string;
   const listing = listings.find((item) => item.id === listingId);
@@ -111,6 +114,18 @@ export default function ListingDetailPage() {
     if (!listing?.seller) return null;
     return getSellerTierMemoized(listing.seller, orderHistory);
   }, [listing?.seller, orderHistory]);
+
+  // Get seller reviews and calculate average rating
+  const sellerReviews = useMemo(() => {
+    if (!listing?.seller) return [];
+    return getReviewsForSeller(listing.seller);
+  }, [listing?.seller, getReviewsForSeller]);
+
+  const sellerAverageRating = useMemo(() => {
+    if (sellerReviews.length === 0) return null;
+    const totalRating = sellerReviews.reduce((sum, review) => sum + review.rating, 0);
+    return totalRating / sellerReviews.length;
+  }, [sellerReviews]);
   
   // Calculate total payable amount (bid + 10% markup) for display purposes
   const calculateTotalPayable = (bidPrice: number): number => {
@@ -970,7 +985,7 @@ export default function ListingDetailPage() {
               </div>
             )}
 
-            {/* Seller Profile - ENHANCED with Larger Profile Photo */}
+            {/* Enhanced Seller Profile with Star Rating */}
             {user?.role === 'buyer' && (
               <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
                 <div className="flex items-center gap-4">
@@ -1001,6 +1016,27 @@ export default function ListingDetailPage() {
                         <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
                       )}
                     </div>
+                    
+                    {/* Star Rating Display */}
+                    {sellerAverageRating !== null ? (
+                      <div className="flex items-center gap-2 mb-2">
+                        <StarRating rating={sellerAverageRating} size="sm" />
+                        <span className="text-yellow-400 text-sm font-medium">
+                          {sellerAverageRating.toFixed(1)}
+                        </span>
+                        <span className="text-gray-500 text-xs">
+                          ({sellerReviews.length} review{sellerReviews.length !== 1 ? 's' : ''})
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <Star className="w-4 h-4" />
+                          <span className="text-xs">No reviews yet</span>
+                        </div>
+                      </div>
+                    )}
+                    
                     <p className="text-gray-400 text-sm leading-relaxed">
                       {sellerProfile.bio || 'No bio provided.'}
                     </p>
