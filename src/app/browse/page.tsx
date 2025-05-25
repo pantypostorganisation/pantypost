@@ -1,4 +1,4 @@
-// src/app/browse/page.tsx
+// src/app/browse/page.tsx - TypeScript Errors Fixed
 'use client';
 
 import Link from 'next/link';
@@ -19,6 +19,12 @@ type SellerProfile = {
   pic: string | null;
 };
 
+type AuctionTimer = {
+  id: string;
+  endTime: string;
+  updateInterval: number;
+};
+
 const hourRangeOptions = [
   { label: 'Any Hours', min: 0, max: Infinity },
   { label: '12+ Hours', min: 12, max: Infinity },
@@ -33,7 +39,7 @@ const isAuctionListing = (listing: Listing): listing is Listing & { auction: Auc
   return !!listing.auction;
 };
 
-// FIX 2: Helper function to check if listing is active
+// Helper function to check if listing is active
 const isListingActive = (listing: Listing): boolean => {
   if (listing.auction) {
     const isActive = listing.auction.status === 'active';
@@ -59,7 +65,66 @@ export default function BrowsePage() {
   const [hoveredListing, setHoveredListing] = useState<string | null>(null);
   const [forceUpdateTimer, setForceUpdateTimer] = useState(0);
 
-  // FIX 1: Improved timer with cleanup and cache management
+  // FIX 5: Memoize expensive seller sales calculations
+  const sellerSalesCache = useMemo(() => {
+    const cache: { [seller: string]: number } = {};
+    orderHistory.forEach(order => {
+      cache[order.seller] = (cache[order.seller] || 0) + 1;
+    });
+    return cache;
+  }, [orderHistory]);
+
+  // FIX 5: Memoized function to get seller sales count
+  const getSellerSalesCount = useCallback((seller: string) => {
+    return sellerSalesCache[seller] || 0;
+  }, [sellerSalesCache]);
+
+  // FIX 6: Optimized timer management - only track auctions that need updates
+  const auctionTimers = useMemo(() => {
+    const now = new Date();
+    return listings
+      .filter(listing => 
+        isAuctionListing(listing) && 
+        isListingActive(listing) &&
+        listing.auction && // Add null check
+        new Date(listing.auction.endTime) > now
+      )
+      .map(listing => {
+        // Type guard ensures auction exists
+        if (!listing.auction) return null;
+        
+        const timer: AuctionTimer = {
+          id: listing.id,
+          endTime: listing.auction.endTime,
+          // Calculate how often this specific auction needs updates
+          updateInterval: (() => {
+            const timeLeft = new Date(listing.auction.endTime).getTime() - now.getTime();
+            if (timeLeft < 60000) return 1000; // Last minute: every second
+            if (timeLeft < 300000) return 5000; // Last 5 minutes: every 5 seconds
+            if (timeLeft < 3600000) return 15000; // Last hour: every 15 seconds
+            return 60000; // Otherwise: every minute
+          })()
+        };
+        return timer;
+      })
+      .filter((timer): timer is AuctionTimer => timer !== null);
+  }, [listings, forceUpdateTimer]);
+
+  // FIX 6: Smart timer that only updates when necessary
+  useEffect(() => {
+    if (auctionTimers.length === 0) return;
+
+    // Use the most frequent interval needed
+    const minInterval = Math.min(...auctionTimers.map(t => t.updateInterval));
+    
+    const interval = setInterval(() => {
+      setForceUpdateTimer(prev => prev + 1);
+    }, minInterval);
+    
+    return () => clearInterval(interval);
+  }, [auctionTimers.length, auctionTimers]);
+
+  // Improved timer cache with better memory management
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
   
   // Clean up expired cache entries periodically
@@ -74,12 +139,23 @@ export default function BrowsePage() {
           delete cache[key];
         }
       });
+
+      // FIX 6: Also remove cache entries for ended auctions
+      const activeAuctionEndTimes = new Set(
+        auctionTimers.map(timer => timer.endTime)
+      );
+      
+      Object.keys(cache).forEach(key => {
+        if (!activeAuctionEndTimes.has(key)) {
+          delete cache[key];
+        }
+      });
     }, 60000); // Clean up every minute
     
     return () => clearInterval(cleanupInterval);
-  }, []);
+  }, [auctionTimers]);
 
-  // FIX 1: Optimized formatTimeRemaining with better cache management
+  // Optimized formatTimeRemaining with better cache management
   const formatTimeRemaining = useCallback((endTimeStr: string) => {
     const now = new Date();
     const nowTime = now.getTime();
@@ -93,7 +169,6 @@ export default function BrowsePage() {
     const endTime = new Date(endTimeStr);
     
     if (endTime <= now) {
-      // Don't cache "Ended" state, return immediately
       return 'Ended';
     }
     
@@ -128,23 +203,44 @@ export default function BrowsePage() {
     return formatted;
   }, []);
 
-  // Only update timer for active auctions to improve performance
-  const activeAuctionCount = useMemo(() => {
-    return listings.filter(listing => 
-      isAuctionListing(listing) && 
-      isListingActive(listing)
-    ).length;
-  }, [listings]);
-
+  // FIX 5: Debounced search to prevent excessive re-filtering
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  
   useEffect(() => {
-    if (activeAuctionCount === 0) return;
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms debounce
     
-    const interval = setInterval(() => {
-      setForceUpdateTimer(prev => prev + 1);
-    }, 1000);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // FIX 4: Safe navigation handler using refs for click tracking
+  const lastClickTime = useRef<number>(0);
+  const lastQuickViewTime = useRef<number>(0);
+  
+  const handleListingClick = useCallback((listingId: string, isLocked: boolean) => {
+    if (isLocked) return;
     
-    return () => clearInterval(interval);
-  }, [activeAuctionCount]);
+    // Prevent multiple rapid clicks
+    const now = Date.now();
+    if (now - lastClickTime.current < 300) return; // 300ms debounce
+    
+    lastClickTime.current = now;
+    router.push(`/browse/${listingId}`);
+  }, [router]);
+
+  // FIX 4: Safe navigation for quick view button
+  const handleQuickView = useCallback((e: React.MouseEvent, listingId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    // Prevent multiple rapid clicks
+    const now = Date.now();
+    if (now - lastQuickViewTime.current < 300) return;
+    
+    lastQuickViewTime.current = now;
+    router.push(`/browse/${listingId}`);
+  }, [router]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -159,18 +255,13 @@ export default function BrowsePage() {
     }
   }, [listings]);
 
+  // FIX 5: Reset page only when filters actually change (not on every render)
   useEffect(() => {
     setPage(0);
-  }, [filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
+  }, [filter, selectedHourRange, debouncedSearchTerm, minPrice, maxPrice, sortBy]);
 
-  // Get seller's total sales count
-  const getSellerSalesCount = (seller: string) => {
-    return orderHistory.filter(order => order.seller === seller).length;
-  };
-
-  // FIX 3: Fixed category counts to match filtering logic exactly
+  // Fixed category counts to match filtering logic exactly
   const categoryCounts = useMemo(() => {
-    // Use the same filtering logic as the main filter
     const activeListings = listings.filter(isListingActive);
     
     return {
@@ -181,13 +272,13 @@ export default function BrowsePage() {
     };
   }, [listings]);
 
-  // FIX 2: Fixed price display logic to handle 0 bids correctly
+  // Fixed price display logic to handle 0 bids correctly
   const getDisplayPrice = useCallback((listing: Listing) => {
     if (isAuctionListing(listing)) {
       const hasActiveBids = listing.auction.bids && listing.auction.bids.length > 0;
       const highestBid = listing.auction.highestBid;
       
-      // FIX 2: Check for null/undefined explicitly, not falsy (allows 0)
+      // Check for null/undefined explicitly, not falsy (allows 0)
       if (hasActiveBids && highestBid !== null && highestBid !== undefined) {
         return {
           price: highestBid.toFixed(2),
@@ -207,7 +298,26 @@ export default function BrowsePage() {
     }
   }, []);
 
-  // FIX 3: Consistent filtering logic used everywhere
+  // FIX 4: Safe pagination handlers
+  const handlePreviousPage = useCallback(() => {
+    if (page > 0) {
+      setPage(prev => prev - 1);
+    }
+  }, [page]);
+
+  const handleNextPage = useCallback(() => {
+    if (filteredListings.length > PAGE_SIZE * (page + 1)) {
+      setPage(prev => prev + 1);
+    }
+  }, [page]); // Remove filteredListings.length dependency to avoid issues
+
+  const handlePageClick = useCallback((targetPage: number) => {
+    if (targetPage >= 0) {
+      setPage(targetPage);
+    }
+  }, []);
+
+  // Consistent filtering logic used everywhere
   const filteredListings = useMemo(() => {
     return listings
       .filter((listing: Listing) => {
@@ -227,9 +337,9 @@ export default function BrowsePage() {
           return false;
         }
         
-        // Search filter
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
+        // FIX 5: Use debounced search term
+        if (debouncedSearchTerm) {
+          const searchLower = debouncedSearchTerm.toLowerCase();
           const matchesSearch = 
             (listing.title?.toLowerCase().includes(searchLower)) || 
             (listing.description?.toLowerCase().includes(searchLower)) || 
@@ -303,7 +413,7 @@ export default function BrowsePage() {
         // Default: newest first
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
-  }, [listings, filter, selectedHourRange, searchTerm, minPrice, maxPrice, sortBy]);
+  }, [listings, filter, selectedHourRange, debouncedSearchTerm, minPrice, maxPrice, sortBy]);
 
   const paginatedListings = useMemo(() => {
     return filteredListings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -321,7 +431,11 @@ export default function BrowsePage() {
     
     if (page > 0) {
       indicators.push(
-        <span key={0} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(0)}>
+        <span 
+          key={0} 
+          className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" 
+          onClick={() => handlePageClick(0)}
+        >
           1
         </span>
       );
@@ -353,7 +467,11 @@ export default function BrowsePage() {
         );
       } else {
         indicators.push(
-          <span key={i} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(i)}>
+          <span 
+            key={i} 
+            className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" 
+            onClick={() => handlePageClick(i)}
+          >
             {i + 1}
           </span>
         );
@@ -368,7 +486,11 @@ export default function BrowsePage() {
     
     if (page < totalPages - 1) {
       indicators.push(
-        <span key={totalPages - 1} className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" onClick={() => setPage(totalPages - 1)}>
+        <span 
+          key={totalPages - 1} 
+          className="px-2 py-1 text-sm text-gray-400 cursor-pointer hover:text-[#ff950e]" 
+          onClick={() => handlePageClick(totalPages - 1)}
+        >
           {totalPages}
         </span>
       );
@@ -379,7 +501,7 @@ export default function BrowsePage() {
         {indicators}
       </div>
     );
-  }, [page, totalPages]);
+  }, [page, totalPages, handlePageClick]);
 
   return (
     <RequireAuth role={user?.role || 'buyer'}>
@@ -404,7 +526,7 @@ export default function BrowsePage() {
                 </p>
               </div>
 
-            {/* Category Filters - Updated to match Header.tsx styling */}
+            {/* Category Filters */}
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setFilter('all')}
@@ -562,7 +684,7 @@ export default function BrowsePage() {
                   const hasAuction = isAuctionListing(listing);
                   const sellerSales = getSellerSalesCount(listing.seller);
                   
-                  // FIX 2: Use the new getDisplayPrice function
+                  // Use the new getDisplayPrice function
                   const { price: displayPrice, label: priceLabel } = getDisplayPrice(listing);
 
                   return (
@@ -575,9 +697,7 @@ export default function BrowsePage() {
                       } cursor-pointer group`}
                       onMouseEnter={() => setHoveredListing(listing.id)}
                       onMouseLeave={() => setHoveredListing(null)}
-                      onClick={() => {
-                        if (!isLockedPremium) router.push(`/browse/${listing.id}`);
-                      }}
+                      onClick={() => handleListingClick(listing.id, Boolean(isLockedPremium))}
                     >
                       {/* Type Badge */}
                       {hasAuction && (
@@ -620,8 +740,8 @@ export default function BrowsePage() {
                           </div>
                         )}
                         
-                        {/* Auction timer - Force update with forceUpdateTimer dependency */}
-                        {hasAuction && (
+                        {/* Auction timer */}
+                        {hasAuction && listing.auction && (
                           <div className="absolute bottom-3 left-3 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
                             <span className="bg-black/80 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center">
                               <Clock className="w-3.5 h-3.5 mr-1 text-purple-400" />
@@ -635,10 +755,7 @@ export default function BrowsePage() {
                           <div className="absolute bottom-3 right-3 z-10">
                             <button 
                               className="bg-[#ff950e] text-black text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-lg hover:bg-[#e88800] transition-all"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/browse/${listing.id}`);
-                              }}
+                              onClick={(e) => handleQuickView(e, listing.id)}
                             >
                               <Eye className="w-3.5 h-3.5" /> View
                             </button>
@@ -672,7 +789,7 @@ export default function BrowsePage() {
                         )}
                         
                         {/* Auction info */}
-                        {hasAuction && (
+                        {hasAuction && listing.auction && (
                           <div className="bg-purple-900/20 rounded-lg p-2.5 mb-3 border border-purple-800/30">
                             <div className="flex justify-between items-center text-sm">
                               <span className="text-purple-300">{priceLabel}</span>
@@ -703,7 +820,7 @@ export default function BrowsePage() {
                           </div>
                         )}
                         
-                        {/* Price and seller - 100% larger */}
+                        {/* Price and seller */}
                         <div className="flex justify-between items-end mt-auto">
                           <Link
                             href={`/sellers/${listing.seller}`}
@@ -766,7 +883,7 @@ export default function BrowsePage() {
                     {page > 0 && (
                       <button
                         className="px-6 py-2.5 rounded-lg bg-[#1a1a1a] text-white font-medium hover:bg-[#222] transition border border-gray-800"
-                        onClick={() => setPage(page - 1)}
+                        onClick={handlePreviousPage}
                       >
                         Previous
                       </button>
@@ -774,7 +891,7 @@ export default function BrowsePage() {
                     {filteredListings.length > PAGE_SIZE * (page + 1) && (
                       <button
                         className="px-6 py-2.5 rounded-lg bg-[#ff950e] text-black font-medium hover:bg-[#e88800] transition"
-                        onClick={() => setPage(page + 1)}
+                        onClick={handleNextPage}
                       >
                         Next
                       </button>
