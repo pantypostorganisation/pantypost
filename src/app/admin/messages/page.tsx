@@ -90,17 +90,13 @@ export default function AdminMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
-  const isMountedRef = useRef<boolean>(true); // Track if component is mounted
-  
+
   // Check if user is admin - do this after all hooks are defined
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
   const username = user?.username || '';
 
-  // 🔧 FIXED: Memoized loadViews function to prevent recreation on every render
+  // Load views data with error handling
   const loadViews = useCallback(() => {
-    // Only update state if component is still mounted
-    if (!isMountedRef.current) return;
-    
     try {
       if (typeof window !== 'undefined') {
         const data = localStorage.getItem('listing_views');
@@ -109,35 +105,27 @@ export default function AdminMessagesPage() {
       }
     } catch (error) {
       console.error('Failed to load views data:', error);
-      // Set empty object on error to prevent crashes
       setViewsData({});
     }
-  }, []); // No dependencies since it doesn't depend on any props or state
+  }, []);
 
-  // 🔧 FIXED: Load views and handle localStorage events with proper cleanup
+  // Load views and handle localStorage events
   useEffect(() => {
-    // Set mounted flag
-    isMountedRef.current = true;
-    
-    // Initial load
     loadViews();
     
-    // Add event listeners
-    window.addEventListener('storage', loadViews);
-    window.addEventListener('focus', loadViews);
+    const handleStorageChange = () => loadViews();
     
-    // Cleanup function
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleStorageChange);
+    
     return () => {
-      isMountedRef.current = false;
-      window.removeEventListener('storage', loadViews);
-      window.removeEventListener('focus', loadViews);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleStorageChange);
     };
-  }, [loadViews]); // Now depends on the memoized loadViews function
+  }, [loadViews]);
 
-  // 🔧 FIXED: Load recent emojis and read threads with proper error handling
+  // Load recent emojis and read threads
   useEffect(() => {
-    if (!isMountedRef.current) return;
-    
     try {
       // Load recent emojis
       const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
@@ -162,11 +150,11 @@ export default function AdminMessagesPage() {
     } catch (error) {
       console.error('Failed to load localStorage data:', error);
     }
-  }, [user]); // Only depend on user, not on changing state
+  }, [user]);
 
-  // 🔧 FIXED: Save recent emojis with error handling
+  // Save recent emojis
   useEffect(() => {
-    if (!isMountedRef.current || recentEmojis.length === 0) return;
+    if (recentEmojis.length === 0) return;
     
     try {
       localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
@@ -175,7 +163,7 @@ export default function AdminMessagesPage() {
     }
   }, [recentEmojis]);
 
-  // 🔧 FIXED: Handle clicks outside emoji picker with proper cleanup
+  // Handle clicks outside emoji picker
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -187,7 +175,7 @@ export default function AdminMessagesPage() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []); // No dependencies needed
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -196,14 +184,7 @@ export default function AdminMessagesPage() {
     }
   }, [activeThread, messages]);
 
-  // 🔧 FIXED: Cleanup effect for component unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  // Prepare threads and messages using useMemo with proper dependencies
+  // Prepare threads and messages
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
     const threads: { [user: string]: Message[] } = {};
     const unreadCounts: { [user: string]: number } = {};
@@ -264,7 +245,7 @@ export default function AdminMessagesPage() {
     }
 
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
-  }, [messages, username, activeThread, users]); // Removed unstable dependencies
+  }, [messages, username, activeThread, users]);
 
   // Calculate UI unread count indicators for the sidebar threads
   const uiUnreadCounts = useMemo(() => {
@@ -277,9 +258,8 @@ export default function AdminMessagesPage() {
     return counts;
   }, [threads, unreadCounts]);
 
-  // 🔧 FIXED: Memoized callbacks to prevent recreation
   const markAsRead = useCallback(() => {
-    if (!activeThread || !user || !isMountedRef.current) return;
+    if (!activeThread || !user) return;
     
     const hasUnreadMessages = threads[activeThread]?.some(
       msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
@@ -332,17 +312,13 @@ export default function AdminMessagesPage() {
     const reader = new FileReader();
     
     reader.onloadend = () => {
-      if (isMountedRef.current) {
-        setSelectedImage(reader.result as string);
-        setIsImageLoading(false);
-      }
+      setSelectedImage(reader.result as string);
+      setIsImageLoading(false);
     };
     
     reader.onerror = () => {
-      if (isMountedRef.current) {
-        setImageError("Failed to read the image file. Please try again.");
-        setIsImageLoading(false);
-      }
+      setImageError("Failed to read the image file. Please try again.");
+      setIsImageLoading(false);
     };
     
     reader.readAsDataURL(file);
@@ -353,8 +329,6 @@ export default function AdminMessagesPage() {
   }, []);
 
   const handleEmojiClick = useCallback((emoji: string) => {
-    if (!isMountedRef.current) return;
-    
     setContent(prev => prev + emoji);
     
     setRecentEmojis(prev => {
@@ -363,14 +337,14 @@ export default function AdminMessagesPage() {
     });
     
     setTimeout(() => {
-      if (inputRef.current && isMountedRef.current) {
+      if (inputRef.current) {
         inputRef.current.focus();
       }
     }, 0);
   }, []);
 
   const handleSend = useCallback(() => {
-    if (!activeThread || (!content.trim() && !selectedImage) || !isMountedRef.current) {
+    if (!activeThread || (!content.trim() && !selectedImage)) {
       alert('Please enter a message.');
       return;
     }
@@ -389,7 +363,7 @@ export default function AdminMessagesPage() {
     setShowEmojiPicker(false);
     
     setTimeout(() => {
-      if (inputRef.current && isMountedRef.current) {
+      if (inputRef.current) {
         inputRef.current.focus();
       }
     }, 0);
@@ -580,7 +554,6 @@ export default function AdminMessagesPage() {
                 </div>
               ) : (
                 filteredAndSortedThreads.map((userKey) => {
-                  const thread = threads[userKey];
                   const lastMessage = lastMessages[userKey];
                   const isActive = activeThread === userKey;
                   const userProfile = userProfiles[userKey];
