@@ -1,4 +1,4 @@
-// File: src/context/MessageContext.tsx
+// src/context/MessageContext.tsx
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';

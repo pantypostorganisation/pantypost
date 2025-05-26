@@ -1,3 +1,4 @@
+// src/app/admin/messages.tsx
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -79,6 +80,7 @@ export default function AdminMessagesPage() {
   const [imageError, setImageError] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [viewsData, setViewsData] = useState<Record<string, number>>({});
+  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -136,7 +138,7 @@ export default function AdminMessagesPage() {
         }
       }
       
-      // Load previously read threads
+      // Load previously read threads from localStorage
       if (user) {
         const readThreadsKey = `panty_read_threads_${user.username}`;
         const readThreads = localStorage.getItem(readThreadsKey);
@@ -144,6 +146,7 @@ export default function AdminMessagesPage() {
           const threads = JSON.parse(readThreads);
           if (Array.isArray(threads)) {
             readThreadsRef.current = new Set(threads);
+            setMessageUpdate(prev => prev + 1); // Force UI update
           }
         }
       }
@@ -184,7 +187,7 @@ export default function AdminMessagesPage() {
     }
   }, [activeThread, messages]);
 
-  // Prepare threads and messages
+  // Prepare threads and messages - MATCHING BUYERS PAGE LOGIC
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
     const threads: { [user: string]: Message[] } = {};
     const unreadCounts: { [user: string]: number } = {};
@@ -194,99 +197,133 @@ export default function AdminMessagesPage() {
     
     let activeMessages: Message[] = [];
 
-    // Process messages
-    Object.values(messages).flat().forEach((msg: Message) => {
-      if (msg.sender === username || msg.receiver === username) {
-        const otherParty = msg.sender === username ? msg.receiver : msg.sender;
-        if (!threads[otherParty]) threads[otherParty] = [];
-        threads[otherParty].push(msg);
-      }
-    });
+    if (user) {
+      // Get all messages for the user
+      Object.values(messages).forEach((msgs) => {
+        msgs.forEach((msg) => {
+          if (msg.sender === user.username || msg.receiver === user.username) {
+            const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+            if (!threads[otherParty]) threads[otherParty] = [];
+            threads[otherParty].push(msg);
+          }
+        });
+      });
 
-    // Sort and process threads
-    Object.entries(threads).forEach(([userKey, msgs]) => {
-      msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      lastMessages[userKey] = msgs[msgs.length - 1];
+      // Sort messages in each thread by date
+      Object.values(threads).forEach((thread) =>
+        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      );
       
-      // Get user profile safely
-      try {
-        const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
-        const userInfo = users?.[userKey];
-        const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
-        const role = userInfo?.role || 'unknown';
+      // Get last message and unread count for each thread
+      Object.entries(threads).forEach(([userKey, msgs]) => {
+        lastMessages[userKey] = msgs[msgs.length - 1];
         
-        userProfiles[userKey] = { 
-          pic: storedPic, 
-          verified: isVerified,
-          role: role
-        };
-      } catch (error) {
-        console.error(`Error processing user profile for ${userKey}:`, error);
-        userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
-      }
-    });
-
-    // Calculate unread counts
-    Object.entries(threads).forEach(([userKey, msgs]) => {
-      const threadUnreadCount = msgs.filter(
-        (msg) => !msg.read && msg.receiver === username
-      ).length;
-      
-      unreadCounts[userKey] = threadUnreadCount;
-      
-      // Only add to total if not in readThreadsRef
-      if (!readThreadsRef.current.has(userKey) && threadUnreadCount > 0) {
-        totalUnreadCount += 1;
-      }
-    });
+        // Get user profile picture and verification status
+        try {
+          const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
+          const userInfo = users?.[userKey];
+          const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
+          const role = userInfo?.role || 'unknown';
+          
+          userProfiles[userKey] = { 
+            pic: storedPic, 
+            verified: isVerified,
+            role: role
+          };
+        } catch (error) {
+          console.error(`Error processing user profile for ${userKey}:`, error);
+          userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
+        }
+        
+        // Count only messages FROM other user TO admin as unread
+        const threadUnreadCount = msgs.filter(
+          (msg) => !msg.read && msg.sender === userKey && msg.receiver === user?.username
+        ).length;
+        
+        unreadCounts[userKey] = threadUnreadCount;
+        
+        // Only add to total if not in readThreadsRef
+        if (!readThreadsRef.current.has(userKey) && threadUnreadCount > 0) {
+          totalUnreadCount += 1; // Count threads, not messages
+        }
+      });
+    }
 
     if (activeThread) {
       activeMessages = threads[activeThread] || [];
     }
 
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
-  }, [messages, username, activeThread, users]);
+  }, [messages, username, activeThread, users, messageUpdate]);
 
-  // Calculate UI unread count indicators for the sidebar threads
+  // Calculate UI unread count indicators for the sidebar threads - MATCHING BUYERS PAGE
   const uiUnreadCounts = useMemo(() => {
     const counts: { [user: string]: number } = {};
     if (threads) {
       Object.keys(threads).forEach(userKey => {
+        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
         counts[userKey] = readThreadsRef.current.has(userKey) ? 0 : unreadCounts[userKey];
       });
     }
     return counts;
-  }, [threads, unreadCounts]);
+  }, [threads, unreadCounts, messageUpdate]);
 
-  const markAsRead = useCallback(() => {
-    if (!activeThread || !user) return;
-    
-    const hasUnreadMessages = threads[activeThread]?.some(
-      msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
-    );
-    
-    if (hasUnreadMessages) {
-      markMessagesAsRead(activeThread, user.username);
+  // FIXED: Mark messages as read when thread is selected and viewed - MATCHING BUYERS PAGE
+  useEffect(() => {
+    if (activeThread && user) {
+      // Check if there are unread messages in this thread
+      const hasUnreadMessages = threads[activeThread]?.some(
+        msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+      );
       
-      if (!readThreadsRef.current.has(activeThread)) {
-        readThreadsRef.current.add(activeThread);
+      if (hasUnreadMessages) {
+        // Mark messages as read in the context immediately
+        markMessagesAsRead(user.username, activeThread);
         
-        try {
+        // Add to readThreadsRef to update UI
+        if (!readThreadsRef.current.has(activeThread)) {
+          readThreadsRef.current.add(activeThread);
+          
+          // Save to localStorage immediately when thread is selected
           if (typeof window !== 'undefined') {
             const readThreadsKey = `panty_read_threads_${user.username}`;
             localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
             
+            // Dispatch event to notify header
             const event = new CustomEvent('readThreadsUpdated', { 
               detail: { threads: Array.from(readThreadsRef.current), username: user.username }
             });
             window.dispatchEvent(event);
           }
-        } catch (error) {
-          console.error('Failed to save read threads:', error);
+          
+          setMessageUpdate(prev => prev + 1);
         }
+      }
+      
+      // Create a custom event to notify other components about thread selection
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('threadSelected', { 
+          detail: { thread: activeThread, username: user.username }
+        });
+        window.dispatchEvent(event);
       }
     }
   }, [activeThread, user, threads, markMessagesAsRead]);
+
+  // Save read threads to localStorage - MATCHING BUYERS PAGE
+  useEffect(() => {
+    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
+      const readThreadsKey = `panty_read_threads_${user.username}`;
+      const threadsArray = Array.from(readThreadsRef.current);
+      localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
+      
+      // Dispatch a custom event to notify other components about the update
+      const event = new CustomEvent('readThreadsUpdated', { 
+        detail: { threads: threadsArray, username: user.username }
+      });
+      window.dispatchEvent(event);
+    }
+  }, [messageUpdate, user]);
 
   // Handle image file selection with validation and error handling
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -586,10 +623,10 @@ export default function AdminMessagesPage() {
                           </div>
                         </div>
                         
-                        {/* Unread indicator */}
-                        {uiUnreadCounts[userKey] > 0 && (
+                        {/* Unread indicator - show actual unread count from messages, not UI filtered count */}
+                        {unreadCounts[userKey] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {uiUnreadCounts[userKey]}
+                            {unreadCounts[userKey]}
                           </div>
                         )}
                       </div>
@@ -680,10 +717,7 @@ export default function AdminMessagesPage() {
                 </div>
                 
                 {/* Messages */}
-                <div 
-                  className="flex-1 overflow-y-auto p-4 bg-[#121212]"
-                  onClick={() => markAsRead()}
-                >
+                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
                   <div className="max-w-3xl mx-auto space-y-4">
                     {activeMessages.map((msg, index) => {
                       const isFromMe = msg.sender === username;
@@ -864,10 +898,6 @@ export default function AdminMessagesPage() {
                           className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
                           rows={1}
                           maxLength={250}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            markAsRead();
-                          }}
                         />
                         
                         {/* Fixed emoji button position */}
@@ -875,7 +905,6 @@ export default function AdminMessagesPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowEmojiPicker(!showEmojiPicker);
-                            markAsRead();
                           }}
                           className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
                             showEmojiPicker 
@@ -904,7 +933,6 @@ export default function AdminMessagesPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               triggerFileInput();
-                              markAsRead();
                             }}
                             disabled={isImageLoading}
                             className={`w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md ${
@@ -923,7 +951,6 @@ export default function AdminMessagesPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowEmojiPicker(!showEmojiPicker);
-                              markAsRead();
                             }}
                             className={`md:hidden w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md text-black text-2xl ${
                               showEmojiPicker 
@@ -951,7 +978,6 @@ export default function AdminMessagesPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             handleSend();
-                            markAsRead();
                           }}
                           disabled={(!content.trim() && !selectedImage) || isImageLoading}
                           className={`flex items-center justify-center px-5 py-2 rounded-full ${
