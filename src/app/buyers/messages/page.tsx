@@ -9,25 +9,23 @@ import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import VirtualMessageList from '@/components/messaging/VirtualMessageList';
-import MessageInput from '@/components/messaging/MessageInput';
-import { 
-  Search, 
-  CheckCheck, 
+import {
+  Search,
+  CheckCheck,
   ArrowRightCircle,
   MessageCircle,
-  X, 
-  BadgeCheck, 
-  Smile, 
-  AlertTriangle, 
-  ShieldAlert, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  Edit3, 
-  Sparkles, 
-  ShoppingBag, 
-  Filter, 
+  X,
+  BadgeCheck,
+  Smile,
+  AlertTriangle,
+  ShieldAlert,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  Sparkles,
+  ShoppingBag,
+  Filter,
   BellRing
 } from 'lucide-react';
 
@@ -124,8 +122,6 @@ export default function BuyerMessagesPage() {
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-  const [_, forceRerender] = useState(0);
-  const markedThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
@@ -195,11 +191,6 @@ export default function BuyerMessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, messages]);
-
-  // Forces rerender when requests or wallet updates
-  useEffect(() => {
-    forceRerender((v) => v + 1);
-  }, [requests, wallet]);
 
   const username = user?.username || '';
 
@@ -282,22 +273,35 @@ export default function BuyerMessagesPage() {
     });
   }, [threads, lastMessages, searchQuery]);
 
-  // Set up UI tracking for active thread
+  // FIXED: Mark messages as read when thread is selected and viewed
   useEffect(() => {
     if (activeThread && user) {
-      // Add to readThreadsRef if there are unread messages
-      if (unreadCounts[activeThread] > 0) {
+      // Check if there are unread messages in this thread
+      const hasUnreadMessages = threads[activeThread]?.some(
+        msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+      );
+      
+      if (hasUnreadMessages) {
+        // Mark messages as read in the context immediately
+        markMessagesAsRead(user.username, activeThread);
+        
+        // Add to readThreadsRef to update UI
         if (!readThreadsRef.current.has(activeThread)) {
-          // Only add to readThreadsRef if there are actual unread messages
           readThreadsRef.current.add(activeThread);
           
           // Save to localStorage immediately when thread is selected
           if (typeof window !== 'undefined') {
             const readThreadsKey = `panty_read_threads_${user.username}`;
             localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+            
+            // Dispatch event to notify header
+            const event = new CustomEvent('readThreadsUpdated', { 
+              detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+            });
+            window.dispatchEvent(event);
           }
           
-          setMessageUpdate(prev => prev + 1); // Force UI update only once
+          setMessageUpdate(prev => prev + 1);
         }
       }
       
@@ -309,7 +313,19 @@ export default function BuyerMessagesPage() {
         window.dispatchEvent(event);
       }
     }
-  }, [activeThread, user, unreadCounts]);
+  }, [activeThread, user, threads, markMessagesAsRead]);
+
+  // Calculate UI unread count indicators for the sidebar threads
+  const uiUnreadCounts = useMemo(() => {
+    const counts: { [seller: string]: number } = {};
+    if (threads) {
+      Object.keys(threads).forEach(seller => {
+        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
+        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
+      });
+    }
+    return counts;
+  }, [threads, unreadCounts, messageUpdate]);
 
   // Save read threads to localStorage
   useEffect(() => {
@@ -355,52 +371,6 @@ export default function BuyerMessagesPage() {
       ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
       : [];
   }, [activeThread, threads, buyerRequests]);
-
-  // Calculate UI unread count indicators for the sidebar threads
-  const uiUnreadCounts = useMemo(() => {
-    const counts: { [seller: string]: number } = {};
-    if (threads) {
-      Object.keys(threads).forEach(seller => {
-        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
-        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
-      });
-    }
-    return counts;
-  }, [threads, unreadCounts, messageUpdate]);
-
-  // Mark messages as read when explicitly viewed by user
-  const markAsRead = useCallback(() => {
-    if (!activeThread || !user) return;
-    
-    // Remember that this thread has been viewed
-    const hasUnreadMessages = threads[activeThread]?.some(
-      msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
-    );
-    
-    if (hasUnreadMessages) {
-      // Mark messages as read in the context
-      markMessagesAsRead(activeThread, user.username);
-      
-      // Make sure we update readThreadsRef for UI consistency
-      if (!readThreadsRef.current.has(activeThread)) {
-        readThreadsRef.current.add(activeThread);
-        
-        // Save to localStorage immediately when messages are read
-        if (typeof window !== 'undefined') {
-          const readThreadsKey = `panty_read_threads_${user.username}`;
-          localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
-          
-          // Dispatch custom event to notify other components
-          const event = new CustomEvent('readThreadsUpdated', { 
-            detail: { threads: Array.from(readThreadsRef.current), username: user.username }
-          });
-          window.dispatchEvent(event);
-        }
-        
-        setMessageUpdate(prev => prev + 1);
-      }
-    }
-  }, [activeThread, user, threads, markMessagesAsRead]);
 
   // Image handling with validation and error handling
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -616,7 +586,6 @@ export default function BuyerMessagesPage() {
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
-    forceRerender((v) => v + 1);
   }, [
     user, 
     activeThread, 
@@ -631,14 +600,12 @@ export default function BuyerMessagesPage() {
   const handleAccept = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
-      forceRerender((v) => v + 1);
     }
   }, [respondToRequest]);
   
   const handleDecline = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'rejected');
-      forceRerender((v) => v + 1);
     }
   }, [respondToRequest]);
 
@@ -708,7 +675,6 @@ export default function BuyerMessagesPage() {
 
     setShowPayModal(false);
     setPayingRequest(null);
-    forceRerender((v) => v + 1);
   }, [user, payingRequest, wallet, updateWallet, setRequests]);
 
   const handleCancelPay = useCallback(() => {
@@ -967,10 +933,10 @@ export default function BuyerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* Unread indicator - only show when there are unread messages */}
-                        {uiUnreadCounts[seller] > 0 && (
+                        {/* Unread indicator - show actual unread count from messages, not UI filtered count */}
+                        {unreadCounts[seller] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {uiUnreadCounts[seller]}
+                            {unreadCounts[seller]}
                           </div>
                         )}
                       </div>
@@ -1054,11 +1020,8 @@ export default function BuyerMessagesPage() {
                   </div>
                 </div>
                 
-                {/* Messages - This div now has onClick to mark messages as read */}
-                <div 
-                  className="flex-1 overflow-y-auto p-4 bg-[#121212]"
-                  onClick={() => markAsRead()}
-                >
+                {/* Messages - This div has proper scrolling */}
+                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
                   <div className="max-w-3xl mx-auto space-y-4">
                     {threadMessages.map((msg, index) => {
                       const isFromMe = msg.sender === user?.username;
@@ -1461,18 +1424,13 @@ export default function BuyerMessagesPage() {
                           className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
                           rows={1}
                           maxLength={250}
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent triggering message container's onClick
-                            markAsRead(); // But still mark messages as read when focusing the input
-                          }}
                         />
                         
                         {/* Fixed emoji button position */}
                         <button
                           onClick={(e) => {
-                            e.stopPropagation(); // Prevent triggering message container's onClick
+                            e.stopPropagation();
                             setShowEmojiPicker(!showEmojiPicker);
-                            markAsRead(); // Mark messages as read when interacting with emoji button
                           }}
                           className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
                             showEmojiPicker 
@@ -1504,7 +1462,6 @@ export default function BuyerMessagesPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowTipModal(true);
-                              markAsRead();
                             }}
                             title="Send Tip"
                           />
@@ -1520,7 +1477,6 @@ export default function BuyerMessagesPage() {
                               if (showCustomRequestForm || isImageLoading) return;
                               e.stopPropagation();
                               triggerFileInput();
-                              markAsRead();
                             }}
                             title="Attach Image"
                           />
@@ -1530,7 +1486,6 @@ export default function BuyerMessagesPage() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowEmojiPicker(!showEmojiPicker);
-                              markAsRead();
                             }}
                             className="md:hidden border-none p-0 bg-transparent focus:outline-none"
                             title="Emoji"
@@ -1553,7 +1508,6 @@ export default function BuyerMessagesPage() {
                                   fileInputRef.current.value = '';
                                 }
                               }
-                              markAsRead();
                             }}
                             title="Custom Request"
                           />
@@ -1575,7 +1529,6 @@ export default function BuyerMessagesPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             handleReply();
-                            markAsRead();
                           }}
                           className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
