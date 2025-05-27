@@ -174,6 +174,34 @@ export default function Header() {
     }));
   }, [user, sellerNotifications]);
 
+  // Function to delete all cleared notifications permanently
+  const deleteAllClearedNotifications = useCallback(() => {
+    if (!user || user.role !== 'seller') return;
+    
+    const username = user.username;
+    // Get fresh notifications directly from sellerNotifications
+    const userNotifications = sellerNotifications || [];
+    
+    // Get all cleared notifications
+    const clearedNotifsToDelete = userNotifications.filter(notification => notification.cleared);
+    
+    if (clearedNotifsToDelete.length === 0) return;
+    
+    // Keep only active notifications (remove all cleared ones)
+    const updatedNotifications = userNotifications.filter(notification => !notification.cleared);
+    
+    // Update the notification store directly
+    const notificationStore = JSON.parse(localStorage.getItem('seller_notifications_store') || '{}');
+    notificationStore[username] = updatedNotifications;
+    localStorage.setItem('seller_notifications_store', JSON.stringify(notificationStore));
+    
+    // Force a re-render by dispatching a storage event
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'seller_notifications_store',
+      newValue: JSON.stringify(notificationStore)
+    }));
+  }, [user, sellerNotifications]);
+
   // Load read threads from localStorage when component mounts
   useEffect(() => {
     if (!mounted || !user || typeof window === 'undefined') return;
@@ -633,12 +661,21 @@ export default function Header() {
                   <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
                     <div className="flex justify-between items-center">
                       <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
-                      {activeNotifications.length > 0 && (
+                      {/* Show "Clear All" button on Active tab, "Delete All" button on Cleared tab */}
+                      {activeNotifTab === 'active' && activeNotifications.length > 0 && (
                         <button
                           onClick={clearAllNotifications}
                           className="text-xs text-white hover:text-[#ff950e] font-medium transition-colors px-2 py-1 rounded bg-black/20 hover:bg-[#ff950e]/10 border border-white/20 hover:border-[#ff950e]/30"
                         >
                           Clear All
+                        </button>
+                      )}
+                      {activeNotifTab === 'cleared' && clearedNotifications.length > 0 && (
+                        <button
+                          onClick={deleteAllClearedNotifications}
+                          className="text-xs text-white hover:text-red-400 font-medium transition-colors px-2 py-1 rounded bg-red-900/20 hover:bg-red-900/30 border border-red-500/30 hover:border-red-500/50"
+                        >
+                          Delete All
                         </button>
                       )}
                     </div>
