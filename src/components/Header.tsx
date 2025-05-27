@@ -35,7 +35,7 @@ export default function Header() {
     return null;
   }
 
-  const { user, logout, sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions } = useListings();
+  const { user, logout, sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions, users } = useListings();
   const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory, wallet } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
@@ -45,7 +45,7 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceKey, setBalanceKey] = useState(0);
-  const [messageUpdateTrigger, setMessageUpdateTrigger] = useState(0); // Force message updates
+  const [messageCounterUpdate, setMessageCounterUpdate] = useState(0); // Force message counter updates
   
   // Store readThreads in a ref to track which conversations have been viewed
   const readThreadsRef = useRef<Set<string>>(new Set());
@@ -187,7 +187,7 @@ export default function Header() {
         if (Array.isArray(parsedThreads)) {
           readThreadsRef.current = new Set(parsedThreads);
           // Force message count update when read threads are loaded
-          setMessageUpdateTrigger(prev => prev + 1);
+          setMessageCounterUpdate(prev => prev + 1);
         }
       }
     } catch (e) {
@@ -195,31 +195,47 @@ export default function Header() {
     }
   }, [mounted, user]);
 
-  // FIXED: Calculate total unread messages correctly
+  // FIXED: Calculate total unread messages correctly with proper thread tracking
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
     
-    let totalUnreadMessages = 0;
+    // Build threads structure similar to message pages
+    const threads: { [otherUser: string]: any[] } = {};
     
-    // Go through all messages and count unread ones
+    // Organize messages into threads
     Object.values(messages)
       .flat()
-      .forEach(msg => {
-        // Only count messages TO the current user (not from them)
-        const isMessageToUser = msg.receiver === user.username;
-        const isMessageFromOtherUser = msg.sender !== user.username;
-        const isUnread = !msg.read;
-        
-        // Count all unread messages - remove the readThreadsRef filter for now
-        // We'll handle the "read" state when user actually opens the thread
-        if (isMessageToUser && isMessageFromOtherUser && isUnread) {
-          totalUnreadMessages++;
+      .forEach((msg: any) => {
+        if (msg.sender === user.username || msg.receiver === user.username) {
+          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+          if (!threads[otherParty]) threads[otherParty] = [];
+          threads[otherParty].push(msg);
         }
       });
+
+    // Sort messages in each thread by date
+    Object.values(threads).forEach((thread) =>
+      thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    );
+
+    let totalUnreadCount = 0;
+
+    // Count messages (not threads) with proper read status checking
+    Object.entries(threads).forEach(([otherUser, msgs]) => {
+      // Count only messages FROM other user TO current user as unread
+      const threadUnreadCount = msgs.filter(
+        (msg) => !msg.read && msg.sender === otherUser && msg.receiver === user.username
+      ).length;
+      
+      // FIXED: Don't use readThreadsRef to filter here - only use actual message read status
+      // The readThreadsRef should only be used in the message pages for UI display
+      if (threadUnreadCount > 0) {
+        totalUnreadCount += threadUnreadCount; // Count actual unread messages
+      }
+    });
     
-    // Return the total count of unread messages
-    return totalUnreadMessages;
-  }, [user, messages, messageUpdateTrigger]); // Include messageUpdateTrigger as dependency
+    return totalUnreadCount;
+  }, [user, messages, messageCounterUpdate]); // Include messageCounterUpdate as dependency
 
   // Function to force update balances - with rate limiting to prevent infinite loops
   const forceUpdateBalances = useCallback(() => {
@@ -347,7 +363,7 @@ export default function Header() {
     }
   }, [isAdminUser]);
 
-  // Listen for read threads updates and storage changes
+  // Listen for read threads updates and storage changes - REMOVED readThreadsRef updates
   useEffect(() => {
     if (!mounted || !user) return;
     
@@ -362,7 +378,7 @@ export default function Header() {
             const newValue = JSON.parse(event.newValue);
             if (Array.isArray(newValue)) {
               readThreadsRef.current = new Set(newValue);
-              setMessageUpdateTrigger(prev => prev + 1); // Trigger message count update
+              setMessageCounterUpdate(prev => prev + 1); // Trigger message count update
             }
           } catch (e) {
             console.error('Failed to parse updated read threads', e);
@@ -371,39 +387,12 @@ export default function Header() {
       }
     };
 
-    // Handle read threads updated event
-    const handleReadThreadsUpdated = (event: CustomEvent) => {
-      if (!isMountedRef.current || !user) return;
-      
-      if (event.detail?.username === user.username) {
-        if (Array.isArray(event.detail.threads)) {
-          readThreadsRef.current = new Set(event.detail.threads);
-          setMessageUpdateTrigger(prev => prev + 1); // Trigger message count update
-        }
-      }
-    };
-
-    // Handle thread selection event (when user clicks on a thread)
-    const handleThreadSelected = (event: CustomEvent) => {
-      if (!isMountedRef.current || !user) return;
-      
-      if (event.detail?.username === user.username && event.detail?.thread) {
-        // Add the selected thread to read threads immediately
-        if (!readThreadsRef.current.has(event.detail.thread)) {
-          readThreadsRef.current.add(event.detail.thread);
-          setMessageUpdateTrigger(prev => prev + 1); // Trigger message count update
-        }
-      }
-    };
+    // REMOVED: readThreadsUpdated and threadSelected handlers since they interfere with header count
 
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('readThreadsUpdated', handleReadThreadsUpdated as EventListener);
-    window.addEventListener('threadSelected', handleThreadSelected as EventListener);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('readThreadsUpdated', handleReadThreadsUpdated as EventListener);
-      window.removeEventListener('threadSelected', handleThreadSelected as EventListener);
     };
   }, [mounted, user]);
 
@@ -529,8 +518,8 @@ export default function Header() {
             <Link href="/admin/messages" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs relative">
               <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
               <span>Messages</span>
-              {/* Add unread count for admin messages if needed */}
-              {unreadCount > 0 && !isMessagesPage && (
+              {/* Show unread count for admin messages - always show unless count is 0 */}
+              {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                   {unreadCount}
                 </span>
@@ -581,8 +570,8 @@ export default function Header() {
                 <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Messages</span>
               </div>
-              {/* FIXED: Show unread count properly for sellers */}
-              {unreadCount > 0 && !isMessagesPage && (
+              {/* FIXED: Show unread count properly for sellers - always show unless count is 0 */}
+              {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                   {unreadCount}
                 </span>
@@ -783,8 +772,8 @@ export default function Header() {
                 <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Messages</span>
               </div>
-              {/* FIXED: Show unread count properly for buyers */}
-              {unreadCount > 0 && !isMessagesPage && (
+              {/* FIXED: Show unread count properly for buyers - always show unless count is 0 */}
+              {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                   {unreadCount}
                 </span>
