@@ -1,4 +1,4 @@
-// src/app/browse/page.tsx - Back to Grid View Only (No List View)
+// src/app/browse/page.tsx - Fixed Memory Leaks and Performance Issues
 'use client';
 
 import Link from 'next/link';
@@ -180,66 +180,122 @@ export default function BrowsePage() {
     }
   }, [sellerSalesCache]);
 
-  // FIX 6: Optimized timer management with safe date parsing
+  // 🚀 FIX: Completely rewritten timer management to prevent memory leaks
   const auctionTimers = useMemo(() => {
-    const now = new Date();
     try {
-      return listings
-        .filter(listing => {
-          if (!isAuctionListing(listing) || !isListingActive(listing)) return false;
-          
-          const endTime = safeParseDate(listing.auction.endTime);
-          return endTime && endTime > now;
-        })
-        .map(listing => {
-          if (!listing.auction) return null;
-          
-          const endTime = safeParseDate(listing.auction.endTime);
-          if (!endTime) return null;
-          
-          const timer: AuctionTimer = {
-            id: listing.id,
-            endTime: listing.auction.endTime,
-            updateInterval: (() => {
-              const timeLeft = endTime.getTime() - now.getTime();
-              if (timeLeft < 60000) return 1000; // Last minute: every second
-              if (timeLeft < 300000) return 5000; // Last 5 minutes: every 5 seconds
-              if (timeLeft < 3600000) return 15000; // Last hour: every 15 seconds
-              return 60000; // Otherwise: every minute
-            })()
-          };
-          return timer;
-        })
-        .filter((timer): timer is AuctionTimer => timer !== null);
+      const now = new Date();
+      const activeAuctions = listings.filter(listing => {
+        if (!isAuctionListing(listing) || !isListingActive(listing)) return false;
+        
+        const endTime = safeParseDate(listing.auction.endTime);
+        return endTime && endTime > now;
+      });
+
+      return activeAuctions.map(listing => {
+        if (!listing.auction) return null;
+        
+        const endTime = safeParseDate(listing.auction.endTime);
+        if (!endTime) return null;
+        
+        const timeLeft = endTime.getTime() - now.getTime();
+        let updateInterval: number;
+        
+        // 🚀 FIX: More conservative update intervals to reduce CPU usage
+        if (timeLeft < 60000) { // Last minute
+          updateInterval = 5000; // Every 5 seconds instead of 1
+        } else if (timeLeft < 300000) { // Last 5 minutes
+          updateInterval = 15000; // Every 15 seconds instead of 5
+        } else if (timeLeft < 3600000) { // Last hour
+          updateInterval = 60000; // Every minute instead of 15 seconds
+        } else {
+          updateInterval = 300000; // Every 5 minutes instead of 1 minute
+        }
+        
+        const timer: AuctionTimer = {
+          id: listing.id,
+          endTime: listing.auction.endTime,
+          updateInterval
+        };
+        return timer;
+      }).filter((timer): timer is AuctionTimer => timer !== null);
     } catch (error) {
       console.error('Error calculating auction timers:', error);
       return [];
     }
   }, [listings, forceUpdateTimer]);
 
-  // FIX 6: Smart timer that only updates when necessary
+  // 🚀 FIX: Completely rewritten timer effect with proper cleanup
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
+  
   useEffect(() => {
-    if (auctionTimers.length === 0) return;
+    // Clear any existing timer first
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Only set up timer if we have active auctions and component is mounted
+    if (auctionTimers.length === 0 || !mountedRef.current) {
+      return;
+    }
 
     try {
-      const minInterval = Math.min(...auctionTimers.map(t => t.updateInterval));
+      // 🚀 FIX: Use the minimum interval, but cap it at reasonable values
+      const minInterval = Math.max(
+        Math.min(...auctionTimers.map(t => t.updateInterval)),
+        5000 // Never update more frequently than every 5 seconds
+      );
       
-      const interval = setInterval(() => {
+      timerRef.current = setInterval(() => {
+        // 🚀 FIX: Check if component is still mounted before updating
+        if (!mountedRef.current) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          return;
+        }
+        
+        // 🚀 FIX: Batch state updates to prevent excessive re-renders
         setForceUpdateTimer(prev => prev + 1);
       }, minInterval);
       
-      return () => clearInterval(interval);
     } catch (error) {
       console.error('Error setting up auction timer:', error);
     }
-  }, [auctionTimers.length, auctionTimers]);
+    
+    // 🚀 FIX: Always return cleanup function, even in error cases
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [auctionTimers.length]); // 🚀 FIX: Only depend on length, not the entire array
 
-  // Improved timer cache with better memory management
+  // 🚀 FIX: Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    return () => {
+      mountedRef.current = false;
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  // 🚀 FIX: Improved timer cache with better memory management and size limits
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
+  const maxCacheSize = 200; // Limit cache size
   
-  // Clean up expired cache entries periodically
+  // 🚀 FIX: More aggressive cache cleanup
   useEffect(() => {
     const cleanupInterval = setInterval(() => {
+      if (!mountedRef.current) return;
+      
       try {
         const now = Date.now();
         const cache = timeCache.current;
@@ -251,7 +307,7 @@ export default function BrowsePage() {
           }
         });
 
-        // FIX 6 & 9: Also remove cache entries for ended auctions and limit cache size
+        // 🚀 FIX: Remove cache entries for ended auctions
         const activeAuctionEndTimes = new Set(
           auctionTimers.map(timer => timer.endTime)
         );
@@ -262,22 +318,25 @@ export default function BrowsePage() {
           }
         });
         
-        // FIX 9: Limit cache size to prevent memory issues
+        // 🚀 FIX: Limit cache size to prevent memory bloat
         const cacheKeys = Object.keys(cache);
-        if (cacheKeys.length > 200) {
-          // Remove oldest entries
+        if (cacheKeys.length > maxCacheSize) {
+          // Remove oldest entries (those expiring soonest)
           const sortedKeys = cacheKeys.sort((a, b) => cache[a].expires - cache[b].expires);
-          sortedKeys.slice(0, 50).forEach(key => delete cache[key]);
+          const keysToRemove = sortedKeys.slice(0, cacheKeys.length - maxCacheSize);
+          keysToRemove.forEach(key => delete cache[key]);
         }
       } catch (error) {
         console.error('Error cleaning up timer cache:', error);
       }
     }, 60000); // Clean up every minute
     
-    return () => clearInterval(cleanupInterval);
-  }, [auctionTimers]);
+    return () => {
+      clearInterval(cleanupInterval);
+    };
+  }, []); // 🚀 FIX: Remove auctionTimers dependency to prevent unnecessary cleanups
 
-  // FIX 10: Safe formatTimeRemaining with error handling
+  // FIX 10: Safe formatTimeRemaining with error handling and better caching
   const formatTimeRemaining = useCallback((endTimeStr: string) => {
     try {
       const now = new Date();
@@ -295,6 +354,11 @@ export default function BrowsePage() {
       }
       
       if (endTime <= now) {
+        // 🚀 FIX: Cache ended auctions for longer to prevent repeated calculations
+        timeCache.current[endTimeStr] = {
+          formatted: 'Ended',
+          expires: nowTime + 300000 // Cache for 5 minutes
+        };
         return 'Ended';
       }
       
@@ -303,21 +367,21 @@ export default function BrowsePage() {
       const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
       
-      let formatted;
-      let cacheTime;
+      let formatted: string;
+      let cacheTime: number;
       
       if (diffDays > 0) {
         formatted = `${diffDays}d ${diffHours}h`;
-        cacheTime = 60000; // Cache for 1 minute
+        cacheTime = 300000; // Cache for 5 minutes
       } else if (diffHours > 0) {
         formatted = `${diffHours}h ${diffMinutes}m`;
-        cacheTime = 30000; // Cache for 30 seconds
+        cacheTime = 60000; // Cache for 1 minute
       } else if (diffMinutes > 0) {
         formatted = `${diffMinutes}m`;
-        cacheTime = 10000; // Cache for 10 seconds
+        cacheTime = 30000; // Cache for 30 seconds
       } else {
         formatted = 'Soon';
-        cacheTime = 1000; // Cache for 1 second
+        cacheTime = 10000; // Cache for 10 seconds
       }
       
       // Update cache
@@ -331,7 +395,7 @@ export default function BrowsePage() {
       console.error('Error formatting time remaining:', error, 'for string:', endTimeStr);
       return 'Time error';
     }
-  }, []);
+  }, []); // 🚀 FIX: Remove all dependencies since we use refs
 
   // FIX 5: Debounced search to prevent excessive re-filtering
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
@@ -441,10 +505,8 @@ export default function BrowsePage() {
   }, [page]);
 
   const handleNextPage = useCallback(() => {
-    if (filteredListings.length > PAGE_SIZE * (page + 1)) {
-      setPage(prev => prev + 1);
-    }
-  }, [page]); // Remove filteredListings.length dependency to avoid issues
+    setPage(prev => prev + 1);
+  }, []);
 
   const handlePageClick = useCallback((targetPage: number) => {
     if (targetPage >= 0) {
@@ -452,7 +514,7 @@ export default function BrowsePage() {
     }
   }, []);
 
-  // Consistent filtering logic with error handling
+  // 🚀 FIX: Memoized filtered listings with better error handling
   const filteredListings = useMemo(() => {
     try {
       return listings
@@ -590,7 +652,7 @@ export default function BrowsePage() {
     }
   }, [filteredListings.length]);
 
-  // Render page indicators
+  // 🚀 FIX: Memoized page indicators to prevent unnecessary re-renders
   const renderPageIndicators = useCallback(() => {
     if (totalPages <= 1) return null;
     
