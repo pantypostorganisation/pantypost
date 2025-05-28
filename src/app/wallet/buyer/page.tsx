@@ -19,9 +19,9 @@ export default function BuyerWalletPage() {
   const { user } = useListings();
   const { 
     getBuyerBalance, 
-    setBuyerBalance, 
+    setBuyerBalance, // 🚀 FIX: Import setBuyerBalance to actually update wallet
     orderHistory, 
-    addDeposit // 🚀 ADD: Import the deposit tracking function
+    addDeposit 
   } = useWallet();
   const [balance, setBalance] = useState(0);
   const [amountToAdd, setAmountToAdd] = useState('');
@@ -42,45 +42,87 @@ export default function BuyerWalletPage() {
   // Calculate total spent
   const totalSpent = buyerPurchases.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
 
+  // 🚀 FIX: Update balance whenever wallet context changes or withdrawals happen
   useEffect(() => {
     if (user?.username) {
       const rawBalance = getBuyerBalance(user.username);
-      setBalance(Math.max(0, rawBalance));
+      const updatedBalance = Math.max(0, rawBalance);
+      setBalance(updatedBalance);
     }
-  }, [user, getBuyerBalance]);
+  }, [user, getBuyerBalance]); // Removed 'logs' dependency as it doesn't exist for buyers
 
   const handleAddFunds = () => {
     setIsLoading(true);
     const amount = parseFloat(amountToAdd);
     
-    if (isNaN(amount) || amount <= 0 || !user?.username) {
-      setMessage('Please enter a valid amount.');
+    // 🚀 FIX: Better validation with more specific error messages
+    if (!user?.username) {
+      setMessage('You must be logged in to add funds.');
       setMessageType('error');
       setIsLoading(false);
       return;
     }
 
+    if (isNaN(amount) || amount <= 0) {
+      setMessage('Please enter a valid amount greater than $0.');
+      setMessageType('error');
+      setIsLoading(false);
+      return;
+    }
+
+    // 🚀 FIX: Add maximum deposit limit for security
+    if (amount > 10000) {
+      setMessage('Maximum deposit amount is $10,000. Please contact support for larger deposits.');
+      setMessageType('error');
+      setIsLoading(false);
+      return;
+    }
+
+    // 🚀 FIX: Round amount to 2 decimal places to prevent floating point issues
+    const roundedAmount = Math.round(amount * 100) / 100;
+
     try {
       // Simulate a slight delay for better UX
       setTimeout(() => {
-        // 🚀 NEW: Use the deposit tracking system instead of direct balance update
-        const success = addDeposit(user.username!, amount, 'credit_card', `Wallet deposit by ${user.username}`);
-        
-        if (success) {
-          // Update local balance state
-          const newBalance = balance + amount;
-          setBalance(newBalance);
-          setAmountToAdd('');
-          setMessage(`Successfully added $${amount.toFixed(2)} to your wallet.`);
-          setMessageType('success');
-        } else {
-          setMessage('An error occurred while adding funds.');
+        try {
+          // 🚀 FIX: Track the deposit first
+          const depositSuccess = addDeposit(
+            user.username!, 
+            roundedAmount, 
+            'credit_card', 
+            `Wallet deposit by ${user.username}`
+          );
+          
+          if (depositSuccess) {
+            // 🚀 FIX: Actually update the buyer's wallet balance in the context
+            const currentBalance = getBuyerBalance(user.username!);
+            const newBalance = currentBalance + roundedAmount;
+            
+            // Update the wallet context with the new balance
+            setBuyerBalance(user.username!, newBalance);
+            
+            // Update local state to reflect the change immediately
+            setBalance(newBalance);
+            
+            // Clear form and show success message
+            setAmountToAdd('');
+            setMessage(`Successfully added $${roundedAmount.toFixed(2)} to your wallet. Your new balance is $${newBalance.toFixed(2)}.`);
+            setMessageType('success');
+          } else {
+            setMessage('Failed to process deposit. Please try again or contact support.');
+            setMessageType('error');
+          }
+        } catch (depositError) {
+          console.error('Deposit processing error:', depositError);
+          setMessage('An error occurred while processing your deposit. Please try again.');
           setMessageType('error');
         }
+        
         setIsLoading(false);
       }, 800);
     } catch (error) {
-      setMessage('An error occurred while adding funds.');
+      console.error('Add funds error:', error);
+      setMessage('An unexpected error occurred. Please try again.');
       setMessageType('error');
       setIsLoading(false);
     }
@@ -90,6 +132,23 @@ export default function BuyerWalletPage() {
       setMessage('');
       setMessageType('');
     }, 5000);
+  };
+
+  // 🚀 FIX: Add input validation for amount field
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Allow empty string or valid decimal numbers
+    if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
+      setAmountToAdd(value);
+    }
+  };
+
+  // 🚀 FIX: Add Enter key support for better UX
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && amountToAdd && !isLoading) {
+      handleAddFunds();
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -132,6 +191,13 @@ export default function BuyerWalletPage() {
               <p className="mt-4 text-sm text-gray-400">
                 Use your wallet to purchase listings. Each transaction includes a 10% platform fee.
               </p>
+              {/* 🚀 FIX: Add low balance warning */}
+              {balance < 20 && balance > 0 && (
+                <div className="mt-3 flex items-center text-sm text-yellow-400">
+                  <AlertCircle className="w-4 h-4 mr-1" />
+                  Low balance - consider adding more funds
+                </div>
+              )}
             </div>
 
             {/* Total Spent Card */}
@@ -160,6 +226,17 @@ export default function BuyerWalletPage() {
             </h2>
             
             <div className="mb-6">
+              {/* 🚀 FIX: Add helpful info about deposits */}
+              <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                <div className="flex items-start">
+                  <CheckCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-200">
+                    <p className="font-medium mb-1">Instant Deposits</p>
+                    <p>Funds are added immediately to your account and available for purchases right away.</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
                   <label htmlFor="amount" className="block text-sm font-medium text-gray-400 mb-1">
@@ -170,21 +247,35 @@ export default function BuyerWalletPage() {
                       <span className="text-gray-500">$</span>
                     </div>
                     <input
-                      type="number"
+                      type="text"
                       id="amount"
-                      step="0.01"
                       value={amountToAdd}
-                      onChange={(e) => setAmountToAdd(e.target.value)}
+                      onChange={handleAmountChange} // 🚀 FIX: Use custom validation
+                      onKeyPress={handleKeyPress} // 🚀 FIX: Add Enter key support
                       placeholder="0.00"
                       className="w-full bg-[#222] border border-[#444] rounded-lg py-3 pl-8 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+                      disabled={isLoading}
                     />
+                  </div>
+                  {/* 🚀 FIX: Add quick amount buttons */}
+                  <div className="flex gap-2 mt-2">
+                    {[25, 50, 100, 200].map((quickAmount) => (
+                      <button
+                        key={quickAmount}
+                        onClick={() => setAmountToAdd(quickAmount.toString())}
+                        className="text-xs px-2 py-1 bg-[#333] hover:bg-[#444] text-gray-300 rounded transition-colors"
+                        disabled={isLoading}
+                      >
+                        ${quickAmount}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div className="flex items-end">
                   <button
                     onClick={handleAddFunds}
-                    className="px-6 py-3 rounded-lg font-medium flex items-center justify-center min-w-[180px] bg-[#ff950e] hover:bg-[#e88800] text-black"
-                    disabled={isLoading}
+                    className="px-6 py-3 rounded-lg font-medium flex items-center justify-center min-w-[180px] bg-[#ff950e] hover:bg-[#e88800] text-black disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    disabled={isLoading || !amountToAdd || parseFloat(amountToAdd) <= 0}
                   >
                     {isLoading ? (
                       <>
@@ -205,8 +296,8 @@ export default function BuyerWalletPage() {
             {/* Status message */}
             {message && (
               <div className={`p-4 rounded-lg ${
-                messageType === 'success' ? 'bg-green-900 bg-opacity-20 text-green-400' : 
-                messageType === 'error' ? 'bg-red-900 bg-opacity-20 text-red-400' : ''
+                messageType === 'success' ? 'bg-green-900 bg-opacity-20 text-green-400 border border-green-500/30' : 
+                messageType === 'error' ? 'bg-red-900 bg-opacity-20 text-red-400 border border-red-500/30' : ''
               }`}>
                 <div className="flex items-center">
                   {messageType === 'success' && <CheckCircle className="w-5 h-5 mr-2" />}
@@ -226,7 +317,7 @@ export default function BuyerWalletPage() {
                   Recent Purchases
                 </h2>
                 
-                <a href="/buyers/my-orders" className="text-sm text-[#ff950e] hover:text-[#e88800] flex items-center">
+                <a href="/buyers/my-orders" className="text-sm text-[#ff950e] hover:text-[#e88800] flex items-center transition-colors">
                   View All
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </a>
@@ -234,7 +325,7 @@ export default function BuyerWalletPage() {
               
               <div className="space-y-4">
                 {recentPurchases.map((purchase, index) => (
-                  <div key={index} className="bg-[#222] rounded-lg p-4 border border-[#333]">
+                  <div key={index} className="bg-[#222] rounded-lg p-4 border border-[#333] hover:border-[#444] transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium text-white">{purchase.title}</h3>
@@ -250,6 +341,22 @@ export default function BuyerWalletPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* 🚀 FIX: Add empty state for no purchases */}
+          {buyerPurchases.length === 0 && (
+            <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg text-center">
+              <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-300 mb-2">No purchases yet</h3>
+              <p className="text-gray-500 mb-4">Start browsing to find amazing items from verified sellers</p>
+              <a 
+                href="/browse" 
+                className="inline-flex items-center px-4 py-2 bg-[#ff950e] hover:bg-[#e88800] text-black rounded-lg font-medium transition-colors"
+              >
+                Browse Listings
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </a>
             </div>
           )}
         </div>
