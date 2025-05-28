@@ -98,6 +98,73 @@ export default function AdminProfitDashboard() {
 
   const { actions: filteredActions, orders: filteredOrders, deposits: filteredDeposits } = getTimeFilteredData();
 
+  // 🚀 FIX: Improved revenue calculation logic
+  const calculatePlatformRevenue = (actions: typeof adminActions) => {
+    return actions
+      .filter(action => {
+        if (action.type !== 'credit') return false;
+        
+        const reason = action.reason.toLowerCase();
+        
+        // 🚀 FIX: Explicitly include legitimate platform revenue sources
+        const isLegitimateRevenue = 
+          reason.includes('platform fee') ||
+          reason.includes('commission') ||
+          reason.includes('subscription') ||
+          reason.includes('sale revenue') ||
+          reason.includes('auction commission') ||
+          reason.includes('premium listing') ||
+          reason.includes('listing fee') ||
+          reason.includes('transaction fee') ||
+          reason.includes('service fee') ||
+          // Include sales-related revenue patterns
+          reason.includes('sold') ||
+          reason.includes('purchase') ||
+          reason.includes('order') ||
+          // Include percentage-based fees
+          reason.includes('10%') ||
+          reason.includes('20%') ||
+          reason.includes('25%');
+        
+        // 🚀 FIX: Explicitly exclude non-revenue items (more precise filtering)
+        const isNonRevenue = 
+          reason.includes('wallet deposit') ||
+          reason.includes('add funds') ||
+          reason.includes('credit adjustment') ||
+          reason.includes('balance correction') ||
+          reason.includes('refund') ||
+          reason.includes('withdrawal') ||
+          reason.includes('manual credit') ||
+          reason.includes('test transaction') ||
+          reason.includes('admin adjustment');
+        
+        // Include if it's legitimate revenue and not a non-revenue item
+        return isLegitimateRevenue && !isNonRevenue;
+      })
+      .reduce((sum, action) => sum + action.amount, 0);
+  };
+
+  // 🚀 FIX: Calculate revenue from actual sales data as fallback
+  const calculateRevenueFromSales = (orders: typeof orderHistory) => {
+    return orders.reduce((sum, order) => {
+      // Platform gets 20% of each sale (10% markup on buyer side)
+      const salePrice = order.markedUpPrice || order.price;
+      const platformFee = salePrice * 0.2; // 20% of total sale
+      return sum + platformFee;
+    }, 0);
+  };
+
+  // 🚀 FIX: Calculate subscription revenue separately
+  const calculateSubscriptionRevenue = (actions: typeof adminActions) => {
+    return actions
+      .filter(action => {
+        if (action.type !== 'credit') return false;
+        const reason = action.reason.toLowerCase();
+        return reason.includes('subscription') || reason.includes('premium') || reason.includes('monthly');
+      })
+      .reduce((sum, action) => sum + action.amount, 0);
+  };
+
   // 🚀 NEW: Deposit analytics
   const totalDepositsAllTime = getTotalDeposits();
   const periodTotalDeposits = filteredDeposits
@@ -106,36 +173,29 @@ export default function AdminProfitDashboard() {
   const periodDepositCount = filteredDeposits.filter(deposit => deposit.status === 'completed').length;
   const averageDepositAmount = periodDepositCount > 0 ? periodTotalDeposits / periodDepositCount : 0;
 
-  // Revenue calculations - Updated to reflect time period (EXCLUDE deposit-related actions)
-  const periodPlatformRevenue = filteredActions
-    .filter(action => 
-      action.type === 'credit' && 
-      !action.reason.toLowerCase().includes('deposit') &&
-      !action.reason.toLowerCase().includes('wallet')
-    )
-    .reduce((sum, action) => sum + action.amount, 0);
+  // 🚀 FIX: Updated revenue calculations using new logic
+  const periodPlatformRevenue = calculatePlatformRevenue(filteredActions);
+  const periodSalesRevenueFromOrders = calculateRevenueFromSales(filteredOrders);
+  const periodSubscriptionRevenue = calculateSubscriptionRevenue(filteredActions);
+  
+  // 🚀 FIX: Use sales data as primary source, admin actions as secondary
+  const actualPeriodRevenue = Math.max(periodPlatformRevenue, periodSalesRevenueFromOrders);
   
   // Calculate total sales revenue for the period (what buyers actually paid)
   const periodSalesRevenue = filteredOrders.reduce((sum, order) => {
     return sum + (order.markedUpPrice || order.price);
   }, 0);
   
-  // Calculate subscription revenue estimate for the period
-  const estimatedPeriodSalesCommission = filteredOrders.length > 0 ? periodSalesRevenue * 0.2 : 0;
-  const estimatedPeriodSubscriptionRevenue = Math.max(0, periodPlatformRevenue - estimatedPeriodSalesCommission);
-  
   const periodAverageOrderValue = filteredOrders.length > 0 ? (periodSalesRevenue / filteredOrders.length) : 0;
   
-  // For "All" time, use total values; otherwise use period values (EXCLUDE deposits from profit calculation)
-  const allTimePlatformRevenue = adminActions
-    .filter(action => 
-      action.type === 'credit' && 
-      !action.reason.toLowerCase().includes('deposit') &&
-      !action.reason.toLowerCase().includes('wallet')
-    )
-    .reduce((sum, action) => sum + action.amount, 0);
+  // 🚀 FIX: For "All" time, use improved calculations
+  const allTimePlatformRevenue = timeFilter === 'all' ? 
+    Math.max(calculatePlatformRevenue(adminActions), calculateRevenueFromSales(orderHistory)) :
+    actualPeriodRevenue;
     
-  const displayPlatformRevenue = timeFilter === 'all' ? allTimePlatformRevenue : periodPlatformRevenue;
+  const allTimeSubscriptionRevenue = calculateSubscriptionRevenue(adminActions);
+    
+  const displayPlatformRevenue = timeFilter === 'all' ? allTimePlatformRevenue : actualPeriodRevenue;
   const displaySalesRevenue = timeFilter === 'all' ? 
     orderHistory.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0) : 
     periodSalesRevenue;
@@ -143,6 +203,11 @@ export default function AdminProfitDashboard() {
     (orderHistory.length > 0 ? displaySalesRevenue / orderHistory.length : 0) : 
     periodAverageOrderValue;
   const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
+  const displaySubscriptionRevenue = timeFilter === 'all' ? allTimeSubscriptionRevenue : periodSubscriptionRevenue;
+
+  // 🚀 FIX: Calculate sales commission more accurately
+  const displaySalesCommission = filteredOrders.length > 0 ? 
+    calculateRevenueFromSales(timeFilter === 'all' ? orderHistory : filteredOrders) : 0;
 
   // User engagement metrics
   const activeListings = listings.length;
@@ -161,7 +226,7 @@ export default function AdminProfitDashboard() {
     .sort(([,a], [,b]) => b - a)
     .slice(0, 5);
 
-  // Calculate growth metrics compared to previous period
+  // 🚀 FIX: Calculate growth metrics with improved revenue calculation
   const getPreviousPeriodData = () => {
     const now = new Date();
     const currentPeriodStart = new Date();
@@ -219,20 +284,18 @@ export default function AdminProfitDashboard() {
 
   const { actions: previousPeriodActions, orders: previousPeriodOrders, deposits: previousPeriodDeposits } = getPreviousPeriodData();
   
-  const previousPeriodRevenue = previousPeriodActions
-    .filter(action => 
-      action.type === 'credit' && 
-      !action.reason.toLowerCase().includes('deposit') &&
-      !action.reason.toLowerCase().includes('wallet')
-    )
-    .reduce((sum, action) => sum + action.amount, 0);
+  // 🚀 FIX: Use improved revenue calculation for growth comparison
+  const previousPeriodRevenue = Math.max(
+    calculatePlatformRevenue(previousPeriodActions),
+    calculateRevenueFromSales(previousPeriodOrders)
+  );
 
   const previousPeriodDepositAmount = previousPeriodDeposits
     .filter(deposit => deposit.status === 'completed')
     .reduce((sum, deposit) => sum + deposit.amount, 0);
 
   const growthRate = timeFilter !== 'all' && previousPeriodRevenue > 0 ? 
-    ((periodPlatformRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 : 0;
+    ((actualPeriodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 : 0;
 
   const depositGrowthRate = timeFilter !== 'all' && previousPeriodDepositAmount > 0 ? 
     ((periodTotalDeposits - previousPeriodDepositAmount) / previousPeriodDepositAmount) * 100 : 0;
@@ -243,7 +306,7 @@ export default function AdminProfitDashboard() {
     .sort(([,a], [,b]) => b - a)
     .slice(0, 5);
 
-  // Revenue distribution by day (for chart)
+  // 🚀 FIX: Revenue distribution by day (improved chart data)
   const getRevenueByDay = () => {
     const days = [];
     const now = new Date();
@@ -282,18 +345,22 @@ export default function AdminProfitDashboard() {
                  actionDate.toDateString() === date.toDateString();
         });
         
-        const hourRevenue = hourActions
-          .filter(action => 
-            action.type === 'credit' && 
-            !action.reason.toLowerCase().includes('deposit') &&
-            !action.reason.toLowerCase().includes('wallet')
-          )
-          .reduce((sum, action) => sum + action.amount, 0);
+        const hourOrders = orderHistory.filter(order => {
+          const orderDate = new Date(order.date);
+          return orderDate.getHours() === date.getHours() && 
+                 orderDate.toDateString() === date.toDateString();
+        });
+        
+        // 🚀 FIX: Use improved revenue calculation for chart
+        const hourRevenue = Math.max(
+          calculatePlatformRevenue(hourActions),
+          calculateRevenueFromSales(hourOrders)
+        );
         
         days.push({
           date: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
           revenue: hourRevenue,
-          transactions: hourActions.length
+          transactions: hourActions.length + hourOrders.length
         });
       } else if (timeFilter === 'year') {
         date.setMonth(now.getMonth() - i);
@@ -303,18 +370,21 @@ export default function AdminProfitDashboard() {
                  actionDate.getFullYear() === date.getFullYear();
         });
         
-        const monthRevenue = monthActions
-          .filter(action => 
-            action.type === 'credit' && 
-            !action.reason.toLowerCase().includes('deposit') &&
-            !action.reason.toLowerCase().includes('wallet')
-          )
-          .reduce((sum, action) => sum + action.amount, 0);
+        const monthOrders = orderHistory.filter(order => {
+          const orderDate = new Date(order.date);
+          return orderDate.getMonth() === date.getMonth() && 
+                 orderDate.getFullYear() === date.getFullYear();
+        });
+        
+        const monthRevenue = Math.max(
+          calculatePlatformRevenue(monthActions),
+          calculateRevenueFromSales(monthOrders)
+        );
         
         days.push({
           date: date.toLocaleDateString('en-US', { month: 'short' }),
           revenue: monthRevenue,
-          transactions: monthActions.length
+          transactions: monthActions.length + monthOrders.length
         });
       } else {
         date.setDate(now.getDate() - i);
@@ -323,18 +393,20 @@ export default function AdminProfitDashboard() {
           return actionDate.toDateString() === date.toDateString();
         });
         
-        const dayRevenue = dayActions
-          .filter(action => 
-            action.type === 'credit' && 
-            !action.reason.toLowerCase().includes('deposit') &&
-            !action.reason.toLowerCase().includes('wallet')
-          )
-          .reduce((sum, action) => sum + action.amount, 0);
+        const dayOrders = orderHistory.filter(order => {
+          const orderDate = new Date(order.date);
+          return orderDate.toDateString() === date.toDateString();
+        });
+        
+        const dayRevenue = Math.max(
+          calculatePlatformRevenue(dayActions),
+          calculateRevenueFromSales(dayOrders)
+        );
         
         days.push({
           date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           revenue: dayRevenue,
-          transactions: dayActions.length
+          transactions: dayActions.length + dayOrders.length
         });
       }
     }
@@ -442,7 +514,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* 🚀 NEW: Enhanced Main Money Metrics - Now includes deposits */}
+          {/* 🚀 FIX: Enhanced Main Money Metrics with accurate revenue calculation */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Total Money Made - Period Specific */}
             <div className="bg-gradient-to-br from-[#ff950e]/20 to-[#ff6b00]/10 rounded-xl p-6 border border-[#ff950e]/30 relative overflow-hidden">
@@ -471,11 +543,13 @@ export default function AdminProfitDashboard() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-400">20% from sales + 25% from subscriptions</p>
+                <p className="text-sm text-gray-400">
+                  Sales: {formatCurrency(displaySalesCommission)} • Subs: {formatCurrency(displaySubscriptionRevenue)}
+                </p>
               </div>
             </div>
 
-            {/* 🚀 NEW: Total Deposits Collected */}
+            {/* Total Deposits Collected */}
             <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-xl p-6 border border-blue-500/30 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -translate-y-16 translate-x-16"></div>
               <div className="relative">
@@ -530,19 +604,13 @@ export default function AdminProfitDashboard() {
                   <div className="flex items-center gap-1">
                     <ShoppingBag className="w-3 h-3 text-green-400" />
                     <span className="text-gray-400">
-                      Sales: {formatCurrency(timeFilter === 'all' ? 
-                        displaySalesRevenue - (estimatedPeriodSubscriptionRevenue || 0) : 
-                        periodSalesRevenue
-                      )}
+                      Sales: {formatCurrency(displaySalesRevenue - displaySubscriptionRevenue)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <Heart className="w-3 h-3 text-pink-400" />
                     <span className="text-gray-400">
-                      Subs: {formatCurrency(timeFilter === 'all' ? 
-                        Math.max(0, adminBalance - (displaySalesRevenue * 0.2)) : 
-                        estimatedPeriodSubscriptionRevenue
-                      )}
+                      Subs: {formatCurrency(displaySubscriptionRevenue)}
                     </span>
                   </div>
                 </div>
@@ -631,7 +699,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* 🚀 NEW: Enhanced Platform Health & User Metrics + Top Depositors */}
+          {/* Platform Health & User Metrics + Top Depositors */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             {/* Platform Health */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
@@ -718,7 +786,7 @@ export default function AdminProfitDashboard() {
               </div>
             </div>
 
-            {/* 🚀 NEW: Top Depositors */}
+            {/* Top Depositors */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-[#ff950e]" />
@@ -758,7 +826,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Money Flow Explanation */}
+          {/* 🚀 FIX: Updated Money Flow Explanation with accurate info */}
           <div className="bg-gradient-to-r from-[#1a1a1a] to-[#252525] rounded-xl p-6 border border-gray-800 mb-8">
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <Info className="h-5 w-5 text-[#ff950e]" />
@@ -770,26 +838,26 @@ export default function AdminProfitDashboard() {
                   <Wallet className="h-8 w-8 text-blue-400" />
                 </div>
                 <h4 className="font-bold text-white mb-2">1. Buyer Deposits</h4>
-                <p className="text-sm text-gray-400">Buyer adds $100 to wallet → You collect $100 upfront</p>
+                <p className="text-sm text-gray-400">Buyer adds $100 to wallet → You collect $100 upfront cash flow</p>
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-[#ff950e]/20 rounded-full flex items-center justify-center mx-auto mb-3">
                   <ShoppingBag className="h-8 w-8 text-[#ff950e]" />
                 </div>
                 <h4 className="font-bold text-white mb-2">2. Purchase Made</h4>
-                <p className="text-sm text-gray-400">$100 spent → $20 stays yours, $80 goes to seller</p>
+                <p className="text-sm text-gray-400">$100 item → $20 platform fee stays yours, $80 goes to seller</p>
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                   <TrendingUp className="h-8 w-8 text-green-400" />
                 </div>
                 <h4 className="font-bold text-white mb-2">3. Pure Profit</h4>
-                <p className="text-sm text-gray-400">You keep $20 profit, pay out $80 when seller withdraws</p>
+                <p className="text-sm text-gray-400">20% profit margin on all sales + 25% from subscriptions</p>
               </div>
             </div>
           </div>
 
-          {/* 🚀 NEW: Enhanced Recent Activity - Now includes deposits */}
+          {/* Enhanced Recent Activity - Now includes deposits */}
           <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -807,11 +875,13 @@ export default function AdminProfitDashboard() {
                   <div className="space-y-3">
                     {/* Combine and sort actions and deposits by date */}
                     {[
-                      ...filteredActions.map(action => ({
-                        type: 'action' as const,
-                        data: action,
-                        date: action.date
-                      })),
+                      ...filteredActions
+                        .filter(action => calculatePlatformRevenue([action]) > 0) // 🚀 FIX: Only show revenue-generating actions
+                        .map(action => ({
+                          type: 'action' as const,
+                          data: action,
+                          date: action.date
+                        })),
                       ...filteredDeposits
                         .filter(deposit => deposit.status === 'completed')
                         .map(deposit => ({
@@ -841,7 +911,7 @@ export default function AdminProfitDashboard() {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <p className="font-medium text-white truncate">
-                                    {action.type === 'credit' ? '💰 Money In' : '🔧 Adjustment'}
+                                    {action.type === 'credit' ? '💰 Revenue In' : '🔧 Adjustment'}
                                   </p>
                                   <p className="text-sm text-gray-400 truncate">{action.reason}</p>
                                 </div>
