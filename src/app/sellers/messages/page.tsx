@@ -72,278 +72,6 @@ type Message = {
   };
 };
 
-// Custom hook for Intersection Observer
-function useIntersectionObserver(
-  targetRef: React.RefObject<HTMLElement | null>,
-  options: IntersectionObserverInit & { onIntersect: () => void }
-) {
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            options.onIntersect();
-          }
-        });
-      },
-      {
-        root: options.root,
-        rootMargin: options.rootMargin || '0px',
-        threshold: options.threshold || 0.5
-      }
-    );
-
-    const target = targetRef.current;
-    if (target) {
-      observer.observe(target);
-    }
-
-    return () => {
-      if (target) {
-        observer.unobserve(target);
-      }
-    };
-  }, [targetRef, options.root, options.rootMargin, options.threshold, options.onIntersect]);
-}
-
-// Message component with intersection observer
-function MessageItem({ 
-  msg, 
-  index, 
-  isFromMe, 
-  user,
-  activeThread,
-  onMessageVisible,
-  customReq,
-  isLatestCustom,
-  isPaid,
-  showActionButtons,
-  handleAccept,
-  handleDecline,
-  handleEditRequest,
-  editRequestId,
-  editTitle,
-  setEditTitle,
-  editPrice,
-  setEditPrice,
-  editTags,
-  setEditTags,
-  editMessage,
-  setEditMessage,
-  handleEditSubmit,
-  setEditRequestId,
-  statusBadge,
-  setPreviewImage
-}: any) {
-  const messageRef = useRef<HTMLDivElement>(null);
-  const [hasBeenVisible, setHasBeenVisible] = useState(false);
-
-  // Use Intersection Observer to track when message becomes visible
-  useIntersectionObserver(messageRef, {
-    threshold: 0.8, // Message is considered "read" when 80% visible
-    onIntersect: () => {
-      if (!hasBeenVisible && !isFromMe && !msg.read) {
-        setHasBeenVisible(true);
-        onMessageVisible(msg);
-      }
-    }
-  });
-
-  const time = new Date(msg.date).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  // Check if message contains only a single emoji
-  const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
-
-  return (
-    <div ref={messageRef} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
-      <div className={`rounded-lg p-3 max-w-[75%] ${
-        isFromMe 
-          ? 'bg-[#ff950e] text-white shadow-lg' 
-          : 'bg-[#333] text-white shadow-md'
-      }`}>
-        {/* Message header */}
-        <div className="flex items-center text-xs mb-1">
-          <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-            {isFromMe ? 'You' : msg.sender} • {time}
-          </span>
-          {/* Only show Read/Sent for messages that the seller sends */}
-          {isFromMe && (
-            <span className="ml-2 text-[10px]">
-              {msg.read ? (
-                <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
-                  <CheckCheck size={12} className="mr-1" /> Read
-                </span>
-              ) : (
-                <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
-              )}
-            </span>
-          )}
-        </div>
-        
-        {/* Image message */}
-        {msg.type === 'image' && msg.meta?.imageUrl && (
-          <div className="mt-1 mb-2">
-            <img 
-              src={msg.meta.imageUrl} 
-              alt="Shared image" 
-              className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPreviewImage(msg.meta?.imageUrl || null);
-              }}
-            />
-            {msg.content && (
-              <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                {msg.content}
-              </p>
-            )}
-          </div>
-        )}
-        
-        {/* Text content */}
-        {msg.type !== 'image' && msg.type !== 'customRequest' && (
-          <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-            {msg.content}
-          </p>
-        )}
-        
-        {/* Custom request content */}
-        {msg.type === 'customRequest' && msg.meta && (
-          <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
-            <p className="font-semibold flex items-center">
-              <Package size={16} className="mr-1" />
-              Custom Request
-            </p>
-            <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-            <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
-            <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
-            {(customReq ? customReq.description : msg.meta.message) && (
-              <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
-            )}
-            {customReq && (
-              <p className="flex items-center">
-                <b>Status:</b>
-                {statusBadge(customReq.status)}
-              </p>
-            )}
-            {isPaid && (
-              <span className="text-green-400 font-bold flex items-center">
-                <ShoppingBag size={14} className="mr-1" />
-                Paid ✅
-              </span>
-            )}
-            {showActionButtons && !isPaid && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    customReq && handleAccept(customReq);
-                  }}
-                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
-                >
-                  <CheckCircle2 size={12} className="mr-1" />
-                  Accept
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    customReq && handleDecline(customReq);
-                  }}
-                  className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
-                >
-                  <XCircle size={12} className="mr-1" />
-                  Decline
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    customReq && handleEditRequest(customReq);
-                  }}
-                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
-                >
-                  <Edit3 size={12} className="mr-1" />
-                  Edit
-                </button>
-              </div>
-            )}
-            {editRequestId === customReq?.id && customReq && (
-              <div className="mt-2 space-y-2 bg-black/30 p-2 rounded">
-                <input
-                  type="text"
-                  placeholder="Title"
-                  value={editTitle}
-                  onChange={e => setEditTitle(e.target.value)}
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <input
-                  type="number"
-                  placeholder="Price (USD)"
-                  value={editPrice}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setEditPrice(val === '' ? '' : Number(val));
-                  }}
-                  min="0.01"
-                  step="0.01"
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <input
-                  type="text"
-                  placeholder="Tags (comma-separated)"
-                  value={editTags}
-                  onChange={e => setEditTags(e.target.value)}
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <textarea
-                  placeholder="Message"
-                  value={editMessage}
-                  onChange={e => setEditMessage(e.target.value)}
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditSubmit();
-                    }}
-                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
-                  >
-                    <Edit3 size={12} className="mr-1" />
-                    Submit Edit
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditRequestId(null);
-                    }}
-                    className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
-                  >
-                    <X size={12} className="mr-1" />
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Helper function to check if content is a single emoji
-const isSingleEmoji = (content: string) => {
-  const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
-  return emojiRegex.test(content);
-};
-
 export default function SellerMessagesPage() {
   const { user, addSellerNotification, users } = useListings();
   const {
@@ -375,14 +103,11 @@ export default function SellerMessagesPage() {
   const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [messageUpdate, setMessageUpdate] = useState(0);
+  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
-  
-  // Track messages that have been marked as read via Intersection Observer
-  const [observerReadMessages, setObserverReadMessages] = useState<Set<string>>(new Set());
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -390,7 +115,6 @@ export default function SellerMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Load recent emojis from localStorage on component mount
   useEffect(() => {
@@ -399,7 +123,7 @@ export default function SellerMessagesPage() {
       try {
         const parsed = JSON.parse(storedRecentEmojis);
         if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 30));
+          setRecentEmojis(parsed.slice(0, 30)); // Limit to 30 recent emojis
         }
       } catch (e) {
         console.error('Failed to parse recent emojis', e);
@@ -408,6 +132,7 @@ export default function SellerMessagesPage() {
     
     // Load previously read threads from localStorage
     try {
+      // Get read threads from localStorage only if user exists
       if (user) {
         const readThreadsKey = `panty_read_threads_${user.username}`;
         const readThreads = localStorage.getItem(readThreadsKey);
@@ -415,7 +140,7 @@ export default function SellerMessagesPage() {
           const threads = JSON.parse(readThreads);
           if (Array.isArray(threads)) {
             readThreadsRef.current = new Set(threads);
-            setMessageUpdate(prev => prev + 1);
+            setMessageUpdate(prev => prev + 1); // Force UI update
           }
         }
       }
@@ -492,7 +217,7 @@ export default function SellerMessagesPage() {
           verified: isVerified
         };
         
-        // Count only messages FROM buyer TO seller as unread
+        // Count only messages FROM buyer TO seller as unread (fix for notification issue)
         const threadUnreadCount = msgs.filter(
           (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
         ).length;
@@ -548,11 +273,13 @@ export default function SellerMessagesPage() {
 
   // Update UI when messages change
   useEffect(() => {
+    // When messages change, update the UI to reflect message read status
     setMessageUpdate(prev => prev + 1);
   }, [messages]);
   
   // Reset the readThreadsRef when logging in/out
   useEffect(() => {
+    // When user changes, reset the readThreadsRef
     readThreadsRef.current = new Set();
     setMessageUpdate(prev => prev + 1);
   }, [user?.username]);
@@ -562,6 +289,7 @@ export default function SellerMessagesPage() {
     const counts: { [buyer: string]: number } = {};
     if (threads) {
       Object.keys(threads).forEach(buyer => {
+        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
         counts[buyer] = readThreadsRef.current.has(buyer) ? 0 : unreadCounts[buyer];
       });
     }
@@ -575,6 +303,7 @@ export default function SellerMessagesPage() {
       const threadsArray = Array.from(readThreadsRef.current);
       localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
       
+      // Dispatch a custom event to notify other components about the update
       const event = new CustomEvent('readThreadsUpdated', { 
         detail: { threads: threadsArray, username: user.username }
       });
@@ -582,32 +311,47 @@ export default function SellerMessagesPage() {
     }
   }, [messageUpdate, user]);
 
-  // Handle message visibility from Intersection Observer
-  const handleMessageVisible = useCallback((msg: Message) => {
-    if (!user || msg.sender === user.username || msg.read) return;
-    
-    // Create a unique ID for this message
-    const messageId = `${msg.sender}-${msg.receiver}-${msg.date}`;
-    
-    // Check if we've already processed this message
-    if (observerReadMessages.has(messageId)) return;
-    
-    // Mark message as read
-    markMessagesAsRead(user.username, msg.sender);
-    
-    // Add to observer read messages set
-    setObserverReadMessages(prev => new Set(prev).add(messageId));
-    
-    // Add thread to readThreadsRef if all messages are now read
-    const threadUnreadCount = threads[msg.sender]?.filter(
-      m => !m.read && m.sender === msg.sender && m.receiver === user.username
-    ).length || 0;
-    
-    if (threadUnreadCount === 0 && !readThreadsRef.current.has(msg.sender)) {
-      readThreadsRef.current.add(msg.sender);
-      setMessageUpdate(prev => prev + 1);
+  // FIXED: Mark messages as read when thread is selected and viewed
+  useEffect(() => {
+    if (activeThread && user) {
+      // Check if there are unread messages in this thread
+      const hasUnreadMessages = threads[activeThread]?.some(
+        msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+      );
+      
+      if (hasUnreadMessages) {
+        // Mark messages as read in the context immediately
+        markMessagesAsRead(user.username, activeThread);
+        
+        // Add to readThreadsRef to update UI
+        if (!readThreadsRef.current.has(activeThread)) {
+          readThreadsRef.current.add(activeThread);
+          
+          // Save to localStorage immediately when thread is selected
+          if (typeof window !== 'undefined') {
+            const readThreadsKey = `panty_read_threads_${user.username}`;
+            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+            
+            // Dispatch event to notify header
+            const event = new CustomEvent('readThreadsUpdated', { 
+              detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+            });
+            window.dispatchEvent(event);
+          }
+          
+          setMessageUpdate(prev => prev + 1);
+        }
+      }
+      
+      // Create a custom event to notify other components about thread selection
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('threadSelected', { 
+          detail: { thread: activeThread, username: user.username }
+        });
+        window.dispatchEvent(event);
+      }
     }
-  }, [user, markMessagesAsRead, threads, observerReadMessages]);
+  }, [activeThread, user, threads, markMessagesAsRead]);
 
   // Handle clicks outside the emoji picker to close it
   useEffect(() => {
@@ -635,11 +379,13 @@ export default function SellerMessagesPage() {
     
     if (!file) return;
     
+    // Validate file type
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
       return;
     }
     
+    // Validate file size
     if (file.size > MAX_IMAGE_SIZE) {
       setImageError(`Image too large. Maximum size is ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
       return;
@@ -671,11 +417,15 @@ export default function SellerMessagesPage() {
   const handleEmojiClick = useCallback((emoji: string) => {
     setReplyMessage(prev => prev + emoji);
     
+    // Update recent emojis
     setRecentEmojis(prev => {
+      // Remove if already exists to prevent duplicates
       const filtered = prev.filter(e => e !== emoji);
+      // Add to the front and return limited array
       return [emoji, ...filtered].slice(0, 30);
     });
     
+    // Focus back on the input after inserting emoji
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
@@ -690,22 +440,28 @@ export default function SellerMessagesPage() {
     const textContent = replyMessage.trim();
 
     if (!textContent && !selectedImage) {
+      // Don't send empty messages
       return;
     }
 
+    // Sellers cannot send custom requests from this page, only normal or image messages
     sendMessage(user.username, activeThread, textContent, {
-      type: selectedImage ? 'image' : 'normal',
-      meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+      type: selectedImage ? 'image' : 'normal', // Set type based on image presence
+      meta: selectedImage ? { imageUrl: selectedImage } : undefined, // Include image URL in meta
     });
 
+    // Don't add notification for seller's own message - this is handled in MessageContext now
+
     setReplyMessage('');
-    setSelectedImage(null);
+    setSelectedImage(null); // Clear selected image after sending
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = ''; // Clear file input
     }
     
+    // Close emoji picker if open
     setShowEmojiPicker(false);
     
+    // Focus back on input
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
@@ -735,23 +491,27 @@ export default function SellerMessagesPage() {
     }
   }, [user, activeThread, hasReported, reportUser]);
 
-  // Handle thread selection
+  // Track which threads have been explicitly viewed and mark as read
+  const [viewedThreads, setViewedThreads] = useState<Set<string>>(new Set());
+
+  // Handle thread selection without marking as read immediately
   const handleThreadSelect = useCallback((buyerId: string) => {
-    if (activeThread === buyerId) return;
+    if (activeThread === buyerId) return; // Prevent unnecessary state updates
     
     setActiveThread(buyerId);
     
-    // Clear observer read messages for the new thread to allow re-observation
-    setObserverReadMessages(new Set());
+    // Don't set messageUpdate here - it will be handled in the useEffect
   }, [activeThread]);
 
   // Filter and sort threads
   const filteredAndSortedThreads = useMemo(() => {
+    // Filter threads by search query and unread status
     const filteredThreads = Object.keys(threads).filter(buyer => {
       const matchesSearch = searchQuery ? buyer.toLowerCase().includes(searchQuery.toLowerCase()) : true;
       
       if (!matchesSearch) return false;
       
+      // For 'unread' filter, consider thread as unread if it has unread messages AND is not in readThreadsRef
       if (filterBy === 'unread') {
         const hasUnread = unreadCounts[buyer] > 0 && !readThreadsRef.current.has(buyer);
         if (!hasUnread) return false;
@@ -760,6 +520,7 @@ export default function SellerMessagesPage() {
       return true;
     });
     
+    // Sort threads by most recent message first
     return filteredThreads.sort((a, b) => {
       const dateA = new Date(lastMessages[a]?.date || 0).getTime();
       const dateB = new Date(lastMessages[b]?.date || 0).getTime();
@@ -816,6 +577,7 @@ export default function SellerMessagesPage() {
   const handleEditSubmit = useCallback(() => {
     if (!user || !activeThread || !editRequestId) return;
     
+    // Validate inputs
     if (!editTitle.trim() || editPrice === '' || isNaN(Number(editPrice)) || Number(editPrice) <= 0) {
       alert('Please enter a valid title and price for your edit.');
       return;
@@ -905,6 +667,13 @@ export default function SellerMessagesPage() {
     }
     
     return 'Just now';
+  };
+
+  // Check if content is a single emoji
+  const isSingleEmoji = (content: string) => {
+    // Regex to match a single emoji (including compound emojis with ZWJ)
+    const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
+    return emojiRegex.test(content);
   };
 
   // Check if user is admin
@@ -1018,7 +787,7 @@ export default function SellerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* Unread indicator */}
+                        {/* Unread indicator - only show when there are unread messages */}
                         {uiUnreadCounts[buyer] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
                             {uiUnreadCounts[buyer]}
@@ -1106,10 +875,17 @@ export default function SellerMessagesPage() {
                 </div>
                 
                 {/* Messages */}
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
                   <div className="max-w-3xl mx-auto space-y-4">
                     {threadMessages.map((msg, index) => {
                       const isFromMe = msg.sender === user?.username;
+                      const time = new Date(msg.date).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      });
+                      
+                      // Check if message contains only a single emoji
+                      const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
                       
                       let customReq: any = undefined;
                       let metaId: string | undefined = undefined;
@@ -1139,35 +915,184 @@ export default function SellerMessagesPage() {
                         !isLastEditor(customReq);
                       
                       return (
-                        <MessageItem
-                          key={index}
-                          msg={msg}
-                          index={index}
-                          isFromMe={isFromMe}
-                          user={user}
-                          activeThread={activeThread}
-                          onMessageVisible={handleMessageVisible}
-                          customReq={customReq}
-                          isLatestCustom={isLatestCustom}
-                          isPaid={isPaid}
-                          showActionButtons={showActionButtons}
-                          handleAccept={handleAccept}
-                          handleDecline={handleDecline}
-                          handleEditRequest={handleEditRequest}
-                          editRequestId={editRequestId}
-                          editTitle={editTitle}
-                          setEditTitle={setEditTitle}
-                          editPrice={editPrice}
-                          setEditPrice={setEditPrice}
-                          editTags={editTags}
-                          setEditTags={setEditTags}
-                          editMessage={editMessage}
-                          setEditMessage={setEditMessage}
-                          handleEditSubmit={handleEditSubmit}
-                          setEditRequestId={setEditRequestId}
-                          statusBadge={statusBadge}
-                          setPreviewImage={setPreviewImage}
-                        />
+                        <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`rounded-lg p-3 max-w-[75%] ${
+                            isFromMe 
+                              ? 'bg-[#ff950e] text-white shadow-lg' 
+                              : 'bg-[#333] text-white shadow-md'
+                          }`}
+                          >
+                            {/* Message header */}
+                            <div className="flex items-center text-xs mb-1">
+                              <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
+                                {isFromMe ? 'You' : msg.sender} • {time}
+                              </span>
+                              {/* Only show Read/Sent for messages that the seller sends, not messages they receive */}
+                              {isFromMe && (
+                                <span className="ml-2 text-[10px]">
+                                  {msg.read ? (
+                                    <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
+                                      <CheckCheck size={12} className="mr-1" /> Read
+                                    </span>
+                                  ) : (
+                                    <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Image message */}
+                            {msg.type === 'image' && msg.meta?.imageUrl && (
+                              <div className="mt-1 mb-2">
+                                <img 
+                                  src={msg.meta.imageUrl} 
+                                  alt="Shared image" 
+                                  className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent triggering the container's onClick
+                                    setPreviewImage(msg.meta?.imageUrl || null);
+                                  }}
+                                />
+                                {msg.content && (
+                                  <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                                    {msg.content}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Text content */}
+                            {msg.type !== 'image' && msg.type !== 'customRequest' && (
+                              <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                                {msg.content}
+                              </p>
+                            )}
+                            
+                            {/* Custom request content */}
+                            {msg.type === 'customRequest' && msg.meta && (
+                              <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
+                                <p className="font-semibold flex items-center">
+                                  <Package size={16} className="mr-1" />
+                                  Custom Request
+                                </p>
+                                <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
+                                <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
+                                <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
+                                {(customReq ? customReq.description : msg.meta.message) && (
+                                  <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
+                                )}
+                                {customReq && (
+                                  <p className="flex items-center">
+                                    <b>Status:</b>
+                                    {statusBadge(customReq.status)}
+                                  </p>
+                                )}
+                                {isPaid && (
+                                  <span className="text-green-400 font-bold flex items-center">
+                                    <ShoppingBag size={14} className="mr-1" />
+                                    Paid ✅
+                                  </span>
+                                )}
+                                {showActionButtons && !isPaid && (
+                                  <div className="flex flex-wrap gap-2 pt-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleAccept(customReq);
+                                      }}
+                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
+                                    >
+                                      <CheckCircle2 size={12} className="mr-1" />
+                                      Accept
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleDecline(customReq);
+                                      }}
+                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
+                                    >
+                                      <XCircle size={12} className="mr-1" />
+                                      Decline
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Prevent triggering the container's onClick
+                                        customReq && handleEditRequest(customReq);
+                                      }}
+                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
+                                    >
+                                      <Edit3 size={12} className="mr-1" />
+                                      Edit
+                                    </button>
+                                  </div>
+                                )}
+                                {editRequestId === customReq?.id && customReq && (
+                                  <div className="mt-2 space-y-2 bg-black/30 p-2 rounded">
+                                    <input
+                                      type="text"
+                                      placeholder="Title"
+                                      value={editTitle}
+                                      onChange={e => setEditTitle(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <input
+                                      type="number"
+                                      placeholder="Price (USD)"
+                                      value={editPrice}
+                                      onChange={e => {
+                                        const val = e.target.value;
+                                        setEditPrice(val === '' ? '' : Number(val));
+                                      }}
+                                      min="0.01"
+                                      step="0.01"
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Tags (comma-separated)"
+                                      value={editTags}
+                                      onChange={e => setEditTags(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <textarea
+                                      placeholder="Message"
+                                      value={editMessage}
+                                      onChange={e => setEditMessage(e.target.value)}
+                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
+                                    />
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Prevent triggering the container's onClick
+                                          handleEditSubmit();
+                                        }}
+                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
+                                      >
+                                        <Edit3 size={12} className="mr-1" />
+                                        Submit Edit
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation(); // Prevent triggering the container's onClick
+                                          setEditRequestId(null);
+                                        }}
+                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
+                                      >
+                                        <X size={12} className="mr-1" />
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                     
@@ -1275,7 +1200,7 @@ export default function SellerMessagesPage() {
                         {/* Fixed emoji button position */}
                         <button
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // Prevent triggering message container's onClick
                             setShowEmojiPicker(!showEmojiPicker);
                           }}
                           className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
@@ -1302,7 +1227,7 @@ export default function SellerMessagesPage() {
                         {/* Attachment button - Left aligned with vertical adjustment */}
                         <button
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // Prevent triggering message container's onClick
                             triggerFileInput();
                           }}
                           disabled={isImageLoading}
@@ -1328,7 +1253,7 @@ export default function SellerMessagesPage() {
                         {/* Send Button - Right aligned */}
                         <button
                           onClick={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation(); // Prevent triggering message container's onClick
                             handleReply();
                           }}
                           disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
