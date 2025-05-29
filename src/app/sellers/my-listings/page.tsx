@@ -171,20 +171,15 @@ export default function MyListingsPage() {
     setImageUrls(_imageUrls);
   };
 
-  // 🔧 FIXED: Calculate auction end time without mutating the original Date object
+  // 🔧 FIXED: Calculate auction end time properly handling fractional days
   const calculateAuctionEndTime = (): string => {
     const now = new Date();
-    
-    // Special case for 1-minute test option
-    if (auctionDuration === '0.017') {
-      const future = new Date(now.getTime() + 60 * 1000); // Exactly 1 minute in milliseconds
-      return future.toISOString();
-    }
-    
-    // Normal case for days - create new Date object instead of mutating
     const days = parseFloat(auctionDuration);
-    const endTime = new Date(now); // Create a copy of the current time
-    endTime.setDate(endTime.getDate() + Math.floor(days)); // Mutate the copy, not the original
+    
+    // Convert days to milliseconds and add to current time
+    const millisecondsToAdd = days * 24 * 60 * 60 * 1000;
+    const endTime = new Date(now.getTime() + millisecondsToAdd);
+    
     return endTime.toISOString();
   };
 
