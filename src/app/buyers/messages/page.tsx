@@ -1,3 +1,4 @@
+// src/app/buyers/messages/page.tsx
 'use client';
 
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
@@ -8,7 +9,6 @@ import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
 import {
   Search,
   CheckCheck,
@@ -26,7 +26,9 @@ import {
   Sparkles,
   ShoppingBag,
   Filter,
-  BellRing
+  BellRing,
+  Settings,
+  DollarSign
 } from 'lucide-react';
 
 // Constants
@@ -83,8 +85,8 @@ export default function BuyerMessagesPage() {
     isBlocked,
     hasReported,
   } = useMessages();
-  const { addRequest, getRequestsForUser, respondToRequest, requests, setRequests } = useRequests();
-  const { wallet, updateWallet, sendTip } = useWallet();
+  const { addRequest, getRequestsForUser, respondToRequest, requests, setRequests, markRequestAsPaid } = useRequests();
+  const { wallet, purchaseCustomRequest, sendTip } = useWallet();
 
   const searchParams = useSearchParams();
   const threadParam = searchParams?.get('thread');
@@ -274,7 +276,7 @@ export default function BuyerMessagesPage() {
     });
   }, [threads, lastMessages, searchQuery]);
 
-  // 🔧 FIXED: Use Intersection Observer to detect when messages are actually visible
+  // ðŸ”§ FIXED: Use Intersection Observer to detect when messages are actually visible
   useEffect(() => {
     if (!activeThread || !user || !messagesContainerRef.current) return;
 
@@ -384,6 +386,9 @@ export default function BuyerMessagesPage() {
 
   // Image handling with validation and error handling
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    // Fixed: Added null check for event.target
+    if (!event.target) return;
+    
     const file = event.target.files?.[0];
     setImageError(null);
     
@@ -462,7 +467,7 @@ export default function BuyerMessagesPage() {
       
       const priceValue = Number(requestPrice);
       const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
-      const requestId = uuidv4();
+      const requestId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
       addRequest({
         id: requestId,
@@ -474,6 +479,9 @@ export default function BuyerMessagesPage() {
         tags: tagsArray,
         status: 'pending',
         date: new Date().toISOString(),
+        messageThreadId: `${user.username}-${activeThread}`,
+        lastModifiedBy: user.username,
+        originalMessageId: requestId
       });
 
       sendMessage(
@@ -588,7 +596,8 @@ export default function BuyerMessagesPage() {
         price: priceValue,
         tags: tagsArray,
         description: editMessage,
-      }
+      },
+      user.username // Track who made the edit
     );
 
     setEditRequestId(null);
@@ -624,7 +633,7 @@ export default function BuyerMessagesPage() {
     setShowPayModal(true);
   }, []);
 
-  // Payment handling with improved validation
+  // NEW: Enhanced payment handling with custom request integration
   const handleConfirmPay = useCallback(() => {
     if (!user || !payingRequest) return;
     
@@ -638,7 +647,7 @@ export default function BuyerMessagesPage() {
     
     const markupPrice = Math.round(basePrice * 1.1 * 100) / 100;
     const seller = payingRequest.seller;
-    const buyer = payingRequest.buyer;
+    const buyer = user.username; // Use current user as buyer
 
     if (!seller || !buyer) {
       alert('Missing seller or buyer information.');
@@ -647,9 +656,6 @@ export default function BuyerMessagesPage() {
       return;
     }
 
-    const sellerShare = Math.round(basePrice * 0.9 * 100) / 100;
-    const adminCut = Math.round((markupPrice - sellerShare) * 100) / 100;
-
     if (wallet[buyer] === undefined || wallet[buyer] < markupPrice) {
       setShowPayModal(false);
       setPayingRequest(null);
@@ -657,35 +663,38 @@ export default function BuyerMessagesPage() {
       return;
     }
 
-    // Process the payment
-    updateWallet(buyer, -markupPrice);
-    updateWallet('oakley', adminCut);
+    // NEW: Use the enhanced custom request purchase function
+    const customRequestPurchase = {
+      requestId: payingRequest.id,
+      title: payingRequest.title,
+      description: payingRequest.description,
+      price: payingRequest.price,
+      seller: payingRequest.seller,
+      buyer: buyer, // Use current user
+      tags: payingRequest.tags
+    };
 
-    updateWallet(
-      seller,
-      sellerShare,
-      {
-        id: payingRequest.id,
-        title: payingRequest.title,
-        description: payingRequest.description,
-        price: payingRequest.price,
-        markedUpPrice: markupPrice,
-        date: new Date().toISOString(),
-        seller: payingRequest.seller,
-        buyer: payingRequest.buyer,
-        tags: payingRequest.tags,
-      }
-    );
-
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === payingRequest.id ? { ...r, paid: true, status: 'paid' } : r
-      )
-    );
+    const success = purchaseCustomRequest(customRequestPurchase);
+    
+    if (success) {
+      // Mark request as paid in the requests system
+      markRequestAsPaid(payingRequest.id);
+      
+      // Update the local requests state to reflect payment
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === payingRequest.id ? { ...r, paid: true, status: 'paid' } : r
+        )
+      );
+      
+      alert(`Payment successful! You paid ${markupPrice.toFixed(2)} for "${payingRequest.title}"`);
+    } else {
+      alert("Payment failed. Please check your balance and try again.");
+    }
 
     setShowPayModal(false);
     setPayingRequest(null);
-  }, [user, payingRequest, wallet, updateWallet, setRequests]);
+  }, [user, payingRequest, wallet, purchaseCustomRequest, markRequestAsPaid, setRequests]);
 
   const handleCancelPay = useCallback(() => {
     setShowPayModal(false);
@@ -720,12 +729,12 @@ export default function BuyerMessagesPage() {
       sendMessage(
         user.username,
         activeThread,
-        `💰 I sent you a tip of $${amount.toFixed(2)}!`
+        `ðŸ’° I sent you a tip of ${amount.toFixed(2)}!`
       );
       setTipAmount('');
       setTipResult({
         success: true,
-        message: `Successfully sent $${amount.toFixed(2)} tip to ${activeThread}!`
+        message: `Successfully sent ${amount.toFixed(2)} tip to ${activeThread}!`
       });
       setTimeout(() => {
         setShowTipModal(false);
@@ -963,9 +972,9 @@ export default function BuyerMessagesPage() {
                         <p className="text-sm text-gray-400 truncate">
                           {lastMessage ? (
                             lastMessage.type === 'customRequest' 
-                              ? '🛠️ Custom Request'
+                              ? 'ðŸ› ï¸ Custom Request'
                               : lastMessage.type === 'image'
-                                ? '📷 Image'
+                                ? 'ðŸ“· Image'
                                 : lastMessage.content
                           ) : ''}
                         </p>
@@ -1066,9 +1075,9 @@ export default function BuyerMessagesPage() {
                         msg.type === 'customRequest';
                       
                       const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
+                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0; // Use current user's balance
                       const canPay = customReq && buyerBalance >= markupPrice;
-                      const isPaid = customReq && customReq.paid;
+                      const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
                       
                       const showActionButtons =
                         !!customReq &&
@@ -1091,7 +1100,7 @@ export default function BuyerMessagesPage() {
                             {/* Message header */}
                             <div className="flex items-center text-xs mb-1">
                               <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                                {isFromMe ? 'You' : msg.sender} • {time}
+                                {isFromMe ? 'You' : msg.sender} â€¢ {time}
                               </span>
                               {isFromMe && (
                                 <span className="ml-2 text-[10px]">
@@ -1141,7 +1150,7 @@ export default function BuyerMessagesPage() {
                                   Custom Request
                                 </p>
                                 <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-                                <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
+                                <p><b>Price:</b> {customReq ? `${customReq.price.toFixed(2)}` : `${msg.meta.price?.toFixed(2)}`}</p>
                                 <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
                                 {(customReq ? customReq.description : msg.meta.message) && (
                                   <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
@@ -1259,7 +1268,7 @@ export default function BuyerMessagesPage() {
                                     {isPaid ? (
                                       <span className="text-green-400 font-bold flex items-center">
                                         <ShoppingBag size={14} className="mr-1" />
-                                        Paid ✅
+                                        Paid âœ…
                                       </span>
                                     ) : (
                                       <>
@@ -1599,7 +1608,10 @@ export default function BuyerMessagesPage() {
                 <span className="font-bold text-[#ff950e]">
                   ${payingRequest ? (Math.round(payingRequest.price * 1.1 * 100) / 100).toFixed(2) : ''}
                 </span>
-                ?
+                {' '}for "{payingRequest?.title}"?
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                (Includes 10% platform fee)
               </p>
               <div className="flex justify-end gap-2 mt-6">
                 <button
