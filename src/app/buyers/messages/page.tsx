@@ -125,6 +125,7 @@ export default function BuyerMessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Load recent emojis from localStorage on component mount
   useEffect(() => {
@@ -273,47 +274,56 @@ export default function BuyerMessagesPage() {
     });
   }, [threads, lastMessages, searchQuery]);
 
-  // FIXED: Mark messages as read when thread is selected and viewed
+  // 🔧 FIXED: Use Intersection Observer to detect when messages are actually visible
   useEffect(() => {
-    if (activeThread && user) {
-      // Check if there are unread messages in this thread
-      const hasUnreadMessages = threads[activeThread]?.some(
-        msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
-      );
-      
-      if (hasUnreadMessages) {
-        // Mark messages as read in the context immediately
-        markMessagesAsRead(user.username, activeThread);
-        
-        // Add to readThreadsRef to update UI
-        if (!readThreadsRef.current.has(activeThread)) {
-          readThreadsRef.current.add(activeThread);
+    if (!activeThread || !user || !messagesContainerRef.current) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const messageElement = entry.target as HTMLElement;
+          const messageIndex = parseInt(messageElement.getAttribute('data-message-index') || '0');
+          const message = activeMessages[messageIndex];
           
-          // Save to localStorage immediately when thread is selected
-          if (typeof window !== 'undefined') {
-            const readThreadsKey = `panty_read_threads_${user.username}`;
-            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+          if (message && !message.read && message.sender === activeThread && message.receiver === user.username) {
+            // Mark this specific message as read
+            markMessagesAsRead(user.username, activeThread);
             
-            // Dispatch event to notify header
-            const event = new CustomEvent('readThreadsUpdated', { 
-              detail: { threads: Array.from(readThreadsRef.current), username: user.username }
-            });
-            window.dispatchEvent(event);
+            // Update UI tracking
+            if (!readThreadsRef.current.has(activeThread)) {
+              readThreadsRef.current.add(activeThread);
+              
+              // Save to localStorage
+              if (typeof window !== 'undefined') {
+                const readThreadsKey = `panty_read_threads_${user.username}`;
+                localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+                
+                // Dispatch event to notify header
+                const event = new CustomEvent('readThreadsUpdated', { 
+                  detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+                });
+                window.dispatchEvent(event);
+              }
+              
+              setMessageUpdate(prev => prev + 1);
+            }
           }
-          
-          setMessageUpdate(prev => prev + 1);
         }
-      }
-      
-      // Create a custom event to notify other components about thread selection
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('threadSelected', { 
-          detail: { thread: activeThread, username: user.username }
-        });
-        window.dispatchEvent(event);
-      }
-    }
-  }, [activeThread, user, threads, markMessagesAsRead]);
+      });
+    }, {
+      root: messagesContainerRef.current,
+      rootMargin: '0px',
+      threshold: 0.5 // Message is considered "read" when 50% visible
+    });
+
+    // Observe all message elements
+    const messageElements = messagesContainerRef.current.querySelectorAll('[data-message-index]');
+    messageElements.forEach(el => observer.observe(el));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeThread, user, activeMessages, markMessagesAsRead]);
 
   // Calculate UI unread count indicators for the sidebar threads
   const uiUnreadCounts = useMemo(() => {
@@ -933,10 +943,10 @@ export default function BuyerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* Unread indicator - show actual unread count from messages, not UI filtered count */}
-                        {unreadCounts[seller] > 0 && (
+                        {/* Unread indicator - show UI unread count */}
+                        {uiUnreadCounts[seller] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {unreadCounts[seller]}
+                            {uiUnreadCounts[seller]}
                           </div>
                         )}
                       </div>
@@ -1021,7 +1031,7 @@ export default function BuyerMessagesPage() {
                 </div>
                 
                 {/* Messages - This div has proper scrolling */}
-                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]" ref={messagesContainerRef}>
                   <div className="max-w-3xl mx-auto space-y-4">
                     {threadMessages.map((msg, index) => {
                       const isFromMe = msg.sender === user?.username;
@@ -1067,7 +1077,11 @@ export default function BuyerMessagesPage() {
                         !isLastEditor(customReq);
                       
                       return (
-                        <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
+                        <div 
+                          key={index} 
+                          className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
+                          data-message-index={index}
+                        >
                           <div className={`rounded-lg p-3 max-w-[75%] ${
                             isFromMe 
                               ? 'bg-[#ff950e] text-white shadow-lg' 
