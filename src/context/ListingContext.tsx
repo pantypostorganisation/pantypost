@@ -483,7 +483,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (!listing.auction || listing.auction.status !== 'active') return false;
     
     // Check if auction has ended
-    if (new Date(listing.auction.endTime) <= new Date()) {
+    if (new Date(listing.auction.endTime).getTime() <= new Date().getTime()) {
       // Update auction status to ended
       const updatedListings = [...listings];
       updatedListings[listingIndex] = {
@@ -587,136 +587,230 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return null; // No valid winners found
   };
 
-  // Check for ended auctions and process them
+  // FIXED: Check for ended auctions with distributed lock to prevent race conditions
   const checkEndedAuctions = () => {
-    const now = new Date();
-    let updated = false;
-    let removedListings: string[] = [];
+    const lockKey = 'auction_check_lock';
+    const lockExpiry = 5000; // 5 seconds
+    const instanceId = uuidv4(); // Unique ID for this check instance
     
-    const updatedListings = listings.map(listing => {
-      // Skip non-auction listings or already ended auctions
-      if (!listing.auction || listing.auction.status !== 'active') {
-        return listing;
+    try {
+      // Try to acquire lock
+      const now = Date.now();
+      const existingLock = localStorage.getItem(lockKey);
+      
+      if (existingLock) {
+        try {
+          const lockData = JSON.parse(existingLock);
+          // Check if lock is expired
+          if (lockData.expiry > now) {
+            console.log(`[Auction Check ${instanceId}] Another instance is processing auctions`);
+            return; // Another tab/instance is processing
+          }
+        } catch (e) {
+          // Invalid lock data, proceed to acquire
+        }
       }
       
-      // Check if auction has ended
-      if (new Date(listing.auction.endTime) <= now) {
-        updated = true;
-        
-        // Process auction if there are bids
-        if (listing.auction.bids.length > 0) {
-          // Find a valid winner (someone with sufficient funds)
-          const validWinner = findValidWinner(
-            listing.auction.bids, 
-            listing.auction.reservePrice
-          );
-          
-          if (validWinner) {
-            // Process the winning bid
-            const winningBidder = validWinner.bidder;
-            const winningBid = validWinner.amount;
-            
-            // Create a copy of the listing for purchase with proper pricing
-            const purchaseListingCopy = {
-              ...listing,
-              price: winningBid,
-              markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100
-            };
-            
-            // Calculate seller tier credit
-            const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
-            const tierCreditPercent = sellerTierInfo.credit;
-            const tierCreditAmount = winningBid * tierCreditPercent;
-            
-            // Process the purchase
-            const success = purchaseListing(purchaseListingCopy, winningBidder);
-            
-            if (success) {
-              // Notify seller of the winner and any tier credit
-              if (tierCreditAmount > 0) {
-                addSellerNotification(
-                  listing.seller,
-                  `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
-                );
-              } else {
-                addSellerNotification(
-                  listing.seller,
-                  `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)}`
-                );
-              }
-              
-              // If the winning bidder is not the highest bidder, notify both
-              if (listing.auction.highestBidder && winningBidder !== listing.auction.highestBidder) {
-                addSellerNotification(
-                  listing.seller,
-                  `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
-                );
-              }
-              
-              // Add to order history with auction flag to track auction orders
-              addOrder({
-                ...purchaseListingCopy,
-                buyer: winningBidder,
-                date: new Date().toISOString(),
-                imageUrl: listing.imageUrls?.[0] || undefined,
-                wasAuction: true, // Add flag to indicate this was an auction
-                finalBid: winningBid,
-                tierCreditAmount: tierCreditAmount // Store the tier credit amount
-              });
-              
-              // Mark listing for removal since it has been sold
-              removedListings.push(listing.id);
-              return null;
-            } else {
-              // This shouldn't happen since we verified funds above, but just in case
-              addSellerNotification(
-                listing.seller,
-                `⚠️ Auction payment error: Couldn't process payment for "${listing.title}"`
-              );
-            }
-          } else {
-            // No valid winner with sufficient funds
-            if (listing.auction.reservePrice && listing.auction.highestBid && listing.auction.highestBid < listing.auction.reservePrice) {
-              // Reserve price not met
-              addSellerNotification(
-                listing.seller,
-                `🔨 Auction ended: Reserve price not met for "${listing.title}"`
-              );
-            } else if (listing.auction.highestBidder) {
-              // Highest bidder had insufficient funds (and no other valid bidders)
-              addSellerNotification(
-                listing.seller,
-                `⚠️ Auction ended: Bidder ${listing.auction.highestBidder} had insufficient funds for "${listing.title}" and no other valid bidders were found.`
-              );
-            }
+      // Set lock with expiry time and instance ID
+      const lockData = {
+        expiry: now + lockExpiry,
+        instanceId: instanceId,
+        timestamp: now
+      };
+      localStorage.setItem(lockKey, JSON.stringify(lockData));
+      
+      // Double-check we own the lock (in case of race condition)
+      const verifyLock = localStorage.getItem(lockKey);
+      if (verifyLock) {
+        try {
+          const verifyData = JSON.parse(verifyLock);
+          if (verifyData.instanceId !== instanceId) {
+            console.log(`[Auction Check ${instanceId}] Lost lock race to ${verifyData.instanceId}`);
+            return; // Another instance won the race
           }
-        } else {
-          // No bids placed
-          addSellerNotification(
-            listing.seller,
-            `🔨 Auction ended: No bids were placed on "${listing.title}"`
-          );
+        } catch (e) {
+          // Proceed if we can't verify
+        }
+      }
+      
+      console.log(`[Auction Check ${instanceId}] Acquired lock, processing auctions...`);
+      
+      // Process auctions
+      let updated = false;
+      let removedListings: string[] = [];
+      
+      const updatedListings = listings.map(listing => {
+        // Skip non-auction listings or already ended auctions
+        if (!listing.auction || listing.auction.status !== 'active') {
+          return listing;
         }
         
-        // Mark auction as ended if it wasn't removed
-        return {
-          ...listing,
-          auction: {
-            ...listing.auction,
-            status: 'ended' as AuctionStatus
+        // Check if auction has ended
+        if (new Date(listing.auction.endTime).getTime() <= now) {
+          updated = true;
+          
+          // Create a processing marker to prevent duplicate processing
+          const processingKey = `auction_processing_${listing.id}`;
+          const existingProcessing = localStorage.getItem(processingKey);
+          
+          if (existingProcessing) {
+            console.log(`[Auction Check ${instanceId}] Auction ${listing.id} already being processed`);
+            return listing; // Skip if already being processed
           }
-        };
+          
+          // Mark as processing with 30 second expiry
+          localStorage.setItem(processingKey, JSON.stringify({
+            instanceId: instanceId,
+            expiry: now + 30000
+          }));
+          
+          try {
+            // Process auction if there are bids
+            if (listing.auction.bids.length > 0) {
+              // Find a valid winner (someone with sufficient funds)
+              const validWinner = findValidWinner(
+                listing.auction.bids, 
+                listing.auction.reservePrice
+              );
+              
+              if (validWinner) {
+                // Process the winning bid
+                const winningBidder = validWinner.bidder;
+                const winningBid = validWinner.amount;
+                
+                // Create a copy of the listing for purchase with proper pricing
+                const purchaseListingCopy = {
+                  ...listing,
+                  price: winningBid,
+                  markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100
+                };
+                
+                // Calculate seller tier credit
+                const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
+                const tierCreditPercent = sellerTierInfo.credit;
+                const tierCreditAmount = winningBid * tierCreditPercent;
+                
+                // Process the purchase
+                const success = purchaseListing(purchaseListingCopy, winningBidder);
+                
+                if (success) {
+                  // Notify seller of the winner and any tier credit
+                  if (tierCreditAmount > 0) {
+                    addSellerNotification(
+                      listing.seller,
+                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+                    );
+                  } else {
+                    addSellerNotification(
+                      listing.seller,
+                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)}`
+                    );
+                  }
+                  
+                  // If the winning bidder is not the highest bidder, notify both
+                  if (listing.auction.highestBidder && winningBidder !== listing.auction.highestBidder) {
+                    addSellerNotification(
+                      listing.seller,
+                      `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
+                    );
+                  }
+                  
+                  // Add to order history with auction flag to track auction orders
+                  addOrder({
+                    ...purchaseListingCopy,
+                    buyer: winningBidder,
+                    date: new Date().toISOString(),
+                    imageUrl: listing.imageUrls?.[0] || undefined,
+                    wasAuction: true, // Add flag to indicate this was an auction
+                    finalBid: winningBid,
+                    tierCreditAmount: tierCreditAmount // Store the tier credit amount
+                  });
+                  
+                  // Mark listing for removal since it has been sold
+                  removedListings.push(listing.id);
+                  
+                  // Clean up processing marker
+                  localStorage.removeItem(processingKey);
+                  
+                  return null;
+                } else {
+                  // This shouldn't happen since we verified funds above, but just in case
+                  addSellerNotification(
+                    listing.seller,
+                    `⚠️ Auction payment error: Couldn't process payment for "${listing.title}"`
+                  );
+                }
+              } else {
+                // No valid winner with sufficient funds
+                if (listing.auction.reservePrice && listing.auction.highestBid && listing.auction.highestBid < listing.auction.reservePrice) {
+                  // Reserve price not met
+                  addSellerNotification(
+                    listing.seller,
+                    `🔨 Auction ended: Reserve price not met for "${listing.title}"`
+                  );
+                } else if (listing.auction.highestBidder) {
+                  // Highest bidder had insufficient funds (and no other valid bidders)
+                  addSellerNotification(
+                    listing.seller,
+                    `⚠️ Auction ended: Bidder ${listing.auction.highestBidder} had insufficient funds for "${listing.title}" and no other valid bidders were found.`
+                  );
+                }
+              }
+            } else {
+              // No bids placed
+              addSellerNotification(
+                listing.seller,
+                `🔨 Auction ended: No bids were placed on "${listing.title}"`
+              );
+            }
+            
+            // Clean up processing marker
+            localStorage.removeItem(processingKey);
+            
+            // Mark auction as ended if it wasn't removed
+            return {
+              ...listing,
+              auction: {
+                ...listing.auction,
+                status: 'ended' as AuctionStatus
+              }
+            };
+          } catch (error) {
+            console.error(`[Auction Check ${instanceId}] Error processing auction ${listing.id}:`, error);
+            // Clean up processing marker on error
+            localStorage.removeItem(processingKey);
+            return listing;
+          }
+        }
+        
+        return listing;
+      }).filter(listing => listing !== null) as Listing[]; // Filter out null entries (sold listings)
+      
+      // Remove listings that were sold
+      const finalListings = updatedListings.filter(listing => !removedListings.includes(listing.id));
+      
+      if (updated || removedListings.length > 0) {
+        setListings(finalListings);
+        localStorage.setItem('listings', JSON.stringify(finalListings));
+        console.log(`[Auction Check ${instanceId}] Processed ${removedListings.length} auctions`);
       }
       
-      return listing;
-    }).filter(listing => listing !== null) as Listing[]; // Filter out null entries (sold listings)
-    
-    // Remove listings that were sold
-    const finalListings = updatedListings.filter(listing => !removedListings.includes(listing.id));
-    
-    if (updated || removedListings.length > 0) {
-      setListings(finalListings);
-      localStorage.setItem('listings', JSON.stringify(finalListings));
+    } finally {
+      // Always release lock when done
+      const currentLock = localStorage.getItem(lockKey);
+      if (currentLock) {
+        try {
+          const lockData = JSON.parse(currentLock);
+          // Only remove if we own the lock
+          if (lockData.instanceId === instanceId) {
+            localStorage.removeItem(lockKey);
+            console.log(`[Auction Check ${instanceId}] Released lock`);
+          }
+        } catch (e) {
+          // Remove invalid lock
+          localStorage.removeItem(lockKey);
+        }
+      }
     }
   };
 
