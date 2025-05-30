@@ -296,10 +296,8 @@ export default function BuyerMessagesPage() {
         
         unreadCounts[seller] = threadUnreadCount;
         
-        // Only add to total if not in readThreadsRef
-        if (!readThreadsRef.current.has(seller) && threadUnreadCount > 0) {
-          totalUnreadCount += 1; // Count threads, not messages
-        }
+        // 🔥 FIXED: Always count unread messages, ignore readThreadsRef for actual count
+        totalUnreadCount += threadUnreadCount;
       });
     }
     
@@ -337,8 +335,8 @@ export default function BuyerMessagesPage() {
     const counts: { [seller: string]: number } = {};
     if (threads) {
       Object.keys(threads).forEach(seller => {
-        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
-        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
+        // 🔥 FIXED: Always show actual unread count, don't hide based on readThreadsRef
+        counts[seller] = unreadCounts[seller];
       });
     }
     return counts;
@@ -1004,9 +1002,10 @@ export default function BuyerMessagesPage() {
                   }`}
                 >
                   <BellRing size={14} className="mr-1" />
-                  Online
+                  Unread
+                  {/* 🔥 FIXED: Show unread counter in the Online/Unread button */}
                   {totalUnreadCount > 0 && (
-                    <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
+                    <span className="ml-2 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
                       {totalUnreadCount}
                     </span>
                   )}
@@ -1073,7 +1072,7 @@ export default function BuyerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* Unread indicator - show UI unread count */}
+                        {/* 🔥 FIXED: Unread indicator - show UI unread count for each individual thread */}
                         {uiUnreadCounts[seller] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
                             {uiUnreadCounts[seller]}
@@ -1760,8 +1759,6 @@ export default function BuyerMessagesPage() {
                     </div>
                   )}
                 </div>
-                
-
                 
                 {/* Description Field */}
                 <div>
