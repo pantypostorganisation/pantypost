@@ -36,23 +36,48 @@ const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// All emojis in a single flat array
+// All emojis in a single flat array - ordered by likely usage for this platform
 const ALL_EMOJIS = [
-  // Smileys and people
-  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕',
-  // Animals and nature
-  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦆', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷', '🕸', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃',
-  // Food and drink
-  '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫑', '🥕', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚',
-  // Activities and sports
-  '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🏵', '🎗', '🎫', '🎟', '🎪', '🤹', '🎭', '🩰', '🎨', '🎬', '🎤',
-  // Travel and places
-  '🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🦯', '🦽', '🦼', '🛴', '🚲', '🛵', '🏍', '🛺', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩', '💺', '🛰', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥', '🛳', '⛴', '🚢', '⚓', '🪝', '⛽', '🚧', '🚦', '🚥', '🚏', '🗺', '🗿',
-  // Objects 
-  '⌚', '📱', '📲', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🕹', '🗜', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '🧭', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯', '🪔', '🧯', '🛢', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '💎', '⚖️', '🪜', '🧰', '🪛', '🔧', '🔨', '⚒', '🛠',
-  // Symbols
-  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑',
-  // Flags
+  // ❤️ MOST LIKELY TO BE USED - Love, flirty, suggestive
+  '❤️', '💕', '💖', '💗', '💓', '💞', '💝', '😍', '🥰', '😘', '😗', '😙', '😚', '💋', '😋', '😛', '😜', '😝', '🤤', '🥵', '🔥', '💦', '🍑', '🍆', '🌶', '🍯', '🍒', '🍓', '🥥', '🍌', '🍭', '🍰', '🧁', '🍪', '🥛', '☕', '🍷', '🥂', '🍾', '💎', '🎁', '🌹', '🌺', '🌸', '💐', '🦋', '✨', '💫', '⭐', '🌟', '💯', 
+  
+  // 😊 COMMON POSITIVE EMOTIONS
+  '😊', '🙂', '😁', '😄', '😃', '😀', '😆', '😅', '😂', '🤣', '🥳', '😇', '🤗', '🤭', '😉', '😌', '🥺', '🥹', '😏', '🤩', '😎', '🤓', '🧐', '🤔', '🤫', '🤐', '😌',
+  
+  // 💜 MORE HEARTS & LOVE
+  '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💘', '💟',
+  
+  // 😢 EMOTIONS & EXPRESSIONS  
+  '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '😱', '😨', '😰', '😥', '😓', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😪', '😴', '🤤', '😵', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🥶',
+  
+  // 🎉 CELEBRATION & FUN
+  '🎉', '🎊', '🎈', '🎂', '🎀', '🎁', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🎗', '🎫', '🎟', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
+  
+  // 💰 MONEY & SHOPPING
+  '💰', '💵', '💴', '💶', '💷', '🪙', '💳', '💸', '🛍', '🛒', '🛁', '👑', '💍', '👄', '💄', '👗', '👙', '👠', '🩱', '🧿',
+  
+  // 🍕 FOOD & DRINKS (selective favorites)
+  '🍕', '🍔', '🍟', '🌮', '🌯', '🥪', '🥗', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🍙', '🍚', '🥟', '🍤', '🦪', '🥘', '🫕', '🥫', '🍳', '🥚', '🧀', '🥓', '🥩', '🍗', '🍖', '🥞', '🧇', '🥐', '🥯', '🍞', '🥖', '🥨', '🧈',
+  
+  // 🍎 FRUITS (keeping sexy ones at front)
+  '🍎', '🍐', '🍊', '🍋', '🍉', '🍇', '🫐', '🍈', '🍑', '🥭', '🍍', '🥝', '🍅',
+  
+  // 🐱 CUTE ANIMALS
+  '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐰', '🐹', '🐭', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐔', '🐧', '🦆', '🦉', '🦇', '🐺', '🐴', '🦄', '🐝', '🦋', '🐌', '🐞', '🐜', '🕷', '🦂', '🐢', '🐍', '🦎', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🐃',
+  
+  // ⚽ ACTIVITIES & SPORTS
+  '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🥅', '⛳', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🤹',
+  
+  // 🚗 TRAVEL & PLACES  
+  '🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🛴', '🚲', '🛵', '🏍', '🛺', '🚁', '✈️', '🛫', '🛬', '🛩', '🚀', '🛸', '⛵', '🚤', '🛥', '🛳', '⚴', '🚢', '🏖', '🏝', '🏕', '🗻', '🏔', '❄️', '☀️', '🌤', '⛅', '🌦', '🌧', '⛈', '🌩', '🌨', '☁️', '🌪', '🌈', '☂️', '☔',
+  
+  // 📱 OBJECTS & TECH
+  '📱', '💻', '⌨️', '🖥', '🖨', '🖱', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📺', '📻', '🎙', '⌚', '⏰', '⏲', '⏱', '🕰', '⌛', '⏳', '🔋', '🔌', '💡', '🔦', '🕯', '🧯', '💽', '💾', '💿', '📀', '📼', '📡',
+  
+  // 🎯 SYMBOLS & MISC
+  '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑',
+  
+  // 🏁 FLAGS (minimal selection)
   '🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️'
 ];
 
@@ -74,6 +99,10 @@ type Message = {
 };
 
 export default function BuyerMessagesPage() {
+  // ⚠️ CRITICAL FIX: ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT THE TOP
+  // Move ALL hooks before any early returns or conditional logic
+  
+  // Context hooks - ALWAYS called first
   const { user, users } = useListings();
   const {
     messages,
@@ -87,14 +116,10 @@ export default function BuyerMessagesPage() {
   } = useMessages();
   const { addRequest, getRequestsForUser, respondToRequest, requests, setRequests, markRequestAsPaid } = useRequests();
   const { wallet, purchaseCustomRequest, sendTip } = useWallet();
-
   const searchParams = useSearchParams();
-  const threadParam = searchParams?.get('thread');
-
-  // Add mounted state to prevent hydration errors
+  
+  // State hooks - ALWAYS called
   const [mounted, setMounted] = useState(false);
-
-  // State
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [showCustomRequestForm, setShowCustomRequestForm] = useState(false);
@@ -118,19 +143,23 @@ export default function BuyerMessagesPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isImageLoading, setIsImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
-  
-  // Emoji picker state
+  const [messageUpdate, setMessageUpdate] = useState(0);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   
-  // Refs
+  // Ref hooks - ALWAYS called
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Get URL parameter - ALWAYS called
+  const threadParam = searchParams?.get('thread');
+  
+  // Basic derived values - ALWAYS calculated
+  const username = user?.username || '';
 
   // Set mounted to true after component mounts to prevent hydration errors
   useEffect(() => {
@@ -184,7 +213,7 @@ export default function BuyerMessagesPage() {
     }
   }, [threadParam, user]);
 
-  // FIXED: Handle clicks outside the emoji picker to close it
+  // Handle clicks outside the emoji picker to close it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -194,7 +223,6 @@ export default function BuyerMessagesPage() {
     
     document.addEventListener('mousedown', handleClickOutside);
     
-    // FIXED: Return cleanup function properly
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -205,20 +233,9 @@ export default function BuyerMessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, messages]);
 
-  // Don't render until mounted to prevent hydration errors
-  if (!mounted) {
-    return (
-      <RequireAuth role="buyer">
-        <div className="py-3 bg-black"></div>
-        <div className="h-screen bg-black flex items-center justify-center">
-          <div className="text-white">Loading...</div>
-        </div>
-      </RequireAuth>
-    );
-  }
-
-  const username = user?.username || '';
-
+  // 🔥 MOVED: All useMemo hooks must be called AFTER all useState/useRef/useEffect hooks
+  // This is the CRITICAL fix - useMemo was being called conditionally before
+  
   // Memoize messages data to improve performance
   const { 
     threads, 
@@ -281,8 +298,17 @@ export default function BuyerMessagesPage() {
     return { threads, unreadCounts, lastMessages, sellerProfiles, totalUnreadCount };
   }, [user, messages, users, messageUpdate]);
 
-  // Get active messages for current thread
-  const activeMessages = activeThread ? threads[activeThread] || [] : [];
+  // Memoize buyerRequests to avoid recalculation
+  const buyerRequests = useMemo(() => {
+    return user ? getRequestsForUser(user.username, 'buyer') : [];
+  }, [user, getRequestsForUser]);
+
+  // Get the messages for the active thread
+  const threadMessages = useMemo(() => {
+    return activeThread
+      ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
+      : [];
+  }, [activeThread, threads, buyerRequests]);
 
   // Filter threads by search query and apply sorting
   const filteredAndSortedThreads = useMemo(() => {
@@ -297,6 +323,21 @@ export default function BuyerMessagesPage() {
       return dateB - dateA;
     });
   }, [threads, lastMessages, searchQuery]);
+
+  // Calculate UI unread count indicators for the sidebar threads
+  const uiUnreadCounts = useMemo(() => {
+    const counts: { [seller: string]: number } = {};
+    if (threads) {
+      Object.keys(threads).forEach(seller => {
+        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
+        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
+      });
+    }
+    return counts;
+  }, [threads, unreadCounts, messageUpdate]);
+
+  // Get active messages for current thread
+  const activeMessages = activeThread ? threads[activeThread] || [] : [];
 
   // FIXED: Use Intersection Observer to detect when messages are actually visible
   useEffect(() => {
@@ -349,18 +390,6 @@ export default function BuyerMessagesPage() {
     };
   }, [activeThread, user, activeMessages, markMessagesAsRead]);
 
-  // Calculate UI unread count indicators for the sidebar threads
-  const uiUnreadCounts = useMemo(() => {
-    const counts: { [seller: string]: number } = {};
-    if (threads) {
-      Object.keys(threads).forEach(seller => {
-        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
-        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
-      });
-    }
-    return counts;
-  }, [threads, unreadCounts, messageUpdate]);
-
   // Save read threads to localStorage
   useEffect(() => {
     if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
@@ -376,36 +405,7 @@ export default function BuyerMessagesPage() {
     }
   }, [messageUpdate, user]);
 
-  // Memoize buyerRequests to avoid recalculation
-  const buyerRequests = useMemo(() => {
-    return user ? getRequestsForUser(user.username, 'buyer') : [];
-  }, [user, getRequestsForUser]);
-
-  // Process messages to handle custom requests correctly
-  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
-    const seen = new Set();
-    const result: any[] = [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
-        if (!seen.has(msg.meta.id)) {
-          seen.add(msg.meta.id);
-          result.unshift(msg);
-        }
-      } else {
-        result.unshift(msg);
-      }
-    }
-    return result;
-  }
-
-  // Get the messages for the active thread
-  const threadMessages = useMemo(() => {
-    return activeThread
-      ? getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests)
-      : [];
-  }, [activeThread, threads, buyerRequests]);
-
+  // ⚠️ ALL useCallback hooks MUST be called before any early returns
   // Image handling with validation and error handling
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     // Fixed: Added null check for event.target
@@ -584,9 +584,6 @@ export default function BuyerMessagesPage() {
     }
   }, [user, activeThread, hasReported, reportUser]);
 
-  const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
-  const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
-
   const handleEditRequest = useCallback((req: any) => {
     if (!req || typeof req !== 'object') return;
     
@@ -655,7 +652,7 @@ export default function BuyerMessagesPage() {
     setShowPayModal(true);
   }, []);
 
-  // NEW: Enhanced payment handling with custom request integration
+  // Enhanced payment handling with custom request integration
   const handleConfirmPay = useCallback(() => {
     if (!user || !payingRequest) return;
     
@@ -685,7 +682,7 @@ export default function BuyerMessagesPage() {
       return;
     }
 
-    // NEW: Use the enhanced custom request purchase function
+    // Use the enhanced custom request purchase function
     const customRequestPurchase = {
       requestId: payingRequest.id,
       title: payingRequest.title,
@@ -783,6 +780,41 @@ export default function BuyerMessagesPage() {
     
     setActiveThread(sellerId);
   }, [activeThread]);
+
+  // ⚠️ EARLY RETURN: Only return early AFTER all hooks have been called
+  // Don't render until mounted to prevent hydration errors
+  if (!mounted) {
+    return (
+      <RequireAuth role="buyer">
+        <div className="py-3 bg-black"></div>
+        <div className="h-screen bg-black flex items-center justify-center">
+          <div className="text-white">Loading...</div>
+        </div>
+      </RequireAuth>
+    );
+  }
+
+  // Process messages to handle custom requests correctly
+  function getLatestCustomRequestMessages(messages: any[], requests: any[]) {
+    const seen = new Set();
+    const result: any[] = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
+        if (!seen.has(msg.meta.id)) {
+          seen.add(msg.meta.id);
+          result.unshift(msg);
+        }
+      } else {
+        result.unshift(msg);
+      }
+    }
+    return result;
+  }
+
+  // Derived values and helper variables
+  const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
+  const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
   // Create a status badge component - matches seller's version
   function StatusBadge({ status }: { status: string }) {
@@ -1167,12 +1199,12 @@ export default function BuyerMessagesPage() {
                             {/* Custom request - Hard black text with black circle behind icon */}
                             {msg.type === 'customRequest' && msg.meta && (
                               <div className="mt-2 text-sm text-black space-y-1 border-t border-black/20 pt-2">
-                                <p className="font-semibold flex items-center">
+                                <div className="font-semibold flex items-center">
                                   <div className="bg-black w-6 h-6 rounded-full flex items-center justify-center mr-2">
                                     <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-4 h-4" />
                                   </div>
                                   Custom Request
-                                </p>
+                                </div>
                                 <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
                                 <p><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
                                 <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
