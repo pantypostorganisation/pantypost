@@ -55,8 +55,9 @@ export default function Header() {
   const balancePollingRef = useRef<NodeJS.Timeout | null>(null);
   // Store last update time to prevent too frequent updates
   const lastBalanceUpdateRef = useRef<number>(0);
-  // Track if component is mounted to prevent state updates after unmount
-  const isMountedRef = useRef<boolean>(false);
+  
+  // FIXED: Remove isMountedRef and use cleanup properly
+  const cleanupFunctionsRef = useRef<(() => void)[]>([]);
 
   const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
@@ -269,11 +270,11 @@ export default function Header() {
   const forceUpdateBalances = useCallback(() => {
     const now = Date.now();
     // Only update if at least 500ms have passed since last update
-    if (now - lastBalanceUpdateRef.current >= 500 && isMountedRef.current) {
+    if (now - lastBalanceUpdateRef.current >= 500 && mounted) {
       lastBalanceUpdateRef.current = now;
       setBalanceKey(prev => prev + 1);
     }
-  }, []);
+  }, [mounted]);
 
   // Enhanced auction check function that updates balances immediately after checking
   const checkAuctionsAndUpdateBalances = useCallback(() => {
@@ -304,8 +305,10 @@ export default function Header() {
   useEffect(() => {
     if (!mounted) return;
     
+    let auctionCheckInterval: NodeJS.Timeout | null = null;
+    
     // Initial check on mount
-    if (isMountedRef.current && typeof checkEndedAuctions === 'function') {
+    if (mounted && typeof checkEndedAuctions === 'function') {
       try {
         checkAuctionsAndUpdateBalances();
       } catch (err) {
@@ -314,8 +317,8 @@ export default function Header() {
     }
     
     // Set up polling that's less frequent to avoid rapid successive updates
-    const auctionCheckInterval = setInterval(() => {
-      if (isMountedRef.current && typeof checkEndedAuctions === 'function') {
+    auctionCheckInterval = setInterval(() => {
+      if (mounted && typeof checkEndedAuctions === 'function') {
         try {
           checkAuctionsAndUpdateBalances();
         } catch (err) {
@@ -324,7 +327,16 @@ export default function Header() {
       }
     }, 10000); // Check every 10 seconds instead of 3 seconds
     
-    return () => clearInterval(auctionCheckInterval);
+    // FIXED: Proper cleanup
+    const cleanup = () => {
+      if (auctionCheckInterval) {
+        clearInterval(auctionCheckInterval);
+      }
+    };
+    
+    cleanupFunctionsRef.current.push(cleanup);
+    
+    return cleanup;
   }, [mounted, checkAuctionsAndUpdateBalances, checkEndedAuctions]);
 
   // Set up balance polling with rate limiting
@@ -339,17 +351,22 @@ export default function Header() {
     
     // Start polling balances less frequently
     balancePollingRef.current = setInterval(() => {
-      if (isMountedRef.current) {
+      if (mounted) {
         forceUpdateBalances();
       }
     }, 5000); // Poll every 5 seconds instead of every second
     
-    return () => {
+    // FIXED: Proper cleanup
+    const cleanup = () => {
       if (balancePollingRef.current) {
         clearInterval(balancePollingRef.current);
         balancePollingRef.current = null;
       }
     };
+    
+    cleanupFunctionsRef.current.push(cleanup);
+    
+    return cleanup;
   }, [mounted, username, forceUpdateBalances]);
 
   // Calculate pending orders count
@@ -381,7 +398,7 @@ export default function Header() {
 
   // Extract report count updating to a stable callback
   const updateReportCount = useCallback(() => {
-    if (typeof window !== 'undefined' && isAdminUser && isMountedRef.current) {
+    if (typeof window !== 'undefined' && isAdminUser && mounted) {
       try {
         const count = typeof getReportCount === 'function' ? getReportCount() : 0;
         setReportCount(count);
@@ -389,7 +406,7 @@ export default function Header() {
         console.error('Error updating report count:', err);
       }
     }
-  }, [isAdminUser]);
+  }, [isAdminUser, mounted]);
 
   // Listen for read threads updates and storage changes - REMOVED readThreadsRef updates
   useEffect(() => {
@@ -397,7 +414,7 @@ export default function Header() {
     
     // Handle when localStorage changes in another tab/window
     const handleStorageChange = (event: StorageEvent) => {
-      if (!isMountedRef.current || !user) return;
+      if (!mounted || !user) return;
       
       if (event.key?.startsWith('panty_read_threads_')) {
         const readThreadsKey = `panty_read_threads_${user.username}`;
@@ -415,24 +432,29 @@ export default function Header() {
       }
     };
 
-    // REMOVED: readThreadsUpdated and threadSelected handlers since they interfere with header count
-
     window.addEventListener('storage', handleStorageChange);
     
-    return () => {
+    // FIXED: Proper cleanup
+    const cleanup = () => {
       window.removeEventListener('storage', handleStorageChange);
     };
+    
+    cleanupFunctionsRef.current.push(cleanup);
+    
+    return cleanup;
   }, [mounted, user]);
 
   // Initial load and event setup
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    isMountedRef.current = true;
+    let isMounted = true;
+    
+    // FIXED: Remove global isMountedRef
     setMounted(true);
     
     // Only call updateReportCount if it's a valid function
-    if (typeof updateReportCount === 'function') {
+    if (typeof updateReportCount === 'function' && isMounted) {
       try {
         updateReportCount();
       } catch (err) {
@@ -440,33 +462,45 @@ export default function Header() {
       }
     }
     
-    window.addEventListener('updateReports', updateReportCount);
-
-    // Handle clicking outside notification dropdown
+    // Event handlers
+    const handleUpdateReports = () => {
+      if (isMounted) {
+        updateReportCount();
+      }
+    };
+    
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifDropdown(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-
+    
     // Custom auction end event listener - with rate limiting
     const handleAuctionEnd = () => {
       const now = Date.now();
-      if (now - lastBalanceUpdateRef.current >= 500) {
+      if (now - lastBalanceUpdateRef.current >= 500 && isMounted) {
         lastBalanceUpdateRef.current = now;
         forceUpdateBalances();
       }
     };
     
+    window.addEventListener('updateReports', handleUpdateReports);
+    document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('auctionEnded', handleAuctionEnd);
 
-    return () => {
-      isMountedRef.current = false;
-      window.removeEventListener('updateReports', updateReportCount);
+    // FIXED: Comprehensive cleanup
+    const cleanup = () => {
+      isMounted = false;
+      window.removeEventListener('updateReports', handleUpdateReports);
       window.removeEventListener('auctionEnded', handleAuctionEnd);
       document.removeEventListener('mousedown', handleClickOutside);
+      
+      // Call all accumulated cleanup functions
+      cleanupFunctionsRef.current.forEach(fn => fn());
+      cleanupFunctionsRef.current = [];
     };
+
+    return cleanup;
   }, [updateReportCount, forceUpdateBalances]);
 
   // Add this to window with rate limiting
@@ -476,7 +510,7 @@ export default function Header() {
     // Create a rate limited version for the global function
     const rateLimitedBalanceUpdate = () => {
       const now = Date.now();
-      if (now - lastBalanceUpdateRef.current >= 500 && isMountedRef.current) {
+      if (now - lastBalanceUpdateRef.current >= 500 && mounted) {
         lastBalanceUpdateRef.current = now;
         setBalanceKey(prev => prev + 1);
       }
@@ -484,11 +518,16 @@ export default function Header() {
     
     (window as any).forceUpdateBalances = rateLimitedBalanceUpdate;
     
-    return () => {
+    // FIXED: Proper cleanup
+    const cleanup = () => {
       if (typeof window !== 'undefined') {
         delete (window as any).forceUpdateBalances;
       }
     };
+    
+    cleanupFunctionsRef.current.push(cleanup);
+    
+    return cleanup;
   }, [mounted]);
 
   // Reset to active tab when dropdown opens
