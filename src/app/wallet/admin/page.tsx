@@ -209,10 +209,10 @@ export default function AdminProfitDashboard() {
   const displaySalesCommission = filteredOrders.length > 0 ? 
     calculateRevenueFromSales(timeFilter === 'all' ? orderHistory : filteredOrders) : 0;
 
-  // User engagement metrics
+  // User engagement metrics - FIX #2: Division by zero protection
   const activeListings = listings.length;
-  const avgListingsPerSeller = sellers.length > 0 ? activeListings / sellers.length : 0;
-  const buyerToSellerRatio = sellers.length > 0 ? buyers.length / sellers.length : 0;
+  const avgListingsPerSeller = sellers.length > 0 ? (activeListings / sellers.length).toFixed(1) : '0.0';
+  const buyerToSellerRatio = sellers.length > 0 ? (buyers.length / sellers.length).toFixed(1) : '0.0';
 
   // 🚀 NEW: Top depositing users
   const topDepositors = Object.entries(
@@ -648,7 +648,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Revenue Chart - Updated descriptions */}
+          {/* Revenue Chart - Updated descriptions - FIX #4: Chart label spacing */}
           <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 mb-8 overflow-hidden">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -675,7 +675,7 @@ export default function AdminProfitDashboard() {
                         {formatCurrency(period.revenue)}
                       </div>
                     </div>
-                    <span className="text-xs text-gray-500 transform -rotate-45 origin-center whitespace-nowrap">
+                    <span className="text-xs text-gray-500 transform -rotate-45 origin-center whitespace-nowrap block mt-1">
                       {period.date}
                     </span>
                   </div>
@@ -699,7 +699,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Platform Health & User Metrics + Top Depositors */}
+          {/* Platform Health & User Metrics + Top Depositors - FIX #6: Type fix */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             {/* Platform Health */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
@@ -740,7 +740,7 @@ export default function AdminProfitDashboard() {
                   <div className="text-right">
                     <span className="text-2xl font-bold text-white">{activeListings}</span>
                     <p className="text-xs text-gray-400">
-                      {avgListingsPerSeller.toFixed(1)} avg per seller
+                      {avgListingsPerSeller} avg per seller
                     </p>
                   </div>
                 </div>
