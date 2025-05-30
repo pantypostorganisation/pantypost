@@ -28,18 +28,127 @@ const sanitizeArray = (arr: string[]): string[] => {
   return arr.map(item => sanitizeString(item)).filter(Boolean);
 };
 
-// Allow only safe image URLs: data:image/, blob:, or relative URLs
+// FIXED: Enhanced image URL sanitization to prevent XSS via data URLs
 const sanitizeImageUrl = (url: string): string => {
   if (typeof url !== 'string') return '';
-  if (
-    url.startsWith('data:image/') ||
-    url.startsWith('blob:') ||
-    url.startsWith('/')
-  ) {
+  
+  // Handle data URLs with strict validation
+  if (url.startsWith('data:image/')) {
+    // Only allow specific image MIME types
+    const validImageTypes = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
+    
+    // Extract MIME type and validate format
+    const matches = url.match(/^data:image\/(jpeg|jpg|png|gif|webp);base64,/);
+    if (!matches) {
+      console.warn('Invalid data URL format detected');
+      return ''; // Reject invalid data URL format
+    }
+    
+    // Validate base64 content
+    const base64Part = url.split(',')[1];
+    if (!base64Part) {
+      console.warn('Missing base64 content in data URL');
+      return '';
+    }
+    
+    // Check if base64 is valid (only allowed characters)
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Part)) {
+      console.warn('Invalid base64 characters detected');
+      return '';
+    }
+    
+    // Additional check: ensure the base64 length is reasonable for an image
+    // Reject suspiciously small base64 that might contain scripts
+    if (base64Part.length < 100) {
+      console.warn('Suspiciously small base64 content');
+      return '';
+    }
+    
+    // Try to decode a small portion to verify it's actual image data
+    try {
+      const testDecode = atob(base64Part.substring(0, 50));
+      // Check for common image file signatures
+      const firstBytes = testDecode.substring(0, 10);
+      
+      // Common image file signatures (magic numbers)
+      const imageSignatures = [
+        '\xFF\xD8\xFF', // JPEG
+        '\x89PNG', // PNG
+        'GIF87a', // GIF
+        'GIF89a', // GIF
+        'RIFF' // WebP (partial)
+      ];
+      
+      const hasValidSignature = imageSignatures.some(sig => 
+        firstBytes.includes(sig)
+      );
+      
+      if (!hasValidSignature && !firstBytes.includes('WEBP')) {
+        console.warn('Invalid image file signature detected');
+        return '';
+      }
+    } catch (e) {
+      console.warn('Failed to decode base64 for validation');
+      return '';
+    }
+    
+    return url; // Data URL is valid
+  }
+  
+  // Handle blob URLs (generally safe as they're browser-generated)
+  if (url.startsWith('blob:')) {
+    // Validate blob URL format
+    if (!/^blob:https?:\/\/[^/]+\/[a-f0-9-]+$/i.test(url)) {
+      console.warn('Invalid blob URL format');
+      return '';
+    }
     return url;
   }
-  // Optionally, allow certain trusted domains:
-  // if (url.match(/^https:\/\/your-trusted-domain\.com\//)) return url;
+  
+  // Handle relative URLs
+  if (url.startsWith('/')) {
+    // Validate relative URL doesn't contain suspicious patterns
+    if (url.includes('../') || url.includes('..\\') || url.includes('%2e%2e')) {
+      console.warn('Path traversal attempt detected');
+      return '';
+    }
+    return url;
+  }
+  
+  // Handle absolute URLs (https/http)
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    try {
+      const urlObj = new URL(url);
+      
+      // Whitelist of allowed image hosting domains
+      const allowedDomains = [
+        'localhost',
+        '127.0.0.1',
+        // Add your trusted image CDN domains here
+        // 'your-cdn.com',
+        // 'trusted-image-host.com'
+      ];
+      
+      // Check if domain is in whitelist
+      const hostname = urlObj.hostname.toLowerCase();
+      const isAllowed = allowedDomains.some(domain => 
+        hostname === domain || hostname.endsWith(`.${domain}`)
+      );
+      
+      if (!isAllowed) {
+        console.warn(`External image URL from untrusted domain: ${hostname}`);
+        return ''; // Reject untrusted domains
+      }
+      
+      return url;
+    } catch (e) {
+      console.warn('Invalid URL format');
+      return '';
+    }
+  }
+  
+  // Reject any other URL schemes
+  console.warn('Unsupported URL scheme');
   return '';
 };
 
