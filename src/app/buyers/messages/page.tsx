@@ -91,6 +91,9 @@ export default function BuyerMessagesPage() {
   const searchParams = useSearchParams();
   const threadParam = searchParams?.get('thread');
 
+  // Add mounted state to prevent hydration errors
+  const [mounted, setMounted] = useState(false);
+
   // State
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
@@ -128,6 +131,11 @@ export default function BuyerMessagesPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Set mounted to true after component mounts to prevent hydration errors
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Load recent emojis from localStorage on component mount
   useEffect(() => {
@@ -176,7 +184,7 @@ export default function BuyerMessagesPage() {
     }
   }, [threadParam, user]);
 
-  // Handle clicks outside the emoji picker to close it
+  // FIXED: Handle clicks outside the emoji picker to close it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -185,6 +193,8 @@ export default function BuyerMessagesPage() {
     };
     
     document.addEventListener('mousedown', handleClickOutside);
+    
+    // FIXED: Return cleanup function properly
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -194,6 +204,18 @@ export default function BuyerMessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, messages]);
+
+  // Don't render until mounted to prevent hydration errors
+  if (!mounted) {
+    return (
+      <RequireAuth role="buyer">
+        <div className="py-3 bg-black"></div>
+        <div className="h-screen bg-black flex items-center justify-center">
+          <div className="text-white">Loading...</div>
+        </div>
+      </RequireAuth>
+    );
+  }
 
   const username = user?.username || '';
 
@@ -276,7 +298,7 @@ export default function BuyerMessagesPage() {
     });
   }, [threads, lastMessages, searchQuery]);
 
-  // ðŸ”§ FIXED: Use Intersection Observer to detect when messages are actually visible
+  // FIXED: Use Intersection Observer to detect when messages are actually visible
   useEffect(() => {
     if (!activeThread || !user || !messagesContainerRef.current) return;
 
@@ -729,7 +751,7 @@ export default function BuyerMessagesPage() {
       sendMessage(
         user.username,
         activeThread,
-        `ðŸ’° I sent you a tip of ${amount.toFixed(2)}!`
+        `💰 I sent you a tip of ${amount.toFixed(2)}!`
       );
       setTipAmount('');
       setTipResult({
@@ -762,9 +784,9 @@ export default function BuyerMessagesPage() {
     setActiveThread(sellerId);
   }, [activeThread]);
 
-  // Create a status badge component
+  // Create a status badge component - matches seller's version
   function StatusBadge({ status }: { status: string }) {
-    let color = 'bg-yellow-500 text-white';
+    let color = 'bg-yellow-500 text-black';
     let label = status.toUpperCase();
     let icon = <Clock size={12} className="mr-1" />;
     
@@ -785,7 +807,7 @@ export default function BuyerMessagesPage() {
       icon = <ShoppingBag size={12} className="mr-1" />;
     }
     else if (status === 'pending') {
-      color = 'bg-yellow-500 text-white';
+      color = 'bg-yellow-500 text-black';
       icon = <Clock size={12} className="mr-1" />;
     }
     
@@ -972,9 +994,9 @@ export default function BuyerMessagesPage() {
                         <p className="text-sm text-gray-400 truncate">
                           {lastMessage ? (
                             lastMessage.type === 'customRequest' 
-                              ? 'ðŸ› ï¸ Custom Request'
+                              ? '🛒 Custom Request'
                               : lastMessage.type === 'image'
-                                ? 'ðŸ“· Image'
+                                ? '📷 Image'
                                 : lastMessage.content
                           ) : ''}
                         </p>
@@ -1100,7 +1122,7 @@ export default function BuyerMessagesPage() {
                             {/* Message header */}
                             <div className="flex items-center text-xs mb-1">
                               <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                                {isFromMe ? 'You' : msg.sender} â€¢ {time}
+                                {isFromMe ? 'You' : msg.sender} • {time}
                               </span>
                               {isFromMe && (
                                 <span className="ml-2 text-[10px]">
@@ -1128,29 +1150,31 @@ export default function BuyerMessagesPage() {
                                   }}
                                 />
                                 {msg.content && (
-                                  <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                                  <p className={`text-black mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                                     {msg.content}
                                   </p>
                                 )}
                               </div>
                             )}
                             
-                            {/* Text content */}
+                            {/* Text content - Hard black text */}
                             {msg.type !== 'image' && msg.type !== 'customRequest' && (
-                              <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                              <p className={`text-black ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                                 {msg.content}
                               </p>
                             )}
                             
-                            {/* Custom request */}
+                            {/* Custom request - Hard black text with black circle behind icon */}
                             {msg.type === 'customRequest' && msg.meta && (
-                              <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
+                              <div className="mt-2 text-sm text-black space-y-1 border-t border-black/20 pt-2">
                                 <p className="font-semibold flex items-center">
-                                  <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-4 h-4 mr-1" />
+                                  <div className="bg-black w-6 h-6 rounded-full flex items-center justify-center mr-2">
+                                    <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-4 h-4" />
+                                  </div>
                                   Custom Request
                                 </p>
                                 <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-                                <p><b>Price:</b> {customReq ? `${customReq.price.toFixed(2)}` : `${msg.meta.price?.toFixed(2)}`}</p>
+                                <p><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
                                 <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
                                 {(customReq ? customReq.description : msg.meta.message) && (
                                   <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
@@ -1268,7 +1292,7 @@ export default function BuyerMessagesPage() {
                                     {isPaid ? (
                                       <span className="text-green-400 font-bold flex items-center">
                                         <ShoppingBag size={14} className="mr-1" />
-                                        Paid âœ…
+                                        Paid ✅
                                       </span>
                                     ) : (
                                       <>

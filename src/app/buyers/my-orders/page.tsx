@@ -129,6 +129,9 @@ export default function MyOrdersPage() {
             src={order.imageUrl || '/default-image.jpg'}
             alt={order.title}
             className="w-full h-48 object-cover mb-4 rounded"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/default-image.jpg';
+            }}
           />
           {badgeContent}
         </div>
@@ -207,50 +210,52 @@ export default function MyOrdersPage() {
           )}
         </div>
 
-        {/* Seller Info */}
-        <Link
-          href={`/sellers/${order.seller}`}
-          className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-800 font-semibold mt-auto mb-3 group/seller"
-        >
-          {sellerProfilePic ? (
-            <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-gray-400 rounded-full transition">
-              <img
-                src={sellerProfilePic}
-                alt={order.seller}
-                className="w-8 h-8 rounded-full object-cover border border-gray-300"
-              />
-            </span>
-          ) : (
-            <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold border border-gray-300">
-              {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
-            </span>
-          )}
-          {order.seller}
-          
-          {/* Verified Badge */}
-          {isSellerVerified && (
-            <div className="relative">
-              <img
-                src="/verification_badge.png"
-                alt="Verified"
-                className="w-4 h-4"
-              />
-              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover/seller:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
-                Verified Seller
+        {/* FIXED: Seller Info - Separated the two links to avoid nesting */}
+        <div className="flex items-center justify-between gap-2 mt-auto mb-3">
+          {/* Seller Profile Link */}
+          <Link
+            href={`/sellers/${order.seller}`}
+            className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-800 font-semibold group/seller flex-1"
+          >
+            {sellerProfilePic ? (
+              <span className="relative group-hover/seller:ring-2 group-hover/seller:ring-gray-400 rounded-full transition">
+                <img
+                  src={sellerProfilePic}
+                  alt={order.seller}
+                  className="w-8 h-8 rounded-full object-cover border border-gray-300"
+                />
+              </span>
+            ) : (
+              <span className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold border border-gray-300">
+                {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
+              </span>
+            )}
+            <span>{order.seller}</span>
+            
+            {/* Verified Badge */}
+            {isSellerVerified && (
+              <div className="relative">
+                <img
+                  src="/verification_badge.png"
+                  alt="Verified"
+                  className="w-4 h-4"
+                />
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover/seller:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                  Verified Seller
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </Link>
           
-          {/* Message seller button */}
+          {/* Message seller button - Separate link */}
           <Link
             href={`/buyers/messages?thread=${order.seller}`}
-            className="ml-auto inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white font-bold px-2 py-1 rounded text-xs transition-all shadow-sm"
-            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 bg-gray-600 hover:bg-gray-500 text-white font-bold px-2 py-1 rounded text-xs transition-all shadow-sm"
           >
             <MessageCircle className="w-3 h-3" />
             Message
           </Link>
-        </Link>
+        </div>
 
         {/* Price Information */}
         <div className="border-t pt-3">

@@ -1,7 +1,7 @@
 // src/app/sellers/orders-to-fulfil/page.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -27,7 +27,9 @@ import {
   Star,
   Settings,
   DollarSign,
-  ShoppingBag
+  ShoppingBag,
+  ExternalLink,
+  Mail
 } from 'lucide-react';
 
 export default function OrdersToFulfilPage() {
@@ -39,70 +41,70 @@ export default function OrdersToFulfilPage() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
-  // Filter orders for current seller
-  const userOrders = user && user.username 
-    ? orderHistory.filter(order => order.seller === user.username)
-    : [];
+  // Memoize filtered orders for performance
+  const { userOrders, auctionOrders, customRequestOrders, directOrders } = useMemo(() => {
+    if (!user?.username) {
+      return { userOrders: [], auctionOrders: [], customRequestOrders: [], directOrders: [] };
+    }
 
-  // Separate orders by type
-  const auctionOrders = userOrders.filter(order => order.wasAuction);
-  const customRequestOrders = userOrders.filter(order => order.isCustomRequest);
-  const directOrders = userOrders.filter(order => !order.wasAuction && !order.isCustomRequest);
+    const userOrders = orderHistory.filter(order => order.seller === user.username);
+    const auctionOrders = userOrders.filter(order => order.wasAuction);
+    const customRequestOrders = userOrders.filter(order => order.isCustomRequest);
+    const directOrders = userOrders.filter(order => !order.wasAuction && !order.isCustomRequest);
 
-  const handleOpenAddressModal = (orderId: string) => {
+    return { userOrders, auctionOrders, customRequestOrders, directOrders };
+  }, [user?.username, orderHistory]);
+
+  const handleOpenAddressModal = useCallback((orderId: string) => {
     setSelectedOrder(orderId);
     setAddressModalOpen(true);
-  };
+  }, []);
 
-  const handleConfirmAddress = (address: DeliveryAddress) => {
+  const handleConfirmAddress = useCallback((address: DeliveryAddress) => {
     if (selectedOrder) {
       updateOrderAddress(selectedOrder, address);
     }
     setAddressModalOpen(false);
     setSelectedOrder(null);
-  };
+  }, [selectedOrder, updateOrderAddress]);
 
-  const getSelectedOrderAddress = (): DeliveryAddress | null => {
+  const getSelectedOrderAddress = useCallback((): DeliveryAddress | null => {
     if (!selectedOrder) return null;
     
     const order = orderHistory.find(order => order.id === selectedOrder);
     return order?.deliveryAddress || null;
-  };
+  }, [selectedOrder, orderHistory]);
 
-  const getShippingStatusBadge = (status?: string) => {
+  const getShippingStatusBadge = useCallback((status?: string) => {
     if (!status || status === 'pending') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
           <Clock className="w-3 h-3 mr-1" />
           Awaiting Shipment
         </span>
       );
     } else if (status === 'processing') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
           <Package className="w-3 h-3 mr-1" />
           Preparing
         </span>
       );
     } else if (status === 'shipped') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">
           <Truck className="w-3 h-3 mr-1" />
           Shipped
         </span>
       );
     }
-  };
+  }, []);
 
-  const toggleExpand = (orderId: string) => {
-    if (expandedOrder === orderId) {
-      setExpandedOrder(null);
-    } else {
-      setExpandedOrder(orderId);
-    }
-  };
+  const toggleExpand = useCallback((orderId: string) => {
+    setExpandedOrder(prev => prev === orderId ? null : orderId);
+  }, []);
 
-  const handleCopyAddress = async (address: DeliveryAddress) => {
+  const handleCopyAddress = useCallback(async (address: DeliveryAddress) => {
     const formattedAddress = formatAddressForCopy(address);
     
     try {
@@ -111,10 +113,19 @@ export default function OrdersToFulfilPage() {
       setTimeout(() => setCopiedText(null), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = formattedAddress;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedText('address');
+      setTimeout(() => setCopiedText(null), 2000);
     }
-  };
+  }, []);
 
-  const formatAddressForCopy = (address: DeliveryAddress): string => {
+  const formatAddressForCopy = useCallback((address: DeliveryAddress): string => {
     const lines = [
       address.fullName,
       address.addressLine1,
@@ -124,31 +135,29 @@ export default function OrdersToFulfilPage() {
     ].filter(Boolean);
     
     return lines.join('\n');
-  };
+  }, []);
 
-  const handleStatusChange = (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+  const handleStatusChange = useCallback((orderId: string, status: 'pending' | 'processing' | 'shipped') => {
     updateShippingStatus(orderId, status);
-  };
+  }, [updateShippingStatus]);
 
-  const renderAddressBlock = (order: any) => {
+  const renderAddressBlock = useCallback((order: any) => {
     if (!order.deliveryAddress) {
       return (
         <div className="mt-4 py-4 px-6 bg-gradient-to-r from-yellow-900/20 to-orange-900/20 border border-yellow-500/30 rounded-xl flex items-start">
           <AlertTriangle className="w-6 h-6 text-yellow-400 mr-3 flex-shrink-0 mt-1" />
-          <div>
-            <p className="text-yellow-200 font-semibold text-base mb-2">â³ Waiting for delivery address</p>
-            <p className="text-yellow-300/80 text-sm">
+          <div className="flex-1">
+            <p className="text-yellow-200 font-semibold text-base mb-2">Waiting for delivery address</p>
+            <p className="text-yellow-300/80 text-sm mb-3">
               The buyer hasn't provided their shipping address yet. You can message them to request it.
             </p>
-            <div className="mt-3">
-              <Link
-                href={`/sellers/messages?thread=${order.buyer}`}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-4 py-2 rounded-lg transition-all text-sm shadow-lg hover:shadow-[#ff950e]/25"
-              >
-                <MessageCircle className="w-4 h-4" />
-                Message {order.buyer}
-              </Link>
-            </div>
+            <Link
+              href={`/sellers/messages?thread=${order.buyer}`}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-4 py-2 rounded-lg transition-all text-sm shadow-lg hover:shadow-[#ff950e]/25"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Message {order.buyer}
+            </Link>
           </div>
         </div>
       );
@@ -160,7 +169,7 @@ export default function OrdersToFulfilPage() {
         <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#e0850d]/20 px-6 py-4 flex justify-between items-center border-b border-gray-700">
           <div className="flex items-center">
             <MapPin className="w-5 h-5 text-[#ff950e] mr-2" />
-            <h4 className="font-semibold text-white text-base">ðŸ“¦ Shipping Address</h4>
+            <h4 className="font-semibold text-white text-base">📦 Shipping Address</h4>
           </div>
           <button 
             onClick={() => handleCopyAddress(address)}
@@ -189,16 +198,16 @@ export default function OrdersToFulfilPage() {
           </div>
           {address.specialInstructions && (
             <div className="mt-4 pt-4 border-t border-gray-600">
-              <div className="text-sm text-[#ff950e] font-semibold mb-2">ðŸ“ Special Instructions:</div>
+              <div className="text-sm text-[#ff950e] font-semibold mb-2">Special Instructions:</div>
               <p className="text-gray-300 bg-black/20 p-3 rounded-lg border border-gray-600">{address.specialInstructions}</p>
             </div>
           )}
         </div>
       </div>
     );
-  };
+  }, [handleCopyAddress, copiedText]);
 
-  const renderShippingControls = (order: any) => {
+  const renderShippingControls = useCallback((order: any) => {
     if (!order.deliveryAddress) return null;
     
     return (
@@ -217,7 +226,7 @@ export default function OrdersToFulfilPage() {
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
               }`}
             >
-              â³ Pending
+              ⏳ Pending
             </button>
             <button
               onClick={() => handleStatusChange(order.id, 'processing')}
@@ -227,7 +236,7 @@ export default function OrdersToFulfilPage() {
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
               }`}
             >
-              ðŸ“¦ Processing
+              📦 Processing
             </button>
             <button
               onClick={() => handleStatusChange(order.id, 'shipped')}
@@ -237,16 +246,16 @@ export default function OrdersToFulfilPage() {
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
               }`}
             >
-              ðŸšš Shipped
+              🚚 Shipped
             </button>
           </div>
         </div>
       </div>
     );
-  };
+  }, [handleStatusChange]);
 
   // Function to extract the shipping label text that could be printed
-  const getShippingLabel = (order: any): string => {
+  const getShippingLabel = useCallback((order: any): string => {
     if (!order.deliveryAddress) return '';
 
     const address = order.deliveryAddress;
@@ -259,9 +268,9 @@ export default function OrdersToFulfilPage() {
     ].filter(Boolean);
 
     return lines.join('\n');
-  };
+  }, []);
 
-  const renderOrderCard = (order: any, type: 'auction' | 'direct' | 'custom') => {
+  const renderOrderCard = useCallback((order: any, type: 'auction' | 'direct' | 'custom') => {
     const isAuction = type === 'auction';
     const isCustom = type === 'custom';
     
@@ -273,8 +282,8 @@ export default function OrdersToFulfilPage() {
       borderStyle = 'border-purple-500/30 hover:border-purple-400/50';
       gradientStyle = 'from-purple-900/10 via-gray-900/50 to-blue-900/10';
       badgeContent = (
-        <span className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-500 to-purple-400 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
-          <Gavel className="w-3 h-3 inline mr-1" />
+        <span className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-500 to-purple-400 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg flex items-center">
+          <Gavel className="w-3 h-3 mr-1" />
           Auction
         </span>
       );
@@ -282,8 +291,8 @@ export default function OrdersToFulfilPage() {
       borderStyle = 'border-blue-500/30 hover:border-blue-400/50';
       gradientStyle = 'from-blue-900/10 via-gray-900/50 to-cyan-900/10';
       badgeContent = (
-        <span className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
-          <Settings className="w-3 h-3 inline mr-1" />
+        <span className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg flex items-center">
+          <Settings className="w-3 h-3 mr-1" />
           Custom
         </span>
       );
@@ -292,20 +301,33 @@ export default function OrdersToFulfilPage() {
     return (
       <li
         key={order.id + order.date}
-        className={`border rounded-2xl bg-gradient-to-br overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 ${gradientStyle} ${borderStyle}`}
+        className={`relative border rounded-2xl bg-gradient-to-br overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 ${gradientStyle} ${borderStyle}`}
       >
         {/* Order Header */}
         <div className="p-6">
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* Product Image */}
-            <div className="relative">
-              <img
-                src={order.imageUrl || '/default-image.jpg'}
-                alt={order.title}
-                className="w-24 h-24 object-cover rounded-xl border-2 border-gray-600 shadow-lg"
-              />
-              {badgeContent}
-            </div>
+            {/* Product Image - Hide for custom requests */}
+            {!isCustom && (
+              <div className="relative">
+                <img
+                  src={order.imageUrl || '/default-image.jpg'}
+                  alt={order.title}
+                  className="w-24 h-24 object-cover rounded-xl border-2 border-gray-600 shadow-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/default-image.jpg';
+                  }}
+                />
+                {badgeContent}
+              </div>
+            )}
+
+            {/* For custom requests, show badge without image */}
+            {isCustom && badgeContent && (
+              <div className="relative w-24 h-24 bg-gradient-to-br from-blue-900/30 to-cyan-900/30 rounded-xl border-2 border-blue-500/30 flex items-center justify-center">
+                <Settings className="w-8 h-8 text-blue-400" />
+                {badgeContent}
+              </div>
+            )}
 
             {/* Order Details */}
             <div className="flex-1 min-w-0">
@@ -331,10 +353,10 @@ export default function OrdersToFulfilPage() {
               </div>
               
               <div className="text-sm text-gray-400 mb-4">
-                {isAuction && 'Won on:'}
-                {isCustom && 'Requested on:'}
-                {!isAuction && !isCustom && 'Sold on:'} 
-                <span className="text-gray-300 font-medium ml-1">{new Date(order.date).toLocaleDateString()}</span>
+                {isAuction && 'Won on: '}
+                {isCustom && 'Requested on: '}
+                {!isAuction && !isCustom && 'Sold on: '} 
+                <span className="text-gray-300 font-medium">{new Date(order.date).toLocaleDateString()}</span>
               </div>
               
               <div className="flex flex-wrap items-center gap-4">
@@ -348,33 +370,22 @@ export default function OrdersToFulfilPage() {
                 )}
                 
                 {isCustom && (
-                  <div className="bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-700/50 flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-blue-400" />
-                    <span className="text-blue-300 text-sm">Custom Request</span>
+                  <div className="bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-700/50">
+                    <span className="text-blue-300 text-sm">Agreed price:</span>
+                    <span className="text-blue-200 font-bold text-lg ml-2">
+                      ${order.price.toFixed(2)}
+                    </span>
                   </div>
                 )}
                 
-                <div className={`px-4 py-2 rounded-full border ${
-                  isAuction ? 'bg-pink-900/30 border-pink-700/50' : 
-                  isCustom ? 'bg-cyan-900/30 border-cyan-700/50' :
-                  'bg-[#ff950e]/10 border-[#ff950e]/30'
-                }`}>
-                  <span className={`text-sm flex items-center gap-1 ${
-                    isAuction ? 'text-pink-300' : 
-                    isCustom ? 'text-cyan-300' :
-                    'text-[#ff950e]'
-                  }`}>
-                    <DollarSign className="w-3 h-3" />
-                    Total paid:
-                  </span>
-                  <span className={`font-bold text-lg ml-2 ${
-                    isAuction ? 'text-pink-200' : 
-                    isCustom ? 'text-cyan-200' :
-                    'text-[#ff950e]'
-                  }`}>
-                    ${order.markedUpPrice?.toFixed(2) || (order.price * 1.1).toFixed(2)}
-                  </span>
-                </div>
+                {!isAuction && !isCustom && (
+                  <div className="bg-[#ff950e]/10 px-4 py-2 rounded-lg border border-[#ff950e]/30">
+                    <span className="text-[#ff950e] text-sm">Listed price:</span>
+                    <span className="text-[#ff950e] font-bold text-lg ml-2">
+                      ${order.price.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
               
               {/* Show custom request details */}
@@ -450,7 +461,7 @@ export default function OrdersToFulfilPage() {
               <div className="mt-6 pt-6 border-t border-gray-700">
                 <h4 className="font-semibold text-white text-lg flex items-center mb-4">
                   <FileText className="w-5 h-5 mr-2 text-[#ff950e]" />
-                  ðŸ·ï¸ Shipping Label
+                  Shipping Label
                 </h4>
                 
                 {/* Enhanced Warning */}
@@ -458,7 +469,7 @@ export default function OrdersToFulfilPage() {
                   <ShieldAlert className="w-6 h-6 text-red-400 mr-3 flex-shrink-0 mt-1" />
                   <div>
                     <p className="text-red-200 font-bold text-sm uppercase tracking-wide mb-2">
-                      ðŸš¨ PRIVACY WARNING - NO RETURN ADDRESS
+                      PRIVACY WARNING - NO RETURN ADDRESS
                     </p>
                     <p className="text-red-300 text-sm">
                       For your safety and privacy, <strong>never include your personal address</strong> on any package. 
@@ -480,7 +491,17 @@ export default function OrdersToFulfilPage() {
         )}
       </li>
     );
-  };
+  }, [expandedOrder, getShippingStatusBadge, toggleExpand, renderAddressBlock, renderShippingControls, getShippingLabel]);
+
+  if (!user) {
+    return (
+      <RequireAuth role="seller">
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <div className="text-white">Loading...</div>
+        </div>
+      </RequireAuth>
+    );
+  }
 
   return (
     <RequireAuth role="seller">
@@ -488,7 +509,7 @@ export default function OrdersToFulfilPage() {
         <div className="max-w-6xl mx-auto">
           <div className="mb-10">
             <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center mb-4">
-              ðŸ“¦ Orders to Fulfil
+              📦 Orders to Fulfil
             </h1>
             <p className="text-gray-300 text-lg max-w-2xl">
               Manage your pending orders, update shipping status, and access buyer contact information.
@@ -502,7 +523,7 @@ export default function OrdersToFulfilPage() {
                 <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-2 rounded-lg mr-3 shadow-lg">
                   <Gavel className="w-6 h-6 text-white" />
                 </div>
-                ðŸ† Auction Sales ({auctionOrders.length})
+                Auction Sales ({auctionOrders.length})
               </h2>
               <ul className="space-y-6">
                 {auctionOrders.map((order) => renderOrderCard(order, 'auction'))}
@@ -517,7 +538,7 @@ export default function OrdersToFulfilPage() {
                 <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-2 rounded-lg mr-3 shadow-lg">
                   <Settings className="w-6 h-6 text-white" />
                 </div>
-                âœ¨ Custom Request Orders ({customRequestOrders.length})
+                Custom Request Orders ({customRequestOrders.length})
               </h2>
               <ul className="space-y-6">
                 {customRequestOrders.map((order) => renderOrderCard(order, 'custom'))}
@@ -528,8 +549,10 @@ export default function OrdersToFulfilPage() {
           {/* Direct Sales */}
           <section className="mb-12">
             <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-              <ShoppingBag className="w-6 h-6 text-[#ff950e] mr-3" />
-              ðŸ›ï¸ Direct Sales ({directOrders.length})
+              <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] p-2 rounded-lg mr-3 shadow-lg">
+                <ShoppingBag className="w-6 h-6 text-black" />
+              </div>
+              Direct Sales ({directOrders.length})
             </h2>
             {directOrders.length === 0 ? (
               <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
