@@ -28,7 +28,8 @@ import {
   Filter,
   BellRing,
   Settings,
-  DollarSign
+  DollarSign,
+  Package
 } from 'lucide-react';
 
 // Constants
@@ -122,10 +123,17 @@ export default function BuyerMessagesPage() {
   const [mounted, setMounted] = useState(false);
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
-  const [showCustomRequestForm, setShowCustomRequestForm] = useState(false);
-  const [requestTitle, setRequestTitle] = useState('');
-  const [requestPrice, setRequestPrice] = useState<number | ''>('');
-  const [requestTags, setRequestTags] = useState('');
+  
+  // NEW: Custom Request Modal State (separate from message input)
+  const [showCustomRequestModal, setShowCustomRequestModal] = useState(false);
+  const [customRequestForm, setCustomRequestForm] = useState({
+    title: '',
+    price: '',
+    description: ''
+  });
+  const [customRequestErrors, setCustomRequestErrors] = useState<Record<string, string>>({});
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  
   const [editRequestId, setEditRequestId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPrice, setEditPrice] = useState<number | ''>('');
@@ -470,6 +478,110 @@ export default function BuyerMessagesPage() {
     }, 0);
   }, []);
 
+  // NEW: Custom Request Modal Functions
+  const openCustomRequestModal = useCallback(() => {
+    setShowCustomRequestModal(true);
+    setCustomRequestForm({
+      title: '',
+      price: '',
+      description: ''
+    });
+    setCustomRequestErrors({});
+  }, []);
+
+  const closeCustomRequestModal = useCallback(() => {
+    setShowCustomRequestModal(false);
+    setCustomRequestForm({
+      title: '',
+      price: '',
+      description: ''
+    });
+    setCustomRequestErrors({});
+    setIsSubmittingRequest(false);
+  }, []);
+
+  const validateCustomRequest = useCallback(() => {
+    const errors: Record<string, string> = {};
+    
+    if (!customRequestForm.title.trim()) {
+      errors.title = 'Title is required';
+    }
+    
+    if (!customRequestForm.price.trim()) {
+      errors.price = 'Price is required';
+    } else {
+      const price = parseFloat(customRequestForm.price);
+      if (isNaN(price) || price <= 0) {
+        errors.price = 'Price must be a valid number greater than 0';
+      }
+    }
+    
+    if (!customRequestForm.description.trim()) {
+      errors.description = 'Description is required';
+    }
+    
+    setCustomRequestErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [customRequestForm]);
+
+  const handleSubmitCustomRequest = useCallback(async () => {
+    if (!activeThread || !user || !validateCustomRequest()) return;
+    
+    setIsSubmittingRequest(true);
+    
+    try {
+      const priceValue = parseFloat(customRequestForm.price);
+      const tagsArray: string[] = []; // No tags anymore
+      const requestId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
+      // Add request to the system
+      addRequest({
+        id: requestId,
+        buyer: user.username,
+        seller: activeThread,
+        title: customRequestForm.title.trim(),
+        description: customRequestForm.description.trim(),
+        price: priceValue,
+        tags: tagsArray,
+        status: 'pending',
+        date: new Date().toISOString(),
+        messageThreadId: `${user.username}-${activeThread}`,
+        lastModifiedBy: user.username,
+        originalMessageId: requestId
+      });
+
+      // Send the custom request message
+      sendMessage(
+        user.username,
+        activeThread,
+        `[Custom Request] ${customRequestForm.title.trim()}`,
+        {
+          type: 'customRequest',
+          meta: {
+            id: requestId,
+            title: customRequestForm.title.trim(),
+            price: priceValue,
+            message: customRequestForm.description.trim(),
+          }
+        }
+      );
+
+      // Close modal and show success
+      closeCustomRequestModal();
+      
+      // Optional: Show success message
+      setTimeout(() => {
+        alert('Custom request sent successfully!');
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error submitting custom request:', error);
+      alert('Failed to send custom request. Please try again.');
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  }, [activeThread, user, customRequestForm, validateCustomRequest, addRequest, sendMessage, closeCustomRequestModal]);
+
   // Message sending function - fixed validation logic
   const handleReply = useCallback(() => {
     if (!activeThread || !user) return;
@@ -481,58 +593,11 @@ export default function BuyerMessagesPage() {
       return;
     }
 
-    if (showCustomRequestForm) {
-      if (!requestTitle.trim() || requestPrice === '' || isNaN(Number(requestPrice)) || Number(requestPrice) <= 0) {
-        alert('Please enter a valid title and price for your custom request.');
-        return;
-      }
-      
-      const priceValue = Number(requestPrice);
-      const tagsArray = requestTags.split(',').map(tag => tag.trim()).filter(Boolean);
-      const requestId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-
-      addRequest({
-        id: requestId,
-        buyer: user.username,
-        seller: activeThread,
-        title: requestTitle.trim(),
-        description: textContent,
-        price: priceValue,
-        tags: tagsArray,
-        status: 'pending',
-        date: new Date().toISOString(),
-        messageThreadId: `${user.username}-${activeThread}`,
-        lastModifiedBy: user.username,
-        originalMessageId: requestId
-      });
-
-      sendMessage(
-        user.username,
-        activeThread,
-        `[PantyPost Custom Request] ${requestTitle.trim()}`,
-        {
-          type: 'customRequest',
-          meta: {
-            id: requestId,
-            title: requestTitle.trim(),
-            price: priceValue,
-            tags: tagsArray,
-            message: textContent,
-            imageUrl: selectedImage || undefined,
-          }
-        }
-      );
-      setRequestTitle('');
-      setRequestPrice('');
-      setRequestTags('');
-      setShowCustomRequestForm(false);
-    } else {
-      // Send normal message or image message
-      sendMessage(user.username, activeThread, textContent, {
-        type: selectedImage ? 'image' : 'normal',
-        meta: selectedImage ? { imageUrl: selectedImage } : undefined,
-      });
-    }
+    // Send normal message or image message
+    sendMessage(user.username, activeThread, textContent, {
+      type: selectedImage ? 'image' : 'normal',
+      meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+    });
 
     setReplyMessage('');
     setSelectedImage(null);
@@ -553,12 +618,7 @@ export default function BuyerMessagesPage() {
     activeThread, 
     user, 
     replyMessage, 
-    showCustomRequestForm, 
-    requestTitle, 
-    requestPrice, 
-    requestTags, 
     selectedImage, 
-    addRequest, 
     sendMessage
   ]);
 
@@ -844,7 +904,7 @@ export default function BuyerMessagesPage() {
     }
     
     return (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold flex items-center ${color}`}>
+      <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold flex items-center ${color}`}>
         {icon}
         {label}
       </span>
@@ -899,6 +959,13 @@ export default function BuyerMessagesPage() {
     }
     
     return 'Just now';
+  };
+
+  // Calculate the total cost with platform fee
+  const calculateTotalCost = (basePrice: string) => {
+    const price = parseFloat(basePrice);
+    if (isNaN(price) || price <= 0) return 0;
+    return Math.round(price * 1.1 * 100) / 100;
   };
 
   return (
@@ -1200,14 +1267,14 @@ export default function BuyerMessagesPage() {
                             {msg.type === 'customRequest' && msg.meta && (
                               <div className="mt-2 text-sm text-black space-y-1 border-t border-black/20 pt-2">
                                 <div className="font-semibold flex items-center">
-                                  <div className="bg-black w-6 h-6 rounded-full flex items-center justify-center mr-2">
-                                    <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-4 h-4" />
+                                  <div className="relative mr-2 flex items-center justify-center">
+                                    <div className="bg-black w-6 h-6 rounded-full absolute"></div>
+                                    <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
                                   </div>
                                   Custom Request
                                 </div>
                                 <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
                                 <p><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
-                                <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
                                 {(customReq ? customReq.description : msg.meta.message) && (
                                   <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
                                 )}
@@ -1335,11 +1402,11 @@ export default function BuyerMessagesPage() {
                                           }}
                                           className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-[#ff950e] hover:text-black ${
                                             !canPay ? 'opacity-50 cursor-not-allowed' : ''
-                                          } transition-colors duration-150 flex items-center`}
+                                          } transition-colors duration-150 flex items-center w-fit`}
                                           disabled={!canPay}
                                         >
                                           <ShoppingBag size={12} className="mr-1" />
-                                          Pay {customReq ? `${markupPrice.toFixed(2)}` : ''} Now
+                                          Pay ${customReq ? `${markupPrice.toFixed(2)}` : ''} Now
                                         </button>
                                         {!canPay && (
                                           <span className="text-xs text-red-400 flex items-center">
@@ -1445,52 +1512,6 @@ export default function BuyerMessagesPage() {
                       </div>
                     )}
                     
-                    {/* Custom request form */}
-                    {showCustomRequestForm && (
-                      <div className="space-y-2 mb-3 p-3 mx-4 bg-[#222] rounded-lg border border-gray-700">
-                        <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-medium text-white flex items-center">
-                            <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-5 h-5 mr-2" />
-                            Custom Request
-                          </h3>
-                          <button 
-                            onClick={() => setShowCustomRequestForm(false)}
-                            className="text-gray-400 hover:text-white transition-colors"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Title"
-                          value={requestTitle}
-                          onChange={(e) => setRequestTitle(e.target.value)}
-                          className="w-full p-2 border rounded bg-[#222] border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                        />
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            placeholder="Price (USD)"
-                            value={requestPrice}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setRequestPrice(val === '' ? '' : Number(val));
-                            }}
-                            min="0.01"
-                            step="0.01"
-                            className="flex-1 p-2 border rounded bg-[#222] border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Tags (comma-separated)"
-                            value={requestTags}
-                            onChange={(e) => setRequestTags(e.target.value)}
-                            className="flex-1 p-2 border rounded bg-[#222] border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    
                     {/* Message input */}
                     <div className="px-4 py-3">
                       <div className="relative mb-2">
@@ -1550,10 +1571,10 @@ export default function BuyerMessagesPage() {
                             src="/Attach_Image_Icon.png" 
                             alt="Attach Image" 
                             className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                              showCustomRequestForm || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+                              isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
                             }`}
                             onClick={(e) => {
-                              if (showCustomRequestForm || isImageLoading) return;
+                              if (isImageLoading) return;
                               e.stopPropagation();
                               triggerFileInput();
                             }}
@@ -1573,22 +1594,16 @@ export default function BuyerMessagesPage() {
                             <Smile size={52} className="text-[#ff950e]" />
                           </button>
                           
-                          {/* Custom Request button */}
+                          {/* ENHANCED: Custom Request button - NOW OPENS MODAL */}
                           <img 
                             src="/Custom_Request_Icon.png" 
                             alt="Custom Request" 
                             className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowCustomRequestForm(!showCustomRequestForm);
-                              if (selectedImage) {
-                                setSelectedImage(null);
-                                if (fileInputRef.current) {
-                                  fileInputRef.current.value = '';
-                                }
-                              }
+                              openCustomRequestModal();
                             }}
-                            title="Custom Request"
+                            title="Send Custom Request"
                           />
                           
                           {/* Hidden file input */}
@@ -1653,6 +1668,174 @@ export default function BuyerMessagesPage() {
         
         {/* Bottom Padding */}
         <div className="py-6 bg-black"></div>
+        
+        {/* NEW: Enhanced Custom Request Modal */}
+        {showCustomRequestModal && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4">
+            <div className="bg-[#1a1a1a] rounded-xl max-w-md w-full shadow-2xl border border-gray-800 max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center p-6 border-b border-gray-800">
+                <div className="flex items-center">
+                  <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 mr-3" />
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Custom Request</h3>
+                    <p className="text-sm text-gray-400">Send to {activeThread}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={closeCustomRequestModal}
+                  className="text-gray-400 hover:text-white transition-colors p-1"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              {/* Modal Content */}
+              <div className="p-6 space-y-4">
+                {/* Title Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Request Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={customRequestForm.title}
+                    onChange={(e) => setCustomRequestForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g., Custom worn panties with special requests"
+                    className={`w-full p-3 rounded-lg bg-[#222] border ${
+                      customRequestErrors.title ? 'border-red-500' : 'border-gray-700'
+                    } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]`}
+                    maxLength={100}
+                  />
+                  {customRequestErrors.title && (
+                    <p className="text-red-400 text-xs mt-1 flex items-center">
+                      <AlertTriangle size={12} className="mr-1" />
+                      {customRequestErrors.title}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Price Field with Total Display */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Your Price *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <DollarSign size={16} className="text-gray-400" />
+                    </div>
+                    <input
+                      type="number"
+                      value={customRequestForm.price}
+                      onChange={(e) => setCustomRequestForm(prev => ({ ...prev, price: e.target.value }))}
+                      placeholder="0.00"
+                      min="0.01"
+                      step="0.01"
+                      className={`w-full pl-10 pr-4 p-3 rounded-lg bg-[#222] border ${
+                        customRequestErrors.price ? 'border-red-500' : 'border-gray-700'
+                      } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]`}
+                    />
+                  </div>
+                  {customRequestErrors.price && (
+                    <p className="text-red-400 text-xs mt-1 flex items-center">
+                      <AlertTriangle size={12} className="mr-1" />
+                      {customRequestErrors.price}
+                    </p>
+                  )}
+                  {/* Total cost display */}
+                  {customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
+                    <div className="mt-2 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-300">Base Price:</span>
+                        <span className="text-white">${parseFloat(customRequestForm.price).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-300">Platform Fee (10%):</span>
+                        <span className="text-white">${(parseFloat(customRequestForm.price) * 0.1).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold border-t border-[#ff950e]/30 pt-2 mt-2">
+                        <span className="text-[#ff950e]">Total You'll Pay:</span>
+                        <span className="text-[#ff950e]">${calculateTotalCost(customRequestForm.price).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+
+                
+                {/* Description Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Request Details *
+                  </label>
+                  <textarea
+                    value={customRequestForm.description}
+                    onChange={(e) => setCustomRequestForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Describe exactly what you're looking for, including any special requests, wearing time, activities, etc."
+                    rows={4}
+                    className={`w-full p-3 rounded-lg bg-[#222] border ${
+                      customRequestErrors.description ? 'border-red-500' : 'border-gray-700'
+                    } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] resize-none`}
+                    maxLength={500}
+                  />
+                  {customRequestErrors.description && (
+                    <p className="text-red-400 text-xs mt-1 flex items-center">
+                      <AlertTriangle size={12} className="mr-1" />
+                      {customRequestErrors.description}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {customRequestForm.description.length}/500 characters
+                  </p>
+                </div>
+                
+                {/* Balance Check */}
+                {user && customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
+                  <div className="p-3 bg-[#222] rounded-lg border border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-300">Your Wallet Balance:</span>
+                      <span className="text-white font-medium">${(wallet[user.username] || 0).toFixed(2)}</span>
+                    </div>
+                    {wallet[user.username] < calculateTotalCost(customRequestForm.price) && (
+                      <p className="text-red-400 text-xs mt-2 flex items-center">
+                        <AlertTriangle size={12} className="mr-1" />
+                        Insufficient balance. You'll need ${(calculateTotalCost(customRequestForm.price) - (wallet[user.username] || 0)).toFixed(2)} more.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Modal Footer */}
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 p-6 border-t border-gray-800">
+                <button
+                  onClick={closeCustomRequestModal}
+                  disabled={isSubmittingRequest}
+                  className="px-6 py-2 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitCustomRequest}
+                  disabled={isSubmittingRequest || !customRequestForm.title.trim() || !customRequestForm.price.trim() || !customRequestForm.description.trim()}
+                  className="px-6 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                >
+                  {isSubmittingRequest ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Package size={16} className="mr-2" />
+                      Send Request
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Payment confirmation modal */}
         {showPayModal && payingRequest && (

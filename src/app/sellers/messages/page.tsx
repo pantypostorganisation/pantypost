@@ -126,8 +126,6 @@ function MessageItem({
   setEditTitle,
   editPrice,
   setEditPrice,
-  editTags,
-  setEditTags,
   editMessage,
   setEditMessage,
   handleEditSubmit,
@@ -161,23 +159,23 @@ function MessageItem({
     <div ref={messageRef} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
       <div className={`rounded-lg p-3 max-w-[75%] ${
         isFromMe 
-          ? 'bg-[#ff950e] text-white shadow-lg' 
-          : 'bg-[#333] text-white shadow-md'
+          ? 'bg-[#ff950e] text-black shadow-lg' 
+          : 'bg-[#303030] text-[#fefefe] shadow-md'
       }`}>
         {/* Message header */}
         <div className="flex items-center text-xs mb-1">
-          <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
+          <span className={isFromMe ? 'text-black opacity-75' : 'text-[#fefefe] opacity-75'}>
             {isFromMe ? 'You' : msg.sender} • {time}
           </span>
           {/* Only show Read/Sent for messages that the seller sends */}
           {isFromMe && (
             <span className="ml-2 text-[10px]">
               {msg.read ? (
-                <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
+                <span className={`flex items-center ${isFromMe ? 'text-black opacity-60' : 'text-[#fefefe] opacity-60'}`}>
                   <CheckCheck size={12} className="mr-1" /> Read
                 </span>
               ) : (
-                <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
+                <span className={isFromMe ? 'text-black opacity-50' : 'text-[#fefefe] opacity-50'}>Sent</span>
               )}
             </span>
           )}
@@ -196,44 +194,40 @@ function MessageItem({
               }}
             />
             {msg.content && (
-              <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+              <p className={`${isFromMe ? 'text-black' : 'text-[#fefefe]'} mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                 {msg.content}
               </p>
             )}
           </div>
         )}
         
-        {/* Text content */}
+        {/* Text content - Different colors for sent vs received */}
         {msg.type !== 'image' && msg.type !== 'customRequest' && (
-          <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+          <p className={`${isFromMe ? 'text-black' : 'text-[#fefefe]'} ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
             {msg.content}
           </p>
         )}
         
-        {/* Custom request content */}
+        {/* Custom request content - ADAPTIVE TEXT COLOR */}
         {msg.type === 'customRequest' && msg.meta && (
-          <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
-            <p className="font-semibold flex items-center">
-              <Package size={16} className="mr-1" />
+          <div className={`mt-2 text-sm space-y-1 border-t ${isFromMe ? 'border-black/20' : 'border-white/20'} pt-2`}>
+            <div className={`font-semibold flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
+              <div className="relative mr-2 flex items-center justify-center">
+                <div className="bg-white w-6 h-6 rounded-full absolute"></div>
+                <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
+              </div>
               Custom Request
-            </p>
-            <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-            <p><b>Price:</b> {customReq ? `$${customReq.price.toFixed(2)}` : `$${msg.meta.price?.toFixed(2)}`}</p>
-            <p><b>Tags:</b> {customReq ? customReq.tags?.join(', ') : msg.meta.tags?.join(', ')}</p>
+            </div>
+            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
+            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
             {(customReq ? customReq.description : msg.meta.message) && (
-              <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
+              <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
             )}
             {customReq && (
-              <p className="flex items-center">
+              <p className={`flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
                 <b>Status:</b>
                 {statusBadge(customReq.status)}
               </p>
-            )}
-            {isPaid && (
-              <span className="text-green-400 font-bold flex items-center">
-                <ShoppingBag size={14} className="mr-1" />
-                Paid ✅
-              </span>
             )}
             {showActionButtons && !isPaid && (
               <div className="flex flex-wrap gap-2 pt-2">
@@ -242,7 +236,7 @@ function MessageItem({
                     e.stopPropagation();
                     customReq && handleAccept(customReq);
                   }}
-                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
+                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                 >
                   <CheckCircle2 size={12} className="mr-1" />
                   Accept
@@ -252,7 +246,7 @@ function MessageItem({
                     e.stopPropagation();
                     customReq && handleDecline(customReq);
                   }}
-                  className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
+                  className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                 >
                   <XCircle size={12} className="mr-1" />
                   Decline
@@ -262,7 +256,7 @@ function MessageItem({
                     e.stopPropagation();
                     customReq && handleEditRequest(customReq);
                   }}
-                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
+                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                 >
                   <Edit3 size={12} className="mr-1" />
                   Edit
@@ -270,13 +264,13 @@ function MessageItem({
               </div>
             )}
             {editRequestId === customReq?.id && customReq && (
-              <div className="mt-2 space-y-2 bg-black/30 p-2 rounded">
+              <div className="mt-3 space-y-2 bg-white/90 p-3 rounded border border-black/20 shadow-sm">
                 <input
                   type="text"
                   placeholder="Title"
                   value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <input
@@ -289,22 +283,14 @@ function MessageItem({
                   }}
                   min="0.01"
                   step="0.01"
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <input
-                  type="text"
-                  placeholder="Tags (comma-separated)"
-                  value={editTags}
-                  onChange={e => setEditTags(e.target.value)}
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <textarea
                   placeholder="Message"
                   value={editMessage}
                   onChange={e => setEditMessage(e.target.value)}
-                  className="w-full p-2 border rounded bg-black border-gray-700 text-white"
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <div className="flex gap-2">
@@ -313,7 +299,7 @@ function MessageItem({
                       e.stopPropagation();
                       handleEditSubmit();
                     }}
-                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
+                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                   >
                     <Edit3 size={12} className="mr-1" />
                     Submit Edit
@@ -323,7 +309,7 @@ function MessageItem({
                       e.stopPropagation();
                       setEditRequestId(null);
                     }}
-                    className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
+                    className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                   >
                     <X size={12} className="mr-1" />
                     Cancel
@@ -367,7 +353,6 @@ export default function SellerMessagesPage() {
   const [editRequestId, setEditRequestId] = useState<string | null>(null);
   const [editPrice, setEditPrice] = useState<number | ''>('');
   const [editTitle, setEditTitle] = useState('');
-  const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -767,49 +752,48 @@ export default function SellerMessagesPage() {
     });
   }, [threads, lastMessages, unreadCounts, searchQuery, filterBy]);
 
-  // Create a status badge component
+  // Create a status badge component - IMPROVED COLORS FOR READABILITY
   function statusBadge(status: string) {
-    let color = 'bg-yellow-500 text-white';
+    let color = 'bg-yellow-400 text-black';
     let label = status.toUpperCase();
     let icon = <Clock size={12} className="mr-1" />;
     
     if (status === 'accepted') {
-      color = 'bg-green-600 text-white';
+      color = 'bg-green-500 text-white';
       icon = <CheckCircle2 size={12} className="mr-1" />;
     }
     else if (status === 'rejected') {
-      color = 'bg-red-600 text-white';
+      color = 'bg-red-500 text-white';
       icon = <XCircle size={12} className="mr-1" />;
     }
     else if (status === 'edited') {
-      color = 'bg-blue-600 text-white';
+      color = 'bg-blue-500 text-white';
       icon = <Edit3 size={12} className="mr-1" />;
     }
     else if (status === 'paid') {
-      color = 'bg-green-800 text-white';
+      color = 'bg-green-600 text-white';
       icon = <ShoppingBag size={12} className="mr-1" />;
     }
     else if (status === 'pending') {
-      color = 'bg-yellow-500 text-white';
+      color = 'bg-yellow-400 text-black';
       icon = <Clock size={12} className="mr-1" />;
     }
     
     return (
-      <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold flex items-center ${color}`}>
+      <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold flex items-center ${color} shadow-sm`}>
         {icon}
         {label}
       </span>
     );
   }
 
-  // Handle editing requests
+  // Handle editing requests - REMOVED TAGS HANDLING
   const handleEditRequest = useCallback((req: any) => {
     if (!req || typeof req !== 'object') return;
     
     setEditRequestId(req.id || null);
     setEditPrice(typeof req.price === 'number' ? req.price : '');
     setEditTitle(req.title || '');
-    setEditTags(Array.isArray(req.tags) ? req.tags.join(', ') : '');
     setEditMessage(req.description || '');
   }, []);
 
@@ -822,7 +806,7 @@ export default function SellerMessagesPage() {
     }
     
     const priceValue = Number(editPrice);
-    const tagsArray = editTags.split(',').map((t) => t.trim()).filter(Boolean);
+    const tagsArray: string[] = []; // No tags anymore
     
     respondToRequest(
       editRequestId,
@@ -839,7 +823,6 @@ export default function SellerMessagesPage() {
     setEditRequestId(null);
     setEditPrice('');
     setEditTitle('');
-    setEditTags('');
     setEditMessage('');
   }, [
     user, 
@@ -847,7 +830,6 @@ export default function SellerMessagesPage() {
     editRequestId, 
     editTitle, 
     editPrice, 
-    editTags, 
     editMessage, 
     respondToRequest
   ]);
@@ -1038,7 +1020,7 @@ export default function SellerMessagesPage() {
                         <p className="text-sm text-gray-400 truncate">
                           {lastMessage ? (
                             lastMessage.type === 'customRequest' 
-                              ? '🛠️ Custom Request'
+                              ? '🛒 Custom Request'
                               : lastMessage.type === 'image'
                                 ? '📷 Image'
                                 : lastMessage.content
@@ -1159,8 +1141,6 @@ export default function SellerMessagesPage() {
                           setEditTitle={setEditTitle}
                           editPrice={editPrice}
                           setEditPrice={setEditPrice}
-                          editTags={editTags}
-                          setEditTags={setEditTags}
                           editMessage={editMessage}
                           setEditMessage={setEditMessage}
                           handleEditSubmit={handleEditSubmit}
