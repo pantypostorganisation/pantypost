@@ -17,6 +17,7 @@ import {
   X,
   BadgeCheck,
   Smile,
+  Image,
   AlertTriangle,
   ShieldAlert,
   Clock,
@@ -99,6 +100,306 @@ type Message = {
   };
 };
 
+// Custom hook for Intersection Observer
+function useIntersectionObserver(
+  targetRef: React.RefObject<HTMLElement | null>,
+  options: IntersectionObserverInit & { onIntersect: () => void }
+) {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            options.onIntersect();
+          }
+        });
+      },
+      {
+        root: options.root,
+        rootMargin: options.rootMargin || '0px',
+        threshold: options.threshold || 0.5
+      }
+    );
+
+    const target = targetRef.current;
+    if (target) {
+      observer.observe(target);
+    }
+
+    return () => {
+      if (target) {
+        observer.unobserve(target);
+      }
+    };
+  }, [targetRef, options.root, options.rootMargin, options.threshold, options.onIntersect]);
+}
+
+// Message component with intersection observer
+function MessageItem({ 
+  msg, 
+  index, 
+  isFromMe, 
+  user,
+  activeThread,
+  onMessageVisible,
+  customReq,
+  isLatestCustom,
+  isPaid,
+  showActionButtons,
+  handleAccept,
+  handleDecline,
+  handleEditRequest,
+  editRequestId,
+  editTitle,
+  setEditTitle,
+  editPrice,
+  setEditPrice,
+  editMessage,
+  setEditMessage,
+  handleEditSubmit,
+  setEditRequestId,
+  statusBadge,
+  setPreviewImage,
+  showPayNow,
+  handlePayNow,
+  markupPrice,
+  canPay
+}: any) {
+  const messageRef = useRef<HTMLDivElement>(null);
+  const [hasBeenVisible, setHasBeenVisible] = useState(false);
+
+  // Use Intersection Observer to track when message becomes visible
+  useIntersectionObserver(messageRef, {
+    threshold: 0.8, // Message is considered "read" when 80% visible
+    onIntersect: () => {
+      if (!hasBeenVisible && !isFromMe && !msg.read) {
+        setHasBeenVisible(true);
+        onMessageVisible(msg);
+      }
+    }
+  });
+
+  const time = new Date(msg.date).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  // Check if message contains only a single emoji
+  const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
+
+  return (
+    <div ref={messageRef} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
+      <div className={`rounded-lg p-3 max-w-[75%] ${
+        isFromMe 
+          ? 'bg-[#ff950e] text-black shadow-lg' 
+          : 'bg-[#303030] text-[#fefefe] shadow-md'
+      }`}>
+        {/* Message header */}
+        <div className="flex items-center text-xs mb-1">
+          <span className={isFromMe ? 'text-black opacity-75' : 'text-[#fefefe] opacity-75'}>
+            {isFromMe ? 'You' : msg.sender} • {time}
+          </span>
+          {/* Only show Read/Sent for messages that the buyer sends */}
+          {isFromMe && (
+            <span className="ml-2 text-[10px]">
+              {msg.read ? (
+                <span className={`flex items-center ${isFromMe ? 'text-black opacity-60' : 'text-[#fefefe] opacity-60'}`}>
+                  <CheckCheck size={12} className="mr-1" /> Read
+                </span>
+              ) : (
+                <span className={isFromMe ? 'text-black opacity-50' : 'text-[#fefefe] opacity-50'}>Sent</span>
+              )}
+            </span>
+          )}
+        </div>
+        
+        {/* Image message */}
+        {msg.type === 'image' && msg.meta?.imageUrl && (
+          <div className="mt-1 mb-2">
+            <img 
+              src={msg.meta.imageUrl} 
+              alt="Shared image" 
+              className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPreviewImage(msg.meta?.imageUrl || null);
+              }}
+            />
+            {msg.content && (
+              <p className={`${isFromMe ? 'text-black' : 'text-[#fefefe]'} mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                {msg.content}
+              </p>
+            )}
+          </div>
+        )}
+        
+        {/* Text content - Different colors for sent vs received */}
+        {msg.type !== 'image' && msg.type !== 'customRequest' && (
+          <p className={`${isFromMe ? 'text-black' : 'text-[#fefefe]'} ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+            {msg.content}
+          </p>
+        )}
+        
+        {/* Custom request content - ADAPTIVE TEXT COLOR */}
+        {msg.type === 'customRequest' && msg.meta && (
+          <div className={`mt-2 text-sm space-y-1 border-t ${isFromMe ? 'border-black/20' : 'border-white/20'} pt-2`}>
+            <div className={`font-semibold flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
+              <div className="relative mr-2 flex items-center justify-center">
+                <div className="bg-white w-6 h-6 rounded-full absolute"></div>
+                <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
+              </div>
+              Custom Request
+            </div>
+            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
+            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
+            {(customReq ? customReq.description : msg.meta.message) && (
+              <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
+            )}
+            {customReq && (
+              <p className={`flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
+                <b>Status:</b>
+                {statusBadge(customReq.status)}
+              </p>
+            )}
+            
+            {/* Edit form */}
+            {editRequestId === customReq?.id && customReq && (
+              <div className="mt-3 space-y-2 bg-white/90 p-3 rounded border border-black/20 shadow-sm">
+                <input
+                  type="text"
+                  placeholder="Title"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <input
+                  type="number"
+                  placeholder="Price (USD)"
+                  value={editPrice}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setEditPrice(val === '' ? '' : Number(val));
+                  }}
+                  min="0.01"
+                  step="0.01"
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <textarea
+                  placeholder="Message"
+                  value={editMessage}
+                  onChange={e => setEditMessage(e.target.value)}
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditSubmit();
+                    }}
+                    className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
+                  >
+                    <Edit3 size={12} className="mr-1" />
+                    Submit Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditRequestId(null);
+                    }}
+                    className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
+                  >
+                    <X size={12} className="mr-1" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Action buttons for custom requests */}
+            {showActionButtons && !isPaid && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    customReq && handleAccept(customReq);
+                  }}
+                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
+                >
+                  <CheckCircle2 size={12} className="mr-1" />
+                  Accept
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    customReq && handleDecline(customReq);
+                  }}
+                  className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
+                >
+                  <XCircle size={12} className="mr-1" />
+                  Decline
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    customReq && handleEditRequest(customReq);
+                  }}
+                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
+                >
+                  <Edit3 size={12} className="mr-1" />
+                  Edit
+                </button>
+              </div>
+            )}
+            
+            {/* Pay now button */}
+            {showPayNow && (
+              <div className="flex flex-col gap-2 pt-2">
+                {isPaid ? (
+                  <span className="text-green-400 font-bold flex items-center">
+                    <ShoppingBag size={14} className="mr-1" />
+                    Paid ✅
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        customReq && canPay && handlePayNow(customReq);
+                      }}
+                      className={`bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 ${
+                        !canPay ? 'opacity-50 cursor-not-allowed' : ''
+                      } transition-colors duration-150 flex items-center w-fit font-medium shadow-sm`}
+                      disabled={!canPay}
+                    >
+                      <ShoppingBag size={12} className="mr-1" />
+                      Pay ${customReq ? `${markupPrice.toFixed(2)}` : ''} Now
+                    </button>
+                    {!canPay && (
+                      <span className="text-xs text-red-400 flex items-center">
+                        <AlertTriangle size={12} className="mr-1" />
+                        Insufficient balance to pay ${markupPrice.toFixed(2)}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Helper function to check if content is a single emoji
+const isSingleEmoji = (content: string) => {
+  const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
+  return emojiRegex.test(content);
+};
+
 export default function BuyerMessagesPage() {
   // ⚠️ CRITICAL FIX: ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT THE TOP
   // Move ALL hooks before any early returns or conditional logic
@@ -144,7 +445,7 @@ export default function BuyerMessagesPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'messages' | 'favorites' | 'requests'>('messages');
-  const [filterBy, setFilterBy] = useState<'all' | 'online'>('all');
+  const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
   const [showTipModal, setShowTipModal] = useState(false);
   const [tipAmount, setTipAmount] = useState<string>('');
   const [tipResult, setTipResult] = useState<{success: boolean, message: string} | null>(null);
@@ -154,6 +455,7 @@ export default function BuyerMessagesPage() {
   const [messageUpdate, setMessageUpdate] = useState(0);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
+  const [observerReadMessages, setObserverReadMessages] = useState<Set<string>>(new Set());
   
   // Ref hooks - ALWAYS called
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -296,8 +598,10 @@ export default function BuyerMessagesPage() {
         
         unreadCounts[seller] = threadUnreadCount;
         
-        // 🔥 FIXED: Always count unread messages, ignore readThreadsRef for actual count
-        totalUnreadCount += threadUnreadCount;
+        // Only add to total if not in readThreadsRef
+        if (!readThreadsRef.current.has(seller) && threadUnreadCount > 0) {
+          totalUnreadCount += threadUnreadCount;
+        }
       });
     }
     
@@ -318,9 +622,18 @@ export default function BuyerMessagesPage() {
 
   // Filter threads by search query and apply sorting
   const filteredAndSortedThreads = useMemo(() => {
-    const filteredThreads = Object.keys(threads).filter(seller => 
-      searchQuery ? seller.toLowerCase().includes(searchQuery.toLowerCase()) : true
-    );
+    const filteredThreads = Object.keys(threads).filter(seller => {
+      const matchesSearch = searchQuery ? seller.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      
+      if (!matchesSearch) return false;
+      
+      if (filterBy === 'unread') {
+        const hasUnread = unreadCounts[seller] > 0 && !readThreadsRef.current.has(seller);
+        if (!hasUnread) return false;
+      }
+      
+      return true;
+    });
     
     // Sort threads by most recent message first
     return filteredThreads.sort((a, b) => {
@@ -328,73 +641,45 @@ export default function BuyerMessagesPage() {
       const dateB = new Date(lastMessages[b]?.date || 0).getTime();
       return dateB - dateA;
     });
-  }, [threads, lastMessages, searchQuery]);
+  }, [threads, lastMessages, unreadCounts, searchQuery, filterBy]);
 
   // Calculate UI unread count indicators for the sidebar threads
   const uiUnreadCounts = useMemo(() => {
     const counts: { [seller: string]: number } = {};
     if (threads) {
       Object.keys(threads).forEach(seller => {
-        // 🔥 FIXED: Always show actual unread count, don't hide based on readThreadsRef
-        counts[seller] = unreadCounts[seller];
+        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
       });
     }
     return counts;
   }, [threads, unreadCounts, messageUpdate]);
 
-  // Get active messages for current thread
-  const activeMessages = activeThread ? threads[activeThread] || [] : [];
-
-  // FIXED: Use Intersection Observer to detect when messages are actually visible
-  useEffect(() => {
-    if (!activeThread || !user || !messagesContainerRef.current) return;
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const messageElement = entry.target as HTMLElement;
-          const messageIndex = parseInt(messageElement.getAttribute('data-message-index') || '0');
-          const message = activeMessages[messageIndex];
-          
-          if (message && !message.read && message.sender === activeThread && message.receiver === user.username) {
-            // Mark this specific message as read
-            markMessagesAsRead(user.username, activeThread);
-            
-            // Update UI tracking
-            if (!readThreadsRef.current.has(activeThread)) {
-              readThreadsRef.current.add(activeThread);
-              
-              // Save to localStorage
-              if (typeof window !== 'undefined') {
-                const readThreadsKey = `panty_read_threads_${user.username}`;
-                localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
-                
-                // Dispatch event to notify header
-                const event = new CustomEvent('readThreadsUpdated', { 
-                  detail: { threads: Array.from(readThreadsRef.current), username: user.username }
-                });
-                window.dispatchEvent(event);
-              }
-              
-              setMessageUpdate(prev => prev + 1);
-            }
-          }
-        }
-      });
-    }, {
-      root: messagesContainerRef.current,
-      rootMargin: '0px',
-      threshold: 0.5 // Message is considered "read" when 50% visible
-    });
-
-    // Observe all message elements
-    const messageElements = messagesContainerRef.current.querySelectorAll('[data-message-index]');
-    messageElements.forEach(el => observer.observe(el));
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [activeThread, user, activeMessages, markMessagesAsRead]);
+  // Handle message visibility from Intersection Observer
+  const handleMessageVisible = useCallback((msg: Message) => {
+    if (!user || msg.sender === user.username || msg.read) return;
+    
+    // Create a unique ID for this message
+    const messageId = `${msg.sender}-${msg.receiver}-${msg.date}`;
+    
+    // Check if we've already processed this message
+    if (observerReadMessages.has(messageId)) return;
+    
+    // Mark message as read
+    markMessagesAsRead(user.username, msg.sender);
+    
+    // Add to observer read messages set
+    setObserverReadMessages(prev => new Set(prev).add(messageId));
+    
+    // Add thread to readThreadsRef if all messages are now read
+    const threadUnreadCount = threads[msg.sender]?.filter(
+      m => !m.read && m.sender === msg.sender && m.receiver === user.username
+    ).length || 0;
+    
+    if (threadUnreadCount === 0 && !readThreadsRef.current.has(msg.sender)) {
+      readThreadsRef.current.add(msg.sender);
+      setMessageUpdate(prev => prev + 1);
+    }
+  }, [user, markMessagesAsRead, threads, observerReadMessages]);
 
   // Save read threads to localStorage
   useEffect(() => {
@@ -874,47 +1159,40 @@ export default function BuyerMessagesPage() {
   const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
-  // Create a status badge component - matches seller's version
-  function StatusBadge({ status }: { status: string }) {
-    let color = 'bg-yellow-500 text-black';
+  // Create a status badge component - IMPROVED COLORS FOR READABILITY
+  function statusBadge(status: string) {
+    let color = 'bg-yellow-400 text-black';
     let label = status.toUpperCase();
     let icon = <Clock size={12} className="mr-1" />;
     
     if (status === 'accepted') {
-      color = 'bg-green-600 text-white';
+      color = 'bg-green-500 text-white';
       icon = <CheckCircle2 size={12} className="mr-1" />;
     }
     else if (status === 'rejected') {
-      color = 'bg-red-600 text-white';
+      color = 'bg-red-500 text-white';
       icon = <XCircle size={12} className="mr-1" />;
     }
     else if (status === 'edited') {
-      color = 'bg-blue-600 text-white';
+      color = 'bg-blue-500 text-white';
       icon = <Edit3 size={12} className="mr-1" />;
     }
     else if (status === 'paid') {
-      color = 'bg-green-800 text-white';
+      color = 'bg-green-600 text-white';
       icon = <ShoppingBag size={12} className="mr-1" />;
     }
     else if (status === 'pending') {
-      color = 'bg-yellow-500 text-black';
+      color = 'bg-yellow-400 text-black';
       icon = <Clock size={12} className="mr-1" />;
     }
     
     return (
-      <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold flex items-center ${color}`}>
+      <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold flex items-center ${color} shadow-sm`}>
         {icon}
         {label}
       </span>
     );
   }
-
-  // Check if content is a single emoji
-  const isSingleEmoji = (content: string) => {
-    // Regex to match a single emoji (including compound emojis with ZWJ)
-    const emojiRegex = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic})(\u200d(\p{Emoji_Presentation}|\p{Extended_Pictographic}))*$/u;
-    return emojiRegex.test(content);
-  };
 
   // Determine if the user is the last editor of a custom request
   function isLastEditor(customReq: any) {
@@ -991,21 +1269,20 @@ export default function BuyerMessagesPage() {
                   }`}
                 >
                   <Filter size={14} className="mr-1" />
-                  All Sellers
+                  All Messages
                 </button>
                 <button 
-                  onClick={() => setFilterBy('online')}
+                  onClick={() => setFilterBy('unread')}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
-                    filterBy === 'online' 
+                    filterBy === 'unread' 
                       ? 'bg-[#ff950e] text-black' 
                       : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
                   }`}
                 >
                   <BellRing size={14} className="mr-1" />
                   Unread
-                  {/* 🔥 FIXED: Show unread counter in the Online/Unread button */}
                   {totalUnreadCount > 0 && (
-                    <span className="ml-2 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
+                    <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
                       {totalUnreadCount}
                     </span>
                   )}
@@ -1072,10 +1349,10 @@ export default function BuyerMessagesPage() {
                           )}
                         </div>
                         
-                        {/* 🔥 FIXED: Unread indicator - show UI unread count for each individual thread */}
-                        {uiUnreadCounts[seller] > 0 && (
+                        {/* Unread indicator - FIXED: Always show actual unread count */}
+                        {unreadCounts[seller] > 0 && (
                           <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {uiUnreadCounts[seller]}
+                            {unreadCounts[seller]}
                           </div>
                         )}
                       </div>
@@ -1159,18 +1436,11 @@ export default function BuyerMessagesPage() {
                   </div>
                 </div>
                 
-                {/* Messages - This div has proper scrolling */}
+                {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 bg-[#121212]" ref={messagesContainerRef}>
                   <div className="max-w-3xl mx-auto space-y-4">
                     {threadMessages.map((msg, index) => {
                       const isFromMe = msg.sender === user?.username;
-                      const time = new Date(msg.date).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-                      
-                      // Check if message contains only a single emoji
-                      const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
                       
                       // Get custom request info if available
                       let customReq: any = undefined;
@@ -1195,7 +1465,7 @@ export default function BuyerMessagesPage() {
                         msg.type === 'customRequest';
                       
                       const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0; // Use current user's balance
+                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
                       const canPay = customReq && buyerBalance >= markupPrice;
                       const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
                       
@@ -1206,221 +1476,37 @@ export default function BuyerMessagesPage() {
                         !isLastEditor(customReq);
                       
                       return (
-                        <div 
-                          key={index} 
-                          className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
-                          data-message-index={index}
-                        >
-                          <div className={`rounded-lg p-3 max-w-[75%] ${
-                            isFromMe 
-                              ? 'bg-[#ff950e] text-white shadow-lg' 
-                              : 'bg-[#333] text-white shadow-md'
-                          }`}
-                          >
-                            {/* Message header */}
-                            <div className="flex items-center text-xs mb-1">
-                              <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                                {isFromMe ? 'You' : msg.sender} • {time}
-                              </span>
-                              {isFromMe && (
-                                <span className="ml-2 text-[10px]">
-                                  {msg.read ? (
-                                    <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
-                                      <CheckCheck size={12} className="mr-1" /> Read
-                                    </span>
-                                  ) : (
-                                    <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                            
-                            {/* Image message */}
-                            {msg.type === 'image' && msg.meta?.imageUrl && (
-                              <div className="mt-1 mb-2">
-                                <img 
-                                  src={msg.meta.imageUrl} 
-                                  alt="Shared image" 
-                                  className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation(); // Prevent triggering the container's onClick
-                                    setPreviewImage(msg.meta?.imageUrl || null);
-                                  }}
-                                />
-                                {msg.content && (
-                                  <p className={`text-black mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                                    {msg.content}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Text content - Hard black text */}
-                            {msg.type !== 'image' && msg.type !== 'customRequest' && (
-                              <p className={`text-black ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                                {msg.content}
-                              </p>
-                            )}
-                            
-                            {/* Custom request - Hard black text with black circle behind icon */}
-                            {msg.type === 'customRequest' && msg.meta && (
-                              <div className="mt-2 text-sm text-black space-y-1 border-t border-black/20 pt-2">
-                                <div className="font-semibold flex items-center">
-                                  <div className="relative mr-2 flex items-center justify-center">
-                                    <div className="bg-black w-6 h-6 rounded-full absolute"></div>
-                                    <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
-                                  </div>
-                                  Custom Request
-                                </div>
-                                <p><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-                                <p><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
-                                {(customReq ? customReq.description : msg.meta.message) && (
-                                  <p><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
-                                )}
-                                {customReq && (
-                                  <p className="flex items-center">
-                                    <b>Status:</b>
-                                    <StatusBadge status={customReq.status} />
-                                  </p>
-                                )}
-                                
-                                {/* Edit form */}
-                                {editRequestId === customReq?.id && customReq && (
-                                  <div className="mt-2 space-y-2 bg-black/30 p-2 rounded">
-                                    <input
-                                      type="text"
-                                      placeholder="Title"
-                                      value={editTitle}
-                                      onChange={e => setEditTitle(e.target.value)}
-                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="Price (USD)"
-                                      value={editPrice}
-                                      onChange={e => {
-                                        const val = e.target.value;
-                                        setEditPrice(val === '' ? '' : Number(val));
-                                      }}
-                                      min="0.01"
-                                      step="0.01"
-                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
-                                    />
-                                    <input
-                                      type="text"
-                                      placeholder="Tags (comma-separated)"
-                                      value={editTags}
-                                      onChange={e => setEditTags(e.target.value)}
-                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
-                                    />
-                                    <textarea
-                                      placeholder="Message"
-                                      value={editMessage}
-                                      onChange={e => setEditMessage(e.target.value)}
-                                      className="w-full p-2 border rounded bg-black border-gray-700 text-white"
-                                      onClick={(e) => e.stopPropagation()} // Prevent triggering the container's onClick
-                                    />
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation(); // Prevent triggering the container's onClick
-                                          handleEditSubmit();
-                                        }}
-                                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
-                                      >
-                                        <Edit3 size={12} className="mr-1" />
-                                        Submit Edit
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation(); // Prevent triggering the container's onClick
-                                          setEditRequestId(null);
-                                        }}
-                                        className="bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 flex items-center transition-colors duration-150"
-                                      >
-                                        <X size={12} className="mr-1" />
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {/* Action buttons for custom requests */}
-                                {showActionButtons && !isPaid && (
-                                  <div className="flex flex-wrap gap-2 pt-2">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation(); // Prevent triggering the container's onClick
-                                        customReq && handleAccept(customReq);
-                                      }}
-                                      className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-800 flex items-center transition-colors duration-150"
-                                    >
-                                      <CheckCircle2 size={12} className="mr-1" />
-                                      Accept
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation(); // Prevent triggering the container's onClick
-                                        customReq && handleDecline(customReq);
-                                      }}
-                                      className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-800 flex items-center transition-colors duration-150"
-                                    >
-                                      <XCircle size={12} className="mr-1" />
-                                      Decline
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        customReq && handleEditRequest(customReq);
-                                      }}
-                                      className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-800 flex items-center transition-colors duration-150"
-                                    >
-                                      <Edit3 size={12} className="mr-1" />
-                                      Edit
-                                    </button>
-                                  </div>
-                                )}
-                                
-                                {/* Pay now button */}
-                                {showPayNow && (
-                                  <div className="flex flex-col gap-2 pt-2">
-                                    {isPaid ? (
-                                      <span className="text-green-400 font-bold flex items-center">
-                                        <ShoppingBag size={14} className="mr-1" />
-                                        Paid ✅
-                                      </span>
-                                    ) : (
-                                      <>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation(); // Prevent triggering the container's onClick
-                                            customReq && canPay && handlePayNow(customReq);
-                                          }}
-                                          className={`bg-black text-white px-3 py-1 rounded text-xs hover:bg-[#ff950e] hover:text-black ${
-                                            !canPay ? 'opacity-50 cursor-not-allowed' : ''
-                                          } transition-colors duration-150 flex items-center w-fit`}
-                                          disabled={!canPay}
-                                        >
-                                          <ShoppingBag size={12} className="mr-1" />
-                                          Pay ${customReq ? `${markupPrice.toFixed(2)}` : ''} Now
-                                        </button>
-                                        {!canPay && (
-                                          <span className="text-xs text-red-400 flex items-center">
-                                            <AlertTriangle size={12} className="mr-1" />
-                                            Insufficient balance to pay ${markupPrice.toFixed(2)}
-                                          </span>
-                                        )}
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <MessageItem
+                          key={index}
+                          msg={msg}
+                          index={index}
+                          isFromMe={isFromMe}
+                          user={user}
+                          activeThread={activeThread}
+                          onMessageVisible={handleMessageVisible}
+                          customReq={customReq}
+                          isLatestCustom={isLatestCustom}
+                          isPaid={isPaid}
+                          showActionButtons={showActionButtons}
+                          handleAccept={handleAccept}
+                          handleDecline={handleDecline}
+                          handleEditRequest={handleEditRequest}
+                          editRequestId={editRequestId}
+                          editTitle={editTitle}
+                          setEditTitle={setEditTitle}
+                          editPrice={editPrice}
+                          setEditPrice={setEditPrice}
+                          editMessage={editMessage}
+                          setEditMessage={setEditMessage}
+                          handleEditSubmit={handleEditSubmit}
+                          setEditRequestId={setEditRequestId}
+                          statusBadge={statusBadge}
+                          setPreviewImage={setPreviewImage}
+                          showPayNow={showPayNow}
+                          handlePayNow={handlePayNow}
+                          markupPrice={markupPrice}
+                          canPay={canPay}
+                        />
                       );
                     })}
                     
@@ -1550,7 +1636,7 @@ export default function BuyerMessagesPage() {
                         </div>
                       )}
                       
-                      {/* Bottom row with action buttons - COMPLETELY REPLACED WITH CUSTOM ICONS */}
+                      {/* Bottom row with action buttons - RESTORED CUSTOM ICONS */}
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-0">
                           {/* Tip button */}
@@ -1593,7 +1679,7 @@ export default function BuyerMessagesPage() {
                             <Smile size={52} className="text-[#ff950e]" />
                           </button>
                           
-                          {/* ENHANCED: Custom Request button - NOW OPENS MODAL */}
+                          {/* Custom Request button */}
                           <img 
                             src="/Custom_Request_Icon.png" 
                             alt="Custom Request" 
@@ -1675,7 +1761,10 @@ export default function BuyerMessagesPage() {
               {/* Modal Header */}
               <div className="flex justify-between items-center p-6 border-b border-gray-800">
                 <div className="flex items-center">
-                  <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 mr-3" />
+                  <div className="relative mr-2 flex items-center justify-center">
+                    <div className="bg-white w-6 h-6 rounded-full absolute"></div>
+                    <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
+                  </div>
                   <div>
                     <h3 className="text-xl font-bold text-white">Custom Request</h3>
                     <p className="text-sm text-gray-400">Send to {activeThread}</p>
@@ -1873,7 +1962,7 @@ export default function BuyerMessagesPage() {
             <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-white flex items-center">
-                  <img src="/Send_Tip_Icon.png" alt="Send Tip" className="w-6 h-6 mr-2" />
+                  <DollarSign size={20} className="mr-2 text-[#ff950e]" />
                   Send a Tip
                 </h3>
                 <button 
@@ -1933,7 +2022,7 @@ export default function BuyerMessagesPage() {
                       className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] flex items-center transition-colors duration-150"
                       disabled={!tipAmount || parseFloat(tipAmount) <= 0}
                     >
-                      <img src="/Send_Tip_Icon.png" alt="Send Tip" className="w-4 h-4 mr-1" />
+                      <DollarSign size={16} className="mr-1" />
                       Send Tip
                     </button>
                   </div>

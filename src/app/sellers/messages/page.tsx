@@ -1277,24 +1277,22 @@ export default function SellerMessagesPage() {
                         </div>
                       )}
                       
-                      {/* Bottom row with attachment and send buttons */}
+                      {/* Bottom row with attachment and send buttons - UPDATED WITH CUSTOM ICONS */}
                       <div className="flex justify-between items-center">
                         {/* Attachment button - Left aligned with vertical adjustment */}
-                        <button
+                        <img 
+                          src="/Attach_Image_Icon.png" 
+                          alt="Attach Image" 
+                          className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
+                            isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
                           onClick={(e) => {
+                            if (isImageLoading) return;
                             e.stopPropagation();
                             triggerFileInput();
                           }}
-                          disabled={isImageLoading}
-                          className={`flex items-center justify-center h-10 w-10 rounded-full mt-[-6px] ${
-                            isImageLoading 
-                              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-                              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                          } transition-colors duration-150 shadow-md`}
                           title="Attach Image"
-                        >
-                          <Image size={20} className="flex-shrink-0" />
-                        </button>
+                        />
                         
                         {/* Hidden file input */}
                         <input
@@ -1305,22 +1303,21 @@ export default function SellerMessagesPage() {
                           onChange={handleImageSelect}
                         />
                         
-                        {/* Send Button - Right aligned */}
-                        <button
+                        {/* Send Button - Right aligned - REPLACED WITH IMAGE */}
+                        <img
+                          src="/Send_Button.png"
+                          alt="Send"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleReply();
                           }}
-                          disabled={(!replyMessage.trim() && !selectedImage) || isImageLoading}
-                          className={`flex items-center justify-center px-5 py-2 rounded-full ${
+                          className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
                             (!replyMessage.trim() && !selectedImage) || isImageLoading
-                              ? 'bg-[#333] text-gray-500 cursor-not-allowed'
-                              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                          } transition-colors duration-150 shadow-md`}
-                        >
-                          <span className="mr-1">Send</span>
-                          <ArrowRightCircle size={16} className="flex-shrink-0" />
-                        </button>
+                              ? 'opacity-50 cursor-not-allowed'
+                              : ''
+                          }`}
+                          style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
+                        />
                       </div>
                     </div>
                   </div>
