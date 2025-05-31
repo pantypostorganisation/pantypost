@@ -4,7 +4,7 @@ import { useListings } from '@/context/ListingContext';
 import { useEffect, useState, useRef } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { Upload, X, ImageIcon, Trash2, PlusCircle, Image as ImageLucide, Award, TrendingUp } from 'lucide-react';
+import { Upload, X, ImageIcon, Trash2, PlusCircle, Image as ImageLucide, Award, TrendingUp, Crown, Star, Gift, Target } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
 import { getSellerTierMemoized, TIER_LEVELS, TierLevel } from '@/utils/sellerTiers';
 
@@ -19,6 +19,7 @@ export default function SellerProfileSettingsPage() {
  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
  const [isUploading, setIsUploading] = useState(false);
  const [saveSuccess, setSaveSuccess] = useState(false);
+ const [selectedTierDetails, setSelectedTierDetails] = useState<TierLevel | null>(null);
 
  const multipleFileInputRef = useRef<HTMLInputElement>(null);
  const profilePicInputRef = useRef<HTMLInputElement>(null);
@@ -26,12 +27,17 @@ export default function SellerProfileSettingsPage() {
  // Calculate seller tier for display
  const sellerTierInfo = user ? getSellerTierMemoized(user.username, orderHistory) : null;
 
+ // Calculate user's current stats
+ const userStats = user ? {
+   totalSales: orderHistory.filter(order => order.seller === user.username).length,
+   totalRevenue: orderHistory.filter(order => order.seller === user.username).reduce((sum, order) => sum + order.price, 0)
+ } : { totalSales: 0, totalRevenue: 0 };
+
  useEffect(() => {
    if (typeof window !== 'undefined' && user?.username) {
      const storedBio = sessionStorage.getItem(`profile_bio_${user.username}`);
      const storedPic = sessionStorage.getItem(`profile_pic_${user.username}`);
      const storedSubPrice = sessionStorage.getItem(`subscription_price_${user.username}`);
-     // Use localStorage for gallery images
      const storedGallery = localStorage.getItem(`profile_gallery_${user.username}`);
 
      if (storedBio) setBio(storedBio);
@@ -62,38 +68,34 @@ export default function SellerProfileSettingsPage() {
 
    sessionStorage.setItem(`profile_bio_${user.username}`, bio);
    sessionStorage.setItem(`subscription_price_${user.username}`, subscriptionPrice || '0');
-   // Save current galleryImages state
    localStorage.setItem(`profile_gallery_${user.username}`, JSON.stringify(galleryImages));
 
    if (preview) {
      sessionStorage.setItem(`profile_pic_${user.username}`, preview);
-     setProfilePic(preview); // Update state
-     setPreview(null); // Clear preview
+     setProfilePic(preview);
+     setPreview(null);
    }
 
    setSaveSuccess(true);
    setTimeout(() => setSaveSuccess(false), 3000);
  };
 
- // Helper function to save profile data, specifically using a passed gallery array
  const handleSaveWithGallery = (currentGallery: string[]) => {
     if (!user?.username) return;
 
     sessionStorage.setItem(`profile_bio_${user.username}`, bio);
     sessionStorage.setItem(`subscription_price_${user.username}`, subscriptionPrice || '0');
-    // Use the passed currentGallery array for saving
     localStorage.setItem(`profile_gallery_${user.username}`, JSON.stringify(currentGallery));
 
     if (preview) {
       sessionStorage.setItem(`profile_pic_${user.username}`, preview);
-      setProfilePic(preview); // Update state
-      setPreview(null); // Clear preview
+      setProfilePic(preview);
+      setPreview(null);
     }
 
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
  };
-
 
  const compressImage = (file: File, maxWidth = 800): Promise<string> => {
    return new Promise((resolve, reject) => {
@@ -176,8 +178,8 @@ export default function SellerProfileSettingsPage() {
      const compressedImages = await Promise.all(compressPromises);
 
      const updatedGallery = [...galleryImages, ...compressedImages];
-     setGalleryImages(updatedGallery); // Update state
-     handleSaveWithGallery(updatedGallery); // Auto-save with the new gallery
+     setGalleryImages(updatedGallery);
+     handleSaveWithGallery(updatedGallery);
 
      setSelectedFiles([]);
    } catch (error) {
@@ -190,14 +192,14 @@ export default function SellerProfileSettingsPage() {
 
  const removeGalleryImage = (index: number) => {
    const updatedGallery = galleryImages.filter((_, i) => i !== index);
-   setGalleryImages(updatedGallery); // Update state
-   handleSaveWithGallery(updatedGallery); // Auto-save after removing
+   setGalleryImages(updatedGallery);
+   handleSaveWithGallery(updatedGallery);
  };
 
  const clearAllGalleryImages = () => {
    if (window.confirm("Are you sure you want to remove all gallery images?")) {
-     setGalleryImages([]); // Update state
-     handleSaveWithGallery([]); // Auto-save after clearing
+     setGalleryImages([]);
+     handleSaveWithGallery([]);
    }
  };
 
@@ -206,7 +208,7 @@ export default function SellerProfileSettingsPage() {
    const tiers: TierLevel[] = ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
    const currentIndex = tiers.indexOf(currentTier);
    if (currentIndex === -1 || currentIndex === tiers.length - 1) {
-     return currentTier; // Either not found or already at highest tier
+     return currentTier;
    }
    return tiers[currentIndex + 1];
  };
@@ -214,7 +216,7 @@ export default function SellerProfileSettingsPage() {
  return (
    <RequireAuth role="seller">
      <main className="min-h-screen bg-black text-white py-10 px-4">
-       <div className="max-w-4xl mx-auto">
+       <div className="max-w-6xl mx-auto">
          <h1 className="text-3xl font-bold mb-2 text-[#ff950e]">My Profile</h1>
          <p className="text-gray-400 mb-8">Manage your seller profile and photo gallery</p>
 
@@ -328,6 +330,7 @@ export default function SellerProfileSettingsPage() {
 
            {/* Right column - Photo Gallery */}
            <div className="lg:col-span-2">
+             {/* Photo Gallery */}
              <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6">
                <div className="flex justify-between items-center mb-6">
                  <h2 className="text-xl font-bold text-white flex items-center">
@@ -446,73 +449,195 @@ export default function SellerProfileSettingsPage() {
                  )}
                </div>
              </div>
-             
-             {/* Seller Tier Display - Moved below the photo gallery */}
-             {sellerTierInfo && (
-               <div className="mt-8 bg-gradient-to-r from-[#1a1a1a] to-[#272727] rounded-xl border border-gray-800 p-6 shadow-xl">
-                 <div className="flex items-center justify-between flex-wrap gap-4">
-                   <div className="flex items-center">
-                     <div className="pr-6 flex-shrink-0">
-                       <TierBadge tier={sellerTierInfo.tier} size="2xl" showTooltip={true} />
-                     </div>
-                     <div>
-                       <h2 className="text-xl font-bold text-white mb-1 flex items-center">
-                         <Award className="w-5 h-5 mr-2 text-[#ff950e]" />
-                         Your Seller Tier: <span className="ml-2 text-[#ff950e]">{sellerTierInfo.tier}</span>
-                       </h2>
-                       <p className="text-gray-300">
-                         {sellerTierInfo.credit > 0 ? (
-                           <>You earn an additional <span className="font-bold text-green-400">{(sellerTierInfo.credit * 100).toFixed(0)}%</span> on all your sales!</>
-                         ) : (
-                           <>Make more sales to earn additional credits on your sales</>
-                         )}
-                       </p>
-                     </div>
-                   </div>
-                   
-                   {sellerTierInfo.tier !== 'Goddess' && (
-                     <div className="bg-[#111] border border-gray-800 rounded-lg p-3 shadow-inner">
-                       <div className="text-sm text-gray-400">Next tier: <span className="font-medium text-purple-400">{getNextTier(sellerTierInfo.tier)}</span></div>
-                       <div className="flex items-center gap-2">
-                         <TrendingUp className="w-4 h-4 text-green-400" />
-                         <span className="text-green-300 text-sm">
-                           Need: {TIER_LEVELS[getNextTier(sellerTierInfo.tier)].minSales} sales or ${TIER_LEVELS[getNextTier(sellerTierInfo.tier)].minAmount.toLocaleString()}
-                         </span>
-                       </div>
-                     </div>
-                   )}
-                 </div>
-                 
-                 {/* Tier progression overview */}
-                 <div className="mt-6 pt-4 border-t border-gray-700">
-                   <h3 className="text-sm font-medium text-gray-300 mb-3">Tier Benefits Overview</h3>
-                   <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
-                     <div className={`p-2 rounded ${sellerTierInfo.tier === 'Tease' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
-                       <div className="font-medium mb-1">Tease</div>
-                       <div className="text-gray-400">No credit</div>
-                     </div>
-                     <div className={`p-2 rounded ${sellerTierInfo.tier === 'Flirt' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
-                       <div className="font-medium mb-1">Flirt</div>
-                       <div className="text-gray-400">+1% credit</div>
-                     </div>
-                     <div className={`p-2 rounded ${sellerTierInfo.tier === 'Obsession' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
-                       <div className="font-medium mb-1">Obsession</div>
-                       <div className="text-gray-400">+2% credit</div>
-                     </div>
-                     <div className={`p-2 rounded ${sellerTierInfo.tier === 'Desire' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
-                       <div className="font-medium mb-1">Desire</div>
-                       <div className="text-gray-400">+3% credit</div>
-                     </div>
-                     <div className={`p-2 rounded ${sellerTierInfo.tier === 'Goddess' ? 'bg-gray-800 ring-2 ring-[#ff950e]' : 'bg-gray-800/50'}`}>
-                       <div className="font-medium mb-1">Goddess</div>
-                       <div className="text-gray-400">+5% credit</div>
-                     </div>
-                   </div>
-                 </div>
-               </div>
-             )}
            </div>
          </div>
+         
+         {/* Seller Tier Display - Interactive Table at Bottom */}
+         {sellerTierInfo && (
+           <div className="mt-8 bg-gradient-to-r from-[#1a1a1a] to-[#272727] rounded-xl border border-gray-800 p-6 shadow-xl">
+             <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
+               <div className="flex items-center">
+                 <div className="pr-6 flex-shrink-0">
+                   <TierBadge tier={sellerTierInfo.tier} size="2xl" showTooltip={true} />
+                 </div>
+                 <div>
+                   <h2 className="text-xl font-bold text-white mb-1 flex items-center">
+                     <Award className="w-5 h-5 mr-2 text-[#ff950e]" />
+                     Your Seller Tier: <span className="ml-2 text-[#ff950e]">{sellerTierInfo.tier}</span>
+                   </h2>
+                   <p className="text-gray-300">
+                     {sellerTierInfo.credit > 0 ? (
+                       <>You earn an additional <span className="font-bold text-green-400">{(sellerTierInfo.credit * 100).toFixed(0)}%</span> on all your sales!</>
+                     ) : (
+                       <>Make more sales to earn additional credits on your sales</>
+                     )}
+                   </p>
+                 </div>
+               </div>
+               
+               {sellerTierInfo.tier !== 'Goddess' && (
+                 <div className="bg-[#111] border border-gray-800 rounded-lg p-3 shadow-inner">
+                   <div className="text-sm text-gray-400">Next tier: <span className="font-medium text-purple-400">{getNextTier(sellerTierInfo.tier)}</span></div>
+                   <div className="flex items-center gap-2">
+                     <TrendingUp className="w-4 h-4 text-green-400" />
+                     <span className="text-green-300 text-sm">
+                       Need: {TIER_LEVELS[getNextTier(sellerTierInfo.tier)].minSales} sales or ${TIER_LEVELS[getNextTier(sellerTierInfo.tier)].minAmount.toLocaleString()}
+                     </span>
+                   </div>
+                 </div>
+               )}
+             </div>
+             
+             {/* Simple Interactive Tier Table */}
+             <div className="bg-[#111] rounded-lg p-4 border border-gray-700">
+               <h3 className="text-lg font-medium text-gray-300 mb-4 flex items-center gap-2">
+                 <Star className="w-5 h-5 text-[#ff950e]" />
+                 All Seller Tiers <span className="text-sm text-gray-500 font-normal">(Click to view details)</span>
+               </h3>
+               
+               {/* Tier Badges Row */}
+               <div className="grid grid-cols-5 gap-3 mb-4">
+                 {(['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'] as TierLevel[]).map((tier) => {
+                   const isCurrentTier = sellerTierInfo.tier === tier;
+                   const isSelected = selectedTierDetails === tier;
+                   
+                   return (
+                     <button
+                       key={tier}
+                       onClick={() => setSelectedTierDetails(isSelected ? null : tier)}
+                       className={`relative p-3 rounded-lg border-2 transition-all duration-300 ${
+                         isCurrentTier 
+                           ? 'border-[#ff950e] bg-[#ff950e]/10' 
+                           : isSelected
+                           ? 'border-purple-400 bg-purple-400/10'
+                           : 'border-gray-600 bg-gray-800/50 hover:border-gray-500'
+                       }`}
+                     >
+                       <div className="flex flex-col items-center space-y-2">
+                         <TierBadge tier={tier} size="xl" showTooltip={false} />
+                         <div className="text-center">
+                           <div className="font-medium text-white text-sm">{tier}</div>
+                           <div className="text-xs text-gray-400">
+                             +{(TIER_LEVELS[tier].credit * 100).toFixed(0)}%
+                           </div>
+                           {isCurrentTier && (
+                             <div className="text-xs text-[#ff950e] font-medium mt-1">Current</div>
+                           )}
+                         </div>
+                       </div>
+                     </button>
+                   );
+                 })}
+               </div>
+               
+               {/* Expanded Details */}
+               {selectedTierDetails && (
+                 <div className="border-t border-gray-700 pt-4 animate-in slide-in-from-top duration-300">
+                   <div className="bg-[#0a0a0a] rounded-lg p-4 border border-gray-800">
+                     <div className="flex items-center gap-3 mb-4">
+                       <TierBadge tier={selectedTierDetails} size="lg" showTooltip={false} />
+                       <div>
+                         <h4 className="text-xl font-bold text-[#ff950e]">{selectedTierDetails} Tier</h4>
+                         <p className="text-gray-400 text-sm">Level {['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'].indexOf(selectedTierDetails) + 1} of 5</p>
+                       </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       {/* Requirements */}
+                       <div>
+                         <h5 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                           <Target className="w-4 h-4 text-green-400" />
+                           Requirements
+                         </h5>
+                         <div className="space-y-2 text-sm">
+                           <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                             <span className="text-gray-300">Total Sales</span>
+                             <span className="text-[#ff950e] font-medium">{TIER_LEVELS[selectedTierDetails].minSales}+</span>
+                           </div>
+                           <div className="text-center text-gray-500 text-xs">OR</div>
+                           <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                             <span className="text-gray-300">Total Revenue</span>
+                             <span className="text-[#ff950e] font-medium">${TIER_LEVELS[selectedTierDetails].minAmount.toLocaleString()}+</span>
+                           </div>
+                           
+                           {/* User Progress */}
+                           {user && (
+                             <div className="mt-3 pt-3 border-t border-gray-800">
+                               <p className="text-xs text-gray-400 mb-2">Your Progress:</p>
+                               <div className="text-xs space-y-1">
+                                 <div className="flex justify-between">
+                                   <span className="text-gray-300">Sales: {userStats.totalSales}</span>
+                                   <span className="text-gray-300">Revenue: ${userStats.totalRevenue.toLocaleString()}</span>
+                                 </div>
+                                 {selectedTierDetails !== sellerTierInfo.tier && (
+                                   <p className="text-green-400 mt-2">
+                                     Need: {Math.max(0, TIER_LEVELS[selectedTierDetails].minSales - userStats.totalSales)} more sales OR ${Math.max(0, TIER_LEVELS[selectedTierDetails].minAmount - userStats.totalRevenue).toLocaleString()} more revenue
+                                   </p>
+                                 )}
+                               </div>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                       
+                       {/* Benefits */}
+                       <div>
+                         <h5 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                           <Gift className="w-4 h-4 text-purple-400" />
+                           Benefits
+                         </h5>
+                         <div className="space-y-2 text-sm">
+                           <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                             <span className="text-gray-300">Bonus Credits</span>
+                             <span className="text-green-400 font-bold">
+                               {TIER_LEVELS[selectedTierDetails].credit > 0 ? `+${(TIER_LEVELS[selectedTierDetails].credit * 100).toFixed(0)}%` : 'None'}
+                             </span>
+                           </div>
+                           
+                           {selectedTierDetails !== 'Tease' && (
+                             <>
+                               <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                                 <span className="text-gray-300">Priority Support</span>
+                                 <span className="text-green-400">✓</span>
+                               </div>
+                               <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                                 <span className="text-gray-300">Featured Profile</span>
+                                 <span className="text-green-400">✓</span>
+                               </div>
+                             </>
+                           )}
+                           
+                           {(selectedTierDetails === 'Desire' || selectedTierDetails === 'Goddess') && (
+                             <>
+                               <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                                 <span className="text-gray-300">Custom Badge</span>
+                                 <span className="text-green-400">✓</span>
+                               </div>
+                               <div className="flex items-center justify-between p-2 bg-[#111] rounded">
+                                 <span className="text-gray-300">VIP Events</span>
+                                 <span className="text-green-400">✓</span>
+                               </div>
+                             </>
+                           )}
+                           
+                           {selectedTierDetails === 'Goddess' && (
+                             <div className="flex items-center justify-between p-2 bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded border border-purple-500/30">
+                               <span className="text-gray-300">Elite Status</span>
+                               <span className="text-purple-400 flex items-center gap-1">
+                                 <Crown className="w-4 h-4" />
+                                 VIP
+                               </span>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               )}
+             </div>
+           </div>
+         )}
        </div>
      </main>
    </RequireAuth>
