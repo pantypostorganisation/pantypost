@@ -1,4 +1,4 @@
-// src/app/admin/messages.tsx
+// src/app/admin/messages/page.tsx
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -21,7 +21,10 @@ import {
   AlertTriangle,
   Clock,
   Filter,
-  BellRing
+  BellRing,
+  Users,
+  MessageSquarePlus,
+  ChevronRight
 } from 'lucide-react';
 
 // Constants
@@ -80,7 +83,9 @@ export default function AdminMessagesPage() {
   const [imageError, setImageError] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [viewsData, setViewsData] = useState<Record<string, number>>({});
-  const [messageUpdate, setMessageUpdate] = useState(0); // Force update for message read status
+  const [messageUpdate, setMessageUpdate] = useState(0);
+  const [showUserDirectory, setShowUserDirectory] = useState(false);
+  const [directorySearchQuery, setDirectorySearchQuery] = useState('');
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -93,7 +98,7 @@ export default function AdminMessagesPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
 
-  // Check if user is admin - do this after all hooks are defined
+  // Check if user is admin
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
   const username = user?.username || '';
 
@@ -146,7 +151,7 @@ export default function AdminMessagesPage() {
           const threads = JSON.parse(readThreads);
           if (Array.isArray(threads)) {
             readThreadsRef.current = new Set(threads);
-            setMessageUpdate(prev => prev + 1); // Force UI update
+            setMessageUpdate(prev => prev + 1);
           }
         }
       }
@@ -187,7 +192,7 @@ export default function AdminMessagesPage() {
     }
   }, [activeThread, messages]);
 
-  // Prepare threads and messages - MATCHING BUYERS PAGE LOGIC
+  // Prepare threads and messages
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
     const threads: { [user: string]: Message[] } = {};
     const unreadCounts: { [user: string]: number } = {};
@@ -244,7 +249,7 @@ export default function AdminMessagesPage() {
         
         // Only add to total if not in readThreadsRef
         if (!readThreadsRef.current.has(userKey) && threadUnreadCount > 0) {
-          totalUnreadCount += 1; // Count threads, not messages
+          totalUnreadCount += 1;
         }
       });
     }
@@ -256,40 +261,60 @@ export default function AdminMessagesPage() {
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
   }, [messages, username, activeThread, users, messageUpdate]);
 
-  // Calculate UI unread count indicators for the sidebar threads - MATCHING BUYERS PAGE
-  const uiUnreadCounts = useMemo(() => {
-    const counts: { [user: string]: number } = {};
-    if (threads) {
-      Object.keys(threads).forEach(userKey => {
-        // If thread is in readThreadsRef, show 0 in the UI regardless of actual message read status
-        counts[userKey] = readThreadsRef.current.has(userKey) ? 0 : unreadCounts[userKey];
+  // Get all users for directory
+  const allUsers = useMemo(() => {
+    const allUsersList = Object.entries(users || {})
+      .filter(([username, userInfo]) => 
+        username !== user?.username && // Exclude current admin user
+        username !== 'oakley' && username !== 'gerome' // Exclude other admins
+      )
+      .map(([username, userInfo]) => {
+        const storedPic = sessionStorage.getItem(`profile_pic_${username}`);
+        const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
+        
+        return {
+          username,
+          role: userInfo?.role || 'unknown',
+          verified: isVerified,
+          pic: storedPic
+        };
       });
-    }
-    return counts;
-  }, [threads, unreadCounts, messageUpdate]);
+    
+    return allUsersList;
+  }, [users, user]);
 
-  // FIXED: Mark messages as read when thread is selected and viewed - MATCHING BUYERS PAGE
+  // Filter users for directory
+  const filteredDirectoryUsers = useMemo(() => {
+    return allUsers.filter(userInfo => {
+      const matchesSearch = directorySearchQuery ? 
+        userInfo.username.toLowerCase().includes(directorySearchQuery.toLowerCase()) : true;
+      
+      if (!matchesSearch) return false;
+      
+      if (filterBy === 'buyers' && userInfo.role !== 'buyer') return false;
+      if (filterBy === 'sellers' && userInfo.role !== 'seller') return false;
+      
+      return true;
+    }).sort((a, b) => a.username.localeCompare(b.username));
+  }, [allUsers, directorySearchQuery, filterBy]);
+
+  // Mark messages as read when thread is selected
   useEffect(() => {
     if (activeThread && user) {
-      // Check if there are unread messages in this thread
       const hasUnreadMessages = threads[activeThread]?.some(
         msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
       );
       
       if (hasUnreadMessages) {
-        // Mark messages as read in the context immediately
         markMessagesAsRead(user.username, activeThread);
         
-        // Add to readThreadsRef to update UI
         if (!readThreadsRef.current.has(activeThread)) {
           readThreadsRef.current.add(activeThread);
           
-          // Save to localStorage immediately when thread is selected
           if (typeof window !== 'undefined') {
             const readThreadsKey = `panty_read_threads_${user.username}`;
             localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
             
-            // Dispatch event to notify header
             const event = new CustomEvent('readThreadsUpdated', { 
               detail: { threads: Array.from(readThreadsRef.current), username: user.username }
             });
@@ -300,7 +325,6 @@ export default function AdminMessagesPage() {
         }
       }
       
-      // Create a custom event to notify other components about thread selection
       if (typeof window !== 'undefined') {
         const event = new CustomEvent('threadSelected', { 
           detail: { thread: activeThread, username: user.username }
@@ -310,14 +334,13 @@ export default function AdminMessagesPage() {
     }
   }, [activeThread, user, threads, markMessagesAsRead]);
 
-  // Save read threads to localStorage - MATCHING BUYERS PAGE
+  // Save read threads to localStorage
   useEffect(() => {
     if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
       const readThreadsKey = `panty_read_threads_${user.username}`;
       const threadsArray = Array.from(readThreadsRef.current);
       localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
       
-      // Dispatch a custom event to notify other components about the update
       const event = new CustomEvent('readThreadsUpdated', { 
         detail: { threads: threadsArray, username: user.username }
       });
@@ -325,20 +348,18 @@ export default function AdminMessagesPage() {
     }
   }, [messageUpdate, user]);
 
-  // Handle image file selection with validation and error handling
+  // Handle image file selection
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     setImageError(null);
     
     if (!file) return;
     
-    // Validate file type
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
       return;
     }
     
-    // Validate file size
     if (file.size > MAX_IMAGE_SIZE) {
       setImageError(`Image too large. Maximum size is ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
       return;
@@ -431,7 +452,18 @@ export default function AdminMessagesPage() {
   const handleThreadSelect = useCallback((userId: string) => {
     if (activeThread === userId) return;
     setActiveThread(userId);
+    setShowUserDirectory(false);
   }, [activeThread]);
+
+  const handleStartConversation = useCallback((targetUsername: string) => {
+    setActiveThread(targetUsername);
+    setShowUserDirectory(false);
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 100);
+  }, []);
 
   useEffect(() => {
     if (selectedUser && !activeThread) {
@@ -496,7 +528,53 @@ export default function AdminMessagesPage() {
     return 'Just now';
   };
 
-  // Render the component only if user is admin
+  // UserListItem component for the directory
+  const UserListItem = ({ userInfo }: { userInfo: { username: string; role: string; verified: boolean; pic: string | null } }) => (
+    <div 
+      onClick={() => handleStartConversation(userInfo.username)}
+      className="flex items-center p-3 cursor-pointer hover:bg-[#222] transition-all duration-200 border-b border-gray-800 group"
+    >
+      {/* User Avatar */}
+      <div className="relative mr-3">
+        <div className="w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md border-2 border-gray-700 group-hover:border-[#ff950e]/50 transition-colors">
+          {userInfo.pic ? (
+            <img src={userInfo.pic} alt={userInfo.username} className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-lg">{getInitial(userInfo.username)}</span>
+          )}
+        </div>
+        
+        {/* Role indicator */}
+        <div className={`absolute -bottom-1 -right-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${
+          userInfo.role === 'buyer' 
+            ? 'bg-blue-500 text-white' 
+            : 'bg-green-500 text-white'
+        }`}>
+          {userInfo.role === 'buyer' ? 'B' : 'S'}
+        </div>
+      </div>
+      
+      {/* User Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h4 className="font-medium text-white truncate group-hover:text-[#ff950e] transition-colors">
+            {userInfo.username}
+          </h4>
+          {userInfo.verified && (
+            <BadgeCheck size={14} className="text-[#ff950e] flex-shrink-0" />
+          )}
+        </div>
+        <p className="text-xs text-gray-400">
+          {userInfo.role === 'buyer' ? 'Buyer Account' : 'Seller Account'}
+        </p>
+      </div>
+      
+      {/* Arrow Indicator */}
+      <ChevronRight size={16} className="text-gray-500 group-hover:text-[#ff950e] transition-colors flex-shrink-0" />
+    </div>
+  );
+
+  // Render access denied if not admin
   if (!isAdmin) {
     return (
       <RequireAuth role="admin">
@@ -512,12 +590,11 @@ export default function AdminMessagesPage() {
 
   return (
     <RequireAuth role="admin">
-      {/* Top Padding */}
       <div className="py-3 bg-black"></div>
       
       <div className="h-screen bg-black flex flex-col overflow-hidden">
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-          {/* Left column - Message threads */}
+          {/* Left column - Message threads and User Directory */}
           <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
             {/* Admin header */}
             <div className="px-4 pt-4 pb-2">
@@ -565,6 +642,32 @@ export default function AdminMessagesPage() {
                   )}
                 </button>
               </div>
+              
+              {/* Toggle between conversations and user directory */}
+              <div className="flex space-x-1 mb-3 bg-[#222] p-1 rounded-lg">
+                <button
+                  onClick={() => setShowUserDirectory(false)}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    !showUserDirectory 
+                      ? 'bg-[#ff950e] text-black shadow-lg' 
+                      : 'text-gray-300 hover:text-white hover:bg-[#333]'
+                  }`}
+                >
+                  <MessageCircle size={16} className="mr-2 inline" />
+                  Conversations
+                </button>
+                <button
+                  onClick={() => setShowUserDirectory(true)}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    showUserDirectory 
+                      ? 'bg-[#ff950e] text-black shadow-lg' 
+                      : 'text-gray-300 hover:text-white hover:bg-[#333]'
+                  }`}
+                >
+                  <Users size={16} className="mr-2 inline" />
+                  All Users
+                </button>
+              </div>
             </div>
             
             {/* Search Bar */}
@@ -572,9 +675,9 @@ export default function AdminMessagesPage() {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search Users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={showUserDirectory ? "Search all users..." : "Search conversations..."}
+                  value={showUserDirectory ? directorySearchQuery : searchQuery}
+                  onChange={(e) => showUserDirectory ? setDirectorySearchQuery(e.target.value) : setSearchQuery(e.target.value)}
                   className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
                 />
                 <div className="absolute right-3 top-2.5 text-gray-400">
@@ -583,76 +686,174 @@ export default function AdminMessagesPage() {
               </div>
             </div>
             
-            {/* Thread list */}
+            {/* Content Area - Either Conversations or User Directory */}
             <div className="flex-1 overflow-y-auto bg-[#121212]">
-              {filteredAndSortedThreads.length === 0 ? (
-                <div className="p-4 text-center text-gray-400">
-                  No conversations found
-                </div>
-              ) : (
-                filteredAndSortedThreads.map((userKey) => {
-                  const lastMessage = lastMessages[userKey];
-                  const isActive = activeThread === userKey;
-                  const userProfile = userProfiles[userKey];
-                  
-                  return (
-                    <div 
-                      key={userKey}
-                      onClick={() => handleThreadSelect(userKey)}
-                      className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
-                        isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
-                      } transition-colors duration-150 ease-in-out`}
-                    >
-                      {/* Active indicator */}
-                      {isActive && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
+              {showUserDirectory ? (
+                /* User Directory */
+                <div>
+                  {/* User count header */}
+                  <div className="px-4 py-2 border-b border-gray-800 bg-[#1a1a1a]">
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-gray-400">
+                        {filteredDirectoryUsers.length} user{filteredDirectoryUsers.length !== 1 ? 's' : ''} available
+                      </p>
+                      {(directorySearchQuery || filterBy !== 'all') && (
+                        <button 
+                          onClick={() => {
+                            setDirectorySearchQuery('');
+                            setFilterBy('all');
+                          }}
+                          className="text-xs text-[#ff950e] hover:text-[#ffb04e] transition-colors"
+                        >
+                          Clear filters
+                        </button>
                       )}
-                      
-                      {/* Avatar with unread indicator */}
-                      <div className="relative mr-3">
-                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
-                          {userProfile?.pic ? (
-                            <img src={userProfile.pic} alt={userKey} className="w-full h-full object-cover" />
-                          ) : (
-                            getInitial(userKey)
+                    </div>
+                  </div>
+                  
+                  {/* User List */}
+                  {filteredDirectoryUsers.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400">
+                      <Users size={48} className="mx-auto mb-3 text-gray-600" />
+                      <p className="text-lg mb-1">No users found</p>
+                      <p className="text-sm">Try adjusting your search or filter</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Group users by role if showing all */}
+                      {filterBy === 'all' ? (
+                        <>
+                          {/* Buyers Section */}
+                          {filteredDirectoryUsers.filter(u => u.role === 'buyer').length > 0 && (
+                            <>
+                              <div className="px-4 py-2 bg-[#1a1a1a] border-b border-gray-800">
+                                <h3 className="text-sm font-medium text-blue-400 flex items-center gap-2">
+                                  <User size={14} />
+                                  Buyers ({filteredDirectoryUsers.filter(u => u.role === 'buyer').length})
+                                </h3>
+                              </div>
+                              {filteredDirectoryUsers
+                                .filter(u => u.role === 'buyer')
+                                .sort((a, b) => a.username.localeCompare(b.username))
+                                .map((userInfo) => (
+                                  <UserListItem key={`buyer-${userInfo.username}`} userInfo={userInfo} />
+                                ))}
+                            </>
                           )}
                           
-                          {/* Role indicator */}
-                          <div className="absolute bottom-0 right-0 text-[8px] bg-black px-1 rounded text-[#ff950e] border border-[#ff950e]">
-                            {userProfile?.role === 'buyer' ? 'B' : userProfile?.role === 'seller' ? 'S' : '?'}
-                          </div>
-                        </div>
-                        
-                        {/* Unread indicator - show actual unread count from messages, not UI filtered count */}
-                        {unreadCounts[userKey] > 0 && (
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {unreadCounts[userKey]}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Message preview */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between">
-                          <h3 className="font-bold text-white truncate">{userKey}</h3>
-                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
-                            <Clock size={12} className="mr-1" />
-                            {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-400 truncate">
-                          {lastMessage ? (
-                            lastMessage.type === 'customRequest' 
-                              ? '🛠️ Custom Request'
-                              : lastMessage.type === 'image'
-                                ? '📷 Image'
-                                : lastMessage.content
-                          ) : ''}
-                        </p>
+                          {/* Sellers Section */}
+                          {filteredDirectoryUsers.filter(u => u.role === 'seller').length > 0 && (
+                            <>
+                              <div className="px-4 py-2 bg-[#1a1a1a] border-b border-gray-800">
+                                <h3 className="text-sm font-medium text-green-400 flex items-center gap-2">
+                                  <BellRing size={14} />
+                                  Sellers ({filteredDirectoryUsers.filter(u => u.role === 'seller').length})
+                                </h3>
+                              </div>
+                              {filteredDirectoryUsers
+                                .filter(u => u.role === 'seller')
+                                .sort((a, b) => a.username.localeCompare(b.username))
+                                .map((userInfo) => (
+                                  <UserListItem key={`seller-${userInfo.username}`} userInfo={userInfo} />
+                                ))}
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        /* Filtered view */
+                        filteredDirectoryUsers
+                          .sort((a, b) => a.username.localeCompare(b.username))
+                          .map((userInfo) => (
+                            <UserListItem key={userInfo.username} userInfo={userInfo} />
+                          ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Existing Conversations */
+                <div>
+                  {filteredAndSortedThreads.length === 0 ? (
+                    <div className="p-4 text-center text-gray-400">
+                      <div className="mb-4">
+                        <MessageCircle size={48} className="mx-auto text-gray-600 mb-2" />
+                        <p className="text-lg mb-2">No conversations found</p>
+                        <p className="text-sm mb-4">Switch to "All Users" to start new conversations</p>
+                        <button
+                          onClick={() => setShowUserDirectory(true)}
+                          className="px-4 py-2 bg-[#ff950e] text-black font-medium rounded-lg hover:bg-[#e88800] transition-colors flex items-center justify-center mx-auto"
+                        >
+                          <Users size={16} className="mr-2" />
+                          Browse Users
+                        </button>
                       </div>
                     </div>
-                  );
-                })
+                  ) : (
+                    filteredAndSortedThreads.map((userKey) => {
+                      const lastMessage = lastMessages[userKey];
+                      const isActive = activeThread === userKey;
+                      const userProfile = userProfiles[userKey];
+                      
+                      return (
+                        <div 
+                          key={userKey}
+                          onClick={() => handleThreadSelect(userKey)}
+                          className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
+                            isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
+                          } transition-colors duration-150 ease-in-out`}
+                        >
+                          {/* Active indicator */}
+                          {isActive && (
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
+                          )}
+                          
+                          {/* Avatar with unread indicator */}
+                          <div className="relative mr-3">
+                            <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
+                              {userProfile?.pic ? (
+                                <img src={userProfile.pic} alt={userKey} className="w-full h-full object-cover" />
+                              ) : (
+                                getInitial(userKey)
+                              )}
+                              
+                              {/* Role indicator */}
+                              <div className="absolute bottom-0 right-0 text-[8px] bg-black px-1 rounded text-[#ff950e] border border-[#ff950e]">
+                                {userProfile?.role === 'buyer' ? 'B' : userProfile?.role === 'seller' ? 'S' : '?'}
+                              </div>
+                            </div>
+                            
+                            {/* Unread indicator */}
+                            {unreadCounts[userKey] > 0 && (
+                              <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
+                                {unreadCounts[userKey]}
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Message preview */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between">
+                              <h3 className="font-bold text-white truncate">{userKey}</h3>
+                              <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
+                                <Clock size={12} className="mr-1" />
+                                {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-400 truncate">
+                              {lastMessage ? (
+                                lastMessage.type === 'customRequest' 
+                                  ? '🛠️ Custom Request'
+                                  : lastMessage.type === 'image'
+                                    ? '📷 Image'
+                                    : lastMessage.content
+                              ) : ''}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -688,7 +889,7 @@ export default function AdminMessagesPage() {
                       </div>
                       <p className="text-xs text-[#ff950e] flex items-center">
                         <Clock size={12} className="mr-1 text-[#ff950e]" />
-                        Active now
+                        Admin conversation
                       </p>
                     </div>
                   </div>
@@ -734,8 +935,7 @@ export default function AdminMessagesPage() {
                             isFromMe 
                               ? 'bg-[#ff950e] text-white shadow-lg' 
                               : 'bg-[#333] text-white shadow-md'
-                          }`}
-                          >
+                          }`}>
                             {/* Message header */}
                             <div className="flex items-center text-xs mb-1">
                               <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
@@ -807,7 +1007,7 @@ export default function AdminMessagesPage() {
                 {/* Message input and emoji picker */}
                 {!isUserBlocked && (
                   <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
-                    {/* Emoji Picker - position ABOVE the input */}
+                    {/* Emoji Picker */}
                     {showEmojiPicker && (
                       <div 
                         ref={emojiPickerRef}
@@ -900,7 +1100,7 @@ export default function AdminMessagesPage() {
                           maxLength={250}
                         />
                         
-                        {/* Fixed emoji button position */}
+                        {/* Emoji button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -973,7 +1173,7 @@ export default function AdminMessagesPage() {
                           />
                         </div>
                         
-                        {/* Send Button - Right aligned */}
+                        {/* Send Button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1017,7 +1217,14 @@ export default function AdminMessagesPage() {
                     <MessageCircle size={64} className="text-gray-600" />
                   </div>
                   <p className="text-xl mb-2">Select a conversation to view messages</p>
-                  <p className="text-sm">Your messages will appear here</p>
+                  <p className="text-sm mb-4">Your messages will appear here</p>
+                  <button
+                    onClick={() => setShowUserDirectory(true)}
+                    className="px-4 py-2 bg-[#ff950e] text-black font-medium rounded-lg hover:bg-[#e88800] transition-colors flex items-center justify-center mx-auto"
+                  >
+                    <MessageSquarePlus size={16} className="mr-2" />
+                    Start New Conversation
+                  </button>
                 </div>
               </div>
             )}
@@ -1035,16 +1242,6 @@ export default function AdminMessagesPage() {
         />
         
         <style jsx global>{`
-          .emoji-button::before {
-            content: "";
-            display: block;
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background-color: black;
-            z-index: -1;
-          }
           .emoji-button {
             position: relative;
             z-index: 1;
