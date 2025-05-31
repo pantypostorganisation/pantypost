@@ -31,7 +31,9 @@ import {
   Heart,
   CreditCard,
   PlusCircle,
-  Download
+  Download,
+  MinusCircle,
+  Upload
 } from 'lucide-react';
 
 export default function AdminProfitDashboard() {
@@ -42,7 +44,9 @@ export default function AdminProfitDashboard() {
     wallet, 
     depositLogs, 
     getTotalDeposits, 
-    getDepositsByTimeframe 
+    getDepositsByTimeframe,
+    sellerWithdrawals,
+    adminWithdrawals
   } = useWallet();
   const { user, users, listings } = useListings();
   const [showDetails, setShowDetails] = useState(false);
@@ -81,7 +85,9 @@ export default function AdminProfitDashboard() {
         return { 
           actions: adminActions, 
           orders: orderHistory, 
-          deposits: depositLogs 
+          deposits: depositLogs,
+          sellerWithdrawals: getAllSellerWithdrawals(),
+          adminWithdrawals: adminWithdrawals
         };
     }
     
@@ -89,80 +95,110 @@ export default function AdminProfitDashboard() {
     const filteredOrders = orderHistory.filter(order => new Date(order.date) >= filterDate);
     const filteredDeposits = depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
     
+    // Filter seller withdrawals
+    const filteredSellerWithdrawals = getAllSellerWithdrawals().filter(
+      withdrawal => new Date(withdrawal.date) >= filterDate
+    );
+    
+    // Filter admin withdrawals
+    const filteredAdminWithdrawals = adminWithdrawals.filter(
+      withdrawal => new Date(withdrawal.date) >= filterDate
+    );
+    
     return { 
       actions: filteredActions, 
       orders: filteredOrders, 
-      deposits: filteredDeposits 
+      deposits: filteredDeposits,
+      sellerWithdrawals: filteredSellerWithdrawals,
+      adminWithdrawals: filteredAdminWithdrawals
     };
   };
 
-  const { actions: filteredActions, orders: filteredOrders, deposits: filteredDeposits } = getTimeFilteredData();
-
-  // 🚀 FIX: Improved revenue calculation logic
-  const calculatePlatformRevenue = (actions: typeof adminActions) => {
-    return actions
-      .filter(action => {
-        if (action.type !== 'credit') return false;
-        
-        const reason = action.reason.toLowerCase();
-        
-        // 🚀 FIX: Explicitly include legitimate platform revenue sources
-        const isLegitimateRevenue = 
-          reason.includes('platform fee') ||
-          reason.includes('commission') ||
-          reason.includes('subscription') ||
-          reason.includes('sale revenue') ||
-          reason.includes('auction commission') ||
-          reason.includes('premium listing') ||
-          reason.includes('listing fee') ||
-          reason.includes('transaction fee') ||
-          reason.includes('service fee') ||
-          // Include sales-related revenue patterns
-          reason.includes('sold') ||
-          reason.includes('purchase') ||
-          reason.includes('order') ||
-          // Include percentage-based fees
-          reason.includes('10%') ||
-          reason.includes('20%') ||
-          reason.includes('25%');
-        
-        // 🚀 FIX: Explicitly exclude non-revenue items (more precise filtering)
-        const isNonRevenue = 
-          reason.includes('wallet deposit') ||
-          reason.includes('add funds') ||
-          reason.includes('credit adjustment') ||
-          reason.includes('balance correction') ||
-          reason.includes('refund') ||
-          reason.includes('withdrawal') ||
-          reason.includes('manual credit') ||
-          reason.includes('test transaction') ||
-          reason.includes('admin adjustment');
-        
-        // Include if it's legitimate revenue and not a non-revenue item
-        return isLegitimateRevenue && !isNonRevenue;
-      })
-      .reduce((sum, action) => sum + action.amount, 0);
+  // Helper function to get all seller withdrawals in a flat array
+  const getAllSellerWithdrawals = () => {
+    const allWithdrawals: Array<{seller: string, amount: number, date: string}> = [];
+    
+    Object.entries(sellerWithdrawals).forEach(([seller, withdrawals]) => {
+      withdrawals.forEach(withdrawal => {
+        allWithdrawals.push({
+          seller,
+          amount: withdrawal.amount,
+          date: withdrawal.date
+        });
+      });
+    });
+    
+    return allWithdrawals.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
-  // 🚀 FIX: Calculate revenue from actual sales data as fallback
-  const calculateRevenueFromSales = (orders: typeof orderHistory) => {
+  const { 
+    actions: filteredActions, 
+    orders: filteredOrders, 
+    deposits: filteredDeposits,
+    sellerWithdrawals: filteredSellerWithdrawals,
+    adminWithdrawals: filteredAdminWithdrawals
+  } = getTimeFilteredData();
+
+  // 🚀 FIXED: Correct platform PROFIT calculation (what we actually make)
+  const calculatePlatformProfit = (orders: typeof orderHistory) => {
+    // Platform makes 20% profit on each sale (our actual earnings)
+    const salesProfit = orders.reduce((sum, order) => {
+      const originalPrice = order.price; // What seller listed it for ($1000)
+      const platformProfit = originalPrice * 0.2; // Our 20% profit = $200
+      return sum + platformProfit;
+    }, 0);
+    
+    return salesProfit;
+  };
+
+  // 🚀 FIXED: Calculate total REVENUE (what buyers actually pay)
+  const calculateTotalRevenue = (orders: typeof orderHistory) => {
     return orders.reduce((sum, order) => {
-      // Platform gets 20% of each sale (10% markup on buyer side)
-      const salePrice = order.markedUpPrice || order.price;
-      const platformFee = salePrice * 0.2; // 20% of total sale
-      return sum + platformFee;
+      return sum + (order.markedUpPrice || order.price); // What buyer actually paid ($1100)
     }, 0);
   };
 
-  // 🚀 FIX: Calculate subscription revenue separately
+  // 🚀 FIXED: Calculate subscription REVENUE (what buyers pay for subscriptions)
   const calculateSubscriptionRevenue = (actions: typeof adminActions) => {
+    // Look for subscription payments - these are recorded when buyers pay
     return actions
       .filter(action => {
         if (action.type !== 'credit') return false;
         const reason = action.reason.toLowerCase();
-        return reason.includes('subscription') || reason.includes('premium') || reason.includes('monthly');
+        return reason.includes('subscription') && !reason.includes('refund');
+      })
+      .reduce((sum, action) => {
+        // For subscriptions, action.amount is the platform's 25% cut
+        // So total subscription revenue = action.amount / 0.25
+        return sum + (action.amount / 0.25);
+      }, 0);
+  };
+
+  // 🚀 FIXED: Calculate subscription PROFIT (our 25% cut)
+  const calculateSubscriptionProfit = (actions: typeof adminActions) => {
+    return actions
+      .filter(action => {
+        if (action.type !== 'credit') return false;
+        const reason = action.reason.toLowerCase();
+        return reason.includes('subscription') && !reason.includes('refund');
       })
       .reduce((sum, action) => sum + action.amount, 0);
+  };
+
+  // 🚀 NEW: Calculate withdrawal metrics
+  const calculateWithdrawals = () => {
+    const totalSellerWithdrawals = filteredSellerWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const totalAdminWithdrawals = filteredAdminWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const totalWithdrawals = totalSellerWithdrawals + totalAdminWithdrawals;
+    const withdrawalCount = filteredSellerWithdrawals.length + filteredAdminWithdrawals.length;
+    
+    return {
+      totalSellerWithdrawals,
+      totalAdminWithdrawals,
+      totalWithdrawals,
+      withdrawalCount,
+      averageWithdrawal: withdrawalCount > 0 ? totalWithdrawals / withdrawalCount : 0
+    };
   };
 
   // 🚀 NEW: Deposit analytics
@@ -173,46 +209,63 @@ export default function AdminProfitDashboard() {
   const periodDepositCount = filteredDeposits.filter(deposit => deposit.status === 'completed').length;
   const averageDepositAmount = periodDepositCount > 0 ? periodTotalDeposits / periodDepositCount : 0;
 
-  // 🚀 FIX: Updated revenue calculations using new logic
-  const periodPlatformRevenue = calculatePlatformRevenue(filteredActions);
-  const periodSalesRevenueFromOrders = calculateRevenueFromSales(filteredOrders);
+  // 🚀 FIXED: Calculate metrics correctly
+  const periodSalesProfit = calculatePlatformProfit(filteredOrders);
+  const allTimeSalesProfit = calculatePlatformProfit(orderHistory);
+  
+  const periodSubscriptionProfit = calculateSubscriptionProfit(filteredActions);
+  const allTimeSubscriptionProfit = calculateSubscriptionProfit(adminActions);
+  
   const periodSubscriptionRevenue = calculateSubscriptionRevenue(filteredActions);
+  const allTimeSubscriptionRevenue = calculateSubscriptionRevenue(adminActions);
   
-  // 🚀 FIX: Use sales data as primary source, admin actions as secondary
-  const actualPeriodRevenue = Math.max(periodPlatformRevenue, periodSalesRevenueFromOrders);
+  // Calculate total REVENUE (what buyers actually pay)
+  const periodSalesRevenue = calculateTotalRevenue(filteredOrders);
+  const allTimeSalesRevenue = calculateTotalRevenue(orderHistory);
   
-  // Calculate total sales revenue for the period (what buyers actually paid)
-  const periodSalesRevenue = filteredOrders.reduce((sum, order) => {
-    return sum + (order.markedUpPrice || order.price);
-  }, 0);
+  const periodTotalRevenue = periodSalesRevenue + periodSubscriptionRevenue;
+  const allTimeTotalRevenue = allTimeSalesRevenue + allTimeSubscriptionRevenue;
   
   const periodAverageOrderValue = filteredOrders.length > 0 ? (periodSalesRevenue / filteredOrders.length) : 0;
+  const allTimeAverageOrderValue = orderHistory.length > 0 ? (allTimeSalesRevenue / orderHistory.length) : 0;
   
-  // 🚀 FIX: For "All" time, use improved calculations
-  const allTimePlatformRevenue = timeFilter === 'all' ? 
-    Math.max(calculatePlatformRevenue(adminActions), calculateRevenueFromSales(orderHistory)) :
-    actualPeriodRevenue;
-    
-  const allTimeSubscriptionRevenue = calculateSubscriptionRevenue(adminActions);
-    
-  const displayPlatformRevenue = timeFilter === 'all' ? allTimePlatformRevenue : actualPeriodRevenue;
-  const displaySalesRevenue = timeFilter === 'all' ? 
-    orderHistory.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0) : 
-    periodSalesRevenue;
-  const displayAverageOrderValue = timeFilter === 'all' ? 
-    (orderHistory.length > 0 ? displaySalesRevenue / orderHistory.length : 0) : 
-    periodAverageOrderValue;
-  const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
+  // Display values based on time filter
+  const displayPlatformProfit = timeFilter === 'all' ? allTimeSalesProfit : periodSalesProfit;
+  const displaySubscriptionProfit = timeFilter === 'all' ? allTimeSubscriptionProfit : periodSubscriptionProfit;
+  const displayTotalProfit = displayPlatformProfit + displaySubscriptionProfit;
+  
+  const displaySalesRevenue = timeFilter === 'all' ? allTimeSalesRevenue : periodSalesRevenue;
   const displaySubscriptionRevenue = timeFilter === 'all' ? allTimeSubscriptionRevenue : periodSubscriptionRevenue;
+  const displayTotalRevenue = displaySalesRevenue + displaySubscriptionRevenue;
+  
+  const displayAverageOrderValue = timeFilter === 'all' ? allTimeAverageOrderValue : periodAverageOrderValue;
+  const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
 
-  // 🚀 FIX: Calculate sales commission more accurately
-  const displaySalesCommission = filteredOrders.length > 0 ? 
-    calculateRevenueFromSales(timeFilter === 'all' ? orderHistory : filteredOrders) : 0;
+  // 🚀 NEW: Withdrawal calculations
+  const withdrawalMetrics = calculateWithdrawals();
+  const allTimeWithdrawals = timeFilter === 'all' ? {
+    totalSellerWithdrawals: getAllSellerWithdrawals().reduce((sum, w) => sum + w.amount, 0),
+    totalAdminWithdrawals: adminWithdrawals.reduce((sum, w) => sum + w.amount, 0),
+    totalWithdrawals: getAllSellerWithdrawals().reduce((sum, w) => sum + w.amount, 0) + adminWithdrawals.reduce((sum, w) => sum + w.amount, 0),
+    withdrawalCount: getAllSellerWithdrawals().length + adminWithdrawals.length,
+    averageWithdrawal: (getAllSellerWithdrawals().length + adminWithdrawals.length) > 0 ? 
+      (getAllSellerWithdrawals().reduce((sum, w) => sum + w.amount, 0) + adminWithdrawals.reduce((sum, w) => sum + w.amount, 0)) / (getAllSellerWithdrawals().length + adminWithdrawals.length) : 0
+  } : withdrawalMetrics;
 
-  // User engagement metrics - FIX #2: Division by zero protection
+  // User engagement metrics
   const activeListings = listings.length;
   const avgListingsPerSeller = sellers.length > 0 ? (activeListings / sellers.length).toFixed(1) : '0.0';
   const buyerToSellerRatio = sellers.length > 0 ? (buyers.length / sellers.length).toFixed(1) : '0.0';
+
+  // 🚀 NEW: Top withdrawing sellers
+  const topWithdrawers = Object.entries(sellerWithdrawals)
+    .map(([seller, withdrawals]) => ({
+      seller,
+      totalWithdrawn: withdrawals.reduce((sum, w) => sum + w.amount, 0),
+      withdrawalCount: withdrawals.length
+    }))
+    .sort((a, b) => b.totalWithdrawn - a.totalWithdrawn)
+    .slice(0, 5);
 
   // 🚀 NEW: Top depositing users
   const topDepositors = Object.entries(
@@ -226,7 +279,7 @@ export default function AdminProfitDashboard() {
     .sort(([,a], [,b]) => b - a)
     .slice(0, 5);
 
-  // 🚀 FIX: Calculate growth metrics with improved revenue calculation
+  // 🚀 FIXED: Calculate growth metrics properly
   const getPreviousPeriodData = () => {
     const now = new Date();
     const currentPeriodStart = new Date();
@@ -261,13 +314,8 @@ export default function AdminProfitDashboard() {
         previousPeriodStart.setFullYear(previousPeriodEnd.getFullYear() - 1);
         break;
       default:
-        return { actions: [], orders: [], deposits: [] };
+        return { orders: [], deposits: [], withdrawals: [], actions: [] };
     }
-    
-    const previousActions = adminActions.filter(action => {
-      const actionDate = new Date(action.date);
-      return actionDate >= previousPeriodStart && actionDate <= previousPeriodEnd;
-    });
     
     const previousOrders = orderHistory.filter(order => {
       const orderDate = new Date(order.date);
@@ -278,27 +326,37 @@ export default function AdminProfitDashboard() {
       const depositDate = new Date(deposit.date);
       return depositDate >= previousPeriodStart && depositDate <= previousPeriodEnd;
     });
+
+    const previousWithdrawals = getAllSellerWithdrawals().filter(withdrawal => {
+      const withdrawalDate = new Date(withdrawal.date);
+      return withdrawalDate >= previousPeriodStart && withdrawalDate <= previousPeriodEnd;
+    });
+
+    const previousActions = adminActions.filter(action => {
+      const actionDate = new Date(action.date);
+      return actionDate >= previousPeriodStart && actionDate <= previousPeriodEnd;
+    });
     
-    return { actions: previousActions, orders: previousOrders, deposits: previousDeposits };
+    return { orders: previousOrders, deposits: previousDeposits, withdrawals: previousWithdrawals, actions: previousActions };
   };
 
-  const { actions: previousPeriodActions, orders: previousPeriodOrders, deposits: previousPeriodDeposits } = getPreviousPeriodData();
+  const { orders: previousPeriodOrders, deposits: previousPeriodDeposits, withdrawals: previousPeriodWithdrawals, actions: previousPeriodActions } = getPreviousPeriodData();
   
-  // 🚀 FIX: Use improved revenue calculation for growth comparison
-  const previousPeriodRevenue = Math.max(
-    calculatePlatformRevenue(previousPeriodActions),
-    calculateRevenueFromSales(previousPeriodOrders)
-  );
-
+  const previousPeriodProfit = calculatePlatformProfit(previousPeriodOrders) + calculateSubscriptionProfit(previousPeriodActions);
   const previousPeriodDepositAmount = previousPeriodDeposits
     .filter(deposit => deposit.status === 'completed')
     .reduce((sum, deposit) => sum + deposit.amount, 0);
+  const previousPeriodWithdrawalAmount = previousPeriodWithdrawals
+    .reduce((sum, withdrawal) => sum + withdrawal.amount, 0);
 
-  const growthRate = timeFilter !== 'all' && previousPeriodRevenue > 0 ? 
-    ((actualPeriodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100 : 0;
+  const growthRate = timeFilter !== 'all' && previousPeriodProfit > 0 ? 
+    ((displayTotalProfit - previousPeriodProfit) / previousPeriodProfit) * 100 : 0;
 
   const depositGrowthRate = timeFilter !== 'all' && previousPeriodDepositAmount > 0 ? 
     ((periodTotalDeposits - previousPeriodDepositAmount) / previousPeriodDepositAmount) * 100 : 0;
+
+  const withdrawalGrowthRate = timeFilter !== 'all' && previousPeriodWithdrawalAmount > 0 ? 
+    ((withdrawalMetrics.totalWithdrawals - previousPeriodWithdrawalAmount) / previousPeriodWithdrawalAmount) * 100 : 0;
 
   // Top performing sellers by wallet balance
   const topSellers = Object.entries(wallet)
@@ -306,115 +364,114 @@ export default function AdminProfitDashboard() {
     .sort(([,a], [,b]) => b - a)
     .slice(0, 5);
 
-  // 🚀 FIX: Revenue distribution by day (improved chart data)
+  // 🚀 FIXED: Revenue distribution by time period for chart
   const getRevenueByDay = () => {
-    const days = [];
+    const periods = [];
     const now = new Date();
-    let daysToShow = 30;
-    let dateIncrement = 1; // days
+    let periodsToShow = 30;
     
     switch (timeFilter) {
       case 'today':
-        daysToShow = 24; // hours
+        periodsToShow = 24; // hours
         break;
       case 'week':
-        daysToShow = 7;
+        periodsToShow = 7;
         break;
       case 'month':
-        daysToShow = 30;
+        periodsToShow = 30;
         break;
       case '3months':
-        daysToShow = 90;
+        periodsToShow = 90;
         break;
       case 'year':
-        daysToShow = 12; // months
-        dateIncrement = 30; // approximately monthly
+        periodsToShow = 12; // months
         break;
       default:
-        daysToShow = 30;
+        periodsToShow = 30;
     }
     
-    for (let i = daysToShow - 1; i >= 0; i--) {
+    for (let i = periodsToShow - 1; i >= 0; i--) {
       const date = new Date();
       
       if (timeFilter === 'today') {
         date.setHours(now.getHours() - i);
-        const hourActions = adminActions.filter(action => {
-          const actionDate = new Date(action.date);
-          return actionDate.getHours() === date.getHours() && 
-                 actionDate.toDateString() === date.toDateString();
-        });
-        
         const hourOrders = orderHistory.filter(order => {
           const orderDate = new Date(order.date);
           return orderDate.getHours() === date.getHours() && 
                  orderDate.toDateString() === date.toDateString();
         });
         
-        // 🚀 FIX: Use improved revenue calculation for chart
-        const hourRevenue = Math.max(
-          calculatePlatformRevenue(hourActions),
-          calculateRevenueFromSales(hourOrders)
-        );
+        const hourActions = adminActions.filter(action => {
+          const actionDate = new Date(action.date);
+          return actionDate.getHours() === date.getHours() && 
+                 actionDate.toDateString() === date.toDateString();
+        });
         
-        days.push({
+        // Calculate TOTAL REVENUE for this hour (what buyers paid)
+        const hourSalesRevenue = calculateTotalRevenue(hourOrders);
+        const hourSubRevenue = calculateSubscriptionRevenue(hourActions);
+        const hourTotalRevenue = hourSalesRevenue + hourSubRevenue;
+        
+        periods.push({
           date: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
-          revenue: hourRevenue,
-          transactions: hourActions.length + hourOrders.length
+          revenue: hourTotalRevenue,
+          transactions: hourOrders.length
         });
       } else if (timeFilter === 'year') {
         date.setMonth(now.getMonth() - i);
-        const monthActions = adminActions.filter(action => {
-          const actionDate = new Date(action.date);
-          return actionDate.getMonth() === date.getMonth() && 
-                 actionDate.getFullYear() === date.getFullYear();
-        });
-        
         const monthOrders = orderHistory.filter(order => {
           const orderDate = new Date(order.date);
           return orderDate.getMonth() === date.getMonth() && 
                  orderDate.getFullYear() === date.getFullYear();
         });
         
-        const monthRevenue = Math.max(
-          calculatePlatformRevenue(monthActions),
-          calculateRevenueFromSales(monthOrders)
-        );
+        const monthActions = adminActions.filter(action => {
+          const actionDate = new Date(action.date);
+          return actionDate.getMonth() === date.getMonth() && 
+                 actionDate.getFullYear() === date.getFullYear();
+        });
         
-        days.push({
+        const monthSalesRevenue = calculateTotalRevenue(monthOrders);
+        const monthSubRevenue = calculateSubscriptionRevenue(monthActions);
+        const monthTotalRevenue = monthSalesRevenue + monthSubRevenue;
+        
+        periods.push({
           date: date.toLocaleDateString('en-US', { month: 'short' }),
-          revenue: monthRevenue,
-          transactions: monthActions.length + monthOrders.length
+          revenue: monthTotalRevenue,
+          transactions: monthOrders.length
         });
       } else {
         date.setDate(now.getDate() - i);
-        const dayActions = adminActions.filter(action => {
-          const actionDate = new Date(action.date);
-          return actionDate.toDateString() === date.toDateString();
-        });
-        
         const dayOrders = orderHistory.filter(order => {
           const orderDate = new Date(order.date);
           return orderDate.toDateString() === date.toDateString();
         });
         
-        const dayRevenue = Math.max(
-          calculatePlatformRevenue(dayActions),
-          calculateRevenueFromSales(dayOrders)
-        );
+        const dayActions = adminActions.filter(action => {
+          const actionDate = new Date(action.date);
+          return actionDate.toDateString() === date.toDateString();
+        });
         
-        days.push({
+        const daySalesRevenue = calculateTotalRevenue(dayOrders);
+        const daySubRevenue = calculateSubscriptionRevenue(dayActions);
+        const dayTotalRevenue = daySalesRevenue + daySubRevenue;
+        
+        periods.push({
           date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          revenue: dayRevenue,
-          transactions: dayActions.length + dayOrders.length
+          revenue: dayTotalRevenue,
+          transactions: dayOrders.length
         });
       }
     }
-    return days;
+    return periods;
   };
 
   const chartData = getRevenueByDay();
   const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1);
+
+  // 🚀 FIXED: Chart calculations for correct averages
+  const totalChartRevenue = chartData.reduce((sum, d) => sum + d.revenue, 0);
+  const averageChartRevenue = chartData.length > 0 ? totalChartRevenue / chartData.length : 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -514,8 +571,8 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* 🚀 FIX: Enhanced Main Money Metrics with accurate revenue calculation */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* 🚀 FIXED: Enhanced Main Money Metrics with accurate revenue calculation */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
             {/* Total Money Made - Period Specific */}
             <div className="bg-gradient-to-br from-[#ff950e]/20 to-[#ff6b00]/10 rounded-xl p-6 border border-[#ff950e]/30 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[#ff950e]/10 rounded-full -translate-y-16 translate-x-16"></div>
@@ -532,7 +589,7 @@ export default function AdminProfitDashboard() {
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-3xl font-bold text-white">{formatCurrency(displayPlatformRevenue)}</span>
+                  <span className="text-3xl font-bold text-white">{formatCurrency(displayTotalProfit)}</span>
                   <span className="text-lg text-[#ff950e] font-medium">💰</span>
                   {timeFilter !== 'all' && growthRate !== 0 && (
                     <span className={`text-sm flex items-center gap-1 ml-2 ${
@@ -544,7 +601,7 @@ export default function AdminProfitDashboard() {
                   )}
                 </div>
                 <p className="text-sm text-gray-400">
-                  Sales: {formatCurrency(displaySalesCommission)} • Subs: {formatCurrency(displaySubscriptionRevenue)}
+                  Sales: {formatCurrency(displayPlatformProfit)} • Subs: {formatCurrency(displaySubscriptionProfit)}
                 </p>
               </div>
             </div>
@@ -555,7 +612,7 @@ export default function AdminProfitDashboard() {
               <div className="relative">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-3 bg-blue-500 rounded-lg">
-                    <PlusCircle className="w-6 h-6 text-white" />
+                    <Download className="w-6 h-6 text-white" />
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-300">
@@ -582,6 +639,39 @@ export default function AdminProfitDashboard() {
               </div>
             </div>
 
+            {/* 🚀 NEW: Total Withdrawals */}
+            <div className="bg-gradient-to-br from-red-500/20 to-red-600/10 rounded-xl p-6 border border-red-500/30 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full -translate-y-16 translate-x-16"></div>
+              <div className="relative">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-red-500 rounded-lg">
+                    <Upload className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-300">
+                      {timeFilter === 'all' ? 'Total Withdrawals' : `Withdrawals - ${getPeriodDisplayName()}`}
+                    </h3>
+                    <p className="text-xs text-gray-500">Money paid out</p>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <span className="text-3xl font-bold text-white">{formatCurrency(allTimeWithdrawals.totalWithdrawals)}</span>
+                  <span className="text-lg text-red-400 font-medium">💸</span>
+                  {timeFilter !== 'all' && withdrawalGrowthRate !== 0 && (
+                    <span className={`text-sm flex items-center gap-1 ml-2 ${
+                      withdrawalGrowthRate > 0 ? 'text-red-400' : 'text-green-400'
+                    }`}>
+                      {withdrawalGrowthRate > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                      {Math.abs(withdrawalGrowthRate).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400">
+                  {allTimeWithdrawals.withdrawalCount} payouts • Avg: {formatCurrency(allTimeWithdrawals.averageWithdrawal)}
+                </p>
+              </div>
+            </div>
+
             {/* Total Platform Revenue - Period Specific */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -translate-y-10 translate-x-10"></div>
@@ -598,13 +688,13 @@ export default function AdminProfitDashboard() {
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-3xl font-bold text-white">{formatCurrency(displaySalesRevenue)}</span>
+                  <span className="text-3xl font-bold text-white">{formatCurrency(displayTotalRevenue)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1">
                     <ShoppingBag className="w-3 h-3 text-green-400" />
                     <span className="text-gray-400">
-                      Sales: {formatCurrency(displaySalesRevenue - displaySubscriptionRevenue)}
+                      Sales: {formatCurrency(displaySalesRevenue)}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
@@ -637,7 +727,7 @@ export default function AdminProfitDashboard() {
                   <span className="text-xs text-gray-500">per sale</span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  = {formatCurrency(displayAverageOrderValue * 0.2)} profit each
+                  = {formatCurrency(filteredOrders.length > 0 ? (displayPlatformProfit / filteredOrders.length) : 0)} profit each
                 </p>
                 {timeFilter !== 'all' && (
                   <p className="text-xs text-gray-400 mt-1">
@@ -648,7 +738,7 @@ export default function AdminProfitDashboard() {
             </div>
           </div>
 
-          {/* Revenue Chart - Updated descriptions - FIX #4: Chart label spacing */}
+          {/* Revenue Chart */}
           <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 mb-8 overflow-hidden">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -690,17 +780,17 @@ export default function AdminProfitDashboard() {
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-500">Average {timeFilter === 'today' ? 'Hour' : timeFilter === 'year' ? 'Month' : 'Day'}</p>
-                <p className="font-bold text-white">{formatCurrency(chartData.reduce((sum, d) => sum + d.revenue, 0) / chartData.length)}</p>
+                <p className="font-bold text-white">{formatCurrency(averageChartRevenue)}</p>
               </div>
               <div className="text-center">
                 <p className="text-xs text-gray-500">Total Period</p>
-                <p className="font-bold text-[#ff950e]">{formatCurrency(chartData.reduce((sum, d) => sum + d.revenue, 0))}</p>
+                <p className="font-bold text-[#ff950e]">{formatCurrency(totalChartRevenue)}</p>
               </div>
             </div>
           </div>
 
-          {/* Platform Health & User Metrics + Top Depositors - FIX #6: Type fix */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Platform Health & User Metrics + Top Depositors + Top Withdrawers */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
             {/* Platform Health */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -789,7 +879,7 @@ export default function AdminProfitDashboard() {
             {/* Top Depositors */}
             <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-[#ff950e]" />
+                <Download className="h-5 w-5 text-[#ff950e]" />
                 Top Depositors
               </h3>
               <div className="space-y-3">
@@ -818,24 +908,63 @@ export default function AdminProfitDashboard() {
                   </div>
                 )) : (
                   <div className="text-center py-8 text-gray-500">
-                    <CreditCard className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+                    <Download className="h-8 w-8 mx-auto mb-2 text-gray-600" />
                     <p>No deposits yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 🚀 NEW: Top Withdrawers */}
+            <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <Upload className="h-5 w-5 text-[#ff950e]" />
+                Top Withdrawers
+              </h3>
+              <div className="space-y-3">
+                {topWithdrawers.length > 0 ? topWithdrawers.map((withdrawer, index) => (
+                  <div key={withdrawer.seller} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        index === 0 ? 'bg-red-500 text-white' :
+                        index === 1 ? 'bg-red-400 text-white' :
+                        index === 2 ? 'bg-red-300 text-black' :
+                        'bg-[#333] text-gray-300'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-white">{withdrawer.seller}</p>
+                        <p className="text-xs text-gray-400">
+                          {withdrawer.withdrawalCount} withdrawal{withdrawer.withdrawalCount !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-red-400">{formatCurrency(withdrawer.totalWithdrawn)}</p>
+                      <p className="text-xs text-gray-500">withdrawn</p>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+                    <p>No withdrawals yet</p>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* 🚀 FIX: Updated Money Flow Explanation with accurate info */}
+          {/* Enhanced Money Flow Explanation */}
           <div className="bg-gradient-to-r from-[#1a1a1a] to-[#252525] rounded-xl p-6 border border-gray-800 mb-8">
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
               <Info className="h-5 w-5 text-[#ff950e]" />
               How Your Money Machine Works
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="text-center">
                 <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Wallet className="h-8 w-8 text-blue-400" />
+                  <Download className="h-8 w-8 text-blue-400" />
                 </div>
                 <h4 className="font-bold text-white mb-2">1. Buyer Deposits</h4>
                 <p className="text-sm text-gray-400">Buyer adds $100 to wallet → You collect $100 upfront cash flow</p>
@@ -845,19 +974,26 @@ export default function AdminProfitDashboard() {
                   <ShoppingBag className="h-8 w-8 text-[#ff950e]" />
                 </div>
                 <h4 className="font-bold text-white mb-2">2. Purchase Made</h4>
-                <p className="text-sm text-gray-400">$100 item → $20 platform fee stays yours, $80 goes to seller</p>
+                <p className="text-sm text-gray-400">$1000 item → Buyer pays $1100 → Seller gets $900 → You keep $200 (20%)</p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Upload className="h-8 w-8 text-red-400" />
+                </div>
+                <h4 className="font-bold text-white mb-2">3. Seller Withdraws</h4>
+                <p className="text-sm text-gray-400">Seller requests payout of their earnings from completed sales</p>
               </div>
               <div className="text-center">
                 <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                   <TrendingUp className="h-8 w-8 text-green-400" />
                 </div>
-                <h4 className="font-bold text-white mb-2">3. Pure Profit</h4>
+                <h4 className="font-bold text-white mb-2">4. Pure Profit</h4>
                 <p className="text-sm text-gray-400">20% profit margin on all sales + 25% from subscriptions</p>
               </div>
             </div>
           </div>
 
-          {/* Enhanced Recent Activity - Now includes deposits */}
+          {/* Enhanced Recent Activity - Now includes deposits and withdrawals */}
           <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -865,68 +1001,43 @@ export default function AdminProfitDashboard() {
                 Recent Money Activity
               </h3>
               <div className="text-sm text-gray-400">
-                Last {Math.max(filteredActions.length, filteredDeposits.length)} actions {timeFilter !== 'all' ? `(${getPeriodDisplayName()})` : ''}
+                Recent transactions {timeFilter !== 'all' ? `(${getPeriodDisplayName()})` : ''}
               </div>
             </div>
             
-            {(filteredActions.length > 0 || filteredDeposits.length > 0) ? (
+            {(filteredDeposits.length > 0 || filteredSellerWithdrawals.length > 0 || filteredAdminWithdrawals.length > 0) ? (
               <div className="overflow-hidden">
                 <div className="max-h-80 overflow-y-auto">
                   <div className="space-y-3">
-                    {/* Combine and sort actions and deposits by date */}
+                    {/* Combine and sort deposits, withdrawals by date */}
                     {[
-                      ...filteredActions
-                        .filter(action => calculatePlatformRevenue([action]) > 0) // 🚀 FIX: Only show revenue-generating actions
-                        .map(action => ({
-                          type: 'action' as const,
-                          data: action,
-                          date: action.date
-                        })),
+                      // Deposits
                       ...filteredDeposits
                         .filter(deposit => deposit.status === 'completed')
                         .map(deposit => ({
                           type: 'deposit' as const,
                           data: deposit,
                           date: deposit.date
+                        })),
+                      // Seller withdrawals
+                      ...filteredSellerWithdrawals
+                        .map(withdrawal => ({
+                          type: 'seller_withdrawal' as const,
+                          data: withdrawal,
+                          date: withdrawal.date
+                        })),
+                      // Admin withdrawals
+                      ...filteredAdminWithdrawals
+                        .map(withdrawal => ({
+                          type: 'admin_withdrawal' as const,
+                          data: withdrawal,
+                          date: withdrawal.date
                         }))
                     ]
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                      .slice(0, 15)
+                      .slice(0, 20)
                       .map((item, index) => {
-                        if (item.type === 'action') {
-                          const action = item.data;
-                          return (
-                            <div key={`action-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors">
-                              <div className="flex items-center gap-4 min-w-0 flex-1">
-                                <div className={`p-2 rounded-lg flex-shrink-0 ${
-                                  action.type === 'credit' 
-                                    ? 'bg-green-500/20 text-green-400'
-                                    : 'bg-red-500/20 text-red-400'
-                                }`}>
-                                  {action.type === 'credit' ? (
-                                    <ArrowUpRight className="w-4 h-4" />
-                                  ) : (
-                                    <ArrowDownRight className="w-4 h-4" />
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-white truncate">
-                                    {action.type === 'credit' ? '💰 Revenue In' : '🔧 Adjustment'}
-                                  </p>
-                                  <p className="text-sm text-gray-400 truncate">{action.reason}</p>
-                                </div>
-                              </div>
-                              <div className="text-right flex-shrink-0 ml-4">
-                                <p className={`font-bold ${
-                                  action.type === 'credit' ? 'text-green-400' : 'text-red-400'
-                                }`}>
-                                  {action.type === 'credit' ? '+' : '-'}{formatCurrency(action.amount)}
-                                </p>
-                                <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
-                              </div>
-                            </div>
-                          );
-                        } else {
+                        if (item.type === 'deposit') {
                           const deposit = item.data;
                           return (
                             <div key={`deposit-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-blue-500/50">
@@ -948,6 +1059,56 @@ export default function AdminProfitDashboard() {
                                   +{formatCurrency(deposit.amount)}
                                 </p>
                                 <p className="text-xs text-gray-500">{formatDate(deposit.date)}</p>
+                              </div>
+                            </div>
+                          );
+                        } else if (item.type === 'seller_withdrawal') {
+                          const withdrawal = item.data;
+                          return (
+                            <div key={`seller-withdrawal-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-red-500/50">
+                              <div className="flex items-center gap-4 min-w-0 flex-1">
+                                <div className="p-2 rounded-lg flex-shrink-0 bg-red-500/20 text-red-400">
+                                  <Upload className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-white truncate">
+                                    💸 Seller Withdrawal
+                                  </p>
+                                  <p className="text-sm text-gray-400 truncate">
+                                    {withdrawal.seller} cashed out
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-4">
+                                <p className="font-bold text-red-400">
+                                  -{formatCurrency(withdrawal.amount)}
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(withdrawal.date)}</p>
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          const withdrawal = item.data;
+                          return (
+                            <div key={`admin-withdrawal-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-purple-500/50">
+                              <div className="flex items-center gap-4 min-w-0 flex-1">
+                                <div className="p-2 rounded-lg flex-shrink-0 bg-purple-500/20 text-purple-400">
+                                  <Wallet className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-white truncate">
+                                    👑 Admin Withdrawal
+                                  </p>
+                                  <p className="text-sm text-gray-400 truncate">
+                                    Platform profit withdrawal
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-4">
+                                <p className="font-bold text-purple-400">
+                                  -{formatCurrency(withdrawal.amount)}
+                                </p>
+                                <p className="text-xs text-gray-500">{formatDate(withdrawal.date)}</p>
                               </div>
                             </div>
                           );
