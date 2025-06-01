@@ -3,6 +3,20 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
+// Content Security Policy compliant image validation
+const IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'] as const;
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB limit
+const MIN_IMAGE_SIZE = 1024; // 1KB minimum to prevent empty/malicious files
+
+// Trusted domains for external images
+const TRUSTED_IMAGE_DOMAINS = [
+  'localhost',
+  '127.0.0.1',
+  // Add your CDN domains here when you have them
+  // 'cdn.pantypost.com',
+  // 'images.pantypost.com'
+];
+
 // Sanitization utilities
 const sanitizeString = (str: string): string => {
   if (typeof str !== 'string') return '';
@@ -28,126 +42,306 @@ const sanitizeArray = (arr: string[]): string[] => {
   return arr.map(item => sanitizeString(item)).filter(Boolean);
 };
 
-// FIXED: Enhanced image URL sanitization to prevent XSS via data URLs
+// Enhanced image validation with multiple security layers
 const sanitizeImageUrl = (url: string): string => {
   if (typeof url !== 'string') return '';
   
-  // Handle data URLs with strict validation
-  if (url.startsWith('data:image/')) {
-    // Only allow specific image MIME types
-    const validImageTypes = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
-    
-    // Extract MIME type and validate format
-    const matches = url.match(/^data:image\/(jpeg|jpg|png|gif|webp);base64,/);
-    if (!matches) {
-      console.warn('Invalid data URL format detected');
-      return ''; // Reject invalid data URL format
-    }
-    
-    // Validate base64 content
-    const base64Part = url.split(',')[1];
-    if (!base64Part) {
-      console.warn('Missing base64 content in data URL');
-      return '';
-    }
-    
-    // Check if base64 is valid (only allowed characters)
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Part)) {
-      console.warn('Invalid base64 characters detected');
-      return '';
-    }
-    
-    // Additional check: ensure the base64 length is reasonable for an image
-    // Reject suspiciously small base64 that might contain scripts
-    if (base64Part.length < 100) {
-      console.warn('Suspiciously small base64 content');
-      return '';
-    }
-    
-    // Try to decode a small portion to verify it's actual image data
-    try {
-      const testDecode = atob(base64Part.substring(0, 50));
-      // Check for common image file signatures
-      const firstBytes = testDecode.substring(0, 10);
-      
-      // Common image file signatures (magic numbers)
-      const imageSignatures = [
-        '\xFF\xD8\xFF', // JPEG
-        '\x89PNG', // PNG
-        'GIF87a', // GIF
-        'GIF89a', // GIF
-        'RIFF' // WebP (partial)
-      ];
-      
-      const hasValidSignature = imageSignatures.some(sig => 
-        firstBytes.includes(sig)
-      );
-      
-      if (!hasValidSignature && !firstBytes.includes('WEBP')) {
-        console.warn('Invalid image file signature detected');
-        return '';
-      }
-    } catch (e) {
-      console.warn('Failed to decode base64 for validation');
-      return '';
-    }
-    
-    return url; // Data URL is valid
+  // Reject suspiciously long URLs that might contain encoded payloads
+  if (url.length > 65536) { // 64KB limit for URLs
+    console.warn('Image URL exceeds maximum length');
+    return '';
   }
   
-  // Handle blob URLs (generally safe as they're browser-generated)
+  // Handle data URLs with comprehensive validation
+  if (url.startsWith('data:')) {
+    try {
+      // Parse data URL structure
+      const dataUrlMatch = url.match(/^data:([^;]+)(;base64)?,(.*)$/);
+      if (!dataUrlMatch) {
+        console.warn('Invalid data URL structure');
+        return '';
+      }
+      
+      const [, mimeType, isBase64, data] = dataUrlMatch;
+      
+      // Validate MIME type
+      if (!IMAGE_MIME_TYPES.includes(mimeType as any)) {
+        console.warn(`Invalid image MIME type: ${mimeType}`);
+        return '';
+      }
+      
+      // Validate base64 encoding is present
+      if (!isBase64) {
+        console.warn('Only base64 encoded images are allowed');
+        return '';
+      }
+      
+      // Validate base64 content
+      if (!data || data.length === 0) {
+        console.warn('Empty image data');
+        return '';
+      }
+      
+      // Check for valid base64 characters
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
+        console.warn('Invalid base64 characters detected');
+        return '';
+      }
+      
+      // Estimate decoded size (base64 is ~33% larger than binary)
+      const estimatedSize = (data.length * 3) / 4;
+      if (estimatedSize > MAX_IMAGE_SIZE) {
+        console.warn(`Image too large: estimated ${estimatedSize} bytes`);
+        return '';
+      }
+      
+      if (estimatedSize < MIN_IMAGE_SIZE) {
+        console.warn(`Image too small: estimated ${estimatedSize} bytes`);
+        return '';
+      }
+      
+      // Decode and validate image header
+      try {
+        const binaryString = atob(data.substring(0, 64)); // Check first 64 chars
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Validate image file signatures (magic numbers)
+        const signatures = {
+          jpeg: [0xFF, 0xD8, 0xFF],
+          png: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+          gif87a: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61],
+          gif89a: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+          webp: [0x52, 0x49, 0x46, 0x46] // RIFF header
+        };
+        
+        let validSignature = false;
+        
+        // Check JPEG
+        if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+          validSignature = signatures.jpeg.every((byte, i) => bytes[i] === byte);
+        }
+        // Check PNG
+        else if (mimeType.includes('png')) {
+          validSignature = signatures.png.every((byte, i) => bytes[i] === byte);
+        }
+        // Check GIF
+        else if (mimeType.includes('gif')) {
+          validSignature = signatures.gif87a.every((byte, i) => bytes[i] === byte) ||
+                          signatures.gif89a.every((byte, i) => bytes[i] === byte);
+        }
+        // Check WebP
+        else if (mimeType.includes('webp')) {
+          validSignature = signatures.webp.every((byte, i) => bytes[i] === byte);
+          // Additional WebP validation
+          if (validSignature && bytes.length >= 12) {
+            const webpMarker = String.fromCharCode(...Array.from(bytes.slice(8, 12)));
+            validSignature = webpMarker === 'WEBP';
+          }
+        }
+        
+        if (!validSignature) {
+          console.warn(`Invalid ${mimeType} file signature`);
+          return '';
+        }
+        
+        // Additional security: scan for suspicious patterns in the decoded data
+        const decodedPreview = binaryString.substring(0, 1000);
+        const suspiciousPatterns = [
+          /<script/i,
+          /javascript:/i,
+          /onclick/i,
+          /onerror/i,
+          /<iframe/i,
+          /<object/i,
+          /<embed/i,
+          /\.exe/i,
+          /\.bat/i,
+          /\.cmd/i,
+          /\.com/i,
+          /\.pif/i,
+          /\.scr/i,
+          /\.vbs/i,
+          /\.js/i
+        ];
+        
+        for (const pattern of suspiciousPatterns) {
+          if (pattern.test(decodedPreview)) {
+            console.warn('Suspicious pattern detected in image data');
+            return '';
+          }
+        }
+        
+      } catch (e) {
+        console.warn('Failed to decode/validate base64 image data:', e);
+        return '';
+      }
+      
+      return url; // Data URL passed all validations
+      
+    } catch (e) {
+      console.warn('Error validating data URL:', e);
+      return '';
+    }
+  }
+  
+  // Handle blob URLs with validation
   if (url.startsWith('blob:')) {
-    // Validate blob URL format
-    if (!/^blob:https?:\/\/[^/]+\/[a-f0-9-]+$/i.test(url)) {
+    // Validate blob URL format (protocol://domain/uuid)
+    const blobPattern = /^blob:(https?:\/\/[^/]+)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!blobPattern.test(url)) {
       console.warn('Invalid blob URL format');
       return '';
     }
-    return url;
-  }
-  
-  // Handle relative URLs
-  if (url.startsWith('/')) {
-    // Validate relative URL doesn't contain suspicious patterns
-    if (url.includes('../') || url.includes('..\\') || url.includes('%2e%2e')) {
-      console.warn('Path traversal attempt detected');
-      return '';
+    
+    // Extract origin from blob URL
+    const blobMatch = url.match(/^blob:(https?:\/\/[^/]+)/);
+    if (blobMatch) {
+      try {
+        const blobOrigin = new URL(blobMatch[1]).hostname;
+        // Only allow blob URLs from trusted origins
+        if (!TRUSTED_IMAGE_DOMAINS.includes(blobOrigin)) {
+          console.warn(`Blob URL from untrusted origin: ${blobOrigin}`);
+          return '';
+        }
+      } catch (e) {
+        console.warn('Invalid blob URL origin');
+        return '';
+      }
     }
+    
     return url;
   }
   
-  // Handle absolute URLs (https/http)
+  // Handle relative URLs with strict validation
+  if (url.startsWith('/')) {
+    // Check for path traversal attempts
+    const pathTraversalPatterns = [
+      /\.\./,           // ..
+      /\.\.%2F/i,       // URL encoded ../
+      /\.\.%5C/i,       // URL encoded ..\
+      /%2E%2E/i,        // Double URL encoded ..
+      /\.\.\\/, // ..\
+      /\x00/,           // Null byte
+      /%00/,            // URL encoded null byte
+    ];
+    
+    for (const pattern of pathTraversalPatterns) {
+      if (pattern.test(url)) {
+        console.warn('Path traversal attempt detected');
+        return '';
+      }
+    }
+    
+    // Validate file extension
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    const hasValidExtension = allowedExtensions.some(ext => 
+      url.toLowerCase().endsWith(ext)
+    );
+    
+    if (!hasValidExtension) {
+      // Check if URL has query parameters that might hide the extension
+      const urlWithoutQuery = url.split('?')[0];
+      const hasValidExtWithoutQuery = allowedExtensions.some(ext => 
+        urlWithoutQuery.toLowerCase().endsWith(ext)
+      );
+      
+      if (!hasValidExtWithoutQuery) {
+        console.warn('Invalid or missing image file extension');
+        return '';
+      }
+    }
+    
+    return url;
+  }
+  
+  // Handle absolute URLs with comprehensive validation
   if (url.startsWith('https://') || url.startsWith('http://')) {
     try {
       const urlObj = new URL(url);
       
-      // Whitelist of allowed image hosting domains
-      const allowedDomains = [
-        'localhost',
-        '127.0.0.1',
-        // Add your trusted image CDN domains here
-        // 'your-cdn.com',
-        // 'trusted-image-host.com'
+      // Reject URLs with authentication info
+      if (urlObj.username || urlObj.password) {
+        console.warn('URLs with authentication info are not allowed');
+        return '';
+      }
+      
+      // Validate protocol
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        console.warn(`Invalid protocol: ${urlObj.protocol}`);
+        return '';
+      }
+      
+      // Check hostname against whitelist
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      // Reject IP addresses unless they're localhost
+      const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+      if (ipPattern.test(hostname) && hostname !== '127.0.0.1') {
+        console.warn('Direct IP addresses are not allowed');
+        return '';
+      }
+      
+      // Check against trusted domains
+      const isTrusted = TRUSTED_IMAGE_DOMAINS.some(domain => {
+        if (domain === hostname) return true;
+        if (domain.startsWith('.')) {
+          // Handle wildcard subdomains
+          return hostname.endsWith(domain) || hostname === domain.substring(1);
+        }
+        return hostname === domain || hostname.endsWith(`.${domain}`);
+      });
+      
+      if (!isTrusted) {
+        console.warn(`Untrusted image domain: ${hostname}`);
+        return '';
+      }
+      
+      // Validate path doesn't contain suspicious patterns
+      const suspiciousPathPatterns = [
+        /\.(php|asp|aspx|jsp|cgi|pl|py|rb|sh|exe|bat|cmd|com|pif|scr|vbs|js)$/i,
+        /<script/i,
+        /javascript:/i,
+        /vbscript:/i,
+        /onload=/i,
+        /onerror=/i,
+        /onclick=/i,
       ];
       
-      // Check if domain is in whitelist
-      const hostname = urlObj.hostname.toLowerCase();
-      const isAllowed = allowedDomains.some(domain => 
-        hostname === domain || hostname.endsWith(`.${domain}`)
-      );
+      const fullPath = urlObj.pathname + urlObj.search;
+      for (const pattern of suspiciousPathPatterns) {
+        if (pattern.test(fullPath)) {
+          console.warn('Suspicious pattern in URL path');
+          return '';
+        }
+      }
       
-      if (!isAllowed) {
-        console.warn(`External image URL from untrusted domain: ${hostname}`);
-        return ''; // Reject untrusted domains
+      // Validate image extension in URL
+      const pathname = urlObj.pathname.toLowerCase();
+      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      const hasValidExtension = allowedExtensions.some(ext => pathname.endsWith(ext));
+      
+      // Some CDNs don't use extensions, so also check Content-Type hints in URL
+      const hasImageTypeHint = /\/(image|img|photo|picture|media)\//i.test(pathname) ||
+                              urlObj.searchParams.has('format') ||
+                              urlObj.searchParams.has('type');
+      
+      if (!hasValidExtension && !hasImageTypeHint) {
+        console.warn('URL does not appear to point to an image');
+        return '';
       }
       
       return url;
+      
     } catch (e) {
-      console.warn('Invalid URL format');
+      console.warn('Invalid URL format:', e);
       return '';
     }
   }
   
-  // Reject any other URL schemes
+  // Reject any other URL schemes (file://, ftp://, etc.)
   console.warn('Unsupported URL scheme');
   return '';
 };
@@ -233,7 +427,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   useEffect(() => {
-    // No longer strip imageUrl, just save as is
     localStorage.setItem('panty_messages', JSON.stringify(messages));
   }, [messages]);
 
@@ -268,6 +461,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         message: options.meta.message ? sanitizeString(options.meta.message) : undefined,
         imageUrl: options.meta.imageUrl ? sanitizeImageUrl(options.meta.imageUrl) : undefined,
       };
+      
+      // If image validation failed, don't send the message
+      if (options.meta.imageUrl && !sanitizedMeta.imageUrl) {
+        console.error('Image validation failed, message not sent');
+        return;
+      }
     }
 
     const newMessage: Message = {
