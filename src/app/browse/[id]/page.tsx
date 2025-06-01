@@ -8,6 +8,7 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useReviews } from '@/context/ReviewContext'; // Import reviews context
+import BanCheck from '@/components/BanCheck';
 import Link from 'next/link';
 import {
   Clock, User, ArrowLeft, AlertTriangle, Crown, MessageCircle,
@@ -368,11 +369,19 @@ export default function ListingDetailPage() {
   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
 
   if (!listingId) {
-    return <div className="text-white text-center p-10">Invalid listing URL.</div>;
+    return (
+      <BanCheck>
+        <div className="text-white text-center p-10">Invalid listing URL.</div>
+      </BanCheck>
+    );
   }
 
   if (!listing) {
-    return <div className="p-10 text-lg font-medium text-center text-white">Listing not found.</div>;
+    return (
+      <BanCheck>
+        <div className="p-10 text-lg font-medium text-center text-white">Listing not found.</div>
+      </BanCheck>
+    );
   }
 
   const images = listing.imageUrls || [];
@@ -645,636 +654,638 @@ export default function ListingDetailPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      {/* Back Button - Positioned above entire layout */}
-      <div className="max-w-7xl mx-auto px-4 pt-6">
-        <Link 
-          href="/browse" 
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors text-sm font-medium"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Browse
-        </Link>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* Left: Image Gallery */}
-          <div className="space-y-4">
-            {/* Main Image Container */}
-            <div ref={imageRef} className="relative group">
-              <div className="relative w-full h-[500px] lg:h-[600px] rounded-xl overflow-hidden bg-gray-900 shadow-xl">
-                {images.length > 0 ? (
-                  <>
-                    <img
-                      src={images[currentImageIndex]}
-                      alt={`${listing.title} - Image ${currentImageIndex + 1}`}
-                      className="w-full h-full object-cover transition-transform duration-300"
-                    />
-                    
-                    {/* Image Navigation */}
-                    {images.length > 1 && (
-                      <>
-                        <button
-                          onClick={handlePrevImage}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={handleNextImage}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-                      </>
-                    )}
-                    
-                    {/* Image Counter */}
-                    {images.length > 1 && (
-                      <div className="absolute bottom-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs">
-                        {currentImageIndex + 1} / {images.length}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-center text-gray-400">
-                      <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">No Image Available</p>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Type Badges */}
-                <div className="absolute top-3 left-3 flex flex-col gap-2">
-                  {isAuctionListing && (
-                    <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
-                      <Gavel className="w-3 h-3 mr-1.5" />
-                      {isAuctionEnded ? 'Ended' : 'Live Auction'}
-                    </span>
-                  )}
-                  {listing.isPremium && (
-                    <span className="bg-yellow-600 text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
-                      <Crown className="w-3 h-3 mr-1.5" />
-                      Premium
-                    </span>
-                  )}
-                </div>
-                
-                {/* View Count */}
-                <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
-                  <Eye className="w-3 h-3" />
-                  {viewCount}
-                </div>
-              </div>
-            </div>
-            
-            {/* Thumbnail Gallery */}
-            {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {images.map((url, index) => (
-                  <div
-                    key={index}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                      index === currentImageIndex 
-                        ? 'border-[#ff950e]' 
-                        : 'border-gray-700 hover:border-gray-600'
-                    }`}
-                    onClick={() => setCurrentImageIndex(index)}
-                  >
-                    <img src={url} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Right: Product Details - Now aligned with image top */}
-          <div className="space-y-4">
-            {/* Title & Basic Info */}
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-2">{listing.title}</h1>
-              
-              {/* Tags */}
-              {listing.tags && listing.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {listing.tags.map((tag, i) => (
-                    <span 
-                      key={i} 
-                      className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full border border-gray-700"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              
-              {/* Hours Worn */}
-              {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Clock className="w-4 h-4" />
-                  <span>{listing.hoursWorn} hours worn</span>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <div>
-              <h3 className="text-base font-semibold text-white mb-2">Description</h3>
-              <p className="text-gray-300 text-sm leading-relaxed">{listing.description}</p>
-            </div>
-
-            {/* Auction Details */}
-            {isAuctionListing && listing.auction && (
-              <div className={`rounded-xl border p-5 ${
-                isAuctionEnded 
-                  ? 'border-gray-700 bg-gray-900/30' 
-                  : 'border-purple-700 bg-purple-900/20'
-              }`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <Gavel className={`w-5 h-5 ${isAuctionEnded ? 'text-gray-400' : 'text-purple-400'}`} />
-                  <h3 className="text-lg font-bold text-white">
-                    {isAuctionEnded ? 'Auction Ended' : 'Live Auction'}
-                  </h3>
-                </div>
-                
-                {/* Auction Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <p className="text-gray-400 text-sm">Starting Bid</p>
-                    <p className="text-xl font-bold text-white">${listing.auction.startingPrice.toFixed(2)}</p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-gray-400 text-sm">Current Bid</p>
-                    {listing.auction.highestBid ? (
-                      <p className="text-xl font-bold text-green-400">${listing.auction.highestBid.toFixed(2)}</p>
-                    ) : (
-                      <p className="text-gray-400 italic">No bids yet</p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Time Remaining */}
-                {!isAuctionEnded && (
-                  <div className="mb-4">
-                    <p className="text-gray-400 text-sm mb-1">Time Remaining</p>
-                    <p className="font-bold text-green-400 mb-2">
-                      {formatTimeRemaining(listing.auction.endTime)}
-                    </p>
-                    
-                    {/* 🚀 UPDATED: Purple Timer Progress Bar */}
-                    <div className="relative">
-                      <div className="w-full bg-gray-700 rounded-full h-2">
-                        <div 
-                          className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 rounded-full transition-all duration-1000 ease-linear"
-                          style={{ width: `${getTimerProgress()}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Total Payable */}
-                <div className="bg-purple-900/30 rounded-lg p-3 mb-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-purple-200 text-sm">Total if you win</span>
-                    <span className="text-lg font-bold text-white">
-                      ${currentTotalPayable.toFixed(2)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Includes 10% platform fee
-                  </p>
-                </div>
-
-                {/* Bidding Section */}
-                {!isAuctionEnded && user?.role === 'buyer' && user.username !== listing.seller && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <input
-                          ref={bidInputRef}
-                          type="number"
-                          placeholder="Enter your bid"
-                          value={bidAmount}
-                          onChange={(e) => setBidAmount(e.target.value)}
-                          onKeyPress={handleBidKeyPress}
-                          min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
-                          step="0.01"
-                          className="w-full px-3 py-2 rounded-lg bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
-                        />
-                      </div>
-                      <button
-                        ref={bidButtonRef}
-                        onClick={handleBidSubmit}
-                        disabled={isBidding || !biddingEnabled}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-500 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                      >
-                        {isBidding ? 'Placing...' : 'Bid'}
-                      </button>
-                    </div>
-                    
-                    {/* Quick Bid + History */}
-                    <div className="flex gap-2">
-                      {suggestedBidAmount && (
-                        <button
-                          onClick={() => setBidAmount(suggestedBidAmount)}
-                          className="bg-purple-800/50 text-purple-300 px-3 py-1 rounded text-sm hover:bg-purple-700/50 transition"
-                        >
-                          ${suggestedBidAmount}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setShowBidHistory(true)}
-                        className="flex-1 bg-gray-800/50 text-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-700/50 transition flex items-center justify-center gap-1"
-                      >
-                        <BarChart2 className="w-3 h-3" />
-                        Bid history ({listing.auction.bids?.length || 0})
-                      </button>
-                    </div>
-                    
-                    {/* Status Messages */}
-                    {bidError && (
-                      <div className="bg-red-900/30 border border-red-800 text-red-400 p-3 rounded text-sm">
-                        {bidError}
-                      </div>
-                    )}
-                    
-                    {bidSuccess && (
-                      <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded text-sm">
-                        {bidSuccess}
-                      </div>
-                    )}
-                    
-                    {bidStatus.message && (
-                      <div className={`p-3 rounded text-sm border ${
-                        bidStatus.success 
-                          ? 'bg-green-900/20 border-green-800/40 text-green-400' 
-                          : 'bg-yellow-900/20 border-yellow-800/40 text-yellow-400'
-                      }`}>
-                        {bidStatus.message}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Price & Actions for Standard Listings */}
-            {!isAuctionListing && (
-              <div className="space-y-3">
-                {/* Compact Price Display */}
-                <div className="bg-[#ff950e] text-black px-4 py-2 rounded-lg text-center">
-                  <div className="text-lg font-bold">
-                    ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
-                  </div>
-                  <p className="text-xs opacity-75">Includes platform fee</p>
-                </div>
-                
-                {/* Compact Action Buttons */}
-                {user?.role === 'buyer' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={handlePurchase}
-                      disabled={isProcessing}
-                      className="bg-[#ff950e] text-black px-3 py-2 rounded-lg font-medium hover:bg-[#e88800] transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
-                    >
-                      {isProcessing ? (
-                        <>
-                          <div className="animate-spin h-3.5 w-3.5 border-2 border-black border-t-transparent rounded-full"></div>
-                          Processing
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingBag className="w-4 h-4" />
-                          Buy Now
-                        </>
-                      )}
-                    </button>
-                    
-                    <Link
-                      href={`/buyers/messages?thread=${listing.seller}`}
-                      className="flex items-center justify-center gap-1.5 bg-gray-800 text-white px-3 py-2 rounded-lg font-medium border border-gray-700 hover:bg-gray-700 transition text-sm"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Message
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Purchase Status */}
-            {purchaseStatus && (
-              <div className={`p-4 rounded-xl font-medium ${
-                purchaseStatus.includes('successful') 
-                  ? 'bg-green-900/30 border border-green-800 text-green-400' 
-                  : 'bg-red-900/30 border border-red-800 text-red-400'
-              }`}>
-                {purchaseStatus}
-              </div>
-            )}
-
-            {/* Premium Content Lock */}
-            {needsSubscription && (
-              <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <Lock className="w-4 h-4 text-yellow-400 mt-0.5" />
-                  <div className="flex-1">
-                    <h3 className="text-base font-bold text-white mb-1">Premium Content</h3>
-                    <p className="text-gray-300 mb-2 text-xs">
-                      Subscribe to {listing.seller} to view full details and make purchases.
-                    </p>
-                    {user?.role === 'buyer' && (
-                      <Link
-                        href={`/sellers/${listing.seller}`}
-                        className="inline-flex items-center gap-1.5 bg-yellow-600 text-black font-medium px-3 py-1.5 rounded-lg hover:bg-yellow-500 transition text-xs"
-                      >
-                        <Crown className="w-3.5 h-3.5" />
-                        Subscribe Now
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Enhanced Seller Profile with Star Rating */}
-            {user?.role === 'buyer' && (
-              <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-                <div className="flex items-center gap-4">
-                  {/* LARGER Profile Photo */}
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-full border-2 border-[#ff950e] bg-gray-700 flex items-center justify-center overflow-hidden">
-                      {sellerProfile.pic ? (
-                        <img src={sellerProfile.pic} alt={listing.seller} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-lg font-bold text-[#ff950e]">
-                          {listing.seller?.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Tier Badge */}
-                    {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-                      <div className="absolute -bottom-1.5 -right-1.5" style={{ transform: 'translate(6px, 6px)' }}>
-                        <TierBadge tier={sellerTierInfo.tier} size="md" showTooltip={true} />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-white font-medium">{listing.seller}</h3>
-                      {isSellerVerified && (
-                        <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
-                      )}
-                    </div>
-                    
-                    {/* Star Rating Display */}
-                    {sellerAverageRating !== null ? (
-                      <div className="flex items-center gap-2 mb-2">
-                        <StarRating rating={sellerAverageRating} size="sm" />
-                        <span className="text-yellow-400 text-sm font-medium">
-                          {sellerAverageRating.toFixed(1)}
-                        </span>
-                        <span className="text-gray-500 text-xs">
-                          ({sellerReviews.length} review{sellerReviews.length !== 1 ? 's' : ''})
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="flex items-center gap-1 text-gray-500">
-                          <Star className="w-4 h-4" />
-                          <span className="text-xs">No reviews yet</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <p className="text-gray-400 text-sm leading-relaxed">
-                      {sellerProfile.bio || 'No bio provided.'}
-                    </p>
-                  </div>
-                  
-                  <Link
-                    href={`/sellers/${listing.seller}`}
-                    className="text-[#ff950e] text-sm font-medium hover:text-[#e88800] transition-colors whitespace-nowrap"
-                  >
-                    View Profile
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* Compact Trust & Safety */}
-            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-800">
-              <div className="text-center">
-                <Shield className="w-5 h-5 text-green-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-400">Secure Payment</p>
-              </div>
-              <div className="text-center">
-                <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-400">Discreet Shipping</p>
-              </div>
-              <div className="text-center">
-                <Gift className="w-5 h-5 text-purple-400 mx-auto mb-1" />
-                <p className="text-xs text-gray-400">Quality Guaranteed</p>
-              </div>
-            </div>
-          </div>
+    <BanCheck>
+      <main className="min-h-screen bg-black text-white">
+        {/* Back Button - Positioned above entire layout */}
+        <div className="max-w-7xl mx-auto px-4 pt-6">
+          <Link 
+            href="/browse" 
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors text-sm font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Browse
+          </Link>
         </div>
 
-        {/* Bid History Modal */}
-        {showBidHistory && isAuctionListing && listing.auction && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-gray-900 rounded-xl border border-purple-800 w-full max-w-2xl max-h-[70vh] p-6 relative">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <History className="w-5 h-5 text-purple-400" />
-                  Bid History
-                </h3>
-                <button
-                  onClick={() => setShowBidHistory(false)}
-                  className="text-gray-400 hover:text-white p-1"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Left: Image Gallery */}
+            <div className="space-y-4">
+              {/* Main Image Container */}
+              <div ref={imageRef} className="relative group">
+                <div className="relative w-full h-[500px] lg:h-[600px] rounded-xl overflow-hidden bg-gray-900 shadow-xl">
+                  {images.length > 0 ? (
+                    <>
+                      <img
+                        src={images[currentImageIndex]}
+                        alt={`${listing.title} - Image ${currentImageIndex + 1}`}
+                        className="w-full h-full object-cover transition-transform duration-300"
+                      />
+                      
+                      {/* Image Navigation */}
+                      {images.length > 1 && (
+                        <>
+                          <button
+                            onClick={handlePrevImage}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={handleNextImage}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
+                      
+                      {/* Image Counter */}
+                      {images.length > 1 && (
+                        <div className="absolute bottom-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs">
+                          {currentImageIndex + 1} / {images.length}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center text-gray-400">
+                        <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p className="text-sm">No Image Available</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Type Badges */}
+                  <div className="absolute top-3 left-3 flex flex-col gap-2">
+                    {isAuctionListing && (
+                      <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
+                        <Gavel className="w-3 h-3 mr-1.5" />
+                        {isAuctionEnded ? 'Ended' : 'Live Auction'}
+                      </span>
+                    )}
+                    {listing.isPremium && (
+                      <span className="bg-yellow-600 text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
+                        <Crown className="w-3 h-3 mr-1.5" />
+                        Premium
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* View Count */}
+                  <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                    <Eye className="w-3 h-3" />
+                    {viewCount}
+                  </div>
+                </div>
               </div>
               
-              {bidsHistory.length === 0 ? (
-                <div className="text-center py-12">
-                  <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">No bids placed yet</p>
-                  <p className="text-gray-500 text-sm">Be the first to bid on this item!</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {bidsHistory.map((bid, index) => (
-                    <div 
-                      key={index} 
-                      className={`p-3 rounded-lg border ${
-                        bid.bidder === currentUsername 
-                          ? 'bg-purple-900/30 border-purple-700' 
-                          : 'bg-gray-800/50 border-gray-700'
+              {/* Thumbnail Gallery */}
+              {images.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {images.map((url, index) => (
+                    <div
+                      key={index}
+                      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
+                        index === currentImageIndex 
+                          ? 'border-[#ff950e]' 
+                          : 'border-gray-700 hover:border-gray-600'
                       }`}
+                      onClick={() => setCurrentImageIndex(index)}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                            bid.bidder === currentUsername ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-700 text-gray-300'
-                          }`}>
-                            {bid.bidder === currentUsername ? 'You' : bid.bidder.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-medium text-white text-sm">
-                              {bid.bidder === currentUsername ? 'Your bid' : bid.bidder}
-                            </p>
-                            <p className="text-xs text-gray-400">{formatBidDate(bid.date)}</p>
-                          </div>
-                          {index === 0 && (
-                            <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded font-medium">
-                              Highest
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-bold ${index === 0 ? 'text-green-400' : 'text-white'}`}>
-                            ${bid.amount.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Total: ${calculateTotalPayable(bid.amount).toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
+                      <img src={url} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
                     </div>
                   ))}
                 </div>
               )}
-              
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <button
-                  onClick={() => setShowBidHistory(false)}
-                  className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-500 transition"
-                >
-                  Close
-                </button>
+            </div>
+
+            {/* Right: Product Details - Now aligned with image top */}
+            <div className="space-y-4">
+              {/* Title & Basic Info */}
+              <div>
+                <h1 className="text-2xl font-bold text-white mb-2">{listing.title}</h1>
+                
+                {/* Tags */}
+                {listing.tags && listing.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {listing.tags.map((tag, i) => (
+                      <span 
+                        key={i} 
+                        className="bg-gray-800 text-gray-300 text-xs px-2.5 py-1 rounded-full border border-gray-700"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Hours Worn */}
+                {listing.hoursWorn !== undefined && listing.hoursWorn !== null && (
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <Clock className="w-4 h-4" />
+                    <span>{listing.hoursWorn} hours worn</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Description */}
+              <div>
+                <h3 className="text-base font-semibold text-white mb-2">Description</h3>
+                <p className="text-gray-300 text-sm leading-relaxed">{listing.description}</p>
+              </div>
+
+              {/* Auction Details */}
+              {isAuctionListing && listing.auction && (
+                <div className={`rounded-xl border p-5 ${
+                  isAuctionEnded 
+                    ? 'border-gray-700 bg-gray-900/30' 
+                    : 'border-purple-700 bg-purple-900/20'
+                }`}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <Gavel className={`w-5 h-5 ${isAuctionEnded ? 'text-gray-400' : 'text-purple-400'}`} />
+                    <h3 className="text-lg font-bold text-white">
+                      {isAuctionEnded ? 'Auction Ended' : 'Live Auction'}
+                    </h3>
+                  </div>
+                  
+                  {/* Auction Stats */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-gray-400 text-sm">Starting Bid</p>
+                      <p className="text-xl font-bold text-white">${listing.auction.startingPrice.toFixed(2)}</p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-gray-400 text-sm">Current Bid</p>
+                      {listing.auction.highestBid ? (
+                        <p className="text-xl font-bold text-green-400">${listing.auction.highestBid.toFixed(2)}</p>
+                      ) : (
+                        <p className="text-gray-400 italic">No bids yet</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Time Remaining */}
+                  {!isAuctionEnded && (
+                    <div className="mb-4">
+                      <p className="text-gray-400 text-sm mb-1">Time Remaining</p>
+                      <p className="font-bold text-green-400 mb-2">
+                        {formatTimeRemaining(listing.auction.endTime)}
+                      </p>
+                      
+                      {/* 🚀 UPDATED: Purple Timer Progress Bar */}
+                      <div className="relative">
+                        <div className="w-full bg-gray-700 rounded-full h-2">
+                          <div 
+                            className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 rounded-full transition-all duration-1000 ease-linear"
+                            style={{ width: `${getTimerProgress()}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Total Payable */}
+                  <div className="bg-purple-900/30 rounded-lg p-3 mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-purple-200 text-sm">Total if you win</span>
+                      <span className="text-lg font-bold text-white">
+                        ${currentTotalPayable.toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Includes 10% platform fee
+                    </p>
+                  </div>
+
+                  {/* Bidding Section */}
+                  {!isAuctionEnded && user?.role === 'buyer' && user.username !== listing.seller && (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <input
+                            ref={bidInputRef}
+                            type="number"
+                            placeholder="Enter your bid"
+                            value={bidAmount}
+                            onChange={(e) => setBidAmount(e.target.value)}
+                            onKeyPress={handleBidKeyPress}
+                            min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
+                            step="0.01"
+                            className="w-full px-3 py-2 rounded-lg bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
+                          />
+                        </div>
+                        <button
+                          ref={bidButtonRef}
+                          onClick={handleBidSubmit}
+                          disabled={isBidding || !biddingEnabled}
+                          className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-500 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          {isBidding ? 'Placing...' : 'Bid'}
+                        </button>
+                      </div>
+                      
+                      {/* Quick Bid + History */}
+                      <div className="flex gap-2">
+                        {suggestedBidAmount && (
+                          <button
+                            onClick={() => setBidAmount(suggestedBidAmount)}
+                            className="bg-purple-800/50 text-purple-300 px-3 py-1 rounded text-sm hover:bg-purple-700/50 transition"
+                          >
+                            ${suggestedBidAmount}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setShowBidHistory(true)}
+                          className="flex-1 bg-gray-800/50 text-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-700/50 transition flex items-center justify-center gap-1"
+                        >
+                          <BarChart2 className="w-3 h-3" />
+                          Bid history ({listing.auction.bids?.length || 0})
+                        </button>
+                      </div>
+                      
+                      {/* Status Messages */}
+                      {bidError && (
+                        <div className="bg-red-900/30 border border-red-800 text-red-400 p-3 rounded text-sm">
+                          {bidError}
+                        </div>
+                      )}
+                      
+                      {bidSuccess && (
+                        <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded text-sm">
+                          {bidSuccess}
+                        </div>
+                      )}
+                      
+                      {bidStatus.message && (
+                        <div className={`p-3 rounded text-sm border ${
+                          bidStatus.success 
+                            ? 'bg-green-900/20 border-green-800/40 text-green-400' 
+                            : 'bg-yellow-900/20 border-yellow-800/40 text-yellow-400'
+                        }`}>
+                          {bidStatus.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Price & Actions for Standard Listings */}
+              {!isAuctionListing && (
+                <div className="space-y-3">
+                  {/* Compact Price Display */}
+                  <div className="bg-[#ff950e] text-black px-4 py-2 rounded-lg text-center">
+                    <div className="text-lg font-bold">
+                      ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
+                    </div>
+                    <p className="text-xs opacity-75">Includes platform fee</p>
+                  </div>
+                  
+                  {/* Compact Action Buttons */}
+                  {user?.role === 'buyer' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={handlePurchase}
+                        disabled={isProcessing}
+                        className="bg-[#ff950e] text-black px-3 py-2 rounded-lg font-medium hover:bg-[#e88800] transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
+                      >
+                        {isProcessing ? (
+                          <>
+                            <div className="animate-spin h-3.5 w-3.5 border-2 border-black border-t-transparent rounded-full"></div>
+                            Processing
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingBag className="w-4 h-4" />
+                            Buy Now
+                          </>
+                        )}
+                      </button>
+                      
+                      <Link
+                        href={`/buyers/messages?thread=${listing.seller}`}
+                        className="flex items-center justify-center gap-1.5 bg-gray-800 text-white px-3 py-2 rounded-lg font-medium border border-gray-700 hover:bg-gray-700 transition text-sm"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        Message
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Purchase Status */}
+              {purchaseStatus && (
+                <div className={`p-4 rounded-xl font-medium ${
+                  purchaseStatus.includes('successful') 
+                    ? 'bg-green-900/30 border border-green-800 text-green-400' 
+                    : 'bg-red-900/30 border border-red-800 text-red-400'
+                }`}>
+                  {purchaseStatus}
+                </div>
+              )}
+
+              {/* Premium Content Lock */}
+              {needsSubscription && (
+                <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <Lock className="w-4 h-4 text-yellow-400 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="text-base font-bold text-white mb-1">Premium Content</h3>
+                      <p className="text-gray-300 mb-2 text-xs">
+                        Subscribe to {listing.seller} to view full details and make purchases.
+                      </p>
+                      {user?.role === 'buyer' && (
+                        <Link
+                          href={`/sellers/${listing.seller}`}
+                          className="inline-flex items-center gap-1.5 bg-yellow-600 text-black font-medium px-3 py-1.5 rounded-lg hover:bg-yellow-500 transition text-xs"
+                        >
+                          <Crown className="w-3.5 h-3.5" />
+                          Subscribe Now
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Enhanced Seller Profile with Star Rating */}
+              {user?.role === 'buyer' && (
+                <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+                  <div className="flex items-center gap-4">
+                    {/* LARGER Profile Photo */}
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-full border-2 border-[#ff950e] bg-gray-700 flex items-center justify-center overflow-hidden">
+                        {sellerProfile.pic ? (
+                          <img src={sellerProfile.pic} alt={listing.seller} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-bold text-[#ff950e]">
+                            {listing.seller?.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Tier Badge */}
+                      {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
+                        <div className="absolute -bottom-1.5 -right-1.5" style={{ transform: 'translate(6px, 6px)' }}>
+                          <TierBadge tier={sellerTierInfo.tier} size="md" showTooltip={true} />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-white font-medium">{listing.seller}</h3>
+                        {isSellerVerified && (
+                          <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
+                        )}
+                      </div>
+                      
+                      {/* Star Rating Display */}
+                      {sellerAverageRating !== null ? (
+                        <div className="flex items-center gap-2 mb-2">
+                          <StarRating rating={sellerAverageRating} size="sm" />
+                          <span className="text-yellow-400 text-sm font-medium">
+                            {sellerAverageRating.toFixed(1)}
+                          </span>
+                          <span className="text-gray-500 text-xs">
+                            ({sellerReviews.length} review{sellerReviews.length !== 1 ? 's' : ''})
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-1 text-gray-500">
+                            <Star className="w-4 h-4" />
+                            <span className="text-xs">No reviews yet</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="text-gray-400 text-sm leading-relaxed">
+                        {sellerProfile.bio || 'No bio provided.'}
+                      </p>
+                    </div>
+                    
+                    <Link
+                      href={`/sellers/${listing.seller}`}
+                      className="text-[#ff950e] text-sm font-medium hover:text-[#e88800] transition-colors whitespace-nowrap"
+                    >
+                      View Profile
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Compact Trust & Safety */}
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-800">
+                <div className="text-center">
+                  <Shield className="w-5 h-5 text-green-400 mx-auto mb-1" />
+                  <p className="text-xs text-gray-400">Secure Payment</p>
+                </div>
+                <div className="text-center">
+                  <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
+                  <p className="text-xs text-gray-400">Discreet Shipping</p>
+                </div>
+                <div className="text-center">
+                  <Gift className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+                  <p className="text-xs text-gray-400">Quality Guaranteed</p>
+                </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Auction Winner Modal */}
-        {showAuctionSuccess && isAuctionListing && listing && user?.role === "buyer" && isUserHighestBidder && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-gray-900 p-6 rounded-2xl border border-yellow-500/30 max-w-md w-full text-center">
-              <div className="mb-4">
-                <Award className="w-16 h-16 text-yellow-500 mx-auto mb-3" />
-                <h2 className="text-2xl font-bold text-white mb-2">🏆 Congratulations! 🏆</h2>
-                <p className="text-lg text-white mb-3">You Won the Auction!</p>
+          {/* Bid History Modal */}
+          {showBidHistory && isAuctionListing && listing.auction && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-gray-900 rounded-xl border border-purple-800 w-full max-w-2xl max-h-[70vh] p-6 relative">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <History className="w-5 h-5 text-purple-400" />
+                    Bid History
+                  </h3>
+                  <button
+                    onClick={() => setShowBidHistory(false)}
+                    className="text-gray-400 hover:text-white p-1"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
                 
-                <div className="bg-black/40 p-4 rounded-xl space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Winning Bid:</span>
-                    <span className="font-bold text-yellow-400">${listing.auction?.highestBid?.toFixed(2)}</span>
+                {bidsHistory.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400">No bids placed yet</p>
+                    <p className="text-gray-500 text-sm">Be the first to bid on this item!</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Platform Fee:</span>
-                    <span className="font-bold text-gray-300">${((listing.auction?.highestBid || 0) * 0.1).toFixed(2)}</span>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {bidsHistory.map((bid, index) => (
+                      <div 
+                        key={index} 
+                        className={`p-3 rounded-lg border ${
+                          bid.bidder === currentUsername 
+                            ? 'bg-purple-900/30 border-purple-700' 
+                            : 'bg-gray-800/50 border-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                              bid.bidder === currentUsername ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-700 text-gray-300'
+                            }`}>
+                              {bid.bidder === currentUsername ? 'You' : bid.bidder.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-white text-sm">
+                                {bid.bidder === currentUsername ? 'Your bid' : bid.bidder}
+                              </p>
+                              <p className="text-xs text-gray-400">{formatBidDate(bid.date)}</p>
+                            </div>
+                            {index === 0 && (
+                              <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded font-medium">
+                                Highest
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${index === 0 ? 'text-green-400' : 'text-white'}`}>
+                              ${bid.amount.toFixed(2)}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              Total: ${calculateTotalPayable(bid.amount).toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="border-t border-gray-600 pt-2">
+                )}
+                
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <button
+                    onClick={() => setShowBidHistory(false)}
+                    className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-500 transition"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Auction Winner Modal */}
+          {showAuctionSuccess && isAuctionListing && listing && user?.role === "buyer" && isUserHighestBidder && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-gray-900 p-6 rounded-2xl border border-yellow-500/30 max-w-md w-full text-center">
+                <div className="mb-4">
+                  <Award className="w-16 h-16 text-yellow-500 mx-auto mb-3" />
+                  <h2 className="text-2xl font-bold text-white mb-2">🏆 Congratulations! 🏆</h2>
+                  <p className="text-lg text-white mb-3">You Won the Auction!</p>
+                  
+                  <div className="bg-black/40 p-4 rounded-xl space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-white font-semibold">Total Paid:</span>
+                      <span className="text-gray-400">Winning Bid:</span>
+                      <span className="font-bold text-yellow-400">${listing.auction?.highestBid?.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Platform Fee:</span>
+                      <span className="font-bold text-gray-300">${((listing.auction?.highestBid || 0) * 0.1).toFixed(2)}</span>
+                    </div>
+                    <div className="border-t border-gray-600 pt-2">
+                      <div className="flex justify-between">
+                        <span className="text-white font-semibold">Total Paid:</span>
+                        <span className="text-xl font-bold text-[#ff950e]">
+                          ${calculateTotalPayable(listing.auction?.highestBid || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <button
+                    onClick={() => router.push('/buyers/my-orders')}
+                    className="w-full bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-500 font-bold transition"
+                  >
+                    View My Orders
+                  </button>
+                  
+                  <button
+                    onClick={() => router.push('/browse')}
+                    className="w-full bg-purple-600 text-white px-4 py-3 rounded-xl hover:bg-purple-500 font-bold transition"
+                  >
+                    Browse More Auctions
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Purchase Success Modal */}
+          {showPurchaseSuccess && !isAuctionListing && listing && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-gray-900 p-6 rounded-2xl border border-[#ff950e]/30 max-w-md w-full text-center">
+                <div className="mb-4">
+                  <ShoppingBag className="w-16 h-16 text-[#ff950e] mx-auto mb-3" />
+                  <h2 className="text-2xl font-bold text-white mb-2">🎉 Purchase Successful!</h2>
+                  
+                  <div className="bg-black/40 p-4 rounded-xl">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-400">Seller:</span>
+                      <span className="font-bold text-white">{listing.seller}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Total Paid:</span>
                       <span className="text-xl font-bold text-[#ff950e]">
-                        ${calculateTotalPayable(listing.auction?.highestBid || 0).toFixed(2)}
+                        ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
                       </span>
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="space-y-3">
+                
                 <button
                   onClick={() => router.push('/buyers/my-orders')}
-                  className="w-full bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-500 font-bold transition"
+                  className="w-full bg-[#ff950e] text-black px-4 py-3 rounded-xl hover:bg-[#e88800] font-bold transition"
                 >
-                  View My Orders
+                  Go to My Orders
                 </button>
-                
+              </div>
+            </div>
+          )}
+
+          {/* Render auction ended screens */}
+          {renderAuctionEndedScreen()}
+
+          {/* Sticky Buy Button for Mobile */}
+          {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
+            <div className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden transition-all duration-300 ${
+              showStickyBuy ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
+            }`}>
+              <div className="bg-black/95 p-4">
                 <button
-                  onClick={() => router.push('/browse')}
-                  className="w-full bg-purple-600 text-white px-4 py-3 rounded-xl hover:bg-purple-500 font-bold transition"
+                  onClick={handlePurchase}
+                  className="w-full bg-[#ff950e] text-black px-6 py-3 rounded-xl font-bold text-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  disabled={isProcessing}
                 >
-                  Browse More Auctions
+                  {isProcessing ? (
+                    <>
+                      <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag className="w-5 h-5" />
+                      Buy Now • ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Purchase Success Modal */}
-        {showPurchaseSuccess && !isAuctionListing && listing && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-gray-900 p-6 rounded-2xl border border-[#ff950e]/30 max-w-md w-full text-center">
-              <div className="mb-4">
-                <ShoppingBag className="w-16 h-16 text-[#ff950e] mx-auto mb-3" />
-                <h2 className="text-2xl font-bold text-white mb-2">🎉 Purchase Successful!</h2>
-                
-                <div className="bg-black/40 p-4 rounded-xl">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400">Seller:</span>
-                    <span className="font-bold text-white">{listing.seller}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Total Paid:</span>
-                    <span className="text-xl font-bold text-[#ff950e]">
-                      ${listing.markedUpPrice?.toFixed(2) ?? (listing.price * 1.1).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <button
-                onClick={() => router.push('/buyers/my-orders')}
-                className="w-full bg-[#ff950e] text-black px-4 py-3 rounded-xl hover:bg-[#e88800] font-bold transition"
-              >
-                Go to My Orders
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Render auction ended screens */}
-        {renderAuctionEndedScreen()}
-
-        {/* Sticky Buy Button for Mobile */}
-        {user?.role === 'buyer' && !needsSubscription && !isAuctionListing && (
-          <div className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden transition-all duration-300 ${
-            showStickyBuy ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
-          }`}>
-            <div className="bg-black/95 p-4">
-              <button
-                onClick={handlePurchase}
-                className="w-full bg-[#ff950e] text-black px-6 py-3 rounded-xl font-bold text-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <ShoppingBag className="w-5 h-5" />
-                    Buy Now • ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </main>
+          )}
+        </div>
+      </main>
+    </BanCheck>
   );
 }

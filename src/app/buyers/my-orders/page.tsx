@@ -5,6 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
+import BanCheck from '@/components/BanCheck';
 import Link from 'next/link';
 import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { 
@@ -484,167 +485,169 @@ export default function MyOrdersPage() {
   };
 
   return (
-    <RequireAuth role="buyer">
-      <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-10">
-            <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center mb-4">
-              <ShoppingBag className="w-8 h-8 mr-3 text-[#ff950e] drop-shadow-lg drop-shadow-[#ff950e]/50" />
-              My Orders
-            </h1>
-            <p className="text-gray-300 text-lg">
-              Track your purchases, manage delivery addresses, and stay updated on order status.
-            </p>
-          </div>
+    <BanCheck>
+      <RequireAuth role="buyer">
+        <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
+          <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="mb-10">
+              <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center mb-4">
+                <ShoppingBag className="w-8 h-8 mr-3 text-[#ff950e] drop-shadow-lg drop-shadow-[#ff950e]/50" />
+                My Orders
+              </h1>
+              <p className="text-gray-300 text-lg">
+                Track your purchases, manage delivery addresses, and stay updated on order status.
+              </p>
+            </div>
 
-          {/* Order Statistics */}
-          <OrderStats />
+            {/* Order Statistics */}
+            <OrderStats />
 
-          {/* Filters and Search */}
-          <div className="bg-gray-900/50 p-6 rounded-xl border border-gray-700 mb-8">
-            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-              {/* Search */}
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search orders..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent focus:shadow-lg focus:shadow-[#ff950e]/20"
-                />
-              </div>
-              
-              {/* Filters */}
-              <div className="flex flex-wrap gap-3">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as any)}
-                  className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:shadow-lg focus:shadow-[#ff950e]/20"
-                >
-                  <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                </select>
+            {/* Filters and Search */}
+            <div className="bg-gray-900/50 p-6 rounded-xl border border-gray-700 mb-8">
+              <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                {/* Search */}
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search orders..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent focus:shadow-lg focus:shadow-[#ff950e]/20"
+                  />
+                </div>
                 
-                <button
-                  onClick={() => toggleSort('date')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                    sortBy === 'date' ? 'bg-[#ff950e] text-black' : 'bg-gray-800 text-white hover:bg-gray-700'
-                  }`}
-                >
-                  <Calendar className="w-4 h-4" />
-                  Date
-                  <ArrowUpDown className="w-3 h-3" />
-                </button>
-                
-                <button
-                  onClick={() => toggleSort('price')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                    sortBy === 'price' ? 'bg-[#ff950e] text-black' : 'bg-gray-800 text-white hover:bg-gray-700'
-                  }`}
-                >
-                  <DollarSign className="w-4 h-4" />
-                  Price
-                  <ArrowUpDown className="w-3 h-3" />
-                </button>
+                {/* Filters */}
+                <div className="flex flex-wrap gap-3">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value as any)}
+                    className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:shadow-lg focus:shadow-[#ff950e]/20"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="shipped">Shipped</option>
+                  </select>
+                  
+                  <button
+                    onClick={() => toggleSort('date')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                      sortBy === 'date' ? 'bg-[#ff950e] text-black' : 'bg-gray-800 text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <Calendar className="w-4 h-4" />
+                    Date
+                    <ArrowUpDown className="w-3 h-3" />
+                  </button>
+                  
+                  <button
+                    onClick={() => toggleSort('price')}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                      sortBy === 'price' ? 'bg-[#ff950e] text-black' : 'bg-gray-800 text-white hover:bg-gray-700'
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    Price
+                    <ArrowUpDown className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Direct Purchases - TOP PRIORITY */}
-          <section className="mb-12">
-            <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-              <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] p-2 rounded-lg mr-3 shadow-lg">
-                <ShoppingBag className="w-6 h-6 text-black" />
-              </div>
-              Direct Purchases ({directOrders.length})
-            </h2>
-            {directOrders.length === 0 ? (
-              <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
-                <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400 text-xl mb-2">No direct purchases yet</p>
-                <p className="text-gray-500">Items you buy directly from the browse page will appear here</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {directOrders.map((order) => renderOrderCard(order, 'direct'))}
+            {/* Direct Purchases - TOP PRIORITY */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+                <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] p-2 rounded-lg mr-3 shadow-lg">
+                  <ShoppingBag className="w-6 h-6 text-black" />
+                </div>
+                Direct Purchases ({directOrders.length})
+              </h2>
+              {directOrders.length === 0 ? (
+                <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
+                  <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400 text-xl mb-2">No direct purchases yet</p>
+                  <p className="text-gray-500">Items you buy directly from the browse page will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {directOrders.map((order) => renderOrderCard(order, 'direct'))}
+                </div>
+              )}
+            </section>
+
+            {/* Custom Request Orders Section - SECOND */}
+            {customRequestOrders.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+                  <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-2 rounded-lg mr-3 shadow-lg">
+                    <Settings className="w-6 h-6 text-white" />
+                  </div>
+                  Custom Request Orders ({customRequestOrders.length})
+                </h2>
+                <div className="space-y-6">
+                  {customRequestOrders.map((order) => renderOrderCard(order, 'custom'))}
+                </div>
+              </section>
+            )}
+
+            {/* Auction Purchases Section - LAST */}
+            {auctionOrders.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+                  <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-2 rounded-lg mr-3 shadow-lg">
+                    <Gavel className="w-6 h-6 text-white" />
+                  </div>
+                  Auction Purchases ({auctionOrders.length})
+                </h2>
+                <div className="space-y-6">
+                  {auctionOrders.map((order) => renderOrderCard(order, 'auction'))}
+                </div>
+              </section>
+            )}
+
+            {/* No orders message */}
+            {userOrders.length === 0 && (
+              <div className="text-center py-20 bg-gray-900/30 rounded-2xl border border-gray-700">
+                <Package className="w-24 h-24 text-gray-600 mx-auto mb-8" />
+                <h3 className="text-2xl font-bold text-gray-400 mb-4">No orders yet</h3>
+                <p className="text-gray-500 text-lg mb-8 max-w-md mx-auto">
+                  Your purchases from direct sales, auctions, and custom requests will appear here once you start shopping.
+                </p>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Link
+                    href="/browse"
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-bold px-8 py-4 rounded-xl transition-all shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105"
+                  >
+                    <Package className="w-5 h-5" />
+                    Browse Listings
+                  </Link>
+                  <Link
+                    href="/buyers/messages"
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-xl"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    Send Custom Requests
+                  </Link>
+                </div>
               </div>
             )}
-          </section>
 
-          {/* Custom Request Orders Section - SECOND */}
-          {customRequestOrders.length > 0 && (
-            <section className="mb-12">
-              <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-                <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-2 rounded-lg mr-3 shadow-lg">
-                  <Settings className="w-6 h-6 text-white" />
-                </div>
-                Custom Request Orders ({customRequestOrders.length})
-              </h2>
-              <div className="space-y-6">
-                {customRequestOrders.map((order) => renderOrderCard(order, 'custom'))}
-              </div>
-            </section>
-          )}
-
-          {/* Auction Purchases Section - LAST */}
-          {auctionOrders.length > 0 && (
-            <section className="mb-12">
-              <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-                <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-2 rounded-lg mr-3 shadow-lg">
-                  <Gavel className="w-6 h-6 text-white" />
-                </div>
-                Auction Purchases ({auctionOrders.length})
-              </h2>
-              <div className="space-y-6">
-                {auctionOrders.map((order) => renderOrderCard(order, 'auction'))}
-              </div>
-            </section>
-          )}
-
-          {/* No orders message */}
-          {userOrders.length === 0 && (
-            <div className="text-center py-20 bg-gray-900/30 rounded-2xl border border-gray-700">
-              <Package className="w-24 h-24 text-gray-600 mx-auto mb-8" />
-              <h3 className="text-2xl font-bold text-gray-400 mb-4">No orders yet</h3>
-              <p className="text-gray-500 text-lg mb-8 max-w-md mx-auto">
-                Your purchases from direct sales, auctions, and custom requests will appear here once you start shopping.
-              </p>
-              <div className="flex flex-wrap justify-center gap-4">
-                <Link
-                  href="/browse"
-                  className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-bold px-8 py-4 rounded-xl transition-all shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105"
-                >
-                  <Package className="w-5 h-5" />
-                  Browse Listings
-                </Link>
-                <Link
-                  href="/buyers/messages"
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-xl"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  Send Custom Requests
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {/* Address Confirmation Modal */}
-          <AddressConfirmationModal
-            isOpen={addressModalOpen}
-            onClose={() => {
-              setAddressModalOpen(false);
-              setSelectedOrder(null);
-            }}
-            onConfirm={handleConfirmAddress}
-            existingAddress={getSelectedOrderAddress()}
-            orderId={selectedOrder || ''}
-          />
-        </div>
-      </main>
-    </RequireAuth>
+            {/* Address Confirmation Modal */}
+            <AddressConfirmationModal
+              isOpen={addressModalOpen}
+              onClose={() => {
+                setAddressModalOpen(false);
+                setSelectedOrder(null);
+              }}
+              onConfirm={handleConfirmAddress}
+              existingAddress={getSelectedOrderAddress()}
+              orderId={selectedOrder || ''}
+            />
+          </div>
+        </main>
+      </RequireAuth>
+    </BanCheck>
   );
 }

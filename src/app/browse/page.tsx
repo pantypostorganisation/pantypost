@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
+import BanCheck from '@/components/BanCheck';
 import { Listing, AuctionSettings } from '@/context/ListingContext';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
@@ -735,489 +736,493 @@ export default function BrowsePage() {
   // FIX 8: Global error boundary for the entire page
   if (listingErrors && Object.keys(listingErrors).length > 3) {
     return (
-      <RequireAuth role={user?.role || 'buyer'}>
-        <main className="min-h-screen bg-black text-white pb-16 pt-8">
-          <div className="max-w-2xl mx-auto px-6">
-            <div className="bg-red-900/20 border border-red-700 rounded-xl p-8 text-center">
-              <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-white mb-2">Multiple Listing Errors</h2>
-              <p className="text-gray-300 mb-4">
-                There were errors loading multiple listings. Please refresh the page or try again later.
-              </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-500 transition"
-              >
-                Refresh Page
-              </button>
+      <BanCheck>
+        <RequireAuth role={user?.role || 'buyer'}>
+          <main className="min-h-screen bg-black text-white pb-16 pt-8">
+            <div className="max-w-2xl mx-auto px-6">
+              <div className="bg-red-900/20 border border-red-700 rounded-xl p-8 text-center">
+                <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+                <h2 className="text-xl font-bold text-white mb-2">Multiple Listing Errors</h2>
+                <p className="text-gray-300 mb-4">
+                  There were errors loading multiple listings. Please refresh the page or try again later.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-500 transition"
+                >
+                  Refresh Page
+                </button>
+              </div>
             </div>
-          </div>
-        </main>
-      </RequireAuth>
+          </main>
+        </RequireAuth>
+      </BanCheck>
     );
   }
 
   return (
-    <RequireAuth role={user?.role || 'buyer'}>
-      <main className="min-h-screen bg-black text-white pb-16 pt-8">
-        {user?.role === 'seller' && (
-          <div className="bg-blue-700/20 border border-blue-700 text-blue-400 p-4 rounded-lg mb-6 max-w-3xl mx-auto">
-            <p className="text-sm flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              You are viewing this page as a seller. You can browse listings but cannot make purchases.
-            </p>
-          </div>
-        )}
-
-        {/* Compact Header Section */}
-        <div className="mb-4 max-w-[1700px] mx-auto px-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
-            <div className="flex flex-col leading-tight">
-              <h1 className="text-2xl font-bold text-white mb-1">
-                Browse <span className="text-[#ff950e]">Listings</span>
-              </h1>
-              <p className="text-gray-400 text-sm">
-                Discover {filteredListings.length} amazing {filter === 'all' ? 'total' : filter} listings from verified sellers
+    <BanCheck>
+      <RequireAuth role={user?.role || 'buyer'}>
+        <main className="min-h-screen bg-black text-white pb-16 pt-8">
+          {user?.role === 'seller' && (
+            <div className="bg-blue-700/20 border border-blue-700 text-blue-400 p-4 rounded-lg mb-6 max-w-3xl mx-auto">
+              <p className="text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                You are viewing this page as a seller. You can browse listings but cannot make purchases.
               </p>
             </div>
+          )}
 
-            {/* Category Filters */}
-            <div className="flex items-center gap-3">
+          {/* Compact Header Section */}
+          <div className="mb-4 max-w-[1700px] mx-auto px-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
+              <div className="flex flex-col leading-tight">
+                <h1 className="text-2xl font-bold text-white mb-1">
+                  Browse <span className="text-[#ff950e]">Listings</span>
+                </h1>
+                <p className="text-gray-400 text-sm">
+                  Discover {filteredListings.length} amazing {filter === 'all' ? 'total' : filter} listings from verified sellers
+                </p>
+              </div>
+
               {/* Category Filters */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setFilter('all')}
-                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
-                    filter === 'all' 
-                      ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
-                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
-                  }`}
-                >
-                  <Package className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span>All</span>
-                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
-                    {categoryCounts.all}
-                  </span>
-                </button>
-                
-                <button
-                  onClick={() => setFilter('standard')}
-                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
-                    filter === 'standard' 
-                      ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
-                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
-                  }`}
-                >
-                  <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span>Standard</span>
-                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
-                    {categoryCounts.standard}
-                  </span>
-                </button>
-                
-                <button
-                  onClick={() => setFilter('premium')}
-                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
-                    filter === 'premium' 
-                      ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
-                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
-                  }`}
-                >
-                  <Crown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span>Premium</span>
-                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
-                    {categoryCounts.premium}
-                  </span>
-                </button>
-                
-                <button
-                  onClick={() => setFilter('auction')}
-                  className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
-                    filter === 'auction' 
-                      ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white border border-white/20 hover:from-[#7c3aed] hover:to-[#8b5cf6] hover:shadow-2xl hover:shadow-[#8b5cf6]/30 transform hover:scale-105' 
-                      : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#8b5cf6] border border-[#333] hover:border-[#8b5cf6]/50 hover:shadow-[#8b5cf6]/20'
-                  }`}
-                >
-                  <Gavel className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  <span>Auctions</span>
-                  <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
-                    {categoryCounts.auction}
-                  </span>
-                </button>
+              <div className="flex items-center gap-3">
+                {/* Category Filters */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setFilter('all')}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                      filter === 'all' 
+                        ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                        : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                    <span>All</span>
+                    <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                      {categoryCounts.all}
+                    </span>
+                  </button>
+                  
+                  <button
+                    onClick={() => setFilter('standard')}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                      filter === 'standard' 
+                        ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                        : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
+                    }`}
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                    <span>Standard</span>
+                    <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                      {categoryCounts.standard}
+                    </span>
+                  </button>
+                  
+                  <button
+                    onClick={() => setFilter('premium')}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                      filter === 'premium' 
+                        ? 'bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white border border-white/20 hover:from-[#ff6b00] hover:to-[#ff950e] hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105' 
+                        : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] border border-[#333] hover:border-[#ff950e]/50 hover:shadow-[#ff950e]/20'
+                    }`}
+                  >
+                    <Crown className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                    <span>Premium</span>
+                    <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                      {categoryCounts.premium}
+                    </span>
+                  </button>
+                  
+                  <button
+                    onClick={() => setFilter('auction')}
+                    className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-300 shadow-lg text-xs font-medium ${
+                      filter === 'auction' 
+                        ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white border border-white/20 hover:from-[#7c3aed] hover:to-[#8b5cf6] hover:shadow-2xl hover:shadow-[#8b5cf6]/30 transform hover:scale-105' 
+                        : 'bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#8b5cf6] border border-[#333] hover:border-[#8b5cf6]/50 hover:shadow-[#8b5cf6]/20'
+                    }`}
+                  >
+                    <Gavel className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                    <span>Auctions</span>
+                    <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                      {categoryCounts.auction}
+                    </span>
+                  </button>
+                </div>
               </div>
+            </div>
+
+            {/* Compact Filters Bar */}
+            <div className="flex flex-wrap gap-3 items-center bg-gradient-to-r from-[#1a1a1a]/80 to-[#222]/80 backdrop-blur-sm p-3 rounded-lg border border-gray-800 shadow-lg">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
+                <input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search by title, description, tags, or seller..."
+                  className="w-full pl-10 pr-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+                />
+              </div>
+
+              <div className="flex gap-2 items-center">
+                <div className="flex items-center gap-1 text-gray-400">
+                  <DollarSign size={14} />
+                  <span className="text-xs font-medium">Price</span>
+                </div>
+                <input
+                  value={minPrice}
+                  onChange={e => setMinPrice(e.target.value)}
+                  placeholder="Min"
+                  type="number"
+                  className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+                />
+                <span className="text-gray-500 text-xs">—</span>
+                <input
+                  value={maxPrice}
+                  onChange={e => setMaxPrice(e.target.value)}
+                  placeholder="Max"
+                  type="number"
+                  className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+                />
+              </div>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+              >
+                <option value="newest">🕒 Newest First</option>
+                <option value="priceAsc">💰 Price: Low → High</option>
+                <option value="priceDesc">💎 Price: High → Low</option>
+                <option value="endingSoon">⏰ Ending Soon</option>
+              </select>
+
+              <select
+                value={selectedHourRange.label}
+                onChange={(e) => {
+                  const selectedOption = hourRangeOptions.find(opt => opt.label === e.target.value);
+                  if (selectedOption) setSelectedHourRange(selectedOption);
+                }}
+                className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+              >
+                {hourRangeOptions.map(option => (
+                  <option key={option.label} value={option.label}>
+                    {option.label === 'Any Hours' ? '⏱️ Any Hours' : `⏱️ ${option.label}`}
+                  </option>
+                ))}
+              </select>
+
+              {(searchTerm || minPrice || maxPrice || selectedHourRange.label !== 'Any Hours' || sortBy !== 'newest') && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setMinPrice('');
+                    setMaxPrice('');
+                    setSelectedHourRange(hourRangeOptions[0]);
+                    setSortBy('newest');
+                  }}
+                  className="px-3 py-2 rounded-lg bg-red-600/20 border border-red-700 text-red-400 hover:bg-red-600/30 text-xs transition-all flex items-center gap-1 font-medium"
+                >
+                  <X size={12} />
+                  Clear
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Compact Filters Bar */}
-          <div className="flex flex-wrap gap-3 items-center bg-gradient-to-r from-[#1a1a1a]/80 to-[#222]/80 backdrop-blur-sm p-3 rounded-lg border border-gray-800 shadow-lg">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <input
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search by title, description, tags, or seller..."
-                className="w-full pl-10 pr-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
-              />
-            </div>
-
-            <div className="flex gap-2 items-center">
-              <div className="flex items-center gap-1 text-gray-400">
-                <DollarSign size={14} />
-                <span className="text-xs font-medium">Price</span>
+          {/* Listings Grid */}
+          <div className="max-w-[1700px] mx-auto px-6">
+            {paginatedListings.length === 0 ? (
+              <div className="text-center py-24 bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 shadow-2xl">
+                <div className="mb-6">
+                  <ShoppingBag className="w-20 h-20 text-gray-600 mx-auto mb-4" />
+                  <div className="w-24 h-1 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] mx-auto rounded-full mb-6"></div>
+                </div>
+                <h3 className="text-white font-bold text-2xl mb-3">No listings found</h3>
+                <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                  We couldn't find any listings matching your criteria. Try adjusting your filters or check back later for new items.
+                </p>
+                <button
+                  onClick={() => {
+                    setFilter('all');
+                    setSearchTerm('');
+                    setMinPrice('');
+                    setMaxPrice('');
+                    setSelectedHourRange(hourRangeOptions[0]);
+                    setSortBy('newest');
+                  }}
+                  className="px-8 py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black rounded-xl font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Reset All Filters
+                </button>
               </div>
-              <input
-                value={minPrice}
-                onChange={e => setMinPrice(e.target.value)}
-                placeholder="Min"
-                type="number"
-                className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
-              />
-              <span className="text-gray-500 text-xs">—</span>
-              <input
-                value={maxPrice}
-                onChange={e => setMaxPrice(e.target.value)}
-                placeholder="Max"
-                type="number"
-                className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
-              />
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                  {paginatedListings.map((listing) => {
+                    // FIX 8: Individual listing error handling
+                    if (listingErrors[listing.id]) {
+                      return (
+                        <div key={listing.id} className="bg-red-900/20 border border-red-700 rounded-xl p-4 text-center">
+                          <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                          <p className="text-red-400 text-sm">Error loading listing</p>
+                          <p className="text-gray-500 text-xs mt-1">{listingErrors[listing.id]}</p>
+                        </div>
+                      );
+                    }
 
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
-            >
-              <option value="newest">🕒 Newest First</option>
-              <option value="priceAsc">💰 Price: Low → High</option>
-              <option value="priceDesc">💎 Price: High → Low</option>
-              <option value="endingSoon">⏰ Ending Soon</option>
-            </select>
+                    try {
+                      const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
+                      const sellerUser = users?.[listing.seller];
+                      const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+                      const hasAuction = isAuctionListing(listing);
+                      const sellerSales = getSellerSalesCount(listing.seller);
+                      
+                      // Use the new getDisplayPrice function
+                      const { price: displayPrice, label: priceLabel } = getDisplayPrice(listing);
 
-            <select
-              value={selectedHourRange.label}
-              onChange={(e) => {
-                const selectedOption = hourRangeOptions.find(opt => opt.label === e.target.value);
-                if (selectedOption) setSelectedHourRange(selectedOption);
-              }}
-              className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
-            >
-              {hourRangeOptions.map(option => (
-                <option key={option.label} value={option.label}>
-                  {option.label === 'Any Hours' ? '⏱️ Any Hours' : `⏱️ ${option.label}`}
-                </option>
-              ))}
-            </select>
-
-            {(searchTerm || minPrice || maxPrice || selectedHourRange.label !== 'Any Hours' || sortBy !== 'newest') && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setMinPrice('');
-                  setMaxPrice('');
-                  setSelectedHourRange(hourRangeOptions[0]);
-                  setSortBy('newest');
-                }}
-                className="px-3 py-2 rounded-lg bg-red-600/20 border border-red-700 text-red-400 hover:bg-red-600/30 text-xs transition-all flex items-center gap-1 font-medium"
-              >
-                <X size={12} />
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Listings Grid */}
-        <div className="max-w-[1700px] mx-auto px-6">
-          {paginatedListings.length === 0 ? (
-            <div className="text-center py-24 bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 shadow-2xl">
-              <div className="mb-6">
-                <ShoppingBag className="w-20 h-20 text-gray-600 mx-auto mb-4" />
-                <div className="w-24 h-1 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] mx-auto rounded-full mb-6"></div>
-              </div>
-              <h3 className="text-white font-bold text-2xl mb-3">No listings found</h3>
-              <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                We couldn't find any listings matching your criteria. Try adjusting your filters or check back later for new items.
-              </p>
-              <button
-                onClick={() => {
-                  setFilter('all');
-                  setSearchTerm('');
-                  setMinPrice('');
-                  setMaxPrice('');
-                  setSelectedHourRange(hourRangeOptions[0]);
-                  setSortBy('newest');
-                }}
-                className="px-8 py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black rounded-xl font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                Reset All Filters
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                {paginatedListings.map((listing) => {
-                  // FIX 8: Individual listing error handling
-                  if (listingErrors[listing.id]) {
-                    return (
-                      <div key={listing.id} className="bg-red-900/20 border border-red-700 rounded-xl p-4 text-center">
-                        <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-                        <p className="text-red-400 text-sm">Error loading listing</p>
-                        <p className="text-gray-500 text-xs mt-1">{listingErrors[listing.id]}</p>
-                      </div>
-                    );
-                  }
-
-                  try {
-                    const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
-                    const sellerUser = users?.[listing.seller];
-                    const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-                    const hasAuction = isAuctionListing(listing);
-                    const sellerSales = getSellerSalesCount(listing.seller);
-                    
-                    // Use the new getDisplayPrice function
-                    const { price: displayPrice, label: priceLabel } = getDisplayPrice(listing);
-
-                    return (
-                      <div
-                        key={listing.id}
-                        className={`relative flex flex-col bg-gradient-to-br from-[#1a1a1a] to-[#111] border ${
-                          hasAuction ? 'border-purple-800' : 'border-gray-800'
-                        } rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden ${
-                          hasAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'
-                        } cursor-pointer group hover:transform hover:scale-[1.02]`}
-                        onMouseEnter={() => handleMouseEnter(listing.id)}
-                        onMouseLeave={handleMouseLeave}
-                        onClick={() => handleListingClick(listing.id, Boolean(isLockedPremium))}
-                      >
-                        {/* Type Badge */}
-                        {hasAuction && (
-                          <div className="absolute top-4 right-4 z-10">
-                            <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
-                              <Gavel className="w-3.5 h-3.5 mr-1.5" /> AUCTION
-                            </span>
-                          </div>
-                        )}
-                        
-                        {!hasAuction && listing.isPremium && (
-                          <div className="absolute top-4 right-4 z-10">
-                            <span className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
-                              <Crown className="w-3.5 h-3.5 mr-1.5" /> PREMIUM
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Image */}
-                        <div className="relative aspect-square overflow-hidden bg-black">
-                          {listing.imageUrls && listing.imageUrls.length > 0 && (
-                            <img
-                              src={listing.imageUrls[0]}
-                              alt={listing.title}
-                              className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
-                                isLockedPremium ? 'blur-md' : ''
-                              }`}
-                              onError={(e) => {
-                                console.warn('Image failed to load:', listing.imageUrls?.[0]);
-                                (e.target as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          )}
-                          
-                          {/* Enhanced bottom gradient */}
-                          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
-                          
-                          {isLockedPremium && (
-                            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
-                              <Lock className="w-12 h-12 text-[#ff950e] mb-4" />
-                              <p className="text-sm font-bold text-white text-center px-4">
-                                Subscribe to view premium content
-                              </p>
-                            </div>
-                          )}
-                          
-                          {/* Enhanced auction timer */}
-                          {hasAuction && listing.auction && (
-                            <div className="absolute bottom-4 left-4 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
-                              <span className="bg-black/90 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
-                                <Clock className="w-4 h-4 mr-2 text-purple-400" />
-                                {formatTimeRemaining(listing.auction.endTime)}
+                      return (
+                        <div
+                          key={listing.id}
+                          className={`relative flex flex-col bg-gradient-to-br from-[#1a1a1a] to-[#111] border ${
+                            hasAuction ? 'border-purple-800' : 'border-gray-800'
+                          } rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden ${
+                            hasAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'
+                          } cursor-pointer group hover:transform hover:scale-[1.02]`}
+                          onMouseEnter={() => handleMouseEnter(listing.id)}
+                          onMouseLeave={handleMouseLeave}
+                          onClick={() => handleListingClick(listing.id, Boolean(isLockedPremium))}
+                        >
+                          {/* Type Badge */}
+                          {hasAuction && (
+                            <div className="absolute top-4 right-4 z-10">
+                              <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
+                                <Gavel className="w-3.5 h-3.5 mr-1.5" /> AUCTION
                               </span>
                             </div>
                           )}
                           
-                          {/* Enhanced quick view button */}
-                          {hoveredListing === listing.id && !isLockedPremium && (
-                            <div className="absolute bottom-4 right-4 z-10">
-                              <button 
-                                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xl hover:from-[#e88800] hover:to-[#ff950e] transition-all transform hover:scale-105"
-                                onClick={(e) => handleQuickView(e, listing.id)}
-                              >
-                                <Eye className="w-4 h-4" /> Quick View
-                              </button>
+                          {!hasAuction && listing.isPremium && (
+                            <div className="absolute top-4 right-4 z-10">
+                              <span className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
+                                <Crown className="w-3.5 h-3.5 mr-1.5" /> PREMIUM
+                              </span>
                             </div>
                           )}
-                        </div>
 
-                        {/* Enhanced Content */}
-                        <div className="p-5 flex flex-col flex-grow">
-                          <div>
-                            <h2 className="text-xl font-bold text-white mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
-                              {listing.title}
-                            </h2>
-                            <p className="text-sm text-gray-400 mb-3 line-clamp-2 leading-relaxed">
-                              {listing.description}
-                            </p>
-                          </div>
-                          
-                          {/* Enhanced Tags */}
-                          {listing.tags && listing.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mb-4">
-                              {listing.tags.slice(0, 3).map((tag, i) => (
-                                <span key={i} className="bg-black/50 text-[#ff950e] text-xs px-3 py-1 rounded-full font-medium border border-[#ff950e]/20">
-                                  #{tag}
-                                </span>
-                              ))}
-                              {listing.tags.length > 3 && (
-                                <span className="text-gray-500 text-xs px-2 py-1">
-                                  +{listing.tags.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          
-                          {/* Enhanced Auction info */}
-                          {hasAuction && listing.auction && (
-                            <div className="bg-gradient-to-r from-purple-900/30 to-purple-800/20 rounded-xl p-4 mb-4 border border-purple-700/30 backdrop-blur-sm">
-                              <div className="flex justify-between items-center text-sm mb-2">
-                                <span className="text-purple-300 font-medium">{priceLabel}</span>
-                                <span className="font-bold text-white flex items-center text-lg">
-                                  {listing.auction.bids && listing.auction.bids.length > 0 && (
-                                    <ArrowUp className="w-4 h-4 text-green-400 mr-1" />
-                                  )}
-                                  ${displayPrice}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-gray-400 flex items-center gap-1">
-                                  <Gavel className="w-3 h-3" />
-                                  {listing.auction.bids?.length || 0} bids
-                                </span>
-                                {listing.auction.reservePrice && (
-                                  <span className={`font-medium ${
-                                    (!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
-                                      ? 'text-yellow-400'
-                                      : 'text-green-400'
-                                  }`}>
-                                    {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
-                                      ? '⚠️ Reserve not met'
-                                      : '✅ Reserve met'
-                                    }
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Enhanced Price and seller */}
-                          <div className="flex justify-between items-end mt-auto">
-                            <Link
-                              href={`/sellers/${listing.seller}`}
-                              className="flex items-center gap-3 text-base text-gray-400 hover:text-[#ff950e] transition-colors group/seller"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              {sellerProfiles[listing.seller]?.pic ? (
-                                <img
-                                  src={sellerProfiles[listing.seller]?.pic!}
-                                  alt={listing.seller}
-                                  className="w-12 h-12 rounded-full object-cover border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                <span className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center text-lg font-bold text-[#ff950e] border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors">
-                                  {listing.seller.charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                              <div className="flex flex-col">
-                                <span className="font-bold text-base flex items-center gap-2">
-                                  {listing.seller}
-                                  {isSellerVerified && (
-                                    <img 
-                                      src="/verification_badge.png" 
-                                      alt="Verified" 
-                                      className="w-5 h-5"
-                                    />
-                                  )}
-                                </span>
-                                {sellerSales > 0 && (
-                                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                                    <CheckCircle className="w-3 h-3" />
-                                    {sellerSales} completed sales
-                                  </span>
-                                )}
-                              </div>
-                            </Link>
+                          {/* Image */}
+                          <div className="relative aspect-square overflow-hidden bg-black">
+                            {listing.imageUrls && listing.imageUrls.length > 0 && (
+                              <img
+                                src={listing.imageUrls[0]}
+                                alt={listing.title}
+                                className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
+                                  isLockedPremium ? 'blur-md' : ''
+                                }`}
+                                onError={(e) => {
+                                  console.warn('Image failed to load:', listing.imageUrls?.[0]);
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            )}
                             
-                            {!hasAuction && (
-                              <div className="text-right">
-                                <p className="font-bold text-[#ff950e] text-2xl">
-                                  ${displayPrice}
-                                </p>
-                                <p className="text-xs text-gray-500 font-medium">
-                                  {priceLabel}
+                            {/* Enhanced bottom gradient */}
+                            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
+                            
+                            {isLockedPremium && (
+                              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
+                                <Lock className="w-12 h-12 text-[#ff950e] mb-4" />
+                                <p className="text-sm font-bold text-white text-center px-4">
+                                  Subscribe to view premium content
                                 </p>
                               </div>
                             )}
+                            
+                            {/* Enhanced auction timer */}
+                            {hasAuction && listing.auction && (
+                              <div className="absolute bottom-4 left-4 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
+                                <span className="bg-black/90 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
+                                  <Clock className="w-4 h-4 mr-2 text-purple-400" />
+                                  {formatTimeRemaining(listing.auction.endTime)}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Enhanced quick view button */}
+                            {hoveredListing === listing.id && !isLockedPremium && (
+                              <div className="absolute bottom-4 right-4 z-10">
+                                <button 
+                                  className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-sm font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xl hover:from-[#e88800] hover:to-[#ff950e] transition-all transform hover:scale-105"
+                                  onClick={(e) => handleQuickView(e, listing.id)}
+                                >
+                                  <Eye className="w-4 h-4" /> Quick View
+                                </button>
+                              </div>
+                            )}
                           </div>
-                          
-                          {/* Enhanced action button for locked premium */}
-                          {user?.role === 'buyer' && isLockedPremium && (
-                            <Link
-                              href={`/sellers/${listing.seller}`}
-                              className="mt-4 w-full bg-gradient-to-r from-gray-700 to-gray-600 text-white px-4 py-3 rounded-xl hover:from-gray-600 hover:to-gray-500 font-bold transition-all text-sm text-center flex items-center justify-center gap-2 shadow-lg"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <Lock className="w-4 h-4" /> Subscribe to Unlock
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  } catch (error) {
-                    handleListingError(error as Error, listing.id);
-                    return null;
-                  }
-                })}
-              </div>
 
-              {/* Enhanced Pagination */}
-              {(filteredListings.length > PAGE_SIZE || page > 0) && (
-                <div className="flex flex-col items-center mt-16 gap-4">
-                  <div className="flex gap-4">
-                    {page > 0 && (
-                      <button
-                        className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#1a1a1a] to-[#222] text-white font-bold hover:from-[#222] hover:to-[#333] transition-all border border-gray-800 shadow-lg hover:shadow-xl"
-                        onClick={handlePreviousPage}
-                      >
-                        ← Previous
-                      </button>
-                    )}
-                    {filteredListings.length > PAGE_SIZE * (page + 1) && (
-                      <button
-                        className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-                        onClick={handleNextPage}
-                      >
-                        Next →
-                      </button>
-                    )}
-                  </div>
-                  {renderPageIndicators()}
+                          {/* Enhanced Content */}
+                          <div className="p-5 flex flex-col flex-grow">
+                            <div>
+                              <h2 className="text-xl font-bold text-white mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
+                                {listing.title}
+                              </h2>
+                              <p className="text-sm text-gray-400 mb-3 line-clamp-2 leading-relaxed">
+                                {listing.description}
+                              </p>
+                            </div>
+                            
+                            {/* Enhanced Tags */}
+                            {listing.tags && listing.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                {listing.tags.slice(0, 3).map((tag, i) => (
+                                  <span key={i} className="bg-black/50 text-[#ff950e] text-xs px-3 py-1 rounded-full font-medium border border-[#ff950e]/20">
+                                    #{tag}
+                                  </span>
+                                ))}
+                                {listing.tags.length > 3 && (
+                                  <span className="text-gray-500 text-xs px-2 py-1">
+                                    +{listing.tags.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Enhanced Auction info */}
+                            {hasAuction && listing.auction && (
+                              <div className="bg-gradient-to-r from-purple-900/30 to-purple-800/20 rounded-xl p-4 mb-4 border border-purple-700/30 backdrop-blur-sm">
+                                <div className="flex justify-between items-center text-sm mb-2">
+                                  <span className="text-purple-300 font-medium">{priceLabel}</span>
+                                  <span className="font-bold text-white flex items-center text-lg">
+                                    {listing.auction.bids && listing.auction.bids.length > 0 && (
+                                      <ArrowUp className="w-4 h-4 text-green-400 mr-1" />
+                                    )}
+                                    ${displayPrice}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="text-gray-400 flex items-center gap-1">
+                                    <Gavel className="w-3 h-3" />
+                                    {listing.auction.bids?.length || 0} bids
+                                  </span>
+                                  {listing.auction.reservePrice && (
+                                    <span className={`font-medium ${
+                                      (!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
+                                        ? 'text-yellow-400'
+                                        : 'text-green-400'
+                                    }`}>
+                                      {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
+                                        ? '⚠️ Reserve not met'
+                                        : '✅ Reserve met'
+                                      }
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Enhanced Price and seller */}
+                            <div className="flex justify-between items-end mt-auto">
+                              <Link
+                                href={`/sellers/${listing.seller}`}
+                                className="flex items-center gap-3 text-base text-gray-400 hover:text-[#ff950e] transition-colors group/seller"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {sellerProfiles[listing.seller]?.pic ? (
+                                  <img
+                                    src={sellerProfiles[listing.seller]?.pic!}
+                                    alt={listing.seller}
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center text-lg font-bold text-[#ff950e] border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors">
+                                    {listing.seller.charAt(0).toUpperCase()}
+                                  </span>
+                                )}
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-base flex items-center gap-2">
+                                    {listing.seller}
+                                    {isSellerVerified && (
+                                      <img 
+                                        src="/verification_badge.png" 
+                                        alt="Verified" 
+                                        className="w-5 h-5"
+                                      />
+                                    )}
+                                  </span>
+                                  {sellerSales > 0 && (
+                                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                                      <CheckCircle className="w-3 h-3" />
+                                      {sellerSales} completed sales
+                                    </span>
+                                  )}
+                                </div>
+                              </Link>
+                              
+                              {!hasAuction && (
+                                <div className="text-right">
+                                  <p className="font-bold text-[#ff950e] text-2xl">
+                                    ${displayPrice}
+                                  </p>
+                                  <p className="text-xs text-gray-500 font-medium">
+                                    {priceLabel}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Enhanced action button for locked premium */}
+                            {user?.role === 'buyer' && isLockedPremium && (
+                              <Link
+                                href={`/sellers/${listing.seller}`}
+                                className="mt-4 w-full bg-gradient-to-r from-gray-700 to-gray-600 text-white px-4 py-3 rounded-xl hover:from-gray-600 hover:to-gray-500 font-bold transition-all text-sm text-center flex items-center justify-center gap-2 shadow-lg"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <Lock className="w-4 h-4" /> Subscribe to Unlock
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } catch (error) {
+                      handleListingError(error as Error, listing.id);
+                      return null;
+                    }
+                  })}
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      </main>
-    </RequireAuth>
+
+                {/* Enhanced Pagination */}
+                {(filteredListings.length > PAGE_SIZE || page > 0) && (
+                  <div className="flex flex-col items-center mt-16 gap-4">
+                    <div className="flex gap-4">
+                      {page > 0 && (
+                        <button
+                          className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#1a1a1a] to-[#222] text-white font-bold hover:from-[#222] hover:to-[#333] transition-all border border-gray-800 shadow-lg hover:shadow-xl"
+                          onClick={handlePreviousPage}
+                        >
+                          ← Previous
+                        </button>
+                      )}
+                      {filteredListings.length > PAGE_SIZE * (page + 1) && (
+                        <button
+                          className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                          onClick={handleNextPage}
+                        >
+                          Next →
+                        </button>
+                      )}
+                    </div>
+                    {renderPageIndicators()}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </main>
+      </RequireAuth>
+    </BanCheck>
   );
 }

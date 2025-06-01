@@ -16,6 +16,7 @@ import {
   Users,
 } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import BanCheck from '@/components/BanCheck';
 
 // Define animation variants
 const containerVariants = {
@@ -80,6 +81,7 @@ export default function Home() {
   const y = useTransform(scrollYProgress, [0, 1], ['-5%', '20%']);
 
   return (
+    <BanCheck>
     <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
       {/* 🚀 REMOVED: Age Verification Modal (now handled globally in layout.tsx) */}
 
@@ -418,5 +420,6 @@ export default function Home() {
 
       `}</style>
     </div>
+    </BanCheck>
   );
 }

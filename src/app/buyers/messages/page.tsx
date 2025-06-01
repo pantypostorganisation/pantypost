@@ -7,6 +7,7 @@ import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
+import BanCheck from '@/components/BanCheck';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -1128,12 +1129,14 @@ export default function BuyerMessagesPage() {
   // Don't render until mounted to prevent hydration errors
   if (!mounted) {
     return (
-      <RequireAuth role="buyer">
-        <div className="py-3 bg-black"></div>
-        <div className="h-screen bg-black flex items-center justify-center">
-          <div className="text-white">Loading...</div>
-        </div>
-      </RequireAuth>
+      <BanCheck>
+        <RequireAuth role="buyer">
+          <div className="py-3 bg-black"></div>
+          <div className="h-screen bg-black flex items-center justify-center">
+            <div className="text-white">Loading...</div>
+          </div>
+        </RequireAuth>
+      </BanCheck>
     );
   }
 
@@ -1245,293 +1248,313 @@ export default function BuyerMessagesPage() {
   };
 
   return (
-    <RequireAuth role="buyer">
-      {/* Top Padding */}
-      <div className="py-3 bg-black"></div>
-      
-      <div className="h-screen bg-black flex flex-col overflow-hidden">
-        <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-          {/* Left column - Message threads */}
-          <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
-            {/* Buyer header */}
-            <div className="px-4 pt-4 pb-2">
-              <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
-                <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
-                My Messages
-              </h2>
-              <div className="flex space-x-2 mb-3">
-                <button 
-                  onClick={() => setFilterBy('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
-                    filterBy === 'all' 
-                      ? 'bg-[#ff950e] text-black' 
-                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                  }`}
-                >
-                  <Filter size={14} className="mr-1" />
-                  All Messages
-                </button>
-                <button 
-                  onClick={() => setFilterBy('unread')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
-                    filterBy === 'unread' 
-                      ? 'bg-[#ff950e] text-black' 
-                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                  }`}
-                >
-                  <BellRing size={14} className="mr-1" />
-                  Unread
-                  {totalUnreadCount > 0 && (
-                    <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
-                      {totalUnreadCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-            
-            {/* Search Bar */}
-            <div className="px-4 pb-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search Sellers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
-                />
-                <div className="absolute right-3 top-2.5 text-gray-400">
-                  <Search size={18} />
+    <BanCheck>
+      <RequireAuth role="buyer">
+        {/* Top Padding */}
+        <div className="py-3 bg-black"></div>
+        
+        <div className="h-screen bg-black flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
+            {/* Left column - Message threads */}
+            <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
+              {/* Buyer header */}
+              <div className="px-4 pt-4 pb-2">
+                <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
+                  <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
+                  My Messages
+                </h2>
+                <div className="flex space-x-2 mb-3">
+                  <button 
+                    onClick={() => setFilterBy('all')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
+                      filterBy === 'all' 
+                        ? 'bg-[#ff950e] text-black' 
+                        : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                    }`}
+                  >
+                    <Filter size={14} className="mr-1" />
+                    All Messages
+                  </button>
+                  <button 
+                    onClick={() => setFilterBy('unread')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
+                      filterBy === 'unread' 
+                        ? 'bg-[#ff950e] text-black' 
+                        : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                    }`}
+                  >
+                    <BellRing size={14} className="mr-1" />
+                    Unread
+                    {totalUnreadCount > 0 && (
+                      <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
+                        {totalUnreadCount}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
-            </div>
-            
-            {/* Thread list */}
-            <div className="flex-1 overflow-y-auto bg-[#121212]">
-              {filteredAndSortedThreads.length === 0 ? (
-                <div className="p-4 text-center text-gray-400">
-                  No conversations found
+              
+              {/* Search Bar */}
+              <div className="px-4 pb-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search Sellers..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+                  />
+                  <div className="absolute right-3 top-2.5 text-gray-400">
+                    <Search size={18} />
+                  </div>
                 </div>
-              ) : (
-                filteredAndSortedThreads.map((seller) => {
-                  const thread = threads[seller];
-                  const lastMessage = lastMessages[seller];
-                  const isActive = activeThread === seller;
-                  const sellerProfile = sellerProfiles[seller];
-                  
-                  return (
-                    <div 
-                      key={seller}
-                      onClick={() => handleThreadSelect(seller)}
-                      className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
-                        isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
-                      } transition-colors duration-150 ease-in-out`}
-                    >
-                      {/* Active indicator */}
-                      {isActive && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
-                      )}
-                      
-                      {/* Avatar with unread indicator */}
-                      <div className="relative mr-3">
-                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
-                          {sellerProfile?.pic ? (
-                            <img src={sellerProfile.pic} alt={seller} className="w-full h-full object-cover" />
-                          ) : (
-                            getInitial(seller)
-                          )}
+              </div>
+              
+              {/* Thread list */}
+              <div className="flex-1 overflow-y-auto bg-[#121212]">
+                {filteredAndSortedThreads.length === 0 ? (
+                  <div className="p-4 text-center text-gray-400">
+                    No conversations found
+                  </div>
+                ) : (
+                  filteredAndSortedThreads.map((seller) => {
+                    const thread = threads[seller];
+                    const lastMessage = lastMessages[seller];
+                    const isActive = activeThread === seller;
+                    const sellerProfile = sellerProfiles[seller];
+                    
+                    return (
+                      <div 
+                        key={seller}
+                        onClick={() => handleThreadSelect(seller)}
+                        className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
+                          isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
+                        } transition-colors duration-150 ease-in-out`}
+                      >
+                        {/* Active indicator */}
+                        {isActive && (
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
+                        )}
+                        
+                        {/* Avatar with unread indicator */}
+                        <div className="relative mr-3">
+                          <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
+                            {sellerProfile?.pic ? (
+                              <img src={sellerProfile.pic} alt={seller} className="w-full h-full object-cover" />
+                            ) : (
+                              getInitial(seller)
+                            )}
+                            
+                            {/* Verified badge if applicable */}
+                            {sellerProfile?.verified && (
+                              <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
+                                <BadgeCheck size={12} className="text-[#ff950e]" />
+                              </div>
+                            )}
+                          </div>
                           
-                          {/* Verified badge if applicable */}
-                          {sellerProfile?.verified && (
-                            <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
-                              <BadgeCheck size={12} className="text-[#ff950e]" />
+                          {/* Unread indicator - FIXED: Always show actual unread count */}
+                          {unreadCounts[seller] > 0 && (
+                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
+                              {unreadCounts[seller]}
                             </div>
                           )}
                         </div>
                         
-                        {/* Unread indicator - FIXED: Always show actual unread count */}
-                        {unreadCounts[seller] > 0 && (
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {unreadCounts[seller]}
+                        {/* Message preview */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between">
+                            <h3 className="font-bold text-white truncate">{seller}</h3>
+                            <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
+                              <Clock size={12} className="mr-1" />
+                              {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-400 truncate">
+                            {lastMessage ? (
+                              lastMessage.type === 'customRequest' 
+                                ? '🛒 Custom Request'
+                                : lastMessage.type === 'image'
+                                  ? '📷 Image'
+                                  : lastMessage.content
+                            ) : ''}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            
+            {/* Right column - Active conversation */}
+            <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
+              {activeThread ? (
+                <>
+                  {/* Conversation header */}
+                  <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
+                    <div className="flex items-center">
+                      <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
+                        {sellerProfiles[activeThread]?.pic ? (
+                          <img src={sellerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitial(activeThread)
+                        )}
+                        
+                        {/* Verified badge if applicable */}
+                        {sellerProfiles[activeThread]?.verified && (
+                          <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
+                            <BadgeCheck size={12} className="text-[#ff950e]" />
                           </div>
                         )}
                       </div>
-                      
-                      {/* Message preview */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between">
-                          <h3 className="font-bold text-white truncate">{seller}</h3>
-                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
-                            <Clock size={12} className="mr-1" />
-                            {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-400 truncate">
-                          {lastMessage ? (
-                            lastMessage.type === 'customRequest' 
-                              ? '🛒 Custom Request'
-                              : lastMessage.type === 'image'
-                                ? '📷 Image'
-                                : lastMessage.content
-                          ) : ''}
+                      <div>
+                        <h2 className="font-bold text-lg text-white">{activeThread}</h2>
+                        <p className="text-xs text-[#ff950e] flex items-center">
+                          <Sparkles size={12} className="mr-1 text-[#ff950e]" />
+                          Active now
                         </p>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-          
-          {/* Right column - Active conversation */}
-          <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
-            {activeThread ? (
-              <>
-                {/* Conversation header */}
-                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
-                  <div className="flex items-center">
-                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
-                      {sellerProfiles[activeThread]?.pic ? (
-                        <img src={sellerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
-                      ) : (
-                        getInitial(activeThread)
-                      )}
-                      
-                      {/* Verified badge if applicable */}
-                      {sellerProfiles[activeThread]?.verified && (
-                        <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
-                          <BadgeCheck size={12} className="text-[#ff950e]" />
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <h2 className="font-bold text-lg text-white">{activeThread}</h2>
-                      <p className="text-xs text-[#ff950e] flex items-center">
-                        <Sparkles size={12} className="mr-1 text-[#ff950e]" />
-                        Active now
-                      </p>
+                    
+                    <div className="flex space-x-2 text-white">
+                      <button 
+                        onClick={handleReport}
+                        disabled={isUserReported}
+                        className={`px-3 py-1 text-xs border rounded flex items-center ${
+                          isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                        } transition-colors duration-150`}
+                      >
+                        <AlertTriangle size={12} className="mr-1" />
+                        {isUserReported ? 'Reported' : 'Report'}
+                      </button>
+                      <button
+                        onClick={handleBlockToggle}
+                        className={`px-3 py-1 text-xs border rounded flex items-center ${
+                          isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                        } transition-colors duration-150`}
+                      >
+                        <ShieldAlert size={12} className="mr-1" />
+                        {isUserBlocked ? 'Unblock' : 'Block'}
+                      </button>
                     </div>
                   </div>
                   
-                  <div className="flex space-x-2 text-white">
-                    <button 
-                      onClick={handleReport}
-                      disabled={isUserReported}
-                      className={`px-3 py-1 text-xs border rounded flex items-center ${
-                        isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-                      } transition-colors duration-150`}
-                    >
-                      <AlertTriangle size={12} className="mr-1" />
-                      {isUserReported ? 'Reported' : 'Report'}
-                    </button>
-                    <button
-                      onClick={handleBlockToggle}
-                      className={`px-3 py-1 text-xs border rounded flex items-center ${
-                        isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-                      } transition-colors duration-150`}
-                    >
-                      <ShieldAlert size={12} className="mr-1" />
-                      {isUserBlocked ? 'Unblock' : 'Block'}
-                    </button>
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto p-4 bg-[#121212]" ref={messagesContainerRef}>
+                    <div className="max-w-3xl mx-auto space-y-4">
+                      {threadMessages.map((msg, index) => {
+                        const isFromMe = msg.sender === user?.username;
+                        
+                        // Get custom request info if available
+                        let customReq: any = undefined;
+                        if (
+                          msg.type === 'customRequest' &&
+                          msg.meta &&
+                          typeof msg.meta.id === 'string'
+                        ) {
+                          customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
+                        }
+                        
+                        const isLatestCustom =
+                          !!customReq &&
+                          (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+                          index === (threadMessages.length - 1) &&
+                          msg.type === 'customRequest';
+                        
+                        const showPayNow =
+                          !!customReq &&
+                          customReq.status === 'accepted' &&
+                          index === (threadMessages.length - 1) &&
+                          msg.type === 'customRequest';
+                        
+                        const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
+                        const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
+                        const canPay = customReq && buyerBalance >= markupPrice;
+                        const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
+                        
+                        const showActionButtons =
+                          !!customReq &&
+                          isLatestCustom &&
+                          customReq.status === 'pending' &&
+                          !isLastEditor(customReq);
+                        
+                        return (
+                          <MessageItem
+                            key={index}
+                            msg={msg}
+                            index={index}
+                            isFromMe={isFromMe}
+                            user={user}
+                            activeThread={activeThread}
+                            onMessageVisible={handleMessageVisible}
+                            customReq={customReq}
+                            isLatestCustom={isLatestCustom}
+                            isPaid={isPaid}
+                            showActionButtons={showActionButtons}
+                            handleAccept={handleAccept}
+                            handleDecline={handleDecline}
+                            handleEditRequest={handleEditRequest}
+                            editRequestId={editRequestId}
+                            editTitle={editTitle}
+                            setEditTitle={setEditTitle}
+                            editPrice={editPrice}
+                            setEditPrice={setEditPrice}
+                            editMessage={editMessage}
+                            setEditMessage={setEditMessage}
+                            handleEditSubmit={handleEditSubmit}
+                            setEditRequestId={setEditRequestId}
+                            statusBadge={statusBadge}
+                            setPreviewImage={setPreviewImage}
+                            showPayNow={showPayNow}
+                            handlePayNow={handlePayNow}
+                            markupPrice={markupPrice}
+                            canPay={canPay}
+                          />
+                        );
+                      })}
+                      
+                      {/* Auto-scroll anchor */}
+                      <div ref={messagesEndRef} />
+                    </div>
                   </div>
-                </div>
-                
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 bg-[#121212]" ref={messagesContainerRef}>
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    {threadMessages.map((msg, index) => {
-                      const isFromMe = msg.sender === user?.username;
-                      
-                      // Get custom request info if available
-                      let customReq: any = undefined;
-                      if (
-                        msg.type === 'customRequest' &&
-                        msg.meta &&
-                        typeof msg.meta.id === 'string'
-                      ) {
-                        customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
-                      }
-                      
-                      const isLatestCustom =
-                        !!customReq &&
-                        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
-                        index === (threadMessages.length - 1) &&
-                        msg.type === 'customRequest';
-                      
-                      const showPayNow =
-                        !!customReq &&
-                        customReq.status === 'accepted' &&
-                        index === (threadMessages.length - 1) &&
-                        msg.type === 'customRequest';
-                      
-                      const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-                      const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
-                      const canPay = customReq && buyerBalance >= markupPrice;
-                      const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
-                      
-                      const showActionButtons =
-                        !!customReq &&
-                        isLatestCustom &&
-                        customReq.status === 'pending' &&
-                        !isLastEditor(customReq);
-                      
-                      return (
-                        <MessageItem
-                          key={index}
-                          msg={msg}
-                          index={index}
-                          isFromMe={isFromMe}
-                          user={user}
-                          activeThread={activeThread}
-                          onMessageVisible={handleMessageVisible}
-                          customReq={customReq}
-                          isLatestCustom={isLatestCustom}
-                          isPaid={isPaid}
-                          showActionButtons={showActionButtons}
-                          handleAccept={handleAccept}
-                          handleDecline={handleDecline}
-                          handleEditRequest={handleEditRequest}
-                          editRequestId={editRequestId}
-                          editTitle={editTitle}
-                          setEditTitle={setEditTitle}
-                          editPrice={editPrice}
-                          setEditPrice={setEditPrice}
-                          editMessage={editMessage}
-                          setEditMessage={setEditMessage}
-                          handleEditSubmit={handleEditSubmit}
-                          setEditRequestId={setEditRequestId}
-                          statusBadge={statusBadge}
-                          setPreviewImage={setPreviewImage}
-                          showPayNow={showPayNow}
-                          handlePayNow={handlePayNow}
-                          markupPrice={markupPrice}
-                          canPay={canPay}
-                        />
-                      );
-                    })}
-                    
-                    {/* Auto-scroll anchor */}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </div>
-                
-                {/* Message input and emoji picker */}
-                {!isUserBlocked && (
-                  <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
-                    {/* Emoji Picker - position ABOVE the input */}
-                    {showEmojiPicker && (
-                      <div 
-                        ref={emojiPickerRef}
-                        className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
-                      >
-                        {/* Recent Emojis Section */}
-                        {recentEmojis.length > 0 && (
-                          <div className="px-3 pt-3">
-                            <div className="text-xs text-gray-400 mb-2">Recent</div>
-                            <div className="grid grid-cols-8 gap-1 mb-3">
-                              {recentEmojis.slice(0, 16).map((emoji, index) => (
+                  
+                  {/* Message input and emoji picker */}
+                  {!isUserBlocked && (
+                    <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+                      {/* Emoji Picker - position ABOVE the input */}
+                      {showEmojiPicker && (
+                        <div 
+                          ref={emojiPickerRef}
+                          className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
+                        >
+                          {/* Recent Emojis Section */}
+                          {recentEmojis.length > 0 && (
+                            <div className="px-3 pt-3">
+                              <div className="text-xs text-gray-400 mb-2">Recent</div>
+                              <div className="grid grid-cols-8 gap-1 mb-3">
+                                {recentEmojis.slice(0, 16).map((emoji, index) => (
+                                  <span
+                                    key={`recent-${index}`}
+                                    onClick={() => handleEmojiClick(emoji)}
+                                    className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
+                                  >
+                                    {emoji}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* All Emojis */}
+                          <div className="px-3 pt-2 pb-3">
+                            {recentEmojis.length > 0 && (
+                              <div className="text-xs text-gray-400 mb-2">All Emojis</div>
+                            )}
+                            <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
+                              {ALL_EMOJIS.map((emoji, index) => (
                                 <span
-                                  key={`recent-${index}`}
+                                  key={`emoji-${index}`}
                                   onClick={() => handleEmojiClick(emoji)}
                                   className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
                                 >
@@ -1540,522 +1563,504 @@ export default function BuyerMessagesPage() {
                               ))}
                             </div>
                           </div>
-                        )}
-                        
-                        {/* All Emojis */}
-                        <div className="px-3 pt-2 pb-3">
-                          {recentEmojis.length > 0 && (
-                            <div className="text-xs text-gray-400 mb-2">All Emojis</div>
-                          )}
-                          <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
-                            {ALL_EMOJIS.map((emoji, index) => (
-                              <span
-                                key={`emoji-${index}`}
-                                onClick={() => handleEmojiClick(emoji)}
-                                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
-                              >
-                                {emoji}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Selected image preview */}
-                    {selectedImage && (
-                      <div className="px-4 pt-3 pb-2">
-                        <div className="relative inline-block">
-                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
-                          <button
-                            onClick={() => {
-                              setSelectedImage(null);
-                              if (fileInputRef.current) {
-                                fileInputRef.current.value = '';
-                              }
-                            }}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs shadow-md transform transition-transform hover:scale-110"
-                            style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Image loading and error states */}
-                    {isImageLoading && (
-                      <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
-                        Loading image...
-                      </div>
-                    )}
-                    
-                    {imageError && (
-                      <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
-                        <AlertTriangle size={14} className="mr-1" />
-                        {imageError}
-                      </div>
-                    )}
-                    
-                    {/* Message input */}
-                    <div className="px-4 py-3">
-                      <div className="relative mb-2">
-                        <textarea
-                          ref={inputRef}
-                          value={replyMessage}
-                          onChange={(e) => setReplyMessage(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                          className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
-                          rows={1}
-                          maxLength={250}
-                        />
-                        
-                        {/* Fixed emoji button position */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowEmojiPicker(!showEmojiPicker);
-                          }}
-                          className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-                            showEmojiPicker 
-                              ? 'bg-[#ff950e] text-black' 
-                              : 'text-[#ff950e] hover:bg-[#333]'
-                          } transition-colors duration-150`}
-                          title="Emoji"
-                          type="button"
-                        >
-                          <Smile size={20} className="flex-shrink-0" />
-                        </button>
-                      </div>
-                      
-                      {/* Character count */}
-                      {replyMessage.length > 0 && (
-                        <div className="text-xs text-gray-400 mb-2 text-right">
-                          {replyMessage.length}/250
                         </div>
                       )}
                       
-                      {/* Bottom row with action buttons - RESTORED CUSTOM ICONS */}
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-0">
-                          {/* Tip button */}
-                          <img 
-                            src="/Send_Tip_Icon.png" 
-                            alt="Send Tip" 
-                            className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowTipModal(true);
-                            }}
-                            title="Send Tip"
+                      {/* Selected image preview */}
+                      {selectedImage && (
+                        <div className="px-4 pt-3 pb-2">
+                          <div className="relative inline-block">
+                            <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
+                            <button
+                              onClick={() => {
+                                setSelectedImage(null);
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = '';
+                                }
+                              }}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs shadow-md transform transition-transform hover:scale-110"
+                              style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Image loading and error states */}
+                      {isImageLoading && (
+                        <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
+                          Loading image...
+                        </div>
+                      )}
+                      
+                      {imageError && (
+                        <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
+                          <AlertTriangle size={14} className="mr-1" />
+                          {imageError}
+                        </div>
+                      )}
+                      
+                      {/* Message input */}
+                      <div className="px-4 py-3">
+                        <div className="relative mb-2">
+                          <textarea
+                            ref={inputRef}
+                            value={replyMessage}
+                            onChange={(e) => setReplyMessage(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder={selectedImage ? "Add a caption..." : "Type a message"}
+                            className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+                            rows={1}
+                            maxLength={250}
                           />
                           
-                          {/* Attachment button */}
-                          <img 
-                            src="/Attach_Image_Icon.png" 
-                            alt="Attach Image" 
-                            className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                              isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                            onClick={(e) => {
-                              if (isImageLoading) return;
-                              e.stopPropagation();
-                              triggerFileInput();
-                            }}
-                            title="Attach Image"
-                          />
-                          
-                          {/* Emoji button (mobile) - keeping this one as a button since it's not a custom image */}
+                          {/* Fixed emoji button position */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setShowEmojiPicker(!showEmojiPicker);
                             }}
-                            className="md:hidden border-none p-0 bg-transparent focus:outline-none"
+                            className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
+                              showEmojiPicker 
+                                ? 'bg-[#ff950e] text-black' 
+                                : 'text-[#ff950e] hover:bg-[#333]'
+                            } transition-colors duration-150`}
                             title="Emoji"
-                            aria-label="Emoji"
+                            type="button"
                           >
-                            <Smile size={52} className="text-[#ff950e]" />
+                            <Smile size={20} className="flex-shrink-0" />
                           </button>
-                          
-                          {/* Custom Request button */}
-                          <img 
-                            src="/Custom_Request_Icon.png" 
-                            alt="Custom Request" 
-                            className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openCustomRequestModal();
-                            }}
-                            title="Send Custom Request"
-                          />
-                          
-                          {/* Hidden file input */}
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/gif,image/webp"
-                            ref={fileInputRef}
-                            style={{ display: 'none' }}
-                            onChange={handleImageSelect}
-                          />
                         </div>
                         
-                        {/* Send Button - Replaced with image */}
-                        <img
-                          src="/Send_Button.png"
-                          alt="Send"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReply();
-                          }}
-                          className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
-                            (!replyMessage.trim() && !selectedImage) || isImageLoading
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          }`}
-                          style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {isUserBlocked && (
-                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
-                    <ShieldAlert size={16} className="mr-2" />
-                    You have blocked this seller
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleBlockToggle();
-                      }}
-                      className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
-                    >
-                      Unblock
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400">
-                <div className="text-center p-4">
-                  <div className="flex justify-center mb-4">
-                    <MessageCircle size={64} className="text-gray-600" />
-                  </div>
-                  <p className="text-xl mb-2">Select a conversation to view messages</p>
-                  <p className="text-sm">Your messages will appear here</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Bottom Padding */}
-        <div className="py-6 bg-black"></div>
-        
-        {/* NEW: Enhanced Custom Request Modal */}
-        {showCustomRequestModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4">
-            <div className="bg-[#1a1a1a] rounded-xl max-w-md w-full shadow-2xl border border-gray-800 max-h-[90vh] overflow-y-auto">
-              {/* Modal Header */}
-              <div className="flex justify-between items-center p-6 border-b border-gray-800">
-                <div className="flex items-center">
-                  <div className="relative mr-2 flex items-center justify-center">
-                    <div className="bg-white w-6 h-6 rounded-full absolute"></div>
-                    <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Custom Request</h3>
-                    <p className="text-sm text-gray-400">Send to {activeThread}</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={closeCustomRequestModal}
-                  className="text-gray-400 hover:text-white transition-colors p-1"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              
-              {/* Modal Content */}
-              <div className="p-6 space-y-4">
-                {/* Title Field */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Request Title *
-                  </label>
-                  <input
-                    type="text"
-                    value={customRequestForm.title}
-                    onChange={(e) => setCustomRequestForm(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="e.g., Custom worn panties with special requests"
-                    className={`w-full p-3 rounded-lg bg-[#222] border ${
-                      customRequestErrors.title ? 'border-red-500' : 'border-gray-700'
-                    } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]`}
-                    maxLength={100}
-                  />
-                  {customRequestErrors.title && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center">
-                      <AlertTriangle size={12} className="mr-1" />
-                      {customRequestErrors.title}
-                    </p>
-                  )}
-                </div>
-                
-                {/* Price Field with Total Display */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Your Price *
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <DollarSign size={16} className="text-gray-400" />
-                    </div>
-                    <input
-                      type="number"
-                      value={customRequestForm.price}
-                      onChange={(e) => setCustomRequestForm(prev => ({ ...prev, price: e.target.value }))}
-                      placeholder="0.00"
-                      min="0.01"
-                      step="0.01"
-                      className={`w-full pl-10 pr-4 p-3 rounded-lg bg-[#222] border ${
-                        customRequestErrors.price ? 'border-red-500' : 'border-gray-700'
-                      } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]`}
-                    />
-                  </div>
-                  {customRequestErrors.price && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center">
-                      <AlertTriangle size={12} className="mr-1" />
-                      {customRequestErrors.price}
-                    </p>
-                  )}
-                  {/* Total cost display */}
-                  {customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
-                    <div className="mt-2 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-300">Base Price:</span>
-                        <span className="text-white">${parseFloat(customRequestForm.price).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-300">Platform Fee (10%):</span>
-                        <span className="text-white">${(parseFloat(customRequestForm.price) * 0.1).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-lg font-bold border-t border-[#ff950e]/30 pt-2 mt-2">
-                        <span className="text-[#ff950e]">Total You'll Pay:</span>
-                        <span className="text-[#ff950e]">${calculateTotalCost(customRequestForm.price).toFixed(2)}</span>
+                        {/* Character count */}
+                        {replyMessage.length > 0 && (
+                          <div className="text-xs text-gray-400 mb-2 text-right">
+                            {replyMessage.length}/250
+                          </div>
+                        )}
+                        
+                        {/* Bottom row with action buttons - RESTORED CUSTOM ICONS */}
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-0">
+                            {/* Tip button */}
+                            <img 
+                              src="/Send_Tip_Icon.png" 
+                              alt="Send Tip" 
+                              className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowTipModal(true);
+                              }}
+                              title="Send Tip"
+                            />
+                            
+                            {/* Attachment button */}
+                            <img 
+                              src="/Attach_Image_Icon.png" 
+                              alt="Attach Image" 
+                              className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
+                                isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
+                              onClick={(e) => {
+                                if (isImageLoading) return;
+                                e.stopPropagation();
+                                triggerFileInput();
+                              }}
+                              title="Attach Image"
+                            />
+                            
+                            {/* Emoji button (mobile) - keeping this one as a button since it's not a custom image */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowEmojiPicker(!showEmojiPicker);
+                              }}
+                              className="md:hidden border-none p-0 bg-transparent focus:outline-none"
+                              title="Emoji"
+                              aria-label="Emoji"
+                            >
+                              <Smile size={52} className="text-[#ff950e]" />
+                            </button>
+                            
+                            {/* Custom Request button */}
+                            <img 
+                              src="/Custom_Request_Icon.png" 
+                              alt="Custom Request" 
+                              className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCustomRequestModal();
+                              }}
+                              title="Send Custom Request"
+                            />
+                            
+                            {/* Hidden file input */}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/gif,image/webp"
+                              ref={fileInputRef}
+                              style={{ display: 'none' }}
+                              onChange={handleImageSelect}
+                            />
+                          </div>
+                          
+                          {/* Send Button - Replaced with image */}
+                          <img
+                            src="/Send_Button.png"
+                            alt="Send"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReply();
+                            }}
+                            className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
+                              (!replyMessage.trim() && !selectedImage) || isImageLoading
+                                ? 'opacity-50 cursor-not-allowed'
+                                : ''
+                            }`}
+                            style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
-                </div>
-                
-                {/* Description Field */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Request Details *
-                  </label>
-                  <textarea
-                    value={customRequestForm.description}
-                    onChange={(e) => setCustomRequestForm(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Describe exactly what you're looking for, including any special requests, wearing time, activities, etc."
-                    rows={4}
-                    className={`w-full p-3 rounded-lg bg-[#222] border ${
-                      customRequestErrors.description ? 'border-red-500' : 'border-gray-700'
-                    } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] resize-none`}
-                    maxLength={500}
-                  />
-                  {customRequestErrors.description && (
-                    <p className="text-red-400 text-xs mt-1 flex items-center">
-                      <AlertTriangle size={12} className="mr-1" />
-                      {customRequestErrors.description}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    {customRequestForm.description.length}/500 characters
-                  </p>
-                </div>
-                
-                {/* Balance Check */}
-                {user && customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
-                  <div className="p-3 bg-[#222] rounded-lg border border-gray-700">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-300">Your Wallet Balance:</span>
-                      <span className="text-white font-medium">${(wallet[user.username] || 0).toFixed(2)}</span>
+                  
+                  {isUserBlocked && (
+                    <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+                      <ShieldAlert size={16} className="mr-2" />
+                      You have blocked this seller
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBlockToggle();
+                        }}
+                        className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
+                      >
+                        Unblock
+                      </button>
                     </div>
-                    {wallet[user.username] < calculateTotalCost(customRequestForm.price) && (
-                      <p className="text-red-400 text-xs mt-2 flex items-center">
-                        <AlertTriangle size={12} className="mr-1" />
-                        Insufficient balance. You'll need ${(calculateTotalCost(customRequestForm.price) - (wallet[user.username] || 0)).toFixed(2)} more.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {/* Modal Footer */}
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 p-6 border-t border-gray-800">
-                <button
-                  onClick={closeCustomRequestModal}
-                  disabled={isSubmittingRequest}
-                  className="px-6 py-2 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmitCustomRequest}
-                  disabled={isSubmittingRequest || !customRequestForm.title.trim() || !customRequestForm.price.trim() || !customRequestForm.description.trim()}
-                  className="px-6 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                >
-                  {isSubmittingRequest ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Package size={16} className="mr-2" />
-                      Send Request
-                    </>
                   )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Payment confirmation modal */}
-        {showPayModal && payingRequest && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50">
-            <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
-              <h3 className="text-lg font-bold mb-4 text-white">Confirm Payment</h3>
-              <p className="text-gray-300">
-                Are you sure you want to pay{' '}
-                <span className="font-bold text-[#ff950e]">
-                  ${payingRequest ? (Math.round(payingRequest.price * 1.1 * 100) / 100).toFixed(2) : ''}
-                </span>
-                {' '}for "{payingRequest?.title}"?
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                (Includes 10% platform fee)
-              </p>
-              <div className="flex justify-end gap-2 mt-6">
-                <button
-                  onClick={handleCancelPay}
-                  className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors duration-150"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmPay}
-                  className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] transition-colors duration-150"
-                >
-                  Confirm & Pay
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Tip Modal */}
-        {showTipModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50">
-            <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-white flex items-center">
-                  <DollarSign size={20} className="mr-2 text-[#ff950e]" />
-                  Send a Tip
-                </h3>
-                <button 
-                  onClick={() => {
-                    setShowTipModal(false);
-                    setTipResult(null);
-                    setTipAmount('');
-                  }}
-                  className="text-gray-400 hover:text-white transition-colors duration-150"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              
-              {tipResult ? (
-                <div className={`p-4 rounded-lg mb-4 ${tipResult.success ? 'bg-green-600 bg-opacity-20 text-green-400' : 'bg-red-600 bg-opacity-20 text-red-400'} flex items-center`}>
-                  {tipResult.success ? 
-                    <CheckCircle2 size={16} className="mr-2" /> : 
-                    <AlertTriangle size={16} className="mr-2" />
-                  }
-                  {tipResult.message}
-                </div>
-              ) : (
-                <>
-                  <p className="text-gray-300 mb-4">
-                    Show your appreciation by sending a tip to {activeThread}
-                  </p>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Amount ($)</label>
-                    <div className="relative mt-1 rounded-md shadow-sm">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <span className="text-gray-400">$</span>
-                      </div>
-                      <input
-                        type="number"
-                        value={tipAmount}
-                        onChange={(e) => setTipAmount(e.target.value)}
-                        className="bg-[#333] text-white border-gray-700 focus:ring-[#ff950e] focus:border-[#ff950e] block w-full pl-7 pr-12 rounded-md p-2"
-                        placeholder="0.00"
-                        min="1"
-                        step="0.01"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setShowTipModal(false);
-                        setTipAmount('');
-                      }}
-                      className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors duration-150"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSendTip}
-                      className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] flex items-center transition-colors duration-150"
-                      disabled={!tipAmount || parseFloat(tipAmount) <= 0}
-                    >
-                      <DollarSign size={16} className="mr-1" />
-                      Send Tip
-                    </button>
-                  </div>
                 </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-gray-400">
+                  <div className="text-center p-4">
+                    <div className="flex justify-center mb-4">
+                      <MessageCircle size={64} className="text-gray-600" />
+                    </div>
+                    <p className="text-xl mb-2">Select a conversation to view messages</p>
+                    <p className="text-sm">Your messages will appear here</p>
+                  </div>
+                </div>
               )}
             </div>
           </div>
-        )}
-        
-        {/* Image Preview Modal */}
-        <ImagePreviewModal
-          imageUrl={previewImage || ''}
-          isOpen={!!previewImage}
-          onClose={() => setPreviewImage(null)}
-        />
-        
-        <style jsx global>{`
-          .emoji-button::before {
-            content: "";
-            display: block;
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background-color: black;
-            z-index: -1;
-          }
-          .emoji-button {
-            position: relative;
-            z-index: 1;
-          }
-        `}</style>
-      </div>
-    </RequireAuth>
+          
+          {/* Bottom Padding */}
+          <div className="py-6 bg-black"></div>
+          
+          {/* NEW: Enhanced Custom Request Modal */}
+          {showCustomRequestModal && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4">
+              <div className="bg-[#1a1a1a] rounded-xl max-w-md w-full shadow-2xl border border-gray-800 max-h-[90vh] overflow-y-auto">
+                {/* Modal Header */}
+                <div className="flex justify-between items-center p-6 border-b border-gray-800">
+                  <div className="flex items-center">
+                    <div className="relative mr-2 flex items-center justify-center">
+                      <div className="bg-white w-6 h-6 rounded-full absolute"></div>
+                      <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Custom Request</h3>
+                      <p className="text-sm text-gray-400">Send to {activeThread}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={closeCustomRequestModal}
+                    className="text-gray-400 hover:text-white transition-colors p-1"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+                
+                {/* Modal Content */}
+                <div className="p-6 space-y-4">
+                  {/* Title Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Request Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={customRequestForm.title}
+                      onChange={(e) => setCustomRequestForm(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="e.g., Custom worn panties with special requests"
+                      className={`w-full p-3 rounded-lg bg-[#222] border ${
+                        customRequestErrors.title ? 'border-red-500' : 'border-gray-700'
+                      } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]`}
+                      maxLength={100}
+                    />
+                    {customRequestErrors.title && (
+                      <p className="text-red-400 text-xs mt-1 flex items-center">
+                        <AlertTriangle size={12} className="mr-1" />
+                        {customRequestErrors.title}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {/* Price Field with Total Display */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Your Price *
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <DollarSign size={16} className="text-gray-400" />
+                      </div>
+                      <input
+                        type="number"
+                        value={customRequestForm.price}
+                        onChange={(e) => setCustomRequestForm(prev => ({ ...prev, price: e.target.value }))}
+                        placeholder="0.00"
+                        min="0.01"
+                        step="0.01"
+                        className={`w-full pl-10 pr-4 p-3 rounded-lg bg-[#222] border ${
+                          customRequestErrors.price ? 'border-red-500' : 'border-gray-700'
+                        } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]`}
+                      />
+                    </div>
+                    {customRequestErrors.price && (
+                      <p className="text-red-400 text-xs mt-1 flex items-center">
+                        <AlertTriangle size={12} className="mr-1" />
+                        {customRequestErrors.price}
+                      </p>
+                    )}
+                    {/* Total cost display */}
+                    {customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
+                      <div className="mt-2 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">Base Price:</span>
+                          <span className="text-white">${parseFloat(customRequestForm.price).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-300">Platform Fee (10%):</span>
+                          <span className="text-white">${(parseFloat(customRequestForm.price) * 0.1).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold border-t border-[#ff950e]/30 pt-2 mt-2">
+                          <span className="text-[#ff950e]">Total You'll Pay:</span>
+                          <span className="text-[#ff950e]">${calculateTotalCost(customRequestForm.price).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Description Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Request Details *
+                    </label>
+                    <textarea
+                      value={customRequestForm.description}
+                      onChange={(e) => setCustomRequestForm(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Describe exactly what you're looking for, including any special requests, wearing time, activities, etc."
+                      rows={4}
+                      className={`w-full p-3 rounded-lg bg-[#222] border ${
+                        customRequestErrors.description ? 'border-red-500' : 'border-gray-700'
+                      } text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] resize-none`}
+                      maxLength={500}
+                    />
+                    {customRequestErrors.description && (
+                      <p className="text-red-400 text-xs mt-1 flex items-center">
+                        <AlertTriangle size={12} className="mr-1" />
+                        {customRequestErrors.description}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {customRequestForm.description.length}/500 characters
+                    </p>
+                  </div>
+                  
+                  {/* Balance Check */}
+                  {user && customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
+                    <div className="p-3 bg-[#222] rounded-lg border border-gray-700">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300">Your Wallet Balance:</span>
+                        <span className="text-white font-medium">${(wallet[user.username] || 0).toFixed(2)}</span>
+                      </div>
+                      {wallet[user.username] < calculateTotalCost(customRequestForm.price) && (
+                        <p className="text-red-400 text-xs mt-2 flex items-center">
+                          <AlertTriangle size={12} className="mr-1" />
+                          Insufficient balance. You'll need ${(calculateTotalCost(customRequestForm.price) - (wallet[user.username] || 0)).toFixed(2)} more.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Modal Footer */}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 p-6 border-t border-gray-800">
+                  <button
+                    onClick={closeCustomRequestModal}
+                    disabled={isSubmittingRequest}
+                    className="px-6 py-2 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitCustomRequest}
+                    disabled={isSubmittingRequest || !customRequestForm.title.trim() || !customRequestForm.price.trim() || !customRequestForm.description.trim()}
+                    className="px-6 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    {isSubmittingRequest ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Package size={16} className="mr-2" />
+                        Send Request
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Payment confirmation modal */}
+          {showPayModal && payingRequest && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50">
+              <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
+                <h3 className="text-lg font-bold mb-4 text-white">Confirm Payment</h3>
+                <p className="text-gray-300">
+                  Are you sure you want to pay{' '}
+                  <span className="font-bold text-[#ff950e]">
+                    ${payingRequest ? (Math.round(payingRequest.price * 1.1 * 100) / 100).toFixed(2) : ''}
+                  </span>
+                  {' '}for "{payingRequest?.title}"?
+                </p>
+                <p className="text-xs text-gray-400 mt-2">
+                  (Includes 10% platform fee)
+                </p>
+                <div className="flex justify-end gap-2 mt-6">
+                  <button
+                    onClick={handleCancelPay}
+                    className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors duration-150"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmPay}
+                    className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] transition-colors duration-150"
+                  >
+                    Confirm & Pay
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Tip Modal */}
+          {showTipModal && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50">
+              <div className="bg-[#222] rounded-lg p-6 max-w-sm w-full shadow-lg border border-gray-700">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-white flex items-center">
+                    <DollarSign size={20} className="mr-2 text-[#ff950e]" />
+                    Send a Tip
+                  </h3>
+                  <button 
+                    onClick={() => {
+                      setShowTipModal(false);
+                      setTipResult(null);
+                      setTipAmount('');
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors duration-150"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                
+                {tipResult ? (
+                  <div className={`p-4 rounded-lg mb-4 ${tipResult.success ? 'bg-green-600 bg-opacity-20 text-green-400' : 'bg-red-600 bg-opacity-20 text-red-400'} flex items-center`}>
+                    {tipResult.success ? 
+                      <CheckCircle2 size={16} className="mr-2" /> : 
+                      <AlertTriangle size={16} className="mr-2" />
+                    }
+                    {tipResult.message}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-gray-300 mb-4">
+                      Show your appreciation by sending a tip to {activeThread}
+                    </p>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Amount ($)</label>
+                      <div className="relative mt-1 rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-400">$</span>
+                        </div>
+                        <input
+                          type="number"
+                          value={tipAmount}
+                          onChange={(e) => setTipAmount(e.target.value)}
+                          className="bg-[#333] text-white border-gray-700 focus:ring-[#ff950e] focus:border-[#ff950e] block w-full pl-7 pr-12 rounded-md p-2"
+                          placeholder="0.00"
+                          min="1"
+                          step="0.01"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setShowTipModal(false);
+                          setTipAmount('');
+                        }}
+                        className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition-colors duration-150"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSendTip}
+                        className="px-4 py-2 rounded bg-[#ff950e] text-black hover:bg-[#e88800] flex items-center transition-colors duration-150"
+                        disabled={!tipAmount || parseFloat(tipAmount) <= 0}
+                      >
+                        <DollarSign size={16} className="mr-1" />
+                        Send Tip
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Image Preview Modal */}
+          <ImagePreviewModal
+            imageUrl={previewImage || ''}
+            isOpen={!!previewImage}
+            onClose={() => setPreviewImage(null)}
+          />
+          
+          <style jsx global>{`
+            .emoji-button::before {
+              content: "";
+              display: block;
+              position: absolute;
+              width: 100%;
+              height: 100%;
+              border-radius: 50%;
+              background-color: black;
+              z-index: -1;
+            }
+            .emoji-button {
+              position: relative;
+              z-index: 1;
+            }
+          `}</style>
+        </div>
+      </RequireAuth>
+    </BanCheck>
   );
 }

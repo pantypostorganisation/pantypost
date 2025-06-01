@@ -211,3 +211,72 @@ a:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ======== HOMEPAGE ANIMATIONS (from JSX styles) ======== */
+
+/* Pulse animation for trust badge */
+@keyframes pulse-slow {
+  50% { opacity: 0.7; }
+}
+.animate-pulse-slow { 
+  animation: pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+}
+
+/* Perspective for 3D hover effects */
+.perspective { 
+  perspective: 1000px; 
+}
+
+/* Smooth scroll behavior */
+html { 
+  scroll-behavior: smooth; 
+}
+
+/* Custom focus styles */
+*:focus-visible {
+  outline: 2px solid #ff950e;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Custom spinning animations for background shapes */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow { 
+  animation: spin-slow 25s linear infinite; 
+}
+
+@keyframes spin-slow-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+.animate-spin-slow-reverse { 
+  animation: spin-slow-reverse 20s linear infinite; 
+}
+
+@keyframes spin-medium {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-medium { 
+  animation: spin-medium 35s linear infinite; 
+}
+
+@keyframes spin-medium-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+.animate-spin-medium-reverse { 
+  animation: spin-medium-reverse 30s linear infinite; 
+}
+
+/* Radial gradient utility */
+.bg-gradient-radial {
+  background-image: radial-gradient(circle, var(--tw-gradient-stops));
+}

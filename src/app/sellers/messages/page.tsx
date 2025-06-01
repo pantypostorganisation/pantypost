@@ -1,6 +1,7 @@
 // src/app/sellers/messages/page.tsx
 'use client';
 
+import BanCheck from '@/components/BanCheck';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { useMessages } from '@/context/MessageContext';
 import { useListings } from '@/context/ListingContext';
@@ -35,23 +36,48 @@ import {
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// All emojis in a single flat array
+// All emojis in a single flat array - ordered by likely usage for this platform
 const ALL_EMOJIS = [
-  // Smileys and people
-  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕',
-  // Animals and nature
-  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🦆', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞', '🐜', '🪰', '🪲', '🪳', '🦟', '🦗', '🕷', '🕸', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🦣', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃',
-  // Food and drink
-  '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫑', '🥕', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🥩', '🍗', '🍖', '🦴', '🌭', '🍔', '🍟', '🍕', '🫓', '🥪', '🥙', '🧆', '🌮', '🌯', '🫔', '🥗', '🥘', '🫕', '🥫', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍙', '🍚',
-  // Activities and sports
-  '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🪂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🏵', '🎗', '🎫', '🎟', '🎪', '🤹', '🎭', '🩰', '🎨', '🎬', '🎤',
-  // Travel and places
-  '🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🦯', '🦽', '🦼', '🛴', '🚲', '🛵', '🏍', '🛺', '🚨', '🚔', '🚍', '🚘', '🚖', '🚡', '🚠', '🚟', '🚃', '🚋', '🚞', '🚝', '🚄', '🚅', '🚈', '🚂', '🚆', '🚇', '🚊', '🚉', '✈️', '🛫', '🛬', '🛩', '💺', '🛰', '🚀', '🛸', '🚁', '🛶', '⛵', '🚤', '🛥', '🛳', '⛴', '🚢', '⚓', '🪝', '⛽', '🚧', '🚦', '🚥', '🚏', '🗺', '🗿',
-  // Objects 
-  '⌚', '📱', '📲', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🕹', '🗜', '💽', '💾', '💿', '📀', '📼', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙', '🎚', '🎛', '🧭', '⏱', '⏲', '⏰', '🕰', '⌛', '⏳', '📡', '🔋', '🔌', '💡', '🔦', '🕯', '🪔', '🧯', '🛢', '💸', '💵', '💴', '💶', '💷', '🪙', '💰', '💳', '💎', '⚖️', '🪜', '🧰', '🪛', '🔧', '🔨', '⚒', '🛠',
-  // Symbols
-  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑',
-  // Flags
+  // ❤️ MOST LIKELY TO BE USED - Love, flirty, suggestive
+  '❤️', '💕', '💖', '💗', '💓', '💞', '💝', '😍', '🥰', '😘', '😗', '😙', '😚', '💋', '😋', '😛', '😜', '😝', '🤤', '🥵', '🔥', '💦', '🍑', '🍆', '🌶', '🍯', '🍒', '🍓', '🥥', '🍌', '🍭', '🍰', '🧁', '🍪', '🥛', '☕', '🍷', '🥂', '🍾', '💎', '🎁', '🌹', '🌺', '🌸', '💐', '🦋', '✨', '💫', '⭐', '🌟', '💯', 
+  
+  // 😊 COMMON POSITIVE EMOTIONS
+  '😊', '🙂', '😁', '😄', '😃', '😀', '😆', '😅', '😂', '🤣', '🥳', '😇', '🤗', '🤭', '😉', '😌', '🥺', '🥹', '😏', '🤩', '😎', '🤓', '🧐', '🤔', '🤫', '🤐', '😌',
+  
+  // 💜 MORE HEARTS & LOVE
+  '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💘', '💟',
+  
+  // 😢 EMOTIONS & EXPRESSIONS  
+  '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '😱', '😨', '😰', '😥', '😓', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😪', '😴', '🤤', '😵', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🥶',
+  
+  // 🎉 CELEBRATION & FUN
+  '🎉', '🎊', '🎈', '🎂', '🎀', '🎁', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖', '🎗', '🎫', '🎟', '🎪', '🎭', '🎨', '🎬', '🎤', '🎧', '🎵', '🎶', '🎸', '🎹', '🎺', '🎻', '🥁',
+  
+  // 💰 MONEY & SHOPPING
+  '💰', '💵', '💴', '💶', '💷', '🪙', '💳', '💸', '🛍', '🛒', '🛁', '👑', '💍', '👄', '💄', '👗', '👙', '👠', '🩱', '🧿',
+  
+  // 🍕 FOOD & DRINKS (selective favorites)
+  '🍕', '🍔', '🍟', '🌮', '🌯', '🥪', '🥗', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🍙', '🍚', '🥟', '🍤', '🦪', '🥘', '🫕', '🥫', '🍳', '🥚', '🧀', '🥓', '🥩', '🍗', '🍖', '🥞', '🧇', '🥐', '🥯', '🍞', '🥖', '🥨', '🧈',
+  
+  // 🍎 FRUITS (keeping sexy ones at front)
+  '🍎', '🍐', '🍊', '🍋', '🍉', '🍇', '🫐', '🍈', '🍑', '🥭', '🍍', '🥝', '🍅',
+  
+  // 🐱 CUTE ANIMALS
+  '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐰', '🐹', '🐭', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐔', '🐧', '🦆', '🦉', '🦇', '🐺', '🐴', '🦄', '🐝', '🦋', '🐌', '🐞', '🐜', '🕷', '🦂', '🐢', '🐍', '🦎', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🐃',
+  
+  // ⚽ ACTIVITIES & SPORTS
+  '⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🥅', '⛳', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷', '⛸', '🥌', '🎿', '⛷', '🏂', '🏋️', '🤼', '🤸', '⛹️', '🤺', '🤾', '🏌️', '🏇', '🧘', '🏄', '🏊', '🤽', '🚣', '🧗', '🚵', '🚴', '🤹',
+  
+  // 🚗 TRAVEL & PLACES  
+  '🚗', '🚕', '🚙', '🚌', '🚎', '🏎', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '🛴', '🚲', '🛵', '🏍', '🛺', '🚁', '✈️', '🛫', '🛬', '🛩', '🚀', '🛸', '⛵', '🚤', '🛥', '🛳', '⚴', '🚢', '🏖', '🏝', '🏕', '🗻', '🏔', '❄️', '☀️', '🌤', '⛅', '🌦', '🌧', '⛈', '🌩', '🌨', '☁️', '🌪', '🌈', '☂️', '☔',
+  
+  // 📱 OBJECTS & TECH
+  '📱', '💻', '⌨️', '🖥', '🖨', '🖱', '📷', '📸', '📹', '🎥', '📽', '🎞', '📞', '☎️', '📺', '📻', '🎙', '⌚', '⏰', '⏲', '⏱', '🕰', '⌛', '⏳', '🔋', '🔌', '💡', '🔦', '🕯', '🧯', '💽', '💾', '💿', '📀', '📼', '📡',
+  
+  // 🎯 SYMBOLS & MISC
+  '☮️', '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑',
+  
+  // 🏁 FLAGS (minimal selection)
   '🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️'
 ];
 
@@ -896,283 +922,303 @@ export default function SellerMessagesPage() {
   const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
 
   return (
-    <RequireAuth role="seller">
-      {/* Top Padding */}
-      <div className="py-3 bg-black"></div>
-      
-      <div className="h-screen bg-black flex flex-col overflow-hidden">
-        <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-          {/* Left column - Message threads */}
-          <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
-            {/* Seller header */}
-            <div className="px-4 pt-4 pb-2">
-              <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
-                <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
-                {isAdmin ? 'Admin Messages' : 'My Messages'}
-              </h2>
-              <div className="flex space-x-2 mb-3">
-                <button 
-                  onClick={() => setFilterBy('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
-                    filterBy === 'all' 
-                      ? 'bg-[#ff950e] text-black' 
-                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                  }`}
-                >
-                  <Filter size={14} className="mr-1" />
-                  All Messages
-                </button>
-                <button 
-                  onClick={() => setFilterBy('unread')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
-                    filterBy === 'unread' 
-                      ? 'bg-[#ff950e] text-black' 
-                      : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
-                  }`}
-                >
-                  <BellRing size={14} className="mr-1" />
-                  Unread
-                  {totalUnreadCount > 0 && (
-                    <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
-                      {totalUnreadCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-            
-            {/* Search Bar */}
-            <div className="px-4 pb-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search Buyers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
-                />
-                <div className="absolute right-3 top-2.5 text-gray-400">
-                  <Search size={18} />
+    <BanCheck>
+      <RequireAuth role="seller">
+        {/* Top Padding */}
+        <div className="py-3 bg-black"></div>
+        
+        <div className="h-screen bg-black flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
+            {/* Left column - Message threads */}
+            <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
+              {/* Seller header */}
+              <div className="px-4 pt-4 pb-2">
+                <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
+                  <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
+                  {isAdmin ? 'Admin Messages' : 'My Messages'}
+                </h2>
+                <div className="flex space-x-2 mb-3">
+                  <button 
+                    onClick={() => setFilterBy('all')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
+                      filterBy === 'all' 
+                        ? 'bg-[#ff950e] text-black' 
+                        : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                    }`}
+                  >
+                    <Filter size={14} className="mr-1" />
+                    All Messages
+                  </button>
+                  <button 
+                    onClick={() => setFilterBy('unread')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition flex items-center ${
+                      filterBy === 'unread' 
+                        ? 'bg-[#ff950e] text-black' 
+                        : 'bg-[#1a1a1a] text-white hover:bg-[#222]'
+                    }`}
+                  >
+                    <BellRing size={14} className="mr-1" />
+                    Unread
+                    {totalUnreadCount > 0 && (
+                      <span className="ml-1 bg-[#ff950e] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold border border-black">
+                        {totalUnreadCount}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
-            </div>
-            
-            {/* Thread list */}
-            <div className="flex-1 overflow-y-auto bg-[#121212]">
-              {filteredAndSortedThreads.length === 0 ? (
-                <div className="p-4 text-center text-gray-400">
-                  No conversations found
+              
+              {/* Search Bar */}
+              <div className="px-4 pb-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search Buyers..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+                  />
+                  <div className="absolute right-3 top-2.5 text-gray-400">
+                    <Search size={18} />
+                  </div>
                 </div>
-              ) : (
-                filteredAndSortedThreads.map((buyer) => {
-                  const thread = threads[buyer];
-                  const lastMessage = lastMessages[buyer];
-                  const isActive = activeThread === buyer;
-                  const buyerProfile = buyerProfiles[buyer];
-                  
-                  return (
-                    <div 
-                      key={buyer}
-                      onClick={() => handleThreadSelect(buyer)}
-                      className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
-                        isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
-                      } transition-colors duration-150 ease-in-out`}
-                    >
-                      {/* Active indicator */}
-                      {isActive && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
-                      )}
-                      
-                      {/* Avatar with unread indicator */}
-                      <div className="relative mr-3">
-                        <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
-                          {buyerProfile?.pic ? (
-                            <img src={buyerProfile.pic} alt={buyer} className="w-full h-full object-cover" />
-                          ) : (
-                            getInitial(buyer)
-                          )}
+              </div>
+              
+              {/* Thread list */}
+              <div className="flex-1 overflow-y-auto bg-[#121212]">
+                {filteredAndSortedThreads.length === 0 ? (
+                  <div className="p-4 text-center text-gray-400">
+                    No conversations found
+                  </div>
+                ) : (
+                  filteredAndSortedThreads.map((buyer) => {
+                    const thread = threads[buyer];
+                    const lastMessage = lastMessages[buyer];
+                    const isActive = activeThread === buyer;
+                    const buyerProfile = buyerProfiles[buyer];
+                    
+                    return (
+                      <div 
+                        key={buyer}
+                        onClick={() => handleThreadSelect(buyer)}
+                        className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
+                          isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
+                        } transition-colors duration-150 ease-in-out`}
+                      >
+                        {/* Active indicator */}
+                        {isActive && (
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]"></div>
+                        )}
+                        
+                        {/* Avatar with unread indicator */}
+                        <div className="relative mr-3">
+                          <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
+                            {buyerProfile?.pic ? (
+                              <img src={buyerProfile.pic} alt={buyer} className="w-full h-full object-cover" />
+                            ) : (
+                              getInitial(buyer)
+                            )}
+                            
+                            {/* Verified badge if applicable */}
+                            {buyerProfile?.verified && (
+                              <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
+                                <BadgeCheck size={12} className="text-[#ff950e]" />
+                              </div>
+                            )}
+                          </div>
                           
-                          {/* Verified badge if applicable */}
-                          {buyerProfile?.verified && (
-                            <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
-                              <BadgeCheck size={12} className="text-[#ff950e]" />
+                          {/* Unread indicator */}
+                          {uiUnreadCounts[buyer] > 0 && (
+                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
+                              {uiUnreadCounts[buyer]}
                             </div>
                           )}
                         </div>
                         
-                        {/* Unread indicator */}
-                        {uiUnreadCounts[buyer] > 0 && (
-                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                            {uiUnreadCounts[buyer]}
+                        {/* Message preview */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between">
+                            <h3 className="font-bold text-white truncate">{buyer}</h3>
+                            <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
+                              <Clock size={12} className="mr-1" />
+                              {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-400 truncate">
+                            {lastMessage ? (
+                              lastMessage.type === 'customRequest' 
+                                ? '🛒 Custom Request'
+                                : lastMessage.type === 'image'
+                                  ? '📷 Image'
+                                  : lastMessage.content
+                            ) : ''}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            
+            {/* Right column - Active conversation */}
+            <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
+              {activeThread ? (
+                <>
+                  {/* Conversation header */}
+                  <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
+                    <div className="flex items-center">
+                      <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
+                        {buyerProfiles[activeThread]?.pic ? (
+                          <img src={buyerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitial(activeThread)
+                        )}
+                        
+                        {/* Verified badge if applicable */}
+                        {buyerProfiles[activeThread]?.verified && (
+                          <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
+                            <BadgeCheck size={12} className="text-[#ff950e]" />
                           </div>
                         )}
                       </div>
-                      
-                      {/* Message preview */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between">
-                          <h3 className="font-bold text-white truncate">{buyer}</h3>
-                          <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
-                            <Clock size={12} className="mr-1" />
-                            {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-400 truncate">
-                          {lastMessage ? (
-                            lastMessage.type === 'customRequest' 
-                              ? '🛒 Custom Request'
-                              : lastMessage.type === 'image'
-                                ? '📷 Image'
-                                : lastMessage.content
-                          ) : ''}
+                      <div>
+                        <h2 className="font-bold text-lg text-white">{activeThread}</h2>
+                        <p className="text-xs text-[#ff950e] flex items-center">
+                          <Sparkles size={12} className="mr-1 text-[#ff950e]" />
+                          Active now
                         </p>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-          
-          {/* Right column - Active conversation */}
-          <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
-            {activeThread ? (
-              <>
-                {/* Conversation header */}
-                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
-                  <div className="flex items-center">
-                    <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
-                      {buyerProfiles[activeThread]?.pic ? (
-                        <img src={buyerProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
-                      ) : (
-                        getInitial(activeThread)
-                      )}
-                      
-                      {/* Verified badge if applicable */}
-                      {buyerProfiles[activeThread]?.verified && (
-                        <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
-                          <BadgeCheck size={12} className="text-[#ff950e]" />
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <h2 className="font-bold text-lg text-white">{activeThread}</h2>
-                      <p className="text-xs text-[#ff950e] flex items-center">
-                        <Sparkles size={12} className="mr-1 text-[#ff950e]" />
-                        Active now
-                      </p>
+                    
+                    <div className="flex space-x-2 text-white">
+                      <button 
+                        onClick={handleReport}
+                        disabled={isUserReported}
+                        className={`px-3 py-1 text-xs border rounded flex items-center ${
+                          isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                        } transition-colors duration-150`}
+                      >
+                        <AlertTriangle size={12} className="mr-1" />
+                        {isUserReported ? 'Reported' : 'Report'}
+                      </button>
+                      <button
+                        onClick={handleBlockToggle}
+                        className={`px-3 py-1 text-xs border rounded flex items-center ${
+                          isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
+                        } transition-colors duration-150`}
+                      >
+                        <ShieldAlert size={12} className="mr-1" />
+                        {isUserBlocked ? 'Unblock' : 'Block'}
+                      </button>
                     </div>
                   </div>
                   
-                  <div className="flex space-x-2 text-white">
-                    <button 
-                      onClick={handleReport}
-                      disabled={isUserReported}
-                      className={`px-3 py-1 text-xs border rounded flex items-center ${
-                        isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-                      } transition-colors duration-150`}
-                    >
-                      <AlertTriangle size={12} className="mr-1" />
-                      {isUserReported ? 'Reported' : 'Report'}
-                    </button>
-                    <button
-                      onClick={handleBlockToggle}
-                      className={`px-3 py-1 text-xs border rounded flex items-center ${
-                        isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-                      } transition-colors duration-150`}
-                    >
-                      <ShieldAlert size={12} className="mr-1" />
-                      {isUserBlocked ? 'Unblock' : 'Block'}
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Messages */}
-                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-[#121212]">
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    {threadMessages.map((msg, index) => {
-                      const isFromMe = msg.sender === user?.username;
+                  {/* Messages */}
+                  <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+                    <div className="max-w-3xl mx-auto space-y-4">
+                      {threadMessages.map((msg, index) => {
+                        const isFromMe = msg.sender === user?.username;
+                        
+                        let customReq: any = undefined;
+                        let metaId: string | undefined = undefined;
+                        if (
+                          msg.type === 'customRequest' &&
+                          typeof msg.meta === 'object' &&
+                          msg.meta !== null &&
+                          'id' in msg.meta &&
+                          typeof (msg.meta as any).id === 'string'
+                        ) {
+                          metaId = (msg.meta as any).id as string;
+                          customReq = sellerRequests.find((r) => r.id === metaId);
+                        }
+
+                        const isLatestCustom =
+                          !!customReq &&
+                          (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+                          index === (threadMessages.length - 1) &&
+                          msg.type === 'customRequest';
+
+                        const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
+
+                        const showActionButtons =
+                          !!customReq &&
+                          isLatestCustom &&
+                          customReq.status === 'pending' &&
+                          !isLastEditor(customReq);
+                        
+                        return (
+                          <MessageItem
+                            key={index}
+                            msg={msg}
+                            index={index}
+                            isFromMe={isFromMe}
+                            user={user}
+                            activeThread={activeThread}
+                            onMessageVisible={handleMessageVisible}
+                            customReq={customReq}
+                            isLatestCustom={isLatestCustom}
+                            isPaid={isPaid}
+                            showActionButtons={showActionButtons}
+                            handleAccept={handleAccept}
+                            handleDecline={handleDecline}
+                            handleEditRequest={handleEditRequest}
+                            editRequestId={editRequestId}
+                            editTitle={editTitle}
+                            setEditTitle={setEditTitle}
+                            editPrice={editPrice}
+                            setEditPrice={setEditPrice}
+                            editMessage={editMessage}
+                            setEditMessage={setEditMessage}
+                            handleEditSubmit={handleEditSubmit}
+                            setEditRequestId={setEditRequestId}
+                            statusBadge={statusBadge}
+                            setPreviewImage={setPreviewImage}
+                          />
+                        );
+                      })}
                       
-                      let customReq: any = undefined;
-                      let metaId: string | undefined = undefined;
-                      if (
-                        msg.type === 'customRequest' &&
-                        typeof msg.meta === 'object' &&
-                        msg.meta !== null &&
-                        'id' in msg.meta &&
-                        typeof (msg.meta as any).id === 'string'
-                      ) {
-                        metaId = (msg.meta as any).id as string;
-                        customReq = sellerRequests.find((r) => r.id === metaId);
-                      }
-
-                      const isLatestCustom =
-                        !!customReq &&
-                        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
-                        index === (threadMessages.length - 1) &&
-                        msg.type === 'customRequest';
-
-                      const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
-
-                      const showActionButtons =
-                        !!customReq &&
-                        isLatestCustom &&
-                        customReq.status === 'pending' &&
-                        !isLastEditor(customReq);
-                      
-                      return (
-                        <MessageItem
-                          key={index}
-                          msg={msg}
-                          index={index}
-                          isFromMe={isFromMe}
-                          user={user}
-                          activeThread={activeThread}
-                          onMessageVisible={handleMessageVisible}
-                          customReq={customReq}
-                          isLatestCustom={isLatestCustom}
-                          isPaid={isPaid}
-                          showActionButtons={showActionButtons}
-                          handleAccept={handleAccept}
-                          handleDecline={handleDecline}
-                          handleEditRequest={handleEditRequest}
-                          editRequestId={editRequestId}
-                          editTitle={editTitle}
-                          setEditTitle={setEditTitle}
-                          editPrice={editPrice}
-                          setEditPrice={setEditPrice}
-                          editMessage={editMessage}
-                          setEditMessage={setEditMessage}
-                          handleEditSubmit={handleEditSubmit}
-                          setEditRequestId={setEditRequestId}
-                          statusBadge={statusBadge}
-                          setPreviewImage={setPreviewImage}
-                        />
-                      );
-                    })}
-                    
-                    {/* Auto-scroll anchor */}
-                    <div ref={messagesEndRef} />
+                      {/* Auto-scroll anchor */}
+                      <div ref={messagesEndRef} />
+                    </div>
                   </div>
-                </div>
-                
-                {/* Message input and emoji picker */}
-                {!isUserBlocked && (
-                  <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
-                    {/* Emoji Picker - position ABOVE the input */}
-                    {showEmojiPicker && (
-                      <div 
-                        ref={emojiPickerRef}
-                        className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
-                      >
-                        {/* Recent Emojis Section */}
-                        {recentEmojis.length > 0 && (
-                          <div className="px-3 pt-3">
-                            <div className="text-xs text-gray-400 mb-2">Recent</div>
-                            <div className="grid grid-cols-8 gap-1 mb-3">
-                              {recentEmojis.slice(0, 16).map((emoji, index) => (
+                  
+                  {/* Message input and emoji picker */}
+                  {!isUserBlocked && (
+                    <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+                      {/* Emoji Picker - position ABOVE the input */}
+                      {showEmojiPicker && (
+                        <div 
+                          ref={emojiPickerRef}
+                          className="absolute left-0 right-0 mx-4 bottom-full mb-2 bg-black border border-gray-800 shadow-lg z-50 rounded-lg overflow-hidden"
+                        >
+                          {/* Recent Emojis Section */}
+                          {recentEmojis.length > 0 && (
+                            <div className="px-3 pt-3">
+                              <div className="text-xs text-gray-400 mb-2">Recent</div>
+                              <div className="grid grid-cols-8 gap-1 mb-3">
+                                {recentEmojis.slice(0, 16).map((emoji, index) => (
+                                  <span
+                                    key={`recent-${index}`}
+                                    onClick={() => handleEmojiClick(emoji)}
+                                    className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
+                                  >
+                                    {emoji}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* All Emojis */}
+                          <div className="px-3 pt-2 pb-3">
+                            {recentEmojis.length > 0 && (
+                              <div className="text-xs text-gray-400 mb-2">All Emojis</div>
+                            )}
+                            <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
+                              {ALL_EMOJIS.map((emoji, index) => (
                                 <span
-                                  key={`recent-${index}`}
+                                  key={`emoji-${index}`}
                                   onClick={() => handleEmojiClick(emoji)}
                                   className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
                                 >
@@ -1181,205 +1227,187 @@ export default function SellerMessagesPage() {
                               ))}
                             </div>
                           </div>
-                        )}
-                        
-                        {/* All Emojis */}
-                        <div className="px-3 pt-2 pb-3">
-                          {recentEmojis.length > 0 && (
-                            <div className="text-xs text-gray-400 mb-2">All Emojis</div>
-                          )}
-                          <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
-                            {ALL_EMOJIS.map((emoji, index) => (
-                              <span
-                                key={`emoji-${index}`}
-                                onClick={() => handleEmojiClick(emoji)}
-                                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
-                              >
-                                {emoji}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Selected image preview */}
-                    {selectedImage && (
-                      <div className="px-4 pt-3 pb-2">
-                        <div className="relative inline-block">
-                          <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
-                          <button
-                            onClick={() => {
-                              setSelectedImage(null);
-                              if (fileInputRef.current) {
-                                fileInputRef.current.value = '';
-                              }
-                            }}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs shadow-md transform transition-transform hover:scale-110"
-                            style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Image loading and error states */}
-                    {isImageLoading && (
-                      <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
-                        Loading image...
-                      </div>
-                    )}
-                    
-                    {imageError && (
-                      <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
-                        <AlertTriangle size={14} className="mr-1" />
-                        {imageError}
-                      </div>
-                    )}
-                    
-                    {/* Message input */}
-                    <div className="px-4 py-3">
-                      <div className="relative mb-2">
-                        <textarea
-                          ref={inputRef}
-                          value={replyMessage}
-                          onChange={(e) => setReplyMessage(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                          className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
-                          rows={1}
-                          maxLength={250}
-                        />
-                        
-                        {/* Fixed emoji button position */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowEmojiPicker(!showEmojiPicker);
-                          }}
-                          className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-                            showEmojiPicker 
-                              ? 'bg-[#ff950e] text-black' 
-                              : 'text-[#ff950e] hover:bg-[#333]'
-                          } transition-colors duration-150`}
-                          title="Emoji"
-                          type="button"
-                        >
-                          <Smile size={20} className="flex-shrink-0" />
-                        </button>
-                      </div>
-                      
-                      {/* Character count */}
-                      {replyMessage.length > 0 && (
-                        <div className="text-xs text-gray-400 mb-2 text-right">
-                          {replyMessage.length}/250
                         </div>
                       )}
                       
-                      {/* Bottom row with attachment and send buttons - UPDATED WITH CUSTOM ICONS */}
-                      <div className="flex justify-between items-center">
-                        {/* Attachment button - Left aligned with vertical adjustment */}
-                        <img 
-                          src="/Attach_Image_Icon.png" 
-                          alt="Attach Image" 
-                          className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                            isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
-                          onClick={(e) => {
-                            if (isImageLoading) return;
-                            e.stopPropagation();
-                            triggerFileInput();
-                          }}
-                          title="Attach Image"
-                        />
+                      {/* Selected image preview */}
+                      {selectedImage && (
+                        <div className="px-4 pt-3 pb-2">
+                          <div className="relative inline-block">
+                            <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
+                            <button
+                              onClick={() => {
+                                setSelectedImage(null);
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = '';
+                                }
+                              }}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs shadow-md transform transition-transform hover:scale-110"
+                              style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Image loading and error states */}
+                      {isImageLoading && (
+                        <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
+                          Loading image...
+                        </div>
+                      )}
+                      
+                      {imageError && (
+                        <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
+                          <AlertTriangle size={14} className="mr-1" />
+                          {imageError}
+                        </div>
+                      )}
+                      
+                      {/* Message input */}
+                      <div className="px-4 py-3">
+                        <div className="relative mb-2">
+                          <textarea
+                            ref={inputRef}
+                            value={replyMessage}
+                            onChange={(e) => setReplyMessage(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder={selectedImage ? "Add a caption..." : "Type a message"}
+                            className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+                            rows={1}
+                            maxLength={250}
+                          />
+                          
+                          {/* Fixed emoji button position */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowEmojiPicker(!showEmojiPicker);
+                            }}
+                            className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
+                              showEmojiPicker 
+                                ? 'bg-[#ff950e] text-black' 
+                                : 'text-[#ff950e] hover:bg-[#333]'
+                            } transition-colors duration-150`}
+                            title="Emoji"
+                            type="button"
+                          >
+                            <Smile size={20} className="flex-shrink-0" />
+                          </button>
+                        </div>
                         
-                        {/* Hidden file input */}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/gif,image/webp"
-                          ref={fileInputRef}
-                          style={{ display: 'none' }}
-                          onChange={handleImageSelect}
-                        />
+                        {/* Character count */}
+                        {replyMessage.length > 0 && (
+                          <div className="text-xs text-gray-400 mb-2 text-right">
+                            {replyMessage.length}/250
+                          </div>
+                        )}
                         
-                        {/* Send Button - Right aligned - REPLACED WITH IMAGE */}
-                        <img
-                          src="/Send_Button.png"
-                          alt="Send"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReply();
-                          }}
-                          className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
-                            (!replyMessage.trim() && !selectedImage) || isImageLoading
-                              ? 'opacity-50 cursor-not-allowed'
-                              : ''
-                          }`}
-                          style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
-                        />
+                        {/* Bottom row with attachment and send buttons - UPDATED WITH CUSTOM ICONS */}
+                        <div className="flex justify-between items-center">
+                          {/* Attachment button - Left aligned with vertical adjustment */}
+                          <img 
+                            src="/Attach_Image_Icon.png" 
+                            alt="Attach Image" 
+                            className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
+                              isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                            onClick={(e) => {
+                              if (isImageLoading) return;
+                              e.stopPropagation();
+                              triggerFileInput();
+                            }}
+                            title="Attach Image"
+                          />
+                          
+                          {/* Hidden file input */}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={handleImageSelect}
+                          />
+                          
+                          {/* Send Button - Right aligned - REPLACED WITH IMAGE */}
+                          <img
+                            src="/Send_Button.png"
+                            alt="Send"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReply();
+                            }}
+                            className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
+                              (!replyMessage.trim() && !selectedImage) || isImageLoading
+                                ? 'opacity-50 cursor-not-allowed'
+                                : ''
+                            }`}
+                            style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
+                          />
+                        </div>
                       </div>
                     </div>
+                  )}
+                  
+                  {isUserBlocked && (
+                    <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+                      <ShieldAlert size={16} className="mr-2" />
+                      You have blocked this buyer
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBlockToggle();
+                        }}
+                        className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
+                      >
+                        Unblock
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-gray-400">
+                  <div className="text-center p-4">
+                    <div className="flex justify-center mb-4">
+                      <MessageCircle size={64} className="text-gray-600" />
+                    </div>
+                    <p className="text-xl mb-2">Select a conversation to view messages</p>
+                    <p className="text-sm">Your messages will appear here</p>
                   </div>
-                )}
-                
-                {isUserBlocked && (
-                  <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
-                    <ShieldAlert size={16} className="mr-2" />
-                    You have blocked this buyer
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleBlockToggle();
-                      }}
-                      className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
-                    >
-                      Unblock
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400">
-                <div className="text-center p-4">
-                  <div className="flex justify-center mb-4">
-                    <MessageCircle size={64} className="text-gray-600" />
-                  </div>
-                  <p className="text-xl mb-2">Select a conversation to view messages</p>
-                  <p className="text-sm">Your messages will appear here</p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+          
+          {/* Bottom Padding */}
+          <div className="py-6 bg-black"></div>
+          
+          <style jsx global>{`
+            .emoji-button::before {
+              content: "";
+              display: block;
+              position: absolute;
+              width: 100%;
+              height: 100%;
+              border-radius: 50%;
+              background-color: black;
+              z-index: -1;
+            }
+            .emoji-button {
+              position: relative;
+              z-index: 1;
+            }
+          `}</style>
+          
+          {/* Image Preview Modal */}
+          <ImagePreviewModal
+            imageUrl={previewImage || ''}
+            isOpen={!!previewImage}
+            onClose={() => setPreviewImage(null)}
+          />
         </div>
-        
-        {/* Bottom Padding */}
-        <div className="py-6 bg-black"></div>
-        
-        <style jsx global>{`
-          .emoji-button::before {
-            content: "";
-            display: block;
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background-color: black;
-            z-index: -1;
-          }
-          .emoji-button {
-            position: relative;
-            z-index: 1;
-          }
-        `}</style>
-        
-        {/* Image Preview Modal */}
-        <ImagePreviewModal
-          imageUrl={previewImage || ''}
-          isOpen={!!previewImage}
-          onClose={() => setPreviewImage(null)}
-        />
-      </div>
-    </RequireAuth>
+      </RequireAuth>
+    </BanCheck>
   );
 }
