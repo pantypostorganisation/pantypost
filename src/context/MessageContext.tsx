@@ -17,6 +17,12 @@ const TRUSTED_IMAGE_DOMAINS = [
   // 'images.pantypost.com'
 ];
 
+// For development, we'll be more permissive
+const isDevelopment = typeof window !== 'undefined' && 
+                     (window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1' ||
+                      window.location.hostname.includes('localhost'));
+
 // Sanitization utilities
 const sanitizeString = (str: string): string => {
   if (typeof str !== 'string') return '';
@@ -98,6 +104,12 @@ const sanitizeImageUrl = (url: string): string => {
       if (estimatedSize < MIN_IMAGE_SIZE) {
         console.warn(`Image too small: estimated ${estimatedSize} bytes`);
         return '';
+      }
+      
+      // In development mode, skip detailed binary validation
+      if (isDevelopment) {
+        console.log('[DEV MODE] Skipping detailed image binary validation');
+        return url;
       }
       
       // Decode and validate image header
@@ -294,9 +306,14 @@ const sanitizeImageUrl = (url: string): string => {
         return hostname === domain || hostname.endsWith(`.${domain}`);
       });
       
-      if (!isTrusted) {
+      if (!isTrusted && !isDevelopment) {
         console.warn(`Untrusted image domain: ${hostname}`);
         return '';
+      }
+      
+      // In development, show warning but allow the image
+      if (!isTrusted && isDevelopment) {
+        console.warn(`[DEV MODE] Allowing untrusted image domain: ${hostname}`);
       }
       
       // Validate path doesn't contain suspicious patterns
@@ -462,10 +479,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         imageUrl: options.meta.imageUrl ? sanitizeImageUrl(options.meta.imageUrl) : undefined,
       };
       
-      // If image validation failed, don't send the message
+      // If image validation failed, log warning but still send in development
       if (options.meta.imageUrl && !sanitizedMeta.imageUrl) {
-        console.error('Image validation failed, message not sent');
-        return;
+        if (isDevelopment) {
+          console.warn('Image validation failed in development mode, sending anyway');
+          // In development, use the original URL even if validation failed
+          sanitizedMeta.imageUrl = options.meta.imageUrl;
+        } else {
+          console.error('Image validation failed, message not sent');
+          return;
+        }
       }
     }
 
