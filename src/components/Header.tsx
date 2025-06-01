@@ -30,7 +30,7 @@ import { usePathname } from 'next/navigation';
 export default function Header() {
   const pathname = usePathname();
   
-  // Don't render header on auth pages - MOVE THIS TO THE TOP BEFORE ANY OTHER HOOKS
+  // Don't render header on auth pages
   if (pathname === '/login' || pathname === '/signup') {
     return null;
   }
@@ -45,19 +45,32 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceKey, setBalanceKey] = useState(0);
-  const [messageCounterUpdate, setMessageCounterUpdate] = useState(0); // Force message counter updates
+  const [messageCounterUpdate, setMessageCounterUpdate] = useState(0);
   
   // Store readThreads in a ref to track which conversations have been viewed
   const readThreadsRef = useRef<Set<string>>(new Set());
   const notifRef = useRef<HTMLDivElement>(null);
   
-  // For balance polling - ref to avoid re-creating the interval
-  const balancePollingRef = useRef<NodeJS.Timeout | null>(null);
-  // Store last update time to prevent too frequent updates
-  const lastBalanceUpdateRef = useRef<number>(0);
+  // Use refs to track intervals and cleanup state
+  const intervalRefsRef = useRef<{
+    auction: NodeJS.Timeout | null;
+    balance: NodeJS.Timeout | null;
+  }>({
+    auction: null,
+    balance: null
+  });
   
-  // FIXED: Remove isMountedRef and use cleanup properly
-  const cleanupFunctionsRef = useRef<(() => void)[]>([]);
+  // Track component mount state
+  const isMountedRef = useRef(true);
+  
+  // Store last update times to prevent rapid updates
+  const lastUpdateRef = useRef<{
+    balance: number;
+    auction: number;
+  }>({
+    balance: 0,
+    auction: 0
+  });
 
   const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
@@ -224,7 +237,7 @@ export default function Header() {
     }
   }, [mounted, user]);
 
-  // FIXED: Calculate total unread messages correctly with proper thread tracking
+  // Calculate total unread messages correctly with proper thread tracking
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
     
@@ -256,117 +269,117 @@ export default function Header() {
         (msg) => !msg.read && msg.sender === otherUser && msg.receiver === user.username
       ).length;
       
-      // FIXED: Don't use readThreadsRef to filter here - only use actual message read status
-      // The readThreadsRef should only be used in the message pages for UI display
       if (threadUnreadCount > 0) {
-        totalUnreadCount += threadUnreadCount; // Count actual unread messages
+        totalUnreadCount += threadUnreadCount;
       }
     });
     
     return totalUnreadCount;
-  }, [user, messages, messageCounterUpdate]); // Include messageCounterUpdate as dependency
+  }, [user, messages, messageCounterUpdate]);
 
-  // Function to force update balances - with rate limiting to prevent infinite loops
+  // Function to force update balances with rate limiting
   const forceUpdateBalances = useCallback(() => {
-    const now = Date.now();
-    // Only update if at least 500ms have passed since last update
-    if (now - lastBalanceUpdateRef.current >= 500 && mounted) {
-      lastBalanceUpdateRef.current = now;
-      setBalanceKey(prev => prev + 1);
-    }
-  }, [mounted]);
-
-  // Enhanced auction check function that updates balances immediately after checking
-  const checkAuctionsAndUpdateBalances = useCallback(() => {
-    // Default to false
-    let auctionsEnded = false;
+    if (!isMountedRef.current) return;
     
-    if (typeof checkEndedAuctions === 'function') {
-      try {
-        // Since TypeScript thinks checkEndedAuctions returns void,
-        // we need to call it without assuming a return value
-        checkEndedAuctions();
-        
-        // For now, we'll just force a balance update when auctions are checked
-        // This is a workaround since we can't reliably determine if auctions ended
-        forceUpdateBalances();
-        
-        // Since we can't actually determine if auctions ended from the return value,
-        // we'll just assume they did for now (this could be refined later)
-        auctionsEnded = true;
-      } catch (err) {
-        console.error('Error checking ended auctions:', err);
-      }
+    const now = Date.now();
+    const minInterval = 1000; // Minimum 1 second between updates
+    
+    if (now - lastUpdateRef.current.balance < minInterval) {
+      return; // Skip if too soon
     }
-    return auctionsEnded;
+    
+    lastUpdateRef.current.balance = now;
+    setBalanceKey(prev => prev + 1);
+  }, []);
+
+  // Enhanced auction check function with rate limiting
+  const checkAuctionsAndUpdateBalances = useCallback(() => {
+    if (!isMountedRef.current) return;
+    
+    const now = Date.now();
+    const minInterval = 5000; // Minimum 5 seconds between auction checks
+    
+    if (now - lastUpdateRef.current.auction < minInterval) {
+      return; // Skip if too soon
+    }
+    
+    lastUpdateRef.current.auction = now;
+    
+    try {
+      if (typeof checkEndedAuctions === 'function') {
+        checkEndedAuctions();
+        // Update balances after auction check
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            forceUpdateBalances();
+          }
+        }, 500); // Small delay to ensure auction processing completes
+      }
+    } catch (err) {
+      console.error('Error checking ended auctions:', err);
+    }
   }, [checkEndedAuctions, forceUpdateBalances]);
 
-  // Set up auction checking with immediate balance updates
+  // Clear all intervals helper
+  const clearAllIntervals = useCallback(() => {
+    if (intervalRefsRef.current.auction) {
+      clearInterval(intervalRefsRef.current.auction);
+      intervalRefsRef.current.auction = null;
+    }
+    if (intervalRefsRef.current.balance) {
+      clearInterval(intervalRefsRef.current.balance);
+      intervalRefsRef.current.balance = null;
+    }
+  }, []);
+
+  // Set up auction checking with proper cleanup
   useEffect(() => {
     if (!mounted) return;
     
-    let auctionCheckInterval: NodeJS.Timeout | null = null;
+    // Clear any existing intervals first
+    clearAllIntervals();
     
     // Initial check on mount
-    if (mounted && typeof checkEndedAuctions === 'function') {
-      try {
+    checkAuctionsAndUpdateBalances();
+    
+    // Set up polling with tracked interval
+    intervalRefsRef.current.auction = setInterval(() => {
+      if (isMountedRef.current) {
         checkAuctionsAndUpdateBalances();
-      } catch (err) {
-        console.error('Error during initial auction check:', err);
       }
-    }
+    }, 30000); // Check every 30 seconds
     
-    // Set up polling that's less frequent to avoid rapid successive updates
-    auctionCheckInterval = setInterval(() => {
-      if (mounted && typeof checkEndedAuctions === 'function') {
-        try {
-          checkAuctionsAndUpdateBalances();
-        } catch (err) {
-          console.error('Error during auction check interval:', err);
-        }
-      }
-    }, 10000); // Check every 10 seconds instead of 3 seconds
-    
-    // FIXED: Proper cleanup
-    const cleanup = () => {
-      if (auctionCheckInterval) {
-        clearInterval(auctionCheckInterval);
+    return () => {
+      if (intervalRefsRef.current.auction) {
+        clearInterval(intervalRefsRef.current.auction);
+        intervalRefsRef.current.auction = null;
       }
     };
-    
-    cleanupFunctionsRef.current.push(cleanup);
-    
-    return cleanup;
-  }, [mounted, checkAuctionsAndUpdateBalances, checkEndedAuctions]);
+  }, [mounted, checkAuctionsAndUpdateBalances, clearAllIntervals]);
 
-  // Set up balance polling with rate limiting
+  // Set up balance polling with proper cleanup
   useEffect(() => {
     if (!mounted || !username) return;
     
-    // Clear any existing polling
-    if (balancePollingRef.current) {
-      clearInterval(balancePollingRef.current);
-      balancePollingRef.current = null;
+    // Clear any existing balance interval
+    if (intervalRefsRef.current.balance) {
+      clearInterval(intervalRefsRef.current.balance);
+      intervalRefsRef.current.balance = null;
     }
     
-    // Start polling balances less frequently
-    balancePollingRef.current = setInterval(() => {
-      if (mounted) {
+    // Start polling balances
+    intervalRefsRef.current.balance = setInterval(() => {
+      if (isMountedRef.current) {
         forceUpdateBalances();
       }
-    }, 5000); // Poll every 5 seconds instead of every second
+    }, 10000); // Poll every 10 seconds
     
-    // FIXED: Proper cleanup
-    const cleanup = () => {
-      if (balancePollingRef.current) {
-        clearInterval(balancePollingRef.current);
-        balancePollingRef.current = null;
+    return () => {
+      if (intervalRefsRef.current.balance) {
+        clearInterval(intervalRefsRef.current.balance);
+        intervalRefsRef.current.balance = null;
       }
     };
-    
-    cleanupFunctionsRef.current.push(cleanup);
-    
-    return cleanup;
   }, [mounted, username, forceUpdateBalances]);
 
   // Calculate pending orders count
@@ -398,7 +411,7 @@ export default function Header() {
 
   // Extract report count updating to a stable callback
   const updateReportCount = useCallback(() => {
-    if (typeof window !== 'undefined' && isAdminUser && mounted) {
+    if (typeof window !== 'undefined' && isAdminUser && mounted && isMountedRef.current) {
       try {
         const count = typeof getReportCount === 'function' ? getReportCount() : 0;
         setReportCount(count);
@@ -408,13 +421,13 @@ export default function Header() {
     }
   }, [isAdminUser, mounted]);
 
-  // Listen for read threads updates and storage changes - REMOVED readThreadsRef updates
+  // Listen for read threads updates and storage changes
   useEffect(() => {
     if (!mounted || !user) return;
     
     // Handle when localStorage changes in another tab/window
     const handleStorageChange = (event: StorageEvent) => {
-      if (!mounted || !user) return;
+      if (!isMountedRef.current || !user) return;
       
       if (event.key?.startsWith('panty_read_threads_')) {
         const readThreadsKey = `panty_read_threads_${user.username}`;
@@ -423,7 +436,7 @@ export default function Header() {
             const newValue = JSON.parse(event.newValue);
             if (Array.isArray(newValue)) {
               readThreadsRef.current = new Set(newValue);
-              setMessageCounterUpdate(prev => prev + 1); // Trigger message count update
+              setMessageCounterUpdate(prev => prev + 1);
             }
           } catch (e) {
             console.error('Failed to parse updated read threads', e);
@@ -434,37 +447,25 @@ export default function Header() {
 
     window.addEventListener('storage', handleStorageChange);
     
-    // FIXED: Proper cleanup
-    const cleanup = () => {
+    return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-    
-    cleanupFunctionsRef.current.push(cleanup);
-    
-    return cleanup;
   }, [mounted, user]);
 
-  // Initial load and event setup
+  // Initial load and event setup with comprehensive cleanup
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    let isMounted = true;
-    
-    // FIXED: Remove global isMountedRef
+    // Set mounted state
     setMounted(true);
+    isMountedRef.current = true;
     
-    // Only call updateReportCount if it's a valid function
-    if (typeof updateReportCount === 'function' && isMounted) {
-      try {
-        updateReportCount();
-      } catch (err) {
-        console.error('Error updating report count:', err);
-      }
-    }
+    // Initial report count update
+    updateReportCount();
     
     // Event handlers
     const handleUpdateReports = () => {
-      if (isMounted) {
+      if (isMountedRef.current) {
         updateReportCount();
       }
     };
@@ -475,59 +476,63 @@ export default function Header() {
       }
     };
     
-    // Custom auction end event listener - with rate limiting
+    // Custom auction end event listener with rate limiting
     const handleAuctionEnd = () => {
+      if (!isMountedRef.current) return;
+      
       const now = Date.now();
-      if (now - lastBalanceUpdateRef.current >= 500 && isMounted) {
-        lastBalanceUpdateRef.current = now;
+      if (now - lastUpdateRef.current.balance >= 1000) {
+        lastUpdateRef.current.balance = now;
         forceUpdateBalances();
       }
     };
     
+    // Add event listeners
     window.addEventListener('updateReports', handleUpdateReports);
     document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('auctionEnded', handleAuctionEnd);
 
-    // FIXED: Comprehensive cleanup
-    const cleanup = () => {
-      isMounted = false;
+    // Comprehensive cleanup
+    return () => {
+      isMountedRef.current = false;
+      
+      // Clear all intervals
+      clearAllIntervals();
+      
+      // Remove event listeners
       window.removeEventListener('updateReports', handleUpdateReports);
       window.removeEventListener('auctionEnded', handleAuctionEnd);
       document.removeEventListener('mousedown', handleClickOutside);
       
-      // Call all accumulated cleanup functions
-      cleanupFunctionsRef.current.forEach(fn => fn());
-      cleanupFunctionsRef.current = [];
+      // Clean up global function
+      if (typeof window !== 'undefined' && (window as any).forceUpdateBalances) {
+        delete (window as any).forceUpdateBalances;
+      }
     };
+  }, [updateReportCount, forceUpdateBalances, clearAllIntervals]);
 
-    return cleanup;
-  }, [updateReportCount, forceUpdateBalances]);
-
-  // Add this to window with rate limiting
+  // Add global balance update function with rate limiting
   useEffect(() => {
     if (!mounted || typeof window === 'undefined') return;
     
     // Create a rate limited version for the global function
     const rateLimitedBalanceUpdate = () => {
+      if (!isMountedRef.current) return;
+      
       const now = Date.now();
-      if (now - lastBalanceUpdateRef.current >= 500 && mounted) {
-        lastBalanceUpdateRef.current = now;
+      if (now - lastUpdateRef.current.balance >= 1000) {
+        lastUpdateRef.current.balance = now;
         setBalanceKey(prev => prev + 1);
       }
     };
     
     (window as any).forceUpdateBalances = rateLimitedBalanceUpdate;
     
-    // FIXED: Proper cleanup
-    const cleanup = () => {
-      if (typeof window !== 'undefined') {
+    return () => {
+      if (typeof window !== 'undefined' && (window as any).forceUpdateBalances) {
         delete (window as any).forceUpdateBalances;
       }
     };
-    
-    cleanupFunctionsRef.current.push(cleanup);
-    
-    return cleanup;
   }, [mounted]);
 
   // Reset to active tab when dropdown opens
@@ -585,7 +590,6 @@ export default function Header() {
             <Link href="/admin/messages" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs relative">
               <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
               <span>Messages</span>
-              {/* Show unread count for admin messages - always show unless count is 0 */}
               {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                   {unreadCount}
@@ -637,7 +641,6 @@ export default function Header() {
                 <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Messages</span>
               </div>
-              {/* FIXED: Show unread count properly for sellers - always show unless count is 0 */}
               {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                   {unreadCount}
@@ -700,7 +703,6 @@ export default function Header() {
                   <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
                     <div className="flex justify-between items-center">
                       <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
-                      {/* Show "Clear All" button on Active tab, "Delete All" button on Cleared tab */}
                       {activeNotifTab === 'active' && activeNotifications.length > 0 && (
                         <button
                           onClick={clearAllNotifications}
@@ -753,7 +755,6 @@ export default function Header() {
                   {/* Notification Content */}
                   <ul className="divide-y divide-gray-800 max-h-64 overflow-y-auto">
                     {activeNotifTab === 'active' ? (
-                      // Active Notifications
                       activeNotifications.length === 0 ? (
                         <li className="p-4 text-sm text-center text-gray-400">No active notifications</li>
                       ) : (
@@ -779,7 +780,6 @@ export default function Header() {
                         ))
                       )
                     ) : (
-                      // Cleared Notifications
                       clearedNotifications.length === 0 ? (
                         <li className="p-4 text-sm text-center text-gray-400">No cleared notifications</li>
                       ) : (
@@ -848,7 +848,6 @@ export default function Header() {
                 <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Messages</span>
               </div>
-              {/* FIXED: Show unread count properly for buyers - always show unless count is 0 */}
               {unreadCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                   {unreadCount}
