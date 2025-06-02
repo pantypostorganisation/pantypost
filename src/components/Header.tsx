@@ -2,8 +2,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Import from AuthContext
 import { useListings } from '@/context/ListingContext';
+import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -36,7 +37,9 @@ export default function Header() {
     return null;
   }
 
-  const { user, logout, sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions, users } = useListings();
+  // ✅ FIXED: Get user from AuthContext, but seller notifications from ListingContext
+  const { user, logout } = useAuth();
+  const { sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions, users } = useListings();
   const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory, wallet } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();

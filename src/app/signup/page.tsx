@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useListings } from '@/context/ListingContext';
+import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Use AuthContext
+import { useListings } from '@/context/ListingContext'; // Keep for users check
 import { User, ShoppingBag, Lock, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -77,7 +78,8 @@ const FloatingParticle = ({ delay = 0 }) => {
 
 export default function SignupPage() {
   const router = useRouter();
-  const { login, isAuthReady, user, users } = useListings();
+  const { login, isAuthReady, user } = useAuth(); // ✅ FIXED: Use AuthContext
+  const { users } = useListings(); // Keep for checking existing users
   
   const [formData, setFormData] = useState<SignupFormData>({
     username: '',
@@ -217,7 +219,7 @@ export default function SignupPage() {
     return newErrors;
   };
   
-  const handleSubmit = (e: React.FormEvent): void => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
     const validationErrors = validateForm();
@@ -254,8 +256,13 @@ export default function SignupPage() {
       }
       
       // Call login with only the parameters it's expecting (username and role)
-      login(normalizedUsername, formData.role as UserRole);
-      router.push('/');
+      const success = await login(normalizedUsername, formData.role as UserRole);
+      
+      if (success) {
+        router.push('/');
+      } else {
+        setErrors({ form: 'Registration failed. Please try again.' });
+      }
     } catch (error: any) {
       console.error('Signup error:', error);
       setErrors({ 

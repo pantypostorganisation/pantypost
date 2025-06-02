@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useListings } from '@/context/ListingContext';
+import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Use AuthContext
 import { User, ShoppingBag, Crown, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
@@ -125,7 +125,7 @@ const FloatingParticle = ({ delay = 0, index = 0 }) => {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isAuthReady, user } = useListings();
+  const { login, isAuthReady, user } = useAuth(); // ✅ FIXED: Use AuthContext
 
   const [username, setUsername] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
@@ -164,13 +164,17 @@ export default function LoginPage() {
       await new Promise(resolve => setTimeout(resolve, 800));
       
       // Perform login
-      login(username.trim(), role);
+      const success = await login(username.trim(), role);
       
-      // Add a small delay to ensure login context updates
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Force redirect to home page
-      router.push('/');
+      if (success) {
+        // Add a small delay to ensure login context updates
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Force redirect to home page
+        router.push('/');
+      } else {
+        setError('Login failed. Please try again.');
+      }
     } catch (error) {
       console.error('Login error:', error);
       setError('Login failed. Please try again.');

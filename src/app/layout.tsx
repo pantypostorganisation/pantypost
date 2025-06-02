@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';  // ✅ ADD THIS
 import { ListingProvider } from '@/context/ListingContext';
 import { MessageProvider } from '@/context/MessageContext';
 import { WalletProvider } from '@/context/WalletContext';
@@ -31,23 +32,25 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} bg-black text-white min-h-screen`}>
         <ErrorBoundary>
-          <WalletProvider>  {/* ✅ Move this FIRST */}
-            <BanProvider>
-              <ListingProvider>  {/* ✅ Now this can use useWallet */}
-                <MessageProvider>
-                  <RequestProvider>
-                    <ReviewProvider>
-                      <BanCheck>
-                        <AgeVerificationModal />
-                        <Header />
-                        {children}
-                      </BanCheck>
-                    </ReviewProvider>
-                  </RequestProvider>
-                </MessageProvider>
-              </ListingProvider>
-            </BanProvider>
-          </WalletProvider>
+          <AuthProvider>  {/* ✅ AUTH MUST BE FIRST - Everything depends on it */}
+            <WalletProvider>
+              <BanProvider>
+                <ListingProvider>
+                  <MessageProvider>
+                    <RequestProvider>
+                      <ReviewProvider>
+                        <BanCheck>
+                          <AgeVerificationModal />
+                          <Header />
+                          {children}
+                        </BanCheck>
+                      </ReviewProvider>
+                    </RequestProvider>
+                  </MessageProvider>
+                </ListingProvider>
+              </BanProvider>
+            </WalletProvider>
+          </AuthProvider>
         </ErrorBoundary>
       </body>
     </html>
