@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
-import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Import from AuthContext
+import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Import from correct path
 import { 
   Ban, 
   Clock, 
