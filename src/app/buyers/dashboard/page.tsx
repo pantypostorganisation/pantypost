@@ -92,7 +92,10 @@ export default function BuyerDashboardPage() {
           
           const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => {
             const sellerUser = users[seller];
-            const sellerBio = sessionStorage.getItem(`profile_bio_${seller}`) || sellerUser?.bio || 'No bio available';
+            // ✅ FIXED: Safely access bio property with fallback
+            const sellerBio = sessionStorage.getItem(`profile_bio_${seller}`) || 
+                             (sellerUser as any)?.bio || 
+                             'No bio available';
             const sellerPic = sessionStorage.getItem(`profile_pic_${seller}`) || null;
             const subscriptionPrice = sessionStorage.getItem(`subscription_price_${seller}`) || '25.00';
             
@@ -103,7 +106,8 @@ export default function BuyerDashboardPage() {
               pic: sellerPic,
               newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
               lastActive: new Date().toISOString(),
-              tier: sellerUser?.tier || 'Tease',
+              // ✅ FIXED: Safely access tier property with fallback
+              tier: (sellerUser as any)?.tier || 'Tease',
               verified: sellerUser?.verified || sellerUser?.verificationStatus === 'verified'
             };
           });
@@ -268,7 +272,7 @@ export default function BuyerDashboardPage() {
         <main className="min-h-screen bg-black text-white">
           <div className="max-w-7xl mx-auto px-6 py-8">
             
-            {/* Clean Header */}
+            {/* ✅ FIXED: Clean Header with properly sized wallet and button */}
             <div className="mb-12">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                 <div>
@@ -280,24 +284,28 @@ export default function BuyerDashboardPage() {
                   </p>
                 </div>
                 
-                <div className="flex items-center gap-4">
-                  <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg px-6 py-4">
+                {/* ✅ FIXED: Wallet balance with integrated add funds button */}
+                <div className="flex justify-end">
+                  {/* Wallet Balance with Plus Button in Top-Right */}
+                  <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg px-6 py-4 relative min-w-[200px]">
+                    {/* Add Funds Button - Small green circle in top-right */}
+                    <Link
+                      href="/wallet/buyer"
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center transition-colors shadow-lg"
+                      title="Add Funds"
+                    >
+                      <Plus className="w-3 h-3 text-white" />
+                    </Link>
+                    
+                    {/* Wallet Balance Content */}
                     <div className="flex items-center gap-3">
-                      <Wallet className="w-6 h-6 text-[#ff950e]" />
+                      <Wallet className="w-5 h-5 text-[#ff950e]" />
                       <div>
-                        <p className="text-sm text-gray-400">Balance</p>
-                        <p className="text-2xl font-bold text-white">${balance.toFixed(2)}</p>
+                        <p className="text-xs text-gray-400 leading-none">Balance</p>
+                        <p className="text-lg font-bold text-white leading-none">${balance.toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
-                  
-                  <Link
-                    href="/wallet/buyer"
-                    className="bg-[#ff950e] hover:bg-[#e88800] text-black font-bold px-8 py-4 rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Add Funds
-                  </Link>
                 </div>
               </div>
             </div>
