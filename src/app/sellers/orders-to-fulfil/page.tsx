@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
+import BanCheck from '@/components/BanCheck';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -495,118 +496,122 @@ export default function OrdersToFulfilPage() {
 
   if (!user) {
     return (
-      <RequireAuth role="seller">
-        <div className="min-h-screen bg-black flex items-center justify-center">
-          <div className="text-white">Loading...</div>
-        </div>
-      </RequireAuth>
+      <BanCheck>
+        <RequireAuth role="seller">
+          <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="text-white">Loading...</div>
+          </div>
+        </RequireAuth>
+      </BanCheck>
     );
   }
 
   return (
-    <RequireAuth role="seller">
-      <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-10">
-            <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center mb-4">
-              📦 Orders to Fulfil
-            </h1>
-            <p className="text-gray-300 text-lg max-w-2xl">
-              Manage your pending orders, update shipping status, and access buyer contact information.
-            </p>
-          </div>
-
-          {/* Auction Sales */}
-          {auctionOrders.length > 0 && (
-            <section className="mb-12">
-              <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-                <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-2 rounded-lg mr-3 shadow-lg">
-                  <Gavel className="w-6 h-6 text-white" />
-                </div>
-                Auction Sales ({auctionOrders.length})
-              </h2>
-              <ul className="space-y-6">
-                {auctionOrders.map((order) => renderOrderCard(order, 'auction'))}
-              </ul>
-            </section>
-          )}
-
-          {/* Custom Request Orders */}
-          {customRequestOrders.length > 0 && (
-            <section className="mb-12">
-              <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-                <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-2 rounded-lg mr-3 shadow-lg">
-                  <Settings className="w-6 h-6 text-white" />
-                </div>
-                Custom Request Orders ({customRequestOrders.length})
-              </h2>
-              <ul className="space-y-6">
-                {customRequestOrders.map((order) => renderOrderCard(order, 'custom'))}
-              </ul>
-            </section>
-          )}
-
-          {/* Direct Sales */}
-          <section className="mb-12">
-            <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-              <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] p-2 rounded-lg mr-3 shadow-lg">
-                <ShoppingBag className="w-6 h-6 text-black" />
-              </div>
-              Direct Sales ({directOrders.length})
-            </h2>
-            {directOrders.length === 0 ? (
-              <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
-                <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400 text-xl mb-2">No direct sales to fulfill yet</p>
-                <p className="text-gray-500">Orders will appear here when buyers purchase your items</p>
-              </div>
-            ) : (
-              <ul className="space-y-6">
-                {directOrders.map((order) => renderOrderCard(order, 'direct'))}
-              </ul>
-            )}
-          </section>
-
-          {/* Summary when no orders */}
-          {userOrders.length === 0 && (
-            <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
-              <Package className="w-20 h-20 text-gray-600 mx-auto mb-6" />
-              <h3 className="text-gray-400 text-2xl mb-4">No orders to fulfill yet</h3>
-              <p className="text-gray-500 text-lg mb-6">
-                Orders from direct sales, auctions, and custom requests will appear here once customers make purchases.
+    <BanCheck>
+      <RequireAuth role="seller">
+        <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
+          <div className="max-w-6xl mx-auto">
+            <div className="mb-10">
+              <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center mb-4">
+                📦 Orders to Fulfil
+              </h1>
+              <p className="text-gray-300 text-lg max-w-2xl">
+                Manage your pending orders, update shipping status, and access buyer contact information.
               </p>
-              <div className="flex flex-wrap justify-center gap-4">
-                <Link
-                  href="/sellers/my-listings"
-                  className="inline-flex items-center gap-2 bg-[#ff950e] hover:bg-[#e88800] text-black font-bold px-6 py-3 rounded-lg transition-all shadow-lg hover:shadow-[#ff950e]/25"
-                >
-                  <Package className="w-5 h-5" />
-                  Manage Listings
-                </Link>
-                <Link
-                  href="/sellers/messages"
-                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-lg transition-all shadow-lg"
-                >
-                  <MessageCircle className="w-5 h-5" />
-                  Check Messages
-                </Link>
-              </div>
             </div>
-          )}
 
-          {/* Address Confirmation Modal */}
-          <AddressConfirmationModal
-            isOpen={addressModalOpen}
-            onClose={() => {
-              setAddressModalOpen(false);
-              setSelectedOrder(null);
-            }}
-            onConfirm={handleConfirmAddress}
-            existingAddress={getSelectedOrderAddress()}
-            orderId={selectedOrder || ''}
-          />
-        </div>
-      </main>
-    </RequireAuth>
+            {/* Auction Sales */}
+            {auctionOrders.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+                  <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-2 rounded-lg mr-3 shadow-lg">
+                    <Gavel className="w-6 h-6 text-white" />
+                  </div>
+                  Auction Sales ({auctionOrders.length})
+                </h2>
+                <ul className="space-y-6">
+                  {auctionOrders.map((order) => renderOrderCard(order, 'auction'))}
+                </ul>
+              </section>
+            )}
+
+            {/* Custom Request Orders */}
+            {customRequestOrders.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+                  <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-2 rounded-lg mr-3 shadow-lg">
+                    <Settings className="w-6 h-6 text-white" />
+                  </div>
+                  Custom Request Orders ({customRequestOrders.length})
+                </h2>
+                <ul className="space-y-6">
+                  {customRequestOrders.map((order) => renderOrderCard(order, 'custom'))}
+                </ul>
+              </section>
+            )}
+
+            {/* Direct Sales */}
+            <section className="mb-12">
+              <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+                <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] p-2 rounded-lg mr-3 shadow-lg">
+                  <ShoppingBag className="w-6 h-6 text-black" />
+                </div>
+                Direct Sales ({directOrders.length})
+              </h2>
+              {directOrders.length === 0 ? (
+                <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
+                  <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400 text-xl mb-2">No direct sales to fulfill yet</p>
+                  <p className="text-gray-500">Orders will appear here when buyers purchase your items</p>
+                </div>
+              ) : (
+                <ul className="space-y-6">
+                  {directOrders.map((order) => renderOrderCard(order, 'direct'))}
+                </ul>
+              )}
+            </section>
+
+            {/* Summary when no orders */}
+            {userOrders.length === 0 && (
+              <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
+                <Package className="w-20 h-20 text-gray-600 mx-auto mb-6" />
+                <h3 className="text-gray-400 text-2xl mb-4">No orders to fulfill yet</h3>
+                <p className="text-gray-500 text-lg mb-6">
+                  Orders from direct sales, auctions, and custom requests will appear here once customers make purchases.
+                </p>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Link
+                    href="/sellers/my-listings"
+                    className="inline-flex items-center gap-2 bg-[#ff950e] hover:bg-[#e88800] text-black font-bold px-6 py-3 rounded-lg transition-all shadow-lg hover:shadow-[#ff950e]/25"
+                  >
+                    <Package className="w-5 h-5" />
+                    Manage Listings
+                  </Link>
+                  <Link
+                    href="/sellers/messages"
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-lg transition-all shadow-lg"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    Check Messages
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Address Confirmation Modal */}
+            <AddressConfirmationModal
+              isOpen={addressModalOpen}
+              onClose={() => {
+                setAddressModalOpen(false);
+                setSelectedOrder(null);
+              }}
+              onConfirm={handleConfirmAddress}
+              existingAddress={getSelectedOrderAddress()}
+              orderId={selectedOrder || ''}
+            />
+          </div>
+        </main>
+      </RequireAuth>
+    </BanCheck>
   );
 }

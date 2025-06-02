@@ -1,5 +1,7 @@
+// src/app/sellers/my-listings/page.tsx
 'use client';
 
+import BanCheck from '@/components/BanCheck';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -354,244 +356,264 @@ export default function MyListingsPage() {
   const atLimit = myListings.length >= maxListings;
 
   return (
-    <RequireAuth role="seller">
-      <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Page Title */}
-          <div className="mb-8">
-            <h1 className="text-3xl sm:text-4xl font-bold text-white">My Listings</h1>
-            <div className="w-16 h-1 bg-[#ff950e] mt-2 rounded-full"></div>
-          </div>
+    <BanCheck>
+      <RequireAuth role="seller">
+        <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Page Title */}
+            <div className="mb-8">
+              <h1 className="text-3xl sm:text-4xl font-bold text-white">My Listings</h1>
+              <div className="w-16 h-1 bg-[#ff950e] mt-2 rounded-full"></div>
+            </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
-            {/* Left side: form + active listings */}
-            <div className="lg:col-span-2 space-y-8">
-              {/* Stats Overview */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-gray-800">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-300">Standard Listings</h3>
-                      <span className="text-4xl font-bold text-white">{standardCount}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+              {/* Left side: form + active listings */}
+              <div className="lg:col-span-2 space-y-8">
+                {/* Stats Overview */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-gray-800">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-300">Standard Listings</h3>
+                        <span className="text-4xl font-bold text-white">{standardCount}</span>
+                      </div>
+                      <Sparkles className="w-10 h-10 text-gray-600" />
                     </div>
-                    <Sparkles className="w-10 h-10 text-gray-600" />
+                  </div>
+                  <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-[#ff950e]">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-300">Premium Listings</h3>
+                        <span className="text-4xl font-bold text-[#ff950e]">{premiumCount}</span>
+                      </div>
+                      <Crown className="w-10 h-10 text-[#ff950e]" />
+                    </div>
+                  </div>
+                  <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-purple-700">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-300">Auction Listings</h3>
+                        <span className="text-4xl font-bold text-purple-500">{auctionCount}</span>
+                      </div>
+                      <Gavel className="w-10 h-10 text-purple-500" />
+                    </div>
                   </div>
                 </div>
-                <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-[#ff950e]">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-300">Premium Listings</h3>
-                      <span className="text-4xl font-bold text-[#ff950e]">{premiumCount}</span>
-                    </div>
-                    <Crown className="w-10 h-10 text-[#ff950e]" />
-                  </div>
-                </div>
-                <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-purple-700">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-300">Auction Listings</h3>
-                      <span className="text-4xl font-bold text-purple-500">{auctionCount}</span>
-                    </div>
-                    <Gavel className="w-10 h-10 text-purple-500" />
-                  </div>
-                </div>
-              </div>
 
-              {/* Listing Limit Message */}
-              {atLimit && !isEditing && (
-                <div className="bg-yellow-900 border border-yellow-700 text-yellow-200 rounded-lg p-4 my-4 text-center font-semibold">
-                  {isVerified ? (
-                    <>
-                      You have reached the maximum of <span className="text-[#ff950e] font-bold">25</span> listings for verified sellers.
-                    </>
-                  ) : (
-                    <>
-                      Unverified sellers can only have <span className="text-[#ff950e] font-bold">2</span> active listings.<br />
-                      <span className="block mt-2">
-                        <Link
-                          href="/sellers/verify"
-                          className="text-[#ff950e] font-bold underline hover:text-white transition"
-                        >
-                          Verify your account
-                        </Link>{' '}
-                        to add up to 25 listings!
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Create Listing Button or Form */}
-              {!showForm && !isEditing && (
-                <div className="flex justify-center">
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="px-8 py-3 rounded-full bg-[#ff950e] text-black font-bold text-lg shadow-lg hover:bg-[#e0850d] transition flex items-center gap-2"
-                    disabled={atLimit}
-                    style={atLimit ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-                  >
-                    <Sparkles className="w-5 h-5" />
-                    Create New Listing
-                  </button>
-                </div>
-              )}
-
-              {(showForm || isEditing) && (
-                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
-                  <h2 className="text-2xl font-bold mb-6 text-white">
-                    {isEditing ? 'Edit Listing' : 'Create New Listing'}
-                  </h2>
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 'Black Lace Panties Worn 24 Hours'"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-                      <textarea
-                        placeholder="Describe your item in detail to attract buyers"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e] h-28"
-                      />
-                    </div>
-                    
-                    {/* Listing Type Selection */}
-                    <div className="bg-[#121212] p-4 rounded-lg border border-gray-700">
-                      <h3 className="text-lg font-medium mb-3 text-white">Listing Type</h3>
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <label className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition flex-1 ${!isAuction ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
-                          <input
-                            type="radio"
-                            checked={!isAuction}
-                            onChange={() => setIsAuction(false)}
-                            className="sr-only" // Hide actual radio button
-                          />
-                          <Sparkles className={`w-5 h-5 ${!isAuction ? 'text-[#ff950e]' : 'text-gray-500'}`} />
-                          <div>
-                            <span className="font-medium">Standard Listing</span>
-                            <p className="text-xs text-gray-400 mt-1">Fixed price, first come first served</p>
-                          </div>
-                        </label>
-                        
-                        <div className="relative flex-1">
-                          <label 
-                            className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition ${
-                              isAuction 
-                                ? 'border-purple-600 bg-purple-600 bg-opacity-10' 
-                                : 'border-gray-700 bg-black'
-                            } ${
-                              !isVerified 
-                                ? 'opacity-50 cursor-not-allowed'
-                                : 'hover:border-purple-500'
-                            }`}
+                {/* Listing Limit Message */}
+                {atLimit && !isEditing && (
+                  <div className="bg-yellow-900 border border-yellow-700 text-yellow-200 rounded-lg p-4 my-4 text-center font-semibold">
+                    {isVerified ? (
+                      <>
+                        You have reached the maximum of <span className="text-[#ff950e] font-bold">25</span> listings for verified sellers.
+                      </>
+                    ) : (
+                      <>
+                        Unverified sellers can only have <span className="text-[#ff950e] font-bold">2</span> active listings.<br />
+                        <span className="block mt-2">
+                          <Link
+                            href="/sellers/verify"
+                            className="text-[#ff950e] font-bold underline hover:text-white transition"
                           >
+                            Verify your account
+                          </Link>{' '}
+                          to add up to 25 listings!
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Create Listing Button or Form */}
+                {!showForm && !isEditing && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => setShowForm(true)}
+                      className="px-8 py-3 rounded-full bg-[#ff950e] text-black font-bold text-lg shadow-lg hover:bg-[#e0850d] transition flex items-center gap-2"
+                      disabled={atLimit}
+                      style={atLimit ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      Create New Listing
+                    </button>
+                  </div>
+                )}
+
+                {(showForm || isEditing) && (
+                  <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
+                    <h2 className="text-2xl font-bold mb-6 text-white">
+                      {isEditing ? 'Edit Listing' : 'Create New Listing'}
+                    </h2>
+                    <div className="space-y-5">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 'Black Lace Panties Worn 24 Hours'"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                        <textarea
+                          placeholder="Describe your item in detail to attract buyers"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e] h-28"
+                        />
+                      </div>
+                      
+                      {/* Listing Type Selection */}
+                      <div className="bg-[#121212] p-4 rounded-lg border border-gray-700">
+                        <h3 className="text-lg font-medium mb-3 text-white">Listing Type</h3>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <label className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition flex-1 ${!isAuction ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
                             <input
                               type="radio"
-                              checked={isAuction}
-                              onChange={() => {
-                                if (isVerified) {
-                                  setIsAuction(true);
-                                } else {
-                                  // Don't allow unverified sellers to create auctions
-                                }
-                              }}
-                              disabled={!isVerified}
+                              checked={!isAuction}
+                              onChange={() => setIsAuction(false)}
                               className="sr-only" // Hide actual radio button
                             />
-                            <Gavel className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-gray-500'}`} />
+                            <Sparkles className={`w-5 h-5 ${!isAuction ? 'text-[#ff950e]' : 'text-gray-500'}`} />
                             <div>
-                              <span className="font-medium">Auction</span>
-                              <p className="text-xs text-gray-400 mt-1">Let buyers bid, highest wins</p>
+                              <span className="font-medium">Standard Listing</span>
+                              <p className="text-xs text-gray-400 mt-1">Fixed price, first come first served</p>
                             </div>
                           </label>
                           
-                          {/* Lock overlay for unverified sellers */}
-                          {!isVerified && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-lg px-3 py-2">
-                              <LockIcon className="w-6 h-6 text-yellow-500 mb-1" />
-                              <span className="text-xs text-yellow-400 font-medium text-center">Verify your account to unlock auctions</span>
-                              <Link 
-                                href="/sellers/verify" 
-                                className="mt-1 text-xs text-white bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded-full font-medium transition"
-                              >
-                                Get Verified
-                              </Link>
-                            </div>
-                          )}
+                          <div className="relative flex-1">
+                            <label 
+                              className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition ${
+                                isAuction 
+                                  ? 'border-purple-600 bg-purple-600 bg-opacity-10' 
+                                  : 'border-gray-700 bg-black'
+                              } ${
+                                !isVerified 
+                                  ? 'opacity-50 cursor-not-allowed'
+                                  : 'hover:border-purple-500'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                checked={isAuction}
+                                onChange={() => {
+                                  if (isVerified) {
+                                    setIsAuction(true);
+                                  } else {
+                                    // Don't allow unverified sellers to create auctions
+                                  }
+                                }}
+                                disabled={!isVerified}
+                                className="sr-only" // Hide actual radio button
+                              />
+                              <Gavel className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-gray-500'}`} />
+                              <div>
+                                <span className="font-medium">Auction</span>
+                                <p className="text-xs text-gray-400 mt-1">Let buyers bid, highest wins</p>
+                              </div>
+                            </label>
+                            
+                            {/* Lock overlay for unverified sellers */}
+                            {!isVerified && (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-lg px-3 py-2">
+                                <LockIcon className="w-6 h-6 text-yellow-500 mb-1" />
+                                <span className="text-xs text-yellow-400 font-medium text-center">Verify your account to unlock auctions</span>
+                                <Link 
+                                  href="/sellers/verify" 
+                                  className="mt-1 text-xs text-white bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded-full font-medium transition"
+                                >
+                                  Get Verified
+                                </Link>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    {/* Show different price fields based on listing type */}
-                    {isAuction ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Starting Bid ($)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="e.g. 9.99"
-                            value={startingPrice}
-                            onChange={(e) => setStartingPrice(e.target.value)}
-                            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                            min="0"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">Minimum price to start bidding</p>
+                      
+                      {/* Show different price fields based on listing type */}
+                      {isAuction ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Starting Bid ($)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="e.g. 9.99"
+                              value={startingPrice}
+                              onChange={(e) => setStartingPrice(e.target.value)}
+                              className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                              min="0"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Minimum price to start bidding</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Reserve Price ($) <span className="text-gray-500 text-xs">(Optional)</span></label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="e.g. 19.99"
+                              value={reservePrice}
+                              onChange={(e) => setReservePrice(e.target.value)}
+                              className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                              min="0"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Minimum winning bid price (hidden from buyers)</p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Auction Duration</label>
+                            <select
+                              value={auctionDuration}
+                              onChange={(e) => setAuctionDuration(e.target.value)}
+                              className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
+                            >
+                              <option value="0.017">1 Minute (Testing)</option>
+                              <option value="1">1 Day</option>
+                              <option value="3">3 Days</option>
+                              <option value="5">5 Days</option>
+                              <option value="7">7 Days</option>
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">How long the auction will last</p>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Reserve Price ($) <span className="text-gray-500 text-xs">(Optional)</span></label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="e.g. 19.99"
-                            value={reservePrice}
-                            onChange={(e) => setReservePrice(e.target.value)}
-                            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                            min="0"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">Minimum winning bid price (hidden from buyers)</p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Price ($)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="e.g. 29.99"
+                              value={price}
+                              onChange={(e) => setPrice(e.target.value)}
+                              className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                              min="0"
+                            />
+                          </div>
+                          {/* Image Upload Section */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Add Images</label>
+                            <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-700 rounded-lg bg-black hover:border-[#ff950e] transition cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleFileSelect}
+                                className="hidden"
+                              />
+                              <ImageIcon className="w-5 h-5 text-[#ff950e]" />
+                              <span className="text-gray-300">Select images from your computer</span>
+                            </label>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Auction Duration</label>
-                          <select
-                            value={auctionDuration}
-                            onChange={(e) => setAuctionDuration(e.target.value)}
-                            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
-                          >
-                            <option value="0.017">1 Minute (Testing)</option>
-                            <option value="1">1 Day</option>
-                            <option value="3">3 Days</option>
-                            <option value="5">5 Days</option>
-                            <option value="7">7 Days</option>
-                          </select>
-                          <p className="text-xs text-gray-500 mt-1">How long the auction will last</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Price ($)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="e.g. 29.99"
-                            value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                            min="0"
-                          />
-                        </div>
-                        {/* Image Upload Section */}
+                      )}
+                      
+                      {/* Image upload section for auction type */}
+                      {isAuction && (
                         <div>
                           <label className="block text-sm font-medium text-gray-300 mb-1">Add Images</label>
-                          <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-700 rounded-lg bg-black hover:border-[#ff950e] transition cursor-pointer">
+                          <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-700 rounded-lg bg-black hover:border-purple-600 transition cursor-pointer">
                             <input
                               type="file"
                               accept="image/*"
@@ -599,511 +621,493 @@ export default function MyListingsPage() {
                               onChange={handleFileSelect}
                               className="hidden"
                             />
-                            <ImageIcon className="w-5 h-5 text-[#ff950e]" />
+                            <ImageIcon className="w-5 h-5 text-purple-500" />
                             <span className="text-gray-300">Select images from your computer</span>
                           </label>
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Image upload section for auction type */}
-                    {isAuction && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Add Images</label>
-                        <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-700 rounded-lg bg-black hover:border-purple-600 transition cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={handleFileSelect}
-                            className="hidden"
-                          />
-                          <ImageIcon className="w-5 h-5 text-purple-500" />
-                          <span className="text-gray-300">Select images from your computer</span>
-                        </label>
-                      </div>
-                    )}
-                    
-                    {/* Selected Files Preview */}
-                    {selectedFiles.length > 0 && (
-                      <div className="mt-3">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm text-gray-300">{selectedFiles.length} file(s) selected</span>
-                          <button
-                            type="button"
-                            onClick={handleUploadFiles}
-                            disabled={isUploading}
-                            className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'}`}
-                          >
-                            {isUploading ? (
-                              <>Uploading...</>
-                            ) : (
-                              <>
-                                <Upload className="w-4 h-4" />
-                                Add to Listing
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                          {selectedFiles.map((file, index) => (
-                            <div key={`selected-file-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">
-                              <img
-                                src={URL.createObjectURL(file)}
-                                alt={`Selected ${index + 1}`}
-                                className="w-full h-24 object-cover"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeSelectedFile(index)}
-                                className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2">
-                                <p className="text-xs text-white truncate">{file.name}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* Image Preview and Reordering */}
-                    {imageUrls.length > 0 && (
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Images (Drag to reorder)</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                          {imageUrls.map((url, index) => (
-                            <div
-                              key={`image-${index}-${url.substring(0, 20)}`}
-                              draggable
-                              onDragStart={() => handleDragStart(index)}
-                              onDragEnter={() => handleDragEnter(index)}
-                              onDragEnd={handleDrop}
-                              onDragOver={(e) => e.preventDefault()}
-                              className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'}`}
-                            >
-                              <img
-                                src={url}
-                                alt={`Listing Image ${index + 1}`}
-                                className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`}
-                              />
-                              {index === 0 && (
-                                <span className="absolute top-2 left-2 bg-[#ff950e] text-black text-xs px-2 py-0.5 rounded-full font-bold">
-                                  Main
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveImageUrl(url)}
-                                className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
-                                aria-label="Remove image"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black bg-opacity-20">
-                                <MoveVertical className="w-6 h-6 text-white" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma separated)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. thong, black, lace, cotton, gym"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Help buyers find your items with relevant tags</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">Hours Worn (optional)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 24"
-                        value={hoursWorn}
-                        onChange={(e) => setHoursWorn(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                        min="0"
-                      />
-                    </div>
-                    
-                    {/* Only show premium option for standard listings */}
-                    {!isAuction && (
-                      <div className="mt-4">
-                        <label className={`flex items-center gap-3 py-4 px-5 border-2 rounded-lg cursor-pointer transition ${isPremium ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
-                          <input
-                            type="checkbox"
-                            checked={isPremium}
-                            onChange={() => setIsPremium(!isPremium)}
-                            className="h-5 w-5 text-[#ff950e] focus:ring-[#ff950e] rounded border-gray-600 bg-black checked:bg-[#ff950e]"
-                          />
-                          <Crown className={`w-6 h-6 ${isPremium ? 'text-[#ff950e]' : 'text-gray-500'}`} />
-                          <div>
-                            <span className={`font-semibold text-lg ${isPremium ? 'text-white' : 'text-gray-300'}`}>Make Premium Listing</span>
-                            <p className={`text-sm mt-0.5 ${isPremium ? 'text-gray-200' : 'text-gray-400'}`}>Only available to your subscribers</p>
-                          </div>
-                        </label>
-                      </div>
-                    )}
-                    
-                    {/* Auction information notice */}
-                    {isAuction && (
-                      <div className="bg-purple-900 bg-opacity-30 border border-purple-700 rounded-lg p-4 mt-4">
-                        <div className="flex gap-3">
-                          <AlertCircle className="w-6 h-6 text-purple-400 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
-                            <ul className="text-sm text-gray-300 space-y-1">
-                              <li>• Auctions run for {auctionDuration === '0.017' ? '1 minute' : `${auctionDuration} day${parseInt(auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing</li>
-                              <li>• Bidders must have sufficient funds in their wallet to place a bid</li>
-                              <li>• If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
-                              <li>• You can cancel an auction at any time before it ends</li>
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="flex flex-col sm:flex-row gap-4 mt-6">
-                      <button
-                        onClick={handleSaveListing}
-                        className={`w-full sm:flex-1 text-black px-6 py-3 rounded-lg font-bold text-lg transition flex items-center justify-center gap-2 ${
-                          isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
-                        }`}
-                      >
-                        {isEditing ? (
-                          <>
-                            <Edit className="w-5 h-5" />
-                            Save Changes
-                          </>
-                        ) : isAuction ? (
-                          <>
-                            <Gavel className="w-5 h-5" />
-                            Create Auction
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-5 h-5" />
-                            Create Listing
-                          </>
-                        )}
-                      </button>
-                      <button
-                        onClick={resetForm}
-                        className="w-full sm:flex-1 bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-600 font-medium text-lg transition flex items-center justify-center gap-2"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Seller's own listings with analytics */}
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
-                <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
-                  Your Active Listings
-                  <BarChart2 className="w-6 h-6 text-[#ff950e]" />
-                </h2>
-                {myListings.length === 0 ? (
-                  <div className="text-center py-10 bg-black rounded-lg border border-dashed border-gray-700 text-gray-400">
-                    <p className="text-lg mb-2">You haven't created any listings yet.</p>
-                    <p className="text-sm">Use the button above to add your first listing.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {myListings.map((listing) => {
-                      const { views } = getListingAnalytics(listing);
-                      const isAuctionListing = !!listing.auction;
+                      )}
                       
-                      return (
-                        <div
-                          key={`listing-${listing.id}`}
-                          className={`border rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition relative flex flex-col h-full
-                            ${isAuctionListing 
-                              ? 'border-purple-700 bg-black' 
-                              : listing.isPremium 
-                                ? 'border-[#ff950e] bg-black' 
-                                : 'border-gray-700 bg-black'}`
-                          }
-                        >
-                          {isAuctionListing && (
-                            <div className="absolute top-4 right-4 z-10">
-                              <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
-                                <Gavel className="w-4 h-4 mr-1" /> Auction
-                              </span>
-                            </div>
-                          )}
-                          
-                          {!isAuctionListing && listing.isPremium && (
-                            <div className="absolute top-4 right-4 z-10">
-                              <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
-                                <Crown className="w-4 h-4 mr-1" /> Premium
-                              </span>
-                            </div>
-                          )}
-
-                          <div className="relative w-full h-48 sm:h-56 overflow-hidden">
-                            {/* Display the first image from the array */}
-                            {listing.imageUrls && listing.imageUrls.length > 0 && (
-                              <img
-                                src={listing.imageUrls[0]}
-                                alt={listing.title}
-                                className="w-full h-full object-cover"
-                              />
-                            )}
+                      {/* Selected Files Preview */}
+                      {selectedFiles.length > 0 && (
+                        <div className="mt-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm text-gray-300">{selectedFiles.length} file(s) selected</span>
+                            <button
+                              type="button"
+                              onClick={handleUploadFiles}
+                              disabled={isUploading}
+                              className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'}`}
+                            >
+                              {isUploading ? (
+                                <>Uploading...</>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4" />
+                                  Add to Listing
+                                </>
+                              )}
+                            </button>
                           </div>
-
-                          <div className="p-5 flex flex-col flex-grow">
-                            <h3 className="text-xl font-bold text-white mb-2">{listing.title}</h3>
-                            <p className="text-gray-400 text-sm mb-3 line-clamp-2 flex-grow">{listing.description}</p>
-
-                            {listing.tags && listing.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-auto mb-3">
-                                {listing.tags.map((tag, idx) => (
-                                  <span key={`tag-${idx}-${listing.id}`} className="bg-gray-700 text-gray-300 text-xs px-2.5 py-1 rounded-full">
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Auction info */}
-                            {isAuctionListing && listing.auction && (
-                              <div className="bg-purple-900 bg-opacity-20 rounded-lg p-3 mb-3 border border-purple-800">
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="text-sm text-purple-300 flex items-center gap-1">
-                                    <Gavel className="w-3 h-3" /> Current Bid:
-                                  </span>
-                                  <span className="font-bold text-white">
-                                    ${listing.auction.highestBid || listing.auction.startingPrice.toFixed(2)}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-sm text-purple-300 flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" /> Ends:
-                                  </span>
-                                  <span className="text-sm text-white">
-                                    {formatTimeRemaining(listing.auction.endTime)}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {listing.auction.bids?.length || 0} {listing.auction.bids?.length === 1 ? 'bid' : 'bids'} placed
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Analytics */}
-                            <div className="flex items-center justify-between text-sm text-gray-400 bg-gray-800 rounded-lg p-3 mt-auto">
-                              <span className="flex items-center gap-1">
-                                <Eye className="w-4 h-4 text-[#ff950e]" /> {views} views
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4 text-gray-500" /> {timeSinceListed(listing.date)}
-                              </span>
-                            </div>
-
-                            <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
-                              <p className={`font-bold text-xl ${isAuctionListing ? 'text-purple-400' : 'text-[#ff950e]'}`}>
-                                {isAuctionListing && listing.auction
-                                  ? `$${listing.auction.startingPrice.toFixed(2)} start` 
-                                  : `$${listing.price.toFixed(2)}`}
-                              </p>
-                              <div className="flex gap-2">
-                                {/* Cancel auction button */}
-                                {isAuctionListing && listing.auction?.status === 'active' && (
-                                  <button
-                                    onClick={() => handleCancelAuction(listing.id)}
-                                    className="text-red-400 p-2 rounded-full hover:bg-gray-800 transition"
-                                    aria-label="Cancel auction"
-                                    title="Cancel auction"
-                                  >
-                                    <X className="w-5 h-5" />
-                                  </button>
-                                )}
-                                {/* Edit Button - only for standard listings or ended auctions */}
-                                {(!isAuctionListing || (listing.auction && listing.auction.status !== 'active')) && (
-                                  <button
-                                    onClick={() => handleEditClick(listing)}
-                                    className="text-blue-400 p-2 rounded-full hover:bg-gray-800 transition"
-                                    aria-label="Edit listing"
-                                  >
-                                    <Edit className="w-5 h-5" />
-                                  </button>
-                                )}
-                                {/* Delete Button */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {selectedFiles.map((file, index) => (
+                              <div key={`selected-file-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={`Selected ${index + 1}`}
+                                  className="w-full h-24 object-cover"
+                                />
                                 <button
-                                  onClick={() => removeListing(listing.id)}
-                                  className="text-red-500 p-2 rounded-full hover:bg-gray-800 transition"
-                                  aria-label="Delete listing"
+                                  type="button"
+                                  onClick={() => removeSelectedFile(index)}
+                                  className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
                                 >
-                                  <Trash2 className="w-5 h-5" />
+                                  <X className="w-4 h-4" />
                                 </button>
+                                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2">
+                                  <p className="text-xs text-white truncate">{file.name}</p>
+                                </div>
                               </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Image Preview and Reordering */}
+                      {imageUrls.length > 0 && (
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Images (Drag to reorder)</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {imageUrls.map((url, index) => (
+                              <div
+                                key={`image-${index}-${url.substring(0, 20)}`}
+                                draggable
+                                onDragStart={() => handleDragStart(index)}
+                                onDragEnter={() => handleDragEnter(index)}
+                                onDragEnd={handleDrop}
+                                onDragOver={(e) => e.preventDefault()}
+                                className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'}`}
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Listing Image ${index + 1}`}
+                                  className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`}
+                                />
+                                {index === 0 && (
+                                  <span className="absolute top-2 left-2 bg-[#ff950e] text-black text-xs px-2 py-0.5 rounded-full font-bold">
+                                    Main
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveImageUrl(url)}
+                                  className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+                                  aria-label="Remove image"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black bg-opacity-20">
+                                  <MoveVertical className="w-6 h-6 text-white" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma separated)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. thong, black, lace, cotton, gym"
+                          value={tags}
+                          onChange={(e) => setTags(e.target.value)}
+                          className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Help buyers find your items with relevant tags</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Hours Worn (optional)</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 24"
+                          value={hoursWorn}
+                          onChange={(e) => setHoursWorn(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                          min="0"
+                        />
+                      </div>
+                      
+                      {/* Only show premium option for standard listings */}
+                      {!isAuction && (
+                        <div className="mt-4">
+                          <label className={`flex items-center gap-3 py-4 px-5 border-2 rounded-lg cursor-pointer transition ${isPremium ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
+                            <input
+                              type="checkbox"
+                              checked={isPremium}
+                              onChange={() => setIsPremium(!isPremium)}
+                              className="h-5 w-5 text-[#ff950e] focus:ring-[#ff950e] rounded border-gray-600 bg-black checked:bg-[#ff950e]"
+                            />
+                            <Crown className={`w-6 h-6 ${isPremium ? 'text-[#ff950e]' : 'text-gray-500'}`} />
+                            <div>
+                              <span className={`font-semibold text-lg ${isPremium ? 'text-white' : 'text-gray-300'}`}>Make Premium Listing</span>
+                              <p className={`text-sm mt-0.5 ${isPremium ? 'text-gray-200' : 'text-gray-400'}`}>Only available to your subscribers</p>
+                            </div>
+                          </label>
+                        </div>
+                      )}
+                      
+                      {/* Auction information notice */}
+                      {isAuction && (
+                        <div className="bg-purple-900 bg-opacity-30 border border-purple-700 rounded-lg p-4 mt-4">
+                          <div className="flex gap-3">
+                            <AlertCircle className="w-6 h-6 text-purple-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
+                              <ul className="text-sm text-gray-300 space-y-1">
+                                <li>• Auctions run for {auctionDuration === '0.017' ? '1 minute' : `${auctionDuration} day${parseInt(auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing</li>
+                                <li>• Bidders must have sufficient funds in their wallet to place a bid</li>
+                                <li>• If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
+                                <li>• You can cancel an auction at any time before it ends</li>
+                              </ul>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right side: order history and premium tips */}
-            <div className="space-y-8">
-              {/* Verification Banner */}
-              {!isVerified && (
-                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-yellow-700">
-                  <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                    <ShieldCheck className="text-yellow-500 w-6 h-6" />
-                    Get Verified
-                  </h2>
-                  <div className="mb-5">
-                    <p className="text-gray-300 mb-3">
-                      Verified sellers get these exclusive benefits:
-                    </p>
-                    <ul className="space-y-2 text-gray-300 text-sm">
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                        <span>Post up to <span className="text-yellow-500 font-bold">25 listings</span> (vs only 2 for unverified)</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                        <span>Create <span className="text-purple-400 font-bold">auction listings</span> for higher bids</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                        <div className="flex items-center">
-                          <span>Display a verification badge </span>
-                          <img src="/verification_badge.png" alt="Verification Badge" className="w-4 h-4 mx-1" /> 
-                          <span> on your profile and listings</span>
-                        </div>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                        <span>Earn buyers' trust for more sales and higher prices</span>
-                      </li>
-                    </ul>
-                  </div>
-                  <Link
-                    href="/sellers/verify"
-                    className="w-full bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-500 font-bold text-lg transition flex items-center justify-center gap-2"
-                  >
-                    <ShieldCheck className="w-5 h-5" />
-                    Verify My Account
-                  </Link>
-                </div>
-              )}
-
-              {/* Auction Seller Tips */}
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-purple-700">
-                <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                  <Gavel className="text-purple-500 w-6 h-6" />
-                  Auction Tips
-                </h2>
-                <ul className="space-y-4 text-gray-300 text-sm">
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-500 font-bold text-lg leading-none">•</span>
-                    <span>Set a competitive starting price to attract initial bids.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-500 font-bold text-lg leading-none">•</span>
-                    <span>Use a reserve price to ensure you don't sell below your minimum acceptable price.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-500 font-bold text-lg leading-none">•</span>
-                    <span>Add high-quality photos and detailed descriptions to encourage higher bids.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-purple-500 font-bold text-lg leading-none">•</span>
-                    <span>Auctions create excitement and can result in higher final prices than fixed listings.</span>
-                  </li>
-                </ul>
-                {!isVerified && (
-                  <div className="mt-5 pt-4 border-t border-gray-700">
-                    <div className="flex items-center gap-2">
-                      <LockIcon className="text-yellow-500 w-5 h-5" />
-                      <p className="text-yellow-400 text-sm">
-                        <Link href="/sellers/verify" className="underline hover:text-yellow-300">Get verified</Link> to unlock auction listings!
-                      </p>
+                      )}
+                      
+                      <div className="flex flex-col sm:flex-row gap-4 mt-6">
+                        <button
+                          onClick={handleSaveListing}
+                          className={`w-full sm:flex-1 text-black px-6 py-3 rounded-lg font-bold text-lg transition flex items-center justify-center gap-2 ${
+                            isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
+                          }`}
+                        >
+                          {isEditing ? (
+                            <>
+                              <Edit className="w-5 h-5" />
+                              Save Changes
+                            </>
+                          ) : isAuction ? (
+                            <>
+                              <Gavel className="w-5 h-5" />
+                              Create Auction
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-5 h-5" />
+                              Create Listing
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={resetForm}
+                          className="w-full sm:flex-1 bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-600 font-medium text-lg transition flex items-center justify-center gap-2"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
-              </div>
-              
-              {/* Premium Seller Tips */}
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-[#ff950e]">
-                <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                  <Crown className="text-[#ff950e] w-6 h-6" />
-                  Premium Seller Tips
-                </h2>
-                <ul className="space-y-4 text-gray-300 text-sm">
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
-                    <span>Premium listings are only visible to your subscribers, increasing exclusivity.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
-                    <span>Set your monthly subscription price in your profile settings to unlock premium features.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
-                    <span>Use high-quality, appealing images for your listings to attract more views and buyers.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
-                    <span>Premium listings can often command higher prices due to their exclusive nature.</span>
-                  </li>
-                </ul>
-              </div>
 
-              {/* Order History */}
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
-                <h2 className="text-2xl font-bold mb-6 text-white">Recent Sales</h2>
-                <div className="space-y-5">
-                  {sellerOrders.length === 0 ? (
-                    <div className="text-center py-8 bg-black rounded-lg border border-dashed border-gray-700 text-gray-400 italic">
-                      <p>No sales yet. Keep promoting your listings!</p>
+                {/* Seller's own listings with analytics */}
+                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
+                  <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
+                    Your Active Listings
+                    <BarChart2 className="w-6 h-6 text-[#ff950e]" />
+                  </h2>
+                  {myListings.length === 0 ? (
+                    <div className="text-center py-10 bg-black rounded-lg border border-dashed border-gray-700 text-gray-400">
+                      <p className="text-lg mb-2">You haven't created any listings yet.</p>
+                      <p className="text-sm">Use the button above to add your first listing.</p>
                     </div>
                   ) : (
-                    sellerOrders.map((order, index) => (
-                      <div
-                        key={`order-${order.id}-${index}-${order.date}`}
-                        className="border border-gray-700 p-4 rounded-lg text-sm bg-black hover:border-[#ff950e] transition"
-                      >
-                        <div className="flex items-center gap-4">
-                          {order.imageUrl && (
-                            <img
-                              src={order.imageUrl}
-                              alt={order.title}
-                              className="w-16 h-16 object-cover rounded-md border border-gray-600"
-                            />
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-white text-base">{order.title}</h3>
-                            <p className="text-[#ff950e] font-bold text-lg mt-1">
-                              ${order.markedUpPrice.toFixed(2)}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Sold on {new Date(order.date).toLocaleDateString()}
-                            </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {myListings.map((listing) => {
+                        const { views } = getListingAnalytics(listing);
+                        const isAuctionListing = !!listing.auction;
+                        
+                        return (
+                          <div
+                            key={`listing-${listing.id}`}
+                            className={`border rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition relative flex flex-col h-full
+                              ${isAuctionListing 
+                                ? 'border-purple-700 bg-black' 
+                                : listing.isPremium 
+                                  ? 'border-[#ff950e] bg-black' 
+                                  : 'border-gray-700 bg-black'}`
+                            }
+                          >
+                            {isAuctionListing && (
+                              <div className="absolute top-4 right-4 z-10">
+                                <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+                                  <Gavel className="w-4 h-4 mr-1" /> Auction
+                                </span>
+                              </div>
+                            )}
+                            
+                            {!isAuctionListing && listing.isPremium && (
+                              <div className="absolute top-4 right-4 z-10">
+                                <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+                                  <Crown className="w-4 h-4 mr-1" /> Premium
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="relative w-full h-48 sm:h-56 overflow-hidden">
+                              {/* Display the first image from the array */}
+                              {listing.imageUrls && listing.imageUrls.length > 0 && (
+                                <img
+                                  src={listing.imageUrls[0]}
+                                  alt={listing.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </div>
+
+                            <div className="p-5 flex flex-col flex-grow">
+                              <h3 className="text-xl font-bold text-white mb-2">{listing.title}</h3>
+                              <p className="text-gray-400 text-sm mb-3 line-clamp-2 flex-grow">{listing.description}</p>
+
+                              {listing.tags && listing.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-auto mb-3">
+                                  {listing.tags.map((tag, idx) => (
+                                    <span key={`tag-${idx}-${listing.id}`} className="bg-gray-700 text-gray-300 text-xs px-2.5 py-1 rounded-full">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Auction info */}
+                              {isAuctionListing && listing.auction && (
+                                <div className="bg-purple-900 bg-opacity-20 rounded-lg p-3 mb-3 border border-purple-800">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-sm text-purple-300 flex items-center gap-1">
+                                      <Gavel className="w-3 h-3" /> Current Bid:
+                                    </span>
+                                    <span className="font-bold text-white">
+                                      ${listing.auction.highestBid || listing.auction.startingPrice.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-purple-300 flex items-center gap-1">
+                                      <Calendar className="w-3 h-3" /> Ends:
+                                    </span>
+                                    <span className="text-sm text-white">
+                                      {formatTimeRemaining(listing.auction.endTime)}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    {listing.auction.bids?.length || 0} {listing.auction.bids?.length === 1 ? 'bid' : 'bids'} placed
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Analytics */}
+                              <div className="flex items-center justify-between text-sm text-gray-400 bg-gray-800 rounded-lg p-3 mt-auto">
+                                <span className="flex items-center gap-1">
+                                  <Eye className="w-4 h-4 text-[#ff950e]" /> {views} views
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-4 h-4 text-gray-500" /> {timeSinceListed(listing.date)}
+                                </span>
+                              </div>
+
+                              <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
+                                <p className={`font-bold text-xl ${isAuctionListing ? 'text-purple-400' : 'text-[#ff950e]'}`}>
+                                  {isAuctionListing && listing.auction
+                                    ? `$${listing.auction.startingPrice.toFixed(2)} start` 
+                                    : `$${listing.price.toFixed(2)}`}
+                                </p>
+                                <div className="flex gap-2">
+                                  {/* Cancel auction button */}
+                                  {isAuctionListing && listing.auction?.status === 'active' && (
+                                    <button
+                                      onClick={() => handleCancelAuction(listing.id)}
+                                      className="text-red-400 p-2 rounded-full hover:bg-gray-800 transition"
+                                      aria-label="Cancel auction"
+                                      title="Cancel auction"
+                                    >
+                                      <X className="w-5 h-5" />
+                                    </button>
+                                  )}
+                                  {/* Edit Button - only for standard listings or ended auctions */}
+                                  {(!isAuctionListing || (listing.auction && listing.auction.status !== 'active')) && (
+                                    <button
+                                      onClick={() => handleEditClick(listing)}
+                                      className="text-blue-400 p-2 rounded-full hover:bg-gray-800 transition"
+                                      aria-label="Edit listing"
+                                    >
+                                      <Edit className="w-5 h-5" />
+                                    </button>
+                                  )}
+                                  {/* Delete Button */}
+                                  <button
+                                    onClick={() => removeListing(listing.id)}
+                                    className="text-red-500 p-2 rounded-full hover:bg-gray-800 transition"
+                                    aria-label="Delete listing"
+                                  >
+                                    <Trash2 className="w-5 h-5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right side: order history and premium tips */}
+              <div className="space-y-8">
+                {/* Verification Banner */}
+                {!isVerified && (
+                  <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-yellow-700">
+                    <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
+                      <ShieldCheck className="text-yellow-500 w-6 h-6" />
+                      Get Verified
+                    </h2>
+                    <div className="mb-5">
+                      <p className="text-gray-300 mb-3">
+                        Verified sellers get these exclusive benefits:
+                      </p>
+                      <ul className="space-y-2 text-gray-300 text-sm">
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                          <span>Post up to <span className="text-yellow-500 font-bold">25 listings</span> (vs only 2 for unverified)</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                          <span>Create <span className="text-purple-400 font-bold">auction listings</span> for higher bids</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                          <div className="flex items-center">
+                            <span>Display a verification badge </span>
+                            <img src="/verification_badge.png" alt="Verification Badge" className="w-4 h-4 mx-1" /> 
+                            <span> on your profile and listings</span>
+                          </div>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
+                          <span>Earn buyers' trust for more sales and higher prices</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <Link
+                      href="/sellers/verify"
+                      className="w-full bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-500 font-bold text-lg transition flex items-center justify-center gap-2"
+                    >
+                      <ShieldCheck className="w-5 h-5" />
+                      Verify My Account
+                    </Link>
+                  </div>
+                )}
+
+                {/* Auction Seller Tips */}
+                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-purple-700">
+                  <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
+                    <Gavel className="text-purple-500 w-6 h-6" />
+                    Auction Tips
+                  </h2>
+                  <ul className="space-y-4 text-gray-300 text-sm">
+                    <li className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold text-lg leading-none">•</span>
+                      <span>Set a competitive starting price to attract initial bids.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold text-lg leading-none">•</span>
+                      <span>Use a reserve price to ensure you don't sell below your minimum acceptable price.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold text-lg leading-none">•</span>
+                      <span>Add high-quality photos and detailed descriptions to encourage higher bids.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-purple-500 font-bold text-lg leading-none">•</span>
+                      <span>Auctions create excitement and can result in higher final prices than fixed listings.</span>
+                    </li>
+                  </ul>
+                  {!isVerified && (
+                    <div className="mt-5 pt-4 border-t border-gray-700">
+                      <div className="flex items-center gap-2">
+                        <LockIcon className="text-yellow-500 w-5 h-5" />
+                        <p className="text-yellow-400 text-sm">
+                          <Link href="/sellers/verify" className="underline hover:text-yellow-300">Get verified</Link> to unlock auction listings!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Premium Seller Tips */}
+                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-[#ff950e]">
+                  <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
+                    <Crown className="text-[#ff950e] w-6 h-6" />
+                    Premium Seller Tips
+                  </h2>
+                  <ul className="space-y-4 text-gray-300 text-sm">
+                    <li className="flex items-start gap-2">
+                      <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
+                      <span>Premium listings are only visible to your subscribers, increasing exclusivity.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
+                      <span>Set your monthly subscription price in your profile settings to unlock premium features.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
+                      <span>Use high-quality, appealing images for your listings to attract more views and buyers.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
+                      <span>Premium listings can often command higher prices due to their exclusive nature.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Order History */}
+                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
+                  <h2 className="text-2xl font-bold mb-6 text-white">Recent Sales</h2>
+                  <div className="space-y-5">
+                    {sellerOrders.length === 0 ? (
+                      <div className="text-center py-8 bg-black rounded-lg border border-dashed border-gray-700 text-gray-400 italic">
+                        <p>No sales yet. Keep promoting your listings!</p>
+                      </div>
+                    ) : (
+                      sellerOrders.map((order, index) => (
+                        <div
+                          key={`order-${order.id}-${index}-${order.date}`}
+                          className="border border-gray-700 p-4 rounded-lg text-sm bg-black hover:border-[#ff950e] transition"
+                        >
+                          <div className="flex items-center gap-4">
+                            {order.imageUrl && (
+                              <img
+                                src={order.imageUrl}
+                                alt={order.title}
+                                className="w-16 h-16 object-cover rounded-md border border-gray-600"
+                              />
+                            )}
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-white text-base">{order.title}</h3>
+                              <p className="text-[#ff950e] font-bold text-lg mt-1">
+                                ${order.markedUpPrice.toFixed(2)}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Sold on {new Date(order.date).toLocaleDateString()}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </main>
-    </RequireAuth>
+        </main>
+      </RequireAuth>
+    </BanCheck>
   );
 }
