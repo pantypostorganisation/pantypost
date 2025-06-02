@@ -453,7 +453,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     reason: BanReason, 
     customReason?: string, 
     adminUsername: string = 'system',
-    reportIds?: string[],
+    reportIds: string[] = [], // Fixed: provide default empty array
     notes?: string
   ): Promise<boolean> => {
     // Validate input
@@ -517,7 +517,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         active: true,
         appealable: true,
         notes: cleanNotes,
-        reportIds: reportIds || [],
+        reportIds: reportIds, // Fixed: now properly typed as string[]
         escalationLevel: recommendation.level,
         appealStatus: 'pending'
       };
@@ -587,7 +587,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const cleanUsername = sanitizeString(username);
       const cleanAppealText = sanitizeString(appealText);
       
-      let appealEvidence: string[] = [];
+      let appealEvidence: string[] = []; // Fixed: initialize as empty array instead of undefined
       
       // Process evidence files
       if (evidence && evidence.length > 0) {
@@ -609,7 +609,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               appealText: cleanAppealText, 
               appealDate: new Date().toISOString(),
               appealStatus: 'pending' as AppealStatus,
-              appealEvidence
+              appealEvidence // Fixed: now always string[] instead of potentially undefined
             }
           : ban
       ));

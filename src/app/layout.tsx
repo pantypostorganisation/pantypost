@@ -1,51 +1,53 @@
 // src/app/layout.tsx
-'use client';
-
-import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Header from '../components/Header';
-import AgeVerificationModal from '../components/AgeVerificationModal';
-import { ListingProvider } from '../context/ListingContext';
-import { WalletProvider } from '../context/WalletContext';
-import { MessageProvider } from '../context/MessageContext';
-import { ReviewProvider } from '../context/ReviewContext';
-import { RequestProvider } from '../context/RequestContext';
-import { BanProvider } from '../context/BanContext'; // NEW: Import BanProvider
-import { ErrorBoundary } from '../components/ErrorBoundary';
-import { usePathname } from 'next/navigation';
+import './globals.css';
+import { ListingProvider } from '@/context/ListingContext';
+import { MessageProvider } from '@/context/MessageContext';
+import { WalletProvider } from '@/context/WalletContext';
+import { RequestProvider } from '@/context/RequestContext';
+import { ReviewProvider } from '@/context/ReviewContext';
+import { BanProvider } from '@/context/BanContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import Header from '@/components/Header';
+import AgeVerificationModal from '@/components/AgeVerificationModal';
+import BanCheck from '@/components/BanCheck';
 
 const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'PantyPost - Premium Adult Marketplace',
+  description: 'The premier marketplace for adult content and personalized experiences.',
+  keywords: 'adult marketplace, premium content, personalized experiences',
+  robots: 'noindex, nofollow', // Prevent search engine indexing for adult content
+};
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  
-  // Check if we're on auth pages
-  const isAuthPage = pathname === '/login' || pathname === '/signup';
-
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${inter.className} bg-black text-white min-h-screen`}>
         <ErrorBoundary>
-          <BanProvider> {/* NEW: Wrap everything in BanProvider */}
-            <WalletProvider>
-              <MessageProvider>
-                <ReviewProvider>
+          <WalletProvider>  {/* ✅ Move this FIRST */}
+            <BanProvider>
+              <ListingProvider>  {/* ✅ Now this can use useWallet */}
+                <MessageProvider>
                   <RequestProvider>
-                    <ListingProvider>
-                      {!isAuthPage && <Header />}
-                      <AgeVerificationModal />
-                      {children}
-                    </ListingProvider>
+                    <ReviewProvider>
+                      <BanCheck>
+                        <AgeVerificationModal />
+                        <Header />
+                        {children}
+                      </BanCheck>
+                    </ReviewProvider>
                   </RequestProvider>
-                </ReviewProvider>
-              </MessageProvider>
-            </WalletProvider>
-          </BanProvider>
+                </MessageProvider>
+              </ListingProvider>
+            </BanProvider>
+          </WalletProvider>
         </ErrorBoundary>
       </body>
     </html>

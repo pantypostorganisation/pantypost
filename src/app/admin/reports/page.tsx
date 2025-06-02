@@ -86,6 +86,9 @@ export default function AdminReportsPage() {
   });
   const [recommendation, setRecommendation] = useState<any>(null);
   const [isProcessingBan, setIsProcessingBan] = useState(false);
+  
+  // ✅ Safe state for ban info to prevent render-time state updates
+  const [reportBanInfo, setReportBanInfo] = useState<{[key: string]: any}>({});
 
   // Load reports
   useEffect(() => {
@@ -106,6 +109,44 @@ export default function AdminReportsPage() {
       }
     }
   }, []);
+
+  // ✅ Safely update ban info without triggering render-time state updates
+  useEffect(() => {
+    const updateBanInfo = () => {
+      try {
+        const newBanInfo: {[key: string]: any} = {};
+        let hasChanges = false;
+        
+        // Get unique reportees from filtered reports
+        const uniqueReportees = [...new Set(filteredReports.map(r => r.reportee))];
+        
+        uniqueReportees.forEach(reportee => {
+          try {
+            // Only check if we don't already have recent info
+            const banInfo = getBanInfo(reportee);
+            if (JSON.stringify(banInfo) !== JSON.stringify(reportBanInfo[reportee])) {
+              newBanInfo[reportee] = banInfo;
+              hasChanges = true;
+            }
+          } catch (error) {
+            console.error(`Error getting ban info for ${reportee}:`, error);
+            newBanInfo[reportee] = null;
+            hasChanges = true;
+          }
+        });
+        
+        if (hasChanges) {
+          setReportBanInfo(prev => ({ ...prev, ...newBanInfo }));
+        }
+      } catch (error) {
+        console.error('Error updating ban info:', error);
+      }
+    };
+
+    // Debounce the update to prevent excessive calls
+    const timeoutId = setTimeout(updateBanInfo, 100);
+    return () => clearTimeout(timeoutId);
+  }, [filteredReports, getBanInfo]); // Dependencies
 
   // Save reports
   const saveReports = (newReports: ReportLog[]) => {
@@ -130,13 +171,19 @@ export default function AdminReportsPage() {
     return matchesSearch && matchesFilter && matchesSeverity;
   });
 
-  // Get escalation info for a user
+  // Get escalation info for a user - with error handling
   const getEscalationInfo = (username: string) => {
     try {
       return getUserEscalation(username);
     } catch (error) {
       console.error('Error getting escalation info:', error);
-      return null;
+      return {
+        username,
+        offenseCount: 0,
+        lastOffenseDate: '',
+        escalationLevel: 0,
+        offenseHistory: []
+      };
     }
   };
 
@@ -204,6 +251,9 @@ export default function AdminReportsPage() {
           );
           saveReports(updatedReports);
         }
+        
+        // Clear ban info cache for this user
+        setReportBanInfo(prev => ({ ...prev, [username]: null }));
         
         setShowBanModal(false);
         setShowRecommendationModal(false);
@@ -394,7 +444,8 @@ export default function AdminReportsPage() {
         ) : (
           <div className="space-y-4">
             {filteredReports.map((report) => {
-              const userBanInfo = getBanInfo(report.reportee);
+              // ✅ Safe access to ban info - no function calls during render
+              const userBanInfo = reportBanInfo[report.reportee];
               const escalationInfo = getEscalationInfo(report.reportee);
               
               return (
