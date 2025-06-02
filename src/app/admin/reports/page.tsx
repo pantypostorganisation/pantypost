@@ -24,7 +24,13 @@ import {
   Infinity,
   FileText,
   BarChart3,
-  RefreshCw
+  RefreshCw,
+  TrendingUp,
+  Target,
+  Zap,
+  Brain,
+  Scale,
+  Lightbulb
 } from 'lucide-react';
 
 type Message = {
@@ -53,7 +59,15 @@ type ReportLog = {
 
 export default function AdminReportsPage() {
   const { user } = useListings();
-  const { banUser, getActiveBans, getBanStats, getBanInfo } = useBans();
+  const { 
+    banUser, 
+    getActiveBans, 
+    getBanStats, 
+    getBanInfo, 
+    getRecommendedBanDuration, 
+    getUserEscalation,
+    validateBanInput
+  } = useBans();
   
   const [reports, setReports] = useState<ReportLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,6 +75,7 @@ export default function AdminReportsPage() {
   const [severityFilter, setSeverityFilter] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
   const [selectedReport, setSelectedReport] = useState<ReportLog | null>(null);
   const [showBanModal, setShowBanModal] = useState(false);
+  const [showRecommendationModal, setShowRecommendationModal] = useState(false);
   const [banForm, setBanForm] = useState({
     username: '',
     banType: 'temporary' as 'temporary' | 'permanent',
@@ -69,6 +84,8 @@ export default function AdminReportsPage() {
     customReason: '',
     notes: ''
   });
+  const [recommendation, setRecommendation] = useState<any>(null);
+  const [isProcessingBan, setIsProcessingBan] = useState(false);
 
   // Load reports
   useEffect(() => {
@@ -113,66 +130,115 @@ export default function AdminReportsPage() {
     return matchesSearch && matchesFilter && matchesSeverity;
   });
 
-  // Handle ban user
-  const handleBanUser = () => {
-    if (!banForm.username) return;
-    
-    const adminUsername = user?.username || 'admin';
-    const hours = banForm.banType === 'permanent' ? 'permanent' : parseInt(banForm.hours);
-    const reportIds = selectedReport ? [selectedReport.id!] : [];
-    
-    const success = banUser(
-      banForm.username,
-      hours,
-      banForm.reason,
-      banForm.customReason,
-      adminUsername,
-      reportIds,
-      banForm.notes
-    );
-    
-    if (success) {
-      // Mark report as processed with ban applied
-      if (selectedReport) {
-        const updatedReports = reports.map(report => 
-          report.id === selectedReport.id ? {
-            ...report,
-            processed: true,
-            banApplied: true,
-            processedBy: adminUsername,
-            processedAt: new Date().toISOString(),
-            adminNotes: banForm.notes
-          } : report
-        );
-        saveReports(updatedReports);
-      }
-      
-      setShowBanModal(false);
-      setBanForm({
-        username: '',
-        banType: 'temporary',
-        hours: '24',
-        reason: 'harassment',
-        customReason: '',
-        notes: ''
-      });
-      
-      alert(`Successfully banned ${banForm.username} ${banForm.banType === 'permanent' ? 'permanently' : `for ${banForm.hours} hours`}`);
-    } else {
-      alert('Failed to ban user. They may already be banned.');
+  // Get escalation info for a user
+  const getEscalationInfo = (username: string) => {
+    try {
+      return getUserEscalation(username);
+    } catch (error) {
+      console.error('Error getting escalation info:', error);
+      return null;
     }
   };
 
-  // Handle quick ban
-  const handleQuickBan = (username: string, hours: number, reason: string) => {
-    const adminUsername = user?.username || 'admin';
-    const success = banUser(username, hours, reason as any, '', adminUsername);
-    
-    if (success) {
-      alert(`Successfully banned ${username} for ${hours} hours`);
-    } else {
-      alert('Failed to ban user. They may already be banned.');
+  // Show recommendation modal
+  const showBanRecommendation = (username: string, reason: any) => {
+    try {
+      const rec = getRecommendedBanDuration(username, reason);
+      const escalation = getEscalationInfo(username);
+      setRecommendation({ ...rec, escalation, username, reason });
+      setShowRecommendationModal(true);
+    } catch (error) {
+      console.error('Error getting recommendation:', error);
+      alert('Error getting ban recommendation');
     }
+  };
+
+  // Handle intelligent ban with recommendation
+  const handleIntelligentBan = async (username: string, reason: any, useRecommendation: boolean = true) => {
+    setIsProcessingBan(true);
+    
+    try {
+      let duration: number | 'permanent';
+      let notes = '';
+      
+      if (useRecommendation && recommendation) {
+        duration = recommendation.duration;
+        notes = `Progressive discipline - ${recommendation.reasoning}`;
+      } else {
+        duration = banForm.banType === 'permanent' ? 'permanent' : parseInt(banForm.hours);
+        notes = banForm.notes;
+      }
+      
+      const adminUsername = user?.username || 'admin';
+      const reportIds = selectedReport ? [selectedReport.id!] : [];
+      
+      // Validate the ban input
+      const validation = validateBanInput(username, duration, reason);
+      if (!validation.valid) {
+        alert(`Invalid ban parameters: ${validation.error}`);
+        return;
+      }
+      
+      const success = await banUser(
+        username,
+        duration,
+        reason,
+        banForm.customReason || undefined,
+        adminUsername,
+        reportIds,
+        notes
+      );
+      
+      if (success) {
+        // Mark report as processed with ban applied
+        if (selectedReport) {
+          const updatedReports = reports.map(report => 
+            report.id === selectedReport.id ? {
+              ...report,
+              processed: true,
+              banApplied: true,
+              processedBy: adminUsername,
+              processedAt: new Date().toISOString(),
+              adminNotes: notes
+            } : report
+          );
+          saveReports(updatedReports);
+        }
+        
+        setShowBanModal(false);
+        setShowRecommendationModal(false);
+        resetBanForm();
+        
+        const durationText = duration === 'permanent' ? 'permanently' : `for ${duration} hours`;
+        alert(`Successfully banned ${username} ${durationText}`);
+      } else {
+        alert('Failed to ban user. They may already be banned or invalid parameters provided.');
+      }
+    } catch (error) {
+      console.error('Error applying ban:', error);
+      alert('An error occurred while applying the ban.');
+    } finally {
+      setIsProcessingBan(false);
+    }
+  };
+
+  // Reset ban form
+  const resetBanForm = () => {
+    setBanForm({
+      username: '',
+      banType: 'temporary',
+      hours: '24',
+      reason: 'harassment',
+      customReason: '',
+      notes: ''
+    });
+    setRecommendation(null);
+  };
+
+  // Handle quick ban with intelligence
+  const handleQuickBan = async (username: string, hours: number, reason: string) => {
+    // Show recommendation first for transparency
+    showBanRecommendation(username, reason as any);
   };
 
   // Mark report as resolved without ban
@@ -217,6 +283,15 @@ export default function AdminReportsPage() {
     }
   };
 
+  // Get escalation level color
+  const getEscalationColor = (level: number) => {
+    if (level <= 1) return 'text-green-400';
+    if (level <= 2) return 'text-yellow-400';
+    if (level <= 3) return 'text-orange-400';
+    if (level <= 4) return 'text-red-400';
+    return 'text-purple-400';
+  };
+
   // Get ban stats
   const banStats = getBanStats();
 
@@ -228,31 +303,39 @@ export default function AdminReportsPage() {
           <div>
             <h1 className="text-3xl font-bold text-[#ff950e] flex items-center">
               <Shield className="mr-3" />
-              Enhanced Reports & Bans
+              Intelligent Reports & Moderation
             </h1>
             <p className="text-gray-400 mt-1">
-              Manage user reports and apply temporary or permanent bans
+              AI-powered progressive discipline system with escalation tracking
             </p>
           </div>
           
-          {/* Quick Stats */}
-          <div className="flex gap-4">
+          {/* Enhanced Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-red-400">{banStats.totalActiveBans}</div>
               <div className="text-xs text-gray-400">Active Bans</div>
             </div>
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-yellow-400">{filteredReports.filter(r => !r.processed).length}</div>
-              <div className="text-xs text-gray-400">Pending Reports</div>
+              <div className="text-xs text-gray-400">Pending</div>
             </div>
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-orange-400">{banStats.pendingAppeals}</div>
-              <div className="text-xs text-gray-400">Pending Appeals</div>
+              <div className="text-2xl font-bold text-orange-400">{banStats.appealStats.pendingAppeals}</div>
+              <div className="text-xs text-gray-400">Appeals</div>
+            </div>
+            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-purple-400">{banStats.escalationStats.level4 + banStats.escalationStats.level5}</div>
+              <div className="text-xs text-gray-400">High Risk</div>
+            </div>
+            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-blue-400">{banStats.recentBans24h}</div>
+              <div className="text-xs text-gray-400">24h Bans</div>
             </div>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Enhanced Filters */}
         <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
           <div className="flex flex-wrap gap-4 items-center">
             {/* Search */}
@@ -285,10 +368,10 @@ export default function AdminReportsPage() {
               className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
             >
               <option value="all">All Severities</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
               <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
             </select>
 
             {/* Refresh */}
@@ -312,6 +395,7 @@ export default function AdminReportsPage() {
           <div className="space-y-4">
             {filteredReports.map((report) => {
               const userBanInfo = getBanInfo(report.reportee);
+              const escalationInfo = getEscalationInfo(report.reportee);
               
               return (
                 <div key={report.id} className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
@@ -327,6 +411,11 @@ export default function AdminReportsPage() {
                           {userBanInfo && (
                             <span className="px-2 py-1 bg-red-900/20 text-red-400 text-xs rounded font-medium">
                               BANNED
+                            </span>
+                          )}
+                          {escalationInfo && escalationInfo.escalationLevel > 0 && (
+                            <span className={`px-2 py-1 text-xs rounded font-medium ${getEscalationColor(escalationInfo.escalationLevel)} bg-opacity-20`}>
+                              Level {escalationInfo.escalationLevel} ({escalationInfo.offenseCount} offenses)
                             </span>
                           )}
                         </div>
@@ -372,6 +461,47 @@ export default function AdminReportsPage() {
                     </div>
                   </div>
 
+                  {/* Escalation Info */}
+                  {escalationInfo && escalationInfo.escalationLevel > 0 && (
+                    <div className="mb-4 p-3 bg-purple-900/10 border border-purple-800 rounded-lg">
+                      <div className="flex items-center gap-2 text-purple-400 mb-2">
+                        <TrendingUp size={16} />
+                        <span className="font-medium">User History & Risk Assessment</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-400">Escalation Level:</span>
+                          <span className={`ml-2 font-medium ${getEscalationColor(escalationInfo.escalationLevel)}`}>
+                            Level {escalationInfo.escalationLevel}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Total Offenses:</span>
+                          <span className="text-white ml-2">{escalationInfo.offenseCount}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Last Offense:</span>
+                          <span className="text-white ml-2">
+                            {escalationInfo.lastOffenseDate ? new Date(escalationInfo.lastOffenseDate).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {escalationInfo.offenseHistory.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-gray-400 text-xs mb-2">Recent Violations:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {escalationInfo.offenseHistory.slice(-3).map((offense, i) => (
+                              <span key={i} className="px-2 py-1 bg-gray-900/50 text-gray-300 text-xs rounded">
+                                {offense.reason} ({new Date(offense.date).toLocaleDateString()})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Messages Preview */}
                   <div className="mb-4">
                     <div className="text-sm text-gray-400 mb-2 flex items-center gap-1">
@@ -403,27 +533,36 @@ export default function AdminReportsPage() {
                   <div className="flex flex-wrap gap-2">
                     {!report.processed && (
                       <>
+                        {/* Intelligent Ban Button */}
+                        <button
+                          onClick={() => showBanRecommendation(report.reportee, 'harassment')}
+                          className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 flex items-center"
+                        >
+                          <Brain size={12} className="mr-1" />
+                          Smart Ban
+                        </button>
+                        
                         {/* Quick Ban Buttons */}
                         <button
                           onClick={() => handleQuickBan(report.reportee, 1, 'harassment')}
                           className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 flex items-center"
                         >
                           <Timer size={12} className="mr-1" />
-                          1 Hour Ban
+                          1 Hour
                         </button>
                         <button
                           onClick={() => handleQuickBan(report.reportee, 24, 'harassment')}
                           className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 flex items-center"
                         >
                           <Timer size={12} className="mr-1" />
-                          24 Hour Ban
+                          24 Hours
                         </button>
                         <button
                           onClick={() => handleQuickBan(report.reportee, 168, 'harassment')}
                           className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center"
                         >
                           <Timer size={12} className="mr-1" />
-                          7 Day Ban
+                          7 Days
                         </button>
                         
                         {/* Custom Ban */}
@@ -498,6 +637,136 @@ export default function AdminReportsPage() {
           </div>
         )}
 
+        {/* Smart Recommendation Modal */}
+        {showRecommendationModal && recommendation && (
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                <Brain className="mr-2 text-purple-400" />
+                Intelligent Ban Recommendation
+              </h3>
+              
+              <div className="space-y-6">
+                {/* User Info */}
+                <div className="bg-[#222] rounded-lg p-4">
+                  <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                    <Target size={16} className="text-blue-400" />
+                    User Assessment: {recommendation.username}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-400">Current Level:</span>
+                      <span className={`ml-2 font-medium ${getEscalationColor(recommendation.escalation?.escalationLevel || 0)}`}>
+                        Level {recommendation.escalation?.escalationLevel || 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Total Offenses:</span>
+                      <span className="text-white ml-2">{recommendation.escalation?.offenseCount || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Recommended Level:</span>
+                      <span className={`ml-2 font-medium ${getEscalationColor(recommendation.level)}`}>
+                        Level {recommendation.level}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Violation Type:</span>
+                      <span className="text-white ml-2 capitalize">{recommendation.reason.replace('_', ' ')}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Recommendation */}
+                <div className="bg-purple-900/20 border border-purple-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                    <Lightbulb size={16} />
+                    AI Recommendation
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-gray-400">Recommended Action:</span>
+                      <span className="text-white ml-2 font-medium">
+                        {recommendation.duration === 'permanent' ? 'Permanent Ban' : `${recommendation.duration} Hour Ban`}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Reasoning:</span>
+                      <p className="text-gray-300 mt-1 text-sm">{recommendation.reasoning}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Escalation History */}
+                {recommendation.escalation?.offenseHistory?.length > 0 && (
+                  <div className="bg-[#222] rounded-lg p-4">
+                    <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+                      <BarChart3 size={16} className="text-orange-400" />
+                      Violation History
+                    </h4>
+                    <div className="space-y-2">
+                      {recommendation.escalation.offenseHistory.slice(-5).map((offense: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center text-sm">
+                          <span className="text-gray-300 capitalize">{offense.reason.replace('_', ' ')}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-400">Weight: {offense.weight}</span>
+                            <span className="text-gray-500">{new Date(offense.date).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowRecommendationModal(false)}
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  disabled={isProcessingBan}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBanModal(true);
+                    setBanForm(prev => ({ 
+                      ...prev, 
+                      username: recommendation.username,
+                      banType: recommendation.duration === 'permanent' ? 'permanent' : 'temporary',
+                      hours: recommendation.duration === 'permanent' ? '24' : recommendation.duration.toString(),
+                      reason: recommendation.reason,
+                      notes: `Progressive discipline - ${recommendation.reasoning}`
+                    }));
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center"
+                  disabled={isProcessingBan}
+                >
+                  <Scale size={16} className="mr-2" />
+                  Customize
+                </button>
+                <button
+                  onClick={() => handleIntelligentBan(recommendation.username, recommendation.reason, true)}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center"
+                  disabled={isProcessingBan}
+                >
+                  {isProcessingBan ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={16} className="mr-2" />
+                      Apply Recommendation
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Custom Ban Modal */}
         {showBanModal && (
           <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
@@ -539,6 +808,7 @@ export default function AdminReportsPage() {
                     <input
                       type="number"
                       min="1"
+                      max="8760"
                       value={banForm.hours}
                       onChange={(e) => setBanForm(prev => ({ ...prev, hours: e.target.value }))}
                       className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
@@ -591,17 +861,31 @@ export default function AdminReportsPage() {
               
               <div className="flex gap-3 mt-6">
                 <button
-                  onClick={() => setShowBanModal(false)}
+                  onClick={() => {
+                    setShowBanModal(false);
+                    resetBanForm();
+                  }}
                   className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  disabled={isProcessingBan}
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleBanUser}
+                  onClick={() => handleIntelligentBan(banForm.username, banForm.reason, false)}
                   className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center"
+                  disabled={isProcessingBan}
                 >
-                  <Ban size={16} className="mr-2" />
-                  Apply Ban
+                  {isProcessingBan ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Ban size={16} className="mr-2" />
+                      Apply Ban
+                    </>
+                  )}
                 </button>
               </div>
             </div>

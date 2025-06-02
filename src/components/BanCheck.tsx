@@ -1,7 +1,7 @@
 // src/components/BanCheck.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
 import { useListings } from '@/context/ListingContext';
 import { 
@@ -12,7 +12,17 @@ import {
   Infinity,
   Shield,
   Calendar,
-  FileText
+  FileText,
+  Upload,
+  X,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Paperclip,
+  Image as ImageIcon,
+  Send,
+  Info,
+  ExternalLink
 } from 'lucide-react';
 
 interface BanCheckProps {
@@ -21,255 +31,619 @@ interface BanCheckProps {
 
 const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
   const { user, logout } = useListings();
-  const { isUserBanned, submitAppeal } = useBans();
+  const { isUserBanned, submitAppeal, getBanInfo } = useBans();
+  
   const [banInfo, setBanInfo] = useState<any>(null);
   const [showAppealForm, setShowAppealForm] = useState(false);
   const [appealText, setAppealText] = useState('');
+  const [appealFiles, setAppealFiles] = useState<File[]>([]);
   const [appealSubmitted, setAppealSubmitted] = useState(false);
-
-  // Check if user is banned whenever user changes
-  useEffect(() => {
-    if (user) {
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [lastCheckTime, setLastCheckTime] = useState<number>(0);
+  const [connectionError, setConnectionError] = useState(false);
+  
+  const maxRetries = 3;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Retry with exponential backoff
+  const checkBanStatus = useCallback(async () => {
+    if (!user?.username) {
+      setBanInfo(null);
+      return;
+    }
+    
+    try {
+      setConnectionError(false);
       const ban = isUserBanned(user.username);
       setBanInfo(ban);
+      setLastCheckTime(Date.now());
+      setRetryCount(0);
       
-      // If user is banned, prevent them from using the platform
-      if (ban) {
-        console.log(`User ${user.username} is banned:`, ban);
+      // If ban was lifted, refresh the page to restore normal access
+      if (!ban && banInfo) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
-    } else {
-      setBanInfo(null);
-    }
-  }, [user, isUserBanned]);
-
-  // Handle appeal submission
-  const handleSubmitAppeal = () => {
-    if (!user || !appealText.trim()) return;
-    
-    const success = submitAppeal(user.username, appealText.trim());
-    if (success) {
-      setAppealSubmitted(true);
-      setShowAppealForm(false);
-      setAppealText('');
+    } catch (error) {
+      console.error('Error checking ban status:', error);
+      setConnectionError(true);
       
-      // Refresh ban info to show appeal was submitted
-      const updatedBan = isUserBanned(user.username);
-      setBanInfo(updatedBan);
-    } else {
-      alert('Failed to submit appeal. Please try again.');
+      if (retryCount < maxRetries) {
+        const backoffDelay = Math.pow(2, retryCount) * 1000;
+        setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          checkBanStatus();
+        }, backoffDelay);
+      }
+    }
+  }, [user?.username, isUserBanned, retryCount, banInfo]);
+
+  // Check ban status on user change and periodically
+  useEffect(() => {
+    checkBanStatus();
+    
+    // Set up periodic checking every 30 seconds
+    const interval = setInterval(checkBanStatus, 30000);
+    
+    // Listen for ban expiration events
+    const handleBanExpired = (event: CustomEvent) => {
+      if (event.detail.username === user?.username) {
+        checkBanStatus();
+      }
+    };
+    
+    window.addEventListener('banExpired', handleBanExpired as EventListener);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('banExpired', handleBanExpired as EventListener);
+    };
+  }, [checkBanStatus, user?.username]);
+
+  // Handle file selection for appeal evidence
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    const validFiles = files.filter(file => {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert(`${file.name} is not an image file`);
+        return false;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`${file.name} is too large (max 5MB)`);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    // Limit to 3 files total
+    const newFiles = [...appealFiles, ...validFiles].slice(0, 3);
+    setAppealFiles(newFiles);
+    
+    // Clear input to allow re-selecting same files
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
-  // Format remaining time
+  // Remove file from appeal
+  const removeFile = (index: number) => {
+    setAppealFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Handle appeal submission
+  const handleSubmitAppeal = async () => {
+    if (!user || !appealText.trim()) {
+      alert('Please enter an appeal message');
+      return;
+    }
+    
+    if (appealText.length < 10) {
+      alert('Appeal message must be at least 10 characters long');
+      return;
+    }
+    
+    if (appealText.length > 1000) {
+      alert('Appeal message must be less than 1000 characters');
+      return;
+    }
+    
+    setIsSubmittingAppeal(true);
+    
+    try {
+      const success = await submitAppeal(user.username, appealText.trim(), appealFiles);
+      
+      if (success) {
+        setAppealSubmitted(true);
+        setShowAppealForm(false);
+        setAppealText('');
+        setAppealFiles([]);
+        
+        // Refresh ban info to show appeal was submitted
+        const updatedBan = getBanInfo(user.username);
+        setBanInfo(updatedBan);
+        
+        // Show success message
+        setTimeout(() => {
+          alert('Appeal submitted successfully! You will be notified of the decision.');
+        }, 500);
+      } else {
+        alert('Failed to submit appeal. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting appeal:', error);
+      alert('An error occurred while submitting your appeal. Please try again.');
+    } finally {
+      setIsSubmittingAppeal(false);
+    }
+  };
+
+  // Format remaining time with better precision
   const formatRemainingTime = (ban: any) => {
     if (ban.banType === 'permanent') {
       return 'This is a permanent ban';
     }
     
     if (!ban.remainingHours || ban.remainingHours <= 0) {
-      return 'Ban has expired - please refresh the page';
+      return 'Ban has expired - refreshing page...';
     }
     
-    if (ban.remainingHours < 24) {
-      return `${ban.remainingHours} hour${ban.remainingHours !== 1 ? 's' : ''} remaining`;
-    }
+    const hours = ban.remainingHours;
     
-    const days = Math.floor(ban.remainingHours / 24);
-    const hours = ban.remainingHours % 24;
-    return `${days} day${days !== 1 ? 's' : ''} ${hours ? `and ${hours} hour${hours !== 1 ? 's' : ''}` : ''} remaining`;
+    if (hours < 1) {
+      const minutes = Math.ceil(hours * 60);
+      return `${minutes} minute${minutes !== 1 ? 's' : ''} remaining`;
+    } else if (hours < 24) {
+      const wholeHours = Math.floor(hours);
+      const minutes = Math.ceil((hours - wholeHours) * 60);
+      return `${wholeHours} hour${wholeHours !== 1 ? 's' : ''} ${minutes > 0 ? `and ${minutes} minute${minutes !== 1 ? 's' : ''}` : ''} remaining`;
+    } else {
+      const days = Math.floor(hours / 24);
+      const remainingHours = Math.floor(hours % 24);
+      return `${days} day${days !== 1 ? 's' : ''} ${remainingHours > 0 ? `and ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}` : ''} remaining`;
+    }
   };
 
-  // Get ban reason display
+  // Get ban reason display with enhanced descriptions
   const getBanReasonDisplay = (reason: string, customReason?: string) => {
-    const reasonMap: Record<string, string> = {
-      harassment: 'Harassment',
-      spam: 'Spam',
-      inappropriate_content: 'Inappropriate Content',
-      scam: 'Scam/Fraud',
-      underage: 'Underage',
-      payment_fraud: 'Payment Fraud',
-      other: 'Other'
+    const reasonMap: Record<string, { title: string; description: string }> = {
+      harassment: {
+        title: 'Harassment',
+        description: 'Engaging in abusive or threatening behavior toward other users'
+      },
+      spam: {
+        title: 'Spam',
+        description: 'Posting repetitive, unwanted, or promotional content'
+      },
+      inappropriate_content: {
+        title: 'Inappropriate Content',
+        description: 'Sharing content that violates platform guidelines'
+      },
+      scam: {
+        title: 'Scam/Fraud',
+        description: 'Attempting to defraud or scam other users'
+      },
+      underage: {
+        title: 'Underage Violation',
+        description: 'Platform restricted to users 21 and older'
+      },
+      payment_fraud: {
+        title: 'Payment Fraud',
+        description: 'Fraudulent payment activity or chargebacks'
+      },
+      other: {
+        title: 'Other',
+        description: 'Other violations of platform terms of service'
+      }
     };
     
-    const displayReason = reasonMap[reason] || reason;
-    return customReason ? `${displayReason}: ${customReason}` : displayReason;
+    const reasonInfo = reasonMap[reason] || { title: reason, description: '' };
+    const displayReason = customReason ? `${reasonInfo.title}: ${customReason}` : reasonInfo.title;
+    
+    return { display: displayReason, description: reasonInfo.description };
   };
 
-  // If user is banned, show ban screen instead of normal content
-  if (banInfo) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full bg-[#1a1a1a] border-2 border-red-800 rounded-xl p-8 text-center shadow-2xl">
-          {/* Ban Icon */}
-          <div className="mb-6">
-            <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              {banInfo.banType === 'permanent' ? (
-                <Infinity size={40} className="text-red-400" />
-              ) : (
-                <Ban size={40} className="text-red-400" />
-              )}
-            </div>
-            <h1 className="text-3xl font-bold text-red-400 mb-2">
-              Account {banInfo.banType === 'permanent' ? 'Permanently' : 'Temporarily'} Banned
-            </h1>
-            <p className="text-gray-400">
-              Your account has been suspended from PantyPost
-            </p>
-          </div>
+  // Get escalation level display
+  const getEscalationDisplay = (level?: number) => {
+    if (!level) return null;
+    
+    const escalationMap: Record<number, { title: string; color: string; description: string }> = {
+      1: { title: 'Level 1', color: 'text-yellow-400', description: 'First offense' },
+      2: { title: 'Level 2', color: 'text-orange-400', description: 'Multiple violations' },
+      3: { title: 'Level 3', color: 'text-red-400', description: 'Serious violations' },
+      4: { title: 'Level 4', color: 'text-purple-400', description: 'Severe violations' },
+      5: { title: 'Level 5', color: 'text-red-600', description: 'Final warning level' }
+    };
+    
+    return escalationMap[level] || null;
+  };
 
-          {/* Ban Details */}
-          <div className="bg-[#222] rounded-lg p-6 mb-6 text-left">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-gray-400 mb-1">
-                  <AlertTriangle size={16} />
-                  <span className="font-medium">Reason</span>
+  // If user is not banned, render children normally
+  if (!banInfo) {
+    return <>{children}</>;
+  }
+
+  const reasonInfo = getBanReasonDisplay(banInfo.reason, banInfo.customReason);
+  const escalationInfo = getEscalationDisplay(banInfo.escalationLevel);
+
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="max-w-4xl w-full bg-[#1a1a1a] border-2 border-red-800 rounded-xl p-8 shadow-2xl">
+        {/* Connection Error Banner */}
+        {connectionError && (
+          <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-800 rounded-lg flex items-center gap-3">
+            <AlertTriangle size={20} className="text-yellow-400" />
+            <div>
+              <p className="text-yellow-400 font-medium">Connection Issue</p>
+              <p className="text-gray-300 text-sm">Unable to verify ban status. Retrying automatically...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Ban Header */}
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            {banInfo.banType === 'permanent' ? (
+              <Infinity size={40} className="text-red-400" />
+            ) : (
+              <Ban size={40} className="text-red-400" />
+            )}
+          </div>
+          <h1 className="text-3xl font-bold text-red-400 mb-2">
+            Account {banInfo.banType === 'permanent' ? 'Permanently' : 'Temporarily'} Suspended
+          </h1>
+          <p className="text-gray-400">
+            Your access to PantyPost has been restricted
+          </p>
+          {escalationInfo && (
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-gray-900/50 rounded-full">
+              <Shield size={16} className={escalationInfo.color} />
+              <span className={`text-sm font-medium ${escalationInfo.color}`}>
+                {escalationInfo.title} - {escalationInfo.description}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Ban Details */}
+        <div className="bg-[#222] rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Info size={20} />
+            Suspension Details
+          </h3>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 text-gray-400 mb-1">
+                    <AlertTriangle size={16} />
+                    <span className="font-medium">Violation</span>
+                  </div>
+                  <div className="text-white">
+                    <p className="font-medium">{reasonInfo.display}</p>
+                    {reasonInfo.description && (
+                      <p className="text-sm text-gray-400 mt-1">{reasonInfo.description}</p>
+                    )}
+                  </div>
                 </div>
-                <p className="text-white">{getBanReasonDisplay(banInfo.reason, banInfo.customReason)}</p>
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 text-gray-400 mb-1">
-                  <Clock size={16} />
-                  <span className="font-medium">Duration</span>
+                
+                <div>
+                  <div className="flex items-center gap-2 text-gray-400 mb-1">
+                    <Clock size={16} />
+                    <span className="font-medium">Duration</span>
+                  </div>
+                  <div className="text-white">
+                    <p className="font-medium">{formatRemainingTime(banInfo)}</p>
+                    {banInfo.banType === 'temporary' && (
+                      <div className="mt-2 bg-red-900/20 rounded-full h-2">
+                        <div 
+                          className="bg-red-500 h-2 rounded-full transition-all duration-1000"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, (banInfo.remainingHours || 0) / (parseInt(banInfo.notes) || 24) * 100))}%`
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <p className="text-white">{formatRemainingTime(banInfo)}</p>
               </div>
-              
-              <div>
-                <div className="flex items-center gap-2 text-gray-400 mb-1">
-                  <Calendar size={16} />
-                  <span className="font-medium">Banned On</span>
-                </div>
-                <p className="text-white">{new Date(banInfo.startTime).toLocaleString()}</p>
-              </div>
-              
-              {banInfo.endTime && (
+            </div>
+            
+            <div>
+              <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 text-gray-400 mb-1">
                     <Calendar size={16} />
-                    <span className="font-medium">Ban Ends</span>
+                    <span className="font-medium">Suspended On</span>
                   </div>
-                  <p className="text-white">{new Date(banInfo.endTime).toLocaleString()}</p>
+                  <p className="text-white">{new Date(banInfo.startTime).toLocaleString()}</p>
                 </div>
-              )}
+                
+                {banInfo.endTime && (
+                  <div>
+                    <div className="flex items-center gap-2 text-gray-400 mb-1">
+                      <Calendar size={16} />
+                      <span className="font-medium">Suspension Ends</span>
+                    </div>
+                    <p className="text-white">{new Date(banInfo.endTime).toLocaleString()}</p>
+                  </div>
+                )}
+                
+                <div>
+                  <div className="flex items-center gap-2 text-gray-400 mb-1">
+                    <Shield size={16} />
+                    <span className="font-medium">Moderator</span>
+                  </div>
+                  <p className="text-white">{banInfo.bannedBy}</p>
+                </div>
+              </div>
             </div>
-            
-            {banInfo.notes && (
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <div className="flex items-center gap-2 text-gray-400 mb-1">
-                  <FileText size={16} />
-                  <span className="font-medium">Additional Information</span>
-                </div>
+          </div>
+          
+          {banInfo.notes && (
+            <div className="mt-6 pt-4 border-t border-gray-700">
+              <div className="flex items-center gap-2 text-gray-400 mb-2">
+                <FileText size={16} />
+                <span className="font-medium">Additional Information</span>
+              </div>
+              <div className="bg-[#1a1a1a] rounded-lg p-3">
                 <p className="text-gray-300 text-sm">{banInfo.notes}</p>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Appeal Section */}
-          {banInfo.appealable && !banInfo.appealSubmitted && !appealSubmitted && (
-            <div className="bg-blue-900/10 border border-blue-800 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-semibold text-blue-400 mb-3 flex items-center justify-center gap-2">
-                <MessageSquare size={20} />
-                Submit an Appeal
-              </h3>
-              <p className="text-gray-300 text-sm mb-4">
-                If you believe this ban was issued in error, you can submit an appeal for admin review.
+        {/* Appeal Section */}
+        {banInfo.appealable && !banInfo.appealSubmitted && !appealSubmitted && (
+          <div className="bg-blue-900/10 border border-blue-800 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold text-blue-400 mb-3 flex items-center justify-center gap-2">
+              <MessageSquare size={20} />
+              Submit an Appeal
+            </h3>
+            <div className="text-center mb-4">
+              <p className="text-gray-300 text-sm mb-2">
+                If you believe this suspension was issued in error, you can submit an appeal for review.
               </p>
-              
-              {!showAppealForm ? (
+              <p className="text-gray-400 text-xs">
+                Appeals are reviewed by our moderation team within 24-48 hours.
+              </p>
+            </div>
+            
+            {!showAppealForm ? (
+              <div className="text-center">
                 <button
                   onClick={() => setShowAppealForm(true)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                 >
-                  Submit Appeal
+                  Start Appeal Process
                 </button>
-              ) : (
-                <div className="text-left">
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-blue-400 mb-2">
+                    Explain why this suspension should be lifted *
+                  </label>
                   <textarea
                     value={appealText}
                     onChange={(e) => setAppealText(e.target.value)}
-                    placeholder="Explain why you believe this ban should be lifted..."
-                    className="w-full p-3 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-                    rows={4}
-                    maxLength={500}
+                    placeholder="Please provide a detailed explanation of why you believe this suspension was issued in error, or describe any circumstances that should be considered..."
+                    className="w-full p-3 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    rows={5}
+                    maxLength={1000}
                   />
-                  <div className="text-xs text-gray-400 mb-4">
-                    {appealText.length}/500 characters
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => {
-                        setShowAppealForm(false);
-                        setAppealText('');
-                      }}
-                      className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSubmitAppeal}
-                      disabled={!appealText.trim()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Submit Appeal
-                    </button>
+                  <div className="flex justify-between items-center mt-2">
+                    <div className="text-xs text-gray-400">
+                      {appealText.length}/1000 characters
+                    </div>
+                    {appealText.length < 10 && (
+                      <div className="text-xs text-red-400">
+                        Minimum 10 characters required
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Appeal Status */}
-          {(banInfo.appealSubmitted || appealSubmitted) && (
-            <div className="bg-orange-900/10 border border-orange-800 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-semibold text-orange-400 mb-2">Appeal Submitted</h3>
-              <p className="text-gray-300 text-sm">
-                Your appeal has been submitted and is pending review by our moderation team. 
-                You will be notified of the decision.
-              </p>
-              {banInfo.appealText && (
-                <div className="mt-3 p-3 bg-[#222] rounded">
-                  <div className="text-sm text-gray-400 mb-1">Your appeal message:</div>
-                  <div className="text-sm text-gray-300">{banInfo.appealText}</div>
+                
+                {/* Evidence Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-blue-400 mb-2">
+                    Supporting Evidence (Optional)
+                  </label>
+                  <div className="border-2 border-dashed border-gray-700 rounded-lg p-4">
+                    <div className="text-center">
+                      <Upload size={32} className="mx-auto text-gray-500 mb-2" />
+                      <p className="text-sm text-gray-400 mb-2">
+                        Upload screenshots or images that support your appeal
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors text-sm"
+                      >
+                        Choose Files
+                      </button>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Max 3 files, 5MB each. Images only.
+                      </p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Selected Files */}
+                  {appealFiles.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-sm font-medium text-gray-300">Selected Evidence:</p>
+                      {appealFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between bg-[#222] p-2 rounded">
+                          <div className="flex items-center gap-2">
+                            <ImageIcon size={16} className="text-blue-400" />
+                            <span className="text-sm text-gray-300">{file.name}</span>
+                            <span className="text-xs text-gray-500">
+                              ({(file.size / 1024 / 1024).toFixed(1)}MB)
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => removeFile(index)}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={() => {
-                logout();
-                window.location.href = '/';
-              }}
-              className="px-6 py-2 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors"
-            >
-              Sign Out
-            </button>
-            
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
-            >
-              Refresh Status
-            </button>
+                
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => {
+                      setShowAppealForm(false);
+                      setAppealText('');
+                      setAppealFiles([]);
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                    disabled={isSubmittingAppeal}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitAppeal}
+                    disabled={!appealText.trim() || appealText.length < 10 || isSubmittingAppeal}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingAppeal ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} />
+                        Submit Appeal
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+        )}
 
-          {/* Contact Info */}
-          <div className="mt-8 pt-6 border-t border-gray-700 text-sm text-gray-400">
+        {/* Appeal Status */}
+        {(banInfo.appealSubmitted || appealSubmitted) && (
+          <div className="bg-orange-900/10 border border-orange-800 rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-semibold text-orange-400 mb-3 flex items-center gap-2">
+              <MessageSquare size={20} />
+              Appeal Status: {banInfo.appealStatus || 'Pending'}
+            </h3>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
+                <span className="text-gray-300 text-sm">
+                  Your appeal has been submitted and is being reviewed by our moderation team.
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
+                <span className="text-gray-400 text-sm">
+                  You will be notified of the decision via email and platform notification.
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
+                <span className="text-gray-400 text-sm">
+                  Appeals are typically reviewed within 24-48 hours.
+                </span>
+              </div>
+            </div>
+            
+            {banInfo.appealText && (
+              <div className="mt-4 p-3 bg-[#222] rounded border-l-4 border-orange-400">
+                <div className="text-sm text-orange-400 mb-1">Your appeal message:</div>
+                <div className="text-sm text-gray-300">{banInfo.appealText}</div>
+                {banInfo.appealDate && (
+                  <div className="text-xs text-gray-500 mt-2">
+                    Submitted: {new Date(banInfo.appealDate).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+          <button
+            onClick={() => {
+              logout();
+              window.location.href = '/';
+            }}
+            className="px-6 py-3 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors font-medium"
+          >
+            Sign Out
+          </button>
+          
+          <button
+            onClick={() => {
+              setRetryCount(0);
+              checkBanStatus();
+            }}
+            className="px-6 py-3 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors font-medium flex items-center gap-2"
+            disabled={connectionError && retryCount >= maxRetries}
+          >
+            <RefreshCw size={16} className={connectionError ? 'animate-spin' : ''} />
+            {connectionError ? 'Retrying...' : 'Refresh Status'}
+          </button>
+        </div>
+
+        {/* Contact Info */}
+        <div className="text-center pt-6 border-t border-gray-700">
+          <div className="text-sm text-gray-400 mb-2">
+            <p className="mb-2">
+              For urgent matters or technical issues, you can contact our support team.
+            </p>
             <p>
-              For urgent matters, contact our support team. Please reference your username: <strong>{user?.username}</strong>
+              Please reference your username: <strong className="text-white">{user?.username}</strong>
             </p>
           </div>
+          
+          {/* Last Status Check */}
+          {lastCheckTime > 0 && (
+            <div className="text-xs text-gray-500 mt-3">
+              Last status check: {new Date(lastCheckTime).toLocaleTimeString()}
+            </div>
+          )}
+        </div>
+
+        {/* Platform Guidelines Link */}
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => window.open('/terms', '_blank')}
+            className="text-blue-400 hover:text-blue-300 text-sm underline flex items-center gap-1 mx-auto transition-colors"
+          >
+            <ExternalLink size={14} />
+            Review Platform Guidelines
+          </button>
         </div>
       </div>
-    );
-  }
-
-  // If user is not banned, render children normally
-  return <>{children}</>;
+    </div>
+  );
 };
 
 export default BanCheck;
