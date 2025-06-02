@@ -1,7 +1,7 @@
 // src/app/admin/reports/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useListings } from '@/context/ListingContext';
 import { useBans } from '@/context/BanContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -30,7 +30,18 @@ import {
   Zap,
   Brain,
   Scale,
-  Lightbulb
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  Info,
+  Activity,
+  MessageCircle,
+  Archive,
+  ExternalLink,
+  Flag,
+  ShieldAlert,
+  EyeOff
 } from 'lucide-react';
 
 type Message = {
@@ -60,7 +71,7 @@ type ReportLog = {
 export default function AdminReportsPage() {
   const { user } = useListings();
   
-  // Safely handle the ban context with error checking
+  // Safely handle the ban context
   let banContext: any = null;
   let banContextError: string | null = null;
   
@@ -69,7 +80,6 @@ export default function AdminReportsPage() {
   } catch (error) {
     console.error('Error initializing ban context:', error);
     banContextError = 'Ban management system not available';
-    // Set default empty functions to prevent crashes
     banContext = {
       banUser: () => Promise.resolve(false),
       getActiveBans: () => [],
@@ -95,9 +105,15 @@ export default function AdminReportsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'unprocessed' | 'processed'>('unprocessed');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'other'>('all');
   const [selectedReport, setSelectedReport] = useState<ReportLog | null>(null);
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
   const [showBanModal, setShowBanModal] = useState(false);
   const [showRecommendationModal, setShowRecommendationModal] = useState(false);
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [showAdminNotesModal, setShowAdminNotesModal] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'severity' | 'reporter'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [banForm, setBanForm] = useState({
     username: '',
     banType: 'temporary' as 'temporary' | 'permanent',
@@ -109,15 +125,24 @@ export default function AdminReportsPage() {
   const [recommendation, setRecommendation] = useState<any>(null);
   const [isProcessingBan, setIsProcessingBan] = useState(false);
   const [reportBanInfo, setReportBanInfo] = useState<{[key: string]: any}>({});
+  const [adminNotes, setAdminNotes] = useState('');
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+  // Auto-save admin notes
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Load reports
   useEffect(() => {
+    loadReports();
+  }, []);
+
+  const loadReports = () => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('panty_report_logs');
       if (stored) {
         try {
           const parsed: ReportLog[] = JSON.parse(stored);
-          // Add IDs and additional fields if missing
           const enhancedReports = parsed.map((report, index) => ({
             ...report,
             id: report.id || `report_${Date.now()}_${index}`,
@@ -127,40 +152,70 @@ export default function AdminReportsPage() {
           }));
           enhancedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           setReports(enhancedReports);
+          setLastRefresh(new Date());
         } catch (error) {
           console.error('Error parsing stored reports:', error);
           setReports([]);
         }
       }
     }
-  }, []);
+  };
 
-  // Calculate filtered reports safely
-  const filteredReports = reports.filter(report => {
-    if (!report) return false;
-    
-    const matchesSearch = searchTerm ? 
-      (report.reporter && report.reporter.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (report.reportee && report.reportee.toLowerCase().includes(searchTerm.toLowerCase())) : true;
-    
-    const matchesFilter = filterBy === 'all' ? true :
-      filterBy === 'processed' ? report.processed :
-      !report.processed;
-    
-    const matchesSeverity = severityFilter === 'all' ? true :
-      report.severity === severityFilter;
-    
-    return matchesSearch && matchesFilter && matchesSeverity;
-  });
+  // Calculate filtered and sorted reports
+  const filteredAndSortedReports = (() => {
+    let filtered = reports.filter(report => {
+      if (!report) return false;
+      
+      const matchesSearch = searchTerm ? 
+        (report.reporter && report.reporter.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (report.reportee && report.reportee.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (report.adminNotes && report.adminNotes.toLowerCase().includes(searchTerm.toLowerCase())) : true;
+      
+      const matchesFilter = filterBy === 'all' ? true :
+        filterBy === 'processed' ? report.processed :
+        !report.processed;
+      
+      const matchesSeverity = severityFilter === 'all' ? true :
+        report.severity === severityFilter;
+        
+      const matchesCategory = categoryFilter === 'all' ? true :
+        report.category === categoryFilter;
+      
+      return matchesSearch && matchesFilter && matchesSeverity && matchesCategory;
+    });
 
-  // Update ban info safely
+    // Sort
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'severity':
+          const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+          comparison = (severityOrder[a.severity || 'medium'] || 2) - (severityOrder[b.severity || 'medium'] || 2);
+          break;
+        case 'reporter':
+          comparison = (a.reporter || '').localeCompare(b.reporter || '');
+          break;
+        case 'date':
+        default:
+          comparison = new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+          break;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  })();
+
+  // Update ban info
   useEffect(() => {
-    if (!banContext || !filteredReports.length) return;
+    if (!banContext || !filteredAndSortedReports.length) return;
     
     const updateBanInfo = () => {
       try {
         const newBanInfo: {[key: string]: any} = {};
-        const uniqueReportees = [...new Set(filteredReports.map(r => r.reportee))];
+        const uniqueReportees = [...new Set(filteredAndSortedReports.map(r => r.reportee))];
         
         uniqueReportees.forEach(reportee => {
           if (reportee && typeof banContext.getBanInfo === 'function') {
@@ -182,7 +237,7 @@ export default function AdminReportsPage() {
 
     const timeoutId = setTimeout(updateBanInfo, 100);
     return () => clearTimeout(timeoutId);
-  }, [filteredReports, banContext]);
+  }, [filteredAndSortedReports, banContext]);
 
   // Save reports
   const saveReports = (newReports: ReportLog[]) => {
@@ -193,7 +248,34 @@ export default function AdminReportsPage() {
     }
   };
 
-  // Get escalation info safely
+  // Auto-save admin notes with debounce
+  const saveAdminNotes = (reportId: string, notes: string) => {
+    if (saveTimeout.current) {
+      clearTimeout(saveTimeout.current);
+    }
+    
+    saveTimeout.current = setTimeout(() => {
+      const updatedReports = reports.map(report => 
+        report.id === reportId ? { ...report, adminNotes: notes } : report
+      );
+      saveReports(updatedReports);
+    }, 1000); // Save after 1 second of no typing
+  };
+
+  // Toggle expanded state
+  const toggleExpanded = (reportId: string) => {
+    setExpandedReports(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(reportId)) {
+        newSet.delete(reportId);
+      } else {
+        newSet.add(reportId);
+      }
+      return newSet;
+    });
+  };
+
+  // Get escalation info
   const getEscalationInfo = (username: string) => {
     if (!banContext || !username || typeof banContext.getUserEscalation !== 'function') {
       return {
@@ -219,7 +301,7 @@ export default function AdminReportsPage() {
     }
   };
 
-  // Show recommendation modal safely
+  // Show ban recommendation
   const showBanRecommendation = (username: string, reason: any) => {
     if (!banContext || typeof banContext.getRecommendedBanDuration !== 'function') {
       alert('Ban recommendation system not available');
@@ -237,7 +319,7 @@ export default function AdminReportsPage() {
     }
   };
 
-  // Handle intelligent ban with recommendation
+  // Handle intelligent ban
   const handleIntelligentBan = async (username: string, reason: any, useRecommendation: boolean = true) => {
     if (!banContext || typeof banContext.banUser !== 'function') {
       alert('Ban system not available');
@@ -261,7 +343,6 @@ export default function AdminReportsPage() {
       const adminUsername = user?.username || 'admin';
       const reportIds = selectedReport ? [selectedReport.id!] : [];
       
-      // Validate the ban input
       if (typeof banContext.validateBanInput === 'function') {
         const validation = banContext.validateBanInput(username, duration, reason);
         if (!validation.valid) {
@@ -281,7 +362,6 @@ export default function AdminReportsPage() {
       );
       
       if (success) {
-        // Mark report as processed with ban applied
         if (selectedReport) {
           const updatedReports = reports.map(report => 
             report.id === selectedReport.id ? {
@@ -290,13 +370,28 @@ export default function AdminReportsPage() {
               banApplied: true,
               processedBy: adminUsername,
               processedAt: new Date().toISOString(),
-              adminNotes: notes
+              adminNotes: (report.adminNotes || '') + `\n[Ban Applied: ${duration} ${duration === 'permanent' ? '' : 'hours'} for ${reason}]`
             } : report
           );
           saveReports(updatedReports);
+          
+          // Add to resolved reports
+          const resolvedEntry = {
+            reporter: selectedReport.reporter,
+            reportee: selectedReport.reportee,
+            date: new Date().toISOString(),
+            resolvedBy: adminUsername,
+            resolvedReason: `Ban applied: ${duration} ${duration === 'permanent' ? '' : 'hours'} for ${reason}`,
+            banApplied: true,
+            notes: selectedReport.adminNotes || 'No admin notes'
+          };
+          
+          const existingResolved = localStorage.getItem('panty_report_resolved');
+          const resolvedList = existingResolved ? JSON.parse(existingResolved) : [];
+          resolvedList.push(resolvedEntry);
+          localStorage.setItem('panty_report_resolved', JSON.stringify(resolvedList));
         }
         
-        // Clear ban info cache for this user
         setReportBanInfo(prev => ({ ...prev, [username]: null }));
         
         setShowBanModal(false);
@@ -329,32 +424,63 @@ export default function AdminReportsPage() {
     setRecommendation(null);
   };
 
-  // Handle quick ban with intelligence
+  // Handle quick ban
   const handleQuickBan = async (username: string, hours: number, reason: string) => {
     showBanRecommendation(username, reason as any);
   };
 
-  // Mark report as resolved without ban
+  // Mark report as resolved
   const handleMarkResolved = (report: ReportLog) => {
+    setSelectedReport(report);
+    setShowResolveModal(true);
+  };
+
+  const confirmResolve = () => {
+    if (!selectedReport) return;
+    
     const adminUsername = user?.username || 'admin';
+    
+    // First, update the report as processed
     const updatedReports = reports.map(r => 
-      r.id === report.id ? {
+      r.id === selectedReport.id ? {
         ...r,
         processed: true,
         banApplied: false,
         processedBy: adminUsername,
-        processedAt: new Date().toISOString()
+        processedAt: new Date().toISOString(),
+        adminNotes: (r.adminNotes || '') + '\n[Resolved without ban]'
       } : r
     );
     saveReports(updatedReports);
-    alert(`Marked report as resolved without ban`);
+    
+    // Then, add to resolved reports
+    const resolvedEntry = {
+      reporter: selectedReport.reporter,
+      reportee: selectedReport.reportee,
+      date: new Date().toISOString(),
+      resolvedBy: adminUsername,
+      resolvedReason: 'Resolved without ban',
+      banApplied: false,
+      notes: selectedReport.adminNotes || 'No admin notes'
+    };
+    
+    const existingResolved = localStorage.getItem('panty_report_resolved');
+    const resolvedList = existingResolved ? JSON.parse(existingResolved) : [];
+    resolvedList.push(resolvedEntry);
+    localStorage.setItem('panty_report_resolved', JSON.stringify(resolvedList));
+    
+    setShowResolveModal(false);
+    setSelectedReport(null);
+    alert(`Report marked as resolved without ban`);
   };
 
   // Delete report
   const handleDeleteReport = (reportId: string) => {
-    const updatedReports = reports.filter(r => r.id !== reportId);
-    saveReports(updatedReports);
-    alert('Report deleted');
+    if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+      const updatedReports = reports.filter(r => r.id !== reportId);
+      saveReports(updatedReports);
+      alert('Report deleted');
+    }
   };
 
   // Update report severity
@@ -365,18 +491,85 @@ export default function AdminReportsPage() {
     saveReports(updatedReports);
   };
 
-  // Get severity color
-  const getSeverityColor = (severity: ReportLog['severity']) => {
+  // Update report category
+  const updateReportCategory = (reportId: string, category: ReportLog['category']) => {
+    const updatedReports = reports.map(r => 
+      r.id === reportId ? { ...r, category } : r
+    );
+    saveReports(updatedReports);
+  };
+
+  // Move to resolved
+  const moveToResolved = (report: ReportLog) => {
+    const adminUsername = user?.username || 'admin';
+    
+    const resolved = {
+      reporter: report.reporter,
+      reportee: report.reportee,
+      date: new Date().toISOString(),
+      resolvedBy: report.processedBy || adminUsername,
+      resolvedReason: report.banApplied ? 'Archived after ban' : 'Archived after resolution',
+      banApplied: report.banApplied || false,
+      notes: report.adminNotes || 'No admin notes'
+    };
+    
+    const existingResolved = localStorage.getItem('panty_report_resolved');
+    const resolvedList = existingResolved ? JSON.parse(existingResolved) : [];
+    resolvedList.push(resolved);
+    localStorage.setItem('panty_report_resolved', JSON.stringify(resolvedList));
+    
+    handleDeleteReport(report.id!);
+    alert('Report moved to resolved');
+  };
+
+  // Get severity color and icon
+  const getSeverityInfo = (severity: ReportLog['severity']) => {
     switch (severity) {
-      case 'low': return 'text-green-400 bg-green-900/20';
-      case 'medium': return 'text-yellow-400 bg-yellow-900/20';
-      case 'high': return 'text-orange-400 bg-orange-900/20';
-      case 'critical': return 'text-red-400 bg-red-900/20';
-      default: return 'text-gray-400 bg-gray-900/20';
+      case 'low': 
+        return { 
+          color: 'text-green-400 bg-green-900/20', 
+          icon: Activity, 
+          label: 'Low' 
+        };
+      case 'medium': 
+        return { 
+          color: 'text-yellow-400 bg-yellow-900/20', 
+          icon: AlertCircle, 
+          label: 'Medium' 
+        };
+      case 'high': 
+        return { 
+          color: 'text-orange-400 bg-orange-900/20', 
+          icon: AlertTriangle, 
+          label: 'High' 
+        };
+      case 'critical': 
+        return { 
+          color: 'text-red-400 bg-red-900/20', 
+          icon: ShieldAlert, 
+          label: 'Critical' 
+        };
+      default: 
+        return { 
+          color: 'text-gray-400 bg-gray-900/20', 
+          icon: Info, 
+          label: 'Unknown' 
+        };
     }
   };
 
-  // Get escalation level color
+  // Get category icon
+  const getCategoryIcon = (category: ReportLog['category']) => {
+    switch (category) {
+      case 'harassment': return AlertTriangle;
+      case 'spam': return MessageSquare;
+      case 'inappropriate_content': return EyeOff;
+      case 'scam': return ShieldAlert;
+      default: return Flag;
+    }
+  };
+
+  // Get escalation color
   const getEscalationColor = (level: number) => {
     if (level <= 1) return 'text-green-400';
     if (level <= 2) return 'text-yellow-400';
@@ -385,7 +578,7 @@ export default function AdminReportsPage() {
     return 'text-purple-400';
   };
 
-  // Get ban stats safely
+  // Get ban stats
   const banStats = banContext && typeof banContext.getBanStats === 'function' ? 
     banContext.getBanStats() : {
       totalActiveBans: 0,
@@ -398,11 +591,25 @@ export default function AdminReportsPage() {
       escalationStats: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 }
     };
 
+  // Calculate report stats
+  const reportStats = {
+    total: reports.length,
+    unprocessed: reports.filter(r => !r.processed).length,
+    processed: reports.filter(r => r.processed).length,
+    critical: reports.filter(r => r.severity === 'critical' && !r.processed).length,
+    today: reports.filter(r => {
+      const reportDate = new Date(r.date);
+      const today = new Date();
+      return reportDate.toDateString() === today.toDateString();
+    }).length,
+    withBans: reports.filter(r => r.banApplied).length
+  };
+
   return (
     <RequireAuth role="admin">
       <main className="p-8 max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold text-[#ff950e] flex items-center">
               <Shield className="mr-3" />
@@ -412,47 +619,67 @@ export default function AdminReportsPage() {
               AI-powered progressive discipline system with escalation tracking
             </p>
             {banContextError && (
-              <p className="text-red-400 text-sm mt-2">⚠️ {banContextError}</p>
+              <p className="text-red-400 text-sm mt-2 flex items-center">
+                <AlertTriangle size={14} className="mr-1" />
+                {banContextError}
+              </p>
             )}
           </div>
           
-          {/* Enhanced Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-red-400">{banStats.totalActiveBans}</div>
-              <div className="text-xs text-gray-400">Active Bans</div>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-400">
+              Last refresh: {lastRefresh.toLocaleTimeString()}
             </div>
-            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-400">{filteredReports.filter(r => !r.processed).length}</div>
-              <div className="text-xs text-gray-400">Pending</div>
-            </div>
-            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-orange-400">{banStats.appealStats.pendingAppeals}</div>
-              <div className="text-xs text-gray-400">Appeals</div>
-            </div>
-            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-purple-400">{banStats.escalationStats.level4 + banStats.escalationStats.level5}</div>
-              <div className="text-xs text-gray-400">High Risk</div>
-            </div>
-            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-blue-400">{banStats.recentBans24h}</div>
-              <div className="text-xs text-gray-400">24h Bans</div>
-            </div>
+            <button
+              onClick={loadReports}
+              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] flex items-center font-medium transition-colors"
+            >
+              <RefreshCw size={16} className="mr-2" />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Enhanced Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
+            <div className="text-2xl font-bold text-white">{reportStats.total}</div>
+            <div className="text-xs text-gray-400">Total Reports</div>
+          </div>
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
+            <div className="text-2xl font-bold text-yellow-400">{reportStats.unprocessed}</div>
+            <div className="text-xs text-gray-400">Pending</div>
+          </div>
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
+            <div className="text-2xl font-bold text-red-400">{reportStats.critical}</div>
+            <div className="text-xs text-gray-400">Critical</div>
+          </div>
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
+            <div className="text-2xl font-bold text-blue-400">{reportStats.today}</div>
+            <div className="text-xs text-gray-400">Today</div>
+          </div>
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
+            <div className="text-2xl font-bold text-green-400">{reportStats.processed}</div>
+            <div className="text-xs text-gray-400">Processed</div>
+          </div>
+          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
+            <div className="text-2xl font-bold text-purple-400">{reportStats.withBans}</div>
+            <div className="text-xs text-gray-400">Resulted in Bans</div>
           </div>
         </div>
 
         {/* Enhanced Filters */}
         <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
-          <div className="flex flex-wrap gap-4 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4">
             {/* Search */}
-            <div className="relative flex-1 min-w-64">
+            <div className="relative xl:col-span-2">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
-                placeholder="Search by username..."
+                placeholder="Search by username or notes..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                className="w-full pl-10 pr-4 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] transition-all"
               />
             </div>
 
@@ -480,44 +707,90 @@ export default function AdminReportsPage() {
               <option value="low">Low</option>
             </select>
 
-            {/* Refresh */}
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] flex items-center font-medium"
+            {/* Category Filter */}
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value as any)}
+              className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
             >
-              <RefreshCw size={16} className="mr-2" />
-              Refresh
+              <option value="all">All Categories</option>
+              <option value="harassment">Harassment</option>
+              <option value="spam">Spam</option>
+              <option value="inappropriate_content">Inappropriate Content</option>
+              <option value="scam">Scam</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          {/* Sort Options */}
+          <div className="flex gap-2 mt-4">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            >
+              <option value="date">Sort by Date</option>
+              <option value="severity">Sort by Severity</option>
+              <option value="reporter">Sort by Reporter</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white hover:bg-[#333] transition-colors"
+            >
+              {sortOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
           </div>
         </div>
 
         {/* Reports List */}
-        {filteredReports.length === 0 ? (
+        {filteredAndSortedReports.length === 0 ? (
           <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-8 text-center">
             <AlertTriangle size={48} className="mx-auto text-gray-600 mb-4" />
             <p className="text-gray-400 text-lg">No reports found</p>
+            {searchTerm && (
+              <p className="text-gray-500 text-sm mt-2">
+                Try adjusting your search terms or filters
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredReports.map((report) => {
+            {filteredAndSortedReports.map((report) => {
               if (!report || !report.id || !report.reportee) {
                 return null;
               }
               
               const userBanInfo = reportBanInfo[report.reportee];
               const escalationInfo = getEscalationInfo(report.reportee);
+              const severityInfo = getSeverityInfo(report.severity);
+              const CategoryIcon = getCategoryIcon(report.category);
+              const isExpanded = expandedReports.has(report.id);
               
               return (
-                <div key={report.id} className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  {/* Report Header */}
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <User size={16} className="text-gray-400" />
-                          <span className="font-semibold text-white">
-                            {report.reporter} → {report.reportee}
-                          </span>
+                <div 
+                  key={report.id} 
+                  className={`bg-[#1a1a1a] border ${
+                    report.severity === 'critical' ? 'border-red-800' : 
+                    report.severity === 'high' ? 'border-orange-800' : 
+                    'border-gray-800'
+                  } rounded-lg overflow-hidden hover:border-gray-700 transition-all`}
+                >
+                  {/* Report Header - Clickable */}
+                  <div 
+                    className="p-6 cursor-pointer"
+                    onClick={() => toggleExpanded(report.id!)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-4 mb-2">
+                          <div className="flex items-center gap-2">
+                            <User size={16} className="text-gray-400" />
+                            <span className="font-semibold text-white">
+                              {report.reporter} → {report.reportee}
+                            </span>
+                          </div>
+                          
+                          {/* Status Badges */}
                           {userBanInfo && (
                             <span className="px-2 py-1 bg-red-900/20 text-red-400 text-xs rounded font-medium">
                               BANNED
@@ -528,223 +801,309 @@ export default function AdminReportsPage() {
                               Level {escalationInfo.escalationLevel} ({escalationInfo.offenseCount} offenses)
                             </span>
                           )}
-                        </div>
-                        <div className="text-sm text-gray-400 flex items-center gap-4">
-                          <span className="flex items-center gap-1">
-                            <Calendar size={14} />
-                            {new Date(report.date).toLocaleString()}
-                          </span>
-                          {report.processedBy && (
-                            <span className="flex items-center gap-1">
-                              <CheckCircle size={14} />
-                              Processed by {report.processedBy}
+                          {report.processed ? (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded font-medium">
+                              <CheckCircle size={12} />
+                              Processed
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 px-2 py-1 bg-yellow-900/20 text-yellow-400 text-xs rounded font-medium">
+                              <Clock size={12} />
+                              Pending
                             </span>
                           )}
                         </div>
-                      </div>
-                    </div>
-                    
-                    {/* Severity Badge */}
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={report.severity}
-                        onChange={(e) => updateReportSeverity(report.id!, e.target.value as any)}
-                        className={`px-2 py-1 text-xs rounded border-0 font-medium ${getSeverityColor(report.severity)}`}
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
-                      </select>
-                      
-                      {report.processed ? (
-                        <span className="flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded font-medium">
-                          <CheckCircle size={12} />
-                          Processed
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 px-2 py-1 bg-yellow-900/20 text-yellow-400 text-xs rounded font-medium">
-                          <Clock size={12} />
-                          Pending
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Escalation Info */}
-                  {escalationInfo && escalationInfo.escalationLevel > 0 && (
-                    <div className="mb-4 p-3 bg-purple-900/10 border border-purple-800 rounded-lg">
-                      <div className="flex items-center gap-2 text-purple-400 mb-2">
-                        <TrendingUp size={16} />
-                        <span className="font-medium">User History & Risk Assessment</span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-400">Escalation Level:</span>
-                          <span className={`ml-2 font-medium ${getEscalationColor(escalationInfo.escalationLevel)}`}>
-                            Level {escalationInfo.escalationLevel}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Total Offenses:</span>
-                          <span className="text-white ml-2">{escalationInfo.offenseCount}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Last Offense:</span>
-                          <span className="text-white ml-2">
-                            {escalationInfo.lastOffenseDate ? new Date(escalationInfo.lastOffenseDate).toLocaleDateString() : 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {escalationInfo.offenseHistory && escalationInfo.offenseHistory.length > 0 && (
-                        <div className="mt-3">
-                          <div className="text-gray-400 text-xs mb-2">Recent Violations:</div>
-                          <div className="flex flex-wrap gap-2">
-                            {escalationInfo.offenseHistory.slice(-3).map((offense: any, i: number) => (
-                              <span key={i} className="px-2 py-1 bg-gray-900/50 text-gray-300 text-xs rounded">
-                                {offense.reason} ({new Date(offense.date).toLocaleDateString()})
-                              </span>
-                            ))}
+                        
+                        <div className="flex items-center gap-6 text-sm">
+                          {/* Severity */}
+                          <div className="flex items-center gap-2">
+                            <severityInfo.icon size={14} className={severityInfo.color.split(' ')[0]} />
+                            <select
+                              value={report.severity}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                updateReportSeverity(report.id!, e.target.value as any);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className={`px-2 py-0.5 text-xs rounded border-0 font-medium ${severityInfo.color} bg-opacity-20`}
+                            >
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                              <option value="critical">Critical</option>
+                            </select>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Messages Preview */}
-                  <div className="mb-4">
-                    <div className="text-sm text-gray-400 mb-2 flex items-center gap-1">
-                      <MessageSquare size={14} />
-                      {report.messages ? report.messages.length : 0} message(s) in conversation
-                    </div>
-                    {report.messages && report.messages.length > 0 && (
-                      <div className="bg-[#222] rounded-lg p-3 max-h-32 overflow-y-auto">
-                        {report.messages.slice(-2).map((msg, i) => (
-                          <div key={i} className="text-sm mb-2">
-                            <span className="text-[#ff950e] font-medium">{msg.sender}:</span>
-                            <span className="text-gray-300 ml-2">{msg.content}</span>
+                          
+                          {/* Category */}
+                          <div className="flex items-center gap-2">
+                            <CategoryIcon size={14} className="text-gray-400" />
+                            <select
+                              value={report.category}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                updateReportCategory(report.id!, e.target.value as any);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="px-2 py-0.5 text-xs rounded bg-gray-800 text-gray-300 border-0"
+                            >
+                              <option value="harassment">Harassment</option>
+                              <option value="spam">Spam</option>
+                              <option value="inappropriate_content">Inappropriate</option>
+                              <option value="scam">Scam</option>
+                              <option value="other">Other</option>
+                            </select>
                           </div>
-                        ))}
-                        {report.messages.length > 2 && (
-                          <div className="text-xs text-gray-500">... and {report.messages.length - 2} more messages</div>
-                        )}
+                          
+                          {/* Date */}
+                          <div className="flex items-center gap-1 text-gray-400">
+                            <Calendar size={14} />
+                            {new Date(report.date).toLocaleString()}
+                          </div>
+                          
+                          {report.processedBy && (
+                            <div className="flex items-center gap-1 text-gray-400">
+                              <CheckCircle size={14} />
+                              by {report.processedBy}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Admin Notes */}
-                  {report.adminNotes && (
-                    <div className="mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
-                      <div className="text-sm text-blue-400 font-medium mb-1">Admin Notes:</div>
-                      <div className="text-sm text-gray-300">{report.adminNotes}</div>
+                      
+                      <div className="flex items-center gap-2 ml-4">
+                        <span className="text-gray-400">
+                          {report.messages ? report.messages.length : 0} messages
+                        </span>
+                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      </div>
                     </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-wrap gap-2">
-                    {!report.processed && (
-                      <>
-                        {/* Intelligent Ban Button */}
-                        <button
-                          onClick={() => showBanRecommendation(report.reportee, 'harassment')}
-                          className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 flex items-center"
-                          disabled={!banContext}
-                        >
-                          <Brain size={12} className="mr-1" />
-                          Smart Ban
-                        </button>
-                        
-                        {/* Quick Ban Buttons */}
-                        <button
-                          onClick={() => handleQuickBan(report.reportee, 1, 'harassment')}
-                          className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 flex items-center"
-                          disabled={!banContext}
-                        >
-                          <Timer size={12} className="mr-1" />
-                          1 Hour
-                        </button>
-                        <button
-                          onClick={() => handleQuickBan(report.reportee, 24, 'harassment')}
-                          className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 flex items-center"
-                          disabled={!banContext}
-                        >
-                          <Timer size={12} className="mr-1" />
-                          24 Hours
-                        </button>
-                        <button
-                          onClick={() => handleQuickBan(report.reportee, 168, 'harassment')}
-                          className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center"
-                          disabled={!banContext}
-                        >
-                          <Timer size={12} className="mr-1" />
-                          7 Days
-                        </button>
-                        
-                        {/* Custom Ban */}
-                        <button
-                          onClick={() => {
-                            setSelectedReport(report);
-                            setBanForm(prev => ({ ...prev, username: report.reportee }));
-                            setShowBanModal(true);
-                          }}
-                          className="px-3 py-1 bg-red-700 text-white text-sm rounded hover:bg-red-800 flex items-center"
-                          disabled={!banContext}
-                        >
-                          <Ban size={12} className="mr-1" />
-                          Custom Ban
-                        </button>
-                        
-                        {/* Resolve without ban */}
-                        <button
-                          onClick={() => handleMarkResolved(report)}
-                          className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center"
-                        >
-                          <CheckCircle size={12} className="mr-1" />
-                          Resolve (No Ban)
-                        </button>
-                      </>
-                    )}
-                    
-                    {/* View Details */}
-                    <button
-                      onClick={() => setSelectedReport(selectedReport?.id === report.id ? null : report)}
-                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center"
-                    >
-                      <Eye size={12} className="mr-1" />
-                      {selectedReport?.id === report.id ? 'Hide' : 'View'} Details
-                    </button>
-                    
-                    {/* Delete */}
-                    <button
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete this report?')) {
-                          handleDeleteReport(report.id!);
-                        }
-                      }}
-                      className="px-3 py-1 bg-red-800 text-white text-sm rounded hover:bg-red-900 flex items-center"
-                    >
-                      <Trash2 size={12} className="mr-1" />
-                      Delete
-                    </button>
                   </div>
-                  
-                  {/* Expanded Details */}
-                  {selectedReport?.id === report.id && report.messages && report.messages.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-700">
-                      <h4 className="text-lg font-semibold text-white mb-3">Full Conversation</h4>
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {report.messages.map((msg, i) => (
-                          <div key={i} className="bg-[#222] p-3 rounded">
-                            <div className="flex justify-between items-start mb-1">
-                              <span className="font-medium text-[#ff950e]">{msg.sender}</span>
-                              <span className="text-xs text-gray-500">
-                                {new Date(msg.date).toLocaleString()}
+
+                  {/* Expanded Content */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-800 p-6 space-y-4 bg-[#0a0a0a]">
+                      {/* Escalation Info */}
+                      {escalationInfo && escalationInfo.escalationLevel > 0 && (
+                        <div className="p-3 bg-purple-900/10 border border-purple-800 rounded-lg">
+                          <div className="flex items-center gap-2 text-purple-400 mb-2">
+                            <TrendingUp size={16} />
+                            <span className="font-medium">User History & Risk Assessment</span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-400">Escalation Level:</span>
+                              <span className={`ml-2 font-medium ${getEscalationColor(escalationInfo.escalationLevel)}`}>
+                                Level {escalationInfo.escalationLevel}
                               </span>
                             </div>
-                            <p className="text-gray-300">{msg.content}</p>
+                            <div>
+                              <span className="text-gray-400">Total Offenses:</span>
+                              <span className="text-white ml-2">{escalationInfo.offenseCount}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Last Offense:</span>
+                              <span className="text-white ml-2">
+                                {escalationInfo.lastOffenseDate ? new Date(escalationInfo.lastOffenseDate).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
                           </div>
-                        ))}
+                          
+                          {escalationInfo.offenseHistory && escalationInfo.offenseHistory.length > 0 && (
+                            <div className="mt-3">
+                              <div className="text-gray-400 text-xs mb-2">Recent Violations:</div>
+                              <div className="flex flex-wrap gap-2">
+                                {escalationInfo.offenseHistory.slice(-3).map((offense: any, i: number) => (
+                                  <span key={i} className="px-2 py-1 bg-gray-900/50 text-gray-300 text-xs rounded">
+                                    {offense.reason} ({new Date(offense.date).toLocaleDateString()})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Messages */}
+                      <div>
+                        <div className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+                          <MessageSquare size={14} />
+                          Conversation ({report.messages ? report.messages.length : 0} messages)
+                        </div>
+                        {report.messages && report.messages.length > 0 && (
+                          <div className="bg-[#222] rounded-lg p-3 max-h-64 overflow-y-auto space-y-2">
+                            {report.messages.map((msg, i) => (
+                              <div key={i} className="border-b border-gray-700 last:border-0 pb-2 last:pb-0">
+                                <div className="flex justify-between items-start mb-1">
+                                  <span className="font-medium text-[#ff950e]">{msg.sender}</span>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(msg.date).toLocaleString()}
+                                  </span>
+                                </div>
+                                <p className="text-gray-300 text-sm">{msg.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Admin Notes */}
+                      <div>
+                        <div className="text-sm text-gray-400 mb-2 flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <FileText size={14} />
+                            Admin Notes
+                          </span>
+                          {editingReportId === report.id ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingReportId(null);
+                              }}
+                              className="text-xs text-blue-400 hover:text-blue-300"
+                            >
+                              Done
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingReportId(report.id!);
+                                setAdminNotes(report.adminNotes || '');
+                              }}
+                              className="text-xs text-blue-400 hover:text-blue-300"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                        {editingReportId === report.id ? (
+                          <textarea
+                            value={adminNotes}
+                            onChange={(e) => {
+                              setAdminNotes(e.target.value);
+                              saveAdminNotes(report.id!, e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full p-3 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] resize-none"
+                            rows={3}
+                            placeholder="Add notes about this report..."
+                          />
+                        ) : (
+                          <div className="p-3 bg-[#222] rounded-lg text-gray-300 text-sm">
+                            {report.adminNotes || <span className="text-gray-500 italic">No notes added</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {!report.processed && (
+                          <>
+                            {/* Intelligent Ban Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                showBanRecommendation(report.reportee, report.category || 'harassment');
+                              }}
+                              className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 flex items-center transition-colors"
+                              disabled={!banContext}
+                            >
+                              <Brain size={12} className="mr-1" />
+                              Smart Ban
+                            </button>
+                            
+                            {/* Quick Ban Buttons */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickBan(report.reportee, 1, report.category || 'harassment');
+                              }}
+                              className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 flex items-center transition-colors"
+                              disabled={!banContext}
+                            >
+                              <Timer size={12} className="mr-1" />
+                              1 Hour
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickBan(report.reportee, 24, report.category || 'harassment');
+                              }}
+                              className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 flex items-center transition-colors"
+                              disabled={!banContext}
+                            >
+                              <Timer size={12} className="mr-1" />
+                              24 Hours
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickBan(report.reportee, 168, report.category || 'harassment');
+                              }}
+                              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center transition-colors"
+                              disabled={!banContext}
+                            >
+                              <Timer size={12} className="mr-1" />
+                              7 Days
+                            </button>
+                            
+                            {/* Custom Ban */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedReport(report);
+                                setBanForm(prev => ({ 
+                                  ...prev, 
+                                  username: report.reportee,
+                                  reason: report.category || 'harassment'
+                                }));
+                                setShowBanModal(true);
+                              }}
+                              className="px-3 py-1 bg-red-700 text-white text-sm rounded hover:bg-red-800 flex items-center transition-colors"
+                              disabled={!banContext}
+                            >
+                              <Ban size={12} className="mr-1" />
+                              Custom Ban
+                            </button>
+                            
+                            {/* Resolve without ban */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkResolved(report);
+                              }}
+                              className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center transition-colors"
+                            >
+                              <CheckCircle size={12} className="mr-1" />
+                              Resolve (No Ban)
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Archive/Move to Resolved */}
+                        {report.processed && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveToResolved(report);
+                            }}
+                            className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 flex items-center transition-colors"
+                          >
+                            <Archive size={12} className="mr-1" />
+                            Archive
+                          </button>
+                        )}
+                        
+                        {/* Delete */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteReport(report.id!);
+                          }}
+                          className="px-3 py-1 bg-red-800 text-white text-sm rounded hover:bg-red-900 flex items-center transition-colors"
+                        >
+                          <Trash2 size={12} className="mr-1" />
+                          Delete
+                        </button>
                       </div>
                     </div>
                   )}
@@ -839,7 +1198,7 @@ export default function AdminReportsPage() {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowRecommendationModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                   disabled={isProcessingBan}
                 >
                   Cancel
@@ -856,7 +1215,7 @@ export default function AdminReportsPage() {
                       notes: `Progressive discipline - ${recommendation.reasoning}`
                     }));
                   }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center"
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center justify-center transition-colors"
                   disabled={isProcessingBan}
                 >
                   <Scale size={16} className="mr-2" />
@@ -864,7 +1223,7 @@ export default function AdminReportsPage() {
                 </button>
                 <button
                   onClick={() => handleIntelligentBan(recommendation.username, recommendation.reason, true)}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center"
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center transition-colors"
                   disabled={isProcessingBan}
                 >
                   {isProcessingBan ? (
@@ -982,14 +1341,14 @@ export default function AdminReportsPage() {
                     setShowBanModal(false);
                     resetBanForm();
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                   disabled={isProcessingBan}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleIntelligentBan(banForm.username, banForm.reason, false)}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center"
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center transition-colors"
                   disabled={isProcessingBan}
                 >
                   {isProcessingBan ? (
@@ -1003,6 +1362,47 @@ export default function AdminReportsPage() {
                       Apply Ban
                     </>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Resolve Modal */}
+        {showResolveModal && selectedReport && (
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                <CheckCircle className="mr-2 text-green-400" />
+                Resolve Report
+              </h3>
+              
+              <p className="text-gray-300 mb-4">
+                Are you sure you want to mark this report as resolved without applying a ban?
+              </p>
+              
+              <div className="bg-[#222] rounded-lg p-3 mb-4">
+                <div className="text-sm text-gray-400">Reporter: <span className="text-white">{selectedReport.reporter}</span></div>
+                <div className="text-sm text-gray-400">Reported: <span className="text-white">{selectedReport.reportee}</span></div>
+                <div className="text-sm text-gray-400">Date: <span className="text-white">{new Date(selectedReport.date).toLocaleString()}</span></div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowResolveModal(false);
+                    setSelectedReport(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmResolve}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center transition-colors"
+                >
+                  <CheckCircle size={16} className="mr-2" />
+                  Confirm Resolve
                 </button>
               </div>
             </div>
