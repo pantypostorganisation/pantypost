@@ -87,8 +87,7 @@ export default function AdminReportsPage() {
         pendingAppeals: 0,
         recentBans24h: 0,
         bansByReason: {},
-        appealStats: { totalAppeals: 0, pendingAppeals: 0, approvedAppeals: 0, rejectedAppeals: 0 },
-        escalationStats: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 }
+        appealStats: { totalAppeals: 0, pendingAppeals: 0, approvedAppeals: 0, rejectedAppeals: 0 }
       }),
       getBanInfo: () => null,
       validateBanInput: () => ({ valid: true })
@@ -153,7 +152,7 @@ export default function AdminReportsPage() {
     }
   };
 
-  // Calculate user report statistics
+  // Calculate user report statistics (for admin decision-making)
   const getUserReportStats = (username: string) => {
     const userReports = reports.filter(report => report.reportee === username);
     const activeReports = userReports.filter(report => !report.processed);
@@ -288,8 +287,8 @@ export default function AdminReportsPage() {
     });
   };
 
-  // Handle simple ban (without complex AI recommendations)
-  const handleSimpleBan = async (username: string, reason: any) => {
+  // Handle manual ban (simple admin decision)
+  const handleManualBan = async (username: string, reason: any) => {
     if (!banContext || typeof banContext.banUser !== 'function') {
       alert('Ban system not available');
       return;
@@ -507,8 +506,7 @@ export default function AdminReportsPage() {
       pendingAppeals: 0,
       recentBans24h: 0,
       bansByReason: {},
-      appealStats: { totalAppeals: 0, pendingAppeals: 0, approvedAppeals: 0, rejectedAppeals: 0 },
-      escalationStats: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 }
+      appealStats: { totalAppeals: 0, pendingAppeals: 0, approvedAppeals: 0, rejectedAppeals: 0 }
     };
 
   // Calculate report stats
@@ -536,7 +534,7 @@ export default function AdminReportsPage() {
               Reports & Moderation
             </h1>
             <p className="text-gray-400 mt-1">
-              Review user reports and take moderation actions
+              Review user reports and make manual ban decisions
             </p>
             {banContextError && (
               <p className="text-red-400 text-sm mt-2 flex items-center">
@@ -717,7 +715,7 @@ export default function AdminReportsPage() {
                             </span>
                           )}
                           
-                          {/* User Report History */}
+                          {/* User Report History - Simple Count */}
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-1 bg-purple-900/20 text-purple-400 text-xs rounded font-medium flex items-center gap-1">
                               <Users size={12} />
@@ -810,11 +808,11 @@ export default function AdminReportsPage() {
                   {/* Expanded Content */}
                   {isExpanded && (
                     <div className="border-t border-gray-800 p-6 space-y-4 bg-[#0a0a0a]">
-                      {/* User Report History */}
+                      {/* User Report History - Simple Statistics */}
                       <div className="p-3 bg-purple-900/10 border border-purple-800 rounded-lg">
                         <div className="flex items-center gap-2 text-purple-400 mb-2">
                           <BarChart3 size={16} />
-                          <span className="font-medium">Report History for {report.reportee}</span>
+                          <span className="font-medium">Report Summary for {report.reportee}</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                           <div>
@@ -1033,7 +1031,7 @@ export default function AdminReportsPage() {
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-md w-full">
               <h3 className="text-xl font-bold text-white mb-4 flex items-center">
                 <Ban className="mr-2 text-red-400" />
-                Ban User
+                Manual Ban Decision
               </h3>
               
               <div className="space-y-4">
@@ -1131,7 +1129,7 @@ export default function AdminReportsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleSimpleBan(banForm.username, banForm.reason)}
+                  onClick={() => handleManualBan(banForm.username, banForm.reason)}
                   className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center transition-colors"
                   disabled={isProcessingBan}
                 >

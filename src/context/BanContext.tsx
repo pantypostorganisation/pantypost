@@ -26,7 +26,6 @@ export type UserBan = {
   appealEvidence?: string[]; // Base64 encoded images
   notes?: string; // admin notes
   reportIds?: string[]; // linked report IDs that led to this ban
-  escalationLevel?: number; // Progressive discipline level
   ipAddress?: string; // For future IP tracking
   expirationTimer?: NodeJS.Timeout; // Timer reference for auto-expiration
 };
@@ -39,18 +38,6 @@ export type BanHistory = {
   timestamp: string;
   adminUsername: string;
   metadata?: Record<string, any>; // Additional context
-};
-
-export type BanEscalation = {
-  username: string;
-  offenseCount: number;
-  lastOffenseDate: string;
-  escalationLevel: number; // 1-5: Warning -> 1h -> 24h -> 7d -> Permanent
-  offenseHistory: {
-    reason: BanReason;
-    date: string;
-    weight: number;
-  }[];
 };
 
 export type AppealReview = {
@@ -74,7 +61,6 @@ export type IPBan = {
 type BanContextType = {
   bans: UserBan[];
   banHistory: BanHistory[];
-  escalations: BanEscalation[];
   appealReviews: AppealReview[];
   ipBans: IPBan[];
   
@@ -96,11 +82,6 @@ type BanContextType = {
   rejectAppeal: (banId: string, adminUsername: string, reason?: string) => boolean;
   escalateAppeal: (banId: string, adminUsername: string, escalationReason: string) => boolean;
   
-  // Progressive discipline
-  getRecommendedBanDuration: (username: string, reason: BanReason) => { duration: number | 'permanent', level: number, reasoning: string };
-  getUserEscalation: (username: string) => BanEscalation;
-  resetUserEscalation: (username: string, adminUsername: string) => boolean;
-  
   // IP management
   banUserIP: (username: string, ipAddress: string, reason: string) => boolean;
   isIPBanned: (ipAddress: string) => boolean;
@@ -121,13 +102,6 @@ type BanContextType = {
       pendingAppeals: number;
       approvedAppeals: number;
       rejectedAppeals: number;
-    };
-    escalationStats: {
-      level1: number;
-      level2: number;
-      level3: number;
-      level4: number;
-      level5: number;
     };
   };
   
@@ -208,7 +182,6 @@ const compressImage = (file: File): Promise<string> => {
 export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [bans, setBans] = useState<UserBan[]>([]);
   const [banHistory, setBanHistory] = useState<BanHistory[]>([]);
-  const [escalations, setEscalations] = useState<BanEscalation[]>([]);
   const [appealReviews, setAppealReviews] = useState<AppealReview[]>([]);
   const [ipBans, setIPBans] = useState<IPBan[]>([]);
   
@@ -220,7 +193,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (typeof window !== 'undefined') {
       const storedBans = localStorage.getItem('panty_user_bans');
       const storedHistory = localStorage.getItem('panty_ban_history');
-      const storedEscalations = localStorage.getItem('panty_ban_escalations');
       const storedAppealReviews = localStorage.getItem('panty_appeal_reviews');
       const storedIPBans = localStorage.getItem('panty_ip_bans');
       
@@ -236,7 +208,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       
       if (storedHistory) setBanHistory(JSON.parse(storedHistory));
-      if (storedEscalations) setEscalations(JSON.parse(storedEscalations));
       if (storedAppealReviews) setAppealReviews(JSON.parse(storedAppealReviews));
       if (storedIPBans) setIPBans(JSON.parse(storedIPBans));
     }
@@ -254,12 +225,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('panty_ban_history', JSON.stringify(banHistory));
     }
   }, [banHistory]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_ban_escalations', JSON.stringify(escalations));
-    }
-  }, [escalations]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -314,102 +279,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setBanHistory(prev => [...prev, historyEntry]);
   };
 
-  // Get user escalation info
-  const getUserEscalation = useCallback((username: string): BanEscalation => {
-    const existing = escalations.find(e => e.username === username);
-    if (existing) return existing;
-    
-    return {
-      username,
-      offenseCount: 0,
-      lastOffenseDate: '',
-      escalationLevel: 0,
-      offenseHistory: []
-    };
-  }, [escalations]);
-
-  // Calculate recommended ban duration based on escalation
-  const getRecommendedBanDuration = useCallback((username: string, reason: BanReason): { duration: number | 'permanent', level: number, reasoning: string } => {
-    const escalation = getUserEscalation(username);
-    
-    const offenseWeights: Record<BanReason, number> = {
-      harassment: 2,
-      spam: 1,
-      inappropriate_content: 2,
-      scam: 3,
-      underage: 5, // Immediate permanent
-      payment_fraud: 3,
-      other: 1
-    };
-    
-    const weight = offenseWeights[reason] || 1;
-    const newLevel = Math.min(escalation.escalationLevel + weight, 5);
-    
-    // Ban durations by level
-    const banLevels = [
-      { duration: 0, description: 'Warning only' },
-      { duration: 1, description: '1 hour timeout' },
-      { duration: 24, description: '24 hour ban' },
-      { duration: 168, description: '7 day ban' },
-      { duration: 'permanent' as const, description: 'Permanent ban' }
-    ];
-    
-    const recommendedBan = banLevels[Math.min(newLevel - 1, 4)];
-    
-    let reasoning = `Level ${newLevel} offense (${escalation.offenseCount + 1} total offenses). `;
-    reasoning += `${reason} carries a weight of ${weight}. `;
-    reasoning += `Recommended: ${recommendedBan.description}`;
-    
-    // Special case for underage - immediate permanent
-    if (reason === 'underage') {
-      return {
-        duration: 'permanent',
-        level: 5,
-        reasoning: 'Underage violation requires immediate permanent ban per platform policy.'
-      };
-    }
-    
-    return {
-      duration: recommendedBan.duration,
-      level: newLevel,
-      reasoning
-    };
-  }, [getUserEscalation]);
-
-  // Update user escalation
-  const updateUserEscalation = (username: string, reason: BanReason, weight: number) => {
-    setEscalations(prev => {
-      const existing = prev.find(e => e.username === username);
-      const newOffense = {
-        reason,
-        date: new Date().toISOString(),
-        weight
-      };
-      
-      if (existing) {
-        return prev.map(e => 
-          e.username === username 
-            ? {
-                ...e,
-                offenseCount: e.offenseCount + 1,
-                lastOffenseDate: new Date().toISOString(),
-                escalationLevel: Math.min(e.escalationLevel + weight, 5),
-                offenseHistory: [...e.offenseHistory, newOffense]
-              }
-            : e
-        );
-      } else {
-        return [...prev, {
-          username,
-          offenseCount: 1,
-          lastOffenseDate: new Date().toISOString(),
-          escalationLevel: weight,
-          offenseHistory: [newOffense]
-        }];
-      }
-    });
-  };
-
   // Schedule automatic expiration
   const scheduleExpiration = useCallback((ban: UserBan) => {
     if (ban.banType === 'permanent' || !ban.endTime || !ban.active) return;
@@ -453,7 +322,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     reason: BanReason, 
     customReason?: string, 
     adminUsername: string = 'system',
-    reportIds: string[] = [], // Fixed: provide default empty array
+    reportIds: string[] = [],
     notes?: string
   ): Promise<boolean> => {
     // Validate input
@@ -501,9 +370,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const now = new Date();
       const banId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       
-      // Get recommended escalation level
-      const recommendation = getRecommendedBanDuration(cleanUsername, reason);
-      
       const newBan: UserBan = {
         id: banId,
         username: cleanUsername,
@@ -517,19 +383,11 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         active: true,
         appealable: true,
         notes: cleanNotes,
-        reportIds: reportIds, // Fixed: now properly typed as string[]
-        escalationLevel: recommendation.level,
+        reportIds: reportIds,
         appealStatus: 'pending'
       };
 
       setBans(prev => [...prev, newBan]);
-      
-      // Update escalation for the user
-      const offenseWeights: Record<BanReason, number> = {
-        harassment: 2, spam: 1, inappropriate_content: 2,
-        scam: 3, underage: 5, payment_fraud: 3, other: 1
-      };
-      updateUserEscalation(cleanUsername, reason, offenseWeights[reason]);
       
       // Schedule expiration if temporary
       if (newBan.banType === 'temporary' && newBan.endTime) {
@@ -543,7 +401,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         cleanUsername, 
         `Banned ${durationText} for ${reason}${cleanCustomReason ? `: ${cleanCustomReason}` : ''}`, 
         cleanAdminUsername,
-        { banId, escalationLevel: recommendation.level, reasoning: recommendation.reasoning }
+        { banId }
       );
       
       return true;
@@ -587,7 +445,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const cleanUsername = sanitizeString(username);
       const cleanAppealText = sanitizeString(appealText);
       
-      let appealEvidence: string[] = []; // Fixed: initialize as empty array instead of undefined
+      let appealEvidence: string[] = [];
       
       // Process evidence files
       if (evidence && evidence.length > 0) {
@@ -609,7 +467,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               appealText: cleanAppealText, 
               appealDate: new Date().toISOString(),
               appealStatus: 'pending' as AppealStatus,
-              appealEvidence // Fixed: now always string[] instead of potentially undefined
+              appealEvidence
             }
           : ban
       ));
@@ -728,29 +586,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return true;
     } catch (error) {
       console.error('Error escalating appeal:', error);
-      return false;
-    }
-  };
-
-  // Reset user escalation (admin only)
-  const resetUserEscalation = (username: string, adminUsername: string): boolean => {
-    try {
-      const cleanUsername = sanitizeString(username);
-      const cleanAdminUsername = sanitizeString(adminUsername);
-      
-      setEscalations(prev => prev.filter(e => e.username !== cleanUsername));
-      
-      addBanHistory(
-        'unbanned', // Using existing enum value
-        cleanUsername, 
-        'Escalation level reset by admin', 
-        cleanAdminUsername,
-        { action: 'escalation_reset' }
-      );
-      
-      return true;
-    } catch (error) {
-      console.error('Error resetting escalation:', error);
       return false;
     }
   };
@@ -900,15 +735,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       rejectedAppeals: banHistory.filter(entry => entry.action === 'appeal_rejected').length
     };
     
-    // Escalation statistics
-    const escalationStats = {
-      level1: escalations.filter(e => e.escalationLevel === 1).length,
-      level2: escalations.filter(e => e.escalationLevel === 2).length,
-      level3: escalations.filter(e => e.escalationLevel === 3).length,
-      level4: escalations.filter(e => e.escalationLevel === 4).length,
-      level5: escalations.filter(e => e.escalationLevel === 5).length
-    };
-    
     return {
       totalActiveBans: activeBans.length,
       temporaryBans: activeBans.filter(ban => ban.banType === 'temporary').length,
@@ -916,8 +742,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       pendingAppeals: activeBans.filter(ban => ban.appealSubmitted && ban.appealStatus === 'pending').length,
       recentBans24h: bans.filter(ban => new Date(ban.startTime) >= twentyFourHoursAgo).length,
       bansByReason,
-      appealStats,
-      escalationStats
+      appealStats
     };
   };
 
@@ -925,7 +750,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <BanContext.Provider value={{
       bans,
       banHistory,
-      escalations,
       appealReviews,
       ipBans,
       banUser,
@@ -940,9 +764,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       approveAppeal,
       rejectAppeal,
       escalateAppeal,
-      getRecommendedBanDuration,
-      getUserEscalation,
-      resetUserEscalation,
       banUserIP,
       isIPBanned,
       updateExpiredBans,

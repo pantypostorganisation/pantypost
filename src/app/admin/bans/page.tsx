@@ -992,6 +992,32 @@ export default function BanManagementPage() {
                   })}
                 </div>
               </div>
+
+              {/* Appeal Statistics */}
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <MessageSquare size={20} className="text-orange-400" />
+                  Appeal Processing
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-400">{banStats.appealStats.totalAppeals}</div>
+                    <div className="text-xs text-gray-400">Total Appeals</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-400">{banStats.appealStats.pendingAppeals}</div>
+                    <div className="text-xs text-gray-400">Pending</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-400">{banStats.appealStats.approvedAppeals}</div>
+                    <div className="text-xs text-gray-400">Approved</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-400">{banStats.appealStats.rejectedAppeals}</div>
+                    <div className="text-xs text-gray-400">Rejected</div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
