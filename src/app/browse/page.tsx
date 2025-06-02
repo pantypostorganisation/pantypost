@@ -1,8 +1,9 @@
-// src/app/browse/page.tsx - Fixed Memory Leaks and Performance Issues
+// src/app/browse/page.tsx
 'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -87,7 +88,8 @@ const isListingActive = (listing: Listing): boolean => {
 };
 
 export default function BrowsePage() {
-  const { listings, removeListing, user, users, isSubscribed, addSellerNotification, placeBid } = useListings();
+  const { user } = useAuth();
+  const { listings, removeListing, users, isSubscribed, addSellerNotification, placeBid } = useListings();
   const { purchaseListing, orderHistory } = useWallet();
   const router = useRouter();
 

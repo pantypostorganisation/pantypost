@@ -2,13 +2,15 @@
 'use client';
 
 import BanCheck from '@/components/BanCheck';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useMessages } from '@/context/MessageContext';
 import { useState } from 'react';
 
 export default function SellerSubscribersPage() {
-  const { user, subscriptions, users } = useListings();
+  const { user } = useAuth();
+  const { subscriptions, users } = useListings();
   const { sendMessage } = useMessages();
   const [messageModal, setMessageModal] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState('');

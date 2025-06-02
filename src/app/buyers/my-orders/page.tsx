@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -35,8 +36,9 @@ import {
 } from 'lucide-react';
 
 export default function MyOrdersPage() {
+  const { user } = useAuth();
   const { orderHistory, updateOrderAddress } = useWallet();
-  const { user, users } = useListings();
+  const { users } = useListings();
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'date' | 'price' | 'status'>('date');

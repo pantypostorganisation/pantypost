@@ -2,6 +2,7 @@
 'use client';
 
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
+import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/context/MessageContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
@@ -406,7 +407,8 @@ export default function BuyerMessagesPage() {
   // Move ALL hooks before any early returns or conditional logic
   
   // Context hooks - ALWAYS called first
-  const { user, users } = useListings();
+  const { user } = useAuth();
+  const { users } = useListings();
   const {
     messages,
     sendMessage,

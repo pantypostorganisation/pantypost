@@ -3,8 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Use AuthContext
-import { useListings } from '@/context/ListingContext'; // Keep for users check
+import { useAuth } from '@/context/AuthContext';
+import { useListings } from '@/context/ListingContext';
 import { User, ShoppingBag, Lock, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -78,8 +78,8 @@ const FloatingParticle = ({ delay = 0 }) => {
 
 export default function SignupPage() {
   const router = useRouter();
-  const { login, isAuthReady, user } = useAuth(); // ✅ FIXED: Use AuthContext
-  const { users } = useListings(); // Keep for checking existing users
+  const { user, login, isAuthReady } = useAuth(); // ✅ FIXED: Get user from AuthContext
+  const { users } = useListings(); // ✅ FIXED: Only get users from ListingContext
   
   const [formData, setFormData] = useState<SignupFormData>({
     username: '',

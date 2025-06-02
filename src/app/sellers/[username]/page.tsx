@@ -3,6 +3,7 @@
 
 import { useParams } from 'next/navigation';
 import BanCheck from '@/components/BanCheck';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useReviews } from '@/context/ReviewContext';
@@ -19,15 +20,15 @@ import {
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const { user } = useAuth(); // ✅ Already correctly getting user from AuthContext
   const {
     listings,
-    user,
     users,
     isSubscribed,
     subscribeToSeller,
     unsubscribeFromSeller,
     subscriptions,
-  } = useListings();
+  } = useListings(); // ✅ Already correctly getting data from ListingContext
   const {
     orderHistory,
     sendTip,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import {
@@ -53,7 +54,7 @@ type ReportLog = {
 };
 
 export default function ResolvedReportsPage() {
-  const { user } = useListings();
+  const { user } = useAuth();
   const [resolved, setResolved] = useState<ResolvedReport[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'banned' | 'nobanned'>('all');

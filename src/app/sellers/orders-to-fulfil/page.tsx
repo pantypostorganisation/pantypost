@@ -3,6 +3,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import BanCheck from '@/components/BanCheck';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -34,7 +35,7 @@ import {
 } from 'lucide-react';
 
 export default function OrdersToFulfilPage() {
-  const { user } = useListings();
+  const { user } = useAuth();
   const { orderHistory, updateOrderAddress, updateShippingStatus } = useWallet();
 
   const [addressModalOpen, setAddressModalOpen] = useState(false);

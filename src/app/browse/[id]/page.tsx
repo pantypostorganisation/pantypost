@@ -1,8 +1,9 @@
-// src/app/browse/[id]/page.tsx - Updated with Purple Timer Progress Bar
+// src/app/browse/[id]/page.tsx
 'use client';
 
 import { useRouter, useParams } from 'next/navigation';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
@@ -52,7 +53,8 @@ function useInterval(callback: () => void, delay: number | null): void {
 }
 
 export default function ListingDetailPage() {
-  const { listings, user, removeListing, addSellerNotification, isSubscribed, users, placeBid, orderHistory } = useListings();
+  const { user } = useAuth(); // ✅ FIXED: Get user from AuthContext
+  const { listings, removeListing, addSellerNotification, isSubscribed, users, placeBid, orderHistory } = useListings(); // ✅ FIXED: Only get other data from ListingContext
   const { getReviewsForSeller } = useReviews(); // Get reviews function
   const { id } = useParams();
   const listingId = Array.isArray(id) ? id[0] : id as string;

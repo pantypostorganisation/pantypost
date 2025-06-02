@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
-import { useListings } from '@/context/ListingContext';
+import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Import from AuthContext
 import { 
   Ban, 
   Clock, 
@@ -30,7 +30,7 @@ interface BanCheckProps {
 }
 
 const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
-  const { user, logout } = useListings();
+  const { user, logout } = useAuth(); // ✅ FIXED: Get user from AuthContext
   const { isUserBanned, submitAppeal, getBanInfo } = useBans();
   
   const [banInfo, setBanInfo] = useState<any>(null);

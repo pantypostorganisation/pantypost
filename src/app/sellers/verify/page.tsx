@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import BanCheck from '@/components/BanCheck';
+import { useAuth } from '@/context/AuthContext';
 import { useListings, VerificationDocs } from '@/context/ListingContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -24,7 +25,8 @@ import {
 } from 'lucide-react';
 
 export default function SellerVerifyPage() {
-  const { user, requestVerification, users } = useListings();
+  const { user } = useAuth();
+  const { requestVerification, users } = useListings();
   const router = useRouter();
 
   const [code, setCode] = useState('');

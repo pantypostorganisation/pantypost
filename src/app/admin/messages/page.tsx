@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import RequireAuth from '@/components/RequireAuth';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
@@ -70,7 +71,8 @@ const ALL_EMOJIS = [
 ];
 
 export default function AdminMessagesPage() {
-  const { user, users } = useListings();
+  const { user } = useAuth();
+  const { users } = useListings();
   const { messages, sendMessage, markMessagesAsRead, blockUser, unblockUser, reportUser, isBlocked, hasReported } = useMessages();
   
   const [selectedUser, setSelectedUser] = useState<string>('');

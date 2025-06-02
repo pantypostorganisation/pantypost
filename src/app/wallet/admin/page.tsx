@@ -2,6 +2,7 @@
 'use client';
 
 import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import { useState, useRef, useEffect } from 'react';
@@ -48,7 +49,8 @@ export default function AdminProfitDashboard() {
     sellerWithdrawals,
     adminWithdrawals
   } = useWallet();
-  const { user, users, listings } = useListings();
+  const { user } = useAuth();
+  const { users, listings } = useListings();
   const [showDetails, setShowDetails] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | '3months' | 'year' | 'all'>('today');
 

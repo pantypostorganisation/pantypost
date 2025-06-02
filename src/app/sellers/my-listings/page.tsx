@@ -2,6 +2,7 @@
 'use client';
 
 import BanCheck from '@/components/BanCheck';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -26,7 +27,8 @@ function timeSinceListed(dateString: string) {
 }
 
 export default function MyListingsPage() {
-  const { listings = [], addListing, addAuctionListing, removeListing, updateListing, user, cancelAuction } = useListings();
+  const { user } = useAuth();
+  const { listings = [], addListing, addAuctionListing, removeListing, updateListing, cancelAuction } = useListings();
   const { orderHistory } = useWallet();
 
   // Form state

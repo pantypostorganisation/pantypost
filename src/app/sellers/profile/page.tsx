@@ -2,6 +2,7 @@
 'use client';
 
 import BanCheck from '@/components/BanCheck';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useEffect, useState, useRef } from 'react';
 import { useWallet } from '@/context/WalletContext';
@@ -11,7 +12,7 @@ import TierBadge from '@/components/TierBadge';
 import { getSellerTierMemoized, TIER_LEVELS, TierLevel } from '@/utils/sellerTiers';
 
 export default function SellerProfileSettingsPage() {
- const { user } = useListings();
+ const { user } = useAuth();
  const { orderHistory } = useWallet();
  const [bio, setBio] = useState('');
  const [profilePic, setProfilePic] = useState<string | null>(null);

@@ -1,7 +1,9 @@
+// src/app/admin/wallet-management/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import { 
@@ -23,7 +25,8 @@ import {
 
 export default function AdminWalletManagementPage() {
   const { wallet, adminCreditUser, adminDebitUser, adminActions } = useWallet();
-  const { users, user } = useListings();
+  const { user } = useAuth();
+  const { users } = useListings();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [selectedUserRole, setSelectedUserRole] = useState<'buyer' | 'seller' | 'admin'>('buyer');

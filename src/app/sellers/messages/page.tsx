@@ -4,6 +4,7 @@
 import BanCheck from '@/components/BanCheck';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { useMessages } from '@/context/MessageContext';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
@@ -357,7 +358,8 @@ const isSingleEmoji = (content: string) => {
 };
 
 export default function SellerMessagesPage() {
-  const { user, addSellerNotification, users } = useListings();
+  const { user } = useAuth();
+  const { addSellerNotification, users } = useListings();
   const {
     getMessagesForSeller,
     markMessagesAsRead,

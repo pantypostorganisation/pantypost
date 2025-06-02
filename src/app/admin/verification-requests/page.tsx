@@ -1,6 +1,8 @@
+// src/app/admin/verification-requests/page.tsx
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useListings, VerificationStatus } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import { 
@@ -31,6 +33,7 @@ interface ImageViewData {
 }
 
 export default function AdminVerificationRequestsPage() {
+  const { user } = useAuth();
   const { users, setVerificationStatus } = useListings();
   const [pending, setPending] = useState<User[]>([]);
   const [selected, setSelected] = useState<User | null>(null);

@@ -2,6 +2,7 @@
 'use client';
 
 import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function BuyerWalletPage() {
-  const { user } = useListings();
+  const { user } = useAuth();
   const { 
     getBuyerBalance, 
     setBuyerBalance, // 🚀 FIX: Import setBuyerBalance to actually update wallet

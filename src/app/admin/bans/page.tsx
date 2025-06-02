@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBans } from '@/context/BanContext';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
 import {
@@ -34,7 +35,7 @@ import {
 } from 'lucide-react';
 
 export default function BanManagementPage() {
-  const { user } = useListings();
+  const { user } = useAuth();
   
   // Safely handle context dependencies
   let banContext;

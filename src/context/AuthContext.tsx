@@ -21,6 +21,12 @@ export interface User {
   isBanned?: boolean;
   banReason?: string;
   banExpiresAt?: string;
+  
+  // Verification properties
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | 'unverified';
+  verificationRequestedAt?: string;
+  verificationRejectionReason?: string;
+  verified?: boolean; // For backward compatibility with existing code
 }
 
 interface AuthContextType {
@@ -75,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: userRole,
         email: `${username}@pantypost.com`,
         isVerified: isAdmin || false,
+        verified: isAdmin || false, // For backward compatibility
         tier: userRole === 'seller' ? 'Tease' : undefined,
         subscriberCount: 0,
         totalSales: 0,
@@ -84,6 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastActive: new Date().toISOString(),
         bio: '',
         isBanned: false,
+        
+        // Initialize verification properties
+        verificationStatus: isAdmin ? 'verified' : 'unverified',
+        verificationRequestedAt: undefined,
+        verificationRejectionReason: undefined,
       };
 
       // Store in localStorage

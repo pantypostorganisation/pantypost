@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useBans } from '@/context/BanContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -66,7 +67,7 @@ type ReportLog = {
 };
 
 export default function AdminReportsPage() {
-  const { user } = useListings();
+  const { user } = useAuth();
   
   // Safely handle the ban context
   let banContext: any = null;
