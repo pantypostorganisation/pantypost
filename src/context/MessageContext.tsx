@@ -380,11 +380,21 @@ export type Message = {
   };
 };
 
+// ADDED: Enhanced ReportLog type with processing status
 type ReportLog = {
+  id?: string;
   reporter: string;
   reportee: string;
   messages: Message[];
   date: string;
+  processed?: boolean; // NEW: Track if report has been processed
+  banApplied?: boolean;
+  banId?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  category?: 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'other';
+  adminNotes?: string;
+  processedBy?: string;
+  processedAt?: string;
 };
 
 type MessageOptions = {
@@ -399,6 +409,7 @@ type MessageOptions = {
   };
 };
 
+// UPDATED: Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [seller: string]: Message[] };
   sendMessage: (
@@ -423,6 +434,10 @@ type MessageContextType = {
   reportUser: (reporter: string, reportee: string) => void;
   isBlocked: (blocker: string, blockee: string) => boolean;
   hasReported: (reporter: string, reportee: string) => boolean;
+  getReportCount: () => number; // NEW: Added to context
+  blockedUsers: { [user: string]: string[] }; // NEW: Expose blocked users
+  reportedUsers: { [user: string]: string[] }; // NEW: Expose reported users
+  reportLogs: ReportLog[]; // NEW: Expose report logs
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -431,6 +446,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [messages, setMessages] = useState<{ [seller: string]: Message[] }>({});
   const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
+  // NEW: State for report logs
+  const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
 
   useEffect(() => {
     const stored = localStorage.getItem('panty_messages');
@@ -441,6 +458,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const reported = localStorage.getItem('panty_reported');
     if (reported) setReportedUsers(JSON.parse(reported));
+
+    // NEW: Load report logs
+    const storedReports = localStorage.getItem('panty_report_logs');
+    if (storedReports) {
+      try {
+        setReportLogs(JSON.parse(storedReports));
+      } catch (error) {
+        console.error('Error parsing report logs:', error);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -454,6 +481,13 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   useEffect(() => {
     localStorage.setItem('panty_reported', JSON.stringify(reportedUsers));
   }, [reportedUsers]);
+
+  // NEW: Save report logs to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('panty_report_logs', JSON.stringify(reportLogs));
+    }
+  }, [reportLogs]);
 
   const sendMessage = (
     sender: string,
@@ -604,6 +638,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  // UPDATED: Enhanced reportUser function with proper report log creation
   const reportUser = (reporter: string, reportee: string) => {
     const sanitizedReporter = sanitizeString(reporter);
     const sanitizedReportee = sanitizeString(reportee);
@@ -625,16 +660,24 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       });
     });
 
-    const existingReports: ReportLog[] = JSON.parse(localStorage.getItem('panty_report_logs') || '[]');
-
-    existingReports.push({
+    // NEW: Create enhanced report log with processing status
+    const newReport: ReportLog = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       reporter: sanitizedReporter,
       reportee: sanitizedReportee,
       messages: allMessages,
       date: new Date().toISOString(),
-    });
+      processed: false, // NEW: Start as unprocessed
+      severity: 'medium', // NEW: Default severity
+      category: 'other' // NEW: Default category
+    };
 
-    localStorage.setItem('panty_report_logs', JSON.stringify(existingReports));
+    setReportLogs(prev => [...prev, newReport]);
+
+    // Dispatch event to update UI counters
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('updateReports'));
+    }
   };
 
   const isBlocked = (blocker: string, blockee: string) => {
@@ -647,6 +690,20 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const sanitizedReporter = sanitizeString(reporter);
     const sanitizedReportee = sanitizeString(reportee);
     return reportedUsers[sanitizedReporter]?.includes(sanitizedReportee) || false;
+  };
+
+  // NEW: Enhanced getReportCount function that counts only pending reports
+  const getReportCount = (): number => {
+    try {
+      // Count only reports that are NOT processed
+      const pendingReports = reportLogs.filter(report => 
+        report && !report.processed
+      );
+      return pendingReports.length;
+    } catch (error) {
+      console.error('Error getting report count:', error);
+      return 0;
+    }
   };
 
   return (
@@ -662,6 +719,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         reportUser,
         isBlocked,
         hasReported,
+        getReportCount, // NEW: Added to context
+        blockedUsers, // NEW: Expose blocked users
+        reportedUsers, // NEW: Expose reported users
+        reportLogs // NEW: Expose report logs
       }}
     >
       {children}
@@ -677,11 +738,27 @@ export const useMessages = () => {
   return context;
 };
 
-export const getReportCount = () => {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('panty_report_logs');
-    const parsed = stored ? JSON.parse(stored) : [];
-    return parsed.length;
+// UPDATED: Enhanced external getReportCount function for header use
+export const getReportCount = (): number => {
+  try {
+    if (typeof window === 'undefined') return 0;
+    
+    const storedReports = localStorage.getItem('panty_report_logs');
+    if (!storedReports) return 0;
+    
+    const reports: ReportLog[] = JSON.parse(storedReports);
+    if (!Array.isArray(reports)) return 0;
+    
+    // Count only unprocessed reports
+    const pendingReports = reports.filter(report => 
+      report && 
+      typeof report === 'object' && 
+      !report.processed
+    );
+    
+    return pendingReports.length;
+  } catch (error) {
+    console.error('Error getting external report count:', error);
+    return 0;
   }
-  return 0;
 };

@@ -41,7 +41,7 @@ export default function Header() {
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
   const [mounted, setMounted] = useState(false);
-  const [reportCount, setReportCount] = useState(0);
+  const [reportCount, setReportCount] = useState<number>(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
@@ -410,14 +410,21 @@ export default function Header() {
       : 0;
   }, [getSellerBalance, username, balanceKey]);
 
-  // Extract report count updating to a stable callback
+  // FIXED: Enhanced report count updating with safe error handling
   const updateReportCount = useCallback(() => {
     if (typeof window !== 'undefined' && isAdminUser && mounted && isMountedRef.current) {
       try {
-        const count = typeof getReportCount === 'function' ? getReportCount() : 0;
-        setReportCount(count);
+        // Use the exported getReportCount function for consistency
+        const count = getReportCount();
+        
+        // Additional validation to ensure we have a valid number
+        const validCount = typeof count === 'number' && !isNaN(count) && count >= 0 ? count : 0;
+        
+        setReportCount(validCount);
       } catch (err) {
         console.error('Error updating report count:', err);
+        // Set to 0 on error to prevent display issues
+        setReportCount(0);
       }
     }
   }, [isAdminUser, mounted]);
