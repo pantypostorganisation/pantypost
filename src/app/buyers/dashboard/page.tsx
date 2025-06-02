@@ -13,32 +13,22 @@ import { useEffect, useState, useMemo } from 'react';
 import { 
   ShoppingBag, 
   MessageCircle, 
-  Heart, 
   DollarSign, 
   Package, 
   Clock, 
   Crown, 
   Star,
-  TrendingUp,
   User,
-  Settings,
   Plus,
   ArrowRight,
-  Sparkles,
   Calendar,
-  Eye,
-  ShoppingCart,
   Wallet,
-  Gift,
-  Bell,
-  Filter,
-  Search,
-  Gavel,
   CheckCircle,
   AlertCircle,
   Truck,
-  CreditCard,
-  Activity
+  Activity,
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
 
 interface SubscriptionInfo {
@@ -48,6 +38,8 @@ interface SubscriptionInfo {
   pic: string | null;
   newListings: number;
   lastActive: string;
+  tier?: string;
+  verified?: boolean;
 }
 
 interface DashboardStats {
@@ -84,49 +76,67 @@ export default function BuyerDashboardPage() {
   const { messages } = useMessages();
 
   const [subscribedSellers, setSubscribedSellers] = useState<SubscriptionInfo[]>([]);
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
-    totalSpent: 0,
-    totalOrders: 0,
-    activeSubscriptions: 0,
-    pendingRequests: 0,
-    unreadMessages: 0,
-    completedOrders: 0,
-    favoriteSellerCount: 0,
-    averageOrderValue: 0,
-    thisWeekSpent: 0,
-    thisMonthOrders: 0,
-    pendingShipments: 0
-  });
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [featuredListings, setFeaturedListings] = useState<any[]>([]);
 
-  // Fetch subscription data
+  // Load subscriptions from the correct localStorage key
   useEffect(() => {
     if (typeof window !== 'undefined' && user?.username) {
-      const subs = JSON.parse(localStorage.getItem('buyer_subscriptions') || '{}');
-      const userSubscriptions = subs[user.username] || [];
-      
-      const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => ({
-        seller,
-        price: sessionStorage.getItem(`subscription_price_${seller}`) || 'N/A',
-        bio: sessionStorage.getItem(`profile_bio_${seller}`) || 'No bio available',
-        pic: sessionStorage.getItem(`profile_pic_${seller}`),
-        newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-        lastActive: new Date().toISOString() // Mock data
-      }));
-      
-      setSubscribedSellers(subscriptionData);
+      try {
+        const subsKey = 'subscriptions';
+        const storedSubs = localStorage.getItem(subsKey);
+        
+        if (storedSubs) {
+          const allSubscriptions = JSON.parse(storedSubs);
+          const userSubscriptions = allSubscriptions[user.username] || [];
+          
+          const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => {
+            const sellerUser = users[seller];
+            const sellerBio = sessionStorage.getItem(`profile_bio_${seller}`) || sellerUser?.bio || 'No bio available';
+            const sellerPic = sessionStorage.getItem(`profile_pic_${seller}`) || null;
+            const subscriptionPrice = sessionStorage.getItem(`subscription_price_${seller}`) || '25.00';
+            
+            return {
+              seller,
+              price: subscriptionPrice,
+              bio: sellerBio,
+              pic: sellerPic,
+              newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
+              lastActive: new Date().toISOString(),
+              tier: sellerUser?.tier || 'Tease',
+              verified: sellerUser?.verified || sellerUser?.verificationStatus === 'verified'
+            };
+          });
+          
+          setSubscribedSellers(subscriptionData);
+        }
+      } catch (error) {
+        console.error('Error loading subscriptions:', error);
+      }
     }
-  }, [user?.username, listings]);
+  }, [user?.username, listings, users]);
 
-  // Calculate comprehensive dashboard statistics
+  // Calculate dashboard statistics
   const stats = useMemo(() => {
-    if (!user?.username) return dashboardStats;
+    if (!user?.username) {
+      return {
+        totalSpent: 0,
+        totalOrders: 0,
+        activeSubscriptions: 0,
+        pendingRequests: 0,
+        unreadMessages: 0,
+        completedOrders: 0,
+        favoriteSellerCount: 0,
+        averageOrderValue: 0,
+        thisWeekSpent: 0,
+        thisMonthOrders: 0,
+        pendingShipments: 0
+      };
+    }
 
     const userOrders = orderHistory.filter(order => order.buyer === user.username);
     const userRequests = getRequestsForUser(user.username, 'buyer');
     
-    // Calculate unread messages
     const unreadCount = Object.values(messages)
       .flat()
       .filter(msg => 
@@ -134,7 +144,6 @@ export default function BuyerDashboardPage() {
         !msg.read
       ).length;
 
-    // Recent activity calculations
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     
@@ -176,7 +185,6 @@ export default function BuyerDashboardPage() {
     const userOrders = orderHistory.filter(order => order.buyer === user.username);
     const userRequests = getRequestsForUser(user.username, 'buyer');
 
-    // Add recent orders
     userOrders
       .slice(0, 3)
       .forEach(order => {
@@ -193,7 +201,6 @@ export default function BuyerDashboardPage() {
         });
       });
 
-    // Add recent requests
     userRequests
       .slice(0, 2)
       .forEach(request => {
@@ -206,11 +213,10 @@ export default function BuyerDashboardPage() {
           amount: request.price,
           status: request.status,
           href: '/buyers/messages',
-          icon: <Settings className="w-4 h-4" />
+          icon: <MessageCircle className="w-4 h-4" />
         });
       });
 
-    // Sort by date and limit
     activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
     setRecentActivity(activities.slice(0, 6));
   }, [user, orderHistory, getRequestsForUser]);
@@ -220,7 +226,6 @@ export default function BuyerDashboardPage() {
     const userOrders = orderHistory.filter(order => order.buyer === user?.username);
     const purchasedSellers = new Set(userOrders.map(order => order.seller));
     
-    // Get listings from sellers user has purchased from before
     const recommendedListings = listings
       .filter(listing => 
         purchasedSellers.has(listing.seller) && 
@@ -229,7 +234,6 @@ export default function BuyerDashboardPage() {
       )
       .slice(0, 6);
 
-    // If not enough, add popular listings
     if (recommendedListings.length < 6) {
       const popularListings = listings
         .filter(listing => 
@@ -261,147 +265,133 @@ export default function BuyerDashboardPage() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 text-white">
-          <div className="max-w-7xl mx-auto px-4 py-6">
+        <main className="min-h-screen bg-black text-white">
+          <div className="max-w-7xl mx-auto px-6 py-8">
             
-            {/* Welcome Header */}
-            <div className="mb-8">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Clean Header */}
+            <div className="mb-12">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                 <div>
-                  <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#ff950e] to-[#ff6b00] bg-clip-text text-transparent">
-                    Welcome back, {user.username}! 👋
+                  <h1 className="text-4xl font-bold text-white mb-2">
+                    Welcome back, <span className="text-[#ff950e]">{user.username}</span>!
                   </h1>
-                  <p className="text-gray-400 mt-2">
-                    Here's what's happening with your account
+                  <p className="text-gray-400 text-lg">
+                    Here's an overview of your account activity
                   </p>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                  <div className="bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 border border-[#ff950e]/30 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Wallet className="w-5 h-5 text-[#ff950e]" />
+                <div className="flex items-center gap-4">
+                  <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <Wallet className="w-6 h-6 text-[#ff950e]" />
                       <div>
-                        <p className="text-xs text-gray-400">Wallet Balance</p>
-                        <p className="text-xl font-bold text-[#ff950e]">${balance.toFixed(2)}</p>
+                        <p className="text-sm text-gray-400">Balance</p>
+                        <p className="text-2xl font-bold text-white">${balance.toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
                   
                   <Link
                     href="/wallet/buyer"
-                    className="bg-[#ff950e] hover:bg-[#e88800] text-black font-bold px-6 py-3 rounded-xl transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-2"
+                    className="bg-[#ff950e] hover:bg-[#e88800] text-black font-bold px-8 py-4 rounded-lg transition-colors flex items-center gap-2"
                   >
-                    <Plus className="w-4 h-4" />
-                    Top Up
+                    <Plus className="w-5 h-5" />
+                    Add Funds
                   </Link>
                 </div>
               </div>
             </div>
 
-            {/* Quick Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-[#ff950e]/10 via-black/20 to-[#ff6b00]/10 border border-[#ff950e]/30 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[#ff950e] text-sm font-medium">Total Spent</p>
-                    <p className="text-white text-xl font-bold">${stats.totalSpent.toFixed(2)}</p>
-                  </div>
-                  <DollarSign className="w-8 h-8 text-[#ff950e]/60" />
+            {/* Stats Grid - Clean and Simple */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="w-6 h-6 text-[#ff950e]" />
+                  <span className="text-xl font-bold text-white">${stats.totalSpent.toFixed(2)}</span>
                 </div>
+                <p className="text-gray-400 font-medium">Total Spent</p>
               </div>
               
-              <div className="bg-gradient-to-br from-purple-500/10 via-black/20 to-purple-600/10 border border-purple-500/30 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-purple-300 text-sm font-medium">Total Orders</p>
-                    <p className="text-white text-xl font-bold">{stats.totalOrders}</p>
-                  </div>
-                  <Package className="w-8 h-8 text-purple-400/60" />
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <Package className="w-6 h-6 text-purple-400" />
+                  <span className="text-xl font-bold text-white">{stats.totalOrders}</span>
                 </div>
+                <p className="text-gray-400 font-medium">Total Orders</p>
               </div>
               
-              <div className="bg-gradient-to-br from-green-500/10 via-black/20 to-emerald-600/10 border border-green-500/30 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-300 text-sm font-medium">Subscriptions</p>
-                    <p className="text-white text-xl font-bold">{stats.activeSubscriptions}</p>
-                  </div>
-                  <Crown className="w-8 h-8 text-green-400/60" />
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <Crown className="w-6 h-6 text-yellow-400" />
+                  <span className="text-xl font-bold text-white">{stats.activeSubscriptions}</span>
                 </div>
+                <p className="text-gray-400 font-medium">Subscriptions</p>
               </div>
               
-              <div className="bg-gradient-to-br from-blue-500/10 via-black/20 to-cyan-600/10 border border-blue-500/30 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-300 text-sm font-medium">Messages</p>
-                    <p className="text-white text-xl font-bold">{stats.unreadMessages}</p>
-                  </div>
-                  <MessageCircle className="w-8 h-8 text-blue-400/60" />
+              <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <MessageCircle className="w-6 h-6 text-blue-400" />
+                  <span className="text-xl font-bold text-white">{stats.unreadMessages}</span>
                 </div>
+                <p className="text-gray-400 font-medium">Unread Messages</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
               
-              {/* Left Column - Main Content */}
+              {/* Main Content Area */}
               <div className="xl:col-span-2 space-y-8">
                 
-                {/* Quick Actions */}
-                <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 border border-gray-700 rounded-xl p-6">
-                  <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-[#ff950e]" />
-                    Quick Actions
-                  </h2>
+                {/* Quick Actions - Clean Grid */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <h2 className="text-xl font-bold text-white mb-5">Quick Actions</h2>
                   
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <Link
                       href="/browse"
-                      className="group bg-gradient-to-br from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 border border-[#ff950e]/30 hover:border-[#ff950e]/50 rounded-lg p-4 transition-all transform hover:scale-105"
+                      className="bg-[#111111] border border-gray-700 hover:border-[#ff950e] hover:bg-[#1a1a1a] rounded-lg p-5 transition-all group"
                     >
-                      <ShoppingBag className="w-6 h-6 text-[#ff950e] mb-2 group-hover:scale-110 transition-transform" />
-                      <p className="text-white font-medium text-sm">Browse</p>
-                      <p className="text-gray-400 text-xs">Discover new</p>
+                      <ShoppingBag className="w-7 h-7 text-[#ff950e] mb-3 group-hover:scale-110 transition-transform" />
+                      <p className="text-white font-semibold mb-1 text-sm">Browse</p>
+                      <p className="text-gray-400 text-xs">Find new items</p>
                     </Link>
                     
                     <Link
                       href="/buyers/messages"
-                      className="group bg-gradient-to-br from-blue-500/10 to-cyan-600/10 hover:from-blue-500/20 hover:to-cyan-600/20 border border-blue-500/30 hover:border-blue-500/50 rounded-lg p-4 transition-all transform hover:scale-105"
+                      className="bg-[#111111] border border-gray-700 hover:border-blue-400 hover:bg-[#1a1a1a] rounded-lg p-5 transition-all group"
                     >
-                      <MessageCircle className="w-6 h-6 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
-                      <p className="text-white font-medium text-sm">Messages</p>
+                      <MessageCircle className="w-7 h-7 text-blue-400 mb-3 group-hover:scale-110 transition-transform" />
+                      <p className="text-white font-semibold mb-1 text-sm">Messages</p>
                       <p className="text-gray-400 text-xs">Chat with sellers</p>
                     </Link>
                     
                     <Link
                       href="/buyers/my-orders"
-                      className="group bg-gradient-to-br from-purple-500/10 to-purple-600/10 hover:from-purple-500/20 hover:to-purple-600/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg p-4 transition-all transform hover:scale-105"
+                      className="bg-[#111111] border border-gray-700 hover:border-purple-400 hover:bg-[#1a1a1a] rounded-lg p-5 transition-all group"
                     >
-                      <Package className="w-6 h-6 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
-                      <p className="text-white font-medium text-sm">My Orders</p>
+                      <Package className="w-7 h-7 text-purple-400 mb-3 group-hover:scale-110 transition-transform" />
+                      <p className="text-white font-semibold mb-1 text-sm">My Orders</p>
                       <p className="text-gray-400 text-xs">Track purchases</p>
                     </Link>
                     
                     <Link
                       href="/wallet/buyer"
-                      className="group bg-gradient-to-br from-green-500/10 to-emerald-600/10 hover:from-green-500/20 hover:to-emerald-600/20 border border-green-500/30 hover:border-green-500/50 rounded-lg p-4 transition-all transform hover:scale-105"
+                      className="bg-[#111111] border border-gray-700 hover:border-green-400 hover:bg-[#1a1a1a] rounded-lg p-5 transition-all group"
                     >
-                      <CreditCard className="w-6 h-6 text-green-400 mb-2 group-hover:scale-110 transition-transform" />
-                      <p className="text-white font-medium text-sm">Wallet</p>
+                      <Wallet className="w-7 h-7 text-green-400 mb-3 group-hover:scale-110 transition-transform" />
+                      <p className="text-white font-semibold mb-1 text-sm">Wallet</p>
                       <p className="text-gray-400 text-xs">Manage funds</p>
                     </Link>
                   </div>
                 </div>
 
-                {/* Recent Activity */}
-                <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 border border-gray-700 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-[#ff950e]" />
-                      Recent Activity
-                    </h2>
+                {/* Recent Activity - Clean List */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-xl font-bold text-white">Recent Activity</h2>
                     <Link 
                       href="/buyers/my-orders"
-                      className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium flex items-center gap-1"
+                      className="text-[#ff950e] hover:text-[#e88800] font-medium flex items-center gap-2 text-sm"
                     >
                       View All <ArrowRight className="w-4 h-4" />
                     </Link>
@@ -413,148 +403,102 @@ export default function BuyerDashboardPage() {
                         <Link
                           key={activity.id}
                           href={activity.href || '#'}
-                          className="block bg-black/20 hover:bg-black/40 border border-gray-800 hover:border-gray-600 rounded-lg p-4 transition-all"
+                          className="flex items-center gap-4 p-4 bg-[#111111] border border-gray-700 hover:border-gray-600 rounded-lg transition-colors"
                         >
-                          <div className="flex items-center gap-4">
-                            <div className="bg-gray-800 p-2 rounded-lg">
-                              {activity.icon}
-                            </div>
-                            <div className="flex-1">
-                              <h3 className="text-white font-medium">{activity.title}</h3>
-                              <p className="text-gray-400 text-sm">{activity.subtitle}</p>
-                            </div>
-                            <div className="text-right">
-                              {activity.amount && (
-                                <p className="text-[#ff950e] font-bold">${activity.amount.toFixed(2)}</p>
-                              )}
-                              <p className="text-gray-500 text-xs">{activity.time}</p>
-                              {activity.status && (
-                                <div className="flex items-center gap-1 mt-1">
-                                  {activity.status === 'shipped' ? (
-                                    <CheckCircle className="w-3 h-3 text-green-400" />
-                                  ) : activity.status === 'pending' ? (
-                                    <Clock className="w-3 h-3 text-yellow-400" />
-                                  ) : (
-                                    <AlertCircle className="w-3 h-3 text-orange-400" />
-                                  )}
-                                  <span className="text-xs capitalize text-gray-400">{activity.status}</span>
-                                </div>
-                              )}
-                            </div>
+                          <div className="p-2 bg-[#1a1a1a] rounded-lg border border-gray-700">
+                            {activity.icon}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-white font-medium">{activity.title}</h3>
+                            <p className="text-gray-400 text-sm">{activity.subtitle}</p>
+                          </div>
+                          <div className="text-right">
+                            {activity.amount && (
+                              <p className="text-[#ff950e] font-bold">${activity.amount.toFixed(2)}</p>
+                            )}
+                            <p className="text-gray-500 text-xs">{activity.time}</p>
+                            {activity.status && (
+                              <div className="flex items-center gap-1 mt-1 justify-end">
+                                {activity.status === 'shipped' ? (
+                                  <CheckCircle className="w-3 h-3 text-green-400" />
+                                ) : activity.status === 'pending' ? (
+                                  <Clock className="w-3 h-3 text-yellow-400" />
+                                ) : (
+                                  <AlertCircle className="w-3 h-3 text-orange-400" />
+                                )}
+                                <span className="text-xs capitalize text-gray-400">{activity.status}</span>
+                              </div>
+                            )}
                           </div>
                         </Link>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <Activity className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-400">No recent activity</p>
+                    <div className="text-center py-12">
+                      <Activity className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                      <p className="text-gray-400 text-lg mb-4">No recent activity</p>
                       <Link
                         href="/browse"
-                        className="inline-flex items-center gap-2 mt-4 bg-[#ff950e] text-black px-4 py-2 rounded-lg font-medium hover:bg-[#e88800] transition-all"
+                        className="inline-flex items-center gap-2 bg-[#ff950e] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#e88800] transition-colors"
                       >
-                        <ShoppingBag className="w-4 h-4" />
+                        <ShoppingBag className="w-5 h-5" />
                         Start Shopping
                       </Link>
                     </div>
                   )}
                 </div>
-
-                {/* Recommended Listings */}
-                {featuredListings.length > 0 && (
-                  <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 border border-gray-700 rounded-xl p-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Star className="w-5 h-5 text-[#ff950e]" />
-                        Recommended For You
-                      </h2>
-                      <Link 
-                        href="/browse"
-                        className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium flex items-center gap-1"
-                      >
-                        Browse All <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {featuredListings.slice(0, 6).map((listing) => (
-                        <Link
-                          key={listing.id}
-                          href={`/browse/${listing.id}`}
-                          className="group bg-black/20 hover:bg-black/40 border border-gray-800 hover:border-[#ff950e]/50 rounded-lg overflow-hidden transition-all transform hover:scale-[1.02]"
-                        >
-                          <div className="aspect-square bg-gray-800 overflow-hidden">
-                            {listing.imageUrls?.[0] ? (
-                              <img 
-                                src={listing.imageUrls[0]} 
-                                alt={listing.title}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Package className="w-8 h-8 text-gray-600" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-3">
-                            <h3 className="text-white font-medium text-sm truncate">{listing.title}</h3>
-                            <p className="text-gray-400 text-xs truncate">by {listing.seller}</p>
-                            <p className="text-[#ff950e] font-bold mt-1">${(listing.markedUpPrice || listing.price).toFixed(2)}</p>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Right Sidebar */}
-              <div className="space-y-6">
+              {/* Sidebar */}
+              <div className="space-y-8">
                 
-                {/* Active Subscriptions */}
-                <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 border border-gray-700 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                      <Crown className="w-5 h-5 text-yellow-400" />
+                {/* Subscriptions - Clean Design */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      <Crown className="w-6 h-6 text-yellow-400" />
                       Subscriptions
                     </h2>
-                    <span className="bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full font-bold">
+                    <span className="bg-yellow-400 text-black text-sm px-2 py-1 rounded font-bold">
                       {subscribedSellers.length}
                     </span>
                   </div>
                   
                   {subscribedSellers.length > 0 ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {subscribedSellers.slice(0, 4).map((sub) => (
                         <Link
                           key={sub.seller}
                           href={`/sellers/${sub.seller}`}
-                          className="block bg-black/20 hover:bg-black/40 border border-gray-800 hover:border-yellow-500/50 rounded-lg p-3 transition-all"
+                          className="flex items-center gap-3 p-4 bg-[#111111] border border-gray-700 hover:border-yellow-400 rounded-lg transition-colors"
                         >
-                          <div className="flex items-center gap-3">
-                            {sub.pic ? (
-                              <img
-                                src={sub.pic}
-                                alt={sub.seller}
-                                className="w-10 h-10 rounded-full object-cover border border-gray-600"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold">
-                                {sub.seller.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            
-                            <div className="flex-1 min-w-0">
-                              <p className="text-white font-medium text-sm truncate">{sub.seller}</p>
-                              <p className="text-gray-400 text-xs truncate">{sub.bio}</p>
+                          {sub.pic ? (
+                            <img
+                              src={sub.pic}
+                              alt={sub.seller}
+                              className="w-12 h-12 rounded-full object-cover border-2 border-gray-600"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-white font-bold text-lg">
+                              {sub.seller.charAt(0).toUpperCase()}
                             </div>
-                            
-                            <div className="text-right">
-                              <p className="text-yellow-400 font-bold text-sm">${sub.price}/mo</p>
-                              {sub.newListings > 0 && (
-                                <p className="text-green-400 text-xs">{sub.newListings} new</p>
+                          )}
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-white font-semibold truncate">{sub.seller}</p>
+                              {sub.verified && (
+                                <img src="/verification_badge.png" alt="Verified" className="w-5 h-5" />
                               )}
                             </div>
+                            <p className="text-gray-400 text-sm truncate">{sub.bio}</p>
+                          </div>
+                          
+                          <div className="text-right">
+                            <p className="text-yellow-400 font-bold">${sub.price}/mo</p>
+                            {sub.newListings > 0 && (
+                              <p className="text-green-400 text-sm">{sub.newListings} new</p>
+                            )}
                           </div>
                         </Link>
                       ))}
@@ -562,80 +506,80 @@ export default function BuyerDashboardPage() {
                       {subscribedSellers.length > 4 && (
                         <Link
                           href="/browse?filter=premium"
-                          className="block text-center text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium py-2"
+                          className="block text-center text-[#ff950e] hover:text-[#e88800] font-medium py-3"
                         >
                           View all {subscribedSellers.length} subscriptions
                         </Link>
                       )}
                     </div>
                   ) : (
-                    <div className="text-center py-6">
-                      <Crown className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-400 text-sm mb-3">No active subscriptions</p>
+                    <div className="text-center py-8">
+                      <Crown className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                      <p className="text-gray-400 mb-4">No active subscriptions</p>
                       <Link
                         href="/browse?filter=premium"
-                        className="inline-flex items-center gap-2 bg-yellow-600 text-black px-3 py-2 rounded-lg text-xs font-bold hover:bg-yellow-500 transition-all"
+                        className="inline-flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
                       >
-                        <Crown className="w-3 h-3" />
+                        <Crown className="w-4 h-4" />
                         Browse Premium
                       </Link>
                     </div>
                   )}
                 </div>
 
-                {/* Order Status Overview */}
-                <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 border border-gray-700 rounded-xl p-6">
-                  <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-blue-400" />
+                {/* Order Status */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <Truck className="w-6 h-6 text-blue-400" />
                     Order Status
                   </h2>
                   
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-yellow-400" />
-                        <span className="text-gray-300 text-sm">Pending</span>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-[#111111] border border-gray-700 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Clock className="w-5 h-5 text-yellow-400" />
+                        <span className="text-white font-medium">Pending</span>
                       </div>
-                      <span className="text-white font-bold">{stats.pendingShipments}</span>
+                      <span className="text-white font-bold text-lg">{stats.pendingShipments}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-400" />
-                        <span className="text-gray-300 text-sm">Completed</span>
+                    <div className="flex items-center justify-between p-3 bg-[#111111] border border-gray-700 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <span className="text-white font-medium">Completed</span>
                       </div>
-                      <span className="text-white font-bold">{stats.completedOrders}</span>
+                      <span className="text-white font-bold text-lg">{stats.completedOrders}</span>
                     </div>
                     
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Settings className="w-4 h-4 text-orange-400" />
-                        <span className="text-gray-300 text-sm">Requests</span>
+                    <div className="flex items-center justify-between p-3 bg-[#111111] border border-gray-700 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <MessageCircle className="w-5 h-5 text-orange-400" />
+                        <span className="text-white font-medium">Requests</span>
                       </div>
-                      <span className="text-white font-bold">{stats.pendingRequests}</span>
+                      <span className="text-white font-bold text-lg">{stats.pendingRequests}</span>
                     </div>
                   </div>
                   
                   <Link
                     href="/buyers/my-orders"
-                    className="block w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg mt-4 transition-all"
+                    className="block w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg mt-6 transition-colors"
                   >
                     View All Orders
                   </Link>
                 </div>
 
-                {/* This Month Summary */}
-                <div className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 border border-gray-700 rounded-xl p-6">
-                  <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-purple-400" />
+                {/* Monthly Summary */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                    <Calendar className="w-6 h-6 text-purple-400" />
                     This Month
                   </h2>
                   
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-400 text-sm">Orders</span>
-                        <span className="text-white font-bold">{stats.thisMonthOrders}</span>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-gray-400">Orders</span>
+                        <span className="text-white font-bold text-lg">{stats.thisMonthOrders}</span>
                       </div>
                       <div className="w-full bg-gray-800 rounded-full h-2">
                         <div 
@@ -646,9 +590,9 @@ export default function BuyerDashboardPage() {
                     </div>
                     
                     <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-gray-400 text-sm">Spent</span>
-                        <span className="text-white font-bold">${stats.thisWeekSpent.toFixed(2)}</span>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-gray-400">Spent</span>
+                        <span className="text-white font-bold text-lg">${stats.thisWeekSpent.toFixed(2)}</span>
                       </div>
                       <div className="w-full bg-gray-800 rounded-full h-2">
                         <div 
@@ -658,9 +602,9 @@ export default function BuyerDashboardPage() {
                       </div>
                     </div>
                     
-                    <div className="pt-2 border-t border-gray-700">
-                      <p className="text-gray-400 text-xs">
-                        Average order: <span className="text-white font-semibold">${stats.averageOrderValue.toFixed(2)}</span>
+                    <div className="pt-4 border-t border-gray-700">
+                      <p className="text-gray-400 text-center">
+                        Average order: <span className="text-white font-bold">${stats.averageOrderValue.toFixed(2)}</span>
                       </p>
                     </div>
                   </div>
