@@ -20,29 +20,17 @@ import {
   AlertTriangle,
   MessageSquare,
   FileText,
-  RotateCcw,
-  Trash2,
-  Eye,
   UserCheck,
-  TrendingUp,
   BarChart3,
-  Users,
-  Target,
-  Brain,
-  Scale,
-  Zap,
   RefreshCw,
   Download,
-  Settings,
-  Award,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
   Image as ImageIcon,
   Info,
   ArrowLeft,
-  ArrowRight,
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  AlertCircle
+  ArrowRight
 } from 'lucide-react';
 
 export default function BanManagementPage() {
@@ -68,8 +56,6 @@ export default function BanManagementPage() {
     rejectAppeal = () => false,
     escalateAppeal = () => false,
     banHistory = [],
-    getUserEscalation = () => null,
-    resetUserEscalation = () => false,
     appealReviews = [],
     updateExpiredBans = () => {}
   } = banContext || {};
@@ -102,19 +88,6 @@ export default function BanManagementPage() {
     }
   }, [updateExpiredBans]);
 
-  // Safe getUserEscalation wrapper
-  const getUserEscalationSafe = (username: string) => {
-    try {
-      if (!username || typeof username !== 'string') return null;
-      if (typeof getUserEscalation !== 'function') return null;
-      const result = getUserEscalation(username);
-      return result || null;
-    } catch (error) {
-      console.error('Error getting escalation info:', error);
-      return null;
-    }
-  };
-
   // Safe data retrieval
   const banStats = (() => {
     try {
@@ -131,13 +104,6 @@ export default function BanManagementPage() {
           pendingAppeals: 0,
           approvedAppeals: 0,
           rejectedAppeals: 0
-        },
-        escalationStats: {
-          level1: 0,
-          level2: 0,
-          level3: 0,
-          level4: 0,
-          level5: 0
         }
       };
     } catch (error) {
@@ -154,13 +120,6 @@ export default function BanManagementPage() {
           pendingAppeals: 0,
           approvedAppeals: 0,
           rejectedAppeals: 0
-        },
-        escalationStats: {
-          level1: 0,
-          level2: 0,
-          level3: 0,
-          level4: 0,
-          level5: 0
         }
       };
     }
@@ -372,32 +331,6 @@ export default function BanManagementPage() {
     setShowEvidenceModal(true);
   };
 
-  // Handle escalation reset
-  const handleResetEscalation = (username: string) => {
-    if (!username || typeof username !== 'string' || username.trim() === '') {
-      alert('Invalid username provided');
-      return;
-    }
-    
-    if (confirm(`Are you sure you want to reset escalation level for ${username}? This will clear their offense history and cannot be undone.`)) {
-      try {
-        if (typeof resetUserEscalation !== 'function') {
-          alert('Reset escalation function not available');
-          return;
-        }
-        const success = resetUserEscalation(username, user?.username || 'admin');
-        if (success) {
-          alert(`Escalation level reset for ${username}`);
-        } else {
-          alert('Failed to reset escalation level');
-        }
-      } catch (error) {
-        console.error('Error resetting escalation:', error);
-        alert('An error occurred while resetting escalation level');
-      }
-    }
-  };
-
   // Export ban data
   const exportBanData = () => {
     try {
@@ -486,19 +419,6 @@ export default function BanManagementPage() {
     );
   };
 
-  // Get escalation color
-  const getEscalationColor = (level: number | undefined) => {
-    if (!level || typeof level !== 'number' || level < 1) {
-      return 'text-gray-400 bg-gray-900/20';
-    }
-    
-    if (level <= 1) return 'text-green-400 bg-green-900/20';
-    if (level <= 2) return 'text-yellow-400 bg-yellow-900/20';
-    if (level <= 3) return 'text-orange-400 bg-orange-900/20';
-    if (level <= 4) return 'text-red-400 bg-red-900/20';
-    return 'text-purple-400 bg-purple-900/20';
-  };
-
   if (!banContext) {
     return (
       <RequireAuth role="admin">
@@ -532,10 +452,10 @@ export default function BanManagementPage() {
             <div>
               <h1 className="text-3xl font-bold text-[#ff950e] flex items-center">
                 <Shield className="mr-3" />
-                Advanced Ban Management
+                Ban Management
               </h1>
               <p className="text-gray-400 mt-1">
-                Comprehensive ban oversight with analytics and progressive discipline tracking
+                Manual ban oversight and appeal processing
               </p>
             </div>
             
@@ -558,8 +478,8 @@ export default function BanManagementPage() {
             </div>
           </div>
 
-          {/* Enhanced Stats Dashboard */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+          {/* Stats Dashboard */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
               <div className="text-2xl font-bold text-red-400">{banStats.totalActiveBans}</div>
               <div className="text-xs text-gray-400">Active Bans</div>
@@ -583,10 +503,6 @@ export default function BanManagementPage() {
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
               <div className="text-2xl font-bold text-green-400">{banStats.appealStats.approvedAppeals}</div>
               <div className="text-xs text-gray-400">Approved</div>
-            </div>
-            <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-              <div className="text-2xl font-bold text-red-600">{banStats.escalationStats.level4 + banStats.escalationStats.level5}</div>
-              <div className="text-xs text-gray-400">High Risk</div>
             </div>
           </div>
 
@@ -696,7 +612,6 @@ export default function BanManagementPage() {
                       return null;
                     }
                     
-                    const escalationInfo = getUserEscalationSafe(ban.username);
                     const isExpanded = expandedBans.has(ban.id);
                     
                     return (
@@ -723,11 +638,6 @@ export default function BanManagementPage() {
                                 {ban.appealSubmitted && (
                                   <span className="px-2 py-1 bg-orange-900/20 text-orange-400 text-xs rounded font-medium">
                                     Appeal {ban.appealStatus || 'Pending'}
-                                  </span>
-                                )}
-                                {ban.escalationLevel && (
-                                  <span className={`px-2 py-1 text-xs rounded font-medium ${getEscalationColor(ban.escalationLevel)}`}>
-                                    Level {ban.escalationLevel}
                                   </span>
                                 )}
                               </div>
@@ -775,33 +685,6 @@ export default function BanManagementPage() {
                                 </div>
                               )}
                             </div>
-
-                            {/* Escalation Info */}
-                            {escalationInfo && escalationInfo.escalationLevel > 0 && (
-                              <div className="p-3 bg-purple-900/10 border border-purple-800 rounded-lg">
-                                <div className="flex items-center gap-2 text-purple-400 mb-2">
-                                  <TrendingUp size={14} />
-                                  <span className="font-medium text-sm">Escalation History</span>
-                                </div>
-                                <div className="grid grid-cols-3 gap-4 text-xs">
-                                  <div>
-                                    <span className="text-gray-400">Level:</span>
-                                    <span className="text-purple-400 ml-1 font-medium">{escalationInfo.escalationLevel}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-400">Offenses:</span>
-                                    <span className="text-white ml-1">{escalationInfo.offenseCount || 0}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-400">Last:</span>
-                                    <span className="text-white ml-1">
-                                      {escalationInfo.lastOffenseDate ? 
-                                        new Date(escalationInfo.lastOffenseDate).toLocaleDateString() : 'N/A'}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
                             
                             {/* Admin Notes */}
                             {ban.notes && typeof ban.notes === 'string' && ban.notes.trim() && (
@@ -849,19 +732,6 @@ export default function BanManagementPage() {
                                 Unban
                               </button>
                               
-                              {escalationInfo && escalationInfo.escalationLevel > 0 && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleResetEscalation(ban.username);
-                                  }}
-                                  className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 flex items-center transition-colors"
-                                >
-                                  <RotateCcw size={12} className="mr-1" />
-                                  Reset Level
-                                </button>
-                              )}
-                              
                               {ban.appealSubmitted && ban.appealStatus === 'pending' && (
                                 <button
                                   onClick={(e) => {
@@ -870,7 +740,7 @@ export default function BanManagementPage() {
                                   }}
                                   className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center transition-colors"
                                 >
-                                  <Scale size={12} className="mr-1" />
+                                  <MessageSquare size={12} className="mr-1" />
                                   Review Appeal
                                 </button>
                               )}
@@ -912,11 +782,6 @@ export default function BanManagementPage() {
                               <span className="px-2 py-1 bg-gray-900/20 text-gray-400 text-xs rounded font-medium">
                                 Expired/Lifted
                               </span>
-                              {ban.escalationLevel && (
-                                <span className={`px-2 py-1 text-xs rounded font-medium ${getEscalationColor(ban.escalationLevel)}`}>
-                                  Level {ban.escalationLevel}
-                                </span>
-                              )}
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -982,11 +847,6 @@ export default function BanManagementPage() {
                               <span className="px-2 py-1 bg-orange-900/20 text-orange-400 text-xs rounded font-medium">
                                 Appeal {ban.appealStatus || 'Pending'}
                               </span>
-                              {ban.escalationLevel && (
-                                <span className={`px-2 py-1 text-xs rounded font-medium ${getEscalationColor(ban.escalationLevel)}`}>
-                                  Level {ban.escalationLevel}
-                                </span>
-                              )}
                             </div>
                             
                             <div className="bg-orange-900/10 border border-orange-800 rounded-lg p-4 mb-3">
@@ -1026,7 +886,7 @@ export default function BanManagementPage() {
                               onClick={() => handleAppealReview(ban)}
                               className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center transition-colors"
                             >
-                              <Scale size={12} className="mr-1" />
+                              <MessageSquare size={12} className="mr-1" />
                               Review Appeal
                             </button>
                           </div>
@@ -1084,18 +944,8 @@ export default function BanManagementPage() {
                                 }`}>
                                   {(entry.action || 'unknown').replace('_', ' ').toUpperCase()}
                                 </span>
-                                {entry.metadata?.escalationLevel && (
-                                  <span className={`px-2 py-1 text-xs rounded font-medium ${getEscalationColor(entry.metadata.escalationLevel)}`}>
-                                    Level {entry.metadata.escalationLevel}
-                                  </span>
-                                )}
                               </div>
                               <div className="text-sm text-gray-300 mb-1">{entry.details || 'No details available'}</div>
-                              {entry.metadata?.reasoning && (
-                                <div className="text-xs text-gray-500 mb-1">
-                                  AI Reasoning: {entry.metadata.reasoning}
-                                </div>
-                              )}
                               <div className="text-xs text-gray-500">
                                 {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown time'} by {entry.adminUsername || 'Unknown admin'}
                               </div>
@@ -1112,97 +962,8 @@ export default function BanManagementPage() {
 
           {activeTab === 'analytics' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Ban Analytics & Insights</h2>
+              <h2 className="text-xl font-semibold text-white mb-4">Ban Analytics</h2>
               
-              {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <BarChart3 size={24} className="text-blue-400" />
-                    <h3 className="text-lg font-semibold text-white">Ban Effectiveness</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Total Bans:</span>
-                      <span className="text-white font-medium">{banStats.totalActiveBans + expiredBans.length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Appeals Rate:</span>
-                      <span className="text-white font-medium">
-                        {banStats.totalActiveBans > 0 ? Math.round((banStats.appealStats.totalAppeals / banStats.totalActiveBans) * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Appeal Success:</span>
-                      <span className="text-white font-medium">
-                        {banStats.appealStats.totalAppeals > 0 ? Math.round((banStats.appealStats.approvedAppeals / banStats.appealStats.totalAppeals) * 100) : 0}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <TrendingUp size={24} className="text-green-400" />
-                    <h3 className="text-lg font-semibold text-white">Escalation Levels</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {Object.entries(banStats.escalationStats).map(([level, count]) => (
-                      <div key={level} className="flex justify-between items-center">
-                        <span className="text-gray-400 capitalize">{level}:</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-gray-700 rounded-full h-2">
-                            <div 
-                              className="bg-purple-400 h-2 rounded-full transition-all duration-500"
-                              style={{ 
-                                width: `${Math.max(10, (Number(count) / Math.max(1, Math.max(...Object.values(banStats.escalationStats).map(Number)))) * 100)}%` 
-                              }}
-                            />
-                          </div>
-                          <span className="text-white font-medium w-8 text-right">{count}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Target size={24} className="text-red-400" />
-                    <h3 className="text-lg font-semibold text-white">Violation Types</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {Object.entries(banStats.bansByReason).slice(0, 4).map(([reason, count]) => (
-                      <div key={reason} className="flex justify-between items-center">
-                        <span className="text-gray-400 capitalize text-sm">{reason.replace('_', ' ')}:</span>
-                        <span className="text-white font-medium">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Users size={24} className="text-orange-400" />
-                    <h3 className="text-lg font-semibold text-white">Activity Summary</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Recent (24h):</span>
-                      <span className="text-white font-medium">{banStats.recentBans24h}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Temporary:</span>
-                      <span className="text-white font-medium">{banStats.temporaryBans}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Permanent:</span>
-                      <span className="text-white font-medium">{banStats.permanentBans}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Ban Reasons Chart */}
               <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -1251,9 +1012,6 @@ export default function BanManagementPage() {
                     <div>Original reason: {getBanReasonDisplay(selectedBan.reason, selectedBan.customReason)}</div>
                     <div>Banned by: {selectedBan.bannedBy || 'Unknown'}</div>
                     <div>Ban type: {selectedBan.banType || 'Unknown'}</div>
-                    {selectedBan.escalationLevel && (
-                      <div>Escalation level: {selectedBan.escalationLevel}</div>
-                    )}
                   </div>
                 </div>
                 
@@ -1310,7 +1068,7 @@ export default function BanManagementPage() {
             <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
               <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-                  <Scale className="mr-2 text-blue-400" />
+                  <MessageSquare className="mr-2 text-blue-400" />
                   Review Appeal - {selectedBan.username}
                 </h3>
                 
@@ -1409,23 +1167,6 @@ export default function BanManagementPage() {
                       <>
                         <XCircle size={16} className="mr-2" />
                         Reject
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => confirmAppealDecision('escalate')}
-                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 flex items-center justify-center transition-colors"
-                    disabled={!appealReviewNotes.trim() || isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle size={16} className="mr-2" />
-                        Escalate
                       </>
                     )}
                   </button>
