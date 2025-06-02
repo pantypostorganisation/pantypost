@@ -23,7 +23,8 @@ import {
   Shield,
   Heart,
   RotateCcw,
-  Trash2
+  Trash2,
+  Ban
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
@@ -581,6 +582,11 @@ export default function Header() {
                 )}
               </Link>
             </div>
+            
+            <Link href="/admin/bans" className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-red-900/20 hover:from-purple-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs">
+              <Ban className="w-3.5 h-3.5 text-purple-400" />
+              <span>Bans</span>
+            </Link>
             
             <Link href="/admin/resolved" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs">
               <ShieldCheck className="w-3.5 h-3.5 text-green-400" />

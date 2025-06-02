@@ -59,16 +59,38 @@ type ReportLog = {
 
 export default function AdminReportsPage() {
   const { user } = useListings();
-  const { 
-    banUser, 
-    getActiveBans, 
-    getBanStats, 
-    getBanInfo, 
-    getRecommendedBanDuration, 
-    getUserEscalation,
-    validateBanInput
-  } = useBans();
   
+  // Safely handle the ban context with error checking
+  let banContext: any = null;
+  let banContextError: string | null = null;
+  
+  try {
+    banContext = useBans();
+  } catch (error) {
+    console.error('Error initializing ban context:', error);
+    banContextError = 'Ban management system not available';
+    // Set default empty functions to prevent crashes
+    banContext = {
+      banUser: () => Promise.resolve(false),
+      getActiveBans: () => [],
+      getBanStats: () => ({
+        totalActiveBans: 0,
+        temporaryBans: 0,
+        permanentBans: 0,
+        pendingAppeals: 0,
+        recentBans24h: 0,
+        bansByReason: {},
+        appealStats: { totalAppeals: 0, pendingAppeals: 0, approvedAppeals: 0, rejectedAppeals: 0 },
+        escalationStats: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 }
+      }),
+      getBanInfo: () => null,
+      getRecommendedBanDuration: () => ({ duration: 24, level: 1, reasoning: 'Default recommendation' }),
+      getUserEscalation: () => ({ username: '', offenseCount: 0, lastOffenseDate: '', escalationLevel: 0, offenseHistory: [] }),
+      validateBanInput: () => ({ valid: true })
+    };
+  }
+
+  // State variables
   const [reports, setReports] = useState<ReportLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'unprocessed' | 'processed'>('unprocessed');
@@ -86,8 +108,6 @@ export default function AdminReportsPage() {
   });
   const [recommendation, setRecommendation] = useState<any>(null);
   const [isProcessingBan, setIsProcessingBan] = useState(false);
-  
-  // ✅ Safe state for ban info to prevent render-time state updates
   const [reportBanInfo, setReportBanInfo] = useState<{[key: string]: any}>({});
 
   // Load reports
@@ -95,71 +115,33 @@ export default function AdminReportsPage() {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('panty_report_logs');
       if (stored) {
-        const parsed: ReportLog[] = JSON.parse(stored);
-        // Add IDs and additional fields if missing
-        const enhancedReports = parsed.map((report, index) => ({
-          ...report,
-          id: report.id || `report_${Date.now()}_${index}`,
-          processed: report.processed || false,
-          severity: report.severity || 'medium',
-          category: report.category || 'other'
-        }));
-        enhancedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setReports(enhancedReports);
+        try {
+          const parsed: ReportLog[] = JSON.parse(stored);
+          // Add IDs and additional fields if missing
+          const enhancedReports = parsed.map((report, index) => ({
+            ...report,
+            id: report.id || `report_${Date.now()}_${index}`,
+            processed: report.processed || false,
+            severity: report.severity || 'medium',
+            category: report.category || 'other'
+          }));
+          enhancedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setReports(enhancedReports);
+        } catch (error) {
+          console.error('Error parsing stored reports:', error);
+          setReports([]);
+        }
       }
     }
   }, []);
 
-  // ✅ Safely update ban info without triggering render-time state updates
-  useEffect(() => {
-    const updateBanInfo = () => {
-      try {
-        const newBanInfo: {[key: string]: any} = {};
-        let hasChanges = false;
-        
-        // Get unique reportees from filtered reports
-        const uniqueReportees = [...new Set(filteredReports.map(r => r.reportee))];
-        
-        uniqueReportees.forEach(reportee => {
-          try {
-            // Only check if we don't already have recent info
-            const banInfo = getBanInfo(reportee);
-            if (JSON.stringify(banInfo) !== JSON.stringify(reportBanInfo[reportee])) {
-              newBanInfo[reportee] = banInfo;
-              hasChanges = true;
-            }
-          } catch (error) {
-            console.error(`Error getting ban info for ${reportee}:`, error);
-            newBanInfo[reportee] = null;
-            hasChanges = true;
-          }
-        });
-        
-        if (hasChanges) {
-          setReportBanInfo(prev => ({ ...prev, ...newBanInfo }));
-        }
-      } catch (error) {
-        console.error('Error updating ban info:', error);
-      }
-    };
-
-    // Debounce the update to prevent excessive calls
-    const timeoutId = setTimeout(updateBanInfo, 100);
-    return () => clearTimeout(timeoutId);
-  }, [filteredReports, getBanInfo]); // Dependencies
-
-  // Save reports
-  const saveReports = (newReports: ReportLog[]) => {
-    setReports(newReports);
-    localStorage.setItem('panty_report_logs', JSON.stringify(newReports));
-    window.dispatchEvent(new Event('updateReports'));
-  };
-
-  // Filter reports
+  // Calculate filtered reports safely
   const filteredReports = reports.filter(report => {
+    if (!report) return false;
+    
     const matchesSearch = searchTerm ? 
-      report.reporter.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.reportee.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+      (report.reporter && report.reporter.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (report.reportee && report.reportee.toLowerCase().includes(searchTerm.toLowerCase())) : true;
     
     const matchesFilter = filterBy === 'all' ? true :
       filterBy === 'processed' ? report.processed :
@@ -171,10 +153,60 @@ export default function AdminReportsPage() {
     return matchesSearch && matchesFilter && matchesSeverity;
   });
 
-  // Get escalation info for a user - with error handling
+  // Update ban info safely
+  useEffect(() => {
+    if (!banContext || !filteredReports.length) return;
+    
+    const updateBanInfo = () => {
+      try {
+        const newBanInfo: {[key: string]: any} = {};
+        const uniqueReportees = [...new Set(filteredReports.map(r => r.reportee))];
+        
+        uniqueReportees.forEach(reportee => {
+          if (reportee && typeof banContext.getBanInfo === 'function') {
+            try {
+              const banInfo = banContext.getBanInfo(reportee);
+              newBanInfo[reportee] = banInfo;
+            } catch (error) {
+              console.error(`Error getting ban info for ${reportee}:`, error);
+              newBanInfo[reportee] = null;
+            }
+          }
+        });
+        
+        setReportBanInfo(newBanInfo);
+      } catch (error) {
+        console.error('Error updating ban info:', error);
+      }
+    };
+
+    const timeoutId = setTimeout(updateBanInfo, 100);
+    return () => clearTimeout(timeoutId);
+  }, [filteredReports, banContext]);
+
+  // Save reports
+  const saveReports = (newReports: ReportLog[]) => {
+    setReports(newReports);
+    localStorage.setItem('panty_report_logs', JSON.stringify(newReports));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('updateReports'));
+    }
+  };
+
+  // Get escalation info safely
   const getEscalationInfo = (username: string) => {
+    if (!banContext || !username || typeof banContext.getUserEscalation !== 'function') {
+      return {
+        username,
+        offenseCount: 0,
+        lastOffenseDate: '',
+        escalationLevel: 0,
+        offenseHistory: []
+      };
+    }
+    
     try {
-      return getUserEscalation(username);
+      return banContext.getUserEscalation(username);
     } catch (error) {
       console.error('Error getting escalation info:', error);
       return {
@@ -187,10 +219,15 @@ export default function AdminReportsPage() {
     }
   };
 
-  // Show recommendation modal
+  // Show recommendation modal safely
   const showBanRecommendation = (username: string, reason: any) => {
+    if (!banContext || typeof banContext.getRecommendedBanDuration !== 'function') {
+      alert('Ban recommendation system not available');
+      return;
+    }
+    
     try {
-      const rec = getRecommendedBanDuration(username, reason);
+      const rec = banContext.getRecommendedBanDuration(username, reason);
       const escalation = getEscalationInfo(username);
       setRecommendation({ ...rec, escalation, username, reason });
       setShowRecommendationModal(true);
@@ -202,6 +239,11 @@ export default function AdminReportsPage() {
 
   // Handle intelligent ban with recommendation
   const handleIntelligentBan = async (username: string, reason: any, useRecommendation: boolean = true) => {
+    if (!banContext || typeof banContext.banUser !== 'function') {
+      alert('Ban system not available');
+      return;
+    }
+    
     setIsProcessingBan(true);
     
     try {
@@ -220,13 +262,15 @@ export default function AdminReportsPage() {
       const reportIds = selectedReport ? [selectedReport.id!] : [];
       
       // Validate the ban input
-      const validation = validateBanInput(username, duration, reason);
-      if (!validation.valid) {
-        alert(`Invalid ban parameters: ${validation.error}`);
-        return;
+      if (typeof banContext.validateBanInput === 'function') {
+        const validation = banContext.validateBanInput(username, duration, reason);
+        if (!validation.valid) {
+          alert(`Invalid ban parameters: ${validation.error}`);
+          return;
+        }
       }
       
-      const success = await banUser(
+      const success = await banContext.banUser(
         username,
         duration,
         reason,
@@ -287,7 +331,6 @@ export default function AdminReportsPage() {
 
   // Handle quick ban with intelligence
   const handleQuickBan = async (username: string, hours: number, reason: string) => {
-    // Show recommendation first for transparency
     showBanRecommendation(username, reason as any);
   };
 
@@ -342,8 +385,18 @@ export default function AdminReportsPage() {
     return 'text-purple-400';
   };
 
-  // Get ban stats
-  const banStats = getBanStats();
+  // Get ban stats safely
+  const banStats = banContext && typeof banContext.getBanStats === 'function' ? 
+    banContext.getBanStats() : {
+      totalActiveBans: 0,
+      temporaryBans: 0,
+      permanentBans: 0,
+      pendingAppeals: 0,
+      recentBans24h: 0,
+      bansByReason: {},
+      appealStats: { totalAppeals: 0, pendingAppeals: 0, approvedAppeals: 0, rejectedAppeals: 0 },
+      escalationStats: { level1: 0, level2: 0, level3: 0, level4: 0, level5: 0 }
+    };
 
   return (
     <RequireAuth role="admin">
@@ -358,6 +411,9 @@ export default function AdminReportsPage() {
             <p className="text-gray-400 mt-1">
               AI-powered progressive discipline system with escalation tracking
             </p>
+            {banContextError && (
+              <p className="text-red-400 text-sm mt-2">⚠️ {banContextError}</p>
+            )}
           </div>
           
           {/* Enhanced Stats */}
@@ -444,7 +500,10 @@ export default function AdminReportsPage() {
         ) : (
           <div className="space-y-4">
             {filteredReports.map((report) => {
-              // ✅ Safe access to ban info - no function calls during render
+              if (!report || !report.id || !report.reportee) {
+                return null;
+              }
+              
               const userBanInfo = reportBanInfo[report.reportee];
               const escalationInfo = getEscalationInfo(report.reportee);
               
@@ -538,11 +597,11 @@ export default function AdminReportsPage() {
                         </div>
                       </div>
                       
-                      {escalationInfo.offenseHistory.length > 0 && (
+                      {escalationInfo.offenseHistory && escalationInfo.offenseHistory.length > 0 && (
                         <div className="mt-3">
                           <div className="text-gray-400 text-xs mb-2">Recent Violations:</div>
                           <div className="flex flex-wrap gap-2">
-                            {escalationInfo.offenseHistory.slice(-3).map((offense, i) => (
+                            {escalationInfo.offenseHistory.slice(-3).map((offense: any, i: number) => (
                               <span key={i} className="px-2 py-1 bg-gray-900/50 text-gray-300 text-xs rounded">
                                 {offense.reason} ({new Date(offense.date).toLocaleDateString()})
                               </span>
@@ -557,19 +616,21 @@ export default function AdminReportsPage() {
                   <div className="mb-4">
                     <div className="text-sm text-gray-400 mb-2 flex items-center gap-1">
                       <MessageSquare size={14} />
-                      {report.messages.length} message(s) in conversation
+                      {report.messages ? report.messages.length : 0} message(s) in conversation
                     </div>
-                    <div className="bg-[#222] rounded-lg p-3 max-h-32 overflow-y-auto">
-                      {report.messages.slice(-2).map((msg, i) => (
-                        <div key={i} className="text-sm mb-2">
-                          <span className="text-[#ff950e] font-medium">{msg.sender}:</span>
-                          <span className="text-gray-300 ml-2">{msg.content}</span>
-                        </div>
-                      ))}
-                      {report.messages.length > 2 && (
-                        <div className="text-xs text-gray-500">... and {report.messages.length - 2} more messages</div>
-                      )}
-                    </div>
+                    {report.messages && report.messages.length > 0 && (
+                      <div className="bg-[#222] rounded-lg p-3 max-h-32 overflow-y-auto">
+                        {report.messages.slice(-2).map((msg, i) => (
+                          <div key={i} className="text-sm mb-2">
+                            <span className="text-[#ff950e] font-medium">{msg.sender}:</span>
+                            <span className="text-gray-300 ml-2">{msg.content}</span>
+                          </div>
+                        ))}
+                        {report.messages.length > 2 && (
+                          <div className="text-xs text-gray-500">... and {report.messages.length - 2} more messages</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Admin Notes */}
@@ -588,6 +649,7 @@ export default function AdminReportsPage() {
                         <button
                           onClick={() => showBanRecommendation(report.reportee, 'harassment')}
                           className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 flex items-center"
+                          disabled={!banContext}
                         >
                           <Brain size={12} className="mr-1" />
                           Smart Ban
@@ -597,6 +659,7 @@ export default function AdminReportsPage() {
                         <button
                           onClick={() => handleQuickBan(report.reportee, 1, 'harassment')}
                           className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 flex items-center"
+                          disabled={!banContext}
                         >
                           <Timer size={12} className="mr-1" />
                           1 Hour
@@ -604,6 +667,7 @@ export default function AdminReportsPage() {
                         <button
                           onClick={() => handleQuickBan(report.reportee, 24, 'harassment')}
                           className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 flex items-center"
+                          disabled={!banContext}
                         >
                           <Timer size={12} className="mr-1" />
                           24 Hours
@@ -611,6 +675,7 @@ export default function AdminReportsPage() {
                         <button
                           onClick={() => handleQuickBan(report.reportee, 168, 'harassment')}
                           className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center"
+                          disabled={!banContext}
                         >
                           <Timer size={12} className="mr-1" />
                           7 Days
@@ -624,6 +689,7 @@ export default function AdminReportsPage() {
                             setShowBanModal(true);
                           }}
                           className="px-3 py-1 bg-red-700 text-white text-sm rounded hover:bg-red-800 flex items-center"
+                          disabled={!banContext}
                         >
                           <Ban size={12} className="mr-1" />
                           Custom Ban
@@ -664,7 +730,7 @@ export default function AdminReportsPage() {
                   </div>
                   
                   {/* Expanded Details */}
-                  {selectedReport?.id === report.id && (
+                  {selectedReport?.id === report.id && report.messages && report.messages.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-700">
                       <h4 className="text-lg font-semibold text-white mb-3">Full Conversation</h4>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -689,7 +755,7 @@ export default function AdminReportsPage() {
         )}
 
         {/* Smart Recommendation Modal */}
-        {showRecommendationModal && recommendation && (
+        {showRecommendationModal && recommendation && banContext && (
           <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-white mb-4 flex items-center">
