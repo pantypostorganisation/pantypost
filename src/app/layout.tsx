@@ -1,17 +1,4 @@
 // src/app/layout.tsx
-<<<<<<< HEAD
-import type { Metadata } from "next";
-import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
-import { ListingProvider } from "@/context/ListingContext";
-import { WalletProvider } from "@/context/WalletContext";
-import { MessageProvider } from "@/context/MessageContext";
-import { RequestProvider } from "@/context/RequestContext";
-import { ReviewProvider } from "@/context/ReviewContext";
-import { BanProvider } from "@/context/BanContext";
-import ErrorBoundary from "@/components/ErrorBoundary";
-
-=======
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -34,7 +21,6 @@ const inter = Inter({
   preload: true
 });
 
->>>>>>> parent of f775d5f (bug fix)
 export const metadata: Metadata = {
   title: 'PantyPost - Premium Adult Marketplace',
   description: 'The premier marketplace for adult content and personalized experiences.',
@@ -79,14 +65,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-<<<<<<< HEAD
-      <body className="antialiased">
-        <ErrorBoundary>
-          <AuthProvider>
-            <ErrorBoundary>
-              <BanProvider>
-                <ErrorBoundary>
-=======
       <head>
         {/* ✅ ADDED: Preload critical resources */}
         <link rel="preload" href="/logo.png" as="image" />
@@ -111,7 +89,6 @@ export default function RootLayout({
             <ContextErrorBoundary contextName="Authentication">
               <AuthProvider>
                 <ContextErrorBoundary contextName="Wallet">
->>>>>>> parent of f775d5f (bug fix)
                   <WalletProvider>
                     <ContextErrorBoundary contextName="Ban System">
                       <BanProvider>
