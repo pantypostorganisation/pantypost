@@ -1,4 +1,5 @@
-﻿'use client';
+﻿// src/components/messaging/MessageInput.tsx
+'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Paperclip, Send, X } from 'lucide-react';

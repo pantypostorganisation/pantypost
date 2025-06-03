@@ -62,8 +62,8 @@ export default function MyListingsPage() {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
-  // Verification status check
-  const isVerified = user?.verified || user?.verificationStatus === 'verified';
+  // ✅ FIXED: Use correct property name from AuthContext
+  const isVerified = user?.isVerified || user?.verificationStatus === 'verified';
 
   // Load views from localStorage and update on storage event and window focus
   useEffect(() => {
@@ -175,7 +175,7 @@ export default function MyListingsPage() {
     setImageUrls(_imageUrls);
   };
 
-  // 🔧 FIXED: Calculate auction end time properly handling fractional days
+  // Calculate auction end time properly handling fractional days
   const calculateAuctionEndTime = (): string => {
     const now = new Date();
     const days = parseFloat(auctionDuration);

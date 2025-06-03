@@ -1,3 +1,4 @@
+// // src/utils/format.ts
 /**
  * Utility functions for formatting values consistently across the application
  */

@@ -1,3 +1,4 @@
+// src/hooks/usePaginatedMessages.ts
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 type Message = {

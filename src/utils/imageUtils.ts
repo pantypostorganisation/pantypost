@@ -1,3 +1,4 @@
+// src/utils/imageUtils.ts
 /**
  * Utility functions for image handling and optimization
  */

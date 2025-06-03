@@ -1,4 +1,5 @@
-﻿'use client';
+﻿// src/components/StarRating.tsx
+'use client';
 
 import {
   FaStar as FullStar,

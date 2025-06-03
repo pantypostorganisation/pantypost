@@ -1,3 +1,4 @@
+// src/utils/storage.ts
 /**
  * Enhanced storage utilities with error handling, quotas and compression
  */

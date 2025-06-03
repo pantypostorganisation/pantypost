@@ -1,3 +1,4 @@
+// src/components/AgeVerificationModal.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
