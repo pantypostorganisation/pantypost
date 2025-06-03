@@ -1,4 +1,5 @@
-// src/app/layout.tsx
+'use client';
+
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -17,27 +18,29 @@ import { Suspense } from 'react';
 
 const inter = Inter({ 
   subsets: ['latin'],
-  display: 'swap', // ✅ ADDED: Better font loading performance
+  display: 'swap',
   preload: true
 });
 
-export const metadata: Metadata = {
-  title: 'PantyPost - Premium Adult Marketplace',
-  description: 'The premier marketplace for adult content and personalized experiences.',
-  keywords: 'adult marketplace, premium content, personalized experiences',
-  robots: 'noindex, nofollow',
-  viewport: 'width=device-width, initial-scale=1', // ✅ ADDED: Mobile optimization
-  themeColor: '#ff950e', // ✅ ADDED: Theme color for mobile browsers
-};
-
-// ✅ ADDED: Individual error boundaries for each provider
-function ContextErrorBoundary({ children, contextName }: { children: React.ReactNode; contextName: string }) {
+// Auth-specific error boundary
+function AuthErrorBoundary({ children }: { children: React.ReactNode }) {
   return (
     <ErrorBoundary fallback={
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-bold text-red-400 mb-2">Context Error</h2>
-          <p className="text-gray-400">Failed to load {contextName}. Please refresh the page.</p>
+          <h2 className="text-xl font-bold text-red-400 mb-2">Authentication Error</h2>
+          <p className="text-gray-400 mb-4">There was an issue with login/logout. Please try again.</p>
+          <button 
+            onClick={() => {
+              // Clear any stored auth data and reload
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            }}
+            className="bg-[#ff950e] text-black px-4 py-2 rounded-lg font-semibold hover:bg-[#ff6b00] transition-colors"
+          >
+            Reset & Reload
+          </button>
         </div>
       </div>
     }>
@@ -46,7 +49,7 @@ function ContextErrorBoundary({ children, contextName }: { children: React.React
   );
 }
 
-// ✅ ADDED: Loading component for better UX
+// Loading component
 function LoadingFallback() {
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -66,7 +69,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* ✅ ADDED: Preload critical resources */}
+        <title>PantyPost - Premium Adult Marketplace</title>
+        <meta name="description" content="The premier marketplace for adult content and personalized experiences." />
+        <meta name="keywords" content="adult marketplace, premium content, personalized experiences" />
+        <meta name="robots" content="noindex, nofollow" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#ff950e" />
         <link rel="preload" href="/logo.png" as="image" />
         <link rel="preload" href="/phone-mockup.png" as="image" />
       </head>
@@ -86,19 +94,19 @@ export default function RootLayout({
           </div>
         }>
           <Suspense fallback={<LoadingFallback />}>
-            <ContextErrorBoundary contextName="Authentication">
+            <AuthErrorBoundary>
               <AuthProvider>
-                <ContextErrorBoundary contextName="Wallet">
+                <ErrorBoundary fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center"><div>Wallet Error</div></div>}>
                   <WalletProvider>
-                    <ContextErrorBoundary contextName="Ban System">
+                    <ErrorBoundary fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center"><div>Ban Check Error</div></div>}>
                       <BanProvider>
-                        <ContextErrorBoundary contextName="Listings">
+                        <ErrorBoundary fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center"><div>Listing Error</div></div>}>
                           <ListingProvider>
-                            <ContextErrorBoundary contextName="Messages">
+                            <ErrorBoundary fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center"><div>Message Error</div></div>}>
                               <MessageProvider>
-                                <ContextErrorBoundary contextName="Requests">
+                                <ErrorBoundary fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center"><div>Request Error</div></div>}>
                                   <RequestProvider>
-                                    <ContextErrorBoundary contextName="Reviews">
+                                    <ErrorBoundary fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center"><div>Review Error</div></div>}>
                                       <ReviewProvider>
                                         <BanCheck>
                                           <AgeVerificationModal />
@@ -108,22 +116,23 @@ export default function RootLayout({
                                           </main>
                                         </BanCheck>
                                       </ReviewProvider>
-                                    </ContextErrorBoundary>
+                                    </ErrorBoundary>
                                   </RequestProvider>
-                                </ContextErrorBoundary>
+                                </ErrorBoundary>
                               </MessageProvider>
-                            </ContextErrorBoundary>
+                            </ErrorBoundary>
                           </ListingProvider>
-                        </ContextErrorBoundary>
+                        </ErrorBoundary>
                       </BanProvider>
-                    </ContextErrorBoundary>
+                    </ErrorBoundary>
                   </WalletProvider>
-                </ContextErrorBoundary>
+                </ErrorBoundary>
               </AuthProvider>
-            </ContextErrorBoundary>
+            </AuthErrorBoundary>
           </Suspense>
         </ErrorBoundary>
       </body>
     </html>
   );
 }
+
