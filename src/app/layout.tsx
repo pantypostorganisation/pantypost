@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 <<<<<<< HEAD
+<<<<<<< HEAD
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
@@ -28,6 +29,24 @@ import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';
 import { Suspense } from 'react';
 
+=======
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';
+import { ListingProvider } from '@/context/ListingContext';
+import { MessageProvider } from '@/context/MessageContext';
+import { WalletProvider } from '@/context/WalletContext';
+import { RequestProvider } from '@/context/RequestContext';
+import { ReviewProvider } from '@/context/ReviewContext';
+import { BanProvider } from '@/context/BanContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import Header from '@/components/Header';
+import AgeVerificationModal from '@/components/AgeVerificationModal';
+import BanCheck from '@/components/BanCheck';
+import { Suspense } from 'react';
+
+>>>>>>> parent of f775d5f (bug fix)
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap', // ✅ ADDED: Better font loading performance
@@ -80,6 +99,7 @@ export default function RootLayout({
   return (
     <html lang="en">
 <<<<<<< HEAD
+<<<<<<< HEAD
       <body className="antialiased">
         <ErrorBoundary>
           <AuthProvider>
@@ -87,6 +107,8 @@ export default function RootLayout({
               <BanProvider>
                 <ErrorBoundary>
 =======
+=======
+>>>>>>> parent of f775d5f (bug fix)
       <head>
         {/* ✅ ADDED: Preload critical resources */}
         <link rel="preload" href="/logo.png" as="image" />
@@ -111,6 +133,9 @@ export default function RootLayout({
             <ContextErrorBoundary contextName="Authentication">
               <AuthProvider>
                 <ContextErrorBoundary contextName="Wallet">
+<<<<<<< HEAD
+>>>>>>> parent of f775d5f (bug fix)
+=======
 >>>>>>> parent of f775d5f (bug fix)
                   <WalletProvider>
                     <ContextErrorBoundary contextName="Ban System">
