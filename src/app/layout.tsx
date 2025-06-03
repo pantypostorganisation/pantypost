@@ -1,6 +1,5 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ListingProvider } from "@/context/ListingContext";
@@ -10,17 +9,6 @@ import { RequestProvider } from "@/context/RequestContext";
 import { ReviewProvider } from "@/context/ReviewContext";
 import { BanProvider } from "@/context/BanContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
-
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
 
 export const metadata: Metadata = {
   title: "PantyPost - Premium Marketplace",
@@ -34,9 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <ErrorBoundary>
           <AuthProvider>
             <ErrorBoundary>
