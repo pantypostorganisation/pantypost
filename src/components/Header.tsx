@@ -100,6 +100,7 @@ const safeSetLocalStorage = (key: string, value: any) => {
 };
 
 export default function Header() {
+  // ✅ FIXED: All hooks MUST be called before any conditional returns
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { 
@@ -114,7 +115,7 @@ export default function Header() {
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
   
-  // ✅ Simplified state management - removed redundant `mounted` state
+  // ✅ All state hooks called unconditionally
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
@@ -133,11 +134,6 @@ export default function Header() {
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
-
-  // Early return for excluded pages
-  if (pathname === '/login' || pathname === '/signup') {
-    return null;
-  }
 
   // Derived values
   const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
@@ -490,9 +486,6 @@ export default function Header() {
     </Link>
   );
 
-  // Early return if not mounted
-  if (!isMountedRef.current) return null;
-
   // ✅ Mobile Navigation Component with better scroll handling
   const MobileMenu = () => (
     <div className={`mobile-menu fixed inset-0 z-50 lg:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
@@ -567,6 +560,15 @@ export default function Header() {
       </div>
     </div>
   );
+
+  // ✅ FIXED: Early return MUST be after all hooks
+  // Early return for excluded pages - this MUST be after all hooks are called
+  if (pathname === '/login' || pathname === '/signup') {
+    return null;
+  }
+
+  // Early return if not mounted
+  if (!isMountedRef.current) return null;
 
   return (
     <>

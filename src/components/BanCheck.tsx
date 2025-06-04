@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
-import { useAuth } from '@/context/AuthContext'; // ✅ FIXED: Import from correct path
+import { useAuth } from '@/context/AuthContext';
 import { 
   Ban, 
   Clock, 
@@ -30,7 +30,8 @@ interface BanCheckProps {
 }
 
 const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
-  const { user, logout } = useAuth(); // ✅ FIXED: Get user from AuthContext
+  // ✅ FIXED: All hooks are now called unconditionally at the top level
+  const { user, logout } = useAuth();
   const { isUserBanned, submitAppeal, getBanInfo } = useBans();
   
   const [banInfo, setBanInfo] = useState<any>(null);
@@ -262,6 +263,12 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
     
     return escalationMap[level] || null;
   };
+
+  // ✅ FIXED: Ensure children is defined before rendering
+  if (!children) {
+    console.warn('BanCheck: children prop is undefined');
+    return null;
+  }
 
   // If user is not banned, render children normally
   if (!banInfo) {

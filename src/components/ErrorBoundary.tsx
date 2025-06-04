@@ -93,6 +93,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       );
     }
 
+    // ✅ FIXED: Ensure children is not undefined or null
+    if (!this.props.children) {
+      console.warn('ErrorBoundary: children prop is undefined or null');
+      return null;
+    }
+
     return this.props.children;
   }
 }
