@@ -26,6 +26,7 @@ export interface User {
   verificationStatus: 'pending' | 'verified' | 'rejected' | 'unverified';
   verificationRequestedAt?: string;
   verificationRejectionReason?: string;
+  verificationDocs?: any; // Add this to store docs in auth context
 }
 
 interface AuthContextType {
@@ -99,6 +100,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           // ✅ ADDED: Validate stored user data
           if (parsedUser && typeof parsedUser === 'object' && parsedUser.username) {
+            // ✅ IMPORTANT: Check if we have verification data in the all_users_v2 store
+            const allUsersData = safeLocalStorage.getItem('all_users_v2');
+            if (allUsersData) {
+              try {
+                const allUsers = JSON.parse(allUsersData);
+                const storedUserData = allUsers[parsedUser.username];
+                
+                if (storedUserData && storedUserData.verificationStatus) {
+                  // Merge verification data from all_users_v2
+                  parsedUser.verificationStatus = storedUserData.verificationStatus;
+                  parsedUser.verificationRequestedAt = storedUserData.verificationRequestedAt;
+                  parsedUser.verificationRejectionReason = storedUserData.verificationRejectionReason;
+                  parsedUser.verificationDocs = storedUserData.verificationDocs;
+                  parsedUser.isVerified = storedUserData.verificationStatus === 'verified';
+                }
+              } catch (e) {
+                console.error('Error parsing all_users_v2 data:', e);
+              }
+            }
+            
             // ✅ ADDED: Migrate old user data format
             const migratedUser: User = {
               ...parsedUser,
@@ -148,13 +169,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isAdmin = normalizedUsername === 'oakley' || normalizedUsername === 'gerome';
       const userRole = isAdmin ? 'admin' : role;
 
+      // ✅ IMPORTANT: Check if user already exists in all_users_v2
+      let existingVerificationData = null;
+      const allUsersData = safeLocalStorage.getItem('all_users_v2');
+      if (allUsersData) {
+        try {
+          const allUsers = JSON.parse(allUsersData);
+          const existingUser = allUsers[normalizedUsername];
+          if (existingUser && existingUser.verificationStatus) {
+            existingVerificationData = {
+              verificationStatus: existingUser.verificationStatus,
+              verificationRequestedAt: existingUser.verificationRequestedAt,
+              verificationRejectionReason: existingUser.verificationRejectionReason,
+              verificationDocs: existingUser.verificationDocs,
+            };
+          }
+        } catch (e) {
+          console.error('Error checking existing user data:', e);
+        }
+      }
+
       // Create user object with proper defaults
       const newUser: User = {
         id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         username: normalizedUsername,
         role: userRole,
         email: `${normalizedUsername}@pantypost.com`,
-        isVerified: isAdmin,
+        isVerified: existingVerificationData?.verificationStatus === 'verified' || isAdmin,
         tier: userRole === 'seller' ? 'Tease' : undefined,
         subscriberCount: 0,
         totalSales: 0,
@@ -164,7 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastActive: new Date().toISOString(),
         bio: '',
         isBanned: false,
-        verificationStatus: isAdmin ? 'verified' : 'unverified',
+        verificationStatus: existingVerificationData?.verificationStatus || (isAdmin ? 'verified' : 'unverified'),
+        verificationRequestedAt: existingVerificationData?.verificationRequestedAt,
+        verificationRejectionReason: existingVerificationData?.verificationRejectionReason,
+        verificationDocs: existingVerificationData?.verificationDocs,
       };
 
       // Store in localStorage with error handling
@@ -198,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ✅ IMPROVED: Safe user updates with validation
+  // ✅ IMPROVED: Safe user updates with validation and persistence to all_users_v2
   const updateUser = useCallback((updates: Partial<User>) => {
     if (!user) {
       setError('No user to update');
@@ -212,7 +256,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         lastActive: new Date().toISOString() // Always update last active
       };
       
+      // Update currentUser in localStorage
       const success = safeLocalStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      
+      // ✅ IMPORTANT: Also update all_users_v2 to maintain consistency
+      const allUsersData = safeLocalStorage.getItem('all_users_v2');
+      if (allUsersData) {
+        try {
+          const allUsers = JSON.parse(allUsersData);
+          allUsers[user.username] = {
+            ...allUsers[user.username],
+            ...updatedUser,
+          };
+          safeLocalStorage.setItem('all_users_v2', JSON.stringify(allUsers));
+        } catch (e) {
+          console.error('Error updating all_users_v2:', e);
+        }
+      }
+      
       if (success) {
         setUser(updatedUser);
         setError(null);

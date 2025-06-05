@@ -879,6 +879,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     updateUser({
       verificationStatus: 'pending',
       verificationRequestedAt: new Date().toISOString(),
+      verificationDocs: { ...docs, code }, // Store docs in AuthContext too
     });
     
     // Also update the legacy users store for admin functionality
