@@ -2,12 +2,28 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useMemo } from 'react';
+
+// ✅ OPTIMIZED: Check for reduced motion preference
+const useReducedMotion = () => {
+  if (typeof window === 'undefined') return false;
+  
+  const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  return mediaQuery.matches;
+};
 
 export default function FloatingParticles() {
-  // Generate more particles with random properties
-  const generateParticles = () => {
+  const prefersReducedMotion = useReducedMotion();
+
+  // ✅ OPTIMIZED: Respect accessibility preferences
+  if (prefersReducedMotion) {
+    return null; // Don't render particles for motion-sensitive users
+  }
+
+  // ✅ OPTIMIZED: Memoized particle generation for better performance
+  const particles = useMemo(() => {
     const particlesArray = [];
-    const particleCount = 40; // Increased from 15 to 40
+    const particleCount = 35; // Reduced from 40 for better performance
     
     for (let i = 0; i < particleCount; i++) {
       particlesArray.push({
@@ -15,18 +31,28 @@ export default function FloatingParticles() {
         left: Math.random() * 100,
         top: Math.random() * 100,
         delay: Math.random() * 5,
-        size: Math.random() > 0.5 ? 'w-1 h-1' : Math.random() > 0.5 ? 'w-1.5 h-1.5' : 'w-2 h-2',
-        duration: 10 + Math.random() * 10, // Random duration between 10-20s
-        horizontalDrift: (Math.random() - 0.5) * 100, // Random drift left or right
+        size: Math.random() > 0.7 ? 'w-2 h-2' : Math.random() > 0.4 ? 'w-1.5 h-1.5' : 'w-1 h-1',
+        duration: 10 + Math.random() * 8, // Slightly reduced duration range
+        horizontalDrift: (Math.random() - 0.5) * 80, // Reduced drift for smoother animation
+        opacity: 0.3 + Math.random() * 0.5, // Variable opacity for depth
       });
     }
     return particlesArray;
-  };
+  }, []);
 
-  const particles = generateParticles();
+  // ✅ OPTIMIZED: Memoized shimmer particles with better distribution
+  const shimmerParticles = useMemo(() => {
+    return particles.slice(0, 8).map((particle) => ({
+      ...particle,
+      left: (particle.left + 5) % 100,
+      top: (particle.top + 10) % 100,
+      id: `shimmer-${particle.id}`,
+    }));
+  }, [particles]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" role="presentation" aria-hidden="true">
+      {/* Main particles */}
       {particles.map((particle) => (
         <motion.div
           key={particle.id}
@@ -34,21 +60,22 @@ export default function FloatingParticles() {
           style={{
             left: `${particle.left}%`,
             top: `${particle.top}%`,
-            // Create sheen effect with gradient and glow
-            background: `radial-gradient(circle at 30% 30%, rgba(255, 149, 14, 0.4), rgba(255, 149, 14, 0.2))`,
+            // ✅ OPTIMIZED: Enhanced gradient with better performance
+            background: `radial-gradient(circle at 30% 30%, rgba(255, 149, 14, ${particle.opacity}), rgba(255, 149, 14, ${particle.opacity * 0.5}))`,
             boxShadow: `
-              0 0 10px rgba(255, 149, 14, 0.3),
-              0 0 20px rgba(255, 149, 14, 0.2),
-              inset -2px -2px 4px rgba(255, 255, 255, 0.2),
-              inset 1px 1px 2px rgba(255, 149, 14, 0.3)
+              0 0 8px rgba(255, 149, 14, ${particle.opacity * 0.4}),
+              0 0 16px rgba(255, 149, 14, ${particle.opacity * 0.2}),
+              inset -1px -1px 2px rgba(255, 255, 255, 0.1),
+              inset 1px 1px 1px rgba(255, 149, 14, 0.2)
             `,
-            filter: 'blur(0.5px)',
+            filter: 'blur(0.3px)',
+            willChange: 'transform, opacity', // ✅ OPTIMIZED: Performance hint
           }}
           animate={{
-            y: [-100, -300],
-            x: [0, particle.horizontalDrift, 0], // Random horizontal movement
-            opacity: [0, 0.8, 0.8, 0],
-            scale: [0.8, 1.2, 0.8], // Subtle pulsing effect
+            y: [-80, -250],
+            x: [0, particle.horizontalDrift, 0],
+            opacity: [0, particle.opacity, particle.opacity, 0],
+            scale: [0.8, 1.1, 0.8],
           }}
           transition={{
             duration: particle.duration,
@@ -64,21 +91,22 @@ export default function FloatingParticles() {
         />
       ))}
       
-      {/* Add some extra shimmer particles */}
-      {particles.slice(0, 10).map((particle) => (
+      {/* ✅ OPTIMIZED: Enhanced shimmer particles with better performance */}
+      {shimmerParticles.map((particle) => (
         <motion.div
-          key={`shimmer-${particle.id}`}
+          key={particle.id}
           className="absolute w-0.5 h-0.5 rounded-full"
           style={{
-            left: `${(particle.left + 5) % 100}%`,
-            top: `${(particle.top + 10) % 100}%`,
+            left: `${particle.left}%`,
+            top: `${particle.top}%`,
             background: 'rgba(255, 255, 255, 0.8)',
-            boxShadow: '0 0 6px rgba(255, 255, 255, 0.6)',
+            boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
+            willChange: 'transform, opacity', // ✅ OPTIMIZED: Performance hint
           }}
           animate={{
-            y: [-50, -250],
-            x: [0, particle.horizontalDrift * 0.5, 0],
-            opacity: [0, 1, 0],
+            y: [-40, -200],
+            x: [0, particle.horizontalDrift * 0.4, 0],
+            opacity: [0, 0.8, 0],
           }}
           transition={{
             duration: particle.duration * 0.7,
@@ -88,6 +116,20 @@ export default function FloatingParticles() {
           }}
         />
       ))}
+
+      {/* ✅ NEW: Subtle background glow for depth */}
+      <motion.div
+        className="absolute inset-0 bg-gradient-radial from-[#ff950e]/5 via-transparent to-transparent"
+        animate={{
+          opacity: [0.3, 0.5, 0.3],
+        }}
+        transition={{
+          duration: 8,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        style={{ willChange: 'opacity' }}
+      />
     </div>
   );
 }
