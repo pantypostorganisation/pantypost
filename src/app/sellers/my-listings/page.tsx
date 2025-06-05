@@ -62,7 +62,6 @@ export default function MyListingsPage() {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
-  // ✅ FIXED: Use correct property name from AuthContext
   const isVerified = user?.isVerified || user?.verificationStatus === 'verified';
 
   // Load views from localStorage and update on storage event and window focus
@@ -187,7 +186,6 @@ export default function MyListingsPage() {
     return endTime.toISOString();
   };
 
-  // Handle adding or updating a listing
   const handleSaveListing = () => {
     if (!title || !description || imageUrls.length === 0) {
       alert('Please fill in all required fields (title, description) and add at least one image.');
@@ -353,9 +351,21 @@ export default function MyListingsPage() {
     }
   };
 
-  // --- Listing Limit Logic ---
+  // Listing Limit Logic
   const maxListings = isVerified ? 25 : 2;
   const atLimit = myListings.length >= maxListings;
+
+  if (!user) {
+    return (
+      <BanCheck>
+        <RequireAuth role="seller">
+          <div className="min-h-screen bg-black flex items-center justify-center">
+            <div className="text-white">Loading...</div>
+          </div>
+        </RequireAuth>
+      </BanCheck>
+    );
+  }
 
   return (
     <BanCheck>
@@ -476,7 +486,7 @@ export default function MyListingsPage() {
                               type="radio"
                               checked={!isAuction}
                               onChange={() => setIsAuction(false)}
-                              className="sr-only" // Hide actual radio button
+                              className="sr-only"
                             />
                             <Sparkles className={`w-5 h-5 ${!isAuction ? 'text-[#ff950e]' : 'text-gray-500'}`} />
                             <div>
@@ -503,12 +513,10 @@ export default function MyListingsPage() {
                                 onChange={() => {
                                   if (isVerified) {
                                     setIsAuction(true);
-                                  } else {
-                                    // Don't allow unverified sellers to create auctions
                                   }
                                 }}
                                 disabled={!isVerified}
-                                className="sr-only" // Hide actual radio button
+                                className="sr-only"
                               />
                               <Gavel className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-gray-500'}`} />
                               <div>
@@ -854,7 +862,6 @@ export default function MyListingsPage() {
                             )}
 
                             <div className="relative w-full h-48 sm:h-56 overflow-hidden">
-                              {/* Display the first image from the array */}
                               {listing.imageUrls && listing.imageUrls.length > 0 && (
                                 <img
                                   src={listing.imageUrls[0]}
