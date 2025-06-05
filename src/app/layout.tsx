@@ -65,14 +65,66 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <title>PantyPost - Premium Adult Marketplace</title>
-        <meta name="description" content="The premier marketplace for adult content and personalized experiences." />
-        <meta name="keywords" content="adult marketplace, premium content, personalized experiences" />
-        <meta name="robots" content="noindex, nofollow" />
+        {/* Essential meta tags */}
+        <title>PantyPost - Premium Adult Marketplace | Verified Sellers</title>
+        <meta name="description" content="The premier marketplace for adult content and personalized experiences. Connect with verified sellers in a secure, private environment. 21+ only." />
+        <meta name="keywords" content="adult marketplace, premium content, verified sellers, secure platform, private messaging, subscription service" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#ff950e" />
+        <meta name="robots" content="noindex, nofollow" />
+        <meta name="rating" content="adult" />
+        <meta name="content-rating" content="mature" />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="PantyPost - Premium Adult Marketplace" />
+        <meta property="og:description" content="The premier marketplace for adult content and personalized experiences." />
+        <meta property="og:image" content="/logo.png" />
+        <meta property="og:site_name" content="PantyPost" />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="PantyPost - Premium Adult Marketplace" />
+        <meta name="twitter:description" content="The premier marketplace for adult content and personalized experiences." />
+        <meta name="twitter:image" content="/logo.png" />
+        
+        {/* Performance hints */}
         <link rel="preload" href="/logo.png" as="image" />
         <link rel="preload" href="/phone-mockup.png" as="image" />
+        <link rel="dns-prefetch" href="//fonts.googleapis.com" />
+        
+        {/* PWA meta tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        
+        {/* Canonical URL */}
+        <link rel="canonical" href="https://pantypost.com" />
+        
+        {/* Structured data for the website */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              "name": "PantyPost",
+              "description": "The premier marketplace for adult content and personalized experiences",
+              "url": "https://pantypost.com",
+              "potentialAction": {
+                "@type": "SearchAction",
+                "target": {
+                  "@type": "EntryPoint",
+                  "urlTemplate": "https://pantypost.com/browse?q={search_term_string}"
+                },
+                "query-input": "required name=search_term_string"
+              },
+              "audience": {
+                "@type": "Audience",
+                "audienceType": "Adult"
+              }
+            })
+          }}
+        />
       </head>
       <body className={`${inter.className} bg-black text-white min-h-screen antialiased`}>
         <ErrorBoundary fallback={<SimpleErrorFallback />}>
@@ -89,9 +141,8 @@ export default function RootLayout({
                               <ErrorBoundary fallback={<SimpleErrorFallback />}>
                                 <AgeVerificationModal />
                                 <Header />
-                                <main className="min-h-screen">
-                                  {children}
-                                </main>
+                                {/* Removed main wrapper to prevent nesting issues */}
+                                {children}
                               </ErrorBoundary>
                             </BanCheck>
                           </ErrorBoundary>

@@ -339,7 +339,7 @@ export default function SellerVerifyPage() {
                   </div>
                 </div>
                 
-                {/* Document Preview */}
+                {/* Document Preview - UPDATED TO SHOW IMAGES DIRECTLY */}
                 <div className="border-t border-gray-800 pt-4 mt-4">
                   <h3 className="font-medium text-gray-300 mb-4 flex items-center">
                     <CalendarClock className="w-4 h-4 mr-2 text-yellow-500" />
@@ -348,14 +348,16 @@ export default function SellerVerifyPage() {
                   
                   <div className="grid grid-cols-2 gap-3">
                     {codePhoto && (
-                      <div 
-                        className="relative border border-gray-800 rounded-lg overflow-hidden h-40 cursor-pointer" 
-                        onClick={() => viewImage("Photo with Verification Code", codePhoto)}
-                      >
-                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center">
+                      <div className="relative border border-gray-800 rounded-lg overflow-hidden">
+                        <img 
+                          src={codePhoto} 
+                          alt="Photo with Code" 
+                          className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                          onClick={() => viewImage("Photo with Verification Code", codePhoto)}
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center pointer-events-none">
                           <ExternalLink className="w-6 h-6 text-white opacity-70" />
                         </div>
-                        <img src={codePhoto} alt="Verification Code" className="h-full w-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-1.5 text-xs">
                           Photo with Code
                         </div>
@@ -363,14 +365,16 @@ export default function SellerVerifyPage() {
                     )}
                     
                     {idFront && (
-                      <div 
-                        className="relative border border-gray-800 rounded-lg overflow-hidden h-40 cursor-pointer" 
-                        onClick={() => viewImage("ID Front", idFront)}
-                      >
-                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center">
+                      <div className="relative border border-gray-800 rounded-lg overflow-hidden">
+                        <img 
+                          src={idFront} 
+                          alt="ID Front" 
+                          className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                          onClick={() => viewImage("ID Front", idFront)}
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center pointer-events-none">
                           <ExternalLink className="w-6 h-6 text-white opacity-70" />
                         </div>
-                        <img src={idFront} alt="ID Front" className="h-full w-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-1.5 text-xs">
                           ID Front
                         </div>
@@ -378,14 +382,16 @@ export default function SellerVerifyPage() {
                     )}
                     
                     {idBack && (
-                      <div 
-                        className="relative border border-gray-800 rounded-lg overflow-hidden h-40 cursor-pointer" 
-                        onClick={() => viewImage("ID Back", idBack)}
-                      >
-                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center">
+                      <div className="relative border border-gray-800 rounded-lg overflow-hidden">
+                        <img 
+                          src={idBack} 
+                          alt="ID Back" 
+                          className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                          onClick={() => viewImage("ID Back", idBack)}
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center pointer-events-none">
                           <ExternalLink className="w-6 h-6 text-white opacity-70" />
                         </div>
-                        <img src={idBack} alt="ID Back" className="h-full w-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-1.5 text-xs">
                           ID Back
                         </div>
@@ -393,14 +399,16 @@ export default function SellerVerifyPage() {
                     )}
                     
                     {passport && (
-                      <div 
-                        className="relative border border-gray-800 rounded-lg overflow-hidden h-40 cursor-pointer" 
-                        onClick={() => viewImage("Passport", passport)}
-                      >
-                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center">
+                      <div className="relative border border-gray-800 rounded-lg overflow-hidden">
+                        <img 
+                          src={passport} 
+                          alt="Passport" 
+                          className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity" 
+                          onClick={() => viewImage("Passport", passport)}
+                        />
+                        <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center pointer-events-none">
                           <ExternalLink className="w-6 h-6 text-white opacity-70" />
                         </div>
-                        <img src={passport} alt="Passport" className="h-full w-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-1.5 text-xs">
                           Passport
                         </div>
