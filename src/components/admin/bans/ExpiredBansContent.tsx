@@ -9,7 +9,7 @@ interface ExpiredBansContentProps {
   filters: FilterOptions;
 }
 
-const filterAndSortBans = (bans: any[], filters: FilterOptions) => {
+const filterAndSortBans = (bans: BanEntry[], filters: FilterOptions): BanEntry[] => {
   if (!Array.isArray(bans)) return [];
   
   let filtered = bans.filter(ban => {
@@ -105,4 +105,3 @@ export default function ExpiredBansContent({ expiredBans, filters }: ExpiredBans
     </div>
   );
 }
-

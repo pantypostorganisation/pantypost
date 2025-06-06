@@ -5,7 +5,7 @@ import {
   UserCheck, 
   Info 
 } from 'lucide-react';
-import { BanReason } from '@/types/ban';
+import { BanEntry, BanReason } from '@/types/ban';
 
 export const getBanReasonDisplay = (reason: string, customReason?: string) => {
   if (!reason || typeof reason !== 'string') {
@@ -34,11 +34,14 @@ export const getBanReasonDisplay = (reason: string, customReason?: string) => {
   );
 };
 
-export const isValidBan = (ban: any): ban is { id: string; username: string } => {
+export const isValidBan = (ban: any): ban is BanEntry => {
   return ban && 
          typeof ban === 'object' && 
          ban.id && 
          ban.username && 
-         typeof ban.username === 'string';
+         typeof ban.username === 'string' &&
+         ban.banType &&
+         ban.reason &&
+         ban.startTime &&
+         ban.bannedBy;
 };
-
