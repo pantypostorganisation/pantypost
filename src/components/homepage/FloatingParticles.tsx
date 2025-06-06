@@ -2,7 +2,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 // ✅ OPTIMIZED: Check for reduced motion preference
 const useReducedMotion = () => {
@@ -12,35 +12,66 @@ const useReducedMotion = () => {
   return mediaQuery.matches;
 };
 
+// ✅ FIXED: Deterministic particle generation based on index
+const generateDeterministicParticles = (count: number) => {
+  const particles = [];
+  
+  // Use mathematical patterns instead of Math.random() for deterministic results
+  for (let i = 0; i < count; i++) {
+    // Create pseudo-random values based on index
+    const seed = i * 137.5; // Prime number for better distribution
+    const x = ((seed * 9.7) % 100);
+    const y = ((seed * 13.3) % 100);
+    const delay = ((seed * 0.11) % 5);
+    const duration = 10 + ((seed * 0.17) % 8);
+    const sizeRand = ((seed * 0.23) % 10);
+    const horizontalDrift = ((seed * 0.29) % 80) - 40; // -40 to 40
+    const opacity = 0.3 + ((seed * 0.31) % 50) / 100; // 0.3 to 0.8
+    
+    // Determine size based on calculated value
+    let size = 'w-1 h-1';
+    if (sizeRand > 7) {
+      size = 'w-2 h-2';
+    } else if (sizeRand > 4) {
+      size = 'w-1.5 h-1.5';
+    }
+    
+    particles.push({
+      id: i + 1,
+      left: x,
+      top: y,
+      delay: delay,
+      size: size,
+      duration: duration,
+      horizontalDrift: horizontalDrift,
+      opacity: opacity,
+    });
+  }
+  
+  return particles;
+};
+
 export default function FloatingParticles() {
   const prefersReducedMotion = useReducedMotion();
+  const [isClient, setIsClient] = useState(false);
+
+  // ✅ FIXED: Only render particles after hydration
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // ✅ OPTIMIZED: Respect accessibility preferences
   if (prefersReducedMotion) {
     return null; // Don't render particles for motion-sensitive users
   }
 
-  // ✅ OPTIMIZED: Memoized particle generation for better performance
+  // ✅ FIXED: Generate particles with deterministic values
   const particles = useMemo(() => {
-    const particlesArray = [];
     const particleCount = 35; // Reduced from 40 for better performance
-    
-    for (let i = 0; i < particleCount; i++) {
-      particlesArray.push({
-        id: i + 1,
-        left: Math.random() * 100,
-        top: Math.random() * 100,
-        delay: Math.random() * 5,
-        size: Math.random() > 0.7 ? 'w-2 h-2' : Math.random() > 0.4 ? 'w-1.5 h-1.5' : 'w-1 h-1',
-        duration: 10 + Math.random() * 8, // Slightly reduced duration range
-        horizontalDrift: (Math.random() - 0.5) * 80, // Reduced drift for smoother animation
-        opacity: 0.3 + Math.random() * 0.5, // Variable opacity for depth
-      });
-    }
-    return particlesArray;
+    return generateDeterministicParticles(particleCount);
   }, []);
 
-  // ✅ OPTIMIZED: Memoized shimmer particles with better distribution
+  // ✅ FIXED: Generate shimmer particles deterministically
   const shimmerParticles = useMemo(() => {
     return particles.slice(0, 8).map((particle) => ({
       ...particle,
@@ -49,6 +80,11 @@ export default function FloatingParticles() {
       id: `shimmer-${particle.id}`,
     }));
   }, [particles]);
+
+  // ✅ FIXED: Don't render particles on server to avoid hydration mismatch
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none" role="presentation" aria-hidden="true">
