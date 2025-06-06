@@ -17,7 +17,7 @@ export default function TrustBadges() {
 
   return (
     <motion.div 
-      className="flex gap-2.5 mt-6 flex-wrap justify-center md:justify-start" 
+      className="flex gap-2.5 mt-6 flex-wrap" 
       variants={containerVariants}
       role="region"
       aria-label="Trust and security indicators"
