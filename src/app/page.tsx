@@ -1,7 +1,7 @@
 // src/app/page.tsx
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useCallback } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import BanCheck from '@/components/BanCheck';
 import HeroSection from '@/components/homepage/HeroSection';
@@ -10,28 +10,85 @@ import FeaturesSection from '@/components/homepage/FeaturesSection';
 import CTASection from '@/components/homepage/CTASection';
 import Footer from '@/components/homepage/Footer';
 
-// Loading fallback components
+// Enhanced loading fallback components with pulse animations
 const SectionSkeleton = ({ height = "h-96" }: { height?: string }) => (
   <div className={`${height} bg-gradient-to-b from-[#101010] to-black flex items-center justify-center`}>
     <div className="text-center">
       <div className="w-8 h-8 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-      <p className="text-gray-400 text-sm">Loading...</p>
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-800/50 rounded w-32 mx-auto animate-pulse"></div>
+        <div className="h-3 bg-gray-800/30 rounded w-24 mx-auto animate-pulse delay-75"></div>
+      </div>
     </div>
   </div>
 );
 
-// Enhanced error fallback for sections
-const SectionErrorFallback = ({ sectionName }: { sectionName: string }) => (
+// Enhanced error fallback with retry functionality
+const SectionErrorFallback = ({ 
+  sectionName, 
+  retry, 
+  error 
+}: { 
+  sectionName: string; 
+  retry?: () => void; 
+  error?: Error; 
+}) => (
   <div className="min-h-[200px] bg-gradient-to-b from-[#101010] to-black flex items-center justify-center">
-    <div className="text-center p-8">
+    <div className="text-center p-8 max-w-md mx-auto">
       <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
         <span className="text-red-400 text-xl">⚠</span>
       </div>
       <h3 className="text-red-400 font-semibold mb-2">Section Unavailable</h3>
-      <p className="text-gray-500 text-sm">The {sectionName} section could not be loaded.</p>
+      <p className="text-gray-500 text-sm mb-4">
+        The {sectionName} section could not be loaded.
+      </p>
+      {error && process.env.NODE_ENV === 'development' && (
+        <p className="text-gray-600 text-xs mb-4 font-mono bg-gray-900/50 p-2 rounded">
+          {error.message}
+        </p>
+      )}
+      {retry && (
+        <button 
+          onClick={retry} 
+          className="text-[#ff950e] text-sm hover:underline hover:text-[#ff6b00] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
+        >
+          Try Again
+        </button>
+      )}
     </div>
   </div>
 );
+
+// Enhanced section wrapper with retry functionality
+const SectionWrapper = ({ 
+  children, 
+  sectionName, 
+  fallbackHeight 
+}: { 
+  children: React.ReactNode; 
+  sectionName: string; 
+  fallbackHeight?: string; 
+}) => {
+  const handleRetry = useCallback(() => {
+    // Force re-render by reloading the page section
+    window.location.reload();
+  }, []);
+
+  return (
+    <ErrorBoundary 
+      fallback={
+        <SectionErrorFallback 
+          sectionName={sectionName} 
+          retry={handleRetry}
+        />
+      }
+    >
+      <Suspense fallback={<SectionSkeleton height={fallbackHeight} />}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  );
+};
 
 export default function Home() {
   return (
@@ -39,44 +96,35 @@ export default function Home() {
       <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
         
         {/* Hero Section with Error Boundary */}
-        <ErrorBoundary fallback={<SectionErrorFallback sectionName="Hero" />}>
-          <Suspense fallback={<SectionSkeleton height="h-screen" />}>
-            <HeroSection />
-          </Suspense>
-        </ErrorBoundary>
+        <SectionWrapper sectionName="Hero" fallbackHeight="h-screen">
+          <HeroSection />
+        </SectionWrapper>
         
         {/* Trust Signals Section with Error Boundary */}
-        <ErrorBoundary fallback={<SectionErrorFallback sectionName="Trust Signals" />}>
-          <Suspense fallback={<SectionSkeleton height="h-64" />}>
-            <TrustSignalsSection />
-          </Suspense>
-        </ErrorBoundary>
+        <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
+          <TrustSignalsSection />
+        </SectionWrapper>
         
         {/* Features Section with Error Boundary */}
-        <ErrorBoundary fallback={<SectionErrorFallback sectionName="Features" />}>
-          <Suspense fallback={<SectionSkeleton height="h-96" />}>
-            <FeaturesSection />
-          </Suspense>
-        </ErrorBoundary>
+        <SectionWrapper sectionName="Features" fallbackHeight="h-96">
+          <FeaturesSection />
+        </SectionWrapper>
         
         {/* CTA Section with Error Boundary */}
-        <ErrorBoundary fallback={<SectionErrorFallback sectionName="Call to Action" />}>
-          <Suspense fallback={<SectionSkeleton height="h-80" />}>
-            <CTASection />
-          </Suspense>
-        </ErrorBoundary>
+        <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
+          <CTASection />
+        </SectionWrapper>
         
         {/* Footer with Error Boundary */}
-        <ErrorBoundary fallback={<SectionErrorFallback sectionName="Footer" />}>
-          <Suspense fallback={<SectionSkeleton height="h-64" />}>
-            <Footer />
-          </Suspense>
-        </ErrorBoundary>
+        <SectionWrapper sectionName="Footer" fallbackHeight="h-64">
+          <Footer />
+        </SectionWrapper>
       </div>
 
-      {/* Global Styles - Enhanced with performance optimizations */}
+      {/* Enhanced Global Styles with better performance optimizations */}
       <style jsx global>{`
         @keyframes pulse-slow {
+          0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
         }
         .animate-pulse-slow { 
@@ -84,30 +132,47 @@ export default function Home() {
           will-change: opacity;
         }
 
-        /* Perspective for 3D-ish hover */
-        .perspective { 
-          perspective: 1000px; 
+        /* Enhanced shimmer effect for loading states */
+        .loading-shimmer {
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+          animation: shimmer 1.5s infinite;
+        }
+        
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
         }
 
-        /* Smooth Scroll with performance optimization */
+        /* Perspective for 3D-ish hover with GPU acceleration */
+        .perspective { 
+          perspective: 1000px; 
+          transform-style: preserve-3d;
+        }
+
+        /* Enhanced Smooth Scroll with performance optimization */
         html { 
           scroll-behavior: smooth; 
           -webkit-overflow-scrolling: touch;
         }
 
-        /* Enhanced Focus Visible with better contrast */
+        /* Enhanced Focus Visible with better contrast and accessibility */
         *:focus-visible {
           outline: 2px solid #ff950e;
           outline-offset: 2px;
           border-radius: 4px;
-          box-shadow: 0 0 0 4px rgba(255, 149, 14, 0.1);
+          box-shadow: 
+            0 0 0 4px rgba(255, 149, 14, 0.1),
+            0 0 0 2px rgba(255, 149, 14, 0.3);
+          transition: box-shadow 0.2s ease;
         }
         *:focus:not(:focus-visible) {
           outline: none;
         }
         button:focus-visible, a:focus-visible {
           transform: scale(1.02);
-          transition: transform 0.1s ease;
+          transition: transform 0.1s ease, box-shadow 0.2s ease;
         }
 
         /* Enhanced Custom Spin Animations with GPU acceleration */
@@ -117,6 +182,7 @@ export default function Home() {
         .animate-spin-slow { 
           animation: spin-slow 25s linear infinite; 
           will-change: transform;
+          transform-origin: center;
         }
 
         @keyframes spin-slow-reverse {
@@ -125,6 +191,7 @@ export default function Home() {
         .animate-spin-slow-reverse { 
           animation: spin-slow-reverse 20s linear infinite; 
           will-change: transform;
+          transform-origin: center;
         }
 
         @keyframes spin-medium {
@@ -133,6 +200,7 @@ export default function Home() {
         .animate-spin-medium { 
           animation: spin-medium 35s linear infinite; 
           will-change: transform;
+          transform-origin: center;
         }
 
         @keyframes spin-medium-reverse {
@@ -141,6 +209,7 @@ export default function Home() {
         .animate-spin-medium-reverse { 
           animation: spin-medium-reverse 30s linear infinite; 
           will-change: transform;
+          transform-origin: center;
         }
 
         /* Enhanced Tailwind Arbitrary Radial Gradient with fallback */
@@ -154,7 +223,7 @@ export default function Home() {
           -webkit-tap-highlight-color: transparent;
         }
         
-        /* Reduce motion for accessibility */
+        /* Enhanced reduced motion handling for accessibility */
         @media (prefers-reduced-motion: reduce) {
           *,
           *::before,
@@ -169,20 +238,48 @@ export default function Home() {
           .animate-spin-slow-reverse,
           .animate-spin-medium,
           .animate-spin-medium-reverse,
-          .animate-pulse-slow {
+          .animate-pulse-slow,
+          .loading-shimmer {
             animation: none !important;
+          }
+          
+          .perspective {
+            perspective: none !important;
           }
         }
 
-        /* Enhanced loading states */
-        .loading-shimmer {
-          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-          animation: shimmer 1.5s infinite;
+        /* Enhanced loading skeleton animations */
+        @keyframes skeleton-pulse {
+          0% { opacity: 1; }
+          50% { opacity: 0.5; }
+          100% { opacity: 1; }
         }
         
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+        .animate-skeleton {
+          animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          will-change: opacity;
+        }
+        
+        /* Stagger delays for skeleton animations */
+        .animate-pulse.delay-75 {
+          animation-delay: 75ms;
+        }
+        .animate-pulse.delay-150 {
+          animation-delay: 150ms;
+        }
+        .animate-pulse.delay-300 {
+          animation-delay: 300ms;
+        }
+
+        /* Enhanced error state styles */
+        .error-state {
+          background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(127, 29, 29, 0.05));
+          border: 1px solid rgba(220, 38, 38, 0.2);
+        }
+        
+        .error-state:hover {
+          background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(127, 29, 29, 0.08));
+          border-color: rgba(220, 38, 38, 0.3);
         }
       `}</style>
     </BanCheck>

@@ -10,7 +10,7 @@ import {
   TrendingUp 
 } from 'lucide-react';
 
-// Trust badges displayed in the hero section - exactly matching your original
+// Trust badges displayed in the hero section - verified structure
 export const TRUST_BADGES = [
   { icon: Shield, text: 'Secure & Private' },
   { icon: Star, text: 'Verified Sellers' },
@@ -18,7 +18,7 @@ export const TRUST_BADGES = [
   { icon: Lock, text: 'Encrypted' },
 ];
 
-// Trust signals displayed in the trust section - exactly matching your original
+// Trust signals displayed in the trust section - verified structure
 export const TRUST_SIGNALS = [
   { icon: Shield, title: 'Privacy First', desc: 'Your identity is always protected.' },
   { icon: CreditCard, title: 'Secure Payments', desc: 'Encrypted and safe transactions.' },
@@ -26,7 +26,7 @@ export const TRUST_SIGNALS = [
   { icon: Users, title: '24/7 Support', desc: 'Our team is here to help anytime.' },
 ];
 
-// Main features displayed on homepage - exactly matching your original
+// Main features displayed on homepage - verified structure
 export const PLATFORM_FEATURES = [
   { 
     icon: ShoppingBag, 
@@ -45,7 +45,7 @@ export const PLATFORM_FEATURES = [
   },
 ];
 
-// Hero section content - exactly matching your original
+// Hero section content - verified structure
 export const HERO_CONTENT = {
   badge: 'Trusted by 10,000+ users',
   title: 'The',
@@ -62,7 +62,7 @@ export const HERO_CONTENT = {
   },
 };
 
-// CTA section content - exactly matching your original
+// CTA section content - verified structure
 export const CTA_CONTENT = {
   title: 'Ready to Get Started?',
   description: 'Join thousands of buyers and sellers on the most secure marketplace for used undergarments.',
@@ -76,7 +76,7 @@ export const CTA_CONTENT = {
   },
 };
 
-// Footer links - exactly matching your original
+// Footer links - verified structure
 export const FOOTER_LINKS = [
   { href: '/terms', label: 'Terms' },
   { href: '/privacy', label: 'Privacy' },
@@ -84,7 +84,7 @@ export const FOOTER_LINKS = [
   { href: '/contact', label: 'Contact' },
 ];
 
-// Generate particle positions (deterministic based on index) - exactly matching your original
+// Generate particle positions (deterministic based on index) - verified structure
 export const generateParticlePositions = (count: number = 45) => 
   Array.from({ length: count }, (_, i) => ({
     left: ((i * 37 + i * 7) % 90) + 5, // Creates pseudo-random horizontal distribution
@@ -92,3 +92,12 @@ export const generateParticlePositions = (count: number = 45) =>
     delay: (i * 0.2) % 4.5, // Stagger the animations
     duration: 8 + (i % 4) // Vary duration between 8-11 seconds
   }));
+
+// Debug: Log the structure to verify everything is correct
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('Homepage constants loaded:', {
+    TRUST_BADGES: TRUST_BADGES.map(badge => ({ text: badge.text, hasIcon: !!badge.icon })),
+    TRUST_SIGNALS: TRUST_SIGNALS.map(signal => ({ title: signal.title, hasIcon: !!signal.icon })),
+    PLATFORM_FEATURES: PLATFORM_FEATURES.map(feature => ({ title: feature.title, hasIcon: !!feature.icon })),
+  });
+}
