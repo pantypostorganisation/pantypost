@@ -1,4 +1,4 @@
-// src/types/message.ts
+// src/types/message.ts/(ADMIN MESSAGES ONLY ATM)
 
 export type MessageType = 'normal' | 'customRequest' | 'image';
 
