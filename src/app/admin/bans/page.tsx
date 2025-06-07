@@ -1,3 +1,4 @@
+// src/app/admin/bans/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -65,7 +66,15 @@ export default function BanManagementPage() {
         permanentBans: 0,
         pendingAppeals: 0,
         recentBans24h: 0,
-        bansByReason: {},
+        bansByReason: {
+          harassment: 0,
+          spam: 0,
+          inappropriate_content: 0,
+          scam: 0,
+          underage: 0,
+          payment_fraud: 0,
+          other: 0
+        },
         appealStats: {
           totalAppeals: 0,
           pendingAppeals: 0,
@@ -81,7 +90,15 @@ export default function BanManagementPage() {
         permanentBans: 0,
         pendingAppeals: 0,
         recentBans24h: 0,
-        bansByReason: {},
+        bansByReason: {
+          harassment: 0,
+          spam: 0,
+          inappropriate_content: 0,
+          scam: 0,
+          underage: 0,
+          payment_fraud: 0,
+          other: 0
+        },
         appealStats: {
           totalAppeals: 0,
           pendingAppeals: 0,
@@ -424,4 +441,3 @@ export default function BanManagementPage() {
     </RequireAuth>
   );
 }
-
