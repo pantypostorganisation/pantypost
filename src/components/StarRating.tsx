@@ -1,34 +1,51 @@
 ﻿// src/components/StarRating.tsx
 'use client';
 
-import {
-  FaStar as FullStar,
-  FaStarHalfAlt as HalfStar,
-  FaRegStar as EmptyStar,
-} from 'react-icons/fa';
+import { Star } from 'lucide-react';
 
-type StarRatingProps = {
+interface StarRatingProps {
   rating: number;
-  size?: 'sm' | 'md'; // optional size prop
-};
+  onRatingChange?: (rating: number) => void;
+  interactive?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+}
 
-export default function StarRating({ rating, size = 'md' }: StarRatingProps) {
-  const fullStars = Math.floor(rating);
-  // Only show half star if decimal is >= 0.4
-  const decimal = rating - fullStars;
-  const hasHalfStar = decimal >= 0.4;
-  const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+export default function StarRating({ 
+  rating, 
+  onRatingChange, 
+  interactive = false, 
+  size = 'md' 
+}: StarRatingProps) {
+  const sizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-5 h-5',
+    lg: 'w-6 h-6'
+  };
 
-  const iconClass = size === 'sm' ? 'text-xs' : 'text-base';
+  const containerClasses = {
+    sm: 'gap-0.5',
+    md: 'gap-1',
+    lg: 'gap-1.5'
+  };
 
   return (
-    <div className={`flex items-center text-yellow-500 ${iconClass}`}>
-      {Array.from({ length: fullStars }).map((_, i) => (
-        <FullStar key={`full-star-${i}-${rating}`} />
-      ))}
-      {hasHalfStar && <HalfStar key={`half-star-${rating}`} />}
-      {Array.from({ length: emptyStars }).map((_, i) => (
-        <EmptyStar key={`empty-star-${i}-${rating}`} />
+    <div className={`flex ${containerClasses[size]}`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => interactive && onRatingChange?.(star)}
+          disabled={!interactive}
+          className={interactive ? 'cursor-pointer' : 'cursor-default'}
+        >
+          <Star
+            className={`${sizeClasses[size]} ${
+              star <= rating 
+                ? 'fill-[#ff950e] text-[#ff950e]' 
+                : 'fill-gray-300 text-gray-300'
+            } ${interactive ? 'hover:fill-[#ff950e] hover:text-[#ff950e]' : ''}`}
+          />
+        </button>
       ))}
     </div>
   );
