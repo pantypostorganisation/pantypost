@@ -43,13 +43,6 @@ export function useMessageData() {
   
   const readThreadsRef = useRef<Set<string>>(new Set());
 
-  // Debug logging
-  useEffect(() => {
-    console.log('MessageContext messages:', messages);
-    console.log('Current user:', user);
-    console.log('Active thread:', activeThread);
-  }, [messages, user, activeThread]);
-
   // Reset the readThreadsRef when logging in/out
   useEffect(() => {
     readThreadsRef.current = new Set();
@@ -104,42 +97,12 @@ export function useMessageData() {
     let totalUnreadCount = 0;
     
     if (user) {
-      // Get all messages - handle the MessageContext structure
-      let allMessages: Message[] = [];
-      
-      if (messages && typeof messages === 'object') {
-        // The MessageContext stores messages by receiver username
-        // We need to get messages from ALL keys where we're involved
-        Object.entries(messages).forEach(([username, userMessages]) => {
-          if (Array.isArray(userMessages)) {
-            // Get messages where we're either sender or receiver
-            const relevantMessages = userMessages.filter((msg: Message) => 
-              msg.sender === user.username || msg.receiver === user.username
-            );
-            allMessages = [...allMessages, ...relevantMessages];
-          }
-        });
-        
-        // Remove duplicates based on unique message properties
-        const uniqueMessages = new Map();
-        allMessages.forEach(msg => {
-          const key = `${msg.sender}-${msg.receiver}-${msg.date}-${msg.content}`;
-          uniqueMessages.set(key, msg);
-        });
-        allMessages = Array.from(uniqueMessages.values());
-      }
-      
-      console.log('MessageContext structure:', messages);
-      console.log('All messages found:', allMessages);
-      console.log('Current user:', user.username);
-      
-      // Filter messages for this seller
-      const sellerMessages = allMessages.filter(
-        (msg: Message) =>
-          msg.sender === user.username || msg.receiver === user.username
-      );
-      
-      console.log('Filtered seller messages:', sellerMessages);
+      const sellerMessages = Object.values(messages)
+        .flat()
+        .filter(
+          (msg: Message) =>
+            msg.sender === user.username || msg.receiver === user.username
+        );
         
       sellerMessages.forEach((msg) => {
         const otherParty =
@@ -175,8 +138,6 @@ export function useMessageData() {
         }
       });
     }
-    
-    console.log('Processed threads:', threads);
     
     return { 
       threads, 
@@ -228,21 +189,11 @@ export function useMessageData() {
   const handleSendMessage = useCallback((content: string, type: 'normal' | 'image' = 'normal', imageUrl?: string) => {
     if (!user || !activeThread) return;
     
-    console.log('handleSendMessage called with:', {
-      sender: user.username,
-      receiver: activeThread,
-      content,
-      type
-    });
-    
     sendMessage(user.username, activeThread, content, {
       type,
       meta: imageUrl ? { imageUrl } : undefined
     });
-    
-    // Force immediate update
-    setMessageUpdate(prev => prev + 1);
-  }, [user, activeThread, sendMessage, setMessageUpdate]);
+  }, [user, activeThread, sendMessage]);
 
   const handleBlockToggle = useCallback(() => {
     if (!user || !activeThread) return;

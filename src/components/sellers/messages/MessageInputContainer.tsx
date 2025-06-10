@@ -4,43 +4,34 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import MessageInput from './MessageInput';
 import EmojiPicker from './EmojiPicker';
+import { useSellerMessages } from '@/hooks/useSellerMessages';
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE } from '@/constants/emojis';
 
 interface MessageInputContainerProps {
   isUserBlocked: boolean;
   onBlockToggle: () => void;
-  replyMessage: string;
-  setReplyMessage: (message: string) => void;
-  selectedImage: string | null;
-  setSelectedImage: (image: string | null) => void;
-  imageError: string | null;
-  setImageError: (error: string | null) => void;
-  isImageLoading: boolean;
-  setIsImageLoading: (loading: boolean) => void;
-  showEmojiPicker: boolean;
-  setShowEmojiPicker: (show: boolean) => void;
-  recentEmojis: string[];
-  handleEmojiClick: (emoji: string) => void;
-  handleReply: () => void;
 }
 
 export default function MessageInputContainer({ 
   isUserBlocked, 
-  onBlockToggle,
-  replyMessage,
-  setReplyMessage,
-  selectedImage,
-  setSelectedImage,
-  imageError,
-  setImageError,
-  isImageLoading,
-  setIsImageLoading,
-  showEmojiPicker,
-  setShowEmojiPicker,
-  recentEmojis,
-  handleEmojiClick,
-  handleReply
+  onBlockToggle 
 }: MessageInputContainerProps) {
+  const {
+    replyMessage,
+    setReplyMessage,
+    selectedImage,
+    setSelectedImage,
+    imageError,
+    setImageError,
+    isImageLoading,
+    setIsImageLoading,
+    showEmojiPicker,
+    setShowEmojiPicker,
+    recentEmojis,
+    handleEmojiClick,
+    handleReply
+  } = useSellerMessages();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
