@@ -3,7 +3,6 @@
 
 import React from 'react';
 import MessageItem from './MessageItem';
-import { useSellerMessages } from '@/hooks/useSellerMessages';
 import { Clock, CheckCircle2, XCircle, Edit3, ShoppingBag } from 'lucide-react';
 
 interface MessagesListProps {
@@ -11,31 +10,42 @@ interface MessagesListProps {
   sellerRequests: any[];
   user: any;
   activeThread: string;
+  handleMessageVisible: (msg: any) => void;
+  handleAccept: (req: any) => void;
+  handleDecline: (req: any) => void;
+  handleEditRequest: (req: any) => void;
+  editRequestId: string | null;
+  editTitle: string;
+  setEditTitle: (title: string) => void;
+  editPrice: number | '';
+  setEditPrice: (price: number | '') => void;
+  editMessage: string;
+  setEditMessage: (message: string) => void;
+  handleEditSubmit: () => void;
+  setEditRequestId: (id: string | null) => void;
+  setPreviewImage: (url: string | null) => void;
 }
 
 export default function MessagesList({ 
   threadMessages, 
   sellerRequests, 
   user, 
-  activeThread 
+  activeThread,
+  handleMessageVisible,
+  handleAccept,
+  handleDecline,
+  handleEditRequest,
+  editRequestId,
+  editTitle,
+  setEditTitle,
+  editPrice,
+  setEditPrice,
+  editMessage,
+  setEditMessage,
+  handleEditSubmit,
+  setEditRequestId,
+  setPreviewImage
 }: MessagesListProps) {
-  const {
-    handleMessageVisible,
-    handleAccept,
-    handleDecline,
-    handleEditRequest,
-    editRequestId,
-    editTitle,
-    setEditTitle,
-    editPrice,
-    setEditPrice,
-    editMessage,
-    setEditMessage,
-    handleEditSubmit,
-    setEditRequestId,
-    setPreviewImage
-  } = useSellerMessages();
-
   // Determine if the user is the last editor
   function isLastEditor(customReq: any) {
     if (!customReq) return false;

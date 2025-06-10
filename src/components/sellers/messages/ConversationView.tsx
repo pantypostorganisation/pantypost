@@ -20,7 +20,34 @@ export default function ConversationView({ activeThread }: ConversationViewProps
     isUserBlocked,
     isUserReported,
     handleReport,
-    handleBlockToggle
+    handleBlockToggle,
+    handleMessageVisible,
+    handleAccept,
+    handleDecline,
+    handleEditRequest,
+    editRequestId,
+    editTitle,
+    setEditTitle,
+    editPrice,
+    setEditPrice,
+    editMessage,
+    setEditMessage,
+    handleEditSubmit,
+    setEditRequestId,
+    setPreviewImage,
+    replyMessage,
+    setReplyMessage,
+    selectedImage,
+    setSelectedImage,
+    imageError,
+    setImageError,
+    isImageLoading,
+    setIsImageLoading,
+    showEmojiPicker,
+    setShowEmojiPicker,
+    recentEmojis,
+    handleEmojiClick,
+    handleReply
   } = useSellerMessages();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,6 +85,20 @@ export default function ConversationView({ activeThread }: ConversationViewProps
             sellerRequests={sellerRequests}
             user={user}
             activeThread={activeThread}
+            handleMessageVisible={handleMessageVisible}
+            handleAccept={handleAccept}
+            handleDecline={handleDecline}
+            handleEditRequest={handleEditRequest}
+            editRequestId={editRequestId}
+            editTitle={editTitle}
+            setEditTitle={setEditTitle}
+            editPrice={editPrice}
+            setEditPrice={setEditPrice}
+            editMessage={editMessage}
+            setEditMessage={setEditMessage}
+            handleEditSubmit={handleEditSubmit}
+            setEditRequestId={setEditRequestId}
+            setPreviewImage={setPreviewImage}
           />
           
           {/* Auto-scroll anchor */}
@@ -66,12 +107,23 @@ export default function ConversationView({ activeThread }: ConversationViewProps
       </div>
       
       {/* Message input */}
-      {(
-        <MessageInputContainer 
-          isUserBlocked={isUserBlocked}
-          onBlockToggle={handleBlockToggle}
-        />
-      ) as any}
+      <MessageInputContainer 
+        isUserBlocked={isUserBlocked}
+        onBlockToggle={handleBlockToggle}
+        replyMessage={replyMessage}
+        setReplyMessage={setReplyMessage}
+        selectedImage={selectedImage}
+        setSelectedImage={setSelectedImage}
+        imageError={imageError}
+        setImageError={setImageError}
+        isImageLoading={isImageLoading}
+        setIsImageLoading={setIsImageLoading}
+        showEmojiPicker={showEmojiPicker}
+        setShowEmojiPicker={setShowEmojiPicker}
+        recentEmojis={recentEmojis}
+        handleEmojiClick={handleEmojiClick}
+        handleReply={handleReply}
+      />
     </>
   );
 }
