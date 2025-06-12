@@ -1,6 +1,7 @@
 // src/app/sellers/[username]/page.tsx
 'use client';
 
+import React from 'react';
 import { useParams } from 'next/navigation';
 import BanCheck from '@/components/BanCheck';
 import ProfileHeader from '@/components/seller-profile/ProfileHeader';
@@ -12,6 +13,12 @@ import UnsubscribeModal from '@/components/seller-profile/modals/UnsubscribeModa
 import TipModal from '@/components/seller-profile/modals/TipModal';
 import GalleryModal from '@/components/seller-profile/modals/GalleryModal';
 import { useSellerProfile } from '@/hooks/useSellerProfile';
+
+// Optional: Memoize components for better performance
+const MemoizedProfileHeader = React.memo(ProfileHeader);
+const MemoizedListingsGrid = React.memo(ListingsGrid);
+const MemoizedProfileGallery = React.memo(ProfileGallery);
+const MemoizedReviewsSection = React.memo(ReviewsSection);
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
@@ -99,7 +106,7 @@ export default function SellerProfilePage() {
           )}
 
           {/* Profile Header */}
-          <ProfileHeader
+          <MemoizedProfileHeader
             username={username}
             profilePic={profilePic}
             bio={bio}
@@ -119,7 +126,7 @@ export default function SellerProfilePage() {
           />
 
           {/* Listings Grid */}
-          <ListingsGrid
+          <MemoizedListingsGrid
             standardListings={standardListings}
             premiumListings={premiumListings}
             hasAccess={hasAccess}
@@ -129,7 +136,7 @@ export default function SellerProfilePage() {
           />
 
           {/* Gallery Section */}
-          <ProfileGallery
+          <MemoizedProfileGallery
             galleryImages={galleryImages}
             slideIndex={slideIndex}
             isPaused={isPaused}
@@ -141,7 +148,7 @@ export default function SellerProfilePage() {
           />
 
           {/* Reviews Section */}
-          <ReviewsSection
+          <MemoizedReviewsSection
             reviews={reviews}
             canReview={hasPurchased && !alreadyReviewed && user?.role === 'buyer'}
             rating={rating}
@@ -152,7 +159,7 @@ export default function SellerProfilePage() {
             onSubmit={handleReviewSubmit}
           />
 
-          {/* Modals */}
+          {/* Modals - These don't need memoization as they're conditionally rendered */}
           <TipModal
             show={showTipModal}
             username={username}

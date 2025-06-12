@@ -192,6 +192,18 @@ type MessageOptions = {
   };
 };
 
+// NEW: Thread type for organized message threads
+type MessageThread = {
+  [otherParty: string]: Message[];
+};
+
+// NEW: Thread info type for additional thread metadata
+type ThreadInfo = {
+  unreadCount: number;
+  lastMessage: Message | null;
+  otherParty: string;
+};
+
 // UPDATED: Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
@@ -211,6 +223,9 @@ type MessageContextType = {
     listingId: string
   ) => void;
   getMessagesForUsers: (userA: string, userB: string) => Message[];
+  getThreadsForUser: (username: string, role?: 'buyer' | 'seller') => MessageThread; // NEW
+  getThreadInfo: (username: string, otherParty: string) => ThreadInfo; // NEW
+  getAllThreadsInfo: (username: string, role?: 'buyer' | 'seller') => { [otherParty: string]: ThreadInfo }; // NEW
   markMessagesAsRead: (userA: string, userB: string) => void;
   blockUser: (blocker: string, blockee: string) => void;
   unblockUser: (blocker: string, blockee: string) => void;
@@ -425,6 +440,82 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return messages[conversationKey] || [];
   };
 
+  // NEW: Get all message threads for a user
+  const getThreadsForUser = (username: string, role?: 'buyer' | 'seller'): MessageThread => {
+    const threads: MessageThread = {};
+    
+    Object.entries(messages).forEach(([conversationKey, msgs]) => {
+      msgs.forEach((msg) => {
+        // Check if this message involves the user
+        if (msg.sender === username || msg.receiver === username) {
+          const otherParty = msg.sender === username ? msg.receiver : msg.sender;
+          
+          // If role is specified, filter based on role
+          // For buyers: other party should be sellers (no filtering needed here as we don't have role info)
+          // For sellers: other party should be buyers (no filtering needed here as we don't have role info)
+          // This filtering should be done at the component level if needed
+          
+          // Initialize thread if not exists
+          if (!threads[otherParty]) {
+            threads[otherParty] = [];
+          }
+          
+          // Add message to thread (check for duplicates)
+          const messageExists = threads[otherParty].some(
+            existingMsg => 
+              existingMsg.sender === msg.sender && 
+              existingMsg.receiver === msg.receiver && 
+              existingMsg.date === msg.date &&
+              existingMsg.content === msg.content
+          );
+          
+          if (!messageExists) {
+            threads[otherParty].push(msg);
+          }
+        }
+      });
+    });
+    
+    // Sort messages in each thread by date
+    Object.values(threads).forEach((thread) => {
+      thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    });
+    
+    return threads;
+  };
+
+  // NEW: Get thread info for a specific conversation
+  const getThreadInfo = (username: string, otherParty: string): ThreadInfo => {
+    const conversationKey = getConversationKey(username, otherParty);
+    const threadMessages = messages[conversationKey] || [];
+    
+    // Count unread messages (messages FROM otherParty TO username that are unread)
+    const unreadCount = threadMessages.filter(
+      (msg: Message) => msg.sender === otherParty && msg.receiver === username && !msg.read
+    ).length;
+    
+    // Get last message
+    const lastMessage = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
+    
+    return {
+      unreadCount,
+      lastMessage,
+      otherParty
+    };
+  };
+
+  // NEW: Get all thread info for a user
+  const getAllThreadsInfo = (username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
+    const threads = getThreadsForUser(username, role);
+    const threadInfos: { [otherParty: string]: ThreadInfo } = {};
+    
+    Object.keys(threads).forEach(otherParty => {
+      threadInfos[otherParty] = getThreadInfo(username, otherParty);
+    });
+    
+    return threadInfos;
+  };
+
   const markMessagesAsRead = (userA: string, userB: string) => {
     const conversationKey = getConversationKey(userA, userB);
 
@@ -540,6 +631,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         sendMessage,
         sendCustomRequest,
         getMessagesForUsers,
+        getThreadsForUser, // NEW
+        getThreadInfo, // NEW
+        getAllThreadsInfo, // NEW
         markMessagesAsRead,
         blockUser,
         unblockUser,

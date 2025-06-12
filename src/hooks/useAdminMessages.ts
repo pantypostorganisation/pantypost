@@ -1,3 +1,4 @@
+// src/hooks/useAdminMessages.ts
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -7,7 +8,18 @@ import { Message } from '@/types/message';
 export const useAdminMessages = () => {
   const { user } = useAuth();
   const { users } = useListings();
-  const { messages, sendMessage, markMessagesAsRead, blockUser, unblockUser, reportUser, isBlocked, hasReported } = useMessages();
+  const { 
+    messages, 
+    sendMessage, 
+    markMessagesAsRead, 
+    blockUser, 
+    unblockUser, 
+    reportUser, 
+    isBlocked, 
+    hasReported,
+    getThreadsForUser,
+    getAllThreadsInfo
+  } = useMessages();
   
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [content, setContent] = useState<string>('');
@@ -73,74 +85,61 @@ export const useAdminMessages = () => {
     }
   }, [user]);
 
-  // Prepare threads and messages
+  // UPDATED: Use new helper functions from MessageContext
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
-    const threads: { [user: string]: Message[] } = {};
-    const unreadCounts: { [user: string]: number } = {};
-    const lastMessages: { [user: string]: Message } = {};
-    const userProfiles: { [user: string]: { pic: string | null, verified: boolean, role: string } } = {};
+    if (!user) return { 
+      threads: {}, 
+      unreadCounts: {}, 
+      lastMessages: {}, 
+      userProfiles: {}, 
+      activeMessages: [],
+      totalUnreadCount: 0 
+    };
+    
+    // Use the new helper functions (no role filter for admin - sees all)
+    const threads = getThreadsForUser(user.username);
+    const threadInfos = getAllThreadsInfo(user.username);
+    
+    const unreadCounts: { [userKey: string]: number } = {};
+    const lastMessages: { [userKey: string]: Message } = {};
+    const userProfiles: { [userKey: string]: { pic: string | null, verified: boolean, role: string } } = {};
     let totalUnreadCount = 0;
     
-    let activeMessages: Message[] = [];
-
-    if (user) {
-      // Get all messages for the user
-      Object.values(messages).forEach((msgs) => {
-        msgs.forEach((msg) => {
-          if (msg.sender === user.username || msg.receiver === user.username) {
-            const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-            if (!threads[otherParty]) threads[otherParty] = [];
-            threads[otherParty].push(msg);
-          }
-        });
-      });
-
-      // Sort messages in each thread by date
-      Object.values(threads).forEach((thread) =>
-        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      );
+    Object.entries(threadInfos).forEach(([userKey, info]) => {
+      unreadCounts[userKey] = info.unreadCount;
+      lastMessages[userKey] = info.lastMessage as Message;
       
-      // Get last message and unread count for each thread
-      Object.entries(threads).forEach(([userKey, msgs]) => {
-        lastMessages[userKey] = msgs[msgs.length - 1];
+      // Get user profile picture and verification status
+      try {
+        const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
+        const userInfo = users?.[userKey];
+        const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
+        const role = userInfo?.role || 'unknown';
         
-        // Get user profile picture and verification status
-        try {
-          const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
-          const userInfo = users?.[userKey];
-          const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
-          const role = userInfo?.role || 'unknown';
-          
-          userProfiles[userKey] = { 
-            pic: storedPic, 
-            verified: isVerified,
-            role: role
-          };
-        } catch (error) {
-          console.error(`Error processing user profile for ${userKey}:`, error);
-          userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
-        }
-        
-        // Count only messages FROM other user TO admin as unread
-        const threadUnreadCount = msgs.filter(
-          (msg) => !msg.read && msg.sender === userKey && msg.receiver === user?.username
-        ).length;
-        
-        unreadCounts[userKey] = threadUnreadCount;
-        
-        // Only add to total if not in readThreadsRef
-        if (!readThreadsRef.current.has(userKey) && threadUnreadCount > 0) {
-          totalUnreadCount += 1;
-        }
-      });
-    }
-
+        userProfiles[userKey] = { 
+          pic: storedPic, 
+          verified: isVerified,
+          role: role
+        };
+      } catch (error) {
+        console.error(`Error processing user profile for ${userKey}:`, error);
+        userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
+      }
+      
+      // Only add to total if not in readThreadsRef
+      if (!readThreadsRef.current.has(userKey) && info.unreadCount > 0) {
+        totalUnreadCount += 1;
+      }
+    });
+    
+    // Get active messages
+    let activeMessages: Message[] = [];
     if (activeThread) {
       activeMessages = threads[activeThread] || [];
     }
 
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
-  }, [messages, username, activeThread, users, messageUpdate]);
+  }, [user, messages, activeThread, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
 
   // Get all users for directory
   const allUsers = useMemo(() => {

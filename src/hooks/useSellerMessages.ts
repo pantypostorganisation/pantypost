@@ -19,10 +19,11 @@ export function useSellerMessages() {
     reportUser, 
     isBlocked, 
     hasReported,
-    getMessagesForUsers 
+    getThreadsForUser,
+    getAllThreadsInfo
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
-  const { wallet } = useWallet(); // Removed createOrder as it doesn't exist
+  const { wallet } = useWallet();
   
   // State for UI
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -117,63 +118,47 @@ export function useSellerMessages() {
     }
   }, [recentEmojis]);
   
-  // Process messages to get threads
+  // UPDATED: Use new helper functions from MessageContext
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
-    const threads: { [buyer: string]: any[] } = {};
+    if (!user) return { 
+      threads: {}, 
+      unreadCounts: {}, 
+      lastMessages: {}, 
+      buyerProfiles: {}, 
+      totalUnreadCount: 0 
+    };
+    
+    // Use the new helper functions
+    const threads = getThreadsForUser(user.username, 'seller');
+    const threadInfos = getAllThreadsInfo(user.username, 'seller');
+    
     const unreadCounts: { [buyer: string]: number } = {};
     const lastMessages: { [buyer: string]: any } = {};
     const buyerProfiles: { [buyer: string]: { pic: string | null, verified: boolean } } = {};
     let totalUnreadCount = 0;
     
-    if (user) {
-      // Get all messages where user is involved
-      Object.entries(messages).forEach(([conversationKey, msgs]) => {
-        msgs.forEach((msg) => {
-          if (msg.sender === user.username || msg.receiver === user.username) {
-            // For sellers, the other party is always the buyer
-            const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-            
-            if (!threads[otherParty]) threads[otherParty] = [];
-            threads[otherParty].push(msg);
-          }
-        });
-      });
-
-      // Sort messages in each thread by date
-      Object.values(threads).forEach((thread) =>
-        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      );
+    Object.entries(threadInfos).forEach(([buyer, info]) => {
+      unreadCounts[buyer] = info.unreadCount;
+      lastMessages[buyer] = info.lastMessage;
       
-      // Get last message and unread count for each thread
-      Object.entries(threads).forEach(([buyer, msgs]) => {
-        lastMessages[buyer] = msgs[msgs.length - 1];
-        
-        // Get buyer profile picture and verification status
-        const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
-        const buyerInfo = users?.[buyer];
-        const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
-        
-        buyerProfiles[buyer] = { 
-          pic: storedPic, 
-          verified: isVerified
-        };
-        
-        // Count only messages FROM buyer TO seller as unread
-        const threadUnreadCount = msgs.filter(
-          (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
-        ).length;
-        
-        unreadCounts[buyer] = threadUnreadCount;
-        
-        // Only add to total if not in readThreadsRef
-        if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
-          totalUnreadCount += threadUnreadCount;
-        }
-      });
-    }
+      // Get buyer profile picture and verification status
+      const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
+      const buyerInfo = users?.[buyer];
+      const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+      
+      buyerProfiles[buyer] = { 
+        pic: storedPic, 
+        verified: isVerified
+      };
+      
+      // Only add to total if not in readThreadsRef
+      if (!readThreadsRef.current.has(buyer) && info.unreadCount > 0) {
+        totalUnreadCount += info.unreadCount;
+      }
+    });
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user, messages, users, messageUpdate]);
+  }, [user, messages, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
   
   // Get seller's requests
   const sellerRequests = useMemo(() => {
@@ -285,7 +270,6 @@ export function useSellerMessages() {
   const handleDecline = useCallback((customRequestId: string) => {
     if (!user) return;
     
-    // Changed from 'declined' to 'rejected' to match RequestStatus type
     respondToRequest(customRequestId, 'rejected', undefined, undefined, user.username);
     
     const request = requests.find(r => r.id === customRequestId);
@@ -349,8 +333,8 @@ export function useSellerMessages() {
     addSellerNotification(user.username, `Custom request modified and sent to buyer!`);
   }, [editRequestId, editTitle, editPrice, editMessage, user, requests, respondToRequest, sendMessage, addSellerNotification]);
   
-  // Add emoji to message
-  const addEmoji = useCallback((emoji: string) => {
+  // Handle emoji click
+  const handleEmojiClick = useCallback((emoji: string) => {
     setReplyMessage(prev => prev + emoji);
     
     setRecentEmojis(prev => {
@@ -432,11 +416,12 @@ export function useSellerMessages() {
     selectedImage,
     setSelectedImage,
     isImageLoading,
+    setIsImageLoading,
     imageError,
+    setImageError,
     showEmojiPicker,
     setShowEmojiPicker,
     recentEmojis,
-    addEmoji,
     
     // Custom requests
     sellerRequests,
@@ -459,6 +444,7 @@ export function useSellerMessages() {
     handleEditSubmit,
     handleImageSelect,
     handleMessageVisible,
+    handleEmojiClick,
     
     // Status
     isUserBlocked,

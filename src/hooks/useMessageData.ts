@@ -33,7 +33,9 @@ export function useMessageData() {
     unblockUser,
     reportUser,
     isBlocked,
-    hasReported
+    hasReported,
+    getThreadsForUser,
+    getAllThreadsInfo
   } = useMessages();
   const { getRequestsForUser, respondToRequest } = useRequests();
   
@@ -82,7 +84,7 @@ export function useMessageData() {
     }
   }, [messageUpdate, user]);
 
-  // Memoize messages data
+  // UPDATED: Use new helper functions from MessageContext
   const { 
     threads, 
     unreadCounts, 
@@ -90,54 +92,42 @@ export function useMessageData() {
     buyerProfiles, 
     totalUnreadCount 
   } = useMemo(() => {
-    const threads: { [buyer: string]: Message[] } = {};
+    if (!user) return { 
+      threads: {}, 
+      unreadCounts: {}, 
+      lastMessages: {}, 
+      buyerProfiles: {}, 
+      totalUnreadCount: 0 
+    };
+    
+    // Use the new helper functions (determine role based on context where this hook is used)
+    const threads = getThreadsForUser(user.username);
+    const threadInfos = getAllThreadsInfo(user.username);
+    
     const unreadCounts: { [buyer: string]: number } = {};
     const lastMessages: { [buyer: string]: Message } = {};
     const buyerProfiles: { [buyer: string]: { pic: string | null, verified: boolean } } = {};
     let totalUnreadCount = 0;
     
-    if (user) {
-      const sellerMessages = Object.values(messages)
-        .flat()
-        .filter(
-          (msg: Message) =>
-            msg.sender === user.username || msg.receiver === user.username
-        );
-        
-      sellerMessages.forEach((msg) => {
-        const otherParty =
-          msg.sender === user.username ? msg.receiver : msg.sender;
-        if (!threads[otherParty]) threads[otherParty] = [];
-        threads[otherParty].push(msg);
-      });
+    Object.entries(threadInfos).forEach(([buyer, info]) => {
+      unreadCounts[buyer] = info.unreadCount;
+      lastMessages[buyer] = info.lastMessage as Message;
       
-      Object.values(threads).forEach((thread) =>
-        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      );
+      // Get buyer profile picture and verification status
+      const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
+      const buyerInfo = users?.[buyer];
+      const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
       
-      Object.entries(threads).forEach(([buyer, msgs]) => {
-        lastMessages[buyer] = msgs[msgs.length - 1];
-        
-        const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
-        const buyerInfo = users?.[buyer];
-        const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
-        
-        buyerProfiles[buyer] = { 
-          pic: storedPic, 
-          verified: isVerified
-        };
-        
-        const threadUnreadCount = msgs.filter(
-          (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
-        ).length;
-        
-        unreadCounts[buyer] = threadUnreadCount;
-        
-        if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
-          totalUnreadCount += threadUnreadCount;
-        }
-      });
-    }
+      buyerProfiles[buyer] = { 
+        pic: storedPic, 
+        verified: isVerified
+      };
+      
+      // Only add to total if not in readThreadsRef
+      if (!readThreadsRef.current.has(buyer) && info.unreadCount > 0) {
+        totalUnreadCount += info.unreadCount;
+      }
+    });
     
     return { 
       threads, 
@@ -146,7 +136,7 @@ export function useMessageData() {
       buyerProfiles, 
       totalUnreadCount 
     };
-  }, [user, messages, users, messageUpdate]);
+  }, [user, messages, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
 
   // Memoize sellerRequests
   const sellerRequests = useMemo(() => {
