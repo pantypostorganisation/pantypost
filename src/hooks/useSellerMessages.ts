@@ -22,7 +22,7 @@ export function useSellerMessages() {
     getMessagesForUsers 
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
-  const { createOrder, wallet } = useWallet();
+  const { wallet } = useWallet(); // Removed createOrder as it doesn't exist
   
   // State for UI
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -285,7 +285,8 @@ export function useSellerMessages() {
   const handleDecline = useCallback((customRequestId: string) => {
     if (!user) return;
     
-    respondToRequest(customRequestId, 'declined', undefined, undefined, user.username);
+    // Changed from 'declined' to 'rejected' to match RequestStatus type
+    respondToRequest(customRequestId, 'rejected', undefined, undefined, user.username);
     
     const request = requests.find(r => r.id === customRequestId);
     if (request) {
