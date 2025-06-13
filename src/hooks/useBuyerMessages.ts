@@ -506,9 +506,10 @@ export function useBuyerMessages() {
     const priceValue = Number(editPrice);
     const tagsArray = editTags.split(',').map((t) => t.trim()).filter(Boolean);
     
+    // CRITICAL: Set status to 'edited' instead of 'pending' when editing
     respondToRequest(
       editRequestId,
-      'pending',
+      'edited', // Changed from 'pending' to 'edited'
       editMessage,
       {
         title: editTitle,
@@ -516,7 +517,7 @@ export function useBuyerMessages() {
         tags: tagsArray,
         description: editMessage,
       },
-      user.username
+      user.username // This tracks who made the edit
     );
 
     setEditRequestId(null);
@@ -527,13 +528,13 @@ export function useBuyerMessages() {
   }, [user, activeThread, editRequestId, editTitle, editPrice, editTags, editMessage, respondToRequest]);
 
   const handleAccept = useCallback((req: any) => {
-    if (req && req.status === 'pending') {
+    if (req && (req.status === 'pending' || req.status === 'edited')) {
       respondToRequest(req.id, 'accepted');
     }
   }, [respondToRequest]);
   
   const handleDecline = useCallback((req: any) => {
-    if (req && req.status === 'pending') {
+    if (req && (req.status === 'pending' || req.status === 'edited')) {
       respondToRequest(req.id, 'rejected');
     }
   }, [respondToRequest]);

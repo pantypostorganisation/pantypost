@@ -21,41 +21,27 @@ export interface MessageItemProps {
   activeThread: string;
   onMessageVisible: (msg: Message) => void;
   customReq?: CustomRequest;
-  isLatestCustom: boolean;
-  isPaid: boolean;
-  handleAccept: (req: CustomRequest) => void;
-  handleDecline: (req: CustomRequest) => void;
-  handleEditRequest: (req: CustomRequest) => void;
-  editRequestId: string | null;
-  editTitle: string;
-  setEditTitle: (title: string) => void;
-  editPrice: number | '';
-  setEditPrice: (price: number | '') => void;
-  editMessage: string;
-  setEditMessage: (message: string) => void;
-  handleEditSubmit: () => void;
-  setEditRequestId: (id: string | null) => void;
-  statusBadge: (status: string) => React.ReactElement;
+  isLatestCustom?: boolean;
+  isPaid?: boolean;
+  handleAccept?: (req: CustomRequest) => void;
+  handleDecline?: (req: CustomRequest) => void;
+  handleEditRequest?: (req: CustomRequest) => void;
+  editRequestId?: string | null;
+  editTitle?: string;
+  setEditTitle?: (title: string) => void;
+  editPrice?: number | '';
+  setEditPrice?: (price: number | '') => void;
+  editMessage?: string;
+  setEditMessage?: (message: string) => void;
+  handleEditSubmit?: () => void;
+  setEditRequestId?: (id: string | null) => void;
+  statusBadge?: (status: string) => React.ReactElement;
   setPreviewImage: (url: string | null) => void;
-  showPayNow: boolean;
-  handlePayNow: (req: CustomRequest) => void;
-  markupPrice: number;
-  canPay: boolean;
-  showEditButton?: boolean; // Add this optional prop
-}
-
-// Determine if the user is the last editor of a custom request
-function isLastEditor(customReq: CustomRequest | undefined, threadMessages: Message[], user: any): boolean {
-  if (!customReq) return false;
-  const lastMsg = threadMessages
-    .filter(
-      (msg) =>
-        msg.type === 'customRequest' &&
-        msg.meta &&
-        msg.meta.id === customReq.id
-    )
-    .slice(-1)[0];
-  return lastMsg && lastMsg.sender === user?.username;
+  showPayNow?: boolean;
+  handlePayNow?: (req: CustomRequest) => void;
+  markupPrice?: number;
+  canPay?: boolean;
+  showEditButton?: boolean;
 }
 
 export default function MessageItem({
@@ -66,34 +52,34 @@ export default function MessageItem({
   activeThread,
   onMessageVisible,
   customReq,
-  isLatestCustom,
-  isPaid,
+  isLatestCustom = false,
+  isPaid = false,
   handleAccept,
   handleDecline,
   handleEditRequest,
   editRequestId,
-  editTitle,
+  editTitle = '',
   setEditTitle,
-  editPrice,
+  editPrice = '',
   setEditPrice,
-  editMessage,
+  editMessage = '',
   setEditMessage,
   handleEditSubmit,
   setEditRequestId,
   statusBadge,
   setPreviewImage,
-  showPayNow,
+  showPayNow = false,
   handlePayNow,
-  markupPrice,
-  canPay,
-  showEditButton = true // Default to true to maintain existing behavior
+  markupPrice = 0,
+  canPay = false,
+  showEditButton = true
 }: MessageItemProps) {
   const messageRef = useRef<HTMLDivElement>(null);
   const [hasBeenVisible, setHasBeenVisible] = useState(false);
 
   // Use Intersection Observer to track when message becomes visible
   useIntersectionObserver(messageRef, {
-    threshold: 0.8, // Message is considered "read" when 80% visible
+    threshold: 0.8,
     onIntersect: () => {
       if (!hasBeenVisible && !isFromMe && !msg.read) {
         setHasBeenVisible(true);
@@ -110,11 +96,19 @@ export default function MessageItem({
   // Check if message contains only a single emoji
   const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
 
-  // Determine if we should show action buttons
+  // CRITICAL FIX: Determine if the current user is the last editor
+  // If someone edited the request, the OTHER party needs to respond
+  const isLastEditor = customReq && customReq.lastModifiedBy === user?.username;
+  
+  // Show action buttons only if:
+  // 1. It's the latest custom request
+  // 2. The request is pending or edited
+  // 3. The current user is NOT the last editor (it's been thrown back to them)
   const showActionButtons = !!customReq &&
     isLatestCustom &&
-    customReq.status === 'pending' &&
-    customReq.lastModifiedBy !== user?.username;
+    (customReq.status === 'pending' || customReq.status === 'edited') &&
+    !isLastEditor &&
+    !isPaid;
 
   return (
     <div ref={messageRef} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
@@ -184,15 +178,32 @@ export default function MessageItem({
             {(customReq ? customReq.description : msg.meta.message) && (
               <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
             )}
-            {customReq && (
+            {customReq && statusBadge && (
               <p className={`flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
                 <b>Status:</b>
                 {statusBadge(customReq.status)}
               </p>
             )}
             
+            {/* Show who needs to take action */}
+            {customReq && isLatestCustom && (customReq.status === 'pending' || customReq.status === 'edited') && !isPaid && (
+              <p className={`text-xs italic ${isFromMe ? 'text-black/70' : 'text-[#fefefe]/70'}`}>
+                {isLastEditor ? (
+                  <span className="flex items-center">
+                    <Clock size={12} className="mr-1" />
+                    Waiting for {activeThread} to respond...
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <AlertTriangle size={12} className="mr-1" />
+                    Action required from you
+                  </span>
+                )}
+              </p>
+            )}
+            
             {/* Edit form */}
-            {editRequestId === customReq?.id && customReq && (
+            {editRequestId === customReq?.id && customReq && setEditTitle && setEditPrice && setEditMessage && handleEditSubmit && setEditRequestId && (
               <div className="mt-3 space-y-2 bg-white/90 p-3 rounded border border-black/20 shadow-sm">
                 <input
                   type="text"
@@ -248,7 +259,7 @@ export default function MessageItem({
             )}
             
             {/* Action buttons for custom requests */}
-            {showActionButtons && !isPaid && (
+            {showActionButtons && handleAccept && handleDecline && handleEditRequest && (
               <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   onClick={(e) => {
@@ -285,8 +296,8 @@ export default function MessageItem({
               </div>
             )}
             
-            {/* Pay now button */}
-            {showPayNow && (
+            {/* Pay now button - only show for buyer when accepted */}
+            {showPayNow && customReq?.status === 'accepted' && handlePayNow && (
               <div className="flex flex-col gap-2 pt-2">
                 {isPaid ? (
                   <span className="text-green-400 font-bold flex items-center">
