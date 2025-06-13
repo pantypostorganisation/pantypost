@@ -1,15 +1,17 @@
 // src/hooks/useBuyerMessages.ts
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
+import { useListings } from '@/context/ListingContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
-import { v4 as uuidv4 } from 'uuid';
-import { MAX_IMAGE_SIZE, ALLOWED_IMAGE_TYPES } from '@/constants/emojis';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-// Types
+// Constants
+const ADMIN_ACCOUNTS = ['oakley', 'gerome'];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
 type Message = {
   sender: string;
   receiver: string;
@@ -25,12 +27,6 @@ type Message = {
     message?: string;
     imageUrl?: string;
   };
-};
-
-type CustomRequestForm = {
-  title: string;
-  price: string;
-  description: string;
 };
 
 export function useBuyerMessages() {
@@ -51,14 +47,14 @@ export function useBuyerMessages() {
   const { wallet, purchaseCustomRequest, sendTip } = useWallet();
   const searchParams = useSearchParams();
   
-  // Component state
+  // State hooks
   const [mounted, setMounted] = useState(false);
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   
   // Custom Request Modal State
   const [showCustomRequestModal, setShowCustomRequestModal] = useState(false);
-  const [customRequestForm, setCustomRequestForm] = useState<CustomRequestForm>({
+  const [customRequestForm, setCustomRequestForm] = useState({
     title: '',
     price: '',
     description: ''
@@ -66,66 +62,64 @@ export function useBuyerMessages() {
   const [customRequestErrors, setCustomRequestErrors] = useState<Record<string, string>>({});
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   
-  // Edit request state
   const [editRequestId, setEditRequestId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPrice, setEditPrice] = useState<number | ''>('');
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
-  
-  // Payment state
   const [showPayModal, setShowPayModal] = useState(false);
   const [payingRequest, setPayingRequest] = useState<any>(null);
-  
-  // Image state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [isImageLoading, setIsImageLoading] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
-  
-  // UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'messages' | 'favorites' | 'requests'>('messages');
   const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
   const [showTipModal, setShowTipModal] = useState(false);
   const [tipAmount, setTipAmount] = useState<string>('');
   const [tipResult, setTipResult] = useState<{success: boolean, message: string} | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [messageUpdate, setMessageUpdate] = useState(0);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
   const [observerReadMessages, setObserverReadMessages] = useState<Set<string>>(new Set());
   
-  // Refs
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  // Ref hooks
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const readThreadsRef = useRef<Set<string>>(new Set());
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastManualScrollTime = useRef<number>(0);
   
-  // Check if user is admin
-  const isAdmin = user && (user.username === 'oakley' || user.username === 'gerome');
+  // Get URL parameter
+  const threadParam = searchParams?.get('thread');
   
-  // Initialize from URL params
+  // Basic derived values
+  const username = user?.username || '';
+  const isAdmin = user?.username && ADMIN_ACCOUNTS.includes(user.username);
+
+  // Set mounted to true after component mounts
   useEffect(() => {
     setMounted(true);
-    const seller = searchParams.get('seller');
-    if (seller) {
-      setActiveThread(seller);
-    }
-  }, [searchParams]);
-  
-  // Clean up image on unmount
+  }, []);
+
+  // Load recent emojis from localStorage on component mount
   useEffect(() => {
-    return () => {
-      if (selectedImage) {
-        URL.revokeObjectURL(selectedImage);
+    const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
+    if (storedRecentEmojis) {
+      try {
+        const parsed = JSON.parse(storedRecentEmojis);
+        if (Array.isArray(parsed)) {
+          setRecentEmojis(parsed.slice(0, 30));
+        }
+      } catch (e) {
+        console.error('Failed to parse recent emojis', e);
       }
-    };
-  }, [selectedImage]);
-  
-  // Load read threads from localStorage
-  useEffect(() => {
+    }
+    
+    // Load previously read threads from localStorage
     try {
       if (user) {
         const readThreadsKey = `panty_read_threads_${user.username}`;
@@ -142,7 +136,144 @@ export function useBuyerMessages() {
       console.error('Failed to load read threads', e);
     }
   }, [user]);
-  
+
+  // Save recent emojis to localStorage when they change
+  useEffect(() => {
+    if (recentEmojis.length > 0) {
+      localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
+    }
+  }, [recentEmojis]);
+
+  // Initialize the thread based on URL thread parameter
+  useEffect(() => {
+    if (threadParam && user) {
+      setActiveThread(threadParam);
+    }
+  }, [threadParam, user]);
+
+  // Handle clicks outside the emoji picker to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    const timeSinceManualScroll = Date.now() - lastManualScrollTime.current;
+    if (timeSinceManualScroll > 1000) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeThread, messages]);
+
+  // Memoize messages data
+  const { 
+    threads, 
+    unreadCounts, 
+    lastMessages, 
+    sellerProfiles, 
+    totalUnreadCount 
+  } = useMemo(() => {
+    const threads: { [seller: string]: any[] } = {};
+    const unreadCounts: { [seller: string]: number } = {};
+    const lastMessages: { [seller: string]: any } = {};
+    const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+    let totalUnreadCount = 0;
+    
+    if (user) {
+      // Get all messages for the user
+      Object.values(messages).forEach((msgs) => {
+        msgs.forEach((msg) => {
+          if (msg.sender === user.username || msg.receiver === user.username) {
+            const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+            if (!threads[otherParty]) threads[otherParty] = [];
+            threads[otherParty].push(msg);
+          }
+        });
+      });
+
+      // Sort messages in each thread by date
+      Object.values(threads).forEach((thread) =>
+        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      );
+      
+      // Get last message and unread count for each thread
+      Object.entries(threads).forEach(([seller, msgs]) => {
+        lastMessages[seller] = msgs[msgs.length - 1];
+        
+        // Get seller profile picture and verification status
+        const storedPic = sessionStorage.getItem(`profile_pic_${seller}`);
+        const sellerUser = users?.[seller];
+        const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
+        
+        sellerProfiles[seller] = { 
+          pic: storedPic, 
+          verified: isVerified
+        };
+        
+        // Count only messages FROM seller TO buyer as unread
+        const threadUnreadCount = msgs.filter(
+          (msg) => !msg.read && msg.sender === seller && msg.receiver === user?.username
+        ).length;
+        
+        unreadCounts[seller] = threadUnreadCount;
+        
+        // Only add to total if not in readThreadsRef
+        if (!readThreadsRef.current.has(seller) && threadUnreadCount > 0) {
+          totalUnreadCount += threadUnreadCount;
+        }
+      });
+    }
+    
+    return { threads, unreadCounts, lastMessages, sellerProfiles, totalUnreadCount };
+  }, [user, messages, users, messageUpdate]);
+
+  // Memoize buyerRequests
+  const buyerRequests = useMemo(() => {
+    return user ? getRequestsForUser(user.username, 'buyer') : [];
+  }, [user, getRequestsForUser]);
+
+  // Calculate UI unread count indicators
+  const uiUnreadCounts = useMemo(() => {
+    const counts: { [seller: string]: number } = {};
+    if (threads) {
+      Object.keys(threads).forEach(seller => {
+        counts[seller] = readThreadsRef.current.has(seller) ? 0 : unreadCounts[seller];
+      });
+    }
+    return counts;
+  }, [threads, unreadCounts, messageUpdate]);
+
+  // Handle message visibility from Intersection Observer
+  const handleMessageVisible = useCallback((msg: Message) => {
+    if (!user || msg.sender === user.username || msg.read) return;
+    
+    const messageId = `${msg.sender}-${msg.receiver}-${msg.date}`;
+    
+    if (observerReadMessages.has(messageId)) return;
+    
+    markMessagesAsRead(user.username, msg.sender);
+    
+    setObserverReadMessages(prev => new Set(prev).add(messageId));
+    
+    const threadUnreadCount = threads[msg.sender]?.filter(
+      m => !m.read && m.sender === msg.sender && m.receiver === user.username
+    ).length || 0;
+    
+    if (threadUnreadCount === 0 && !readThreadsRef.current.has(msg.sender)) {
+      readThreadsRef.current.add(msg.sender);
+      setMessageUpdate(prev => prev + 1);
+    }
+  }, [user, markMessagesAsRead, threads, observerReadMessages]);
+
   // Save read threads to localStorage
   useEffect(() => {
     if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
@@ -156,193 +287,86 @@ export function useBuyerMessages() {
       window.dispatchEvent(event);
     }
   }, [messageUpdate, user]);
-  
-  // Load recent emojis
-  useEffect(() => {
-    const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
-    if (storedRecentEmojis) {
-      try {
-        const parsed = JSON.parse(storedRecentEmojis);
-        if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 30));
-        }
-      } catch (e) {
-        console.error('Failed to parse recent emojis', e);
-      }
-    }
-  }, []);
-  
-  // Save recent emojis
-  useEffect(() => {
-    if (recentEmojis.length > 0) {
-      localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
-    }
-  }, [recentEmojis]);
-  
-  // Process messages to get threads
-  const { threads, unreadCounts, lastMessages, sellerProfiles, totalUnreadCount, buyerRequests } = useMemo(() => {
-    const threads: { [seller: string]: Message[] } = {};
-    const unreadCounts: { [seller: string]: number } = {};
-    const lastMessages: { [seller: string]: Message } = {};
-    const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
-    let totalUnreadCount = 0;
+
+  // Image handling with validation
+  const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target) return;
     
-    if (user) {
-      Object.entries(messages).forEach(([conversationKey, msgs]) => {
-        msgs.forEach((msg) => {
-          if (msg.sender === user.username || msg.receiver === user.username) {
-            const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-            
-            if (!threads[otherParty]) {
-              threads[otherParty] = [];
-              unreadCounts[otherParty] = 0;
-            }
-            
-            threads[otherParty].push(msg);
-            
-            if (msg.sender !== user.username && !msg.read && !observerReadMessages.has(`${msg.sender}-${msg.date}`)) {
-              unreadCounts[otherParty]++;
-              totalUnreadCount++;
-            }
-            
-            if (!lastMessages[otherParty] || new Date(msg.date) > new Date(lastMessages[otherParty].date)) {
-              lastMessages[otherParty] = msg;
-            }
-          }
-        });
-      });
-      
-      Object.keys(threads).forEach(seller => {
-        threads[seller].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        const sellerUser = users[seller];
-        sellerProfiles[seller] = {
-          pic: sellerUser?.profilePicture || null,
-          verified: sellerUser?.verified || sellerUser?.verificationStatus === 'verified' || false
-        };
-      });
-    }
+    const file = event.target.files?.[0];
+    setImageError(null);
     
-    const buyerRequests = user ? getRequestsForUser(user.username, 'buyer') : [];
-    
-    return { threads, unreadCounts, lastMessages, sellerProfiles, totalUnreadCount, buyerRequests };
-  }, [messages, user, users, getRequestsForUser, observerReadMessages]);
-  
-  // Get unread counts for UI
-  const uiUnreadCounts = useMemo(() => {
-    const counts: { [seller: string]: number } = {};
-    
-    Object.entries(threads).forEach(([seller, messages]) => {
-      let unreadCount = 0;
-      const isThreadRead = readThreadsRef.current.has(seller);
-      
-      messages.forEach(msg => {
-        if (msg.sender !== user?.username && !msg.read && !isThreadRead) {
-          unreadCount++;
-        }
-      });
-      
-      counts[seller] = unreadCount;
-    });
-    
-    return counts;
-  }, [threads, user, messageUpdate]);
-  
-  // Check if users are blocked
-  const isUserBlocked = useCallback((otherUser: string) => {
-    return user ? isBlocked(user.username, otherUser) : false;
-  }, [user, isBlocked]);
-  
-  const isUserReported = useCallback((otherUser: string) => {
-    return user ? hasReported(user.username, otherUser) : false;
-  }, [user, hasReported]);
-  
-  // Handlers
-  const handleBlock = useCallback((sellerUsername: string) => {
-    if (!user) return;
-    blockUser(user.username, sellerUsername);
-    setActiveThread(null);
-  }, [user, blockUser]);
-  
-  const handleUnblock = useCallback((sellerUsername: string) => {
-    if (!user) return;
-    unblockUser(user.username, sellerUsername);
-  }, [user, unblockUser]);
-  
-  const handleReport = useCallback((sellerUsername: string) => {
-    if (!user) return;
-    reportUser(user.username, sellerUsername);
-  }, [user, reportUser]);
-  
-  const handleBlockToggle = useCallback((sellerUsername: string) => {
-    if (isUserBlocked(sellerUsername)) {
-      handleUnblock(sellerUsername);
-    } else {
-      handleBlock(sellerUsername);
-    }
-  }, [isUserBlocked, handleBlock, handleUnblock]);
-  
-  // Message visibility handler
-  const handleMessageVisible = useCallback((msg: Message) => {
-    if (!user || msg.sender === user.username || msg.read) return;
-    
-    const messageKey = `${msg.sender}-${msg.date}`;
-    setObserverReadMessages(prev => new Set(prev).add(messageKey));
-    
-    setTimeout(() => {
-      markMessagesAsRead(msg.sender, user.username);
-    }, 1000);
-  }, [user, markMessagesAsRead]);
-  
-  // Handle image selection
-  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
     if (!file) return;
     
-    if (!file.type.startsWith('image/')) {
-      setImageError('Please select a valid image file');
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
       return;
     }
     
-    if (file.size > 10 * 1024 * 1024) {
-      setImageError('Image size should be less than 10MB');
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageError(`Image too large. Maximum size is ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
       return;
     }
     
     setIsImageLoading(true);
-    setImageError(null);
     
-    try {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setSelectedImage(event.target.result as string);
-          setIsImageLoading(false);
-        }
-      };
-      reader.onerror = () => {
-        setImageError('Failed to load image');
-        setIsImageLoading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      setImageError('Failed to process image');
+    const reader = new FileReader();
+    
+    reader.onloadend = () => {
+      setSelectedImage(reader.result as string);
       setIsImageLoading(false);
-    }
+    };
     
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    reader.onerror = () => {
+      setImageError("Failed to read the image file. Please try again.");
+      setIsImageLoading(false);
+    };
+    
+    reader.readAsDataURL(file);
   }, []);
-  
-  // Custom request validation
+
+  // Handle emoji selection
+  const handleEmojiClick = useCallback((emoji: string) => {
+    setReplyMessage(prev => prev + emoji);
+    
+    setRecentEmojis(prev => {
+      const filtered = prev.filter(e => e !== emoji);
+      return [emoji, ...filtered].slice(0, 30);
+    });
+    
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
+  }, []);
+
+  // Custom Request Modal Functions
+  const openCustomRequestModal = useCallback(() => {
+    setShowCustomRequestModal(true);
+    setCustomRequestForm({
+      title: '',
+      price: '',
+      description: ''
+    });
+    setCustomRequestErrors({});
+  }, []);
+
+  const closeCustomRequestModal = useCallback(() => {
+    setShowCustomRequestModal(false);
+    setCustomRequestForm({
+      title: '',
+      price: '',
+      description: ''
+    });
+    setCustomRequestErrors({});
+    setIsSubmittingRequest(false);
+  }, []);
+
   const validateCustomRequest = useCallback(() => {
     const errors: Record<string, string> = {};
     
     if (!customRequestForm.title.trim()) {
       errors.title = 'Title is required';
-    } else if (customRequestForm.title.trim().length < 3) {
-      errors.title = 'Title must be at least 3 characters';
     }
     
     if (!customRequestForm.price.trim()) {
@@ -350,37 +374,28 @@ export function useBuyerMessages() {
     } else {
       const price = parseFloat(customRequestForm.price);
       if (isNaN(price) || price <= 0) {
-        errors.price = 'Price must be a positive number';
-      } else if (price > 10000) {
-        errors.price = 'Price cannot exceed $10,000';
+        errors.price = 'Price must be a valid number greater than 0';
       }
     }
     
     if (!customRequestForm.description.trim()) {
       errors.description = 'Description is required';
-    } else if (customRequestForm.description.trim().length < 10) {
-      errors.description = 'Description must be at least 10 characters';
     }
     
     setCustomRequestErrors(errors);
     return Object.keys(errors).length === 0;
   }, [customRequestForm]);
-  
-  // Handle custom request submission
+
   const handleCustomRequestSubmit = useCallback(async () => {
-    if (!activeThread || !user) return;
-    
-    if (!validateCustomRequest()) {
-      return;
-    }
+    if (!activeThread || !user || !validateCustomRequest()) return;
     
     setIsSubmittingRequest(true);
     
     try {
       const priceValue = parseFloat(customRequestForm.price);
       const tagsArray: string[] = [];
-      const requestId = 'req_' + Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      
+      const requestId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
       addRequest({
         id: requestId,
         buyer: user.username,
@@ -395,7 +410,7 @@ export function useBuyerMessages() {
         lastModifiedBy: user.username,
         originalMessageId: requestId
       });
-      
+
       sendMessage(
         user.username,
         activeThread,
@@ -410,7 +425,7 @@ export function useBuyerMessages() {
           }
         }
       );
-      
+
       closeCustomRequestModal();
       
       setTimeout(() => {
@@ -423,45 +438,63 @@ export function useBuyerMessages() {
     } finally {
       setIsSubmittingRequest(false);
     }
-  }, [activeThread, user, customRequestForm, validateCustomRequest, addRequest, sendMessage]);
-  
-  // Close custom request modal
-  const closeCustomRequestModal = useCallback(() => {
-    setShowCustomRequestModal(false);
-    setCustomRequestForm({ title: '', price: '', description: '' });
-    setCustomRequestErrors({});
-    setIsSubmittingRequest(false);
-  }, []);
-  
-  // Handle message reply
+  }, [activeThread, user, customRequestForm, validateCustomRequest, addRequest, sendMessage, closeCustomRequestModal]);
+
+  // Message sending function
   const handleReply = useCallback(() => {
     if (!activeThread || !user) return;
-    
+
     const textContent = replyMessage.trim();
-    
+
     if (!textContent && !selectedImage) {
       return;
     }
-    
+
     sendMessage(user.username, activeThread, textContent, {
       type: selectedImage ? 'image' : 'normal',
-      meta: selectedImage ? { imageUrl: selectedImage } : undefined
+      meta: selectedImage ? { imageUrl: selectedImage } : undefined,
     });
-    
+
     setReplyMessage('');
     setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
     setShowEmojiPicker(false);
+    
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
   }, [activeThread, user, replyMessage, selectedImage, sendMessage]);
-  
-  // Edit request handlers
+
+  const handleBlockToggle = useCallback(() => {
+    if (!user || !activeThread) return;
+    if (isBlocked(user.username, activeThread)) {
+      unblockUser(user.username, activeThread);
+    } else {
+      blockUser(user.username, activeThread);
+    }
+  }, [user, activeThread, isBlocked, unblockUser, blockUser]);
+
+  const handleReport = useCallback(() => {
+    if (user && activeThread && !hasReported(user.username, activeThread)) {
+      reportUser(user.username, activeThread);
+    }
+  }, [user, activeThread, hasReported, reportUser]);
+
   const handleEditRequest = useCallback((req: any) => {
-    setEditRequestId(req.id);
+    if (!req || typeof req !== 'object') return;
+    
+    setEditRequestId(req.id || null);
     setEditPrice(typeof req.price === 'number' ? req.price : '');
     setEditTitle(req.title || '');
     setEditTags(Array.isArray(req.tags) ? req.tags.join(', ') : '');
     setEditMessage(req.description || '');
   }, []);
-  
+
   const handleEditSubmit = useCallback(() => {
     if (!user || !activeThread || !editRequestId) return;
     
@@ -485,15 +518,14 @@ export function useBuyerMessages() {
       },
       user.username
     );
-    
+
     setEditRequestId(null);
     setEditPrice('');
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
   }, [user, activeThread, editRequestId, editTitle, editPrice, editTags, editMessage, respondToRequest]);
-  
-  // Request action handlers
+
   const handleAccept = useCallback((req: any) => {
     if (req && req.status === 'pending') {
       respondToRequest(req.id, 'accepted');
@@ -505,13 +537,12 @@ export function useBuyerMessages() {
       respondToRequest(req.id, 'rejected');
     }
   }, [respondToRequest]);
-  
+
   const handlePayNow = useCallback((req: any) => {
     setPayingRequest(req);
     setShowPayModal(true);
   }, []);
-  
-  // Payment confirmation
+
   const handleConfirmPay = useCallback(() => {
     if (!user || !payingRequest) return;
     
@@ -526,78 +557,112 @@ export function useBuyerMessages() {
     const markupPrice = Math.round(basePrice * 1.1 * 100) / 100;
     const seller = payingRequest.seller;
     const buyer = user.username;
-    
+
     if (!seller || !buyer) {
       alert('Missing seller or buyer information.');
       setShowPayModal(false);
       setPayingRequest(null);
       return;
     }
-    
+
     if (wallet[buyer] === undefined || wallet[buyer] < markupPrice) {
       setShowPayModal(false);
       setPayingRequest(null);
       alert("Insufficient balance to complete this transaction.");
       return;
     }
-    
-    const success = purchaseCustomRequest({
+
+    const customRequestPurchase = {
       requestId: payingRequest.id,
       title: payingRequest.title,
-      description: payingRequest.description || '',
-      price: basePrice,
-      seller: seller,
+      description: payingRequest.description,
+      price: payingRequest.price,
+      seller: payingRequest.seller,
       buyer: buyer,
-      tags: payingRequest.tags || []
-    });
+      tags: payingRequest.tags
+    };
+
+    const success = purchaseCustomRequest(customRequestPurchase);
     
     if (success) {
       markRequestAsPaid(payingRequest.id);
-      setShowPayModal(false);
-      setPayingRequest(null);
-      alert('Payment successful! The seller has been notified.');
+      
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === payingRequest.id ? { ...r, paid: true, status: 'paid' } : r
+        )
+      );
+      
+      alert(`Payment successful! You paid ${markupPrice.toFixed(2)} for "${payingRequest.title}"`);
     } else {
-      alert('Payment failed. Please try again.');
+      alert("Payment failed. Please check your balance and try again.");
     }
-  }, [user, payingRequest, wallet, purchaseCustomRequest, markRequestAsPaid]);
-  
-  // Tip handling
+
+    setShowPayModal(false);
+    setPayingRequest(null);
+  }, [user, payingRequest, wallet, purchaseCustomRequest, markRequestAsPaid, setRequests]);
+
   const handleSendTip = useCallback(() => {
-    if (!user || !activeThread || !tipAmount || isNaN(Number(tipAmount))) {
-      setTipResult({ success: false, message: 'Invalid tip amount' });
+    if (!activeThread || !user) return;
+    
+    const amount = parseFloat(tipAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setTipResult({
+        success: false,
+        message: "Please enter a valid amount."
+      });
       return;
     }
     
-    const amount = Number(tipAmount);
-    if (amount <= 0) {
-      setTipResult({ success: false, message: 'Tip must be greater than 0' });
+    if (wallet[user.username] === undefined || wallet[user.username] < amount) {
+      setTipResult({
+        success: false,
+        message: "Insufficient balance to send this tip."
+      });
       return;
     }
     
     const success = sendTip(user.username, activeThread, amount);
-    
     if (success) {
-      setTipResult({ success: true, message: `Tip of $${amount.toFixed(2)} sent successfully!` });
+      sendMessage(
+        user.username,
+        activeThread,
+        `💰 I sent you a tip of ${amount.toFixed(2)}!`
+      );
       setTipAmount('');
-      sendMessage(user.username, activeThread, `💝 Sent you a tip of $${amount.toFixed(2)}!`);
+      setTipResult({
+        success: true,
+        message: `Successfully sent ${amount.toFixed(2)} tip to ${activeThread}!`
+      });
       setTimeout(() => {
         setShowTipModal(false);
         setTipResult(null);
-      }, 2000);
+      }, 1500);
     } else {
-      setTipResult({ success: false, message: 'Insufficient balance or tip failed' });
+      setTipResult({
+        success: false,
+        message: "Failed to send tip. Please check your wallet balance."
+      });
     }
-  }, [user, activeThread, tipAmount, sendTip, sendMessage]);
-  
-  // Emoji handling
-  const handleEmojiClick = useCallback((emoji: string) => {
-    setReplyMessage(prev => prev + emoji);
-    setRecentEmojis(prev => {
-      const filtered = prev.filter(e => e !== emoji);
-      return [emoji, ...filtered].slice(0, 30);
-    });
+  }, [activeThread, user, tipAmount, wallet, sendTip, sendMessage]);
+
+  // Handle scroll tracking for auto-scroll behavior
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      lastManualScrollTime.current = Date.now();
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
   }, []);
-  
+
+  // Derived values
+  const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
+  const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
+
   return {
     // Auth & context
     user,
@@ -679,6 +744,7 @@ export function useBuyerMessages() {
     emojiPickerRef,
     messagesEndRef,
     messagesContainerRef,
+    inputRef,
     lastManualScrollTime,
     
     // Actions
@@ -695,7 +761,7 @@ export function useBuyerMessages() {
     handleMessageVisible,
     handleEmojiClick,
     handleSendTip,
-    handleCustomRequestSubmit,
+    handleCustomRequestSubmit: handleCustomRequestSubmit,
     closeCustomRequestModal,
     validateCustomRequest,
     

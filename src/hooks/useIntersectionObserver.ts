@@ -1,9 +1,13 @@
 // src/hooks/useIntersectionObserver.ts
 import { useEffect } from 'react';
 
+interface IntersectionObserverOptions extends IntersectionObserverInit {
+  onIntersect: () => void;
+}
+
 export function useIntersectionObserver(
   targetRef: React.RefObject<HTMLElement | null>,
-  options: IntersectionObserverInit & { onIntersect: () => void }
+  options: IntersectionObserverOptions
 ) {
   useEffect(() => {
     const observer = new IntersectionObserver(
