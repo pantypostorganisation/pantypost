@@ -17,6 +17,7 @@ export default function MessageInputContainer({
   onBlockToggle 
 }: MessageInputContainerProps) {
   const {
+    activeThread,
     replyMessage,
     setReplyMessage,
     selectedImage,
@@ -62,7 +63,22 @@ export default function MessageInputContainer({
 
   // Handle reply with input focus
   const handleReplyWithFocus = useCallback(() => {
+    // Don't send if no active thread
+    if (!activeThread) {
+      console.error('No active thread to send message to');
+      return;
+    }
+
+    // Don't send if message is empty and no image
+    if (!replyMessage.trim() && !selectedImage) {
+      console.log('Cannot send empty message');
+      return;
+    }
+
+    console.log('Sending message:', { activeThread, replyMessage, hasImage: !!selectedImage });
+    
     handleReply();
+    
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -71,7 +87,7 @@ export default function MessageInputContainer({
         inputRef.current.focus();
       }
     }, 0);
-  }, [handleReply]);
+  }, [activeThread, replyMessage, selectedImage, handleReply]);
 
   // Handle image selection
   const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {

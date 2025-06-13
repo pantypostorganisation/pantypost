@@ -253,9 +253,26 @@ export function useSellerMessages() {
     }
   }, [user, markMessagesAsRead, threads, observerReadMessages]);
   
-  // Handle sending reply
+  // Handle sending reply - FIXED to ensure activeThread is checked
   const handleReply = useCallback(() => {
-    if (!activeThread || !user || (!replyMessage.trim() && !selectedImage)) return;
+    console.log('handleReply called', { activeThread, user, replyMessage, selectedImage });
+    
+    if (!activeThread) {
+      console.error('No active thread selected');
+      return;
+    }
+    
+    if (!user) {
+      console.error('No user logged in');
+      return;
+    }
+    
+    if (!replyMessage.trim() && !selectedImage) {
+      console.log('Nothing to send - empty message and no image');
+      return;
+    }
+
+    console.log('Sending message from', user.username, 'to', activeThread);
 
     sendMessage(user.username, activeThread, replyMessage.trim(), {
       type: selectedImage ? 'image' : 'normal',
@@ -265,6 +282,7 @@ export function useSellerMessages() {
     setReplyMessage('');
     setSelectedImage(null);
     setImageError(null);
+    setShowEmojiPicker(false);
   }, [activeThread, user, replyMessage, selectedImage, sendMessage]);
   
   // Handle block toggle
