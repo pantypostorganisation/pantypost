@@ -5,7 +5,6 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import ChatHeader from './ChatHeader';
 import MessagesList from './MessagesList';
 import MessageInputContainer from './MessageInputContainer';
-import { useSellerMessages } from '@/hooks/useSellerMessages';
 
 interface ConversationViewProps {
   activeThread: string;
@@ -17,6 +16,36 @@ interface ConversationViewProps {
   handleReport: () => void;
   handleBlockToggle: () => void;
   user: any;
+  // Message input props
+  replyMessage: string;
+  setReplyMessage: (message: string) => void;
+  selectedImage: string | null;
+  setSelectedImage: (image: string | null) => void;
+  isImageLoading: boolean;
+  setIsImageLoading: (loading: boolean) => void;
+  imageError: string | null;
+  setImageError: (error: string | null) => void;
+  showEmojiPicker: boolean;
+  setShowEmojiPicker: (show: boolean) => void;
+  recentEmojis: string[];
+  handleReply: () => void;
+  handleEmojiClick: (emoji: string) => void;
+  handleImageSelect: (file: File) => void;
+  // Message handlers
+  handleAccept: (requestId: string) => void;
+  handleDecline: (requestId: string) => void;
+  handleEditRequest: (requestId: string, title: string, price: number, message: string) => void;
+  handleEditSubmit: () => void;
+  handleMessageVisible: (msg: any) => void;
+  editRequestId: string | null;
+  setEditRequestId: (id: string | null) => void;
+  editPrice: number | '';
+  setEditPrice: (price: number | '') => void;
+  editTitle: string;
+  setEditTitle: (title: string) => void;
+  editMessage: string;
+  setEditMessage: (message: string) => void;
+  setPreviewImage: (url: string | null) => void;
 }
 
 export default function ConversationView({ 
@@ -28,7 +57,37 @@ export default function ConversationView({
   isUserReported,
   handleReport,
   handleBlockToggle,
-  user
+  user,
+  // Message input props
+  replyMessage,
+  setReplyMessage,
+  selectedImage,
+  setSelectedImage,
+  isImageLoading,
+  setIsImageLoading,
+  imageError,
+  setImageError,
+  showEmojiPicker,
+  setShowEmojiPicker,
+  recentEmojis,
+  handleReply,
+  handleEmojiClick,
+  handleImageSelect,
+  // Message handlers
+  handleAccept,
+  handleDecline,
+  handleEditRequest,
+  handleEditSubmit,
+  handleMessageVisible,
+  editRequestId,
+  setEditRequestId,
+  editPrice,
+  setEditPrice,
+  editTitle,
+  setEditTitle,
+  editMessage,
+  setEditMessage,
+  setPreviewImage
 }: ConversationViewProps) {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -81,6 +140,20 @@ export default function ConversationView({
             sellerRequests={sellerRequests}
             user={user}
             activeThread={activeThread}
+            handleAccept={handleAccept}
+            handleDecline={handleDecline}
+            handleEditRequest={handleEditRequest}
+            handleEditSubmit={handleEditSubmit}
+            handleMessageVisible={handleMessageVisible}
+            editRequestId={editRequestId}
+            setEditRequestId={setEditRequestId}
+            editPrice={editPrice}
+            setEditPrice={setEditPrice}
+            editTitle={editTitle}
+            setEditTitle={setEditTitle}
+            editMessage={editMessage}
+            setEditMessage={setEditMessage}
+            setPreviewImage={setPreviewImage}
           />
           
           {/* Auto-scroll anchor */}
@@ -92,6 +165,21 @@ export default function ConversationView({
       <MessageInputContainer 
         isUserBlocked={isUserBlocked}
         onBlockToggle={handleBlockToggle}
+        activeThread={activeThread}
+        replyMessage={replyMessage}
+        setReplyMessage={setReplyMessage}
+        selectedImage={selectedImage}
+        setSelectedImage={setSelectedImage}
+        isImageLoading={isImageLoading}
+        setIsImageLoading={setIsImageLoading}
+        imageError={imageError}
+        setImageError={setImageError}
+        showEmojiPicker={showEmojiPicker}
+        setShowEmojiPicker={setShowEmojiPicker}
+        recentEmojis={recentEmojis}
+        handleReply={handleReply}
+        handleEmojiClick={handleEmojiClick}
+        handleImageSelect={handleImageSelect}
       />
     </>
   );

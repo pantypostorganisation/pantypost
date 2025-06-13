@@ -4,34 +4,47 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import MessageInput from './MessageInput';
 import EmojiPicker from './EmojiPicker';
-import { useSellerMessages } from '@/hooks/useSellerMessages';
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE } from '@/constants/emojis';
 
 interface MessageInputContainerProps {
   isUserBlocked: boolean;
   onBlockToggle: () => void;
+  activeThread: string;
+  replyMessage: string;
+  setReplyMessage: (message: string) => void;
+  selectedImage: string | null;
+  setSelectedImage: (image: string | null) => void;
+  isImageLoading: boolean;
+  setIsImageLoading: (loading: boolean) => void;
+  imageError: string | null;
+  setImageError: (error: string | null) => void;
+  showEmojiPicker: boolean;
+  setShowEmojiPicker: (show: boolean) => void;
+  recentEmojis: string[];
+  handleReply: () => void;
+  handleEmojiClick: (emoji: string) => void;
+  handleImageSelect: (file: File) => void;
 }
 
 export default function MessageInputContainer({ 
   isUserBlocked, 
-  onBlockToggle 
+  onBlockToggle,
+  activeThread,
+  replyMessage,
+  setReplyMessage,
+  selectedImage,
+  setSelectedImage,
+  isImageLoading,
+  setIsImageLoading,
+  imageError,
+  setImageError,
+  showEmojiPicker,
+  setShowEmojiPicker,
+  recentEmojis,
+  handleReply,
+  handleEmojiClick,
+  handleImageSelect
 }: MessageInputContainerProps) {
-  const {
-    activeThread,
-    replyMessage,
-    setReplyMessage,
-    selectedImage,
-    setSelectedImage,
-    imageError,
-    setImageError,
-    isImageLoading,
-    setIsImageLoading,
-    showEmojiPicker,
-    setShowEmojiPicker,
-    recentEmojis,
-    handleEmojiClick,
-    handleReply
-  } = useSellerMessages();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -63,9 +76,11 @@ export default function MessageInputContainer({
 
   // Handle reply with input focus
   const handleReplyWithFocus = useCallback(() => {
+    console.log('handleReplyWithFocus called', { activeThread, replyMessage, hasImage: !!selectedImage });
+    
     // Don't send if no active thread
     if (!activeThread) {
-      console.error('No active thread to send message to');
+      console.error('No active thread selected');
       return;
     }
 
@@ -75,7 +90,7 @@ export default function MessageInputContainer({
       return;
     }
 
-    console.log('Sending message:', { activeThread, replyMessage, hasImage: !!selectedImage });
+    console.log('Calling handleReply...');
     
     handleReply();
     
@@ -89,12 +104,12 @@ export default function MessageInputContainer({
     }, 0);
   }, [activeThread, replyMessage, selectedImage, handleReply]);
 
-  // Handle image selection
-  const handleImageSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image selection from file input
+  const handleImageSelectFromInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    setImageError(null);
-    
     if (!file) return;
+    
+    setImageError(null);
     
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
@@ -106,22 +121,8 @@ export default function MessageInputContainer({
       return;
     }
     
-    setIsImageLoading(true);
-    
-    const reader = new FileReader();
-    
-    reader.onloadend = () => {
-      setSelectedImage(reader.result as string);
-      setIsImageLoading(false);
-    };
-    
-    reader.onerror = () => {
-      setImageError("Failed to read the image file. Please try again.");
-      setIsImageLoading(false);
-    };
-    
-    reader.readAsDataURL(file);
-  }, [setImageError, setIsImageLoading, setSelectedImage]);
+    handleImageSelect(file);
+  }, [setImageError, handleImageSelect]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -163,7 +164,7 @@ export default function MessageInputContainer({
         onBlockToggle={onBlockToggle}
         fileInputRef={fileInputRef}
         emojiPickerRef={emojiPickerRef}
-        onImageSelect={handleImageSelect}
+        onImageSelect={handleImageSelectFromInput}
       />
     </div>
   );

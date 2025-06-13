@@ -3,38 +3,48 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import MessageItem from './MessageItem';
-import { useSellerMessages } from '@/hooks/useSellerMessages';
 
 interface MessagesListProps {
   threadMessages: any[];
   sellerRequests: any[];
   user: any;
   activeThread: string;
+  handleAccept: (requestId: string) => void;
+  handleDecline: (requestId: string) => void;
+  handleEditRequest: (requestId: string, title: string, price: number, message: string) => void;
+  handleEditSubmit: () => void;
+  handleMessageVisible: (msg: any) => void;
+  editRequestId: string | null;
+  setEditRequestId: (id: string | null) => void;
+  editPrice: number | '';
+  setEditPrice: (price: number | '') => void;
+  editTitle: string;
+  setEditTitle: (title: string) => void;
+  editMessage: string;
+  setEditMessage: (message: string) => void;
+  setPreviewImage: (url: string | null) => void;
 }
 
 export default function MessagesList({
   threadMessages,
   sellerRequests,
   user,
-  activeThread
+  activeThread,
+  handleAccept,
+  handleDecline,
+  handleEditRequest,
+  handleEditSubmit,
+  handleMessageVisible,
+  editRequestId,
+  setEditRequestId,
+  editPrice,
+  setEditPrice,
+  editTitle,
+  setEditTitle,
+  editMessage,
+  setEditMessage,
+  setPreviewImage
 }: MessagesListProps) {
-  const {
-    handleAccept,
-    handleDecline,
-    handleEditRequest,
-    handleEditSubmit,
-    editRequestId,
-    editTitle,
-    setEditTitle,
-    editPrice,
-    setEditPrice,
-    editMessage,
-    setEditMessage,
-    setEditRequestId,
-    handleMessageVisible,
-    setPreviewImage
-  } = useSellerMessages();
-
   // Helper to check if the current user was the last to edit a request
   const isLastEditor = (req: any) => {
     if (!req.editHistory || req.editHistory.length === 0) {

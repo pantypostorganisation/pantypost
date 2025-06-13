@@ -1,57 +1,91 @@
 // src/app/sellers/messages/page.tsx
 'use client';
 
-import React, { useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import BanCheck from '@/components/BanCheck';
+import React from 'react';
 import RequireAuth from '@/components/RequireAuth';
-import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
+import BanCheck from '@/components/BanCheck';
+import { useSellerMessages } from '@/hooks/useSellerMessages';
 import ThreadsSidebar from '@/components/sellers/messages/ThreadsSidebar';
 import ConversationView from '@/components/sellers/messages/ConversationView';
 import EmptyState from '@/components/sellers/messages/EmptyState';
-import { useSellerMessages } from '@/hooks/useSellerMessages';
+import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 
 export default function SellerMessagesPage() {
-  const searchParams = useSearchParams();
   const {
+    // Auth
     user,
-    activeThread,
-    setActiveThread,
-    previewImage,
-    setPreviewImage,
     isAdmin,
+    
+    // Messages & threads
     threads,
+    unreadCounts,
+    uiUnreadCounts,
     lastMessages,
     buyerProfiles,
     totalUnreadCount,
-    uiUnreadCounts,
+    activeThread,
+    setActiveThread,
+    
+    // UI State
+    previewImage,
+    setPreviewImage,
     searchQuery,
     setSearchQuery,
     filterBy,
     setFilterBy,
+    observerReadMessages,
     setObserverReadMessages,
+    
+    // Message input
+    replyMessage,
+    setReplyMessage,
+    selectedImage,
+    setSelectedImage,
+    isImageLoading,
+    setIsImageLoading,
+    imageError,
+    setImageError,
+    showEmojiPicker,
+    setShowEmojiPicker,
+    recentEmojis,
+    
+    // Custom requests
+    sellerRequests,
+    editRequestId,
+    setEditRequestId,
+    editPrice,
+    setEditPrice,
+    editTitle,
+    setEditTitle,
+    editMessage,
+    setEditMessage,
+    
+    // Actions
+    handleReply,
+    handleBlockToggle,
+    handleReport,
+    handleAccept,
+    handleDecline,
+    handleEditRequest,
+    handleEditSubmit,
+    handleImageSelect,
+    handleMessageVisible,
+    handleEmojiClick,
+    
+    // Status
     isUserBlocked,
     isUserReported,
-    handleReport,
-    handleBlockToggle,
-    sellerRequests
   } = useSellerMessages();
 
-  // Debug
-  useEffect(() => {
-    console.log('=== SellerMessagesPage ===');
-    console.log('activeThread:', activeThread);
-    console.log('threads:', Object.keys(threads));
-  }, [activeThread, threads]);
-
-  // Initialize thread from URL parameter
-  const threadParam = searchParams?.get('thread');
-  useEffect(() => {
-    if (threadParam && user) {
-      console.log('Setting activeThread from URL param:', threadParam);
-      setActiveThread(threadParam);
-    }
-  }, [threadParam, user, setActiveThread]);
+  if (!user) {
+    return (
+      <RequireAuth role="seller">
+        <div className="h-screen bg-black flex items-center justify-center">
+          <div className="text-white">Loading...</div>
+        </div>
+      </RequireAuth>
+    );
+  }
 
   return (
     <BanCheck>
@@ -60,8 +94,8 @@ export default function SellerMessagesPage() {
         
         <div className="h-screen bg-black flex flex-col overflow-hidden">
           <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-            {/* Pass all props to MessagesLayout children */}
-            <ThreadsSidebar 
+            {/* Left column - Message threads */}
+            <ThreadsSidebar
               isAdmin={isAdmin}
               threads={threads}
               lastMessages={lastMessages}
@@ -77,10 +111,10 @@ export default function SellerMessagesPage() {
               setObserverReadMessages={setObserverReadMessages}
             />
             
-            {/* Right column - Active conversation or empty state */}
+            {/* Right column - Active conversation */}
             <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
               {activeThread ? (
-                <ConversationView 
+                <ConversationView
                   activeThread={activeThread}
                   threads={threads}
                   buyerProfiles={buyerProfiles}
@@ -90,6 +124,36 @@ export default function SellerMessagesPage() {
                   handleReport={handleReport}
                   handleBlockToggle={handleBlockToggle}
                   user={user}
+                  // Pass all the props needed by MessageInputContainer
+                  replyMessage={replyMessage}
+                  setReplyMessage={setReplyMessage}
+                  selectedImage={selectedImage}
+                  setSelectedImage={setSelectedImage}
+                  isImageLoading={isImageLoading}
+                  setIsImageLoading={setIsImageLoading}
+                  imageError={imageError}
+                  setImageError={setImageError}
+                  showEmojiPicker={showEmojiPicker}
+                  setShowEmojiPicker={setShowEmojiPicker}
+                  recentEmojis={recentEmojis}
+                  handleReply={handleReply}
+                  handleEmojiClick={handleEmojiClick}
+                  handleImageSelect={handleImageSelect}
+                  // Pass message handlers
+                  handleAccept={handleAccept}
+                  handleDecline={handleDecline}
+                  handleEditRequest={handleEditRequest}
+                  handleEditSubmit={handleEditSubmit}
+                  handleMessageVisible={handleMessageVisible}
+                  editRequestId={editRequestId}
+                  setEditRequestId={setEditRequestId}
+                  editPrice={editPrice}
+                  setEditPrice={setEditPrice}
+                  editTitle={editTitle}
+                  setEditTitle={setEditTitle}
+                  editMessage={editMessage}
+                  setEditMessage={setEditMessage}
+                  setPreviewImage={setPreviewImage}
                 />
               ) : (
                 <EmptyState />
@@ -97,25 +161,10 @@ export default function SellerMessagesPage() {
             </div>
           </div>
           
+          {/* Bottom Padding */}
           <div className="py-6 bg-black"></div>
           
-          <style jsx global>{`
-            .emoji-button::before {
-              content: "";
-              display: block;
-              position: absolute;
-              width: 100%;
-              height: 100%;
-              border-radius: 50%;
-              background-color: black;
-              z-index: -1;
-            }
-            .emoji-button {
-              position: relative;
-              z-index: 1;
-            }
-          `}</style>
-          
+          {/* Image Preview Modal */}
           <ImagePreviewModal
             imageUrl={previewImage || ''}
             isOpen={!!previewImage}
