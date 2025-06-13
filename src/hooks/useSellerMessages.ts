@@ -7,6 +7,23 @@ import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import { v4 as uuidv4 } from 'uuid';
 
+type Message = {
+  sender: string;
+  receiver: string;
+  content: string;
+  date: string;
+  read?: boolean;
+  type?: 'normal' | 'customRequest' | 'image';
+  meta?: {
+    id?: string;
+    title?: string;
+    price?: number;
+    tags?: string[];
+    message?: string;
+    imageUrl?: string;
+  };
+};
+
 export function useSellerMessages() {
   const { user } = useAuth();
   const { addSellerNotification, users } = useListings();
@@ -18,9 +35,7 @@ export function useSellerMessages() {
     unblockUser, 
     reportUser, 
     isBlocked, 
-    hasReported,
-    getThreadsForUser,
-    getAllThreadsInfo
+    hasReported
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
   const { wallet } = useWallet();
@@ -51,13 +66,6 @@ export function useSellerMessages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
-  
-  // DEBUG: Track activeThread changes
-  useEffect(() => {
-    console.log('=== useSellerMessages activeThread changed ===');
-    console.log('New activeThread value:', activeThread);
-    console.log('Stack trace:', new Error().stack);
-  }, [activeThread]);
   
   // Reset when user changes
   useEffect(() => {
@@ -125,28 +133,43 @@ export function useSellerMessages() {
     }
   }, [recentEmojis]);
   
-  // UPDATED: Use new helper functions from MessageContext
+  // Process messages into threads
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
-    if (!user) return { 
-      threads: {}, 
-      unreadCounts: {}, 
-      lastMessages: {}, 
-      buyerProfiles: {}, 
-      totalUnreadCount: 0 
-    };
-    
-    // Use the new helper functions
-    const threads = getThreadsForUser(user.username, 'seller');
-    const threadInfos = getAllThreadsInfo(user.username, 'seller');
-    
+    const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
-    const lastMessages: { [buyer: string]: any } = {};
+    const lastMessages: { [buyer: string]: Message } = {};
     const buyerProfiles: { [buyer: string]: { pic: string | null, verified: boolean } } = {};
     let totalUnreadCount = 0;
     
-    Object.entries(threadInfos).forEach(([buyer, info]) => {
-      unreadCounts[buyer] = info.unreadCount;
-      lastMessages[buyer] = info.lastMessage;
+    if (!user) return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
+    
+    // Get all messages for the seller
+    Object.values(messages).forEach((msgs) => {
+      msgs.forEach((msg) => {
+        // Only include messages where the current user is the seller (receiver) or sender
+        if (msg.sender === user.username || msg.receiver === user.username) {
+          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+          
+          // Skip if other party is also a seller/admin (seller-to-seller messages)
+          const otherUser = users?.[otherParty];
+          if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
+            return;
+          }
+          
+          if (!threads[otherParty]) threads[otherParty] = [];
+          threads[otherParty].push(msg);
+        }
+      });
+    });
+    
+    // Sort messages in each thread by date
+    Object.values(threads).forEach((thread) =>
+      thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    );
+    
+    // Get last message and unread count for each thread
+    Object.entries(threads).forEach(([buyer, msgs]) => {
+      lastMessages[buyer] = msgs[msgs.length - 1];
       
       // Get buyer profile picture and verification status
       const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
@@ -158,14 +181,21 @@ export function useSellerMessages() {
         verified: isVerified
       };
       
+      // Count only messages FROM buyer TO seller as unread
+      const threadUnreadCount = msgs.filter(
+        (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
+      ).length;
+      
+      unreadCounts[buyer] = threadUnreadCount;
+      
       // Only add to total if not in readThreadsRef
-      if (!readThreadsRef.current.has(buyer) && info.unreadCount > 0) {
-        totalUnreadCount += info.unreadCount;
+      if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
+        totalUnreadCount += threadUnreadCount;
       }
     });
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user, messages, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
+  }, [user, messages, users, messageUpdate]);
   
   // Get seller's requests
   const sellerRequests = useMemo(() => {

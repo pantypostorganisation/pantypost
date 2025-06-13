@@ -4,27 +4,38 @@
 import React, { useMemo } from 'react';
 import { MessageCircle, Filter, BellRing, Search } from 'lucide-react';
 import ThreadListItem from './ThreadListItem';
-import { useSellerMessages } from '@/hooks/useSellerMessages';
 
 interface ThreadsSidebarProps {
   isAdmin: boolean;
+  threads: any;
+  lastMessages: any;
+  buyerProfiles: any;
+  totalUnreadCount: number;
+  uiUnreadCounts: any;
+  activeThread: string | null;
+  setActiveThread: (thread: string) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  filterBy: 'all' | 'unread';
+  setFilterBy: (filter: 'all' | 'unread') => void;
+  setObserverReadMessages: (messages: Set<string>) => void;
 }
 
-export default function ThreadsSidebar({ isAdmin }: ThreadsSidebarProps) {
-  const {
-    threads,
-    lastMessages,
-    buyerProfiles,
-    totalUnreadCount,
-    uiUnreadCounts,
-    activeThread,
-    setActiveThread,
-    searchQuery,
-    setSearchQuery,
-    filterBy,
-    setFilterBy,
-    setObserverReadMessages
-  } = useSellerMessages();
+export default function ThreadsSidebar({ 
+  isAdmin,
+  threads,
+  lastMessages,
+  buyerProfiles,
+  totalUnreadCount,
+  uiUnreadCounts,
+  activeThread,
+  setActiveThread,
+  searchQuery,
+  setSearchQuery,
+  filterBy,
+  setFilterBy,
+  setObserverReadMessages
+}: ThreadsSidebarProps) {
 
   // Filter and sort threads
   const filteredAndSortedThreads = useMemo(() => {
@@ -54,6 +65,7 @@ export default function ThreadsSidebar({ isAdmin }: ThreadsSidebarProps) {
     console.log('Trying to select buyer:', buyerId);
     console.log('Current activeThread:', activeThread);
     console.log('setActiveThread function exists:', !!setActiveThread);
+    console.log('Threads available:', Object.keys(threads));
     
     if (activeThread === buyerId) {
       console.log('Same thread already active, returning');
@@ -131,27 +143,15 @@ export default function ThreadsSidebar({ isAdmin }: ThreadsSidebarProps) {
           </div>
         ) : (
           filteredAndSortedThreads.map((buyer) => (
-            <div key={buyer}>
-              {/* Debug: Direct click handler */}
-              <div 
-                onClick={() => {
-                  console.log('Direct div clicked for buyer:', buyer);
-                  handleThreadSelect(buyer);
-                }}
-                style={{ cursor: 'pointer', padding: '2px', background: '#ff950e20' }}
-              >
-                <small style={{ color: '#ff950e' }}>Debug: Click here to select {buyer}</small>
-              </div>
-              
-              <ThreadListItem
-                buyer={buyer}
-                lastMessage={lastMessages[buyer]}
-                isActive={activeThread === buyer}
-                buyerProfile={buyerProfiles[buyer]}
-                unreadCount={uiUnreadCounts[buyer]}
-                onClick={() => handleThreadSelect(buyer)}
-              />
-            </div>
+            <ThreadListItem
+              key={buyer}
+              buyer={buyer}
+              lastMessage={lastMessages[buyer]}
+              isActive={activeThread === buyer}
+              buyerProfile={buyerProfiles[buyer]}
+              unreadCount={uiUnreadCounts[buyer]}
+              onClick={() => handleThreadSelect(buyer)}
+            />
           ))
         )}
       </div>

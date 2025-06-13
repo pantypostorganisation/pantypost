@@ -6,74 +6,55 @@ import ChatHeader from './ChatHeader';
 import MessagesList from './MessagesList';
 import MessageInputContainer from './MessageInputContainer';
 import { useSellerMessages } from '@/hooks/useSellerMessages';
-import { useMessages } from '@/context/MessageContext';
 
 interface ConversationViewProps {
   activeThread: string;
+  threads: any;
+  buyerProfiles: any;
+  sellerRequests: any[];
+  isUserBlocked: boolean;
+  isUserReported: boolean;
+  handleReport: () => void;
+  handleBlockToggle: () => void;
+  user: any;
 }
 
-export default function ConversationView({ activeThread }: ConversationViewProps) {
-  const {
-    user,
-    threads,
-    buyerProfiles,
-    sellerRequests,
-    isUserBlocked,
-    isUserReported,
-    handleReport,
-    handleBlockToggle
-  } = useSellerMessages();
-  
-  // Get the actual messages using the MessageContext helper
-  const { getMessagesForUsers, messages } = useMessages();
+export default function ConversationView({ 
+  activeThread,
+  threads,
+  buyerProfiles,
+  sellerRequests,
+  isUserBlocked,
+  isUserReported,
+  handleReport,
+  handleBlockToggle,
+  user
+}: ConversationViewProps) {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   
-  // Debug: Log what we have
-  useEffect(() => {
-    console.log('=== DEBUG ConversationView ===');
-    console.log('activeThread:', activeThread);
-    console.log('user:', user);
-    console.log('user.username:', user?.username);
-    console.log('All messages in context:', messages);
-    console.log('Threads from useSellerMessages:', threads);
-    
-    if (user && activeThread) {
-      // Try to get messages
-      const retrievedMessages = getMessagesForUsers(user.username, activeThread);
-      console.log('Retrieved messages for conversation:', retrievedMessages);
-      
-      // Check all possible conversation keys
-      const possibleKeys = [
-        `${user.username}-${activeThread}`,
-        `${activeThread}-${user.username}`,
-        [user.username, activeThread].sort().join('-')
-      ];
-      console.log('Checking possible conversation keys:', possibleKeys);
-      possibleKeys.forEach(key => {
-        console.log(`messages[${key}]:`, messages[key]);
-      });
-    }
-    console.log('=== END DEBUG ===');
-  }, [activeThread, user, messages, threads, getMessagesForUsers]);
-  
-  // Get messages for active thread using the proper conversation key
+  // Get messages for the active thread
   const threadMessages = useMemo(() => {
-    if (!activeThread || !user) {
-      console.log('No activeThread or user, returning empty array');
+    console.log('=== ConversationView threadMessages calculation ===');
+    console.log('activeThread:', activeThread);
+    console.log('threads:', threads);
+    console.log('threads keys:', Object.keys(threads));
+    
+    if (!activeThread || !threads[activeThread]) {
+      console.log('No activeThread or no messages for thread');
       return [];
     }
     
-    // Use the helper function that handles conversation keys properly
-    const messages = getMessagesForUsers(user.username, activeThread);
-    console.log('threadMessages from getMessagesForUsers:', messages);
+    // Messages are already filtered by thread in useSellerMessages
+    const messages = threads[activeThread] || [];
+    console.log('Thread messages for', activeThread, ':', messages);
     
     // Process custom request messages
     const processed = getLatestCustomRequestMessages(messages, sellerRequests);
     console.log('Processed messages:', processed);
     return processed;
-  }, [activeThread, user, sellerRequests, getMessagesForUsers]);
+  }, [activeThread, threads, sellerRequests]);
   
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -95,11 +76,6 @@ export default function ConversationView({ activeThread }: ConversationViewProps
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-[#121212]">
         <div className="max-w-3xl mx-auto space-y-4">
-          {/* Debug info */}
-          <div className="text-white bg-red-900 p-2 rounded">
-            DEBUG: activeThread={activeThread}, messages count={threadMessages.length}
-          </div>
-          
           <MessagesList 
             threadMessages={threadMessages}
             sellerRequests={sellerRequests}
@@ -113,12 +89,10 @@ export default function ConversationView({ activeThread }: ConversationViewProps
       </div>
       
       {/* Message input */}
-      {(
-        <MessageInputContainer 
-          isUserBlocked={isUserBlocked}
-          onBlockToggle={handleBlockToggle}
-        />
-      ) as any}
+      <MessageInputContainer 
+        isUserBlocked={isUserBlocked}
+        onBlockToggle={handleBlockToggle}
+      />
     </>
   );
 }

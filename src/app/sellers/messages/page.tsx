@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
-import MessagesLayout from '@/components/sellers/messages/MessagesLayout';
+import ThreadsSidebar from '@/components/sellers/messages/ThreadsSidebar';
 import ConversationView from '@/components/sellers/messages/ConversationView';
 import EmptyState from '@/components/sellers/messages/EmptyState';
 import { useSellerMessages } from '@/hooks/useSellerMessages';
@@ -19,32 +19,39 @@ export default function SellerMessagesPage() {
     setActiveThread,
     previewImage,
     setPreviewImage,
-    isAdmin
+    isAdmin,
+    threads,
+    lastMessages,
+    buyerProfiles,
+    totalUnreadCount,
+    uiUnreadCounts,
+    searchQuery,
+    setSearchQuery,
+    filterBy,
+    setFilterBy,
+    setObserverReadMessages,
+    isUserBlocked,
+    isUserReported,
+    handleReport,
+    handleBlockToggle,
+    sellerRequests
   } = useSellerMessages();
 
-  // Debug logging
+  // Debug
   useEffect(() => {
-    console.log('=== SellerMessagesPage Debug ===');
-    console.log('Current activeThread:', activeThread);
-    console.log('User:', user);
-  }, [activeThread, user]);
+    console.log('=== SellerMessagesPage ===');
+    console.log('activeThread:', activeThread);
+    console.log('threads:', Object.keys(threads));
+  }, [activeThread, threads]);
 
   // Initialize thread from URL parameter
   const threadParam = searchParams?.get('thread');
   useEffect(() => {
-    console.log('Thread param from URL:', threadParam);
     if (threadParam && user) {
-      console.log('Setting activeThread to:', threadParam);
+      console.log('Setting activeThread from URL param:', threadParam);
       setActiveThread(threadParam);
     }
   }, [threadParam, user, setActiveThread]);
-
-  // Add click handler debugging
-  const handleDebugClick = () => {
-    console.log('Debug button clicked, current activeThread:', activeThread);
-    console.log('Manually setting activeThread to "ab"');
-    setActiveThread('ab');
-  };
 
   return (
     <BanCheck>
@@ -52,31 +59,43 @@ export default function SellerMessagesPage() {
         <div className="py-3 bg-black"></div>
         
         <div className="h-screen bg-black flex flex-col overflow-hidden">
-          {/* Debug button */}
-          <button 
-            onClick={handleDebugClick}
-            className="fixed top-20 right-5 z-50 bg-red-600 text-white px-4 py-2 rounded"
-          >
-            Debug: Set activeThread to "ab"
-          </button>
-          
-          <MessagesLayout isAdmin={isAdmin}>
-            {activeThread ? (
-              <>
-                <div className="bg-yellow-600 text-black p-2">
-                  DEBUG: activeThread is set to: {activeThread}
-                </div>
-                <ConversationView activeThread={activeThread} />
-              </>
-            ) : (
-              <>
-                <div className="bg-red-600 text-white p-2">
-                  DEBUG: activeThread is NULL
-                </div>
+          <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
+            {/* Pass all props to MessagesLayout children */}
+            <ThreadsSidebar 
+              isAdmin={isAdmin}
+              threads={threads}
+              lastMessages={lastMessages}
+              buyerProfiles={buyerProfiles}
+              totalUnreadCount={totalUnreadCount}
+              uiUnreadCounts={uiUnreadCounts}
+              activeThread={activeThread}
+              setActiveThread={setActiveThread}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              filterBy={filterBy}
+              setFilterBy={setFilterBy}
+              setObserverReadMessages={setObserverReadMessages}
+            />
+            
+            {/* Right column - Active conversation or empty state */}
+            <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
+              {activeThread ? (
+                <ConversationView 
+                  activeThread={activeThread}
+                  threads={threads}
+                  buyerProfiles={buyerProfiles}
+                  sellerRequests={sellerRequests}
+                  isUserBlocked={isUserBlocked}
+                  isUserReported={isUserReported}
+                  handleReport={handleReport}
+                  handleBlockToggle={handleBlockToggle}
+                  user={user}
+                />
+              ) : (
                 <EmptyState />
-              </>
-            )}
-          </MessagesLayout>
+              )}
+            </div>
+          </div>
           
           <div className="py-6 bg-black"></div>
           
