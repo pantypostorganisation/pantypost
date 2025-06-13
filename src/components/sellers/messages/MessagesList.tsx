@@ -1,10 +1,9 @@
 // src/components/sellers/messages/MessagesList.tsx
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import MessageItem from './MessageItem';
 import { useSellerMessages } from '@/hooks/useSellerMessages';
-import { Clock, CheckCircle2, XCircle, Edit3, ShoppingBag } from 'lucide-react';
 
 interface MessagesListProps {
   threadMessages: any[];
@@ -13,17 +12,17 @@ interface MessagesListProps {
   activeThread: string;
 }
 
-export default function MessagesList({ 
-  threadMessages, 
-  sellerRequests, 
-  user, 
-  activeThread 
+export default function MessagesList({
+  threadMessages,
+  sellerRequests,
+  user,
+  activeThread
 }: MessagesListProps) {
   const {
-    handleMessageVisible,
     handleAccept,
     handleDecline,
     handleEditRequest,
+    handleEditSubmit,
     editRequestId,
     editTitle,
     setEditTitle,
@@ -31,80 +30,55 @@ export default function MessagesList({
     setEditPrice,
     editMessage,
     setEditMessage,
-    handleEditSubmit,
     setEditRequestId,
+    handleMessageVisible,
     setPreviewImage
   } = useSellerMessages();
 
-  // Determine if the user is the last editor
-  function isLastEditor(customReq: any) {
-    if (!customReq) return false;
-    const lastMsg = threadMessages
-      .filter(
-        (msg) =>
-          msg.type === 'customRequest' &&
-          msg.meta &&
-          msg.meta.id === customReq.id
-      )
-      .slice(-1)[0];
-    return lastMsg && lastMsg.sender === user?.username;
-  }
+  // Helper to check if the current user was the last to edit a request
+  const isLastEditor = (req: any) => {
+    if (!req.editHistory || req.editHistory.length === 0) {
+      return req.buyer === user?.username;
+    }
+    const lastEdit = req.editHistory[req.editHistory.length - 1];
+    return lastEdit.editedBy === user?.username;
+  };
 
-  // Status badge function
+  // Create status badge
   const createStatusBadge = (status: string) => {
-    let color = 'bg-yellow-400 text-black';
-    let label = status.toUpperCase();
-    let icon = <Clock size={12} className="mr-1" />;
-    
-    if (status === 'accepted') {
-      color = 'bg-green-500 text-white';
-      icon = <CheckCircle2 size={12} className="mr-1" />;
-    }
-    else if (status === 'rejected') {
-      color = 'bg-red-500 text-white';
-      icon = <XCircle size={12} className="mr-1" />;
-    }
-    else if (status === 'edited') {
-      color = 'bg-blue-500 text-white';
-      icon = <Edit3 size={12} className="mr-1" />;
-    }
-    else if (status === 'paid') {
-      color = 'bg-green-600 text-white';
-      icon = <ShoppingBag size={12} className="mr-1" />;
-    }
-    else if (status === 'pending') {
-      color = 'bg-yellow-400 text-black';
-      icon = <Clock size={12} className="mr-1" />;
-    }
-    
+    const badgeClasses: { [key: string]: string } = {
+      pending: "bg-yellow-500 text-black",
+      accepted: "bg-green-500 text-white",
+      declined: "bg-red-500 text-white",
+      paid: "bg-blue-500 text-white",
+      edited: "bg-purple-500 text-white",
+      cancelled: "bg-gray-500 text-white"
+    };
+
     return (
-      <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold flex items-center ${color} shadow-sm`}>
-        {icon}
-        {label}
+      <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${badgeClasses[status] || 'bg-gray-500 text-white'}`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
   };
+
+  // Fixed handleEditRequest wrapper - now correctly passes just the request object
+  const handleEditRequestWrapper = useCallback((req: any) => {
+    handleEditRequest(req.id, req.title, req.price, req.description || req.message || '');
+  }, [handleEditRequest]);
 
   return (
     <>
       {threadMessages.map((msg, index) => {
         const isFromMe = msg.sender === user?.username;
         
-        let customReq: any = undefined;
-        let metaId: string | undefined = undefined;
-        if (
-          msg.type === 'customRequest' &&
-          typeof msg.meta === 'object' &&
-          msg.meta !== null &&
-          'id' in msg.meta &&
-          typeof (msg.meta as any).id === 'string'
-        ) {
-          metaId = (msg.meta as any).id as string;
-          customReq = sellerRequests.find((r) => r.id === metaId);
-        }
+        // Find the custom request if this is a custom request message
+        const customReq = msg.type === 'customRequest' && msg.meta && msg.meta.id
+          ? sellerRequests.find(req => req.id === msg.meta.id)
+          : null;
 
-        const isLatestCustom =
-          !!customReq &&
+        // Only show action buttons on the LATEST custom request message
+        const isLatestCustom = !!customReq &&
           (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
           index === (threadMessages.length - 1) &&
           msg.type === 'customRequest';
@@ -132,7 +106,7 @@ export default function MessagesList({
             showActionButtons={showActionButtons}
             handleAccept={handleAccept}
             handleDecline={handleDecline}
-            handleEditRequest={handleEditRequest}
+            handleEditRequest={handleEditRequestWrapper}
             editRequestId={editRequestId}
             editTitle={editTitle}
             setEditTitle={setEditTitle}

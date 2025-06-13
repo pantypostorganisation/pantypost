@@ -50,10 +50,20 @@ export default function ThreadsSidebar({ isAdmin }: ThreadsSidebarProps) {
 
   // Handle thread selection
   const handleThreadSelect = (buyerId: string) => {
-    if (activeThread === buyerId) return;
+    console.log('=== ThreadsSidebar handleThreadSelect ===');
+    console.log('Trying to select buyer:', buyerId);
+    console.log('Current activeThread:', activeThread);
+    console.log('setActiveThread function exists:', !!setActiveThread);
     
+    if (activeThread === buyerId) {
+      console.log('Same thread already active, returning');
+      return;
+    }
+    
+    console.log('Calling setActiveThread with:', buyerId);
     setActiveThread(buyerId);
     setObserverReadMessages(new Set());
+    console.log('setActiveThread called');
   };
 
   return (
@@ -121,15 +131,27 @@ export default function ThreadsSidebar({ isAdmin }: ThreadsSidebarProps) {
           </div>
         ) : (
           filteredAndSortedThreads.map((buyer) => (
-            <ThreadListItem
-              key={buyer}
-              buyer={buyer}
-              lastMessage={lastMessages[buyer]}
-              isActive={activeThread === buyer}
-              buyerProfile={buyerProfiles[buyer]}
-              unreadCount={uiUnreadCounts[buyer]}
-              onClick={() => handleThreadSelect(buyer)}
-            />
+            <div key={buyer}>
+              {/* Debug: Direct click handler */}
+              <div 
+                onClick={() => {
+                  console.log('Direct div clicked for buyer:', buyer);
+                  handleThreadSelect(buyer);
+                }}
+                style={{ cursor: 'pointer', padding: '2px', background: '#ff950e20' }}
+              >
+                <small style={{ color: '#ff950e' }}>Debug: Click here to select {buyer}</small>
+              </div>
+              
+              <ThreadListItem
+                buyer={buyer}
+                lastMessage={lastMessages[buyer]}
+                isActive={activeThread === buyer}
+                buyerProfile={buyerProfiles[buyer]}
+                unreadCount={uiUnreadCounts[buyer]}
+                onClick={() => handleThreadSelect(buyer)}
+              />
+            </div>
           ))
         )}
       </div>

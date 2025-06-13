@@ -22,13 +22,29 @@ export default function SellerMessagesPage() {
     isAdmin
   } = useSellerMessages();
 
+  // Debug logging
+  useEffect(() => {
+    console.log('=== SellerMessagesPage Debug ===');
+    console.log('Current activeThread:', activeThread);
+    console.log('User:', user);
+  }, [activeThread, user]);
+
   // Initialize thread from URL parameter
   const threadParam = searchParams?.get('thread');
   useEffect(() => {
+    console.log('Thread param from URL:', threadParam);
     if (threadParam && user) {
+      console.log('Setting activeThread to:', threadParam);
       setActiveThread(threadParam);
     }
   }, [threadParam, user, setActiveThread]);
+
+  // Add click handler debugging
+  const handleDebugClick = () => {
+    console.log('Debug button clicked, current activeThread:', activeThread);
+    console.log('Manually setting activeThread to "ab"');
+    setActiveThread('ab');
+  };
 
   return (
     <BanCheck>
@@ -36,11 +52,29 @@ export default function SellerMessagesPage() {
         <div className="py-3 bg-black"></div>
         
         <div className="h-screen bg-black flex flex-col overflow-hidden">
+          {/* Debug button */}
+          <button 
+            onClick={handleDebugClick}
+            className="fixed top-20 right-5 z-50 bg-red-600 text-white px-4 py-2 rounded"
+          >
+            Debug: Set activeThread to "ab"
+          </button>
+          
           <MessagesLayout isAdmin={isAdmin}>
             {activeThread ? (
-              <ConversationView activeThread={activeThread} />
+              <>
+                <div className="bg-yellow-600 text-black p-2">
+                  DEBUG: activeThread is set to: {activeThread}
+                </div>
+                <ConversationView activeThread={activeThread} />
+              </>
             ) : (
-              <EmptyState />
+              <>
+                <div className="bg-red-600 text-white p-2">
+                  DEBUG: activeThread is NULL
+                </div>
+                <EmptyState />
+              </>
             )}
           </MessagesLayout>
           

@@ -25,12 +25,29 @@ export default function ThreadListItem({
   unreadCount,
   onClick
 }: ThreadListItemProps) {
+  
+  // Debug click handler
+  const handleClick = () => {
+    console.log('=== ThreadListItem Click Debug ===');
+    console.log('Buyer:', buyer);
+    console.log('onClick function exists:', !!onClick);
+    console.log('Calling onClick...');
+    
+    if (onClick) {
+      onClick();
+      console.log('onClick called successfully');
+    } else {
+      console.error('onClick is not defined!');
+    }
+  };
+  
   return (
     <div 
-      onClick={onClick}
+      onClick={handleClick}
       className={`flex items-center p-3 cursor-pointer relative border-b border-gray-800 ${
         isActive ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
       } transition-colors duration-150 ease-in-out`}
+      style={{ userSelect: 'none' }} // Prevent text selection on click
     >
       {/* Active indicator */}
       {isActive && (
@@ -38,7 +55,7 @@ export default function ThreadListItem({
       )}
       
       {/* Avatar with unread indicator */}
-      <div className="relative mr-3">
+      <div className="relative mr-3 pointer-events-none">
         <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
           {buyerProfile?.pic ? (
             <img src={buyerProfile.pic} alt={buyer} className="w-full h-full object-cover" />
@@ -63,7 +80,7 @@ export default function ThreadListItem({
       </div>
       
       {/* Message preview */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 pointer-events-none">
         <div className="flex justify-between">
           <h3 className="font-bold text-white truncate">{buyer}</h3>
           <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">

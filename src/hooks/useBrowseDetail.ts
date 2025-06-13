@@ -53,7 +53,7 @@ export const useBrowseDetail = () => {
   const listingId = Array.isArray(id) ? id[0] : id as string;
   const listing = listings.find((item) => item.id === listingId);
   const { purchaseListing, getBuyerBalance, updateOrderAddress } = useWallet();
-  const { sendMessage, getMessagesForSeller, markMessagesAsRead } = useMessages();
+  const { sendMessage, getMessagesForUsers, markMessagesAsRead } = useMessages();
   const { addRequest } = useRequests();
   const router = useRouter();
 
@@ -307,7 +307,7 @@ export const useBrowseDetail = () => {
 
   useEffect(() => {
     if (listing?.seller && currentUsername && !hasMarkedRef.current) {
-      markMessagesAsRead(listing.seller, currentUsername);
+      markMessagesAsRead(currentUsername, listing.seller);
       hasMarkedRef.current = true;
     }
   }, [listing?.seller, currentUsername, markMessagesAsRead]);

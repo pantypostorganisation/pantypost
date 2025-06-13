@@ -52,6 +52,13 @@ export function useSellerMessages() {
   
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
   
+  // DEBUG: Track activeThread changes
+  useEffect(() => {
+    console.log('=== useSellerMessages activeThread changed ===');
+    console.log('New activeThread value:', activeThread);
+    console.log('Stack trace:', new Error().stack);
+  }, [activeThread]);
+  
   // Reset when user changes
   useEffect(() => {
     readThreadsRef.current = new Set();
