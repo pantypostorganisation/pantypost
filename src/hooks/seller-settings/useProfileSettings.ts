@@ -19,12 +19,21 @@ export function useProfileSettings() {
 
   // Combined save handler
   const handleSaveAll = () => {
+    // If there's a preview, that becomes the new profile pic
+    const finalProfilePic = profileData.preview || profileData.profilePic;
+    
     save.handleSave({
       bio: profileData.bio,
-      profilePic: profileData.profilePic,
+      profilePic: finalProfilePic,
       subscriptionPrice: profileData.subscriptionPrice,
       galleryImages: gallery.galleryImages
     });
+    
+    // Clear preview after saving
+    if (profileData.preview) {
+      profileData.setProfilePic(finalProfilePic);
+      profileData.setPreview(null);
+    }
   };
 
   // Gallery save handlers

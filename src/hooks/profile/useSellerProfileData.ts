@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
+import { getUserProfileData } from '@/utils/profileUtils';
 
 export function useSellerProfileData(username: string) {
   const { user } = useAuth();
@@ -19,14 +20,16 @@ export function useSellerProfileData(username: string) {
   // Load profile data
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedBio = sessionStorage.getItem(`profile_bio_${username}`);
-      const storedPic = sessionStorage.getItem(`profile_pic_${username}`);
-      const storedSub = sessionStorage.getItem(`subscription_price_${username}`);
+      // Load profile data using the utility function
+      const profileData = getUserProfileData(username);
+      if (profileData) {
+        setBio(profileData.bio);
+        setProfilePic(profileData.profilePic);
+        setSubscriptionPrice(parseFloat(profileData.subscriptionPrice) || null);
+      }
+      
+      // Gallery is already in localStorage
       const storedGallery = localStorage.getItem(`profile_gallery_${username}`);
-
-      if (storedBio) setBio(storedBio);
-      if (storedPic) setProfilePic(storedPic);
-      if (storedSub) setSubscriptionPrice(parseFloat(storedSub));
       if (storedGallery) {
         try {
           const parsedGallery = JSON.parse(storedGallery);

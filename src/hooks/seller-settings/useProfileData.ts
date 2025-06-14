@@ -1,6 +1,7 @@
 // src/hooks/seller-settings/useProfileData.ts
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { getUserProfileData } from '@/utils/profileUtils';
 
 // Image compression utility
 const compressImage = (file: File, maxWidth = 800): Promise<string> => {
@@ -57,13 +58,13 @@ export function useProfileData() {
   // Load profile data on mount
   useEffect(() => {
     if (typeof window !== 'undefined' && user?.username) {
-      const storedBio = sessionStorage.getItem(`profile_bio_${user.username}`);
-      const storedPic = sessionStorage.getItem(`profile_pic_${user.username}`);
-      const storedSubPrice = sessionStorage.getItem(`subscription_price_${user.username}`);
-
-      if (storedBio) setBio(storedBio);
-      if (storedPic) setProfilePic(storedPic);
-      if (storedSubPrice) setSubscriptionPrice(storedSubPrice);
+      // Load profile data using the utility function
+      const profileData = getUserProfileData(user.username);
+      if (profileData) {
+        setBio(profileData.bio);
+        setProfilePic(profileData.profilePic);
+        setSubscriptionPrice(profileData.subscriptionPrice);
+      }
     }
   }, [user?.username]);
 
