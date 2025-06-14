@@ -1,117 +1,108 @@
 // src/hooks/useBrowseDetail.ts
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
+import { useWallet } from '@/context/WalletContext';
 import { useMessages } from '@/context/MessageContext';
-import { useRequests } from '@/context/RequestContext';
 import { useReviews } from '@/context/ReviewContext';
-import { v4 as uuidv4 } from 'uuid';
+import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { 
+  isAuctionActive, 
   calculateTotalPayable, 
-  formatBidDate, 
-  getTimerProgress as getTimerProgressUtil,
-  formatTimeRemaining as formatTimeRemainingUtil,
-  validateBidAmount
+  formatTimeRemaining, 
+  formatRelativeTime,
+  extractSellerInfo 
 } from '@/utils/browseDetailUtils';
-import { DetailState, BidHistoryItem, ListingWithDetails } from '@/types/browseDetail';
+import { DetailState, ListingWithDetails } from '@/types/browseDetail';
 
-// Custom hook for interval with proper cleanup
-function useInterval(callback: () => void, delay: number | null): void {
-  const savedCallback = useRef<(() => void) | null>(null);
+const AUCTION_UPDATE_INTERVAL = 1000;
+const FUNDING_CHECK_INTERVAL = 10000;
+const NAVIGATION_DELAY = 500;
 
-  useEffect(() => {
-    savedCallback.current = callback;
-  }, [callback]);
-
-  useEffect(() => {
-    function tick() {
-      if (savedCallback.current) {
-        savedCallback.current();
-      }
-    }
-    
-    if (delay !== null) {
-      const id = setInterval(tick, delay);
-      return () => {
-        clearInterval(id);
-      };
-    }
-    
-    return undefined;
-  }, [delay]);
-}
+const initialState: DetailState = {
+  purchaseStatus: '',
+  isProcessing: false,
+  showPurchaseSuccess: false,
+  showAuctionSuccess: false,
+  sellerProfile: { bio: null, pic: null, subscriptionPrice: null },
+  showStickyBuy: false,
+  bidAmount: '',
+  bidStatus: {},
+  biddingEnabled: false,
+  bidsHistory: [],
+  showBidHistory: false,
+  forceUpdateTimer: {},
+  viewCount: 0,
+  isBidding: false,
+  bidError: null,
+  bidSuccess: null,
+  currentImageIndex: 0
+};
 
 export const useBrowseDetail = () => {
-  const { user } = useAuth();
-  const { listings, removeListing, addSellerNotification, isSubscribed, users, placeBid, orderHistory } = useListings();
-  const { getReviewsForSeller } = useReviews();
-  const { id } = useParams();
-  const listingId = Array.isArray(id) ? id[0] : id as string;
-  const listing = listings.find((item) => item.id === listingId);
-  const { purchaseListing, getBuyerBalance, updateOrderAddress } = useWallet();
-  const { sendMessage, getMessagesForUsers, markMessagesAsRead } = useMessages();
-  const { addRequest } = useRequests();
+  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-
-  // State
-  const [state, setState] = useState<DetailState>({
-    purchaseStatus: '',
-    isProcessing: false,
-    showPurchaseSuccess: false,
-    showAuctionSuccess: false,
-    sellerProfile: {},
-    showStickyBuy: false,
-    bidAmount: '',
-    bidStatus: {},
-    biddingEnabled: true,
-    bidsHistory: [],
-    showBidHistory: false,
-    forceUpdateTimer: {},
-    viewCount: Math.floor(Math.random() * 100) + 20,
-    isBidding: false,
-    bidError: null,
-    bidSuccess: null,
-    currentImageIndex: 0
-  });
-
-  // Refs
-  const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
-  const hasMarkedRef = useRef(false);
-  const bidButtonRef = useRef<HTMLButtonElement>(null);
-  const bidInputRef = useRef<HTMLInputElement>(null);
-  const lastBidTime = useRef<number>(0);
-  const imageRef = useRef<HTMLDivElement | null>(null);
-
-  // Computed values
-  const currentUsername = user?.username || '';
-  const isSubscribedToSeller = user?.username && listing?.seller ? isSubscribed(user.username, listing.seller) : false;
-  const needsSubscription = listing?.isPremium && !isSubscribedToSeller;
-  const images = listing?.imageUrls || [];
+  const { user } = useAuth();
+  const { 
+    listings, 
+    users, 
+    placeBid: contextPlaceBid, 
+    isSubscribed, 
+    updateListing,
+    orderHistory
+  } = useListings();
+  const { purchaseListing, getBuyerBalance } = useWallet();
+  const { markMessagesAsRead } = useMessages();
+  const { getReviewsForSeller } = useReviews();
   
+  // State
+  const [state, setState] = useState<DetailState>(initialState);
+  
+  // Refs
+  const lastProcessedPaymentRef = useRef<string | null>(null);
+  const imageRef = useRef<HTMLDivElement>(null);
+  const bidInputRef = useRef<HTMLInputElement>(null);
+  const bidButtonRef = useRef<HTMLButtonElement>(null);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mountedRef = useRef(true);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasMarkedRef = useRef(false);
+  const viewIncrementedRef = useRef(false);
+
+  // Core data
+  const listingId = params?.id as string;
+  const listing = listings.find(l => l.id === listingId) as ListingWithDetails | undefined;
+  const currentUsername = user?.username || null;
+  
+  // Computed values
   const isAuctionListing = !!listing?.auction;
-  const isAuctionEnded = isAuctionListing && 
-    (listing?.auction?.status === 'ended' || listing?.auction?.status === 'cancelled' || 
-     new Date(listing?.auction?.endTime || '') <= new Date());
+  const isAuctionEnded = isAuctionListing && listing?.auction && !isAuctionActive(listing.auction);
+  const images = listing?.imageUrls || [];
+  const currentHighestBid = listing?.auction?.highestBid || 0;
+  const currentTotalPayable = isAuctionListing ? calculateTotalPayable(currentHighestBid) : 0;
+  const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
+  const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
+  const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  const didUserBid = useMemo(() => {
-    if (!isAuctionListing || !listing?.auction?.bids || !user?.username) return false;
-    return listing.auction.bids.some(bid => bid.bidder === user.username);
-  }, [isAuctionListing, listing?.auction?.bids, user?.username]);
+  // Add view count tracking
+  useEffect(() => {
+    if (listing && !viewIncrementedRef.current) {
+      viewIncrementedRef.current = true;
+      // Increment view count
+      const viewKey = `listing_views_${listing.id}`;
+      const currentViews = parseInt(localStorage.getItem(viewKey) || '0');
+      const newViews = currentViews + 1;
+      localStorage.setItem(viewKey, newViews.toString());
+      setState(prev => ({ ...prev, viewCount: newViews }));
+    }
+  }, [listing]);
 
-  const isUserHighestBidder = useMemo(() => {
-    if (!isAuctionListing || !listing?.auction?.highestBidder || !user?.username) return false;
-    return listing.auction.highestBidder === user.username;
-  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username]);
-
-  const sellerTierInfo = useMemo(() => {
-    if (!listing?.seller) return null;
-    return getSellerTierMemoized(listing.seller, orderHistory);
-  }, [listing?.seller, orderHistory]);
-
+  // Get seller reviews
   const sellerReviews = useMemo(() => {
     if (!listing?.seller) return [];
     return getReviewsForSeller(listing.seller);
@@ -123,160 +114,198 @@ export const useBrowseDetail = () => {
     return totalRating / sellerReviews.length;
   }, [sellerReviews]);
 
-  const currentHighestBid = isAuctionListing && listing?.auction?.highestBid 
-    ? listing.auction.highestBid 
-    : isAuctionListing && listing?.auction 
-      ? listing.auction.startingPrice 
-      : 0;
-      
-  const currentTotalPayable = calculateTotalPayable(currentHighestBid);
-  
-  const suggestedBidAmount = useMemo(() => {
-    if (!isAuctionListing || !listing?.auction) return null;
-    const currentBid = listing.auction.highestBid || listing.auction.startingPrice;
-    return (currentBid + 10).toFixed(2);
-  }, [isAuctionListing, listing?.auction]);
-
-  const sellerUser = users?.[listing?.seller ?? ''];
-  const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-
-  // Create enhanced listing object
-  const listingWithDetails: ListingWithDetails | undefined = listing ? {
-    ...listing,
-    sellerProfile: state.sellerProfile,
-    isSellerVerified,
-    sellerTierInfo,
-    sellerAverageRating,
-    sellerReviewCount: sellerReviews.length
-  } : undefined;
-
-  // Handlers
+  // Helper functions
   const updateState = useCallback((updates: Partial<DetailState>) => {
+    if (!mountedRef.current) return;
     setState(prev => ({ ...prev, ...updates }));
   }, []);
 
   const getTimerProgress = useCallback(() => {
-    return getTimerProgressUtil(isAuctionListing, listing, isAuctionEnded);
-  }, [isAuctionListing, listing, isAuctionEnded]);
+    if (!isAuctionListing || !listing?.auction?.endTime || isAuctionEnded) return 0;
+    const now = new Date().getTime();
+    const startTime = new Date(listing.date).getTime();
+    const endTime = new Date(listing.auction.endTime).getTime();
+    const totalDuration = endTime - startTime;
+    const elapsed = now - startTime;
+    return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
+  }, [isAuctionListing, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
-  const formatTimeRemaining = useCallback((endTime: string) => {
-    return formatTimeRemainingUtil(endTime, timeCache);
-  }, []);
+  const checkCurrentUserFunds = useCallback(() => {
+    if (!user || user.role !== "buyer" || !isAuctionListing || !listing?.auction) return;
 
-  const handleImageNavigation = useCallback((direction: 'prev' | 'next') => {
-    setState(prev => ({
-      ...prev,
-      currentImageIndex: direction === 'prev' 
-        ? (prev.currentImageIndex - 1 + images.length) % images.length
-        : (prev.currentImageIndex + 1) % images.length
-    }));
-  }, [images.length]);
+    const balance = getBuyerBalance(user.username);
+    const startingBid = listing.auction.startingPrice || 0;
+    const minimumBid = (listing.auction.highestBid || startingBid) + 1;
+    const totalRequired = calculateTotalPayable(minimumBid);
+    const hasEnoughFunds = balance >= totalRequired;
 
-  const handlePurchase = useCallback(() => {
-    if (!user?.username || !listing || state.isProcessing) return;
+    updateState({ 
+      biddingEnabled: hasEnoughFunds,
+      bidStatus: hasEnoughFunds ? {} : {
+        success: false,
+        message: `Insufficient funds. You need $${totalRequired.toFixed(2)} to place this bid.`
+      }
+    });
+  }, [user, isAuctionListing, listing?.auction, getBuyerBalance, updateState]);
+
+  const formatBidDate = useCallback((date: string) => formatRelativeTime(date), []);
+
+  // Suggested bid amount calculation
+  const suggestedBidAmount = useMemo(() => {
+    if (!isAuctionListing || !listing?.auction) return null;
     
-    updateState({ isProcessing: true });
-    const success = purchaseListing(listing, user.username);
+    const currentBid = listing.auction.highestBid || 0;
+    const startingBid = listing.auction.startingPrice || 0;
+    const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
     
-    if (success) {
-      updateState({ showPurchaseSuccess: true });
-      addSellerNotification(listing.seller, `🛍️ ${user.username} purchased: "${listing.title}"`);
-      
-      setTimeout(() => {
-        removeListing(listing.id);
-        router.push('/buyers/my-orders');
-      }, 10000);
-    } else {
+    return minBidAmount.toString();
+  }, [isAuctionListing, listing?.auction]);
+
+  // Action handlers
+  const handlePurchase = useCallback(async () => {
+    if (!user || !listing || state.isProcessing) return;
+    
+    if (user.role !== 'buyer') {
       updateState({ 
-        purchaseStatus: 'Insufficient balance. Please top up your wallet.',
+        purchaseStatus: 'Only buyers can make purchases',
         isProcessing: false 
       });
+      return;
     }
-  }, [user, listing, state.isProcessing, purchaseListing, addSellerNotification, removeListing, router, updateState]);
 
-  const handleBidSubmit = useCallback(async () => {
-    if (state.isBidding) return;
-    
-    updateState({ bidError: null, bidSuccess: null });
-    
-    if (!user?.username || user.role !== 'buyer' || !listing || !isAuctionListing || !listing.auction) {
-      updateState({ bidError: 'You must be logged in as a buyer to place bids.' });
-      return;
-    }
-    
-    if (listing.auction.endTime && new Date(listing.auction.endTime) <= new Date()) {
-      updateState({ bidError: 'This auction has ended.', biddingEnabled: false });
-      return;
-    }
-    
-    const now = Date.now();
-    if (now - lastBidTime.current < 5000) {
-      updateState({ bidError: 'Please wait a moment before placing another bid.' });
-      return;
-    }
-    
-    const userBalance = getBuyerBalance(user.username);
-    const validation = validateBidAmount(state.bidAmount, listing, userBalance);
-    
-    if (!validation.isValid) {
-      updateState({ bidError: validation.error || 'Invalid bid' });
-      if (bidInputRef.current) bidInputRef.current.focus();
-      return;
-    }
-    
-    updateState({ isBidding: true });
-    
+    updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
+
     try {
-      const numericBid = parseFloat(state.bidAmount);
-      const success = placeBid(listing.id, user.username, numericBid);
-      lastBidTime.current = Date.now();
+      const success = await purchaseListing(listing, listing.markedUpPrice || listing.price);
       
       if (success) {
         updateState({ 
-          bidSuccess: `Your bid of $${numericBid.toFixed(2)} has been placed successfully!`,
-          bidAmount: '',
-          bidStatus: {
-            success: true,
-            message: `You are the highest bidder! Total payable if you win: $${calculateTotalPayable(numericBid).toFixed(2)}`
-          }
+          showPurchaseSuccess: true,
+          purchaseStatus: 'Purchase successful!',
+          isProcessing: false 
         });
         
-        const newBid: BidHistoryItem = {
-          bidder: user.username,
-          amount: numericBid,
-          date: new Date().toISOString()
-        };
-        setState(prev => ({
-          ...prev,
-          bidsHistory: [newBid, ...prev.bidsHistory]
-        }));
+        if (navigationTimeoutRef.current) {
+          clearTimeout(navigationTimeoutRef.current);
+        }
         
-        setTimeout(() => {
-          if (bidInputRef.current) bidInputRef.current.focus();
-        }, 500);
+        navigationTimeoutRef.current = setTimeout(() => {
+          if (mountedRef.current) {
+            router.push('/buyers/my-orders');
+          }
+        }, 10000);
       } else {
-        updateState({ bidError: 'Failed to place your bid. You may not have sufficient funds or the auction has ended.' });
+        updateState({ 
+          purchaseStatus: 'Purchase failed. Please check your wallet balance.',
+          isProcessing: false 
+        });
       }
     } catch (error) {
-      console.error('Bid error:', error);
-      updateState({ bidError: 'An error occurred while placing your bid. Please try again.' });
-    } finally {
-      updateState({ isBidding: false });
+      console.error('Purchase error:', error);
+      updateState({ 
+        purchaseStatus: 'An error occurred. Please try again.',
+        isProcessing: false 
+      });
     }
-  }, [state.isBidding, state.bidAmount, user, listing, isAuctionListing, getBuyerBalance, placeBid, updateState]);
+  }, [user, listing, state.isProcessing, purchaseListing, router, updateState]);
 
-  const checkCurrentUserFunds = useCallback(() => {
-    if (!user?.username || !isAuctionListing || !listing?.auction?.highestBidder) return true;
-    
-    if (listing.auction.highestBidder === user.username) {
-      const highestBid = listing.auction.highestBid || 0;
-      const userBalance = getBuyerBalance(user.username);
+  const handleBidSubmit = useCallback(async () => {
+    if (!listing || state.isBidding || !user || user.role !== 'buyer') return;
+
+    const bidValue = parseFloat(state.bidAmount);
+    if (isNaN(bidValue) || bidValue <= 0) {
+      updateState({ 
+        bidError: 'Please enter a valid bid amount',
+        bidSuccess: null 
+      });
+      return;
+    }
+
+    updateState({ 
+      isBidding: true, 
+      bidError: null, 
+      bidSuccess: null 
+    });
+
+    try {
+      const success = await contextPlaceBid(listing.id, user.username, bidValue);
       
-      if (userBalance < highestBid) {
+      if (success) {
+        updateState({ 
+          bidAmount: '',
+          bidSuccess: 'Bid placed successfully!',
+          bidError: null,
+          isBidding: false,
+          bidStatus: {
+            success: true,
+            message: 'You are now the highest bidder!'
+          }
+        });
+
+        setTimeout(() => {
+          if (mountedRef.current) {
+            updateState({ bidSuccess: null });
+          }
+        }, 3000);
+      } else {
+        updateState({ 
+          bidError: 'Failed to place bid. Please try again.',
+          bidSuccess: null,
+          isBidding: false 
+        });
+      }
+    } catch (error) {
+      console.error('Bid submission error:', error);
+      updateState({ 
+        bidError: 'An error occurred while placing your bid.',
+        bidSuccess: null,
+        isBidding: false 
+      });
+    }
+  }, [listing, state.isBidding, state.bidAmount, user, contextPlaceBid, updateState]);
+
+  const handleImageNavigation = useCallback((newIndex: number) => {
+    if (newIndex >= 0 && newIndex < images.length) {
+      updateState({ currentImageIndex: newIndex });
+    }
+  }, [images.length, updateState]);
+
+  const validateBidAmount = useCallback(() => {
+    if (!listing?.auction || !state.bidAmount) return true;
+    
+    const bidValue = parseFloat(state.bidAmount);
+    const startingBid = listing.auction.startingPrice || 0;
+    const minimumBid = (listing.auction.highestBid || startingBid) + 1;
+    
+    if (isNaN(bidValue) || bidValue < minimumBid) {
+      updateState({
+        bidStatus: {
+          success: false,
+          message: `Minimum bid is $${minimumBid}`
+        }
+      });
+      return false;
+    }
+
+    const userBalance = user ? getBuyerBalance(user.username) : 0;
+    const totalRequired = calculateTotalPayable(bidValue);
+    
+    if (userBalance < totalRequired) {
+      updateState({
+        bidStatus: {
+          success: false,
+          message: `Insufficient funds. You need $${totalRequired.toFixed(2)}`
+        }
+      });
+      return false;
+    }
+
+    if (user?.username === listing.auction.highestBidder && listing.auction.highestBid) {
+      if (bidValue <= listing.auction.highestBid) {
         updateState({
           bidStatus: {
             success: false,
-            message: 'Warning: You do not have sufficient funds to win this auction.'
+            message: 'Your new bid must be higher than your current bid'
           }
         });
         return false;
@@ -293,16 +322,50 @@ export const useBrowseDetail = () => {
       }
     }
     return true;
-  }, [user?.username, isAuctionListing, listing?.auction?.highestBidder, listing?.auction?.highestBid, getBuyerBalance, state.bidStatus.message, updateState]);
+  }, [user?.username, listing?.auction, state.bidAmount, state.bidStatus.message, getBuyerBalance, updateState]);
 
   // Effects
   useEffect(() => {
     if (listing?.seller) {
-      const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
-      const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
-      const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
-      updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+      // Use the new getUserProfileData utility
+      const profileData = getUserProfileData(listing.seller);
+      if (profileData) {
+        updateState({ 
+          sellerProfile: { 
+            bio: profileData.bio,
+            pic: profileData.profilePic,
+            subscriptionPrice: profileData.subscriptionPrice
+          } 
+        });
+      } else {
+        // Fallback to sessionStorage for backward compatibility
+        const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
+        const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
+        const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
+        updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+      }
     }
+  }, [listing?.seller, updateState]);
+
+  // Listen for storage changes to update profile in real-time
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'user_profiles' && e.newValue && listing?.seller) {
+        const profileData = getUserProfileData(listing.seller);
+        if (profileData) {
+          updateState({ 
+            sellerProfile: { 
+              bio: profileData.bio,
+              pic: profileData.profilePic,
+              subscriptionPrice: profileData.subscriptionPrice
+            } 
+          });
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [listing?.seller, updateState]);
 
   useEffect(() => {
@@ -358,63 +421,114 @@ export const useBrowseDetail = () => {
     if (isAuctionListing && listing?.auction?.highestBidder === user?.username) {
       const highestBid = listing.auction?.highestBid || 0;
       const userBalance = user ? getBuyerBalance(user.username) : 0;
+      const totalPayable = calculateTotalPayable(highestBid);
       
-      if (userBalance < highestBid) {
+      if (userBalance < totalPayable) {
         updateState({
           bidStatus: {
             success: false,
-            message: 'Warning: You do not have sufficient funds to win this auction.'
+            message: `Warning: You need $${totalPayable.toFixed(2)} in your wallet to win this auction.`
           }
         });
       } else {
         updateState({
           bidStatus: {
             success: true,
-            message: 'You are the highest bidder!'
+            message: "You are the highest bidder!"
           }
         });
       }
-    } else if (state.bidStatus.success && isAuctionListing && listing?.auction?.highestBidder !== user?.username) {
-      updateState({
-        bidStatus: {
-          success: false,
-          message: 'You have been outbid!'
-        }
-      });
     }
-  }, [isAuctionListing, listing?.auction?.highestBidder, user?.username, state.bidStatus.success, listing?.auction?.highestBid, getBuyerBalance, updateState]);
+  }, [isAuctionListing, listing?.auction?.highestBidder, listing?.auction?.highestBid, user?.username, getBuyerBalance, updateState]);
 
-  // Timer update interval
-  useInterval(
-    () => {
-      if (!isAuctionListing || isAuctionEnded || !listing?.auction?.endTime) return;
-      updateState({ forceUpdateTimer: {} });
-      if (new Date(listing.auction.endTime) <= new Date()) {
-        updateState({ biddingEnabled: false });
+  // Timer for auction updates
+  useEffect(() => {
+    if (!isAuctionListing || isAuctionEnded || !mountedRef.current) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-    },
-    isAuctionListing && !isAuctionEnded && listing?.auction?.endTime ? 1000 : null
-  );
+      return;
+    }
 
+    timerRef.current = setInterval(() => {
+      if (mountedRef.current) {
+        updateState({ forceUpdateTimer: {} });
+      }
+    }, AUCTION_UPDATE_INTERVAL);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isAuctionListing, isAuctionEnded, updateState]);
+
+  // Cleanup
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    return () => {
+      mountedRef.current = false;
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (fundingTimerRef.current) {
+        clearInterval(fundingTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Extract seller info
+  const sellerInfo = useMemo(() => {
+    if (!listing) return null;
+    const info = extractSellerInfo(listing, users || {}, orderHistory);
+    return info ? {
+      ...info,
+      averageRating: sellerAverageRating,
+      reviewCount: sellerReviews.length
+    } : null;
+  }, [listing, users, orderHistory, sellerAverageRating, sellerReviews.length]);
+
+  // Return everything
   return {
     // Data
     user,
-    listing: listingWithDetails,
+    listing,
     listingId,
     images,
     isAuctionListing,
-    isAuctionEnded,
+    isAuctionEnded: isAuctionEnded || false,
     didUserBid,
     isUserHighestBidder,
     currentHighestBid,
     currentTotalPayable,
     suggestedBidAmount,
-    needsSubscription,
-    isSubscribedToSeller,
-    currentUsername,
+    needsSubscription: needsSubscription || false,
+    currentUsername: currentUsername || '',
     
     // State
-    ...state,
+    purchaseStatus: state.purchaseStatus,
+    isProcessing: state.isProcessing,
+    showPurchaseSuccess: state.showPurchaseSuccess,
+    showAuctionSuccess: state.showAuctionSuccess,
+    sellerProfile: state.sellerProfile,
+    showStickyBuy: state.showStickyBuy,
+    bidAmount: state.bidAmount,
+    bidStatus: state.bidStatus,
+    biddingEnabled: state.biddingEnabled,
+    bidsHistory: state.bidsHistory,
+    showBidHistory: state.showBidHistory,
+    forceUpdateTimer: state.forceUpdateTimer,
+    viewCount: state.viewCount,
+    isBidding: state.isBidding,
+    bidError: state.bidError,
+    bidSuccess: state.bidSuccess,
+    currentImageIndex: state.currentImageIndex,
     
     // Refs
     imageRef,
@@ -427,11 +541,17 @@ export const useBrowseDetail = () => {
     handleImageNavigation,
     updateState,
     getTimerProgress,
-    formatTimeRemaining,
+    formatTimeRemaining: (endTime: string) => formatTimeRemaining(endTime),
     formatBidDate,
     calculateTotalPayable,
     
     // Navigation
-    router
+    router,
+    
+    // Seller info
+    sellerTierInfo: sellerInfo?.tierInfo,
+    isVerified: sellerInfo?.isVerified || false,
+    sellerAverageRating: sellerInfo?.averageRating,
+    sellerReviewCount: sellerInfo?.reviewCount || 0
   };
 };

@@ -6,6 +6,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useRequests } from '@/context/RequestContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
+import { getUserProfileData } from '@/utils/profileUtils';
 import { DashboardStats, SubscriptionInfo, RecentActivity } from '@/types/dashboard';
 import { Package, MessageCircle } from 'lucide-react';
 
@@ -33,11 +34,14 @@ export const useDashboardData = () => {
           
           const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => {
             const sellerUser = users[seller];
-            const sellerBio = sessionStorage.getItem(`profile_bio_${seller}`) || 
+            
+            // Use the new getUserProfileData utility
+            const profileData = getUserProfileData(seller);
+            const sellerBio = profileData?.bio || 
                              (sellerUser as any)?.bio || 
                              'No bio available';
-            const sellerPic = sessionStorage.getItem(`profile_pic_${seller}`) || null;
-            const subscriptionPrice = sessionStorage.getItem(`subscription_price_${seller}`) || '25.00';
+            const sellerPic = profileData?.profilePic || null;
+            const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
             
             return {
               seller,
@@ -47,7 +51,7 @@ export const useDashboardData = () => {
               newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
               lastActive: new Date().toISOString(),
               tier: (sellerUser as any)?.tier || 'Tease',
-              verified: sellerUser?.verified || sellerUser?.verificationStatus === 'verified'
+              verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
             };
           });
           
@@ -57,6 +61,54 @@ export const useDashboardData = () => {
         console.error('Error loading subscriptions:', error);
       }
     }
+  }, [user?.username, listings, users]);
+
+  // Listen for storage changes to update profiles in real-time
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'user_profiles' && e.newValue && user?.username) {
+        // Re-fetch subscriptions when profiles are updated
+        try {
+          const subsKey = 'subscriptions';
+          const storedSubs = localStorage.getItem(subsKey);
+          
+          if (storedSubs) {
+            const allSubscriptions = JSON.parse(storedSubs);
+            const userSubscriptions = allSubscriptions[user.username] || [];
+            
+            const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => {
+              const sellerUser = users[seller];
+              
+              // Use the new getUserProfileData utility
+              const profileData = getUserProfileData(seller);
+              const sellerBio = profileData?.bio || 
+                               (sellerUser as any)?.bio || 
+                               'No bio available';
+              const sellerPic = profileData?.profilePic || null;
+              const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
+              
+              return {
+                seller,
+                price: subscriptionPrice,
+                bio: sellerBio,
+                pic: sellerPic,
+                newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
+                lastActive: new Date().toISOString(),
+                tier: (sellerUser as any)?.tier || 'Tease',
+                verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
+              };
+            });
+            
+            setSubscribedSellers(subscriptionData);
+          }
+        } catch (error) {
+          console.error('Error updating subscriptions:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [user?.username, listings, users]);
 
   // Calculate statistics
@@ -80,39 +132,47 @@ export const useDashboardData = () => {
     const userOrders = orderHistory.filter(order => order.buyer === user.username);
     const userRequests = getRequestsForUser(user.username, 'buyer');
     
-    const unreadCount = Object.values(messages)
-      .flat()
-      .filter(msg => 
-        msg.receiver === user.username && 
-        !msg.read
-      ).length;
+    // Count unread messages
+    let unreadCount = 0;
+    Object.values(messages).forEach((threadMessages) => {
+      threadMessages.forEach((msg) => {
+        if (msg.receiver === user.username && !msg.read && !msg.isRead) {
+          unreadCount++;
+        }
+      });
+    });
 
-    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    
-    const weekSpent = userOrders
-      .filter(order => new Date(order.date) >= oneWeekAgo)
-      .reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
-    
-    const monthOrders = userOrders
-      .filter(order => new Date(order.date) >= oneMonthAgo).length;
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-    const totalSpent = userOrders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
-    const completedOrders = userOrders.filter(order => order.shippingStatus === 'shipped').length;
-    const pendingShipments = userOrders.filter(order => 
-      order.shippingStatus === 'pending' || order.shippingStatus === 'processing'
+    const completedOrders = userOrders.filter(order => 
+      order.shippingStatus === 'delivered'
     ).length;
     
-    const uniqueSellers = new Set(userOrders.map(order => order.seller)).size;
-    
+    const pendingShipments = userOrders.filter(order => 
+      order.shippingStatus && order.shippingStatus !== 'delivered'
+    ).length;
+
+    const weekSpent = userOrders
+      .filter(order => new Date(order.date) >= weekAgo)
+      .reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+
+    const monthOrders = userOrders
+      .filter(order => new Date(order.date) >= monthAgo)
+      .length;
+
+    const favoriteSellerCount = new Set(userOrders.map(order => order.seller)).size;
+    const totalSpent = userOrders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+
     return {
       totalSpent,
       totalOrders: userOrders.length,
       activeSubscriptions: subscribedSellers.length,
-      pendingRequests: userRequests.filter(req => req.status === 'pending').length,
+      pendingRequests: userRequests.filter(r => r.status === 'pending').length,
       unreadMessages: unreadCount,
       completedOrders,
-      favoriteSellerCount: uniqueSellers,
+      favoriteSellerCount,
       averageOrderValue: userOrders.length > 0 ? totalSpent / userOrders.length : 0,
       thisWeekSpent: weekSpent,
       thisMonthOrders: monthOrders,

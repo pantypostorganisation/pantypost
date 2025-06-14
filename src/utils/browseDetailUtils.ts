@@ -1,6 +1,9 @@
 // src/utils/browseDetailUtils.ts
 
-import { Listing } from '@/context/ListingContext';
+import { Listing, AuctionSettings } from '@/context/ListingContext';
+import { User } from '@/context/AuthContext';
+import { Order } from '@/context/WalletContext';
+import { getSellerTierMemoized } from './sellerTiers';
 
 export const calculateTotalPayable = (bidPrice: number): number => {
   return Math.round(bidPrice * 1.1 * 100) / 100;
@@ -15,6 +18,22 @@ export const formatBidDate = (dateString: string): string => {
     minute: '2-digit',
     hour12: true
   });
+};
+
+export const formatRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  
+  return date.toLocaleDateString();
 };
 
 export const getTimerProgress = (
@@ -35,51 +54,29 @@ export const getTimerProgress = (
   return progress;
 };
 
-export const formatTimeRemaining = (
-  endTimeStr: string,
-  timeCache: React.MutableRefObject<{[key: string]: {formatted: string, expires: number}}>
-): string => {
+export const formatTimeRemaining = (endTimeStr: string): string => {
   const now = new Date();
-  const nowTime = now.getTime();
-  
-  if (timeCache.current[endTimeStr] && timeCache.current[endTimeStr].expires > nowTime) {
-    return timeCache.current[endTimeStr].formatted;
-  }
-  
   const endTime = new Date(endTimeStr);
   
   if (endTime <= now) {
     return 'Auction ended';
   }
   
-  const diffMs = endTime.getTime() - nowTime;
+  const diffMs = endTime.getTime() - now.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
   const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000);
   
-  let formatted;
   if (diffDays > 0) {
-    formatted = `${diffDays}d ${diffHours}h remaining`;
+    return `${diffDays}d ${diffHours}h remaining`;
   } else if (diffHours > 0) {
-    formatted = `${diffHours}h ${diffMinutes}m remaining`;
+    return `${diffHours}h ${diffMinutes}m remaining`;
   } else if (diffMinutes > 0) {
-    formatted = `${diffMinutes}m ${diffSeconds}s remaining`;
+    return `${diffMinutes}m ${diffSeconds}s remaining`;
   } else {
-    formatted = `${diffSeconds}s remaining`;
+    return `${diffSeconds}s remaining`;
   }
-  
-  const cacheTime = diffDays > 0 ? 60000 :
-                    diffHours > 0 ? 30000 :
-                    diffMinutes > 0 ? 5000 :
-                    1000;
-                    
-  timeCache.current[endTimeStr] = {
-    formatted,
-    expires: nowTime + cacheTime
-  };
-  
-  return formatted;
 };
 
 export const validateBidAmount = (
@@ -97,27 +94,54 @@ export const validateBidAmount = (
     return { isValid: false, error: 'Please enter a valid bid amount.' };
   }
   
-  if (numericBid < listing.auction.startingPrice) {
-    return { 
-      isValid: false, 
-      error: `Your bid must be at least $${listing.auction.startingPrice.toFixed(2)}.` 
-    };
-  }
-  
+  const startingBid = listing.auction.startingPrice || 0;
   const currentHighestBid = listing.auction.highestBid || 0;
-  if (numericBid <= currentHighestBid) {
+  const minimumBid = currentHighestBid > 0 ? currentHighestBid + 1 : startingBid;
+  
+  if (numericBid < minimumBid) {
     return { 
       isValid: false, 
-      error: `Your bid must be higher than the current highest bid of $${currentHighestBid.toFixed(2)}.` 
+      error: `Minimum bid is $${minimumBid.toFixed(2)}.` 
     };
   }
   
-  if (userBalance < numericBid) {
+  const totalRequired = calculateTotalPayable(numericBid);
+  if (userBalance < totalRequired) {
     return { 
       isValid: false, 
-      error: `Insufficient funds. Your wallet balance is $${userBalance.toFixed(2)}.` 
+      error: `Insufficient funds. You need $${totalRequired.toFixed(2)}.` 
     };
   }
   
   return { isValid: true };
+};
+
+export const isAuctionActive = (auction: AuctionSettings): boolean => {
+  if (auction.status !== 'active') return false;
+  
+  const endTime = new Date(auction.endTime);
+  const now = new Date();
+  
+  return endTime > now;
+};
+
+export const extractSellerInfo = (
+  listing: Listing,
+  users: { [key: string]: User },
+  orderHistory?: Order[]
+) => {
+  const seller = listing.seller;
+  const sellerUser = users[seller];
+  
+  if (!sellerUser) return null;
+  
+  const isVerified = sellerUser.isVerified || sellerUser.verificationStatus === 'verified';
+  const tierInfo = orderHistory ? getSellerTierMemoized(seller, orderHistory) : null;
+  
+  return {
+    seller,
+    isVerified,
+    tierInfo,
+    user: sellerUser
+  };
 };

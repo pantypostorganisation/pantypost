@@ -1,12 +1,20 @@
 // src/utils/messageUtils.ts
 
 export interface Message {
+  id?: string;
   sender: string;
   receiver: string;
   content: string;
   date: string;
+  isRead?: boolean;
   read?: boolean;
   type?: 'normal' | 'customRequest' | 'image';
+  imageUrl?: string;
+  isTip?: boolean;
+  tipAmount?: number;
+  isCustomRequest?: boolean;
+  requestData?: any;
+  messageKey?: string;
   meta?: {
     id?: string;
     title?: string;
@@ -86,4 +94,35 @@ export function formatTimeAgo(date: string): string {
   }
   
   return 'Just now';
+}
+
+// Additional utility functions for messages
+export function saveRecentEmojis(emojis: string[]): void {
+  localStorage.setItem('recentEmojis', JSON.stringify(emojis));
+}
+
+export function getRecentEmojis(): string[] {
+  const stored = localStorage.getItem('recentEmojis');
+  return stored ? JSON.parse(stored) : [];
+}
+
+export function validateImageSize(file: File): string | null {
+  const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+  if (file.size > MAX_SIZE) {
+    return 'Image must be less than 5MB';
+  }
+  return null;
+}
+
+export function checkImageExists(base64String: string): boolean {
+  return !!base64String && base64String.startsWith('data:image/');
+}
+
+export function getMessageKey(sender: string, receiver: string): string {
+  return [sender, receiver].sort().join('-');
+}
+
+export function formatMessage(content: string): string {
+  // Simple formatting for now
+  return content.trim();
 }

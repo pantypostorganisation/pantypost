@@ -184,8 +184,8 @@ export default function BuyerMessagesPage() {
                   imageError={imageError}
                   editRequestId={editRequestId}
                   setEditRequestId={setEditRequestId}
-                  editPrice={editPrice}
-                  setEditPrice={setEditPrice}
+                  editPrice={parseFloat(editPrice) || ''}
+                  setEditPrice={(price: number | '') => setEditPrice(price.toString())}
                   editTitle={editTitle}
                   setEditTitle={setEditTitle}
                   editTags={editTags}
@@ -203,8 +203,8 @@ export default function BuyerMessagesPage() {
                   handleImageSelect={handleImageSelect}
                   handleMessageVisible={handleMessageVisible}
                   handleEmojiClick={handleEmojiClick}
-                  isUserBlocked={isUserBlocked}
-                  isUserReported={isUserReported}
+                  isUserBlocked={isUserBlocked(activeThread)}
+                  isUserReported={isUserReported(activeThread)}
                   messagesEndRef={messagesEndRef}
                   messagesContainerRef={messagesContainerRef}
                   fileInputRef={fileInputRef}
@@ -215,81 +215,65 @@ export default function BuyerMessagesPage() {
                   setShowTipModal={setShowTipModal}
                 />
               ) : (
-                <EmptyState />
+                <EmptyState 
+                  activeTab={activeTab} 
+                  buyerRequests={buyerRequests}
+                />
               )}
             </div>
           </div>
-          
-          {/* Bottom Padding */}
-          <div className="py-6 bg-black"></div>
-          
-          {/* Modals */}
+        </div>
+
+        {/* Modals */}
+        {previewImage && (
+          <ImagePreviewModal
+            imageUrl={previewImage}
+            onClose={() => setPreviewImage(null)}
+          />
+        )}
+        
+        {showCustomRequestModal && (
           <CustomRequestModal
-            show={showCustomRequestModal}
+            isOpen={showCustomRequestModal}
             onClose={closeCustomRequestModal}
-            activeThread={activeThread || ''}
+            seller={activeThread || ''}
+            onSubmit={handleCustomRequestSubmit}
             customRequestForm={customRequestForm}
             setCustomRequestForm={setCustomRequestForm}
-            customRequestErrors={customRequestErrors}
-            isSubmittingRequest={isSubmittingRequest}
-            onSubmit={handleCustomRequestSubmit}
-            wallet={wallet}
-            user={user}
+            errors={customRequestErrors}
+            isSubmitting={isSubmittingRequest}
           />
-          
+        )}
+        
+        {showPayModal && payingRequest && (
           <PaymentModal
-            show={showPayModal}
+            isOpen={showPayModal}
             onClose={() => {
               setShowPayModal(false);
               setPayingRequest(null);
             }}
-            payingRequest={payingRequest}
-            wallet={wallet}
-            user={user}
-            onConfirmPay={handleConfirmPay}
+            request={payingRequest}
+            onConfirm={handleConfirmPay}
+            walletBalance={wallet.buyerBalance}
           />
-          
+        )}
+        
+        {showTipModal && (
           <TipModal
-            show={showTipModal}
+            isOpen={showTipModal}
             onClose={() => {
               setShowTipModal(false);
-              setTipResult(null);
               setTipAmount('');
+              setTipResult(null);
             }}
-            activeThread={activeThread || ''}
+            seller={activeThread || ''}
+            onSendTip={handleSendTip}
+            walletBalance={wallet.buyerBalance}
             tipAmount={tipAmount}
             setTipAmount={setTipAmount}
             tipResult={tipResult}
-            wallet={wallet}
-            user={user}
-            onSendTip={handleSendTip}
           />
-          
-          {/* Image Preview Modal - Using shared component */}
-          <ImagePreviewModal
-            imageUrl={previewImage || ''}
-            isOpen={!!previewImage}
-            onClose={() => setPreviewImage(null)}
-          />
-          
-          {/* Global styles for emoji picker */}
-          <style jsx global>{`
-            .emoji-button::before {
-              content: "";
-              display: block;
-              position: absolute;
-              width: 100%;
-              height: 100%;
-              border-radius: 50%;
-              background-color: black;
-              z-index: -1;
-            }
-            .emoji-button {
-              position: relative;
-              z-index: 1;
-            }
-          `}</style>
-        </div>
+        )}
       </RequireAuth>
     </BanCheck>
   );
