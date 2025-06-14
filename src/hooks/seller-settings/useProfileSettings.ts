@@ -53,6 +53,7 @@ export function useProfileSettings() {
     isUploading: gallery.isUploading,
     multipleFileInputRef: gallery.multipleFileInputRef,
     handleMultipleFileChange: gallery.handleMultipleFileChange,
+    removeSelectedFile: gallery.removeSelectedFile,
     uploadGalleryImages: handleGalleryUpload,
     removeGalleryImage: handleGalleryImageRemove,
     clearAllGalleryImages: handleClearGallery,

@@ -2,6 +2,51 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
+// Image compression utility
+const compressImage = (file: File, maxWidth = 800): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(compressedDataUrl);
+      };
+
+      img.onerror = () => reject(new Error('Failed to load image'));
+      if (typeof event.target?.result === 'string') {
+        img.src = event.target.result;
+      } else {
+        reject(new Error('Failed to read file'));
+      }
+    };
+
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+};
+
 export function useGalleryManagement() {
   const { user } = useAuth();
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
@@ -35,9 +80,19 @@ export function useGalleryManagement() {
   // Handle multiple file selection
   const handleMultipleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files) {
-      setSelectedFiles(Array.from(files));
+    if (!files || files.length === 0) return;
+
+    const newFiles = Array.from(files);
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+
+    if (multipleFileInputRef.current) {
+      multipleFileInputRef.current.value = '';
     }
+  };
+
+  // Remove selected file before upload
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // Upload gallery images
@@ -45,30 +100,18 @@ export function useGalleryManagement() {
     if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    const newImages: string[] = [];
-
     try {
-      for (const file of selectedFiles) {
-        const reader = new FileReader();
-        const result = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        newImages.push(result);
-      }
+      const compressPromises = selectedFiles.map(file => compressImage(file));
+      const compressedImages = await Promise.all(compressPromises);
 
-      const updatedGallery = [...galleryImages, ...newImages];
+      const updatedGallery = [...galleryImages, ...compressedImages];
       setGalleryImages(updatedGallery);
-      setSelectedFiles([]);
       onSave(updatedGallery);
 
-      // Reset file input
-      if (multipleFileInputRef.current) {
-        multipleFileInputRef.current.value = '';
-      }
+      setSelectedFiles([]);
     } catch (error) {
-      console.error("Error uploading images:", error);
-      alert("Failed to upload some images. Please try again with different files.");
+      console.error("Error processing images:", error);
+      alert("Failed to process one or more images. Please try again with different files.");
     } finally {
       setIsUploading(false);
     }
@@ -95,6 +138,7 @@ export function useGalleryManagement() {
     isUploading,
     multipleFileInputRef,
     handleMultipleFileChange,
+    removeSelectedFile,
     uploadGalleryImages,
     removeGalleryImage,
     clearAllGalleryImages

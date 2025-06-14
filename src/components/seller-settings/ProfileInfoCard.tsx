@@ -9,11 +9,12 @@ interface ProfileInfoCardProps {
   bio: string;
   setBio: (bio: string) => void;
   preview: string | null;
+  profilePic: string | null;
   subscriptionPrice: string;
   setSubscriptionPrice: (price: string) => void;
   handleProfilePicChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   removeProfilePic: () => void;
-  profilePicInputRef: RefObject<HTMLInputElement>;
+  profilePicInputRef: RefObject<HTMLInputElement | null>;
 }
 
 export default function ProfileInfoCard({
@@ -21,6 +22,7 @@ export default function ProfileInfoCard({
   bio,
   setBio,
   preview,
+  profilePic,
   subscriptionPrice,
   setSubscriptionPrice,
   handleProfilePicChange,
@@ -34,9 +36,9 @@ export default function ProfileInfoCard({
       {/* Profile Picture Section */}
       <div className="flex flex-col items-center mb-6">
         <div className="w-32 h-32 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden mb-4 shadow-lg relative group">
-          {preview ? (
+          {preview || profilePic ? (
             <img
-              src={preview}
+              src={preview || profilePic || ''}
               alt="Profile preview"
               className="w-full h-full object-cover"
             />
@@ -45,24 +47,17 @@ export default function ProfileInfoCard({
               {username ? username.charAt(0).toUpperCase() : '?'}
             </div>
           )}
-          {preview && (
-            <button
-              onClick={removeProfilePic}
-              className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <X className="w-8 h-8 text-white" />
-            </button>
-          )}
+
+          <div
+            className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+            onClick={() => profilePicInputRef.current?.click()}
+          >
+            <div className="text-white text-xs font-medium bg-[#ff950e] rounded-full px-3 py-1">
+              Change Photo
+            </div>
+          </div>
         </div>
-        
-        <button
-          onClick={() => profilePicInputRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition"
-        >
-          <Upload className="w-4 h-4" />
-          {preview ? 'Change Photo' : 'Upload Photo'}
-        </button>
-        
+
         <input
           ref={profilePicInputRef}
           type="file"
@@ -70,11 +65,18 @@ export default function ProfileInfoCard({
           onChange={handleProfilePicChange}
           className="hidden"
         />
+
+        <img
+          src="/Upload_New_Picture.png"
+          alt="Upload New Picture"
+          onClick={() => profilePicInputRef.current?.click()}
+          className="w-24 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+        />
       </div>
 
       {/* Bio Section */}
-      <div className="mb-4">
-        <label htmlFor="bio" className="block text-sm font-medium text-gray-300 mb-2">Bio</label>
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-300 mb-2">Bio</label>
         <textarea
           id="bio"
           name="bio"
