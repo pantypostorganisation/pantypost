@@ -1,7 +1,5 @@
 // src/utils/messageUtils.ts
 
-import { safeStorage } from '@/utils/safeStorage';
-
 export interface Message {
   id?: string;
   sender: string;
@@ -100,11 +98,12 @@ export function formatTimeAgo(date: string): string {
 
 // Additional utility functions for messages
 export function saveRecentEmojis(emojis: string[]): void {
-  safeStorage.setItem('recentEmojis', emojis);
+  localStorage.setItem('recentEmojis', JSON.stringify(emojis));
 }
 
 export function getRecentEmojis(): string[] {
-  return safeStorage.getItem<string[]>('recentEmojis', []) || [];
+  const stored = localStorage.getItem('recentEmojis');
+  return stored ? JSON.parse(stored) : [];
 }
 
 export function validateImageSize(file: File): string | null {
@@ -126,57 +125,4 @@ export function getMessageKey(sender: string, receiver: string): string {
 export function formatMessage(content: string): string {
   // Simple formatting for now
   return content.trim();
-}
-
-// Helper to get conversation key (for MessageContext compatibility)
-export function getConversationKey(sender: string, receiver: string): string {
-  return getMessageKey(sender, receiver);
-}
-
-// Format message timestamp
-export function formatMessageTime(date: string): string {
-  const messageDate = new Date(date);
-  const now = new Date();
-  const diffMs = now.getTime() - messageDate.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  if (diffDays === 0) {
-    // Today - show time only
-    return messageDate.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  } else if (diffDays === 1) {
-    // Yesterday
-    return 'Yesterday';
-  } else if (diffDays < 7) {
-    // This week - show day name
-    return messageDate.toLocaleDateString([], { 
-      weekday: 'short' 
-    });
-  } else {
-    // Older - show date
-    return messageDate.toLocaleDateString([], { 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  }
-}
-
-// Get user initials for avatar
-export function getUserInitials(username: string): string {
-  if (!username) return '?';
-  
-  const words = username.split(/[\s_-]+/);
-  if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
-  
-  return username.substring(0, 2).toUpperCase();
-}
-
-// Truncate message for preview
-export function truncateMessage(content: string, maxLength: number = 50): string {
-  if (content.length <= maxLength) return content;
-  return content.substring(0, maxLength).trim() + '...';
 }

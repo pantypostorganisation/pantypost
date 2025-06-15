@@ -2,7 +2,6 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { safeStorage } from '@/utils/safeStorage';
 
 export interface User {
   id: string;
@@ -10,7 +9,7 @@ export interface User {
   role: 'buyer' | 'seller' | 'admin';
   email?: string;
   profilePicture?: string;
-  isVerified: boolean;
+  isVerified: boolean; // ✅ SIMPLIFIED: Single source of truth
   tier?: 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess';
   subscriberCount?: number;
   totalSales?: number;
@@ -23,10 +22,11 @@ export interface User {
   banReason?: string;
   banExpiresAt?: string;
   
+  // ✅ SIMPLIFIED: Consolidated verification properties
   verificationStatus: 'pending' | 'verified' | 'rejected' | 'unverified';
   verificationRequestedAt?: string;
   verificationRejectionReason?: string;
-  verificationDocs?: any;
+  verificationDocs?: any; // Add this to store docs in auth context
 }
 
 interface AuthContextType {
@@ -37,158 +37,253 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
   isLoggedIn: boolean;
   loading: boolean;
-  error: string | null;
+  error: string | null; // ✅ ADDED: Error state
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Generate or get user ID
-const getUserId = (): string => {
-  let userId = safeStorage.getItem<string>('user_device_id', '');
-  if (!userId) {
-    userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    safeStorage.setItem('user_device_id', userId);
+// ✅ ADDED: Safe localStorage operations
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      console.error(`Error reading from localStorage (${key}):`, error);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (error) {
+      console.error(`Error writing to localStorage (${key}):`, error);
+      return false;
+    }
+  },
+  removeItem: (key: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (error) {
+      console.error(`Error removing from localStorage (${key}):`, error);
+      return false;
+    }
   }
-  return userId;
+};
+
+// ✅ ADDED: Input validation
+const validateUsername = (username: string): string | null => {
+  if (!username || typeof username !== 'string') return 'Username is required';
+  if (username.length < 2) return 'Username must be at least 2 characters';
+  if (username.length > 50) return 'Username must be less than 50 characters';
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) return 'Username can only contain letters, numbers, underscores, and hyphens';
+  return null;
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load user data on mount
+  // ✅ IMPROVED: Safe initialization with error handling
   useEffect(() => {
-    const loadUser = () => {
+    const initAuth = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        
-        const storedUser = safeStorage.getItem<User | null>('user', null);
-        
+        const storedUser = safeLocalStorage.getItem('currentUser');
         if (storedUser) {
-          // Check if user is banned
-          if (storedUser.isBanned && storedUser.banExpiresAt) {
-            const banExpiry = new Date(storedUser.banExpiresAt);
-            if (banExpiry > new Date()) {
-              // Still banned
-              setUser(storedUser);
-            } else {
-              // Ban expired, update user
-              const updatedUser = { ...storedUser, isBanned: false, banReason: undefined, banExpiresAt: undefined };
-              setUser(updatedUser);
-              safeStorage.setItem('user', updatedUser);
+          const parsedUser = JSON.parse(storedUser);
+          
+          // ✅ ADDED: Validate stored user data
+          if (parsedUser && typeof parsedUser === 'object' && parsedUser.username) {
+            // ✅ IMPORTANT: Check if we have verification data in the all_users_v2 store
+            const allUsersData = safeLocalStorage.getItem('all_users_v2');
+            if (allUsersData) {
+              try {
+                const allUsers = JSON.parse(allUsersData);
+                const storedUserData = allUsers[parsedUser.username];
+                
+                if (storedUserData && storedUserData.verificationStatus) {
+                  // Merge verification data from all_users_v2
+                  parsedUser.verificationStatus = storedUserData.verificationStatus;
+                  parsedUser.verificationRequestedAt = storedUserData.verificationRequestedAt;
+                  parsedUser.verificationRejectionReason = storedUserData.verificationRejectionReason;
+                  parsedUser.verificationDocs = storedUserData.verificationDocs;
+                  parsedUser.isVerified = storedUserData.verificationStatus === 'verified';
+                }
+              } catch (e) {
+                console.error('Error parsing all_users_v2 data:', e);
+              }
             }
+            
+            // ✅ ADDED: Migrate old user data format
+            const migratedUser: User = {
+              ...parsedUser,
+              isVerified: parsedUser.isVerified ?? parsedUser.verified ?? false,
+              verificationStatus: parsedUser.verificationStatus ?? (parsedUser.verified ? 'verified' : 'unverified'),
+              createdAt: parsedUser.createdAt ?? new Date().toISOString(),
+              lastActive: new Date().toISOString(), // Always update last active
+            };
+            
+            setUser(migratedUser);
+            
+            // ✅ ADDED: Update stored user with migrated data
+            safeLocalStorage.setItem('currentUser', JSON.stringify(migratedUser));
           } else {
-            setUser(storedUser);
+            // Invalid user data, clear it
+            safeLocalStorage.removeItem('currentUser');
           }
         }
-      } catch (err) {
-        console.error('Error loading user:', err);
+      } catch (error) {
+        console.error('Error loading user from localStorage:', error);
+        safeLocalStorage.removeItem('currentUser');
         setError('Failed to load user data');
       } finally {
-        setLoading(false);
         setIsAuthReady(true);
       }
     };
 
-    loadUser();
+    initAuth();
   }, []);
 
+  // ✅ IMPROVED: Better error handling and validation
   const login = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin' = 'buyer'): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true);
-      setError(null);
+      // ✅ ADDED: Input validation
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        setError(usernameError);
+        return false;
+      }
 
-      // Check if user exists in the users store
-      const allUsers = safeStorage.getItem<Record<string, any>>('all_users_v2', {}) || {};
-      const existingUser = allUsers[username.toLowerCase()];
+      const normalizedUsername = username.trim().toLowerCase();
+      
+      // Admin users check
+      const isAdmin = normalizedUsername === 'oakley' || normalizedUsername === 'gerome';
+      const userRole = isAdmin ? 'admin' : role;
 
-      if (existingUser) {
-        // Check if user is banned
-        if (existingUser.isBanned && existingUser.banExpiresAt) {
-          const banExpiry = new Date(existingUser.banExpiresAt);
-          if (banExpiry > new Date()) {
-            setError(`Account banned until ${banExpiry.toLocaleDateString()}. Reason: ${existingUser.banReason || 'Violation of terms'}`);
-            return false;
+      // ✅ IMPORTANT: Check if user already exists in all_users_v2
+      let existingVerificationData = null;
+      const allUsersData = safeLocalStorage.getItem('all_users_v2');
+      if (allUsersData) {
+        try {
+          const allUsers = JSON.parse(allUsersData);
+          const existingUser = allUsers[normalizedUsername];
+          if (existingUser && existingUser.verificationStatus) {
+            existingVerificationData = {
+              verificationStatus: existingUser.verificationStatus,
+              verificationRequestedAt: existingUser.verificationRequestedAt,
+              verificationRejectionReason: existingUser.verificationRejectionReason,
+              verificationDocs: existingUser.verificationDocs,
+            };
           }
+        } catch (e) {
+          console.error('Error checking existing user data:', e);
         }
-
-        // User exists, use their stored data
-        const userData: User = {
-          ...existingUser,
-          lastActive: new Date().toISOString(),
-        };
-        
-        setUser(userData);
-        safeStorage.setItem('user', userData);
-        
-        // Update user in allUsers
-        allUsers[username.toLowerCase()] = userData;
-        safeStorage.setItem('all_users_v2', allUsers);
-        
-        return true;
       }
 
-      // Admin check
-      const isAdmin = username.toLowerCase() === 'oakley' || username.toLowerCase() === 'gerome';
-      if (isAdmin) {
-        role = 'admin';
-      }
-
-      // Create new user
+      // Create user object with proper defaults
       const newUser: User = {
-        id: getUserId(),
-        username: username.toLowerCase(),
-        role: isAdmin ? 'admin' : role,
-        isVerified: false,
-        verificationStatus: 'unverified',
-        createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-        tier: role === 'seller' ? 'Tease' : undefined,
+        id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        username: normalizedUsername,
+        role: userRole,
+        email: `${normalizedUsername}@pantypost.com`,
+        isVerified: existingVerificationData?.verificationStatus === 'verified' || isAdmin,
+        tier: userRole === 'seller' ? 'Tease' : undefined,
         subscriberCount: 0,
         totalSales: 0,
         rating: 0,
         reviewCount: 0,
+        createdAt: new Date().toISOString(),
+        lastActive: new Date().toISOString(),
+        bio: '',
+        isBanned: false,
+        verificationStatus: existingVerificationData?.verificationStatus || (isAdmin ? 'verified' : 'unverified'),
+        verificationRequestedAt: existingVerificationData?.verificationRequestedAt,
+        verificationRejectionReason: existingVerificationData?.verificationRejectionReason,
+        verificationDocs: existingVerificationData?.verificationDocs,
       };
 
-      // Save new user
-      allUsers[username.toLowerCase()] = newUser;
-      safeStorage.setItem('all_users_v2', allUsers);
+      // Store in localStorage with error handling
+      const success = safeLocalStorage.setItem('currentUser', JSON.stringify(newUser));
+      if (!success) {
+        setError('Failed to save user data');
+        return false;
+      }
       
       setUser(newUser);
-      safeStorage.setItem('user', newUser);
-      
       return true;
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Failed to log in');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Login failed. Please try again.');
       return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // ✅ IMPROVED: Safe logout with cleanup
   const logout = useCallback(() => {
-    setUser(null);
-    safeStorage.removeItem('user');
-    setError(null);
+    try {
+      safeLocalStorage.removeItem('currentUser');
+      setUser(null);
+      setError(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still clear user state even if localStorage fails
+      setUser(null);
+    }
   }, []);
 
+  // ✅ IMPROVED: Safe user updates with validation and persistence to all_users_v2
   const updateUser = useCallback((updates: Partial<User>) => {
-    if (!user) return;
+    if (!user) {
+      setError('No user to update');
+      return;
+    }
 
-    const updatedUser = { ...user, ...updates };
-    setUser(updatedUser);
-    
-    // Save to storage
-    safeStorage.setItem('user', updatedUser);
-    
-    // Update in allUsers
-    const allUsers = safeStorage.getItem<Record<string, any>>('all_users_v2', {}) || {};
-    allUsers[user.username] = updatedUser;
-    safeStorage.setItem('all_users_v2', allUsers);
+    try {
+      const updatedUser = { 
+        ...user, 
+        ...updates,
+        lastActive: new Date().toISOString() // Always update last active
+      };
+      
+      // Update currentUser in localStorage
+      const success = safeLocalStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      
+      // ✅ IMPORTANT: Also update all_users_v2 to maintain consistency
+      const allUsersData = safeLocalStorage.getItem('all_users_v2');
+      if (allUsersData) {
+        try {
+          const allUsers = JSON.parse(allUsersData);
+          allUsers[user.username] = {
+            ...allUsers[user.username],
+            ...updatedUser,
+          };
+          safeLocalStorage.setItem('all_users_v2', JSON.stringify(allUsers));
+        } catch (e) {
+          console.error('Error updating all_users_v2:', e);
+        }
+      }
+      
+      if (success) {
+        setUser(updatedUser);
+        setError(null);
+      } else {
+        setError('Failed to update user data');
+      }
+    } catch (error) {
+      console.error('Update user error:', error);
+      setError('Failed to update user');
+    }
   }, [user]);
 
   const contextValue: AuthContextType = {

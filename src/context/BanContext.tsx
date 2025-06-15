@@ -1,108 +1,92 @@
 // src/context/BanContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { safeStorage } from '@/utils/safeStorage';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 
-export type BanReason = 
-  | 'inappropriate_content' 
-  | 'harassment'
-  | 'spam'
-  | 'scamming'
-  | 'underage'
-  | 'fake_profile'
-  | 'illegal_activity'
-  | 'other';
+export type BanType = 'temporary' | 'permanent';
+export type BanReason = 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'underage' | 'payment_fraud' | 'other';
+export type AppealStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | 'escalated';
 
-export type AppealStatus = 'pending' | 'reviewing' | 'approved' | 'rejected' | 'escalated';
-
-export interface UserBan {
+export type UserBan = {
   id: string;
   username: string;
-  banType: 'temporary' | 'permanent';
+  banType: BanType;
   reason: BanReason;
   customReason?: string;
-  startTime: string;
-  endTime?: string; // undefined for permanent bans
-  remainingHours?: number;
-  bannedBy: string;
+  startTime: string; // ISO string
+  endTime?: string; // ISO string, undefined for permanent bans
+  remainingHours?: number; // calculated field
+  bannedBy: string; // admin username
   active: boolean;
   appealable: boolean;
   appealSubmitted?: boolean;
-  appealMessage?: string;
-  appealSubmittedAt?: string;
+  appealText?: string;
+  appealDate?: string;
   appealStatus?: AppealStatus;
-  appealReviewedBy?: string;
-  appealReviewedAt?: string;
-  appealDecisionReason?: string;
-  notes?: string;
-  reportIds?: string[];
-  evidenceFiles?: string[]; // Base64 image strings
-}
+  appealEvidence?: string[]; // Base64 encoded images
+  notes?: string; // admin notes
+  reportIds?: string[]; // linked report IDs that led to this ban
+  ipAddress?: string; // For future IP tracking
+  expirationTimer?: NodeJS.Timeout; // Timer reference for auto-expiration
+};
 
-export interface BanHistory {
+export type BanHistory = {
   id: string;
-  action: 'banned' | 'unbanned' | 'appeal_submitted' | 'appeal_approved' | 'appeal_rejected' | 'modified';
   username: string;
-  timestamp: string;
+  action: 'banned' | 'unbanned' | 'appeal_submitted' | 'appeal_approved' | 'appeal_rejected' | 'appeal_escalated';
   details: string;
-  performedBy: string;
-  metadata?: {
-    banId?: string;
-    duration?: number;
-    reason?: string;
-    oldStatus?: string;
-    newStatus?: string;
-  };
-}
-
-export interface AppealReview {
-  id: string;
-  banId: string;
-  reviewerId: string;
-  decision: 'approve' | 'reject' | 'escalate';
-  comments: string;
   timestamp: string;
-  priority?: 'high' | 'medium' | 'low';
-}
+  adminUsername: string;
+  metadata?: Record<string, any>; // Additional context
+};
 
-export interface IPBan {
-  id: string;
+export type AppealReview = {
+  reviewId: string;
+  banId: string;
+  reviewerAdmin: string;
+  reviewNotes: string;
+  decision: 'approve' | 'reject' | 'escalate';
+  reviewDate: string;
+  escalationReason?: string;
+};
+
+export type IPBan = {
   ipAddress: string;
-  associatedUsernames: string[];
+  bannedUsernames: string[];
+  banDate: string;
+  expiryDate?: string;
   reason: string;
-  bannedAt: string;
-  bannedBy: string;
-  active: boolean;
-}
+};
 
 type BanContextType = {
   bans: UserBan[];
   banHistory: BanHistory[];
   appealReviews: AppealReview[];
   ipBans: IPBan[];
-  banUser: (
-    username: string, 
-    hours: number | 'permanent', 
-    reason: BanReason, 
-    customReason?: string,
-    adminUsername?: string,
-    reportIds?: string[],
-    notes?: string
-  ) => Promise<boolean>;
-  unbanUser: (username: string, adminUsername?: string, reason?: string) => void;
-  isUserBanned: (username: string) => boolean;
+  
+  // Enhanced ban management
+  banUser: (username: string, hours: number | 'permanent', reason: BanReason, customReason?: string, adminUsername?: string, reportIds?: string[], notes?: string) => Promise<boolean>;
+  unbanUser: (username: string, adminUsername?: string, reason?: string) => boolean;
+  isUserBanned: (username: string) => UserBan | null;
   getBanInfo: (username: string) => UserBan | null;
+  
+  // Ban queries
   getActiveBans: () => UserBan[];
   getExpiredBans: () => UserBan[];
-  getUserBanHistory: (username: string) => BanHistory[];
-  submitAppeal: (banId: string, appealMessage: string, evidenceFiles?: string[]) => Promise<boolean>;
-  reviewAppeal: (banId: string, decision: 'approve' | 'reject' | 'escalate', reviewerId: string, comments: string) => void;
-  approveAppeal: (banId: string, reviewerId: string, comments: string) => void;
-  rejectAppeal: (banId: string, reviewerId: string, comments: string) => void;
-  escalateAppeal: (banId: string, reviewerId: string, comments: string) => void;
-  banUserIP: (ipAddress: string, username: string, reason: string, adminUsername: string) => void;
+  getUserBanHistory: (username: string) => UserBan[];
+  
+  // Enhanced appeals
+  submitAppeal: (username: string, appealText: string, evidence?: File[]) => Promise<boolean>;
+  reviewAppeal: (banId: string, decision: 'approve' | 'reject' | 'escalate', reviewNotes: string, adminUsername: string) => boolean;
+  approveAppeal: (banId: string, adminUsername: string) => boolean;
+  rejectAppeal: (banId: string, adminUsername: string, reason?: string) => boolean;
+  escalateAppeal: (banId: string, adminUsername: string, escalationReason: string) => boolean;
+  
+  // IP management
+  banUserIP: (username: string, ipAddress: string, reason: string) => boolean;
   isIPBanned: (ipAddress: string) => boolean;
+  
+  // Utilities
   updateExpiredBans: () => void;
   scheduleExpiration: (ban: UserBan) => void;
   clearExpirationTimer: (banId: string) => void;
@@ -120,47 +104,54 @@ type BanContextType = {
       rejectedAppeals: number;
     };
   };
+  
+  // Validation
   validateBanInput: (username: string, hours: number | 'permanent', reason: BanReason) => { valid: boolean; error?: string };
 };
 
 const BanContext = createContext<BanContextType | undefined>(undefined);
 
-// Validation utilities
+// Security utilities
+const sanitizeString = (input: string): string => {
+  if (typeof input !== 'string') return '';
+  return input
+    .replace(/[<>]/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/data:/gi, '')
+    .replace(/\u0000/g, '')
+    .trim()
+    .slice(0, 1000); // Prevent extremely long inputs
+};
+
 const validateUsername = (username: string): boolean => {
-  return /^[a-zA-Z0-9_-]{3,20}$/.test(username);
+  if (!username || typeof username !== 'string') return false;
+  if (username.length > 50) return false;
+  return /^[a-zA-Z0-9_-]+$/.test(username);
 };
 
 const validateBanDuration = (hours: number | 'permanent'): boolean => {
   if (hours === 'permanent') return true;
+  if (typeof hours !== 'number') return false;
   return hours > 0 && hours <= 8760; // Max 1 year
 };
 
-const validateBanReason = (reason: BanReason): boolean => {
-  const validReasons: BanReason[] = [
-    'inappropriate_content', 'harassment', 'spam', 'scamming', 
-    'underage', 'fake_profile', 'illegal_activity', 'other'
-  ];
-  return validReasons.includes(reason);
+const validateBanReason = (reason: string): boolean => {
+  const validReasons: BanReason[] = ['harassment', 'spam', 'inappropriate_content', 'scam', 'underage', 'payment_fraud', 'other'];
+  return validReasons.includes(reason as BanReason);
 };
 
-// Sanitization utility
-const sanitizeString = (input: string): string => {
-  return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-              .replace(/[<>]/g, '')
-              .trim();
-};
-
-// Image compression utility
-const compressImage = (file: File, maxDimension: number = 800): Promise<string> => {
+// Compress images for appeal evidence
+const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.readAsDataURL(file);
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
+        // Calculate new dimensions (max 800px)
+        const maxDimension = 800;
         let { width, height } = img;
         
         if (width > height) {
@@ -200,50 +191,50 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Load data from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedBans = safeStorage.getItem<UserBan[]>('panty_user_bans', []);
-      setBans(storedBans || []);
-      // Schedule expiration for active temporary bans
-      if (storedBans && storedBans.length > 0) {
-        storedBans.forEach((ban: UserBan) => {
+      const storedBans = localStorage.getItem('panty_user_bans');
+      const storedHistory = localStorage.getItem('panty_ban_history');
+      const storedAppealReviews = localStorage.getItem('panty_appeal_reviews');
+      const storedIPBans = localStorage.getItem('panty_ip_bans');
+      
+      if (storedBans) {
+        const parsedBans = JSON.parse(storedBans);
+        setBans(parsedBans);
+        // Schedule expiration for active temporary bans
+        parsedBans.forEach((ban: UserBan) => {
           if (ban.active && ban.banType === 'temporary' && ban.endTime) {
             scheduleExpiration(ban);
           }
         });
       }
       
-      const storedHistory = safeStorage.getItem<BanHistory[]>('panty_ban_history', []);
-      setBanHistory(storedHistory || []);
-      
-      const storedAppealReviews = safeStorage.getItem<AppealReview[]>('panty_appeal_reviews', []);
-      setAppealReviews(storedAppealReviews || []);
-      
-      const storedIPBans = safeStorage.getItem<IPBan[]>('panty_ip_bans', []);
-      setIPBans(storedIPBans || []);
+      if (storedHistory) setBanHistory(JSON.parse(storedHistory));
+      if (storedAppealReviews) setAppealReviews(JSON.parse(storedAppealReviews));
+      if (storedIPBans) setIPBans(JSON.parse(storedIPBans));
     }
   }, []);
 
   // Save to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      safeStorage.setItem('panty_user_bans', bans);
+      localStorage.setItem('panty_user_bans', JSON.stringify(bans));
     }
   }, [bans]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      safeStorage.setItem('panty_ban_history', banHistory);
+      localStorage.setItem('panty_ban_history', JSON.stringify(banHistory));
     }
   }, [banHistory]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      safeStorage.setItem('panty_appeal_reviews', appealReviews);
+      localStorage.setItem('panty_appeal_reviews', JSON.stringify(appealReviews));
     }
   }, [appealReviews]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      safeStorage.setItem('panty_ip_bans', ipBans);
+      localStorage.setItem('panty_ip_bans', JSON.stringify(ipBans));
     }
   }, [ipBans]);
 
@@ -275,39 +266,45 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Add to ban history
-  const addBanHistory = (action: BanHistory['action'], username: string, details: string, adminUsername: string, metadata?: BanHistory['metadata']) => {
-    const entry: BanHistory = {
+  const addBanHistory = (action: BanHistory['action'], username: string, details: string, adminUsername: string, metadata?: Record<string, any>) => {
+    const historyEntry: BanHistory = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      username: sanitizeString(username),
       action,
-      username,
+      details: sanitizeString(details),
       timestamp: new Date().toISOString(),
-      details,
-      performedBy: adminUsername,
+      adminUsername: sanitizeString(adminUsername),
       metadata
     };
-    setBanHistory(prev => [...prev, entry]);
+    setBanHistory(prev => [...prev, historyEntry]);
   };
 
-  // Schedule ban expiration
-  const scheduleExpiration = (ban: UserBan) => {
-    if (ban.banType === 'temporary' && ban.endTime) {
-      const endTime = new Date(ban.endTime).getTime();
-      const now = Date.now();
-      const delay = endTime - now;
-
-      if (delay > 0) {
-        const timerId = setTimeout(() => {
-          setBans(prev => prev.map(b => 
-            b.id === ban.id ? { ...b, active: false } : b
-          ));
-          activeTimers.current.delete(ban.id);
-          addBanHistory('unbanned', ban.username, 'Ban expired automatically', 'system');
-        }, delay);
-
-        activeTimers.current.set(ban.id, timerId);
-      }
+  // Schedule automatic expiration
+  const scheduleExpiration = useCallback((ban: UserBan) => {
+    if (ban.banType === 'permanent' || !ban.endTime || !ban.active) return;
+    
+    const timeUntilExpiry = new Date(ban.endTime).getTime() - Date.now();
+    
+    if (timeUntilExpiry > 0) {
+      const timer = setTimeout(() => {
+        console.log(`Auto-expiring ban for ${ban.username}`);
+        unbanUser(ban.username, 'system', 'Automatic expiration');
+        
+        // Dispatch event for UI updates
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('banExpired', { 
+            detail: { banId: ban.id, username: ban.username } 
+          }));
+        }
+        
+        // Clean up timer reference
+        activeTimers.current.delete(ban.id);
+      }, timeUntilExpiry);
+      
+      // Store timer reference
+      activeTimers.current.set(ban.id, timer);
     }
-  };
+  }, []);
 
   // Clear expiration timer
   const clearExpirationTimer = (banId: string) => {
@@ -318,33 +315,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // Update expired bans (called periodically)
-  const updateExpiredBans = () => {
-    const now = new Date();
-    setBans(prev => prev.map(ban => {
-      if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-        const endTime = new Date(ban.endTime);
-        if (now >= endTime) {
-          clearExpirationTimer(ban.id);
-          addBanHistory('unbanned', ban.username, 'Ban expired automatically', 'system');
-          return { ...ban, active: false };
-        } else {
-          // Update remaining hours
-          const remainingMs = endTime.getTime() - now.getTime();
-          const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
-          return { ...ban, remainingHours };
-        }
-      }
-      return ban;
-    }));
-  };
-
-  // Periodically check for expired bans
-  useEffect(() => {
-    const interval = setInterval(updateExpiredBans, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, []);
-
+  // Enhanced ban user function with race condition protection
   const banUser = async (
     username: string, 
     hours: number | 'permanent', 
@@ -369,7 +340,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     // Race condition protection
     const lockKey = `ban_user_${cleanUsername}`;
-    const existingLock = safeStorage.getItem(lockKey, null);
+    const existingLock = localStorage.getItem(lockKey);
     
     if (existingLock) {
       try {
@@ -384,7 +355,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     // Set lock
-    safeStorage.setItem(lockKey, JSON.stringify({
+    localStorage.setItem(lockKey, JSON.stringify({
       timestamp: Date.now(),
       adminUser: cleanAdminUsername
     }));
@@ -430,249 +401,324 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         cleanUsername, 
         `Banned ${durationText} for ${reason}${cleanCustomReason ? `: ${cleanCustomReason}` : ''}`, 
         cleanAdminUsername,
-        {
-          banId,
-          duration: hours === 'permanent' ? undefined : hours,
-          reason
-        }
+        { banId }
       );
-
+      
       return true;
+    } catch (error) {
+      console.error('Error banning user:', error);
+      return false;
     } finally {
-      // Clear lock
-      safeStorage.removeItem(lockKey);
+      // Always release lock
+      localStorage.removeItem(lockKey);
     }
   };
 
-  const unbanUser = (username: string, adminUsername: string = 'system', reason?: string) => {
-    const ban = bans.find(b => b.username === username && b.active);
-    if (ban) {
-      clearExpirationTimer(ban.id);
-      setBans(prev => prev.map(b => 
-        b.username === username && b.active ? { ...b, active: false } : b
+  // Enhanced unban function
+  const unbanUser = (username: string, adminUsername: string = 'system', reason?: string): boolean => {
+    try {
+      const cleanUsername = sanitizeString(username);
+      const cleanAdminUsername = sanitizeString(adminUsername);
+      const cleanReason = reason ? sanitizeString(reason) : undefined;
+      
+      setBans(prev => prev.map(ban => {
+        if (ban.username === cleanUsername && ban.active) {
+          // Clear any active timer
+          clearExpirationTimer(ban.id);
+          
+          return { ...ban, active: false };
+        }
+        return ban;
+      }));
+      
+      addBanHistory('unbanned', cleanUsername, cleanReason || 'Ban lifted by admin', cleanAdminUsername);
+      return true;
+    } catch (error) {
+      console.error('Error unbanning user:', error);
+      return false;
+    }
+  };
+
+  // Enhanced appeal submission with evidence
+  const submitAppeal = async (username: string, appealText: string, evidence?: File[]): Promise<boolean> => {
+    try {
+      const cleanUsername = sanitizeString(username);
+      const cleanAppealText = sanitizeString(appealText);
+      
+      let appealEvidence: string[] = [];
+      
+      // Process evidence files
+      if (evidence && evidence.length > 0) {
+        try {
+          appealEvidence = await Promise.all(
+            evidence.slice(0, 3).map(file => compressImage(file)) // Max 3 files
+          );
+        } catch (error) {
+          console.error('Error processing appeal evidence:', error);
+          // Continue without evidence if processing fails
+        }
+      }
+      
+      setBans(prev => prev.map(ban => 
+        ban.username === cleanUsername && ban.active && ban.appealable
+          ? { 
+              ...ban, 
+              appealSubmitted: true, 
+              appealText: cleanAppealText, 
+              appealDate: new Date().toISOString(),
+              appealStatus: 'pending' as AppealStatus,
+              appealEvidence
+            }
+          : ban
       ));
+      
       addBanHistory(
-        'unbanned', 
-        username, 
-        `Manually unbanned${reason ? `: ${reason}` : ''}`, 
-        adminUsername
+        'appeal_submitted', 
+        cleanUsername, 
+        `Appeal submitted: "${cleanAppealText.substring(0, 100)}${cleanAppealText.length > 100 ? '...' : ''}"`, 
+        cleanUsername,
+        { evidenceCount: appealEvidence.length }
       );
+      
+      return true;
+    } catch (error) {
+      console.error('Error submitting appeal:', error);
+      return false;
     }
   };
 
-  const isUserBanned = (username: string): boolean => {
-    const ban = bans.find(b => b.username === username && b.active);
-    if (!ban) return false;
-    
-    if (ban.banType === 'temporary' && ban.endTime) {
-      return new Date() < new Date(ban.endTime);
+  // Enhanced appeal review system
+  const reviewAppeal = (banId: string, decision: 'approve' | 'reject' | 'escalate', reviewNotes: string, adminUsername: string): boolean => {
+    try {
+      const cleanReviewNotes = sanitizeString(reviewNotes);
+      const cleanAdminUsername = sanitizeString(adminUsername);
+      
+      const review: AppealReview = {
+        reviewId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        banId,
+        reviewerAdmin: cleanAdminUsername,
+        reviewNotes: cleanReviewNotes,
+        decision,
+        reviewDate: new Date().toISOString(),
+        escalationReason: decision === 'escalate' ? cleanReviewNotes : undefined
+      };
+      
+      setAppealReviews(prev => [...prev, review]);
+      
+      const ban = bans.find(b => b.id === banId);
+      if (!ban) return false;
+      
+      if (decision === 'approve') {
+        return approveAppeal(banId, cleanAdminUsername);
+      } else if (decision === 'reject') {
+        return rejectAppeal(banId, cleanAdminUsername, cleanReviewNotes);
+      } else if (decision === 'escalate') {
+        return escalateAppeal(banId, cleanAdminUsername, cleanReviewNotes);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error reviewing appeal:', error);
+      return false;
     }
-    
-    return true;
   };
 
+  // Approve appeal
+  const approveAppeal = (banId: string, adminUsername: string): boolean => {
+    try {
+      const ban = bans.find(b => b.id === banId);
+      if (!ban) return false;
+      
+      setBans(prev => prev.map(b => 
+        b.id === banId ? { ...b, active: false, appealStatus: 'approved' as AppealStatus } : b
+      ));
+      
+      // Clear any active timer
+      clearExpirationTimer(banId);
+      
+      addBanHistory('appeal_approved', ban.username, 'Appeal approved and ban lifted', adminUsername);
+      return true;
+    } catch (error) {
+      console.error('Error approving appeal:', error);
+      return false;
+    }
+  };
+
+  // Reject appeal
+  const rejectAppeal = (banId: string, adminUsername: string, reason?: string): boolean => {
+    try {
+      const ban = bans.find(b => b.id === banId);
+      if (!ban) return false;
+      
+      setBans(prev => prev.map(b => 
+        b.id === banId 
+          ? { 
+              ...b, 
+              appealSubmitted: false, 
+              appealText: undefined, 
+              appealable: false,
+              appealStatus: 'rejected' as AppealStatus
+            }
+          : b
+      ));
+      
+      addBanHistory('appeal_rejected', ban.username, reason || 'Appeal rejected', adminUsername);
+      return true;
+    } catch (error) {
+      console.error('Error rejecting appeal:', error);
+      return false;
+    }
+  };
+
+  // Escalate appeal
+  const escalateAppeal = (banId: string, adminUsername: string, escalationReason: string): boolean => {
+    try {
+      const ban = bans.find(b => b.id === banId);
+      if (!ban) return false;
+      
+      setBans(prev => prev.map(b => 
+        b.id === banId 
+          ? { ...b, appealStatus: 'escalated' as AppealStatus }
+          : b
+      ));
+      
+      addBanHistory('appeal_escalated', ban.username, `Appeal escalated: ${escalationReason}`, adminUsername);
+      return true;
+    } catch (error) {
+      console.error('Error escalating appeal:', error);
+      return false;
+    }
+  };
+
+  // IP ban functionality
+  const banUserIP = (username: string, ipAddress: string, reason: string): boolean => {
+    try {
+      const cleanUsername = sanitizeString(username);
+      const cleanIPAddress = sanitizeString(ipAddress);
+      const cleanReason = sanitizeString(reason);
+      
+      const ipBan: IPBan = {
+        ipAddress: cleanIPAddress,
+        bannedUsernames: [cleanUsername],
+        banDate: new Date().toISOString(),
+        expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+        reason: cleanReason
+      };
+      
+      setIPBans(prev => {
+        const existing = prev.find(ban => ban.ipAddress === cleanIPAddress);
+        if (existing) {
+          return prev.map(ban => 
+            ban.ipAddress === cleanIPAddress 
+              ? { ...ban, bannedUsernames: [...new Set([...ban.bannedUsernames, cleanUsername])] }
+              : ban
+          );
+        }
+        return [...prev, ipBan];
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error banning IP:', error);
+      return false;
+    }
+  };
+
+  // Check if IP is banned
+  const isIPBanned = (ipAddress: string): boolean => {
+    const now = new Date();
+    return ipBans.some(ban => 
+      ban.ipAddress === ipAddress && 
+      (!ban.expiryDate || new Date(ban.expiryDate) > now)
+    );
+  };
+
+  // Check if user is banned (with real-time expiration check)
+  const isUserBanned = (username: string): UserBan | null => {
+    const activeBan = bans.find(ban => ban.username === username && ban.active);
+    
+    if (!activeBan) return null;
+    
+    // Check if temporary ban has expired
+    if (activeBan.banType === 'temporary' && activeBan.endTime) {
+      const now = new Date();
+      const endTime = new Date(activeBan.endTime);
+      
+      if (now >= endTime) {
+        // Ban has expired, automatically unban
+        unbanUser(username, 'system', 'Temporary ban expired');
+        return null;
+      }
+      
+      // Update remaining hours
+      const remainingMs = endTime.getTime() - now.getTime();
+      const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+      activeBan.remainingHours = Math.max(0, remainingHours);
+    }
+    
+    return activeBan;
+  };
+
+  // Get ban info (same as isUserBanned but clearer name)
   const getBanInfo = (username: string): UserBan | null => {
-    return bans.find(b => b.username === username && b.active) || null;
+    return isUserBanned(username);
   };
 
+  // Get active bans
   const getActiveBans = (): UserBan[] => {
-    return bans.filter(ban => ban.active);
+    return bans.filter(ban => ban.active).map(ban => {
+      // Update remaining hours for temporary bans
+      if (ban.banType === 'temporary' && ban.endTime) {
+        const now = new Date();
+        const endTime = new Date(ban.endTime);
+        const remainingMs = endTime.getTime() - now.getTime();
+        const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+        ban.remainingHours = Math.max(0, remainingHours);
+      }
+      return ban;
+    });
   };
 
+  // Get expired bans
   const getExpiredBans = (): UserBan[] => {
     return bans.filter(ban => !ban.active);
   };
 
-  const getUserBanHistory = (username: string): BanHistory[] => {
-    return banHistory.filter(entry => entry.username === username);
+  // Get user's ban history
+  const getUserBanHistory = (username: string): UserBan[] => {
+    return bans.filter(ban => ban.username === username);
   };
 
-  const submitAppeal = async (banId: string, appealMessage: string, evidenceFiles?: string[]): Promise<boolean> => {
-    const ban = bans.find(b => b.id === banId);
-    if (!ban || !ban.appealable || ban.appealSubmitted) {
-      return false;
-    }
-
-    // Compress evidence files if provided
-    let compressedEvidence: string[] = [];
-    if (evidenceFiles && evidenceFiles.length > 0) {
-      try {
-        // Limit to 3 files
-        const limitedFiles = evidenceFiles.slice(0, 3);
-        compressedEvidence = limitedFiles; // Already base64 strings
-      } catch (error) {
-        console.error('Error processing evidence files:', error);
+  // Update expired bans
+  const updateExpiredBans = () => {
+    const now = new Date();
+    setBans(prev => prev.map(ban => {
+      if (ban.active && ban.banType === 'temporary' && ban.endTime) {
+        const endTime = new Date(ban.endTime);
+        if (now >= endTime) {
+          clearExpirationTimer(ban.id);
+          addBanHistory('unbanned', ban.username, 'Temporary ban expired automatically', 'system');
+          return { ...ban, active: false };
+        }
       }
-    }
-
-    setBans(prev => prev.map(b => 
-      b.id === banId 
-        ? { 
-            ...b, 
-            appealSubmitted: true, 
-            appealMessage: sanitizeString(appealMessage),
-            appealSubmittedAt: new Date().toISOString(),
-            appealStatus: 'pending',
-            evidenceFiles: compressedEvidence
-          } 
-        : b
-    ));
-
-    addBanHistory(
-      'appeal_submitted', 
-      ban.username, 
-      'Appeal submitted for review', 
-      ban.username
-    );
-
-    return true;
+      return ban;
+    }));
   };
 
-  const reviewAppeal = (banId: string, decision: 'approve' | 'reject' | 'escalate', reviewerId: string, comments: string) => {
-    const review: AppealReview = {
-      id: Date.now().toString(),
-      banId,
-      reviewerId,
-      decision,
-      comments: sanitizeString(comments),
-      timestamp: new Date().toISOString()
-    };
-
-    setAppealReviews(prev => [...prev, review]);
-
-    if (decision === 'approve') {
-      approveAppeal(banId, reviewerId, comments);
-    } else if (decision === 'reject') {
-      rejectAppeal(banId, reviewerId, comments);
-    } else {
-      escalateAppeal(banId, reviewerId, comments);
-    }
-  };
-
-  const approveAppeal = (banId: string, reviewerId: string, comments: string) => {
-    const ban = bans.find(b => b.id === banId);
-    if (!ban) return;
-
-    clearExpirationTimer(banId);
-    
-    setBans(prev => prev.map(b => 
-      b.id === banId 
-        ? { 
-            ...b, 
-            active: false,
-            appealStatus: 'approved',
-            appealReviewedBy: reviewerId,
-            appealReviewedAt: new Date().toISOString(),
-            appealDecisionReason: sanitizeString(comments)
-          } 
-        : b
-    ));
-
-    addBanHistory(
-      'appeal_approved', 
-      ban.username, 
-      `Appeal approved: ${comments}`, 
-      reviewerId
-    );
-  };
-
-  const rejectAppeal = (banId: string, reviewerId: string, comments: string) => {
-    const ban = bans.find(b => b.id === banId);
-    if (!ban) return;
-
-    setBans(prev => prev.map(b => 
-      b.id === banId 
-        ? { 
-            ...b, 
-            appealStatus: 'rejected',
-            appealReviewedBy: reviewerId,
-            appealReviewedAt: new Date().toISOString(),
-            appealDecisionReason: sanitizeString(comments)
-          } 
-        : b
-    ));
-
-    addBanHistory(
-      'appeal_rejected', 
-      ban.username, 
-      `Appeal rejected: ${comments}`, 
-      reviewerId
-    );
-  };
-
-  const escalateAppeal = (banId: string, reviewerId: string, comments: string) => {
-    const ban = bans.find(b => b.id === banId);
-    if (!ban) return;
-
-    setBans(prev => prev.map(b => 
-      b.id === banId 
-        ? { 
-            ...b, 
-            appealStatus: 'escalated'
-          } 
-        : b
-    ));
-
-    // Add to review queue with high priority
-    const review: AppealReview = {
-      id: Date.now().toString(),
-      banId,
-      reviewerId,
-      decision: 'escalate',
-      comments: sanitizeString(comments),
-      timestamp: new Date().toISOString(),
-      priority: 'high'
-    };
-    
-    setAppealReviews(prev => [...prev, review]);
-  };
-
-  const banUserIP = (ipAddress: string, username: string, reason: string, adminUsername: string) => {
-    const existingBan = ipBans.find(ban => ban.ipAddress === ipAddress);
-    
-    if (existingBan) {
-      // Add username to existing IP ban
-      if (!existingBan.associatedUsernames.includes(username)) {
-        setIPBans(prev => prev.map(ban => 
-          ban.ipAddress === ipAddress 
-            ? { ...ban, associatedUsernames: [...ban.associatedUsernames, username] }
-            : ban
-        ));
-      }
-    } else {
-      // Create new IP ban
-      const newIPBan: IPBan = {
-        id: Date.now().toString(),
-        ipAddress,
-        associatedUsernames: [username],
-        reason: sanitizeString(reason),
-        bannedAt: new Date().toISOString(),
-        bannedBy: adminUsername,
-        active: true
-      };
-      
-      setIPBans(prev => [...prev, newIPBan]);
-    }
-  };
-
-  const isIPBanned = (ipAddress: string): boolean => {
-    return ipBans.some(ban => ban.ipAddress === ipAddress && ban.active);
-  };
-
-  // Enhanced statistics function
+  // Get comprehensive ban statistics
   const getBanStats = () => {
-    const activeBans = bans.filter(ban => ban.active);
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const activeBans = getActiveBans();
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
-    // Ban reason breakdown
+    // Count bans by reason
     const bansByReason: Record<BanReason, number> = {
-      inappropriate_content: 0,
       harassment: 0,
       spam: 0,
-      scamming: 0,
+      inappropriate_content: 0,
+      scam: 0,
       underage: 0,
-      fake_profile: 0,
-      illegal_activity: 0,
+      payment_fraud: 0,
       other: 0
     };
     

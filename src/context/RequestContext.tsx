@@ -1,8 +1,7 @@
 // src/context/RequestContext.tsx
-'use client';
+"use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { safeStorage } from '@/utils/safeStorage';
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'edited' | 'paid';
 
@@ -16,9 +15,11 @@ export type CustomRequest = {
   tags: string[];
   status: RequestStatus;
   date: string;
+  response?: string;
   paid?: boolean;
-  messageThreadId?: string; // Links to the message conversation
-  lastModifiedBy?: string; // Track who made the last modification
+  // Add these fields to track the message-based flow
+  messageThreadId?: string; // Links to the conversation
+  lastModifiedBy?: string; // Who made the last edit
   originalMessageId?: string; // Reference to original message
 };
 
@@ -56,23 +57,35 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
   // Load initial data from localStorage only once
   useEffect(() => {
     if (typeof window !== 'undefined' && !isInitialized) {
-      const storedRequests = safeStorage.getItem<CustomRequest[]>('panty_custom_requests', []);
-      // Migrate old requests to include new fields if they don't exist
-      const migratedRequests = (storedRequests || []).map((req: any) => ({
-        ...req,
-        messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
-        lastModifiedBy: req.lastModifiedBy || req.buyer,
-        originalMessageId: req.originalMessageId || req.id
-      }));
-      setRequests(migratedRequests);
-      setIsInitialized(true);
+      try {
+        const stored = localStorage.getItem('panty_custom_requests');
+        if (stored) {
+          const parsedRequests = JSON.parse(stored);
+          // Migrate old requests to include new fields if they don't exist
+          const migratedRequests = parsedRequests.map((req: any) => ({
+            ...req,
+            messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
+            lastModifiedBy: req.lastModifiedBy || req.buyer,
+            originalMessageId: req.originalMessageId || req.id
+          }));
+          setRequests(migratedRequests);
+        }
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading requests from localStorage:', error);
+        setIsInitialized(true);
+      }
     }
   }, [isInitialized]);
 
   // Save to localStorage whenever requests change
   useEffect(() => {
     if (typeof window !== 'undefined' && isInitialized) {
-      safeStorage.setItem('panty_custom_requests', requests);
+      try {
+        localStorage.setItem('panty_custom_requests', JSON.stringify(requests));
+      } catch (error) {
+        console.error('Error saving requests to localStorage:', error);
+      }
     }
   }, [requests, isInitialized]);
 
@@ -103,46 +116,52 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     modifiedBy?: string
   ) => {
     setRequests((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          return {
-            ...r,
-            status,
-            lastModifiedBy: modifiedBy || r.seller,
-            ...(updateFields || {})
-          };
-        }
-        return r;
-      })
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status,
+              response,
+              lastModifiedBy: modifiedBy || r.lastModifiedBy,
+              ...(updateFields || {}),
+            }
+          : r
+      )
     );
   };
 
+  // Mark request as paid (when payment is processed)
   const markRequestAsPaid = (id: string) => {
     setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'paid' as RequestStatus, paid: true } : r))
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: 'paid' as RequestStatus,
+              paid: true
+            }
+          : r
+      )
     );
   };
 
-  // Helper function to get all active requests for a buyer-seller thread
-  const getActiveRequestsForThread = (buyer: string, seller: string): CustomRequest[] => {
-    const threadId = `${buyer}-${seller}`;
-    return requests.filter(
-      r => r.messageThreadId === threadId && (r.status === 'pending' || r.status === 'accepted' || r.status === 'edited')
+  // Get all active requests between two users
+  const getActiveRequestsForThread = (buyer: string, seller: string) => {
+    return requests.filter((r) => 
+      r.buyer === buyer && 
+      r.seller === seller && 
+      r.status !== 'rejected' && 
+      r.status !== 'paid'
     );
   };
 
-  // Helper function to get the latest request in a thread
-  const getLatestRequestInThread = (buyer: string, seller: string): CustomRequest | undefined => {
-    const threadRequests = requests.filter(
-      r => r.buyer === buyer && r.seller === seller
-    );
+  // Get the most recent request in a conversation thread
+  const getLatestRequestInThread = (buyer: string, seller: string) => {
+    const threadRequests = requests
+      .filter((r) => r.buyer === buyer && r.seller === seller)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-    if (threadRequests.length === 0) return undefined;
-    
-    // Sort by date descending and return the first
-    return threadRequests.sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    )[0];
+    return threadRequests[0];
   };
 
   return (
@@ -156,7 +175,7 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
         respondToRequest,
         markRequestAsPaid,
         getActiveRequestsForThread,
-        getLatestRequestInThread
+        getLatestRequestInThread,
       }}
     >
       {children}
