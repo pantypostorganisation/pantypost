@@ -5,6 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
+import { getUserProfilePic } from '@/utils/profileUtils';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import Link from 'next/link';
@@ -172,7 +173,7 @@ export default function MyOrdersPage() {
     // Get seller info from users context
     const sellerUser = users?.[order.seller ?? ''];
     const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-    const sellerProfilePic = sessionStorage.getItem(`profile_pic_${order.seller}`);
+    const sellerProfilePic = getUserProfilePic(order.seller);
     const hasDeliveryAddress = !!order.deliveryAddress;
     
     let borderStyle = 'border-gray-700 hover:border-[#ff950e]/50';

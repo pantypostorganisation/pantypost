@@ -137,35 +137,77 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user]);
 
-  // Unread counts calculation
+  // Calculate other message data
+  const { unreadCounts, lastMessages, sellerProfiles, totalUnreadCount } = useMemo(() => {
+    const unreadCounts: { [seller: string]: number } = {};
+    const lastMessages: { [seller: string]: Message } = {};
+    const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+    let totalUnreadCount = 0;
+    
+    Object.entries(threads).forEach(([seller, msgs]) => {
+      lastMessages[seller] = msgs[msgs.length - 1];
+      
+      // Get seller profile using the new utility
+      const profileData = getUserProfileData(seller);
+      const sellerUser = users?.[seller];
+      
+      sellerProfiles[seller] = {
+        pic: profileData?.profilePic || null,
+        verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
+      };
+      
+      // Count unread messages - use both isRead and read properties
+      const unread = msgs.filter(msg => 
+        msg.receiver === user?.username && !msg.isRead && !msg.read
+      ).length;
+      unreadCounts[seller] = unread;
+      totalUnreadCount += unread;
+    });
+    
+    return { unreadCounts, lastMessages, sellerProfiles, totalUnreadCount };
+  }, [threads, users, user?.username]);
+
+  // Update UI unread counts based on actual unread counts
   useEffect(() => {
     if (!user) return;
 
     const newUiUnreadCounts: { [key: string]: number } = {};
     
     Object.entries(threads).forEach(([seller, msgs]) => {
-      const unreadMessages = msgs.filter(msg => 
-        !msg.isRead && 
-        msg.receiver === user.username &&
-        (!msg.id || !observerReadMessages.has(msg.id))
-      );
-      newUiUnreadCounts[seller] = unreadMessages.length;
+      // If this is the active thread, always show 0 unread
+      if (seller === activeThread) {
+        newUiUnreadCounts[seller] = 0;
+      } else {
+        // Otherwise, count unread messages
+        const unreadMessages = msgs.filter(msg => 
+          msg.receiver === user.username &&
+          !msg.isRead && 
+          !msg.read &&
+          (!msg.id || !observerReadMessages.has(msg.id))
+        );
+        newUiUnreadCounts[seller] = unreadMessages.length;
+      }
     });
     
     setUiUnreadCounts(newUiUnreadCounts);
-  }, [user, threads, observerReadMessages]);
+  }, [user, threads, observerReadMessages, activeThread]);
 
-  // Update read status in backend when observerReadMessages changes
+  // Mark all messages as read when opening a thread
   useEffect(() => {
-    if (!activeThread || !user || observerReadMessages.size === 0) return;
-
-    const timer = setTimeout(() => {
+    if (activeThread && user) {
+      // Mark all messages in this thread as read immediately
       markMessagesAsRead(user.username, activeThread);
+      
+      // Clear observer read messages for this thread
       setObserverReadMessages(new Set());
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [activeThread, user, observerReadMessages, markMessagesAsRead]);
+      
+      // Force UI to show 0 unread for this thread
+      setUiUnreadCounts(prev => ({
+        ...prev,
+        [activeThread]: 0
+      }));
+    }
+  }, [activeThread, user, markMessagesAsRead]);
 
   // Handle thread initialization
   useEffect(() => {
@@ -203,34 +245,6 @@ export const useBuyerMessages = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [activeThread, messages]);
-
-  // Calculate other message data
-  const { unreadCounts, lastMessages, sellerProfiles, totalUnreadCount } = useMemo(() => {
-    const unreadCounts: { [seller: string]: number } = {};
-    const lastMessages: { [seller: string]: Message } = {};
-    const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
-    let totalUnreadCount = 0;
-    
-    Object.entries(threads).forEach(([seller, msgs]) => {
-      lastMessages[seller] = msgs[msgs.length - 1];
-      
-      // Get seller profile using the new utility
-      const profileData = getUserProfileData(seller);
-      const sellerUser = users?.[seller];
-      
-      sellerProfiles[seller] = {
-        pic: profileData?.profilePic || null,
-        verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
-      };
-      
-      // Count unread messages
-      const unread = msgs.filter(msg => !msg.isRead && msg.receiver === user?.username).length;
-      unreadCounts[seller] = unread;
-      totalUnreadCount += unread;
-    });
-    
-    return { unreadCounts, lastMessages, sellerProfiles, totalUnreadCount };
-  }, [threads, users, user?.username]);
 
   // Listen for storage changes to update profiles in real-time
   useEffect(() => {

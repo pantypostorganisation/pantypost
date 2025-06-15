@@ -121,6 +121,9 @@ export default function BuyerMessagesPage() {
     isUserReported,
   } = useBuyerMessages();
 
+  // Create wallet object for components
+  const walletData = user ? { [user.username]: wallet.buyerBalance } : {};
+
   if (!mounted || !user) {
     return (
       <BanCheck>
@@ -170,7 +173,7 @@ export default function BuyerMessagesPage() {
                   user={user}
                   sellerProfiles={sellerProfiles}
                   buyerRequests={buyerRequests}
-                  wallet={wallet}
+                  wallet={walletData}
                   previewImage={previewImage}
                   setPreviewImage={setPreviewImage}
                   showEmojiPicker={showEmojiPicker}
@@ -215,10 +218,7 @@ export default function BuyerMessagesPage() {
                   setShowTipModal={setShowTipModal}
                 />
               ) : (
-                <EmptyState 
-                  activeTab={activeTab} 
-                  buyerRequests={buyerRequests}
-                />
+                <EmptyState />
               )}
             </div>
           </div>
@@ -228,50 +228,78 @@ export default function BuyerMessagesPage() {
         {previewImage && (
           <ImagePreviewModal
             imageUrl={previewImage}
+            isOpen={true}
             onClose={() => setPreviewImage(null)}
           />
         )}
         
         {showCustomRequestModal && (
           <CustomRequestModal
-            isOpen={showCustomRequestModal}
+            show={showCustomRequestModal}
             onClose={closeCustomRequestModal}
-            seller={activeThread || ''}
+            activeThread={activeThread || ''}
             onSubmit={handleCustomRequestSubmit}
-            customRequestForm={customRequestForm}
-            setCustomRequestForm={setCustomRequestForm}
-            errors={customRequestErrors}
-            isSubmitting={isSubmittingRequest}
+            customRequestForm={{
+              title: customRequestForm.title,
+              price: customRequestForm.price,
+              description: customRequestForm.description
+            }}
+            setCustomRequestForm={(form: any) => {
+              if (typeof form === 'function') {
+                setCustomRequestForm(prev => {
+                  const updated = form(prev);
+                  return {
+                    ...prev,
+                    title: updated.title,
+                    price: updated.price,
+                    description: updated.description
+                  };
+                });
+              } else {
+                setCustomRequestForm({
+                  ...customRequestForm,
+                  title: form.title,
+                  price: form.price,
+                  description: form.description
+                });
+              }
+            }}
+            customRequestErrors={customRequestErrors}
+            isSubmittingRequest={isSubmittingRequest}
+            wallet={walletData}
+            user={user}
           />
         )}
         
         {showPayModal && payingRequest && (
           <PaymentModal
-            isOpen={showPayModal}
+            show={showPayModal}
             onClose={() => {
               setShowPayModal(false);
               setPayingRequest(null);
             }}
-            request={payingRequest}
-            onConfirm={handleConfirmPay}
-            walletBalance={wallet.buyerBalance}
+            payingRequest={payingRequest}
+            wallet={walletData}
+            user={user}
+            onConfirmPay={handleConfirmPay}
           />
         )}
         
         {showTipModal && (
           <TipModal
-            isOpen={showTipModal}
+            show={showTipModal}
             onClose={() => {
               setShowTipModal(false);
               setTipAmount('');
               setTipResult(null);
             }}
-            seller={activeThread || ''}
-            onSendTip={handleSendTip}
-            walletBalance={wallet.buyerBalance}
+            activeThread={activeThread || ''}
             tipAmount={tipAmount}
             setTipAmount={setTipAmount}
             tipResult={tipResult}
+            wallet={walletData}
+            user={user}
+            onSendTip={handleSendTip}
           />
         )}
       </RequireAuth>

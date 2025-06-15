@@ -136,7 +136,8 @@ export const useDashboardData = () => {
     let unreadCount = 0;
     Object.values(messages).forEach((threadMessages) => {
       threadMessages.forEach((msg) => {
-        if (msg.receiver === user.username && !msg.read && !msg.isRead) {
+        // Fixed: Use 'read' instead of 'isRead'
+        if (msg.receiver === user.username && !msg.read) {
           unreadCount++;
         }
       });
@@ -146,13 +147,16 @@ export const useDashboardData = () => {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-    const completedOrders = userOrders.filter(order => 
-      order.shippingStatus === 'delivered'
-    ).length;
+    // Fixed: Add type assertion for shippingStatus comparisons
+    const completedOrders = userOrders.filter(order => {
+      const status = order.shippingStatus as string | undefined;
+      return status === 'delivered';
+    }).length;
     
-    const pendingShipments = userOrders.filter(order => 
-      order.shippingStatus && order.shippingStatus !== 'delivered'
-    ).length;
+    const pendingShipments = userOrders.filter(order => {
+      const status = order.shippingStatus as string | undefined;
+      return status && status !== 'delivered';
+    }).length;
 
     const weekSpent = userOrders
       .filter(order => new Date(order.date) >= weekAgo)

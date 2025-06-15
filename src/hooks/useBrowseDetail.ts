@@ -176,7 +176,9 @@ export const useBrowseDetail = () => {
     updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
 
     try {
-      const success = await purchaseListing(listing, listing.markedUpPrice || listing.price);
+      // Convert price to string as purchaseListing expects a string
+      const priceString = String(listing.markedUpPrice || listing.price);
+      const success = await purchaseListing(listing, priceString);
       
       if (success) {
         updateState({ 

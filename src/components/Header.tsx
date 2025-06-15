@@ -307,14 +307,14 @@ export default function Header() {
         // Update balances after auction check with delay
         setTimeout(() => {
           if (isMountedRef.current) {
-            forceUpdateBalances();
+            setBalanceUpdateTrigger(prev => prev + 1);
           }
         }, 1000);
       }
     } catch (err) {
       console.error('Error checking ended auctions:', err);
     }
-  }, [checkEndedAuctions, forceUpdateBalances]);
+  }, [checkEndedAuctions]);
 
   // Update report count with error handling
   const updateReportCount = useCallback(() => {
@@ -422,10 +422,14 @@ export default function Header() {
     
     isMountedRef.current = true;
     
-    // Initial updates
-    updateReportCount();
-    forceUpdateBalances();
-    checkAuctionsWithRateLimit();
+    // Initial updates - run after a short delay to ensure everything is ready
+    const initTimer = setTimeout(() => {
+      if (isMountedRef.current) {
+        updateReportCount();
+        forceUpdateBalances();
+        checkAuctionsWithRateLimit();
+      }
+    }, 100);
     
     // Event listeners
     const handleUpdateReports = () => {
@@ -446,6 +450,9 @@ export default function Header() {
     return () => {
       isMountedRef.current = false;
       
+      // Clear init timer
+      clearTimeout(initTimer);
+      
       // Clear intervals
       clearBalanceInterval();
       clearAuctionInterval();
@@ -459,7 +466,7 @@ export default function Header() {
         delete (window as any).__pantypost_balance_context;
       }
     };
-  }, [updateReportCount, forceUpdateBalances, checkAuctionsWithRateLimit, clearBalanceInterval, clearAuctionInterval]);
+  }, []);
 
   // Reset notification tab when dropdown opens
   useEffect(() => {
