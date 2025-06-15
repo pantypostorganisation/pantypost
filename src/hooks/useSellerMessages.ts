@@ -40,7 +40,8 @@ export function useSellerMessages() {
     unblockUser, 
     reportUser, 
     isBlocked, 
-    hasReported
+    hasReported,
+    clearMessageNotifications // NEW: Import this
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
   const { wallet } = useWallet();
@@ -226,12 +227,15 @@ export function useSellerMessages() {
     return counts;
   }, [threads, unreadCounts]);
   
-  // Mark messages as read when thread is selected
+  // Mark messages as read when thread is selected AND clear notifications
   useEffect(() => {
     if (!activeThread || !user || activeThread === lastActiveThread.current) return;
     
     // Update the last active thread
     lastActiveThread.current = activeThread;
+    
+    // NEW: Clear message notifications for this buyer
+    clearMessageNotifications(user.username, activeThread);
     
     // Check if there are unread messages
     const conversationKey = getConversationKey(user.username, activeThread);
@@ -254,7 +258,7 @@ export function useSellerMessages() {
       
       return () => clearTimeout(timer);
     }
-  }, [activeThread, user?.username, markMessagesAsRead, messages]);
+  }, [activeThread, user?.username, markMessagesAsRead, messages, clearMessageNotifications]);
   
   // Handle message visibility for marking as read
   const handleMessageVisible = useCallback((msg: any) => {

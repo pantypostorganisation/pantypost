@@ -1,156 +1,16 @@
 // src/context/MessageContext.tsx
-'use client';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { sanitizeString } from '@/utils/sanitizeInput';
+import { v4 as uuidv4 } from 'uuid';
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-
-// Content Security Policy compliant image validation
-const IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'] as const;
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB limit
-const MIN_IMAGE_SIZE = 1024; // 1KB minimum to prevent empty/malicious files
-
-// Trusted domains for external images
-const TRUSTED_IMAGE_DOMAINS = [
-  'localhost',
-  '127.0.0.1',
-  // Add your CDN domains here when you have them
-  // 'cdn.pantypost.com',
-  // 'images.pantypost.com'
-];
-
-// For development, we'll be more permissive
-const isDevelopment = typeof window !== 'undefined' && 
-                     (window.location.hostname === 'localhost' || 
-                      window.location.hostname === '127.0.0.1' ||
-                      window.location.hostname.includes('localhost'));
-
-// Sanitization utilities
-const sanitizeString = (str: string): string => {
-  if (typeof str !== 'string') return '';
-  return str
-    .replace(/[<>]/g, '') // Remove < and > to prevent HTML
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/data:/gi, '') // Remove data: URLs (except for images, see below)
-    .replace(/\u0000/g, '') // Remove null bytes
-    .replace(/&/g, '&amp;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;')
-    .trim();
-};
-
-const sanitizeNumber = (num: number): number => {
-  const parsed = parseFloat(String(num));
-  return isNaN(parsed) ? 0 : parsed;
-};
-
-const sanitizeArray = (arr: string[]): string[] => {
-  if (!Array.isArray(arr)) return [];
-  return arr.map(item => sanitizeString(item)).filter(Boolean);
-};
-
-// Enhanced image validation with multiple security layers
-const sanitizeImageUrl = (url: string): string => {
-  if (typeof url !== 'string') return '';
-  
-  // Reject suspiciously long URLs that might contain encoded payloads
-  if (url.length > 65536) { // 64KB limit for URLs
-    console.warn('Image URL exceeds maximum length');
-    return '';
-  }
-  
-  // Handle data URLs with comprehensive validation
-  if (url.startsWith('data:')) {
-    try {
-      // Parse data URL structure
-      const dataUrlMatch = url.match(/^data:([^;]+)(;base64)?,(.*)$/);
-      if (!dataUrlMatch) {
-        console.warn('Invalid data URL format');
-        return '';
-      }
-      
-      const [, mimeType, , data] = dataUrlMatch;
-      
-      // Validate MIME type
-      if (!IMAGE_MIME_TYPES.includes(mimeType as any)) {
-        console.warn(`Unsupported image MIME type: ${mimeType}`);
-        return '';
-      }
-      
-      // Validate base64 data
-      if (!data || data.length === 0) {
-        console.warn('Empty image data');
-        return '';
-      }
-      
-      // Check data size (rough estimate: base64 is ~33% larger than binary)
-      const estimatedSize = (data.length * 0.75);
-      if (estimatedSize > MAX_IMAGE_SIZE) {
-        console.warn(`Image too large: ~${(estimatedSize / 1024 / 1024).toFixed(2)}MB`);
-        return '';
-      }
-      
-      if (estimatedSize < MIN_IMAGE_SIZE) {
-        console.warn('Image suspiciously small');
-        return '';
-      }
-      
-      // Basic base64 validation
-      if (!/^[A-Za-z0-9+/]+=*$/.test(data.replace(/\s/g, ''))) {
-        console.warn('Invalid base64 data');
-        return '';
-      }
-      
-      return url;
-    } catch (error) {
-      console.error('Error validating data URL:', error);
-      return '';
-    }
-  }
-  
-  // Handle regular URLs
-  try {
-    const parsedUrl = new URL(url);
-    
-    // Only allow HTTPS in production
-    if (!isDevelopment && parsedUrl.protocol !== 'https:') {
-      console.warn('Only HTTPS URLs allowed in production');
-      return '';
-    }
-    
-    // Check against trusted domains in production
-    if (!isDevelopment && !TRUSTED_IMAGE_DOMAINS.includes(parsedUrl.hostname)) {
-      console.warn(`Untrusted image domain: ${parsedUrl.hostname}`);
-      return '';
-    }
-    
-    // Basic path validation
-    const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    const hasValidExtension = validExtensions.some(ext => 
-      parsedUrl.pathname.toLowerCase().endsWith(ext)
-    );
-    
-    if (!hasValidExtension && !isDevelopment) {
-      console.warn('Image URL must have a valid image extension');
-      return '';
-    }
-    
-    return url;
-  } catch (error) {
-    // If URL parsing fails, it's not a valid URL
-    console.warn('Invalid URL format:', error);
-    return '';
-  }
-  
-  // Reject any other URL schemes
-  console.warn('Unsupported URL scheme');
-  return '';
-};
-
-export type Message = {
+// UPDATED: Enhanced Message type with id and isRead
+type Message = {
+  id?: string;
   sender: string;
   receiver: string;
   content: string;
   date: string;
+  isRead?: boolean;
   read?: boolean;
   type?: 'normal' | 'customRequest' | 'image';
   meta?: {
@@ -204,6 +64,14 @@ type ThreadInfo = {
   otherParty: string;
 };
 
+// NEW: Message notification type
+type MessageNotification = {
+  buyer: string;
+  messageCount: number;
+  lastMessage: string;
+  timestamp: string;
+};
+
 // UPDATED: Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
@@ -236,6 +104,8 @@ type MessageContextType = {
   blockedUsers: { [user: string]: string[] }; // NEW: Expose blocked users
   reportedUsers: { [user: string]: string[] }; // NEW: Expose reported users
   reportLogs: ReportLog[]; // NEW: Expose report logs
+  messageNotifications: { [seller: string]: MessageNotification[] }; // NEW
+  clearMessageNotifications: (seller: string, buyer: string) => void; // NEW
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -252,6 +122,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
   // NEW: State for report logs
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
+  // NEW: State for message notifications
+  const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
 
   useEffect(() => {
     const stored = localStorage.getItem('panty_messages');
@@ -309,6 +181,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.error('Error parsing report logs:', error);
       }
     }
+
+    // NEW: Load message notifications
+    const storedNotifications = localStorage.getItem('panty_message_notifications');
+    if (storedNotifications) {
+      try {
+        setMessageNotifications(JSON.parse(storedNotifications));
+      } catch (error) {
+        console.error('Error parsing message notifications:', error);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -330,62 +212,76 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [reportLogs]);
 
+  // NEW: Save message notifications to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('panty_message_notifications', JSON.stringify(messageNotifications));
+    }
+  }, [messageNotifications]);
+
   const sendMessage = (
     sender: string,
     receiver: string,
     content: string,
     options?: MessageOptions
   ) => {
-    if (isBlocked(receiver, sender)) return;
-
-    // Sanitize inputs
     const sanitizedSender = sanitizeString(sender);
     const sanitizedReceiver = sanitizeString(receiver);
     const sanitizedContent = sanitizeString(content);
-
-    let sanitizedMeta = undefined;
-    if (options?.meta) {
-      sanitizedMeta = {
-        id: options.meta.id ? sanitizeString(options.meta.id) : undefined,
-        title: options.meta.title ? sanitizeString(options.meta.title) : undefined,
-        price: options.meta.price ? sanitizeNumber(options.meta.price) : undefined,
-        tags: options.meta.tags ? sanitizeArray(options.meta.tags) : undefined,
-        message: options.meta.message ? sanitizeString(options.meta.message) : undefined,
-        imageUrl: options.meta.imageUrl ? sanitizeImageUrl(options.meta.imageUrl) : undefined,
-      };
-      
-      // If image validation failed, log warning but still send in development
-      if (options.meta.imageUrl && !sanitizedMeta.imageUrl) {
-        if (isDevelopment) {
-          console.warn('Image validation failed in development mode, sending anyway');
-          // In development, use the original URL even if validation failed
-          sanitizedMeta.imageUrl = options.meta.imageUrl;
-        } else {
-          console.error('Image validation failed, message not sent');
-          return;
-        }
-      }
-    }
+    const conversationKey = getConversationKey(sanitizedSender, sanitizedReceiver);
 
     const newMessage: Message = {
+      id: uuidv4(), // UPDATED: Always generate an ID
       sender: sanitizedSender,
       receiver: sanitizedReceiver,
       content: sanitizedContent,
       date: new Date().toISOString(),
+      isRead: false, // UPDATED: Add isRead flag
       read: false,
       type: options?.type || 'normal',
-      meta: sanitizedMeta,
+      meta: options?.meta,
     };
 
-    const conversationKey = getConversationKey(sanitizedSender, sanitizedReceiver);
+    setMessages((prev) => ({
+      ...prev,
+      [conversationKey]: [...(prev[conversationKey] || []), newMessage],
+    }));
 
-    setMessages((prev) => {
-      const updatedMessages = [...(prev[conversationKey] || []), newMessage];
-      return {
-        ...prev,
-        [conversationKey]: updatedMessages,
-      };
-    });
+    // NEW: Create notification if sender is buyer and receiver is seller
+    // Note: You'll need to import or pass the users data to check roles
+    // For now, we'll create notifications for all messages to sellers
+    if (options?.type !== 'customRequest') { // Don't create notifications for custom requests
+      setMessageNotifications(prev => {
+        const sellerNotifs = prev[receiver] || [];
+        const existingIndex = sellerNotifs.findIndex(n => n.buyer === sender);
+        
+        if (existingIndex >= 0) {
+          // Update existing notification
+          const updated = [...sellerNotifs];
+          updated[existingIndex] = {
+            buyer: sender,
+            messageCount: updated[existingIndex].messageCount + 1,
+            lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+            timestamp: new Date().toISOString()
+          };
+          return {
+            ...prev,
+            [receiver]: updated
+          };
+        } else {
+          // Create new notification
+          return {
+            ...prev,
+            [receiver]: [...sellerNotifs, {
+              buyer: sender,
+              messageCount: 1,
+              lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+              timestamp: new Date().toISOString()
+            }]
+          };
+        }
+      });
+    }
   };
 
   const sendCustomRequest = (
@@ -397,41 +293,15 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     tags: string[],
     listingId: string
   ) => {
-    if (isBlocked(seller, buyer)) return;
-
-    // Sanitize inputs
-    const sanitizedBuyer = sanitizeString(buyer);
-    const sanitizedSeller = sanitizeString(seller);
-    const sanitizedContent = sanitizeString(content);
-    const sanitizedTitle = sanitizeString(title);
-    const sanitizedPrice = sanitizeNumber(price);
-    const sanitizedTags = sanitizeArray(tags);
-    const sanitizedListingId = sanitizeString(listingId);
-
-    const newMessage: Message = {
-      sender: sanitizedBuyer,
-      receiver: sanitizedSeller,
-      content: sanitizedContent,
-      date: new Date().toISOString(),
-      read: false,
+    sendMessage(buyer, seller, content, {
       type: 'customRequest',
       meta: {
-        id: sanitizedListingId,
-        title: sanitizedTitle,
-        price: sanitizedPrice,
-        tags: sanitizedTags,
-        message: sanitizedContent,
+        id: uuidv4(),
+        title,
+        price,
+        tags,
+        message: content,
       },
-    };
-
-    const conversationKey = getConversationKey(sanitizedBuyer, sanitizedSeller);
-
-    setMessages((prev) => {
-      const updatedMessages = [...(prev[conversationKey] || []), newMessage];
-      return {
-        ...prev,
-        [conversationKey]: updatedMessages,
-      };
     });
   };
 
@@ -440,44 +310,29 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return messages[conversationKey] || [];
   };
 
-  // NEW: Get all message threads for a user
+  // NEW: Get all threads for a user
   const getThreadsForUser = (username: string, role?: 'buyer' | 'seller'): MessageThread => {
     const threads: MessageThread = {};
     
-    Object.entries(messages).forEach(([conversationKey, msgs]) => {
-      msgs.forEach((msg) => {
-        // Check if this message involves the user
+    Object.entries(messages).forEach(([key, msgs]) => {
+      msgs.forEach(msg => {
+        // Check if user is involved in this message
         if (msg.sender === username || msg.receiver === username) {
           const otherParty = msg.sender === username ? msg.receiver : msg.sender;
           
-          // If role is specified, filter based on role
-          // For buyers: other party should be sellers (no filtering needed here as we don't have role info)
-          // For sellers: other party should be buyers (no filtering needed here as we don't have role info)
-          // This filtering should be done at the component level if needed
-          
-          // Initialize thread if not exists
+          // Initialize thread if it doesn't exist
           if (!threads[otherParty]) {
             threads[otherParty] = [];
           }
           
-          // Add message to thread (check for duplicates)
-          const messageExists = threads[otherParty].some(
-            existingMsg => 
-              existingMsg.sender === msg.sender && 
-              existingMsg.receiver === msg.receiver && 
-              existingMsg.date === msg.date &&
-              existingMsg.content === msg.content
-          );
-          
-          if (!messageExists) {
-            threads[otherParty].push(msg);
-          }
+          // Add message to thread
+          threads[otherParty].push(msg);
         }
       });
     });
     
     // Sort messages in each thread by date
-    Object.values(threads).forEach((thread) => {
+    Object.values(threads).forEach(thread => {
       thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
     
@@ -489,13 +344,14 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const conversationKey = getConversationKey(username, otherParty);
     const threadMessages = messages[conversationKey] || [];
     
-    // Count unread messages (messages FROM otherParty TO username that are unread)
+    // Count unread messages (messages TO the user that are not read)
     const unreadCount = threadMessages.filter(
-      (msg: Message) => msg.sender === otherParty && msg.receiver === username && !msg.read
+      msg => msg.receiver === username && !msg.read && !msg.isRead
     ).length;
     
     // Get last message
-    const lastMessage = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
+    const lastMessage = threadMessages.length > 0 ? 
+      threadMessages[threadMessages.length - 1] : null;
     
     return {
       unreadCount,
@@ -530,6 +386,23 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       return {
         ...prev,
         [conversationKey]: updatedMessages,
+      };
+    });
+  };
+
+  // NEW: Clear message notifications
+  const clearMessageNotifications = (seller: string, buyer: string) => {
+    setMessageNotifications(prev => {
+      const sellerNotifs = prev[seller] || [];
+      const filtered = sellerNotifs.filter(n => n.buyer !== buyer);
+      
+      if (filtered.length === sellerNotifs.length) {
+        return prev; // No change
+      }
+      
+      return {
+        ...prev,
+        [seller]: filtered
       };
     });
   };
@@ -580,48 +453,37 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     // NEW: Create a report log entry
-    const conversationMessages = getMessagesForUsers(sanitizedReporter, sanitizedReportee);
-    const reportLog: ReportLog = {
-      id: `report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    const conversationKey = getConversationKey(reporter, reportee);
+    const reportMessages = messages[conversationKey] || [];
+    
+    const newReport: ReportLog = {
+      id: uuidv4(),
       reporter: sanitizedReporter,
       reportee: sanitizedReportee,
-      messages: conversationMessages,
+      messages: reportMessages,
       date: new Date().toISOString(),
       processed: false,
-      severity: 'medium', // Default severity
-      category: 'other', // Default category
+      category: 'other'
     };
-
-    setReportLogs((prev) => [...prev, reportLog]);
+    
+    setReportLogs(prev => [...prev, newReport]);
   };
 
   const isBlocked = (blocker: string, blockee: string): boolean => {
     const sanitizedBlocker = sanitizeString(blocker);
     const sanitizedBlockee = sanitizeString(blockee);
-    const blockerList = blockedUsers[sanitizedBlocker] || [];
-    return blockerList.includes(sanitizedBlockee);
+    return blockedUsers[sanitizedBlocker]?.includes(sanitizedBlockee) ?? false;
   };
 
   const hasReported = (reporter: string, reportee: string): boolean => {
     const sanitizedReporter = sanitizeString(reporter);
     const sanitizedReportee = sanitizeString(reportee);
-    const reporterList = reportedUsers[sanitizedReporter] || [];
-    return reporterList.includes(sanitizedReportee);
+    return reportedUsers[sanitizedReporter]?.includes(sanitizedReportee) ?? false;
   };
 
   // NEW: Get count of unprocessed reports
   const getReportCount = (): number => {
-    try {
-      const pendingReports = reportLogs.filter(report => 
-        report && 
-        typeof report === 'object' && 
-        !report.processed
-      );
-      return pendingReports.length;
-    } catch (error) {
-      console.error('Error getting report count:', error);
-      return 0;
-    }
+    return reportLogs.filter(report => !report.processed).length;
   };
 
   return (
@@ -643,7 +505,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         getReportCount, // NEW: Added to context
         blockedUsers, // NEW: Expose blocked users
         reportedUsers, // NEW: Expose reported users
-        reportLogs // NEW: Expose report logs
+        reportLogs, // NEW: Expose report logs
+        messageNotifications, // NEW
+        clearMessageNotifications // NEW
       }}
     >
       {children}
