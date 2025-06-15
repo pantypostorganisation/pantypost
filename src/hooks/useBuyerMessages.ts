@@ -97,6 +97,9 @@ export const useBuyerMessages = () => {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const lastManualScrollTime = useRef(Date.now());
   
+  // Add a ref to track if we've already marked messages as read for the current thread
+  const hasMarkedReadRef = useRef<string | null>(null);
+  
   const isAdmin = user?.role === 'admin';
   const wallet = { buyerBalance: user ? getBuyerBalance(user.username) : 0 };
   const buyerRequests = getRequestsForUser(user?.username || '', 'buyer');
@@ -104,7 +107,11 @@ export const useBuyerMessages = () => {
   // Mark messages as read and update UI
   const markMessageAsReadAndUpdateUI = useCallback((message: Message) => {
     if (message.id) {
-      setObserverReadMessages(prev => new Set([...prev, message.id!]));
+      setObserverReadMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.add(message.id!);
+        return newSet;
+      });
     }
   }, []);
 
@@ -189,12 +196,22 @@ export const useBuyerMessages = () => {
       }
     });
     
-    setUiUnreadCounts(newUiUnreadCounts);
+    // Only update state if the counts actually changed
+    setUiUnreadCounts(prev => {
+      const hasChanged = Object.keys(newUiUnreadCounts).some(key => 
+        prev[key] !== newUiUnreadCounts[key]
+      ) || Object.keys(prev).length !== Object.keys(newUiUnreadCounts).length;
+      
+      return hasChanged ? newUiUnreadCounts : prev;
+    });
   }, [user, threads, observerReadMessages, activeThread]);
 
   // Mark all messages as read when opening a thread
   useEffect(() => {
-    if (activeThread && user) {
+    if (activeThread && user && hasMarkedReadRef.current !== activeThread) {
+      // Track that we've marked this thread as read
+      hasMarkedReadRef.current = activeThread;
+      
       // Mark all messages in this thread as read immediately
       markMessagesAsRead(user.username, activeThread);
       
@@ -241,17 +258,17 @@ export const useBuyerMessages = () => {
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     const timeSinceManualScroll = Date.now() - lastManualScrollTime.current;
-    if (timeSinceManualScroll > 1000) {
+    if (timeSinceManualScroll > 1000 && activeThread && threads[activeThread]) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [activeThread, messages]);
+  }, [activeThread, threads]);
 
   // Listen for storage changes to update profiles in real-time
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'user_profiles' && e.newValue) {
-        // Force re-calculation of memoized data by updating a dependency
-        setMounted(prev => !prev);
+        // Force re-render by changing a dummy state
+        // This is handled internally by the context now
       }
     };
 
@@ -280,7 +297,7 @@ export const useBuyerMessages = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, replyMessage, selectedImage, user, sendMessage]);
 
-  const handleBlockToggle = () => {
+  const handleBlockToggle = useCallback(() => {
     if (!activeThread || !user) return;
     
     const isBlocked = blockedUsers[user.username]?.includes(activeThread);
@@ -289,14 +306,14 @@ export const useBuyerMessages = () => {
     } else {
       blockUser(user.username, activeThread);
     }
-  };
+  }, [activeThread, user, blockedUsers, unblockUser, blockUser]);
 
-  const handleReport = () => {
+  const handleReport = useCallback(() => {
     if (!activeThread || !user) return;
     reportUser(user.username, activeThread);
-  };
+  }, [activeThread, user, reportUser]);
 
-  const handleAccept = async (request: any) => {
+  const handleAccept = useCallback(async (request: any) => {
     if (!user || !request) return;
     
     // For now, just mark the request as accepted in messages
@@ -314,9 +331,9 @@ export const useBuyerMessages = () => {
       acceptMessage.receiver,
       acceptMessage.content
     );
-  };
+  }, [user, sendMessage]);
 
-  const handleDecline = async (request: any) => {
+  const handleDecline = useCallback(async (request: any) => {
     if (!user || !request) return;
     
     // For now, just mark the request as declined in messages
@@ -334,24 +351,24 @@ export const useBuyerMessages = () => {
       declineMessage.receiver,
       declineMessage.content
     );
-  };
+  }, [user, sendMessage]);
 
-  const handleEditRequest = (request: any) => {
+  const handleEditRequest = useCallback((request: any) => {
     setEditRequestId(request.id);
     setEditPrice(request.price.toString());
     setEditTitle(request.title);
     setEditTags(request.tags || '');
     setEditMessage(request.notes || '');
-  };
+  }, []);
 
-  const handleEditSubmit = async () => {
-    if (!editRequestId || !user) return;
+  const handleEditSubmit = useCallback(async () => {
+    if (!editRequestId || !user || !activeThread) return;
     
     // For now, just send an update message
     const editMessage: Message = {
       id: `edit_${Date.now()}`,
       sender: user.username,
-      receiver: activeThread!,
+      receiver: activeThread,
       content: `📝 Updated custom request: ${editTitle} - $${editPrice}`,
       date: new Date().toISOString(),
       isRead: false
@@ -368,14 +385,14 @@ export const useBuyerMessages = () => {
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
-  };
+  }, [editRequestId, user, activeThread, editTitle, editPrice, sendMessage]);
 
-  const handlePayNow = (request: any) => {
+  const handlePayNow = useCallback((request: any) => {
     setPayingRequest(request);
     setShowPayModal(true);
-  };
+  }, []);
 
-  const handleConfirmPay = async () => {
+  const handleConfirmPay = useCallback(async () => {
     if (!payingRequest || !user) return;
     
     const currentBalance = getBuyerBalance(user.username);
@@ -389,9 +406,9 @@ export const useBuyerMessages = () => {
     setShowPayModal(false);
     setPayingRequest(null);
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, [payingRequest, user, getBuyerBalance, markRequestAsPaid]);
 
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -419,9 +436,9 @@ export const useBuyerMessages = () => {
       setIsImageLoading(false);
     };
     reader.readAsDataURL(file);
-  };
+  }, []);
 
-  const handleEmojiClick = (emoji: string) => {
+  const handleEmojiClick = useCallback((emoji: string) => {
     setReplyMessage(prev => prev + emoji);
     
     const newRecentEmojis = [emoji, ...recentEmojis.filter(e => e !== emoji)].slice(0, 8);
@@ -430,9 +447,9 @@ export const useBuyerMessages = () => {
     
     setShowEmojiPicker(false);
     inputRef.current?.focus();
-  };
+  }, [recentEmojis, setRecentEmojis]);
 
-  const handleSendTip = async () => {
+  const handleSendTip = useCallback(async () => {
     if (!activeThread || !tipAmount || !user) return;
     
     const amount = parseFloat(tipAmount);
@@ -485,9 +502,9 @@ export const useBuyerMessages = () => {
         message: 'Failed to send tip. Please try again.'
       });
     }
-  };
+  }, [activeThread, tipAmount, user, getBuyerBalance, sendTip, sendMessage]);
 
-  const validateCustomRequest = (): boolean => {
+  const validateCustomRequest = useCallback((): boolean => {
     const errors: Partial<CustomRequestForm> = {};
     
     if (!customRequestForm.title.trim()) {
@@ -505,9 +522,9 @@ export const useBuyerMessages = () => {
     
     setCustomRequestErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [customRequestForm]);
 
-  const handleCustomRequestSubmit = async () => {
+  const handleCustomRequestSubmit = useCallback(async () => {
     if (!validateCustomRequest() || !activeThread || !user) return;
     
     setIsSubmittingRequest(true);
@@ -545,9 +562,9 @@ export const useBuyerMessages = () => {
     closeCustomRequestModal();
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     setIsSubmittingRequest(false);
-  };
+  }, [validateCustomRequest, activeThread, user, customRequestForm, addRequest, sendMessage]);
 
-  const closeCustomRequestModal = () => {
+  const closeCustomRequestModal = useCallback(() => {
     setShowCustomRequestModal(false);
     setCustomRequestForm({
       title: '',
@@ -557,7 +574,7 @@ export const useBuyerMessages = () => {
       hoursWorn: '24'
     });
     setCustomRequestErrors({});
-  };
+  }, []);
 
   // Status checks
   const isUserBlocked = useCallback((username: string) => {
