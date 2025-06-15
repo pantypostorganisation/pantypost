@@ -1,4 +1,4 @@
-// src/app/browse/[id]/page.tsx
+// src/app/browse/[id]/page.tsx Error here
 'use client';
 
 import BanCheck from '@/components/BanCheck';
