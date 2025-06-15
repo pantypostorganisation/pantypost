@@ -7,6 +7,11 @@ import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import { v4 as uuidv4 } from 'uuid';
 
+// Helper function
+const getConversationKey = (userA: string, userB: string): string => {
+  return [userA, userB].sort().join('-');
+};
+
 type Message = {
   sender: string;
   receiver: string;
@@ -45,7 +50,6 @@ export function useSellerMessages() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
   const [activeThread, setActiveThread] = useState<string | null>(null);
-  const [messageUpdate, setMessageUpdate] = useState(0);
   const [observerReadMessages, setObserverReadMessages] = useState<Set<string>>(new Set());
   
   // State for message input
@@ -64,73 +68,82 @@ export function useSellerMessages() {
   
   const readThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasLoadedEmojis = useRef(false);
+  const lastActiveThread = useRef<string | null>(null);
   
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
   
-  // Reset when user changes
-  useEffect(() => {
-    readThreadsRef.current = new Set();
-    setMessageUpdate(prev => prev + 1);
-  }, [user?.username]);
-  
   // Load previously read threads from localStorage
   useEffect(() => {
+    if (!user) return;
+    
     try {
-      if (user) {
-        const readThreadsKey = `panty_read_threads_${user.username}`;
-        const readThreads = localStorage.getItem(readThreadsKey);
-        if (readThreads) {
-          const threads = JSON.parse(readThreads);
-          if (Array.isArray(threads)) {
-            readThreadsRef.current = new Set(threads);
-            setMessageUpdate(prev => prev + 1);
-          }
+      const readThreadsKey = `panty_read_threads_${user.username}`;
+      const readThreads = localStorage.getItem(readThreadsKey);
+      if (readThreads) {
+        const threads = JSON.parse(readThreads);
+        if (Array.isArray(threads)) {
+          readThreadsRef.current = new Set(threads);
         }
       }
     } catch (e) {
       console.error('Failed to load read threads', e);
     }
-  }, [user]);
+  }, [user?.username]);
   
   // Save read threads to localStorage
   useEffect(() => {
-    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
-      const readThreadsKey = `panty_read_threads_${user.username}`;
-      const threadsArray = Array.from(readThreadsRef.current);
-      localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
-      
-      const event = new CustomEvent('readThreadsUpdated', { 
-        detail: { threads: threadsArray, username: user.username }
-      });
-      window.dispatchEvent(event);
-    }
-  }, [messageUpdate, user]);
-  
-  // Update UI when messages change
-  useEffect(() => {
-    setMessageUpdate(prev => prev + 1);
-  }, [messages]);
+    if (!user || readThreadsRef.current.size === 0) return;
+    
+    const timeoutId = setTimeout(() => {
+      try {
+        const readThreadsKey = `panty_read_threads_${user.username}`;
+        const threadsArray = Array.from(readThreadsRef.current);
+        localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
+        
+        const event = new CustomEvent('readThreadsUpdated', { 
+          detail: { threads: threadsArray, username: user.username }
+        });
+        window.dispatchEvent(event);
+      } catch (e) {
+        console.error('Failed to save read threads', e);
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timeoutId);
+  }, [user?.username, activeThread]); // Update when activeThread changes
   
   // Load recent emojis from localStorage
   useEffect(() => {
-    const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
-    if (storedRecentEmojis) {
-      try {
+    if (hasLoadedEmojis.current) return;
+    hasLoadedEmojis.current = true;
+    
+    try {
+      const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
+      if (storedRecentEmojis) {
         const parsed = JSON.parse(storedRecentEmojis);
         if (Array.isArray(parsed)) {
           setRecentEmojis(parsed.slice(0, 30));
         }
-      } catch (e) {
-        console.error('Failed to parse recent emojis', e);
       }
+    } catch (e) {
+      console.error('Failed to load recent emojis', e);
     }
   }, []);
   
   // Save recent emojis to localStorage
   useEffect(() => {
-    if (recentEmojis.length > 0) {
-      localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
-    }
+    if (recentEmojis.length === 0) return;
+    
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
+      } catch (error) {
+        console.error('Failed to save recent emojis:', error);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
   }, [recentEmojis]);
   
   // Process messages into threads
@@ -195,7 +208,7 @@ export function useSellerMessages() {
     });
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user, messages, users, messageUpdate]);
+  }, [user?.username, messages, users]);
   
   // Get seller's requests
   const sellerRequests = useMemo(() => {
@@ -211,25 +224,37 @@ export function useSellerMessages() {
       });
     }
     return counts;
-  }, [threads, unreadCounts, messageUpdate]);
+  }, [threads, unreadCounts]);
   
   // Mark messages as read when thread is selected
   useEffect(() => {
-    if (activeThread && user) {
-      const hasUnreadMessages = threads[activeThread]?.some(
-        msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
-      );
-      
-      if (hasUnreadMessages) {
+    if (!activeThread || !user || activeThread === lastActiveThread.current) return;
+    
+    // Update the last active thread
+    lastActiveThread.current = activeThread;
+    
+    // Check if there are unread messages
+    const conversationKey = getConversationKey(user.username, activeThread);
+    const threadMessages = messages[conversationKey] || [];
+    
+    const hasUnread = threadMessages.some(
+      msg => msg.receiver === user.username && msg.sender === activeThread && !msg.read
+    );
+    
+    if (hasUnread) {
+      // Use a small delay to prevent render loops
+      const timer = setTimeout(() => {
         markMessagesAsRead(user.username, activeThread);
         
+        // Update read threads ref
         if (!readThreadsRef.current.has(activeThread)) {
           readThreadsRef.current.add(activeThread);
-          setMessageUpdate(prev => prev + 1);
         }
-      }
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
-  }, [activeThread, user, threads, markMessagesAsRead]);
+  }, [activeThread, user?.username, markMessagesAsRead, messages]);
   
   // Handle message visibility for marking as read
   const handleMessageVisible = useCallback((msg: any) => {
@@ -239,40 +264,34 @@ export function useSellerMessages() {
     
     if (observerReadMessages.has(messageId)) return;
     
-    markMessagesAsRead(user.username, msg.sender);
-    
-    setObserverReadMessages(prev => new Set(prev).add(messageId));
-    
-    const threadUnreadCount = threads[msg.sender]?.filter(
-      m => !m.read && m.sender === msg.sender && m.receiver === user.username
-    ).length || 0;
-    
-    if (threadUnreadCount === 0 && !readThreadsRef.current.has(msg.sender)) {
-      readThreadsRef.current.add(msg.sender);
-      setMessageUpdate(prev => prev + 1);
-    }
-  }, [user, markMessagesAsRead, threads, observerReadMessages]);
+    // Use requestAnimationFrame to batch updates
+    requestAnimationFrame(() => {
+      markMessagesAsRead(user.username, msg.sender);
+      
+      setObserverReadMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.add(messageId);
+        return newSet;
+      });
+      
+      // Update read threads if all messages are read
+      const conversationKey = getConversationKey(user.username, msg.sender);
+      const threadMessages = messages[conversationKey] || [];
+      
+      const remainingUnread = threadMessages.filter(
+        m => !m.read && m.sender === msg.sender && m.receiver === user.username && 
+        `${m.sender}-${m.receiver}-${m.date}` !== messageId
+      ).length;
+      
+      if (remainingUnread === 0 && !readThreadsRef.current.has(msg.sender)) {
+        readThreadsRef.current.add(msg.sender);
+      }
+    });
+  }, [user, markMessagesAsRead, messages]);
   
-  // Handle sending reply - FIXED to ensure activeThread is checked
+  // Handle sending reply
   const handleReply = useCallback(() => {
-    console.log('handleReply called', { activeThread, user, replyMessage, selectedImage });
-    
-    if (!activeThread) {
-      console.error('No active thread selected');
-      return;
-    }
-    
-    if (!user) {
-      console.error('No user logged in');
-      return;
-    }
-    
-    if (!replyMessage.trim() && !selectedImage) {
-      console.log('Nothing to send - empty message and no image');
-      return;
-    }
-
-    console.log('Sending message from', user.username, 'to', activeThread);
+    if (!activeThread || !user || (!replyMessage.trim() && !selectedImage)) return;
 
     sendMessage(user.username, activeThread, replyMessage.trim(), {
       type: selectedImage ? 'image' : 'normal',
@@ -459,8 +478,6 @@ export function useSellerMessages() {
     setSearchQuery,
     filterBy,
     setFilterBy,
-    messageUpdate,
-    setMessageUpdate,
     observerReadMessages,
     setObserverReadMessages,
     messagesEndRef,
