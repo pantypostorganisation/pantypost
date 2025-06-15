@@ -2,6 +2,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { safeStorage } from '@/utils/safeStorage';
 
 export type Review = {
   reviewer: string;
@@ -22,14 +23,12 @@ export const ReviewProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [allReviews, setAllReviews] = useState<{ [seller: string]: Review[] }>({});
 
   useEffect(() => {
-    const stored = localStorage.getItem('panty_reviews');
-    if (stored) {
-      setAllReviews(JSON.parse(stored));
-    }
+    const stored = safeStorage.getItem<{ [seller: string]: Review[] }>('panty_reviews', {});
+    setAllReviews(stored || {});
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('panty_reviews', JSON.stringify(allReviews));
+    safeStorage.setItem('panty_reviews', allReviews);
   }, [allReviews]);
 
   const getReviewsForSeller = (sellerUsername: string): Review[] => {

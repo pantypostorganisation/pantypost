@@ -1,6 +1,7 @@
 // src/context/MessageContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { sanitizeString } from '@/utils/sanitizeInput';
+import { safeStorage } from '@/utils/safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 
 // UPDATED: Enhanced Message type with id and isRead
@@ -126,97 +127,74 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
 
   useEffect(() => {
-    const stored = localStorage.getItem('panty_messages');
-    if (stored) {
-      try {
-        const parsedMessages = JSON.parse(stored);
+    // Load messages with migration support
+    const storedMessages = safeStorage.getItem('messages', null);
+    if (storedMessages) {
+      // Check if migration is needed
+      const needsMigration = Object.values(storedMessages).some(
+        value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
+      );
+      
+      if (needsMigration) {
+        console.log('Migrating message format...');
+        const migrated: { [key: string]: Message[] } = {};
         
-        // Migrate old format if needed
-        const needsMigration = Object.values(parsedMessages).some(
-          value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
-        );
-        
-        if (needsMigration) {
-          console.log('Migrating message format...');
-          const migrated: { [key: string]: Message[] } = {};
-          
-          // Old format: messages stored under receiver's username
-          Object.entries(parsedMessages).forEach(([key, msgs]) => {
-            if (Array.isArray(msgs)) {
-              msgs.forEach((msg: any) => {
-                if (msg.sender && msg.receiver) {
-                  const conversationKey = getConversationKey(msg.sender, msg.receiver);
-                  if (!migrated[conversationKey]) {
-                    migrated[conversationKey] = [];
-                  }
-                  migrated[conversationKey].push(msg);
+        // Old format: messages stored under receiver's username
+        Object.entries(storedMessages).forEach(([key, msgs]) => {
+          if (Array.isArray(msgs)) {
+            msgs.forEach((msg: any) => {
+              if (msg.sender && msg.receiver) {
+                const conversationKey = getConversationKey(msg.sender, msg.receiver);
+                if (!migrated[conversationKey]) {
+                  migrated[conversationKey] = [];
                 }
-              });
-            }
-          });
-          
-          setMessages(migrated);
-          localStorage.setItem('panty_messages', JSON.stringify(migrated));
-        } else {
-          setMessages(parsedMessages);
-        }
-      } catch (error) {
-        console.error('Error parsing messages:', error);
-        setMessages({});
+                migrated[conversationKey].push(msg);
+              }
+            });
+          }
+        });
+        
+        setMessages(migrated);
+        safeStorage.setItem('messages', migrated);
+      } else {
+        setMessages(storedMessages);
       }
     }
 
-    const blocked = localStorage.getItem('panty_blocked');
-    if (blocked) setBlockedUsers(JSON.parse(blocked));
+    // Load other data with fallbacks
+    const blocked = safeStorage.getItem('blocked', {}) || {};
+    setBlockedUsers(blocked);
 
-    const reported = localStorage.getItem('panty_reported');
-    if (reported) setReportedUsers(JSON.parse(reported));
+    const reported = safeStorage.getItem('reported', {}) || {};
+    setReportedUsers(reported);
 
-    // NEW: Load report logs
-    const storedReports = localStorage.getItem('panty_report_logs');
-    if (storedReports) {
-      try {
-        setReportLogs(JSON.parse(storedReports));
-      } catch (error) {
-        console.error('Error parsing report logs:', error);
-      }
-    }
-
-    // NEW: Load message notifications
-    const storedNotifications = localStorage.getItem('panty_message_notifications');
-    if (storedNotifications) {
-      try {
-        setMessageNotifications(JSON.parse(storedNotifications));
-      } catch (error) {
-        console.error('Error parsing message notifications:', error);
-      }
-    }
+    const storedReportLogs = safeStorage.getItem('report_logs', []) || [];
+    setReportLogs(storedReportLogs);
+    
+    const storedNotifications = safeStorage.getItem('message_notifications', {}) || {};
+    setMessageNotifications(storedNotifications);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('panty_messages', JSON.stringify(messages));
+    safeStorage.setItem('messages', messages);
   }, [messages]);
 
   useEffect(() => {
-    localStorage.setItem('panty_blocked', JSON.stringify(blockedUsers));
+    safeStorage.setItem('blocked', blockedUsers);
   }, [blockedUsers]);
 
   useEffect(() => {
-    localStorage.setItem('panty_reported', JSON.stringify(reportedUsers));
+    safeStorage.setItem('reported', reportedUsers);
   }, [reportedUsers]);
 
   // NEW: Save report logs to localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_report_logs', JSON.stringify(reportLogs));
-    }
+    safeStorage.setItem('report_logs', reportLogs);
   }, [reportLogs]);
 
   // NEW: Save message notifications to localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_message_notifications', JSON.stringify(messageNotifications));
-    }
+    safeStorage.setItem('message_notifications', messageNotifications);
   }, [messageNotifications]);
 
   const sendMessage = (
@@ -525,25 +503,15 @@ export const useMessages = () => {
 
 // UPDATED: Enhanced external getReportCount function for header use
 export const getReportCount = (): number => {
-  try {
-    if (typeof window === 'undefined') return 0;
-    
-    const storedReports = localStorage.getItem('panty_report_logs');
-    if (!storedReports) return 0;
-    
-    const reports: ReportLog[] = JSON.parse(storedReports);
-    if (!Array.isArray(reports)) return 0;
-    
-    // Count only unprocessed reports
-    const pendingReports = reports.filter(report => 
-      report && 
-      typeof report === 'object' && 
-      !report.processed
-    );
-    
-    return pendingReports.length;
-  } catch (error) {
-    console.error('Error getting external report count:', error);
-    return 0;
-  }
+  const reports = safeStorage.getItem<ReportLog[]>('report_logs', []) || [];
+  if (!Array.isArray(reports)) return 0;
+  
+  // Count only unprocessed reports
+  const pendingReports = reports.filter(report => 
+    report && 
+    typeof report === 'object' && 
+    !report.processed
+  );
+  
+  return pendingReports.length;
 };

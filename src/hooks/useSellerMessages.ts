@@ -5,12 +5,8 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
+import { safeStorage } from '@/utils/safeStorage';
 import { v4 as uuidv4 } from 'uuid';
-
-// Helper function
-const getConversationKey = (userA: string, userB: string): string => {
-  return [userA, userB].sort().join('-');
-};
 
 type Message = {
   sender: string;
@@ -40,17 +36,17 @@ export function useSellerMessages() {
     unblockUser, 
     reportUser, 
     isBlocked, 
-    hasReported,
-    clearMessageNotifications // NEW: Import this
+    hasReported
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
-  const { wallet } = useWallet();
+  const { } = useWallet(); // Remove unused wallet
   
   // State for UI
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'unread'>('all');
   const [activeThread, setActiveThread] = useState<string | null>(null);
+  const [messageUpdate, setMessageUpdate] = useState(0);
   const [observerReadMessages, setObserverReadMessages] = useState<Set<string>>(new Set());
   
   // State for message input
@@ -69,82 +65,59 @@ export function useSellerMessages() {
   
   const readThreadsRef = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const hasLoadedEmojis = useRef(false);
-  const lastActiveThread = useRef<string | null>(null);
   
-  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
+  const isAdmin = user && (user.username === 'oakley' || user.username === 'gerome');
+  
+  // Reset when user changes
+  useEffect(() => {
+    readThreadsRef.current = new Set();
+    setMessageUpdate(prev => prev + 1);
+  }, [user?.username]);
   
   // Load previously read threads from localStorage
   useEffect(() => {
-    if (!user) return;
-    
-    try {
+    if (user) {
       const readThreadsKey = `panty_read_threads_${user.username}`;
-      const readThreads = localStorage.getItem(readThreadsKey);
-      if (readThreads) {
-        const threads = JSON.parse(readThreads);
-        if (Array.isArray(threads)) {
-          readThreadsRef.current = new Set(threads);
-        }
+      const threads = safeStorage.getItem<string[]>(readThreadsKey, []);
+      if (threads && threads.length > 0) {
+        readThreadsRef.current = new Set(threads);
+        setMessageUpdate(prev => prev + 1);
       }
-    } catch (e) {
-      console.error('Failed to load read threads', e);
     }
-  }, [user?.username]);
+  }, [user]);
   
   // Save read threads to localStorage
   useEffect(() => {
-    if (!user || readThreadsRef.current.size === 0) return;
-    
-    const timeoutId = setTimeout(() => {
-      try {
-        const readThreadsKey = `panty_read_threads_${user.username}`;
-        const threadsArray = Array.from(readThreadsRef.current);
-        localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
-        
-        const event = new CustomEvent('readThreadsUpdated', { 
-          detail: { threads: threadsArray, username: user.username }
-        });
-        window.dispatchEvent(event);
-      } catch (e) {
-        console.error('Failed to save read threads', e);
-      }
-    }, 1000);
-    
-    return () => clearTimeout(timeoutId);
-  }, [user?.username, activeThread]); // Update when activeThread changes
+    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
+      const readThreadsKey = `panty_read_threads_${user.username}`;
+      const threadsArray = Array.from(readThreadsRef.current);
+      safeStorage.setItem(readThreadsKey, threadsArray);
+      
+      const event = new CustomEvent('readThreadsUpdated', { 
+        detail: { threads: threadsArray, username: user.username }
+      });
+      window.dispatchEvent(event);
+    }
+  }, [messageUpdate, user]);
+  
+  // Update UI when messages change
+  useEffect(() => {
+    setMessageUpdate(prev => prev + 1);
+  }, [messages]);
   
   // Load recent emojis from localStorage
   useEffect(() => {
-    if (hasLoadedEmojis.current) return;
-    hasLoadedEmojis.current = true;
-    
-    try {
-      const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
-      if (storedRecentEmojis) {
-        const parsed = JSON.parse(storedRecentEmojis);
-        if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 30));
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load recent emojis', e);
+    const storedRecentEmojis = safeStorage.getItem<string[]>('panty_recent_emojis', []);
+    if (storedRecentEmojis && storedRecentEmojis.length > 0) {
+      setRecentEmojis(storedRecentEmojis.slice(0, 30));
     }
   }, []);
   
   // Save recent emojis to localStorage
   useEffect(() => {
-    if (recentEmojis.length === 0) return;
-    
-    const timeoutId = setTimeout(() => {
-      try {
-        localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
-      } catch (error) {
-        console.error('Failed to save recent emojis:', error);
-      }
-    }, 500);
-    
-    return () => clearTimeout(timeoutId);
+    if (recentEmojis.length > 0) {
+      safeStorage.setItem('panty_recent_emojis', recentEmojis);
+    }
   }, [recentEmojis]);
   
   // Process messages into threads
@@ -209,282 +182,251 @@ export function useSellerMessages() {
     });
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user?.username, messages, users]);
+  }, [user, messages, users, messageUpdate]);
   
   // Get seller's requests
   const sellerRequests = useMemo(() => {
     return user ? getRequestsForUser(user.username, 'seller') : [];
   }, [user, getRequestsForUser]);
   
-  // Calculate UI unread counts (considering read threads)
+  // Calculate unread counts per buyer
   const uiUnreadCounts = useMemo(() => {
     const counts: { [buyer: string]: number } = {};
+    
     if (threads) {
       Object.keys(threads).forEach(buyer => {
-        counts[buyer] = readThreadsRef.current.has(buyer) ? 0 : unreadCounts[buyer];
+        counts[buyer] = readThreadsRef.current.has(buyer) ? 0 : unreadCounts[buyer] || 0;
       });
     }
+    
     return counts;
-  }, [threads, unreadCounts]);
-  
-  // Mark messages as read when thread is selected AND clear notifications
-  useEffect(() => {
-    if (!activeThread || !user || activeThread === lastActiveThread.current) return;
-    
-    // Update the last active thread
-    lastActiveThread.current = activeThread;
-    
-    // NEW: Clear message notifications for this buyer
-    clearMessageNotifications(user.username, activeThread);
-    
-    // Check if there are unread messages
-    const conversationKey = getConversationKey(user.username, activeThread);
-    const threadMessages = messages[conversationKey] || [];
-    
-    const hasUnread = threadMessages.some(
-      msg => msg.receiver === user.username && msg.sender === activeThread && !msg.read
-    );
-    
-    if (hasUnread) {
-      // Use a small delay to prevent render loops
-      const timer = setTimeout(() => {
-        markMessagesAsRead(user.username, activeThread);
-        
-        // Update read threads ref
-        if (!readThreadsRef.current.has(activeThread)) {
-          readThreadsRef.current.add(activeThread);
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [activeThread, user?.username, markMessagesAsRead, messages, clearMessageNotifications]);
-  
-  // Handle message visibility for marking as read
-  const handleMessageVisible = useCallback((msg: any) => {
-    if (!user || msg.sender === user.username || msg.read) return;
-    
-    const messageId = `${msg.sender}-${msg.receiver}-${msg.date}`;
-    
-    if (observerReadMessages.has(messageId)) return;
-    
-    // Use requestAnimationFrame to batch updates
-    requestAnimationFrame(() => {
-      markMessagesAsRead(user.username, msg.sender);
-      
-      setObserverReadMessages(prev => {
-        const newSet = new Set(prev);
-        newSet.add(messageId);
-        return newSet;
-      });
-      
-      // Update read threads if all messages are read
-      const conversationKey = getConversationKey(user.username, msg.sender);
-      const threadMessages = messages[conversationKey] || [];
-      
-      const remainingUnread = threadMessages.filter(
-        m => !m.read && m.sender === msg.sender && m.receiver === user.username && 
-        `${m.sender}-${m.receiver}-${m.date}` !== messageId
-      ).length;
-      
-      if (remainingUnread === 0 && !readThreadsRef.current.has(msg.sender)) {
-        readThreadsRef.current.add(msg.sender);
-      }
-    });
-  }, [user, markMessagesAsRead, messages]);
-  
-  // Handle sending reply
-  const handleReply = useCallback(() => {
-    if (!activeThread || !user || (!replyMessage.trim() && !selectedImage)) return;
+  }, [threads, unreadCounts, messageUpdate]);
 
-    sendMessage(user.username, activeThread, replyMessage.trim(), {
-      type: selectedImage ? 'image' : 'normal',
-      meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+  // Filter threads based on search and filter
+  const filteredThreads = useMemo(() => {
+    if (!threads) return [];
+    
+    let filtered = Object.entries(threads);
+    
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(([buyer]) => 
+        buyer.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply unread filter
+    if (filterBy === 'unread') {
+      filtered = filtered.filter(([buyer]) => unreadCounts[buyer] > 0);
+    }
+    
+    // Sort by last message date (newest first)
+    filtered.sort(([, aMsgs], [, bMsgs]) => {
+      const aLastMsg = aMsgs[aMsgs.length - 1];
+      const bLastMsg = bMsgs[bMsgs.length - 1];
+      return new Date(bLastMsg.date).getTime() - new Date(aLastMsg.date).getTime();
     });
     
-    setReplyMessage('');
-    setSelectedImage(null);
-    setImageError(null);
-    setShowEmojiPicker(false);
-  }, [activeThread, user, replyMessage, selectedImage, sendMessage]);
-  
-  // Handle block toggle
-  const handleBlockToggle = useCallback(() => {
-    if (!activeThread || !user) return;
-    
-    if (isBlocked(user.username, activeThread)) {
-      unblockUser(user.username, activeThread);
-    } else {
-      blockUser(user.username, activeThread);
-    }
-  }, [activeThread, user, isBlocked, unblockUser, blockUser]);
-  
-  // Handle report
-  const handleReport = useCallback(() => {
-    if (!activeThread || !user) return;
-    
-    if (!hasReported(user.username, activeThread)) {
-      reportUser(user.username, activeThread);
-    }
-  }, [activeThread, user, hasReported, reportUser]);
-  
-  // Handle accepting custom request
-  const handleAccept = useCallback((customRequestId: string) => {
-    if (!user) return;
-    
-    respondToRequest(customRequestId, 'accepted', undefined, undefined, user.username);
-    
-    const request = requests.find(r => r.id === customRequestId);
-    if (request) {
-      addSellerNotification(user.username, `Custom request "${request.title}" accepted! Buyer will be notified.`);
+    return filtered;
+  }, [threads, searchQuery, filterBy, unreadCounts]);
+
+  // Function to handle image selection
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsImageLoading(true);
+      setImageError(null);
       
-      sendMessage(user.username, request.buyer, `Your custom request "${request.title}" has been accepted!`, {
-        type: 'normal'
-      });
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setImageError('Image must be less than 5MB');
+        setIsImageLoading(false);
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setSelectedImage(event.target?.result as string);
+        setIsImageLoading(false);
+      };
+      reader.onerror = () => {
+        setImageError('Failed to load image');
+        setIsImageLoading(false);
+      };
+      reader.readAsDataURL(file);
     }
-  }, [user, respondToRequest, requests, addSellerNotification, sendMessage]);
-  
-  // Handle declining custom request
-  const handleDecline = useCallback((customRequestId: string) => {
+  };
+
+  // Function to send a reply
+  const sendReply = () => {
+    if (!user || !activeThread) return;
+    
+    if (!replyMessage.trim() && !selectedImage) return;
+    
+    if (selectedImage) {
+      sendMessage(user.username, activeThread, selectedImage, {
+        type: 'image',
+        meta: {
+          imageUrl: selectedImage
+        }
+      });
+      setSelectedImage(null);
+    }
+    
+    if (replyMessage.trim()) {
+      sendMessage(user.username, activeThread, replyMessage);
+      setReplyMessage('');
+    }
+    
+    // Notification for new message
+    if (!isAdmin) {
+      addSellerNotification(
+        user.username,
+        `💬 New message sent to ${activeThread}`
+      );
+    }
+  };
+
+  // Function to handle emoji selection
+  const handleEmojiSelect = (emoji: string) => {
+    setReplyMessage(prev => prev + emoji);
+    
+    // Add to recent emojis
+    setRecentEmojis(prev => {
+      const updated = [emoji, ...prev.filter(e => e !== emoji)].slice(0, 30);
+      return updated;
+    });
+  };
+
+  // Mark thread as read when viewing it
+  const markThreadAsRead = useCallback((buyer: string) => {
     if (!user) return;
     
-    respondToRequest(customRequestId, 'rejected', undefined, undefined, user.username);
+    // Mark messages as read in context
+    markMessagesAsRead(buyer, user.username);
     
-    const request = requests.find(r => r.id === customRequestId);
-    if (request) {
-      sendMessage(user.username, request.buyer, `Your custom request "${request.title}" has been declined.`, {
-        type: 'normal'
-      });
+    // Update local ref
+    readThreadsRef.current.add(buyer);
+    setMessageUpdate(prev => prev + 1);
+  }, [user, markMessagesAsRead]);
+
+  // Handle custom request actions
+  const handleAcceptRequest = (requestId: string) => {
+    respondToRequest(requestId, 'accepted');
+    if (!isAdmin && user) {
+      addSellerNotification(
+        user.username,
+        `✅ Custom request accepted`
+      );
     }
-  }, [user, respondToRequest, requests, sendMessage]);
-  
-  // Handle custom request editing
-  const handleEditRequest = useCallback((requestId: string, title: string, price: number, message: string) => {
-    setEditRequestId(requestId);
-    setEditTitle(title);
-    setEditPrice(price);
-    setEditMessage(message);
-  }, []);
-  
-  // Handle submitting edited request
-  const handleEditSubmit = useCallback(() => {
-    if (!editRequestId || !user || editTitle.trim() === '' || editPrice === '' || editPrice <= 0) return;
+  };
+
+  const handleRejectRequest = (requestId: string) => {
+    respondToRequest(requestId, 'rejected');
+    if (!isAdmin && user) {
+      addSellerNotification(
+        user.username,
+        `❌ Custom request rejected`
+      );
+    }
+  };
+
+  const handleEditRequest = (requestId: string) => {
+    const request = requests.find(r => r.id === requestId);
+    if (request) {
+      setEditRequestId(requestId);
+      setEditPrice(request.price);
+      setEditTitle(request.title);
+      setEditMessage(request.description);
+    }
+  };
+
+  const saveEditedRequest = () => {
+    if (!editRequestId || !user) return;
     
-    const request = requests.find(r => r.id === editRequestId);
-    if (!request) return;
-    
-    // Update the request
     respondToRequest(
       editRequestId, 
       'edited',
-      editMessage.trim(),
+      undefined,
       {
-        title: editTitle.trim(),
+        title: editTitle,
         price: Number(editPrice),
-        description: editMessage.trim()
+        description: editMessage
       },
       user.username
     );
     
-    // Send message about the edit
-    sendMessage(
-      user.username,
-      request.buyer,
-      `I've modified your custom request "${editTitle.trim()}"`,
-      {
-        type: 'customRequest',
-        meta: {
-          id: editRequestId,
-          title: editTitle.trim(),
-          price: Number(editPrice),
-          message: editMessage.trim(),
+    // Send a message about the edit
+    const request = requests.find(r => r.id === editRequestId);
+    if (request) {
+      sendMessage(
+        user.username,
+        request.buyer,
+        `I've updated your custom request "${editTitle}" - Price: $${editPrice}`,
+        {
+          type: 'customRequest',
+          meta: {
+            id: editRequestId,
+            title: editTitle,
+            price: Number(editPrice),
+            message: editMessage
+          }
         }
-      }
-    );
+      );
+    }
     
-    // Reset edit state
     setEditRequestId(null);
-    setEditTitle('');
     setEditPrice('');
+    setEditTitle('');
     setEditMessage('');
     
-    addSellerNotification(user.username, `Custom request modified and sent to buyer!`);
-  }, [editRequestId, editTitle, editPrice, editMessage, user, requests, respondToRequest, sendMessage, addSellerNotification]);
-  
-  // Handle emoji click
-  const handleEmojiClick = useCallback((emoji: string) => {
-    setReplyMessage(prev => prev + emoji);
-    
-    setRecentEmojis(prev => {
-      const filtered = prev.filter(e => e !== emoji);
-      return [emoji, ...filtered].slice(0, 30);
-    });
-    
-    setShowEmojiPicker(false);
-  }, []);
-  
-  // Handle image selection
-  const handleImageSelect = useCallback(async (file: File) => {
-    if (!file) return;
-    
-    setIsImageLoading(true);
-    setImageError(null);
-    
-    try {
-      // Validate file
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Please select an image file');
-      }
-      
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('Image must be less than 5MB');
-      }
-      
-      // Read file as data URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImage(e.target?.result as string);
-        setIsImageLoading(false);
-      };
-      reader.onerror = () => {
-        setImageError('Failed to read image');
-        setIsImageLoading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      setImageError(error instanceof Error ? error.message : 'Failed to load image');
-      setIsImageLoading(false);
+    if (!isAdmin) {
+      addSellerNotification(
+        user.username,
+        `✏️ Custom request edited`
+      );
     }
-  }, []);
-  
-  const isUserBlocked = !!(user && activeThread && isBlocked(user.username, activeThread));
-  const isUserReported = !!(user && activeThread && hasReported(user.username, activeThread));
-  
+  };
+
+  // Scroll to bottom of messages
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [activeThread, threads]);
+
   return {
-    // Auth
+    // User data
     user,
     isAdmin,
     
-    // Messages & threads
+    // Thread data
     threads,
-    unreadCounts,
-    uiUnreadCounts,
-    lastMessages,
-    buyerProfiles,
-    totalUnreadCount,
+    filteredThreads,
     activeThread,
     setActiveThread,
+    buyerProfiles,
     
-    // UI State
-    previewImage,
-    setPreviewImage,
+    // Message data
+    lastMessages,
+    unreadCounts,
+    uiUnreadCounts,
+    totalUnreadCount,
+    observerReadMessages,
+    setObserverReadMessages,
+    markThreadAsRead,
+    
+    // UI states
     searchQuery,
     setSearchQuery,
     filterBy,
     setFilterBy,
-    observerReadMessages,
-    setObserverReadMessages,
-    messagesEndRef,
+    previewImage,
+    setPreviewImage,
+    showEmojiPicker,
+    setShowEmojiPicker,
+    recentEmojis,
     
     // Message input
     replyMessage,
@@ -492,38 +434,34 @@ export function useSellerMessages() {
     selectedImage,
     setSelectedImage,
     isImageLoading,
-    setIsImageLoading,
     imageError,
-    setImageError,
-    showEmojiPicker,
-    setShowEmojiPicker,
-    recentEmojis,
+    handleImageSelect,
+    sendReply,
+    handleEmojiSelect,
     
-    // Custom requests
+    // Request management
     sellerRequests,
     editRequestId,
-    setEditRequestId,
     editPrice,
     setEditPrice,
     editTitle,
     setEditTitle,
     editMessage,
     setEditMessage,
-    
-    // Actions
-    handleReply,
-    handleBlockToggle,
-    handleReport,
-    handleAccept,
-    handleDecline,
+    handleAcceptRequest,
+    handleRejectRequest,
     handleEditRequest,
-    handleEditSubmit,
-    handleImageSelect,
-    handleMessageVisible,
-    handleEmojiClick,
+    saveEditedRequest,
     
-    // Status
-    isUserBlocked,
-    isUserReported,
+    // Context functions
+    blockUser,
+    unblockUser,
+    reportUser,
+    isBlocked,
+    hasReported,
+    
+    // Refs
+    messagesEndRef,
+    scrollToBottom
   };
 }

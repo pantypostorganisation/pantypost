@@ -1,5 +1,7 @@
 // src/utils/profileUtils.ts
 
+import { safeStorage } from '@/utils/safeStorage';
+
 export interface UserProfile {
   bio: string;
   profilePic: string | null;
@@ -16,12 +18,9 @@ export function getUserProfileData(username: string): UserProfile | null {
 
   try {
     // First check shared localStorage
-    const profilesData = localStorage.getItem('user_profiles');
-    if (profilesData) {
-      const profiles = JSON.parse(profilesData);
-      if (profiles[username]) {
-        return profiles[username];
-      }
+    const profiles = safeStorage.getItem<Record<string, UserProfile>>('user_profiles', {});
+    if (profiles && profiles[username]) {
+      return profiles[username];
     }
 
     // Fallback to sessionStorage for backward compatibility
@@ -48,8 +47,7 @@ export function saveUserProfileData(username: string, profile: UserProfile): boo
 
   try {
     // Get existing profiles
-    const profilesData = localStorage.getItem('user_profiles') || '{}';
-    const profiles = JSON.parse(profilesData);
+    const profiles = safeStorage.getItem<Record<string, UserProfile>>('user_profiles', {}) || {};
     
     // Update profile
     profiles[username] = {
@@ -58,18 +56,20 @@ export function saveUserProfileData(username: string, profile: UserProfile): boo
     };
     
     // Save to localStorage
-    localStorage.setItem('user_profiles', JSON.stringify(profiles));
+    const success = safeStorage.setItem('user_profiles', profiles);
     
-    // Also update sessionStorage for backward compatibility
-    sessionStorage.setItem(`profile_bio_${username}`, profile.bio);
-    if (profile.profilePic) {
-      sessionStorage.setItem(`profile_pic_${username}`, profile.profilePic);
-    } else {
-      sessionStorage.removeItem(`profile_pic_${username}`);
+    if (success) {
+      // Also update sessionStorage for backward compatibility
+      sessionStorage.setItem(`profile_bio_${username}`, profile.bio);
+      if (profile.profilePic) {
+        sessionStorage.setItem(`profile_pic_${username}`, profile.profilePic);
+      } else {
+        sessionStorage.removeItem(`profile_pic_${username}`);
+      }
+      sessionStorage.setItem(`subscription_price_${username}`, profile.subscriptionPrice);
     }
-    sessionStorage.setItem(`subscription_price_${username}`, profile.subscriptionPrice);
     
-    return true;
+    return success;
   } catch (error) {
     console.error('Error saving user profile:', error);
     return false;
@@ -98,4 +98,49 @@ export function getUserBio(username: string): string {
 export function getUserSubscriptionPrice(username: string): string {
   const profile = getUserProfileData(username);
   return profile?.subscriptionPrice || '0';
+}
+
+/**
+ * Delete user profile data
+ */
+export function deleteUserProfile(username: string): boolean {
+  if (!username || typeof window === 'undefined') return false;
+  
+  try {
+    const profiles = safeStorage.getItem<Record<string, UserProfile>>('user_profiles', {}) || {};
+    delete profiles[username];
+    
+    const success = safeStorage.setItem('user_profiles', profiles);
+    
+    if (success) {
+      // Also clear from sessionStorage
+      sessionStorage.removeItem(`profile_bio_${username}`);
+      sessionStorage.removeItem(`profile_pic_${username}`);
+      sessionStorage.removeItem(`subscription_price_${username}`);
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('Error deleting user profile:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all user profiles
+ */
+export function getAllUserProfiles(): Record<string, UserProfile> {
+  return safeStorage.getItem<Record<string, UserProfile>>('user_profiles', {}) || {};
+}
+
+/**
+ * Clear all user profiles (admin function)
+ */
+export function clearAllUserProfiles(): boolean {
+  try {
+    return safeStorage.setItem('user_profiles', {});
+  } catch (error) {
+    console.error('Error clearing all profiles:', error);
+    return false;
+  }
 }
