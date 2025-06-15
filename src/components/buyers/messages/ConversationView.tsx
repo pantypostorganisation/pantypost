@@ -133,7 +133,7 @@ interface ConversationViewProps {
   handleEditRequest: (req: CustomRequest) => void;
   handleEditSubmit: () => void;
   handlePayNow: (req: CustomRequest) => void;
-  handleImageSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  handleImageSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleMessageVisible: (msg: Message) => void;
   handleEmojiClick: (emoji: string) => void;
   isUserBlocked: boolean;
@@ -227,6 +227,19 @@ export default function ConversationView({
     fileInputRef.current?.click();
   }, [fileInputRef]);
 
+  // Add stable handlers to prevent re-renders
+  const stableHandleReply = useCallback(() => {
+    handleReply();
+  }, [handleReply]);
+
+  const stableHandleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    handleImageSelect(e);
+  }, [handleImageSelect]);
+
+  const stableSetReplyMessage = useCallback((value: string) => {
+    setReplyMessage(value);
+  }, [setReplyMessage]);
+
   return (
     <>
       {/* Conversation header */}
@@ -279,8 +292,8 @@ export default function ConversationView({
       </div>
       
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-[#121212]" ref={messagesContainerRef}>
-        <div className="max-w-3xl mx-auto space-y-4">
+      <div className="flex-1 overflow-y-auto bg-[#121212]" ref={messagesContainerRef}>
+        <div className="max-w-3xl mx-auto space-y-4 p-4">
           {threadMessages.map((msg: Message, index: number) => {
             const isFromMe = msg.sender === user?.username;
             
@@ -438,7 +451,7 @@ export default function ConversationView({
               <textarea
                 ref={inputRef}
                 value={replyMessage}
-                onChange={(e) => setReplyMessage(e.target.value)}
+                onChange={(e) => stableSetReplyMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={selectedImage ? "Add a caption..." : "Type a message"}
                 className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
@@ -532,7 +545,7 @@ export default function ConversationView({
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   ref={fileInputRef}
                   style={{ display: 'none' }}
-                  onChange={handleImageSelect}
+                  onChange={stableHandleImageSelect}
                 />
               </div>
               
@@ -542,7 +555,7 @@ export default function ConversationView({
                 alt="Send"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleReply();
+                  stableHandleReply();
                 }}
                 className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
                   (!replyMessage.trim() && !selectedImage) || isImageLoading
