@@ -406,7 +406,11 @@ export default function Header() {
     if (!isMountedRef.current || !user || user.role !== 'seller') return;
     
     try {
-      const sales = orderHistory.filter((order) => order.seller === user.username);
+      // Only count orders that are NOT shipped (pending, processing, or no status)
+      const sales = orderHistory.filter((order) => 
+        order.seller === user.username && 
+        (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
+      );
       const requests = getRequestsForUser(user.username, 'seller');
       const acceptedCustoms = requests.filter((req) => req.status === 'accepted');
       setPendingOrdersCount(sales.length + acceptedCustoms.length);
@@ -537,6 +541,7 @@ export default function Header() {
               {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
               {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
               {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
+              {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
               {renderMobileLink('/wallet/seller', <Wallet className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
             </>
           )}
