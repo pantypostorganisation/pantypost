@@ -22,7 +22,7 @@ export default function BuyerWalletPage() {
   const { user } = useAuth();
   const { 
     getBuyerBalance, 
-    setBuyerBalance, // 🚀 FIX: Import setBuyerBalance to actually update wallet
+    setBuyerBalance,
     orderHistory, 
     addDeposit 
   } = useWallet();
@@ -31,6 +31,7 @@ export default function BuyerWalletPage() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [walletUpdateTrigger, setWalletUpdateTrigger] = useState(0);
 
   // Get buyer's purchase history
   const buyerPurchases = user?.username 
@@ -45,20 +46,36 @@ export default function BuyerWalletPage() {
   // Calculate total spent
   const totalSpent = buyerPurchases.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
 
-  // 🚀 FIX: Update balance whenever wallet context changes or withdrawals happen
+  // Update balance whenever wallet context changes
   useEffect(() => {
     if (user?.username) {
       const rawBalance = getBuyerBalance(user.username);
       const updatedBalance = Math.max(0, rawBalance);
       setBalance(updatedBalance);
     }
-  }, [user, getBuyerBalance]); // Removed 'logs' dependency as it doesn't exist for buyers
+  }, [user, getBuyerBalance, orderHistory, walletUpdateTrigger]);
+
+  // Listen for wallet updates
+  useEffect(() => {
+    const handleWalletUpdate = () => {
+      if (user?.username) {
+        const rawBalance = getBuyerBalance(user.username);
+        const updatedBalance = Math.max(0, rawBalance);
+        setBalance(updatedBalance);
+      }
+    };
+
+    window.addEventListener('walletUpdate', handleWalletUpdate);
+    
+    return () => {
+      window.removeEventListener('walletUpdate', handleWalletUpdate);
+    };
+  }, [user, getBuyerBalance]);
 
   const handleAddFunds = () => {
     setIsLoading(true);
     const amount = parseFloat(amountToAdd);
     
-    // 🚀 FIX: Better validation with more specific error messages
     if (!user?.username) {
       setMessage('You must be logged in to add funds.');
       setMessageType('error');
@@ -73,7 +90,6 @@ export default function BuyerWalletPage() {
       return;
     }
 
-    // 🚀 FIX: Add maximum deposit limit for security
     if (amount > 10000) {
       setMessage('Maximum deposit amount is $10,000. Please contact support for larger deposits.');
       setMessageType('error');
@@ -81,14 +97,13 @@ export default function BuyerWalletPage() {
       return;
     }
 
-    // 🚀 FIX: Round amount to 2 decimal places to prevent floating point issues
     const roundedAmount = Math.round(amount * 100) / 100;
 
     try {
       // Simulate a slight delay for better UX
       setTimeout(() => {
         try {
-          // 🚀 FIX: Track the deposit first
+          // Track the deposit first
           const depositSuccess = addDeposit(
             user.username!, 
             roundedAmount, 
@@ -97,20 +112,18 @@ export default function BuyerWalletPage() {
           );
           
           if (depositSuccess) {
-            // 🚀 FIX: Actually update the buyer's wallet balance in the context
+            // Update local state to reflect the change immediately
             const currentBalance = getBuyerBalance(user.username!);
             const newBalance = currentBalance + roundedAmount;
-            
-            // Update the wallet context with the new balance
-            setBuyerBalance(user.username!, newBalance);
-            
-            // Update local state to reflect the change immediately
             setBalance(newBalance);
             
             // Clear form and show success message
             setAmountToAdd('');
             setMessage(`Successfully added $${roundedAmount.toFixed(2)} to your wallet. Your new balance is $${newBalance.toFixed(2)}.`);
             setMessageType('success');
+            
+            // Trigger wallet update
+            setWalletUpdateTrigger(prev => prev + 1);
           } else {
             setMessage('Failed to process deposit. Please try again or contact support.');
             setMessageType('error');
@@ -137,7 +150,6 @@ export default function BuyerWalletPage() {
     }, 5000);
   };
 
-  // 🚀 FIX: Add input validation for amount field
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
@@ -147,7 +159,6 @@ export default function BuyerWalletPage() {
     }
   };
 
-  // 🚀 FIX: Add Enter key support for better UX
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && amountToAdd && !isLoading) {
       handleAddFunds();
@@ -195,7 +206,6 @@ export default function BuyerWalletPage() {
                 <p className="mt-4 text-sm text-gray-400">
                   Use your wallet to purchase listings. Each transaction includes a 10% platform fee.
                 </p>
-                {/* 🚀 FIX: Add low balance warning */}
                 {balance < 20 && balance > 0 && (
                   <div className="mt-3 flex items-center text-sm text-yellow-400">
                     <AlertCircle className="w-4 h-4 mr-1" />
@@ -230,7 +240,6 @@ export default function BuyerWalletPage() {
               </h2>
               
               <div className="mb-6">
-                {/* 🚀 FIX: Add helpful info about deposits */}
                 <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
                   <div className="flex items-start">
                     <CheckCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
@@ -254,14 +263,13 @@ export default function BuyerWalletPage() {
                         type="text"
                         id="amount"
                         value={amountToAdd}
-                        onChange={handleAmountChange} // 🚀 FIX: Use custom validation
-                        onKeyPress={handleKeyPress} // 🚀 FIX: Add Enter key support
+                        onChange={handleAmountChange}
+                        onKeyPress={handleKeyPress}
                         placeholder="0.00"
                         className="w-full bg-[#222] border border-[#444] rounded-lg py-3 pl-8 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
                         disabled={isLoading}
                       />
                     </div>
-                    {/* 🚀 FIX: Add quick amount buttons */}
                     <div className="flex gap-2 mt-2">
                       {[25, 50, 100, 200].map((quickAmount) => (
                         <button
@@ -348,7 +356,7 @@ export default function BuyerWalletPage() {
               </div>
             )}
 
-            {/* 🚀 FIX: Add empty state for no purchases */}
+            {/* Empty state for no purchases */}
             {buyerPurchases.length === 0 && (
               <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg text-center">
                 <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-4" />

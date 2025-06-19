@@ -18,19 +18,19 @@ export type Order = {
   description: string;
   price: number;
   markedUpPrice: number;
-  imageUrl?: string; // This is where the first image URL will be stored
+  imageUrl?: string;
   date: string;
   seller: string;
   buyer: string;
   tags?: string[];
-  wearTime?: string; // Note: This seems to correspond to 'hoursWorn' in Listing type
-  wasAuction?: boolean; // Flag to indicate if this was an auction purchase
-  finalBid?: number; // The final winning bid amount for auctions
-  deliveryAddress?: DeliveryAddress; // Add this field
-  shippingStatus?: 'pending' | 'processing' | 'shipped'; // Add shipping status
-  tierCreditAmount?: number; // Track tier credit amount for transparency
-  isCustomRequest?: boolean; // NEW: Flag to identify custom request orders
-  originalRequestId?: string; // NEW: Link back to the original custom request
+  wearTime?: string;
+  wasAuction?: boolean;
+  finalBid?: number;
+  deliveryAddress?: DeliveryAddress;
+  shippingStatus?: 'pending' | 'processing' | 'shipped';
+  tierCreditAmount?: number;
+  isCustomRequest?: boolean;
+  originalRequestId?: string;
 };
 
 type Listing = {
@@ -58,7 +58,6 @@ type AdminAction = {
   date: string;
 };
 
-// ðŸš€ NEW: Deposit tracking type
 export type DepositLog = {
   id: string;
   username: string;
@@ -70,7 +69,6 @@ export type DepositLog = {
   notes?: string;
 };
 
-// NEW: Custom Request Purchase type for type safety
 export type CustomRequestPurchase = {
   requestId: string;
   title: string;
@@ -91,7 +89,6 @@ type WalletContextType = {
   setSellerBalance: (seller: string, balance: number) => void;
   getSellerBalance: (seller: string) => number;
   purchaseListing: (listing: Listing, buyerUsername: string) => boolean;
-  // NEW: Custom request purchase function
   purchaseCustomRequest: (customRequest: CustomRequestPurchase) => boolean;
   subscribeToSellerWithPayment: (
     buyer: string,
@@ -108,14 +105,11 @@ type WalletContextType = {
   updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void;
   sendTip: (buyer: string, seller: string, amount: number) => boolean;
   setAddSellerNotificationCallback?: (fn: (seller: string, message: string) => void) => void;
-  // Admin functions
   adminCreditUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
   adminDebitUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
   adminActions: AdminAction[];
-  // Delivery and shipping functions
   updateOrderAddress: (orderId: string, address: DeliveryAddress) => void;
   updateShippingStatus: (orderId: string, status: 'pending' | 'processing' | 'shipped') => void;
-  // ðŸš€ Deposit tracking functions
   depositLogs: DepositLog[];
   addDeposit: (username: string, amount: number, method: DepositLog['method'], notes?: string) => boolean;
   getDepositsForUser: (username: string) => DepositLog[];
@@ -126,6 +120,7 @@ type WalletContextType = {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
+  // Initialize state with empty values first
   const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
@@ -133,77 +128,95 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [sellerWithdrawals, setSellerWithdrawals] = useState<{ [username: string]: Withdrawal[] }>({});
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
   const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
-  const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
-  // ðŸš€ NEW: Deposit logs state
   const [depositLogs, setDepositLogs] = useState<DepositLog[]>([]);
+  const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
 
+  // Load data from localStorage on mount
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isInitialized) return;
 
-    const buyers = localStorage.getItem("wallet_buyers");
-    const admin = localStorage.getItem("wallet_admin");
-    const sellers = localStorage.getItem("wallet_sellers");
-    const orders = localStorage.getItem("wallet_orders");
-    const sellerWds = localStorage.getItem("wallet_sellerWithdrawals");
-    const adminWds = localStorage.getItem("wallet_adminWithdrawals");
-    const actions = localStorage.getItem("wallet_adminActions");
-    // ðŸš€ NEW: Load deposit logs
-    const deposits = localStorage.getItem("wallet_depositLogs");
+    try {
+      const buyers = localStorage.getItem("wallet_buyers");
+      const admin = localStorage.getItem("wallet_admin");
+      const sellers = localStorage.getItem("wallet_sellers");
+      const orders = localStorage.getItem("wallet_orders");
+      const sellerWds = localStorage.getItem("wallet_sellerWithdrawals");
+      const adminWds = localStorage.getItem("wallet_adminWithdrawals");
+      const actions = localStorage.getItem("wallet_adminActions");
+      const deposits = localStorage.getItem("wallet_depositLogs");
 
-    if (buyers) setBuyerBalancesState(JSON.parse(buyers));
-    if (admin) setAdminBalanceState(parseFloat(admin));
-    if (sellers) setSellerBalancesState(JSON.parse(sellers));
-    if (orders) setOrderHistory(JSON.parse(orders));
-    if (sellerWds) setSellerWithdrawals(JSON.parse(sellerWds));
-    if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
-    if (actions) setAdminActions(JSON.parse(actions));
-    if (deposits) setDepositLogs(JSON.parse(deposits));
-  }, []);
+      if (buyers) setBuyerBalancesState(JSON.parse(buyers));
+      if (admin) setAdminBalanceState(parseFloat(admin));
+      if (sellers) setSellerBalancesState(JSON.parse(sellers));
+      if (orders) setOrderHistory(JSON.parse(orders));
+      if (sellerWds) setSellerWithdrawals(JSON.parse(sellerWds));
+      if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
+      if (actions) setAdminActions(JSON.parse(actions));
+      if (deposits) setDepositLogs(JSON.parse(deposits));
+      
+      setIsInitialized(true);
+    } catch (error) {
+      console.error('Error loading wallet data from localStorage:', error);
+      setIsInitialized(true);
+    }
+  }, [isInitialized]);
 
+  // Save to localStorage whenever state changes
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_buyers", JSON.stringify(buyerBalances));
-  }, [buyerBalances]);
+  }, [buyerBalances, isInitialized]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_admin", adminBalance.toString());
-  }, [adminBalance]);
+  }, [adminBalance, isInitialized]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_sellers", JSON.stringify(sellerBalances));
-  }, [sellerBalances]);
+  }, [sellerBalances, isInitialized]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_orders", JSON.stringify(orderHistory));
-  }, [orderHistory]);
+  }, [orderHistory, isInitialized]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_sellerWithdrawals", JSON.stringify(sellerWithdrawals));
-  }, [sellerWithdrawals]);
+  }, [sellerWithdrawals, isInitialized]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_adminWithdrawals", JSON.stringify(adminWithdrawals));
-  }, [adminWithdrawals]);
+  }, [adminWithdrawals, isInitialized]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_adminActions", JSON.stringify(adminActions));
-  }, [adminActions]);
+  }, [adminActions, isInitialized]);
 
-  // ðŸš€ NEW: Save deposit logs to localStorage
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isInitialized || typeof window === 'undefined') return;
     localStorage.setItem("wallet_depositLogs", JSON.stringify(depositLogs));
-  }, [depositLogs]);
+  }, [depositLogs, isInitialized]);
+
+  // Force update Header balance when context updates
+  useEffect(() => {
+    if (!isInitialized || typeof window === 'undefined') return;
+    
+    // Trigger a custom event to update the header
+    const event = new CustomEvent('walletUpdate', { 
+      detail: { buyerBalances, sellerBalances, adminBalance } 
+    });
+    window.dispatchEvent(event);
+  }, [buyerBalances, sellerBalances, adminBalance, isInitialized]);
 
   const getBuyerBalance = (username: string): number => {
     return buyerBalances[username] || 0;
@@ -235,24 +248,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setOrderHistory((prev) => [...prev, order]);
   };
 
-  // ðŸš€ NEW: Deposit tracking functions
   const addDeposit = (username: string, amount: number, method: DepositLog['method'], notes?: string): boolean => {
     if (!username || amount <= 0) {
       return false;
     }
 
     try {
-      // Generate unique deposit ID
       const depositId = `dep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Create deposit log
       const newDeposit: DepositLog = {
         id: depositId,
         username,
         amount,
         method,
         date: new Date().toISOString(),
-        status: 'completed', // In production, this might start as 'pending'
+        status: 'completed',
         transactionId: `txn_${depositId}`,
         notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
       };
@@ -317,35 +327,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
   };
 
-  // Function to update the delivery address for an order
   const updateOrderAddress = (orderId: string, address: DeliveryAddress) => {
     setOrderHistory((prev) => {
       const updatedOrders = prev.map((order) => 
         order.id === orderId ? { ...order, deliveryAddress: address } : order
       );
-      localStorage.setItem("wallet_orders", JSON.stringify(updatedOrders));
       return updatedOrders;
     });
   };
 
-  // Function to update shipping status
   const updateShippingStatus = (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
     setOrderHistory((prev) => {
       const updatedOrders = prev.map((order) => 
         order.id === orderId ? { ...order, shippingStatus: status } : order
       );
-      localStorage.setItem("wallet_orders", JSON.stringify(updatedOrders));
       return updatedOrders;
     });
   };
 
-  // Admin functions
   const adminCreditUser = (username: string, role: 'buyer' | 'seller', amount: number, reason: string): boolean => {
     if (!username || amount <= 0 || !reason) {
       return false;
     }
 
-    // Get the current admin user from localStorage if available
     const currentUser = typeof window !== 'undefined' ? 
       localStorage.getItem('panty_currentUser') : null;
     const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
@@ -355,7 +359,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const currentBalance = getBuyerBalance(username);
         setBuyerBalance(username, currentBalance + amount);
         
-        // ðŸš€ NEW: If this is a wallet credit, also log as deposit
         if (reason.toLowerCase().includes('deposit') || reason.toLowerCase().includes('wallet')) {
           addDeposit(username, amount, 'admin_credit', `Admin credit: ${reason}`);
         }
@@ -366,7 +369,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // Log the admin action
       const action: AdminAction = {
         adminUser,
         username,
@@ -390,7 +392,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    // Get the current admin user from localStorage if available
     const currentUser = typeof window !== 'undefined' ? 
       localStorage.getItem('panty_currentUser') : null;
     const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
@@ -399,20 +400,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (role === 'buyer') {
         const currentBalance = getBuyerBalance(username);
         if (currentBalance < amount) {
-          return false; // Insufficient funds
+          return false;
         }
         setBuyerBalance(username, currentBalance - amount);
       } else if (role === 'seller') {
         const currentBalance = getSellerBalance(username);
         if (currentBalance < amount) {
-          return false; // Insufficient funds
+          return false;
         }
         setSellerBalance(username, currentBalance - amount);
       } else {
         return false;
       }
 
-      // Log the admin action
       const action: AdminAction = {
         adminUser,
         username,
@@ -439,13 +439,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const sellerCut = listing.price * 0.9;
     const platformCut = price - sellerCut;
     const currentBuyerBalance = getBuyerBalance(buyerUsername);
+    
     if (currentBuyerBalance < price) {
       return false;
     }
 
     const transactionLockKey = `transaction_lock_${buyerUsername}_${seller}`;
     if (localStorage.getItem(transactionLockKey)) {
-      return false; // Transaction is already in progress
+      return false;
     }
     localStorage.setItem(transactionLockKey, 'locked');
 
@@ -453,14 +454,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (price <= 0 || !listing.title || !listing.id || !seller) {
         return false;
       }
+      
       setBuyerBalance(buyerUsername, currentBuyerBalance - price);
 
-      // Calculate tier credit bonus
       const sellerTierInfo = getSellerTierMemoized(seller, orderHistory);
       const tierCreditPercent = sellerTierInfo.credit;
       const tierCreditAmount = listing.price * tierCreditPercent;
       
-      // Add base amount plus tier credit to seller balance
       setSellerBalancesState((prev) => ({
         ...prev,
         [seller]: (prev[seller] || 0) + sellerCut + tierCreditAmount,
@@ -468,7 +468,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       updateWallet('admin', platformCut);
 
-      // Record platform profit as admin action for analytics
       const platformProfitAction: AdminAction = {
         adminUser: 'system',
         username: 'platform',
@@ -485,18 +484,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         buyer: buyerUsername,
         date: new Date().toISOString(),
         imageUrl: listing.imageUrls?.[0] || undefined,
-        shippingStatus: 'pending', // Default shipping status
-        tierCreditAmount: tierCreditAmount, // Store the tier credit amount in the order
-        isCustomRequest: false, // This is a regular listing purchase
+        shippingStatus: 'pending',
+        tierCreditAmount: tierCreditAmount,
+        isCustomRequest: false,
       } as Order;
 
       addOrder(order);
+      
       const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
         ? listing.markedUpPrice.toFixed(2)
         : listing.price.toFixed(2);
 
       if (addSellerNotification) {
-        // Include tier credit info in the notification
         if (tierCreditAmount > 0) {
           addSellerNotification(
             seller,
@@ -516,11 +515,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // NEW: Custom Request Purchase Function
   const purchaseCustomRequest = (customRequest: CustomRequestPurchase): boolean => {
     const { requestId, title, description, price, seller, buyer, tags } = customRequest;
     
-    // Calculate marked up price (10% platform fee)
     const markedUpPrice = Math.round(price * 1.1 * 100) / 100;
     const sellerCut = price * 0.9;
     const platformCut = markedUpPrice - sellerCut;
@@ -532,7 +529,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     const transactionLockKey = `custom_request_transaction_lock_${buyer}_${seller}_${requestId}`;
     if (localStorage.getItem(transactionLockKey)) {
-      return false; // Transaction is already in progress
+      return false;
     }
     localStorage.setItem(transactionLockKey, 'locked');
 
@@ -541,24 +538,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return false;
       }
       
-      // Deduct from buyer balance
       setBuyerBalance(buyer, currentBuyerBalance - markedUpPrice);
 
-      // Calculate tier credit bonus
       const sellerTierInfo = getSellerTierMemoized(seller, orderHistory);
       const tierCreditPercent = sellerTierInfo.credit;
       const tierCreditAmount = price * tierCreditPercent;
       
-      // Add base amount plus tier credit to seller balance
       setSellerBalancesState((prev) => ({
         ...prev,
         [seller]: (prev[seller] || 0) + sellerCut + tierCreditAmount,
       }));
 
-      // Add platform cut to admin balance
       updateWallet('admin', platformCut);
 
-      // Record platform profit as admin action for analytics
       const platformProfitAction: AdminAction = {
         adminUser: 'system',
         username: 'platform',
@@ -570,9 +562,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       };
       setAdminActions(prev => [...prev, platformProfitAction]);
 
-      // Create order for custom request
       const order: Order = {
-        id: `custom_${requestId}_${Date.now()}`, // Unique order ID
+        id: `custom_${requestId}_${Date.now()}`,
         title,
         description,
         price,
@@ -583,13 +574,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         tags,
         shippingStatus: 'pending',
         tierCreditAmount,
-        isCustomRequest: true, // Flag this as a custom request order
-        originalRequestId: requestId, // Link back to the original request
+        isCustomRequest: true,
+        originalRequestId: requestId,
       };
 
       addOrder(order);
 
-      // Notify seller
       if (addSellerNotification) {
         if (tierCreditAmount > 0) {
           addSellerNotification(
@@ -639,7 +629,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       updateWallet('admin', adminCut);
 
-      // Record subscription profit as admin action for analytics
       const subscriptionProfitAction: AdminAction = {
         adminUser: 'system',
         username: 'platform',
@@ -786,7 +775,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setSellerBalance,
         getSellerBalance,
         purchaseListing,
-        purchaseCustomRequest, // NEW: Add the custom request purchase function
+        purchaseCustomRequest,
         subscribeToSellerWithPayment,
         orderHistory,
         addOrder,
@@ -798,14 +787,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         updateWallet,
         sendTip,
         setAddSellerNotificationCallback,
-        // Admin functions
         adminCreditUser,
         adminDebitUser,
         adminActions,
-        // Delivery and shipping functions
         updateOrderAddress,
         updateShippingStatus,
-        // ðŸš€ Deposit tracking functions
         depositLogs,
         addDeposit,
         getDepositsForUser,
