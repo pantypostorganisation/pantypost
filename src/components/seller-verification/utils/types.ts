@@ -1,4 +1,5 @@
 // src/components/seller-verification/utils/types.ts
+import React from 'react';
 
 export interface ImageViewData {
   type: string;
@@ -16,10 +17,10 @@ export interface DocumentUploadFieldProps {
   label: string;
   value: string | null;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   required?: boolean;
   helpText?: string;
-  iconComponent?: React.ReactNode;
+  iconComponent?: React.ComponentType<{ className?: string }>;
 }
 
 export interface VerificationDocsDisplay {

@@ -176,9 +176,8 @@ export const useBrowseDetail = () => {
     updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
 
     try {
-      // Convert price to string as purchaseListing expects a string
-      const priceString = String(listing.markedUpPrice || listing.price);
-      const success = await purchaseListing(listing, priceString);
+      // FIXED: Pass the listing object and buyer username correctly
+      const success = await purchaseListing(listing, user.username);
       
       if (success) {
         updateState({ 

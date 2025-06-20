@@ -105,10 +105,10 @@ export default function SellerVerifyPage() {
         <PendingState 
           user={user} 
           code={code}
-          codePhoto={codePhoto}
-          idFront={idFront}
-          idBack={idBack}
-          passport={passport}
+          codePhoto={codePhoto || undefined}
+          idFront={idFront || undefined}
+          idBack={idBack || undefined}
+          passport={passport || undefined}
           getTimeAgo={getTimeAgo}
         />
         <ImageViewerModal 

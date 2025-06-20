@@ -1,6 +1,7 @@
 // src/components/seller-verification/DocumentUploadSection.tsx
 'use client';
 
+import React from 'react';
 import { Camera, Upload } from 'lucide-react';
 import { DocumentUploadFieldProps } from './utils/types';
 
@@ -28,7 +29,7 @@ function DocumentUploadField({
           <img src={value} alt={`${label} preview`} className="max-h-full max-w-full object-contain" />
         ) : (
           <>
-            <Icon className="w-8 h-8 text-gray-500 mb-2" />
+            {React.createElement(Icon, { className: "w-8 h-8 text-gray-500 mb-2" })}
             <span className="text-xs text-gray-500">Click to upload</span>
           </>
         )}
@@ -54,10 +55,10 @@ interface DocumentUploadSectionProps {
   onIdFrontChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onIdBackChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPassportChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  codePhotoRef: React.RefObject<HTMLInputElement>;
-  idFrontRef: React.RefObject<HTMLInputElement>;
-  idBackRef: React.RefObject<HTMLInputElement>;
-  passportRef: React.RefObject<HTMLInputElement>;
+  codePhotoRef: React.RefObject<HTMLInputElement | null>;
+  idFrontRef: React.RefObject<HTMLInputElement | null>;
+  idBackRef: React.RefObject<HTMLInputElement | null>;
+  passportRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export default function DocumentUploadSection({
