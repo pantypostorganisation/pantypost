@@ -884,9 +884,9 @@ export default function Header() {
                 <span>My Orders</span>
               </Link>
               
-              <Link href="/wallet/buyer" className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs">
-                <Wallet className="w-3.5 h-3.5 text-[#ff950e]" />
-                <span className="font-bold text-[#ff950e]">${Math.max(buyerBalance, 0).toFixed(2)}</span>
+              <Link href="/wallet/buyer" className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs">
+                <Wallet className="w-3.5 h-3.5 text-purple-400" />
+                <span className="font-bold text-purple-400">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
               
               <Link href="/buyers/messages" className="relative group">
