@@ -8,11 +8,11 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
-import OrderStats from '@/components/sellers/orders/OrderStats';
-import OrdersSection from '@/components/sellers/orders/OrdersSection';
-import OrdersEmptyState from '@/components/sellers/orders/OrdersEmptyState';
-import AddressDisplay from '@/components/sellers/orders/AddressDisplay';
-import ShippingControls from '@/components/sellers/orders/ShippingControls';
+import OrderStats from '@/components/seller/orders/OrderStats';
+import OrdersSection from '@/components/seller/orders/OrdersSection';
+import OrdersEmptyState from '@/components/seller/orders/OrdersEmptyState';
+import AddressDisplay from '@/components/seller/orders/AddressDisplay';
+import ShippingControls from '@/components/seller/orders/ShippingControls';
 import { 
   Clock, 
   Package, 

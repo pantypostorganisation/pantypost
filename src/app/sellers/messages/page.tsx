@@ -5,9 +5,9 @@ import React from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useSellerMessages } from '@/hooks/useSellerMessages';
-import ThreadsSidebar from '@/components/sellers/messages/ThreadsSidebar';
-import ConversationView from '@/components/sellers/messages/ConversationView';
-import EmptyState from '@/components/sellers/messages/EmptyState';
+import ThreadsSidebar from '@/components/seller/messages/ThreadsSidebar';
+import ConversationView from '@/components/seller/messages/ConversationView';
+import EmptyState from '@/components/seller/messages/EmptyState';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 
 export default function SellerMessagesPage() {
