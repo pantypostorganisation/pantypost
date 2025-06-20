@@ -282,8 +282,8 @@ export default function BuyerWalletPage() {
                       <div className="flex items-start">
                         <CheckCircle className="w-5 h-5 text-blue-400 mr-3 mt-0.5 flex-shrink-0" />
                         <div className="text-sm">
-                          <p className="font-semibold text-blue-300 mb-1">Enterprise-Grade Security</p>
-                          <p className="text-blue-200/80">Instant deposits with bank-level encryption. Your funds are available immediately.</p>
+                          <p className="font-semibold text-blue-300 mb-1">SECURE TRANSACTIONS</p>
+                          <p className="text-blue-200/80">Instant deposits. Your funds are available immediately.</p>
                         </div>
                       </div>
                     </div>
