@@ -26,13 +26,15 @@ export default function SellerProfileSettingsPage() {
     preview,
     subscriptionPrice,
     setSubscriptionPrice,
+    profileUploading,
     handleProfilePicChange,
     removeProfilePic,
     
     // Gallery
     galleryImages,
     selectedFiles,
-    isUploading,
+    galleryUploading,
+    uploadProgress,
     multipleFileInputRef,
     handleMultipleFileChange,
     removeSelectedFile,
@@ -78,6 +80,7 @@ export default function SellerProfileSettingsPage() {
                   handleProfilePicChange={handleProfilePicChange}
                   removeProfilePic={removeProfilePic}
                   profilePicInputRef={profilePicInputRef}
+                  isUploading={profileUploading}
                 />
 
                 {/* Save Button */}
@@ -101,7 +104,8 @@ export default function SellerProfileSettingsPage() {
                 <GalleryManager
                   galleryImages={galleryImages}
                   selectedFiles={selectedFiles}
-                  isUploading={isUploading}
+                  isUploading={galleryUploading}
+                  uploadProgress={uploadProgress}
                   multipleFileInputRef={multipleFileInputRef}
                   handleMultipleFileChange={handleMultipleFileChange}
                   uploadGalleryImages={uploadGalleryImages}

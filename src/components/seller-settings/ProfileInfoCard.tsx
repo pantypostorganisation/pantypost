@@ -15,6 +15,7 @@ interface ProfileInfoCardProps {
   handleProfilePicChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   removeProfilePic: () => void;
   profilePicInputRef: RefObject<HTMLInputElement | null>;
+  isUploading?: boolean;
 }
 
 export default function ProfileInfoCard({
@@ -27,7 +28,8 @@ export default function ProfileInfoCard({
   setSubscriptionPrice,
   handleProfilePicChange,
   removeProfilePic,
-  profilePicInputRef
+  profilePicInputRef,
+  isUploading = false
 }: ProfileInfoCardProps) {
   return (
     <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6">
@@ -36,7 +38,12 @@ export default function ProfileInfoCard({
       {/* Profile Picture Section */}
       <div className="flex flex-col items-center mb-6">
         <div className="w-32 h-32 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden mb-4 shadow-lg relative group">
-          {preview || profilePic ? (
+          {isUploading ? (
+            <div className="flex flex-col items-center justify-center">
+              <div className="w-8 h-8 border-3 border-[#ff950e] border-t-transparent rounded-full animate-spin mb-2"></div>
+              <span className="text-xs text-[#ff950e]">Uploading...</span>
+            </div>
+          ) : preview || profilePic ? (
             <img
               src={preview || profilePic || ''}
               alt="Profile preview"
@@ -48,14 +55,16 @@ export default function ProfileInfoCard({
             </div>
           )}
 
-          <div
-            className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-            onClick={() => profilePicInputRef.current?.click()}
-          >
-            <div className="text-white text-xs font-medium bg-[#ff950e] rounded-full px-3 py-1">
-              Change Photo
+          {!isUploading && (
+            <div
+              className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+              onClick={() => profilePicInputRef.current?.click()}
+            >
+              <div className="text-white text-xs font-medium bg-[#ff950e] rounded-full px-3 py-1">
+                Change Photo
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <input
@@ -64,13 +73,16 @@ export default function ProfileInfoCard({
           accept="image/*"
           onChange={handleProfilePicChange}
           className="hidden"
+          disabled={isUploading}
         />
 
         <img
           src="/Upload_New_Picture.png"
           alt="Upload New Picture"
-          onClick={() => profilePicInputRef.current?.click()}
-          className="w-24 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+          onClick={() => !isUploading && profilePicInputRef.current?.click()}
+          className={`w-24 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${
+            isUploading ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         />
       </div>
 

@@ -2,51 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getUserProfileData } from '@/utils/profileUtils';
-
-// Image compression utility
-const compressImage = (file: File, maxWidth = 800): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(compressedDataUrl);
-      };
-
-      img.onerror = () => reject(new Error('Failed to load image'));
-      if (typeof event.target?.result === 'string') {
-        img.src = event.target.result;
-      } else {
-        reject(new Error('Failed to read file'));
-      }
-    };
-
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-};
+import { uploadToCloudinary } from '@/utils/cloudinary';
 
 export function useProfileData() {
   const { user } = useAuth();
@@ -54,6 +10,7 @@ export function useProfileData() {
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
 
   // Load profile data on mount
   useEffect(() => {
@@ -68,17 +25,29 @@ export function useProfileData() {
     }
   }, [user?.username]);
 
-  // Handle profile picture change
+  // Handle profile picture change with Cloudinary
   const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const compressed = await compressImage(file, 500);
-        setPreview(compressed);
-      } catch (error) {
-        console.error("Error compressing profile image:", error);
-        alert("Failed to process image. Please try a different one.");
-      }
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      
+      // Upload to Cloudinary
+      const result = await uploadToCloudinary(file);
+      console.log('Profile pic uploaded successfully:', result);
+      
+      // Set the preview to the Cloudinary URL
+      setPreview(result.url);
+      
+      // You might want to save immediately or wait for user to click save
+      // For now, we'll just set the preview
+    } catch (error) {
+      console.error("Error uploading profile image:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to upload image: ${errorMessage}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -97,6 +66,7 @@ export function useProfileData() {
     setPreview,
     subscriptionPrice,
     setSubscriptionPrice,
+    isUploading,
     handleProfilePicChange,
     removeProfilePic
   };

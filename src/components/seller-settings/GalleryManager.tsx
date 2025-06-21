@@ -8,6 +8,7 @@ interface GalleryManagerProps {
   galleryImages: string[];
   selectedFiles: File[];
   isUploading: boolean;
+  uploadProgress?: number;
   multipleFileInputRef: RefObject<HTMLInputElement | null>;
   handleMultipleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   uploadGalleryImages: () => void;
@@ -20,6 +21,7 @@ export default function GalleryManager({
   galleryImages,
   selectedFiles,
   isUploading,
+  uploadProgress = 0,
   multipleFileInputRef,
   handleMultipleFileChange,
   uploadGalleryImages,
@@ -51,6 +53,22 @@ export default function GalleryManager({
         Add photos to your public gallery. These will be visible to all visitors on your profile page. Gallery changes are saved automatically.
       </p>
 
+      {/* Upload Progress */}
+      {isUploading && uploadProgress > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-sm text-gray-300 mb-1">
+            <span>Uploading to cloud storage...</span>
+            <span>{uploadProgress}%</span>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-2">
+            <div 
+              className="bg-[#ff950e] h-2 rounded-full transition-all duration-300"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* File Selection & Upload */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
@@ -67,6 +85,7 @@ export default function GalleryManager({
                 multiple
                 onChange={handleMultipleFileChange}
                 className="hidden"
+                disabled={isUploading}
               />
               <PlusCircle className="w-5 h-5 text-[#ff950e]" />
               <span className="text-gray-300">Select multiple images...</span>
@@ -101,6 +120,7 @@ export default function GalleryManager({
                     type="button"
                     onClick={() => removeSelectedFile(index)}
                     className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100"
+                    disabled={isUploading}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -137,6 +157,7 @@ export default function GalleryManager({
                 <button
                   onClick={() => removeGalleryImage(index)}
                   className="absolute top-2 right-2 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  disabled={isUploading}
                 >
                   <X size={16} className="text-white" />
                 </button>

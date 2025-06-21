@@ -54,12 +54,23 @@ export function useProfileSettings() {
     user,
     
     // Profile data
-    ...profileData,
+    bio: profileData.bio,
+    setBio: profileData.setBio,
+    profilePic: profileData.profilePic,
+    setProfilePic: profileData.setProfilePic,
+    preview: profileData.preview,
+    setPreview: profileData.setPreview,
+    subscriptionPrice: profileData.subscriptionPrice,
+    setSubscriptionPrice: profileData.setSubscriptionPrice,
+    profileUploading: profileData.isUploading,
+    handleProfilePicChange: profileData.handleProfilePicChange,
+    removeProfilePic: profileData.removeProfilePic,
     
     // Gallery
     galleryImages: gallery.galleryImages,
     selectedFiles: gallery.selectedFiles,
-    isUploading: gallery.isUploading,
+    galleryUploading: gallery.isUploading,
+    uploadProgress: gallery.uploadProgress,
     multipleFileInputRef: gallery.multipleFileInputRef,
     handleMultipleFileChange: gallery.handleMultipleFileChange,
     removeSelectedFile: gallery.removeSelectedFile,

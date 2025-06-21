@@ -1,57 +1,14 @@
 // src/hooks/seller-settings/useGalleryManagement.ts
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-
-// Image compression utility
-const compressImage = (file: File, maxWidth = 800): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(compressedDataUrl);
-      };
-
-      img.onerror = () => reject(new Error('Failed to load image'));
-      if (typeof event.target?.result === 'string') {
-        img.src = event.target.result;
-      } else {
-        reject(new Error('Failed to read file'));
-      }
-    };
-
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-};
+import { uploadMultipleToCloudinary } from '@/utils/cloudinary';
 
 export function useGalleryManagement() {
   const { user } = useAuth();
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const multipleFileInputRef = useRef<HTMLInputElement>(null);
 
   // Load gallery images on mount
@@ -95,25 +52,41 @@ export function useGalleryManagement() {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Upload gallery images
+  // Upload gallery images with Cloudinary
   const uploadGalleryImages = async (onSave: (images: string[]) => void) => {
     if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
+    
     try {
-      const compressPromises = selectedFiles.map(file => compressImage(file));
-      const compressedImages = await Promise.all(compressPromises);
+      // Upload to Cloudinary with progress tracking
+      const uploadResults = await uploadMultipleToCloudinary(
+        selectedFiles,
+        (progress) => {
+          setUploadProgress(Math.round(progress));
+        }
+      );
 
-      const updatedGallery = [...galleryImages, ...compressedImages];
+      // Extract URLs from upload results
+      const newImageUrls = uploadResults.map(result => result.url);
+      
+      // Update gallery with new URLs
+      const updatedGallery = [...galleryImages, ...newImageUrls];
       setGalleryImages(updatedGallery);
       onSave(updatedGallery);
 
       setSelectedFiles([]);
+      setUploadProgress(0);
+      
+      console.log('Gallery images uploaded successfully:', uploadResults);
     } catch (error) {
-      console.error("Error processing images:", error);
-      alert("Failed to process one or more images. Please try again with different files.");
+      console.error("Error uploading images:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to upload images: ${errorMessage}`);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -136,6 +109,7 @@ export function useGalleryManagement() {
     galleryImages,
     selectedFiles,
     isUploading,
+    uploadProgress,
     multipleFileInputRef,
     handleMultipleFileChange,
     removeSelectedFile,
