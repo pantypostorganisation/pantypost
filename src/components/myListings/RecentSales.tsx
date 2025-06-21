@@ -15,7 +15,7 @@ export default function RecentSales({ orders }: RecentSalesProps) {
         ) : (
           orders.map((order, index) => (
             <div
-              key={`order-${order.id}-${index}-${order.date}`}
+              key={`order-${order.id}-${index}`}
               className="border border-gray-700 p-4 rounded-lg text-sm bg-black hover:border-[#ff950e] transition"
             >
               <div className="flex items-center gap-4">
