@@ -8,9 +8,9 @@ import { Listing } from '@/context/ListingContext';
 import { ListingFormState, EditingState, ListingAnalytics } from '@/types/myListings';
 import { 
   INITIAL_FORM_STATE, 
-  uploadImageToStorage, 
   calculateAuctionEndTime 
 } from '@/utils/myListingsUtils';
+import { uploadMultipleToCloudinary } from '@/utils/cloudinary';
 
 export const useMyListings = () => {
   const { user } = useAuth();
@@ -22,6 +22,7 @@ export const useMyListings = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   // Editing state
   const [editingState, setEditingState] = useState<EditingState>({
@@ -81,6 +82,7 @@ export const useMyListings = () => {
     setSelectedFiles([]);
     setEditingState({ listingId: null, isEditing: false });
     setShowForm(false);
+    setUploadProgress(0);
   }, []);
 
   // Handle file selection
@@ -97,20 +99,38 @@ export const useMyListings = () => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Upload files
+  // Upload files using Cloudinary
   const handleUploadFiles = useCallback(async () => {
     if (selectedFiles.length === 0) return;
+    
+    setIsUploading(true);
+    setUploadProgress(0);
+    
     try {
-      setIsUploading(true);
-      const uploadPromises = selectedFiles.map(uploadImageToStorage);
-      const uploadedUrls = await Promise.all(uploadPromises);
-      updateFormState({ imageUrls: [...formState.imageUrls, ...uploadedUrls] });
+      // Upload to Cloudinary with progress tracking
+      const uploadResults = await uploadMultipleToCloudinary(
+        selectedFiles,
+        (progress) => {
+          setUploadProgress(Math.round(progress));
+        }
+      );
+      
+      // Extract URLs from upload results
+      const newImageUrls = uploadResults.map(result => result.url);
+      
+      // Update form state with new URLs
+      updateFormState({ imageUrls: [...formState.imageUrls, ...newImageUrls] });
       setSelectedFiles([]);
+      setUploadProgress(0);
+      
+      console.log('Images uploaded successfully:', uploadResults);
     } catch (error) {
       console.error("Error uploading images:", error);
-      alert("Failed to upload one or more images. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to upload images: ${errorMessage}`);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   }, [selectedFiles, formState.imageUrls, updateFormState]);
 
@@ -282,6 +302,7 @@ export const useMyListings = () => {
     showForm,
     selectedFiles,
     isUploading,
+    uploadProgress,
     editingState,
     isVerified,
     myListings,

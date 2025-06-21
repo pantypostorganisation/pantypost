@@ -39,6 +39,7 @@ export interface ListingFormProps {
   isVerified: boolean;
   selectedFiles: File[];
   isUploading: boolean;
+  uploadProgress?: number;
   onFormChange: (updates: Partial<ListingFormState>) => void;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveFile: (index: number) => void;
@@ -55,6 +56,12 @@ export interface ListingCardProps {
   onEdit: (listing: Listing) => void;
   onDelete: (id: string) => void;
   onCancelAuction: (id: string) => void;
+}
+
+export interface ListingLimitMessageProps {
+  currentListings: number;
+  maxListings: number;
+  isVerified: boolean;
 }
 
 export interface VerificationBannerProps {

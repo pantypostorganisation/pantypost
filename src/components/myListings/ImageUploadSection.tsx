@@ -8,6 +8,7 @@ interface ImageUploadSectionProps {
   selectedFiles: File[];
   imageUrls: string[];
   isUploading: boolean;
+  uploadProgress?: number;
   isAuction: boolean;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveFile: (index: number) => void;
@@ -20,6 +21,7 @@ export default function ImageUploadSection({
   selectedFiles,
   imageUrls,
   isUploading,
+  uploadProgress = 0,
   isAuction,
   onFileSelect,
   onRemoveFile,
@@ -86,6 +88,25 @@ export default function ImageUploadSection({
               )}
             </button>
           </div>
+
+          {/* Upload Progress Bar */}
+          {isUploading && (
+            <div className="mb-3">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Uploading images...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${
+                    isAuction ? 'bg-purple-500' : 'bg-[#ff950e]'
+                  }`}
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {selectedFiles.map((file, index) => (
               <div key={`selected-file-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">

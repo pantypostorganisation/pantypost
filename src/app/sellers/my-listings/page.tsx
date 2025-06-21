@@ -1,49 +1,39 @@
 // src/app/sellers/my-listings/page.tsx
 'use client';
 
+import { Shirt, Crown, Tag, TrendingUp, Gavel, Plus } from 'lucide-react';
 import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
-import { useMyListings } from '@/hooks/useMyListings';
-import { Sparkles, Crown, Gavel, BarChart2 } from 'lucide-react';
-
-// Import all components
 import StatsCard from '@/components/myListings/StatsCard';
-import ListingLimitMessage from '@/components/myListings/ListingLimitMessage';
-import ListingForm from '@/components/myListings/ListingForm';
 import ListingCard from '@/components/myListings/ListingCard';
-import VerificationBanner from '@/components/myListings/VerificationBanner';
+import ListingForm from '@/components/myListings/ListingForm';
+import ListingLimitMessage from '@/components/myListings/ListingLimitMessage';
 import TipsCard from '@/components/myListings/TipsCard';
 import RecentSales from '@/components/myListings/RecentSales';
-
-const AUCTION_TIPS = [
-  'Set a competitive starting price to attract initial bids.',
-  'Use a reserve price to ensure you don\'t sell below your minimum acceptable price.',
-  'Add high-quality photos and detailed descriptions to encourage higher bids.',
-  'Auctions create excitement and can result in higher final prices than fixed listings.'
-];
-
-const PREMIUM_TIPS = [
-  'Premium listings are only visible to your subscribers, increasing exclusivity.',
-  'Set your monthly subscription price in your profile settings to unlock premium features.',
-  'Use high-quality, appealing images for your listings to attract more views and buyers.',
-  'Premium listings can often command higher prices due to their exclusive nature.'
-];
+import VerificationBanner from '@/components/myListings/VerificationBanner';
+import { useMyListings } from '@/hooks/useMyListings';
+import { useRouter } from 'next/navigation';
 
 export default function MyListingsPage() {
+  const router = useRouter();
   const {
-    user,
-    formState,
+    // State
     showForm,
+    formState,
     selectedFiles,
     isUploading,
+    uploadProgress,
     editingState,
     isVerified,
     myListings,
     atLimit,
+    maxListings,
     auctionCount,
     premiumCount,
     standardCount,
     sellerOrders,
+    
+    // Actions
     setShowForm,
     updateFormState,
     resetForm,
@@ -59,153 +49,150 @@ export default function MyListingsPage() {
     getListingAnalytics,
   } = useMyListings();
 
-  if (!user) {
-    return (
-      <BanCheck>
-        <RequireAuth role="seller">
-          <div className="min-h-screen bg-black flex items-center justify-center">
-            <div className="text-white">Loading...</div>
-          </div>
-        </RequireAuth>
-      </BanCheck>
-    );
-  }
-
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 lg:px-8">
+        <main className="min-h-screen bg-black text-white py-10 px-4">
           <div className="max-w-7xl mx-auto">
-            {/* Page Title */}
+            {/* Header */}
             <div className="mb-8">
-              <h1 className="text-3xl sm:text-4xl font-bold text-white">My Listings</h1>
-              <div className="w-16 h-1 bg-[#ff950e] mt-2 rounded-full"></div>
+              <h1 className="text-3xl font-bold mb-2 text-[#ff950e]">My Listings</h1>
+              <p className="text-gray-400">Manage and create your listings</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
-              {/* Left side: form + active listings */}
-              <div className="lg:col-span-2 space-y-8">
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <StatsCard
-                    title="Standard Listings"
-                    count={standardCount}
-                    icon={Sparkles}
-                    iconColor="text-gray-600"
-                    borderColor="border-gray-800"
-                  />
-                  <StatsCard
-                    title="Premium Listings"
-                    count={premiumCount}
-                    icon={Crown}
-                    iconColor="text-[#ff950e]"
-                    borderColor="border-[#ff950e]"
-                  />
-                  <StatsCard
-                    title="Auction Listings"
-                    count={auctionCount}
-                    icon={Gavel}
-                    iconColor="text-purple-500"
-                    borderColor="border-purple-700"
-                  />
-                </div>
+            {/* Verification Banner */}
+            {!isVerified && (
+              <VerificationBanner onVerifyClick={() => router.push('/sellers/verify')} />
+            )}
 
-                {/* Listing Limit Message */}
-                {atLimit && (
-                  <ListingLimitMessage isVerified={isVerified} isEditing={editingState.isEditing} />
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <StatsCard
+                title="Total Listings"
+                count={myListings.length}
+                icon={Shirt}
+                iconColor="text-[#ff950e]"
+                borderColor="border-[#ff950e]"
+              />
+              <StatsCard
+                title="Active Auctions"
+                count={auctionCount}
+                icon={Gavel}
+                iconColor="text-purple-500"
+                borderColor="border-purple-500"
+              />
+              <StatsCard
+                title="Premium Listings"
+                count={premiumCount}
+                icon={Crown}
+                iconColor="text-yellow-500"
+                borderColor="border-yellow-500"
+              />
+              <StatsCard
+                title="Standard Listings"
+                count={standardCount}
+                icon={Tag}
+                iconColor="text-green-500"
+                borderColor="border-green-500"
+              />
+            </div>
+
+            {/* Create New Listing Button */}
+            {!showForm && (
+              <div className="mb-8">
+                {atLimit ? (
+                  <ListingLimitMessage
+                    currentListings={myListings.length}
+                    maxListings={maxListings}
+                    isVerified={isVerified}
+                  />
+                ) : (
+                  <button
+                    onClick={() => setShowForm(true)}
+                    className="flex items-center gap-2 bg-[#ff950e] hover:bg-[#e0850d] text-black px-6 py-3 rounded-lg font-medium transition"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create New Listing
+                  </button>
                 )}
+              </div>
+            )}
 
-                {/* Create Listing Button or Form */}
-                {!showForm && !editingState.isEditing && (
-                  <div className="flex justify-center">
+            {/* Listing Form */}
+            {showForm && (
+              <ListingForm
+                formState={formState}
+                isEditing={editingState.isEditing}
+                isVerified={isVerified}
+                selectedFiles={selectedFiles}
+                isUploading={isUploading}
+                uploadProgress={uploadProgress}
+                onFormChange={updateFormState}
+                onFileSelect={handleFileSelect}
+                onRemoveFile={removeSelectedFile}
+                onUploadFiles={handleUploadFiles}
+                onRemoveImage={handleRemoveImageUrl}
+                onImageReorder={handleImageReorder}
+                onSave={handleSaveListing}
+                onCancel={resetForm}
+              />
+            )}
+
+            {/* Listings Grid */}
+            {myListings.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {myListings.map((listing) => (
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    analytics={getListingAnalytics(listing)}
+                    onEdit={handleEditClick}
+                    onDelete={removeListing}
+                    onCancelAuction={handleCancelAuction}
+                  />
+                ))}
+              </div>
+            ) : (
+              !showForm && (
+                <div className="text-center py-12 bg-gray-900 rounded-lg border border-gray-800">
+                  <Shirt className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400 mb-4">You haven't created any listings yet</p>
+                  {!atLimit && (
                     <button
                       onClick={() => setShowForm(true)}
-                      className="px-8 py-3 rounded-full bg-[#ff950e] text-black font-bold text-lg shadow-lg hover:bg-[#e0850d] transition flex items-center gap-2"
-                      disabled={atLimit}
-                      style={atLimit ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                      className="bg-[#ff950e] hover:bg-[#e0850d] text-black px-6 py-2 rounded-lg font-medium transition"
                     >
-                      <Sparkles className="w-5 h-5" />
-                      Create New Listing
+                      Create Your First Listing
                     </button>
-                  </div>
-                )}
-
-                {(showForm || editingState.isEditing) && (
-                  <ListingForm
-                    formState={formState}
-                    isEditing={editingState.isEditing}
-                    isVerified={isVerified}
-                    selectedFiles={selectedFiles}
-                    isUploading={isUploading}
-                    onFormChange={updateFormState}
-                    onFileSelect={handleFileSelect}
-                    onRemoveFile={removeSelectedFile}
-                    onUploadFiles={handleUploadFiles}
-                    onRemoveImage={handleRemoveImageUrl}
-                    onImageReorder={handleImageReorder}
-                    onSave={handleSaveListing}
-                    onCancel={resetForm}
-                  />
-                )}
-
-                {/* Active Listings */}
-                <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
-                  <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
-                    Your Active Listings
-                    <BarChart2 className="w-6 h-6 text-[#ff950e]" />
-                  </h2>
-                  {myListings.length === 0 ? (
-                    <div className="text-center py-10 bg-black rounded-lg border border-dashed border-gray-700 text-gray-400">
-                      <p className="text-lg mb-2">You haven't created any listings yet.</p>
-                      <p className="text-sm">Use the button above to add your first listing.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {myListings.map((listing) => (
-                        <ListingCard
-                          key={`listing-${listing.id}`}
-                          listing={listing}
-                          analytics={getListingAnalytics(listing)}
-                          onEdit={handleEditClick}
-                          onDelete={removeListing}
-                          onCancelAuction={handleCancelAuction}
-                        />
-                      ))}
-                    </div>
                   )}
                 </div>
-              </div>
+              )
+            )}
 
-              {/* Right side: verification banner, tips, and order history */}
-              <div className="space-y-8">
-                {/* Verification Banner */}
-                {!isVerified && (
-                  <VerificationBanner onVerifyClick={() => {}} />
-                )}
+            {/* Tips and Recent Sales Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Tips Card */}
+              <TipsCard
+                title="Listing Tips"
+                icon={TrendingUp}
+                iconColor="text-green-500"
+                borderColor="border-green-500"
+                tips={[
+                  "Use high-quality, well-lit photos from multiple angles",
+                  "Write detailed descriptions including material, size, and condition",
+                  "Price competitively by researching similar items",
+                  "Add relevant tags to improve discoverability",
+                  "Consider premium listings for exclusive content",
+                  isVerified ? "Create auctions to drive competitive pricing" : "Get verified to unlock auction listings"
+                ]}
+                isVerified={isVerified}
+                showVerifyLink={!isVerified}
+              />
 
-                {/* Auction Seller Tips */}
-                <TipsCard
-                  title="Auction Tips"
-                  icon={Gavel}
-                  iconColor="text-purple-500"
-                  borderColor="border-purple-700"
-                  tips={AUCTION_TIPS}
-                  isVerified={isVerified}
-                  showVerifyLink={true}
-                />
-                
-                {/* Premium Seller Tips */}
-                <TipsCard
-                  title="Premium Seller Tips"
-                  icon={Crown}
-                  iconColor="text-[#ff950e]"
-                  borderColor="border-[#ff950e]"
-                  tips={PREMIUM_TIPS}
-                />
-
-                {/* Recent Sales */}
-                <RecentSales orders={sellerOrders} />
-              </div>
+              {/* Recent Sales */}
+              {sellerOrders.length > 0 && (
+                <RecentSales orders={sellerOrders.slice(0, 5)} />
+              )}
             </div>
           </div>
         </main>

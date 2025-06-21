@@ -1,8 +1,7 @@
 // src/components/myListings/ListingTypeSelector.tsx
 'use client';
 
-import { Sparkles, Gavel, LockIcon } from 'lucide-react';
-import Link from 'next/link';
+import { Tag, Gavel } from 'lucide-react';
 
 interface ListingTypeSelectorProps {
   isAuction: boolean;
@@ -10,70 +9,47 @@ interface ListingTypeSelectorProps {
   onChange: (isAuction: boolean) => void;
 }
 
-export default function ListingTypeSelector({ isAuction, isVerified, onChange }: ListingTypeSelectorProps) {
+export default function ListingTypeSelector({ 
+  isAuction, 
+  isVerified, 
+  onChange 
+}: ListingTypeSelectorProps) {
   return (
-    <div className="bg-[#121212] p-4 rounded-lg border border-gray-700">
-      <h3 className="text-lg font-medium mb-3 text-white">Listing Type</h3>
-      <div className="flex flex-col sm:flex-row gap-4">
-        <label className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition flex-1 ${
-          !isAuction ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'
-        }`}>
-          <input
-            type="radio"
-            checked={!isAuction}
-            onChange={() => onChange(false)}
-            className="sr-only"
-          />
-          <Sparkles className={`w-5 h-5 ${!isAuction ? 'text-[#ff950e]' : 'text-gray-500'}`} />
-          <div>
-            <span className="font-medium">Standard Listing</span>
-            <p className="text-xs text-gray-400 mt-1">Fixed price, first come first served</p>
+    <div>
+      <label className="block text-sm font-medium text-gray-300 mb-2">Listing Type</label>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          className={`p-4 rounded-lg border-2 transition ${
+            !isAuction
+              ? 'border-[#ff950e] bg-[#ff950e]/10 text-[#ff950e]'
+              : 'border-gray-700 bg-black text-gray-400 hover:border-gray-600'
+          }`}
+        >
+          <Tag className="w-6 h-6 mx-auto mb-2" />
+          <div className="font-medium">Standard Listing</div>
+          <div className="text-xs mt-1 opacity-80">Fixed price sale</div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => isVerified && onChange(true)}
+          disabled={!isVerified}
+          className={`p-4 rounded-lg border-2 transition ${
+            isAuction
+              ? 'border-purple-500 bg-purple-500/10 text-purple-500'
+              : isVerified
+              ? 'border-gray-700 bg-black text-gray-400 hover:border-gray-600'
+              : 'border-gray-800 bg-gray-900/50 text-gray-600 cursor-not-allowed'
+          }`}
+        >
+          <Gavel className="w-6 h-6 mx-auto mb-2" />
+          <div className="font-medium">Auction</div>
+          <div className="text-xs mt-1 opacity-80">
+            {isVerified ? 'Competitive bidding' : 'Verified sellers only'}
           </div>
-        </label>
-        
-        <div className="relative flex-1">
-          <label 
-            className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition ${
-              isAuction 
-                ? 'border-purple-600 bg-purple-600 bg-opacity-10' 
-                : 'border-gray-700 bg-black'
-            } ${
-              !isVerified 
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:border-purple-500'
-            }`}
-          >
-            <input
-              type="radio"
-              checked={isAuction}
-              onChange={() => {
-                if (isVerified) {
-                  onChange(true);
-                }
-              }}
-              disabled={!isVerified}
-              className="sr-only"
-            />
-            <Gavel className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-gray-500'}`} />
-            <div>
-              <span className="font-medium">Auction</span>
-              <p className="text-xs text-gray-400 mt-1">Let buyers bid, highest wins</p>
-            </div>
-          </label>
-          
-          {!isVerified && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-lg px-3 py-2">
-              <LockIcon className="w-6 h-6 text-yellow-500 mb-1" />
-              <span className="text-xs text-yellow-400 font-medium text-center">Verify your account to unlock auctions</span>
-              <Link 
-                href="/sellers/verify" 
-                className="mt-1 text-xs text-white bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded-full font-medium transition"
-              >
-                Get Verified
-              </Link>
-            </div>
-          )}
-        </div>
+        </button>
       </div>
     </div>
   );
