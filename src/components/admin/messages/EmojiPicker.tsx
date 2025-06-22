@@ -92,9 +92,9 @@ export default function EmojiPicker({ onEmojiSelect, onClose }: EmojiPickerProps
           <div className="grid grid-cols-8 gap-1 mb-3">
             {recentEmojis.slice(0, 16).map((emoji, index) => (
               <span
-                key={`recent-${index}`}
+                key={`recent-${emoji}-${index}`}
                 onClick={() => handleEmojiClick(emoji)}
-                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
+                className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150 relative z-[1]"
               >
                 {emoji}
               </span>
@@ -111,22 +111,15 @@ export default function EmojiPicker({ onEmojiSelect, onClose }: EmojiPickerProps
         <div className="grid grid-cols-8 gap-1 p-0 overflow-auto" style={{ maxHeight: '200px' }}>
           {ALL_EMOJIS.map((emoji, index) => (
             <span
-              key={`emoji-${index}`}
+              key={`emoji-${emoji}-${index}`}
               onClick={() => handleEmojiClick(emoji)}
-              className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150"
+              className="emoji-button flex items-center justify-center text-xl rounded-full w-10 h-10 cursor-pointer bg-black hover:bg-[#222] transition-colors duration-150 relative z-[1]"
             >
               {emoji}
             </span>
           ))}
         </div>
       </div>
-      
-      <style jsx>{`
-        .emoji-button {
-          position: relative;
-          z-index: 1;
-        }
-      `}</style>
     </div>
   );
 }
