@@ -58,7 +58,7 @@ export default function AdminHealthSection({
   const verifiedSellers = sellers.filter((u: User) => u.verified || u.verificationStatus === 'verified');
   
   const activeListings = listings.length;
-  const avgListingsPerSeller = sellers.length > 0 ? (activeListings / sellers.length).toFixed(1) : '0.0';
+  const avgListingsPerSeller = sellers.length > 0 ? (activeListings / sellers.length).toFixed(1) : '0';
 
   // Top sellers
   const topSellers = Object.entries(wallet)
