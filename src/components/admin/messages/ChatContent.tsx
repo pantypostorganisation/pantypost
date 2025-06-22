@@ -117,7 +117,7 @@ export default function ChatContent({
     fileInputRef.current?.click();
   }, []);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onSend();
@@ -253,7 +253,7 @@ export default function ChatContent({
                         src={msg.meta.imageUrl} 
                         alt="Shared image" 
                         className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                        onClick={(e) => {
+                        onClick={(e: React.MouseEvent<HTMLImageElement>) => {
                           e.stopPropagation();
                           setPreviewImage(msg.meta?.imageUrl || null);
                         }}
@@ -348,7 +348,7 @@ export default function ChatContent({
               <textarea
                 ref={inputRef}
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={selectedImage ? "Add a caption..." : "Type a message"}
                 className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
@@ -358,7 +358,7 @@ export default function ChatContent({
               
               {/* Emoji button */}
               <button
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.stopPropagation();
                   setShowEmojiPicker(!showEmojiPicker);
                 }}
@@ -386,7 +386,7 @@ export default function ChatContent({
               <div className="flex items-center gap-4">
                 {/* Attachment button */}
                 <button
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
                     triggerFileInput();
                   }}
@@ -404,7 +404,7 @@ export default function ChatContent({
                 
                 {/* Emoji button (mobile) */}
                 <button
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
                     setShowEmojiPicker(!showEmojiPicker);
                   }}
@@ -431,7 +431,7 @@ export default function ChatContent({
               
               {/* Send Button */}
               <button
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.stopPropagation();
                   onSend();
                 }}
@@ -455,7 +455,7 @@ export default function ChatContent({
           <ShieldAlert size={16} className="mr-2" />
           You have blocked this user
           <button 
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.stopPropagation();
               onBlockToggle();
             }}
