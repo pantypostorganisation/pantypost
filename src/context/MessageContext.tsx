@@ -2,8 +2,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { sanitizeString } from '@/utils/sanitizeInput';
 import { v4 as uuidv4 } from 'uuid';
+import { messagesService, storageService } from '@/services';
 
-// UPDATED: Enhanced Message type with id and isRead
+// Enhanced Message type with id and isRead
 type Message = {
   id?: string;
   sender: string;
@@ -23,14 +24,14 @@ type Message = {
   };
 };
 
-// ADDED: Enhanced ReportLog type with processing status
+// Enhanced ReportLog type with processing status
 type ReportLog = {
   id?: string;
   reporter: string;
   reportee: string;
   messages: Message[];
   date: string;
-  processed?: boolean; // NEW: Track if report has been processed
+  processed?: boolean;
   banApplied?: boolean;
   banId?: string;
   severity?: 'low' | 'medium' | 'high' | 'critical';
@@ -52,19 +53,19 @@ type MessageOptions = {
   };
 };
 
-// NEW: Thread type for organized message threads
+// Thread type for organized message threads
 type MessageThread = {
   [otherParty: string]: Message[];
 };
 
-// NEW: Thread info type for additional thread metadata
+// Thread info type for additional thread metadata
 type ThreadInfo = {
   unreadCount: number;
   lastMessage: Message | null;
   otherParty: string;
 };
 
-// NEW: Message notification type
+// Message notification type
 type MessageNotification = {
   buyer: string;
   messageCount: number;
@@ -72,7 +73,7 @@ type MessageNotification = {
   timestamp: string;
 };
 
-// UPDATED: Enhanced MessageContextType with additional methods
+// Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
   sendMessage: (
@@ -80,7 +81,7 @@ type MessageContextType = {
     receiver: string,
     content: string,
     options?: MessageOptions
-  ) => void;
+  ) => Promise<void>;
   sendCustomRequest: (
     buyer: string,
     seller: string,
@@ -91,28 +92,27 @@ type MessageContextType = {
     listingId: string
   ) => void;
   getMessagesForUsers: (userA: string, userB: string) => Message[];
-  getThreadsForUser: (username: string, role?: 'buyer' | 'seller') => MessageThread; // NEW
-  getThreadInfo: (username: string, otherParty: string) => ThreadInfo; // NEW
-  getAllThreadsInfo: (username: string, role?: 'buyer' | 'seller') => { [otherParty: string]: ThreadInfo }; // NEW
-  markMessagesAsRead: (userA: string, userB: string) => void;
-  blockUser: (blocker: string, blockee: string) => void;
-  unblockUser: (blocker: string, blockee: string) => void;
-  reportUser: (reporter: string, reportee: string) => void;
+  getThreadsForUser: (username: string, role?: 'buyer' | 'seller') => MessageThread;
+  getThreadInfo: (username: string, otherParty: string) => ThreadInfo;
+  getAllThreadsInfo: (username: string, role?: 'buyer' | 'seller') => { [otherParty: string]: ThreadInfo };
+  markMessagesAsRead: (userA: string, userB: string) => Promise<void>;
+  blockUser: (blocker: string, blockee: string) => Promise<void>;
+  unblockUser: (blocker: string, blockee: string) => Promise<void>;
+  reportUser: (reporter: string, reportee: string) => Promise<void>;
   isBlocked: (blocker: string, blockee: string) => boolean;
   hasReported: (reporter: string, reportee: string) => boolean;
-  getReportCount: () => number; // NEW: Added to context
-  blockedUsers: { [user: string]: string[] }; // NEW: Expose blocked users
-  reportedUsers: { [user: string]: string[] }; // NEW: Expose reported users
-  reportLogs: ReportLog[]; // NEW: Expose report logs
-  messageNotifications: { [seller: string]: MessageNotification[] }; // NEW
-  clearMessageNotifications: (seller: string, buyer: string) => void; // NEW
+  getReportCount: () => number;
+  blockedUsers: { [user: string]: string[] };
+  reportedUsers: { [user: string]: string[] };
+  reportLogs: ReportLog[];
+  messageNotifications: { [seller: string]: MessageNotification[] };
+  clearMessageNotifications: (seller: string, buyer: string) => void;
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
 
 // Helper to create a consistent conversation key
 const getConversationKey = (userA: string, userB: string): string => {
-  // Sort usernames to ensure consistent key regardless of who is sender/receiver
   return [userA, userB].sort().join('-');
 };
 
@@ -120,19 +120,20 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [messages, setMessages] = useState<{ [conversationKey: string]: Message[] }>({});
   const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
-  // NEW: State for report logs
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
-  // NEW: State for message notifications
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
 
+  // Load initial data using services
   useEffect(() => {
-    const stored = localStorage.getItem('panty_messages');
-    if (stored) {
+    const loadData = async () => {
+      if (typeof window === 'undefined') return;
+
       try {
-        const parsedMessages = JSON.parse(stored);
+        // Load messages - using storageService since messagesService doesn't have a getAllMessages method
+        const storedMessages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
         
         // Migrate old format if needed
-        const needsMigration = Object.values(parsedMessages).some(
+        const needsMigration = Object.values(storedMessages).some(
           value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
         );
         
@@ -140,8 +141,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           console.log('Migrating message format...');
           const migrated: { [key: string]: Message[] } = {};
           
-          // Old format: messages stored under receiver's username
-          Object.entries(parsedMessages).forEach(([key, msgs]) => {
+          Object.entries(storedMessages).forEach(([key, msgs]) => {
             if (Array.isArray(msgs)) {
               msgs.forEach((msg: any) => {
                 if (msg.sender && msg.receiver) {
@@ -156,70 +156,66 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           });
           
           setMessages(migrated);
-          localStorage.setItem('panty_messages', JSON.stringify(migrated));
+          await storageService.setItem('panty_messages', migrated);
         } else {
-          setMessages(parsedMessages);
+          setMessages(storedMessages);
         }
+
+        // Load blocked users
+        const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
+        setBlockedUsers(blocked);
+
+        // Load reported users
+        const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
+        setReportedUsers(reported);
+
+        // Load report logs
+        const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
+        setReportLogs(reports);
+
+        // Load message notifications
+        const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>('panty_message_notifications', {});
+        setMessageNotifications(notifications);
       } catch (error) {
-        console.error('Error parsing messages:', error);
-        setMessages({});
+        console.error('Error loading message data:', error);
       }
-    }
+    };
 
-    const blocked = localStorage.getItem('panty_blocked');
-    if (blocked) setBlockedUsers(JSON.parse(blocked));
-
-    const reported = localStorage.getItem('panty_reported');
-    if (reported) setReportedUsers(JSON.parse(reported));
-
-    // NEW: Load report logs
-    const storedReports = localStorage.getItem('panty_report_logs');
-    if (storedReports) {
-      try {
-        setReportLogs(JSON.parse(storedReports));
-      } catch (error) {
-        console.error('Error parsing report logs:', error);
-      }
-    }
-
-    // NEW: Load message notifications
-    const storedNotifications = localStorage.getItem('panty_message_notifications');
-    if (storedNotifications) {
-      try {
-        setMessageNotifications(JSON.parse(storedNotifications));
-      } catch (error) {
-        console.error('Error parsing message notifications:', error);
-      }
-    }
+    loadData();
   }, []);
 
+  // Save data whenever it changes
   useEffect(() => {
-    localStorage.setItem('panty_messages', JSON.stringify(messages));
+    if (typeof window !== 'undefined') {
+      storageService.setItem('panty_messages', messages);
+    }
   }, [messages]);
 
   useEffect(() => {
-    localStorage.setItem('panty_blocked', JSON.stringify(blockedUsers));
+    if (typeof window !== 'undefined') {
+      storageService.setItem('panty_blocked', blockedUsers);
+    }
   }, [blockedUsers]);
 
   useEffect(() => {
-    localStorage.setItem('panty_reported', JSON.stringify(reportedUsers));
+    if (typeof window !== 'undefined') {
+      storageService.setItem('panty_reported', reportedUsers);
+    }
   }, [reportedUsers]);
 
-  // NEW: Save report logs to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_report_logs', JSON.stringify(reportLogs));
+      storageService.setItem('panty_report_logs', reportLogs);
     }
   }, [reportLogs]);
 
-  // NEW: Save message notifications to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_message_notifications', JSON.stringify(messageNotifications));
+      storageService.setItem('panty_message_notifications', messageNotifications);
     }
   }, [messageNotifications]);
 
-  const sendMessage = (
+  const sendMessage = async (
     sender: string,
     receiver: string,
     content: string,
@@ -228,59 +224,57 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const sanitizedSender = sanitizeString(sender);
     const sanitizedReceiver = sanitizeString(receiver);
     const sanitizedContent = sanitizeString(content);
-    const conversationKey = getConversationKey(sanitizedSender, sanitizedReceiver);
 
-    const newMessage: Message = {
-      id: uuidv4(), // UPDATED: Always generate an ID
-      sender: sanitizedSender,
-      receiver: sanitizedReceiver,
-      content: sanitizedContent,
-      date: new Date().toISOString(),
-      isRead: false, // UPDATED: Add isRead flag
-      read: false,
-      type: options?.type || 'normal',
-      meta: options?.meta,
-    };
-
-    setMessages((prev) => ({
-      ...prev,
-      [conversationKey]: [...(prev[conversationKey] || []), newMessage],
-    }));
-
-    // NEW: Create notification if sender is buyer and receiver is seller
-    // Note: You'll need to import or pass the users data to check roles
-    // For now, we'll create notifications for all messages to sellers
-    if (options?.type !== 'customRequest') { // Don't create notifications for custom requests
-      setMessageNotifications(prev => {
-        const sellerNotifs = prev[receiver] || [];
-        const existingIndex = sellerNotifs.findIndex(n => n.buyer === sender);
-        
-        if (existingIndex >= 0) {
-          // Update existing notification
-          const updated = [...sellerNotifs];
-          updated[existingIndex] = {
-            buyer: sender,
-            messageCount: updated[existingIndex].messageCount + 1,
-            lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-            timestamp: new Date().toISOString()
-          };
-          return {
-            ...prev,
-            [receiver]: updated
-          };
-        } else {
-          // Create new notification
-          return {
-            ...prev,
-            [receiver]: [...sellerNotifs, {
-              buyer: sender,
-              messageCount: 1,
-              lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-              timestamp: new Date().toISOString()
-            }]
-          };
-        }
+    try {
+      const result = await messagesService.sendMessage({
+        sender: sanitizedSender,
+        receiver: sanitizedReceiver,
+        content: sanitizedContent,
+        type: options?.type,
+        meta: options?.meta,
       });
+
+      if (result.success && result.data) {
+        const conversationKey = getConversationKey(sanitizedSender, sanitizedReceiver);
+        setMessages(prev => ({
+          ...prev,
+          [conversationKey]: [...(prev[conversationKey] || []), result.data!],
+        }));
+
+        // Update notifications if needed
+        if (options?.type !== 'customRequest') {
+          setMessageNotifications(prev => {
+            const sellerNotifs = prev[sanitizedReceiver] || [];
+            const existingIndex = sellerNotifs.findIndex(n => n.buyer === sanitizedSender);
+            
+            if (existingIndex >= 0) {
+              const updated = [...sellerNotifs];
+              updated[existingIndex] = {
+                buyer: sanitizedSender,
+                messageCount: updated[existingIndex].messageCount + 1,
+                lastMessage: sanitizedContent.substring(0, 50) + (sanitizedContent.length > 50 ? '...' : ''),
+                timestamp: new Date().toISOString()
+              };
+              return {
+                ...prev,
+                [sanitizedReceiver]: updated
+              };
+            } else {
+              return {
+                ...prev,
+                [sanitizedReceiver]: [...sellerNotifs, {
+                  buyer: sanitizedSender,
+                  messageCount: 1,
+                  lastMessage: sanitizedContent.substring(0, 50) + (sanitizedContent.length > 50 ? '...' : ''),
+                  timestamp: new Date().toISOString()
+                }]
+              };
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
     }
   };
 
@@ -310,28 +304,23 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return messages[conversationKey] || [];
   };
 
-  // NEW: Get all threads for a user
   const getThreadsForUser = (username: string, role?: 'buyer' | 'seller'): MessageThread => {
     const threads: MessageThread = {};
     
     Object.entries(messages).forEach(([key, msgs]) => {
       msgs.forEach(msg => {
-        // Check if user is involved in this message
         if (msg.sender === username || msg.receiver === username) {
           const otherParty = msg.sender === username ? msg.receiver : msg.sender;
           
-          // Initialize thread if it doesn't exist
           if (!threads[otherParty]) {
             threads[otherParty] = [];
           }
           
-          // Add message to thread
           threads[otherParty].push(msg);
         }
       });
     });
     
-    // Sort messages in each thread by date
     Object.values(threads).forEach(thread => {
       thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
@@ -339,17 +328,14 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return threads;
   };
 
-  // NEW: Get thread info for a specific conversation
   const getThreadInfo = (username: string, otherParty: string): ThreadInfo => {
     const conversationKey = getConversationKey(username, otherParty);
     const threadMessages = messages[conversationKey] || [];
     
-    // Count unread messages (messages TO the user that are not read)
     const unreadCount = threadMessages.filter(
       msg => msg.receiver === username && !msg.read && !msg.isRead
     ).length;
     
-    // Get last message
     const lastMessage = threadMessages.length > 0 ? 
       threadMessages[threadMessages.length - 1] : null;
     
@@ -360,7 +346,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   };
 
-  // NEW: Get all thread info for a user
   const getAllThreadsInfo = (username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
     const threads = getThreadsForUser(username, role);
     const threadInfos: { [otherParty: string]: ThreadInfo } = {};
@@ -372,32 +357,40 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return threadInfos;
   };
 
-  const markMessagesAsRead = (userA: string, userB: string) => {
-    const conversationKey = getConversationKey(userA, userB);
+  const markMessagesAsRead = async (userA: string, userB: string) => {
+    try {
+      const result = await messagesService.markMessagesAsRead(userA, userB);
+      
+      if (result.success) {
+        const conversationKey = getConversationKey(userA, userB);
+        setMessages(prev => {
+          const conversationMessages = prev[conversationKey] || [];
+          const updatedMessages = conversationMessages.map(msg =>
+            msg.receiver === userA && msg.sender === userB && !msg.read
+              ? { ...msg, read: true, isRead: true }
+              : msg
+          );
 
-    setMessages((prev) => {
-      const conversationMessages = prev[conversationKey] || [];
-      const updatedMessages = conversationMessages.map((msg) =>
-        msg.receiver === userA && msg.sender === userB && !msg.read
-          ? { ...msg, read: true }
-          : msg
-      );
+          return {
+            ...prev,
+            [conversationKey]: updatedMessages,
+          };
+        });
 
-      return {
-        ...prev,
-        [conversationKey]: updatedMessages,
-      };
-    });
+        clearMessageNotifications(userA, userB);
+      }
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
   };
 
-  // NEW: Clear message notifications
   const clearMessageNotifications = (seller: string, buyer: string) => {
     setMessageNotifications(prev => {
       const sellerNotifs = prev[seller] || [];
       const filtered = sellerNotifs.filter(n => n.buyer !== buyer);
       
       if (filtered.length === sellerNotifs.length) {
-        return prev; // No change
+        return prev;
       }
       
       return {
@@ -407,66 +400,98 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
-  const blockUser = (blocker: string, blockee: string) => {
+  const blockUser = async (blocker: string, blockee: string) => {
     const sanitizedBlocker = sanitizeString(blocker);
     const sanitizedBlockee = sanitizeString(blockee);
 
-    setBlockedUsers((prev) => {
-      const blockerList = prev[sanitizedBlocker] || [];
-      if (!blockerList.includes(sanitizedBlockee)) {
-        return {
-          ...prev,
-          [sanitizedBlocker]: [...blockerList, sanitizedBlockee],
-        };
+    try {
+      const result = await messagesService.blockUser({
+        blocker: sanitizedBlocker,
+        blocked: sanitizedBlockee,
+      });
+
+      if (result.success) {
+        setBlockedUsers(prev => {
+          const blockerList = prev[sanitizedBlocker] || [];
+          if (!blockerList.includes(sanitizedBlockee)) {
+            return {
+              ...prev,
+              [sanitizedBlocker]: [...blockerList, sanitizedBlockee],
+            };
+          }
+          return prev;
+        });
       }
-      return prev;
-    });
+    } catch (error) {
+      console.error('Error blocking user:', error);
+    }
   };
 
-  const unblockUser = (blocker: string, blockee: string) => {
+  const unblockUser = async (blocker: string, blockee: string) => {
     const sanitizedBlocker = sanitizeString(blocker);
     const sanitizedBlockee = sanitizeString(blockee);
 
-    setBlockedUsers((prev) => {
-      const blockerList = prev[sanitizedBlocker] || [];
-      return {
-        ...prev,
-        [sanitizedBlocker]: blockerList.filter((b) => b !== sanitizedBlockee),
-      };
-    });
+    try {
+      const result = await messagesService.unblockUser({
+        blocker: sanitizedBlocker,
+        blocked: sanitizedBlockee,
+      });
+
+      if (result.success) {
+        setBlockedUsers(prev => {
+          const blockerList = prev[sanitizedBlocker] || [];
+          return {
+            ...prev,
+            [sanitizedBlocker]: blockerList.filter(b => b !== sanitizedBlockee),
+          };
+        });
+      }
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+    }
   };
 
-  const reportUser = (reporter: string, reportee: string) => {
+  const reportUser = async (reporter: string, reportee: string) => {
     const sanitizedReporter = sanitizeString(reporter);
     const sanitizedReportee = sanitizeString(reportee);
 
-    // Add to reported users list
-    setReportedUsers((prev) => {
-      const reporterList = prev[sanitizedReporter] || [];
-      if (!reporterList.includes(sanitizedReportee)) {
-        return {
-          ...prev,
-          [sanitizedReporter]: [...reporterList, sanitizedReportee],
-        };
-      }
-      return prev;
-    });
-
-    // NEW: Create a report log entry
     const conversationKey = getConversationKey(reporter, reportee);
     const reportMessages = messages[conversationKey] || [];
-    
-    const newReport: ReportLog = {
-      id: uuidv4(),
-      reporter: sanitizedReporter,
-      reportee: sanitizedReportee,
-      messages: reportMessages,
-      date: new Date().toISOString(),
-      processed: false,
-      category: 'other'
-    };
-    
-    setReportLogs(prev => [...prev, newReport]);
+
+    try {
+      const result = await messagesService.reportUser({
+        reporter: sanitizedReporter,
+        reportee: sanitizedReportee,
+        messages: reportMessages,
+      });
+
+      if (result.success) {
+        setReportedUsers(prev => {
+          const reporterList = prev[sanitizedReporter] || [];
+          if (!reporterList.includes(sanitizedReportee)) {
+            return {
+              ...prev,
+              [sanitizedReporter]: [...reporterList, sanitizedReportee],
+            };
+          }
+          return prev;
+        });
+
+        const newReport: ReportLog = {
+          id: uuidv4(),
+          reporter: sanitizedReporter,
+          reportee: sanitizedReportee,
+          messages: reportMessages,
+          date: new Date().toISOString(),
+          processed: false,
+          category: 'other'
+        };
+        
+        setReportLogs(prev => [...prev, newReport]);
+      }
+    } catch (error) {
+      console.error('Error reporting user:', error);
+    }
   };
 
   const isBlocked = (blocker: string, blockee: string): boolean => {
@@ -481,7 +506,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return reportedUsers[sanitizedReporter]?.includes(sanitizedReportee) ?? false;
   };
 
-  // NEW: Get count of unprocessed reports
   const getReportCount = (): number => {
     return reportLogs.filter(report => !report.processed).length;
   };
@@ -493,21 +517,21 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         sendMessage,
         sendCustomRequest,
         getMessagesForUsers,
-        getThreadsForUser, // NEW
-        getThreadInfo, // NEW
-        getAllThreadsInfo, // NEW
+        getThreadsForUser,
+        getThreadInfo,
+        getAllThreadsInfo,
         markMessagesAsRead,
         blockUser,
         unblockUser,
         reportUser,
         isBlocked,
         hasReported,
-        getReportCount, // NEW: Added to context
-        blockedUsers, // NEW: Expose blocked users
-        reportedUsers, // NEW: Expose reported users
-        reportLogs, // NEW: Expose report logs
-        messageNotifications, // NEW
-        clearMessageNotifications // NEW
+        getReportCount,
+        blockedUsers,
+        reportedUsers,
+        reportLogs,
+        messageNotifications,
+        clearMessageNotifications
       }}
     >
       {children}
@@ -523,18 +547,14 @@ export const useMessages = () => {
   return context;
 };
 
-// UPDATED: Enhanced external getReportCount function for header use
-export const getReportCount = (): number => {
+// Enhanced external getReportCount function for header use
+export const getReportCount = async (): Promise<number> => {
   try {
     if (typeof window === 'undefined') return 0;
     
-    const storedReports = localStorage.getItem('panty_report_logs');
-    if (!storedReports) return 0;
-    
-    const reports: ReportLog[] = JSON.parse(storedReports);
+    const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
     if (!Array.isArray(reports)) return 0;
     
-    // Count only unprocessed reports
     const pendingReports = reports.filter(report => 
       report && 
       typeof report === 'object' && 

@@ -32,8 +32,8 @@ interface AuthContextType {
   user: User | null;
   isAuthReady: boolean;
   login: (username: string, role?: 'buyer' | 'seller' | 'admin') => Promise<boolean>;
-  logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
+  logout: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => Promise<void>;
   isLoggedIn: boolean;
   loading: boolean;
   error: string | null;

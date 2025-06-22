@@ -85,10 +85,10 @@ type WalletContextType = {
   buyerBalances: { [username: string]: number };
   adminBalance: number;
   sellerBalances: { [username: string]: number };
-  setBuyerBalance: (username: string, balance: number) => void;
+  setBuyerBalance: (username: string, balance: number) => Promise<void>;
   getBuyerBalance: (username: string) => number;
-  setAdminBalance: (balance: number) => void;
-  setSellerBalance: (seller: string, balance: number) => void;
+  setAdminBalance: (balance: number) => Promise<void>;
+  setSellerBalance: (seller: string, balance: number) => Promise<void>;
   getSellerBalance: (seller: string) => number;
   purchaseListing: (listing: Listing, buyerUsername: string) => boolean;
   purchaseCustomRequest: (customRequest: CustomRequestPurchase) => boolean;
@@ -98,22 +98,22 @@ type WalletContextType = {
     amount: number
   ) => boolean;
   orderHistory: Order[];
-  addOrder: (order: Order) => void;
+  addOrder: (order: Order) => Promise<void>;
   sellerWithdrawals: { [username: string]: Withdrawal[] };
   adminWithdrawals: Withdrawal[];
-  addSellerWithdrawal: (username: string, amount: number) => void;
-  addAdminWithdrawal: (amount: number) => void;
+  addSellerWithdrawal: (username: string, amount: number) => Promise<void>;
+  addAdminWithdrawal: (amount: number) => Promise<void>;
   wallet: { [username: string]: number };
   updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void;
-  sendTip: (buyer: string, seller: string, amount: number) => boolean;
+  sendTip: (buyer: string, seller: string, amount: number) => Promise<boolean>;
   setAddSellerNotificationCallback?: (fn: (seller: string, message: string) => void) => void;
-  adminCreditUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
-  adminDebitUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => boolean;
+  adminCreditUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => Promise<boolean>;
+  adminDebitUser: (username: string, role: 'buyer' | 'seller', amount: number, reason: string) => Promise<boolean>;
   adminActions: AdminAction[];
-  updateOrderAddress: (orderId: string, address: DeliveryAddress) => void;
-  updateShippingStatus: (orderId: string, status: 'pending' | 'processing' | 'shipped') => void;
+  updateOrderAddress: (orderId: string, address: DeliveryAddress) => Promise<void>;
+  updateShippingStatus: (orderId: string, status: 'pending' | 'processing' | 'shipped') => Promise<void>;
   depositLogs: DepositLog[];
-  addDeposit: (username: string, amount: number, method: DepositLog['method'], notes?: string) => boolean;
+  addDeposit: (username: string, amount: number, method: DepositLog['method'], notes?: string) => Promise<boolean>;
   getDepositsForUser: (username: string) => DepositLog[];
   getTotalDeposits: () => number;
   getDepositsByTimeframe: (timeframe: 'today' | 'week' | 'month' | 'year' | 'all') => DepositLog[];
@@ -242,71 +242,126 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return buyerBalances[username] || 0;
   };
 
-  const setBuyerBalance = (username: string, balance: number) => {
-    setBuyerBalancesState((prev) => ({
-      ...prev,
-      [username]: balance,
-    }));
+  const setBuyerBalance = async (username: string, balance: number) => {
+    try {
+      const result = await walletService.updateBalance(username, balance, 'buyer');
+      if (result.success) {
+        setBuyerBalancesState((prev) => ({
+          ...prev,
+          [username]: balance,
+        }));
+      }
+    } catch (error) {
+      console.error('Error setting buyer balance:', error);
+    }
   };
 
   const getSellerBalance = (seller: string): number => {
     return sellerBalances[seller] || 0;
   };
 
-  const setSellerBalance = (seller: string, balance: number) => {
-    setSellerBalancesState((prev) => ({
-      ...prev,
-      [seller]: balance,
-    }));
+  const setSellerBalance = async (seller: string, balance: number) => {
+    try {
+      const result = await walletService.updateBalance(seller, balance, 'seller');
+      if (result.success) {
+        setSellerBalancesState((prev) => ({
+          ...prev,
+          [seller]: balance,
+        }));
+      }
+    } catch (error) {
+      console.error('Error setting seller balance:', error);
+    }
   };
 
-  const setAdminBalance = (balance: number) => {
-    setAdminBalanceState(balance);
+  const setAdminBalance = async (balance: number) => {
+    try {
+      const result = await walletService.updateBalance('admin', balance, 'admin');
+      if (result.success) {
+        setAdminBalanceState(balance);
+      }
+    } catch (error) {
+      console.error('Error setting admin balance:', error);
+    }
   };
 
-  const addOrder = (order: Order) => {
-    setOrderHistory((prev) => [...prev, order]);
+  const addOrder = async (order: Order) => {
+    try {
+      const result = await ordersService.createOrder({
+        title: order.title,
+        description: order.description,
+        price: order.price,
+        markedUpPrice: order.markedUpPrice,
+        imageUrl: order.imageUrl,
+        seller: order.seller,
+        buyer: order.buyer,
+        tags: order.tags,
+        wearTime: order.wearTime,
+        wasAuction: order.wasAuction,
+        finalBid: order.finalBid,
+        deliveryAddress: order.deliveryAddress,
+        tierCreditAmount: order.tierCreditAmount,
+        isCustomRequest: order.isCustomRequest,
+        originalRequestId: order.originalRequestId,
+      });
+      
+      if (result.success && result.data) {
+        setOrderHistory((prev) => [...prev, result.data!]);
+      }
+    } catch (error) {
+      console.error('Error adding order:', error);
+    }
   };
 
-  const addDeposit = (username: string, amount: number, method: DepositLog['method'], notes?: string): boolean => {
+  const addDeposit = async (username: string, amount: number, method: DepositLog['method'], notes?: string): Promise<boolean> => {
     if (!username || amount <= 0) {
       return false;
     }
 
     try {
-      const depositId = `dep_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const newDeposit: DepositLog = {
-        id: depositId,
+      const result = await walletService.deposit({
         username,
         amount,
         method,
-        date: new Date().toISOString(),
-        status: 'completed',
-        transactionId: `txn_${depositId}`,
-        notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
-      };
+        notes,
+      });
 
-      // Add to deposit logs
-      setDepositLogs(prev => [...prev, newDeposit]);
+      if (result.success && result.data) {
+        // Update local state
+        const currentBalance = getBuyerBalance(username);
+        setBuyerBalancesState(prev => ({
+          ...prev,
+          [username]: currentBalance + amount,
+        }));
 
-      // Update buyer balance
-      const currentBalance = getBuyerBalance(username);
-      setBuyerBalance(username, currentBalance + amount);
+        // Add deposit log
+        const newDeposit: DepositLog = {
+          id: result.data.id,
+          username,
+          amount,
+          method,
+          date: result.data.date,
+          status: 'completed',
+          transactionId: result.data.id,
+          notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
+        };
+        setDepositLogs(prev => [...prev, newDeposit]);
 
-      // Record as admin action for analytics
-      const adminAction: AdminAction = {
-        adminUser: 'system',
-        username: username,
-        role: 'buyer',
-        amount: amount,
-        type: 'credit',
-        reason: `Wallet deposit via ${method.replace('_', ' ')}`,
-        date: new Date().toISOString()
-      };
-      setAdminActions(prev => [...prev, adminAction]);
+        // Record as admin action for analytics
+        const adminAction: AdminAction = {
+          adminUser: 'system',
+          username: username,
+          role: 'buyer',
+          amount: amount,
+          type: 'credit',
+          reason: `Wallet deposit via ${method.replace('_', ' ')}`,
+          date: new Date().toISOString()
+        };
+        setAdminActions(prev => [...prev, adminAction]);
 
-      return true;
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error('Error processing deposit:', error);
       return false;
@@ -347,96 +402,137 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
   };
 
-  const updateOrderAddress = (orderId: string, address: DeliveryAddress) => {
-    setOrderHistory((prev) => {
-      const updatedOrders = prev.map((order) => 
-        order.id === orderId ? { ...order, deliveryAddress: address } : order
-      );
-      return updatedOrders;
-    });
+  const updateOrderAddress = async (orderId: string, address: DeliveryAddress) => {
+    try {
+      const result = await ordersService.updateOrderAddress(orderId, address);
+      if (result.success && result.data) {
+        setOrderHistory((prev) => 
+          prev.map((order) => 
+            order.id === orderId ? { ...order, deliveryAddress: address } : order
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error updating order address:', error);
+    }
   };
 
-  const updateShippingStatus = (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
-    setOrderHistory((prev) => {
-      const updatedOrders = prev.map((order) => 
-        order.id === orderId ? { ...order, shippingStatus: status } : order
-      );
-      return updatedOrders;
-    });
+  const updateShippingStatus = async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+    try {
+      const result = await ordersService.updateOrderStatus(orderId, { shippingStatus: status });
+      if (result.success && result.data) {
+        setOrderHistory((prev) => 
+          prev.map((order) => 
+            order.id === orderId ? { ...order, shippingStatus: status } : order
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error updating shipping status:', error);
+    }
   };
 
-  const adminCreditUser = (username: string, role: 'buyer' | 'seller', amount: number, reason: string): boolean => {
+  const adminCreditUser = async (username: string, role: 'buyer' | 'seller', amount: number, reason: string): Promise<boolean> => {
     if (!username || amount <= 0 || !reason) {
       return false;
     }
 
     try {
-      if (role === 'buyer') {
-        const currentBalance = getBuyerBalance(username);
-        setBuyerBalance(username, currentBalance + amount);
-        
-        if (reason.toLowerCase().includes('deposit') || reason.toLowerCase().includes('wallet')) {
-          addDeposit(username, amount, 'admin_credit', `Admin credit: ${reason}`);
-        }
-      } else if (role === 'seller') {
-        const currentBalance = getSellerBalance(username);
-        setSellerBalance(username, currentBalance + amount);
-      } else {
-        return false;
-      }
-
-      const action: AdminAction = {
+      const result = await walletService.processAdminAction({
         adminUser: 'admin',
-        username,
+        targetUser: username,
         role,
         amount,
         type: 'credit',
         reason,
-        date: new Date().toISOString()
-      };
+      });
 
-      setAdminActions(prev => [...prev, action]);
-      return true;
+      if (result.success) {
+        if (role === 'buyer') {
+          const currentBalance = getBuyerBalance(username);
+          setBuyerBalancesState(prev => ({
+            ...prev,
+            [username]: currentBalance + amount,
+          }));
+          
+          if (reason.toLowerCase().includes('deposit') || reason.toLowerCase().includes('wallet')) {
+            await addDeposit(username, amount, 'admin_credit', `Admin credit: ${reason}`);
+          }
+        } else if (role === 'seller') {
+          const currentBalance = getSellerBalance(username);
+          setSellerBalancesState(prev => ({
+            ...prev,
+            [username]: currentBalance + amount,
+          }));
+        }
+
+        const action: AdminAction = {
+          adminUser: 'admin',
+          username,
+          role,
+          amount,
+          type: 'credit',
+          reason,
+          date: new Date().toISOString()
+        };
+
+        setAdminActions(prev => [...prev, action]);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Error crediting user:", error);
       return false;
     }
   };
 
-  const adminDebitUser = (username: string, role: 'buyer' | 'seller', amount: number, reason: string): boolean => {
+  const adminDebitUser = async (username: string, role: 'buyer' | 'seller', amount: number, reason: string): Promise<boolean> => {
     if (!username || amount <= 0 || !reason) {
       return false;
     }
 
     try {
-      if (role === 'buyer') {
-        const currentBalance = getBuyerBalance(username);
-        if (currentBalance < amount) {
-          return false;
-        }
-        setBuyerBalance(username, currentBalance - amount);
-      } else if (role === 'seller') {
-        const currentBalance = getSellerBalance(username);
-        if (currentBalance < amount) {
-          return false;
-        }
-        setSellerBalance(username, currentBalance - amount);
-      } else {
+      const currentBalance = role === 'buyer' ? getBuyerBalance(username) : getSellerBalance(username);
+      if (currentBalance < amount) {
         return false;
       }
 
-      const action: AdminAction = {
+      const result = await walletService.processAdminAction({
         adminUser: 'admin',
-        username,
+        targetUser: username,
         role,
         amount,
         type: 'debit',
         reason,
-        date: new Date().toISOString()
-      };
+      });
 
-      setAdminActions(prev => [...prev, action]);
-      return true;
+      if (result.success) {
+        if (role === 'buyer') {
+          setBuyerBalancesState(prev => ({
+            ...prev,
+            [username]: currentBalance - amount,
+          }));
+        } else if (role === 'seller') {
+          setSellerBalancesState(prev => ({
+            ...prev,
+            [username]: currentBalance - amount,
+          }));
+        }
+
+        const action: AdminAction = {
+          adminUser: 'admin',
+          username,
+          role,
+          amount,
+          type: 'debit',
+          reason,
+          date: new Date().toISOString()
+        };
+
+        setAdminActions(prev => [...prev, action]);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Error debiting user:", error);
       return false;
@@ -513,12 +609,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (tierCreditAmount > 0) {
           addSellerNotification(
             seller,
-            `New sale: "${listing.title}" for $${displayPrice} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+            `New sale: "${listing.title}" for ${displayPrice} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
           );
         } else {
           addSellerNotification(
             seller,
-            `New sale: "${listing.title}" for $${displayPrice}`
+            `New sale: "${listing.title}" for ${displayPrice}`
           );
         }
       }
@@ -602,12 +698,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (tierCreditAmount > 0) {
           addSellerNotification(
             seller,
-            `Custom request paid: "${title}" for $${markedUpPrice.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+            `Custom request paid: "${title}" for ${markedUpPrice.toFixed(2)} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
           );
         } else {
           addSellerNotification(
             seller,
-            `Custom request paid: "${title}" for $${markedUpPrice.toFixed(2)}`
+            `Custom request paid: "${title}" for ${markedUpPrice.toFixed(2)}`
           );
         }
       }
@@ -665,7 +761,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (addSellerNotification) {
         addSellerNotification(
           seller,
-          `New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
+          `New subscriber: ${buyer} paid ${amount.toFixed(2)}/month`
         );
       }
 
@@ -677,7 +773,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addSellerWithdrawal = (username: string, amount: number) => {
+  const addSellerWithdrawal = async (username: string, amount: number) => {
     if (!username || amount <= 0) {
       throw new Error("Invalid withdrawal parameters");
     }
@@ -687,29 +783,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw new Error("Insufficient balance for withdrawal");
     }
 
-    const withdrawalLockKey = `withdrawal_lock_${username}`;
-    if (typeof window !== 'undefined' && localStorage.getItem(withdrawalLockKey)) {
-      throw new Error("Another withdrawal is in progress");
-    }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(withdrawalLockKey, 'locked');
-    }
-
     try {
-      const date = new Date().toISOString();
-      setSellerWithdrawals((prev) => ({
-        ...prev,
-        [username]: [...(prev[username] || []), { amount, date }],
-      }));
-      setSellerBalance(username, currentBalance - amount);
-    } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(withdrawalLockKey);
+      const result = await walletService.withdraw({
+        username,
+        amount,
+      });
+
+      if (result.success) {
+        const date = new Date().toISOString();
+        setSellerWithdrawals((prev) => ({
+          ...prev,
+          [username]: [...(prev[username] || []), { amount, date }],
+        }));
+        await setSellerBalance(username, currentBalance - amount);
+      } else {
+        throw new Error(result.error?.message || "Withdrawal failed");
       }
+    } catch (error) {
+      throw error;
     }
   };
 
-  const addAdminWithdrawal = (amount: number) => {
+  const addAdminWithdrawal = async (amount: number) => {
     if (amount <= 0) {
       throw new Error("Invalid withdrawal amount");
     }
@@ -718,22 +813,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw new Error("Insufficient admin balance for withdrawal");
     }
 
-    const adminWithdrawalLockKey = 'admin_withdrawal_lock';
-    if (typeof window !== 'undefined' && localStorage.getItem(adminWithdrawalLockKey)) {
-      throw new Error("Another admin withdrawal is in progress");
-    }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(adminWithdrawalLockKey, 'locked');
-    }
-
     try {
+      // For admin withdrawals, we'll use a special case
       const date = new Date().toISOString();
       setAdminWithdrawals((prev) => [...prev, { amount, date }]);
-      setAdminBalanceState((prev) => prev - amount);
-    } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(adminWithdrawalLockKey);
-      }
+      await setAdminBalance(adminBalance - amount);
+    } catch (error) {
+      throw error;
     }
   };
 
@@ -753,7 +839,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (addSellerNotification) {
           addSellerNotification(
             username,
-            `New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
+            `New custom order to fulfil: "${orderToFulfil.title}" for ${orderToFulfil.price.toFixed(2)}`
           );
         }
       }
@@ -767,7 +853,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (addSellerNotification) {
             addSellerNotification(
               username,
-              `New custom order to fulfil: "${orderToFulfil.title}" for $${orderToFulfil.price.toFixed(2)}`
+              `New custom order to fulfil: "${orderToFulfil.title}" for ${orderToFulfil.price.toFixed(2)}`
             );
           }
         }
@@ -777,22 +863,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendTip = (buyer: string, seller: string, amount: number): boolean => {
+  const sendTip = async (buyer: string, seller: string, amount: number): Promise<boolean> => {
     if (!buyer || !seller || amount <= 0) return false;
     const buyerBalance = getBuyerBalance(buyer);
     if (buyerBalance < amount) return false;
 
-    setBuyerBalance(buyer, buyerBalance - amount);
-    setSellerBalance(seller, getSellerBalance(seller) + amount);
+    try {
+      const result = await walletService.transfer({
+        from: buyer,
+        to: seller,
+        amount,
+        type: 'tip',
+        description: `Tip from ${buyer} to ${seller}`,
+      });
 
-    if (addSellerNotification) {
-      addSellerNotification(
-        seller,
-        `Tip received from ${buyer} - $${amount.toFixed(2)}`
-      );
+      if (result.success) {
+        setBuyerBalance(buyer, buyerBalance - amount);
+        setSellerBalance(seller, getSellerBalance(seller) + amount);
+
+        if (addSellerNotification) {
+          addSellerNotification(
+            seller,
+            `Tip received from ${buyer} - ${amount.toFixed(2)}`
+          );
+        }
+
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error sending tip:', error);
+      return false;
     }
-
-    return true;
   };
 
   return (

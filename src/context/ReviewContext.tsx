@@ -2,6 +2,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { storageService } from '@/services';
 
 export type Review = {
   reviewer: string;
@@ -20,17 +21,32 @@ const ReviewContext = createContext<ReviewContextType | undefined>(undefined);
 
 export const ReviewProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [allReviews, setAllReviews] = useState<{ [seller: string]: Review[] }>({});
+  const [isInitialized, setIsInitialized] = useState(false);
 
+  // Load data using storage service
   useEffect(() => {
-    const stored = localStorage.getItem('panty_reviews');
-    if (stored) {
-      setAllReviews(JSON.parse(stored));
+    const loadData = async () => {
+      if (typeof window === 'undefined' || isInitialized) return;
+      
+      try {
+        const stored = await storageService.getItem<{ [seller: string]: Review[] }>('panty_reviews', {});
+        setAllReviews(stored);
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading reviews:', error);
+        setIsInitialized(true);
+      }
+    };
+
+    loadData();
+  }, [isInitialized]);
+
+  // Save data using storage service
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isInitialized) {
+      storageService.setItem('panty_reviews', allReviews);
     }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('panty_reviews', JSON.stringify(allReviews));
-  }, [allReviews]);
+  }, [allReviews, isInitialized]);
 
   const getReviewsForSeller = (sellerUsername: string): Review[] => {
     return allReviews[sellerUsername] || [];

@@ -2,6 +2,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { storageService } from '@/services';
 
 export type BanType = 'temporary' | 'permanent';
 export type BanReason = 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'underage' | 'payment_fraud' | 'other';
@@ -184,59 +185,68 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [banHistory, setBanHistory] = useState<BanHistory[]>([]);
   const [appealReviews, setAppealReviews] = useState<AppealReview[]>([]);
   const [ipBans, setIPBans] = useState<IPBan[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   // Track active timers to prevent memory leaks
   const activeTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-  // Load data from localStorage on mount
+  // Load data from localStorage on mount using service
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedBans = localStorage.getItem('panty_user_bans');
-      const storedHistory = localStorage.getItem('panty_ban_history');
-      const storedAppealReviews = localStorage.getItem('panty_appeal_reviews');
-      const storedIPBans = localStorage.getItem('panty_ip_bans');
+    const loadData = async () => {
+      if (typeof window === 'undefined' || isInitialized) return;
       
-      if (storedBans) {
-        const parsedBans = JSON.parse(storedBans);
-        setBans(parsedBans);
+      try {
+        const storedBans = await storageService.getItem<UserBan[]>('panty_user_bans', []);
+        const storedHistory = await storageService.getItem<BanHistory[]>('panty_ban_history', []);
+        const storedAppealReviews = await storageService.getItem<AppealReview[]>('panty_appeal_reviews', []);
+        const storedIPBans = await storageService.getItem<IPBan[]>('panty_ip_bans', []);
+        
+        setBans(storedBans);
         // Schedule expiration for active temporary bans
-        parsedBans.forEach((ban: UserBan) => {
+        storedBans.forEach((ban: UserBan) => {
           if (ban.active && ban.banType === 'temporary' && ban.endTime) {
             scheduleExpiration(ban);
           }
         });
+        
+        setBanHistory(storedHistory);
+        setAppealReviews(storedAppealReviews);
+        setIPBans(storedIPBans);
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading ban data:', error);
+        setIsInitialized(true);
       }
-      
-      if (storedHistory) setBanHistory(JSON.parse(storedHistory));
-      if (storedAppealReviews) setAppealReviews(JSON.parse(storedAppealReviews));
-      if (storedIPBans) setIPBans(JSON.parse(storedIPBans));
-    }
+    };
+
+    loadData();
   }, []);
 
-  // Save to localStorage
+  // Save to localStorage using service
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_user_bans', JSON.stringify(bans));
+    if (typeof window !== 'undefined' && isInitialized) {
+      storageService.setItem('panty_user_bans', bans);
     }
-  }, [bans]);
+  }, [bans, isInitialized]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_ban_history', JSON.stringify(banHistory));
+    if (typeof window !== 'undefined' && isInitialized) {
+      storageService.setItem('panty_ban_history', banHistory);
     }
-  }, [banHistory]);
+  }, [banHistory, isInitialized]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_appeal_reviews', JSON.stringify(appealReviews));
+    if (typeof window !== 'undefined' && isInitialized) {
+      storageService.setItem('panty_appeal_reviews', appealReviews);
     }
-  }, [appealReviews]);
+  }, [appealReviews, isInitialized]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panty_ip_bans', JSON.stringify(ipBans));
+    if (typeof window !== 'undefined' && isInitialized) {
+      storageService.setItem('panty_ip_bans', ipBans);
     }
-  }, [ipBans]);
+  }, [ipBans, isInitialized]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -340,11 +350,11 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     // Race condition protection
     const lockKey = `ban_user_${cleanUsername}`;
-    const existingLock = localStorage.getItem(lockKey);
+    const existingLock = await storageService.getItem<any>(lockKey, null);
     
     if (existingLock) {
       try {
-        const lockData = JSON.parse(existingLock);
+        const lockData = existingLock;
         if (Date.now() - lockData.timestamp < 30000) { // 30 second lock
           console.warn(`Ban operation already in progress for ${cleanUsername}`);
           return false;
@@ -355,10 +365,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     // Set lock
-    localStorage.setItem(lockKey, JSON.stringify({
+    await storageService.setItem(lockKey, {
       timestamp: Date.now(),
       adminUser: cleanAdminUsername
-    }));
+    });
     
     try {
       // Check if user is already banned
@@ -410,7 +420,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return false;
     } finally {
       // Always release lock
-      localStorage.removeItem(lockKey);
+      await storageService.removeItem(lockKey);
     }
   };
 

@@ -1,4 +1,4 @@
-// src/context/ListingContext.tsx test test 2
+// src/context/ListingContext.tsx
 'use client';
 
 import {
@@ -10,10 +10,11 @@ import {
   useCallback,
 } from 'react';
 import { useWallet } from './WalletContext';
-import { useAuth } from './AuthContext'; // ✅ FIXED: Import AuthContext
+import { useAuth } from './AuthContext';
 import { Order } from './WalletContext';
 import { v4 as uuidv4 } from 'uuid';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
+import { listingsService, usersService, storageService } from '@/services';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -27,7 +28,6 @@ export type VerificationDocs = {
   code?: string;
 };
 
-// ✅ FIXED: Remove conflicting User type since we'll use AuthContext's User
 export type Bid = {
   id: string;
   bidder: string;
@@ -87,25 +87,24 @@ export type NotificationItem = string | Notification;
 type NotificationStore = Record<string, NotificationItem[]>;
 
 type ListingContextType = {
-  // ✅ FIXED: Remove user management from ListingContext - use AuthContext instead
   isAuthReady: boolean;
   listings: Listing[];
-  addListing: (listing: AddListingInput) => void;
-  addAuctionListing: (listing: AddListingInput, auctionSettings: AuctionInput) => void;
-  removeListing: (id: string) => void;
-  updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => void;
+  addListing: (listing: AddListingInput) => Promise<void>;
+  addAuctionListing: (listing: AddListingInput, auctionSettings: AuctionInput) => Promise<void>;
+  removeListing: (id: string) => Promise<void>;
+  updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => Promise<void>;
   
   // Auction functions
-  placeBid: (listingId: string, bidder: string, amount: number) => boolean;
+  placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
   getAuctionListings: () => Listing[];
   getActiveAuctions: () => Listing[];
   getEndedAuctions: () => Listing[];
-  checkEndedAuctions: () => void;
-  cancelAuction: (listingId: string) => boolean;
+  checkEndedAuctions: () => Promise<void>;
+  cancelAuction: (listingId: string) => Promise<boolean>;
   
   subscriptions: { [buyer: string]: string[] };
-  subscribeToSeller: (buyer: string, seller: string, price: number) => boolean;
-  unsubscribeFromSeller: (buyer: string, seller: string) => void;
+  subscribeToSeller: (buyer: string, seller: string, price: number) => Promise<boolean>;
+  unsubscribeFromSeller: (buyer: string, seller: string) => Promise<void>;
   isSubscribed: (buyer: string, seller: string) => boolean;
   
   // Updated notification system
@@ -115,10 +114,9 @@ type ListingContextType = {
   restoreSellerNotification: (notificationId: string) => void;
   permanentlyDeleteSellerNotification: (notificationId: string) => void;
 
-  requestVerification: (docs: VerificationDocs) => void;
-  setVerificationStatus: (username: string, status: VerificationStatus, rejectionReason?: string) => void;
+  requestVerification: (docs: VerificationDocs) => Promise<void>;
+  setVerificationStatus: (username: string, status: VerificationStatus, rejectionReason?: string) => Promise<void>;
   
-  // ✅ FIXED: Add users access for admin functionality
   users: { [username: string]: any };
   
   orderHistory: Order[];
@@ -127,7 +125,6 @@ type ListingContextType = {
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // ✅ FIXED: Use AuthContext for user management
   const { user, updateUser } = useAuth();
   
   const [users, setUsers] = useState<{ [username: string]: any }>({});
@@ -170,8 +167,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   // Helper function to save notification store
-  const saveNotificationStore = (store: NotificationStore) => {
-    localStorage.setItem('seller_notifications_store', JSON.stringify(store));
+  const saveNotificationStore = async (store: NotificationStore) => {
+    await storageService.setItem('seller_notifications_store', store);
   };
 
   // Memoized notification function to avoid infinite render loop
@@ -228,45 +225,52 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return notifications.map(normalizeNotification);
   };
 
+  // Load initial data using services
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // ✅ FIXED: Only load ListingContext-specific data, not user data
-      const storedUsers = localStorage.getItem('all_users_v2');
-      const storedListings = localStorage.getItem('listings');
-      const storedSubs = localStorage.getItem('subscriptions');
-      const storedNotifications = localStorage.getItem('seller_notifications_store');
+    const loadData = async () => {
+      if (typeof window === 'undefined') return;
 
-      if (storedUsers) setUsers(JSON.parse(storedUsers));
-      if (storedListings) setListings(JSON.parse(storedListings));
-      if (storedSubs) setSubscriptions(JSON.parse(storedSubs));
-      if (storedNotifications) {
-        try {
-          const parsed = JSON.parse(storedNotifications);
-          const migrated: NotificationStore = {};
-          Object.keys(parsed).forEach(username => {
-            if (Array.isArray(parsed[username])) {
-              migrated[username] = migrateNotifications(parsed[username]);
-            }
-          });
-          setNotificationStore(migrated);
-          saveNotificationStore(migrated);
-        } catch (e) {
-          console.error("Error parsing notification store:", e);
-          setNotificationStore({});
-          saveNotificationStore({});
+      try {
+        // Load users
+        const usersResult = await usersService.getUsers();
+        if (usersResult.success && usersResult.data) {
+          setUsers(usersResult.data);
         }
-      } else {
-        setNotificationStore({});
-        saveNotificationStore({});
+
+        // Load listings
+        const listingsResult = await listingsService.getListings();
+        if (listingsResult.success && listingsResult.data) {
+          setListings(listingsResult.data);
+        }
+
+        // Load subscriptions
+        const storedSubs = await storageService.getItem<{ [buyer: string]: string[] }>('subscriptions', {});
+        setSubscriptions(storedSubs);
+
+        // Load notifications
+        const storedNotifications = await storageService.getItem<NotificationStore>('seller_notifications_store', {});
+        const migrated: NotificationStore = {};
+        Object.keys(storedNotifications).forEach(username => {
+          if (Array.isArray(storedNotifications[username])) {
+            migrated[username] = migrateNotifications(storedNotifications[username]);
+          }
+        });
+        setNotificationStore(migrated);
+        await saveNotificationStore(migrated);
+
+        // Clean up old notification storage
+        await storageService.removeItem('seller_notifications');
+        await storageService.removeItem('seller_notifications_by_id');
+        await storageService.removeItem('seller_notifications_map');
+
+        setIsAuthReady(true);
+      } catch (error) {
+        console.error('Error loading ListingContext data:', error);
+        setIsAuthReady(true);
       }
+    };
 
-      // Clean up old notification storage
-      localStorage.removeItem('seller_notifications');
-      localStorage.removeItem('seller_notifications_by_id');
-      localStorage.removeItem('seller_notifications_map');
-
-      setIsAuthReady(true);
-    }
+    loadData();
   }, []);
 
   // Check for ended auctions on load and at regular intervals
@@ -280,14 +284,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return () => clearInterval(interval);
   }, [listings]);
 
-  const persistUsers = (updated: { [username: string]: any }) => {
+  const persistUsers = async (updated: { [username: string]: any }) => {
     setUsers(updated);
-    localStorage.setItem('all_users_v2', JSON.stringify(updated));
+    await storageService.setItem('all_users_v2', updated);
   };
 
-  // ✅ FIXED: Enforce listing limits for sellers using AuthContext user
-  const addListing = (listing: NewListingInput) => {
-    console.log('🔍 addListing called with user:', user); // Debug log
+  // Use listings service for adding listings
+  const addListing = async (listing: NewListingInput): Promise<void> => {
+    console.log('🔍 addListing called with user:', user);
     
     if (!user || user.role !== 'seller') {
       console.error('❌ addListing failed: user is not a seller', { user: user?.username, role: user?.role });
@@ -315,26 +319,28 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
-    const newListing: Listing = {
-      id: uuidv4(),
-      date: new Date().toISOString(),
-      markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100,
-      isVerified: isVerified,
-      ...listing,
-    };
-    
-    console.log('✅ Creating new listing:', newListing);
+    try {
+      const result = await listingsService.createListing({
+        ...listing,
+        seller: user.username,
+        isVerified: isVerified,
+      });
 
-    setListings((prev) => {
-      const updated = [...prev, newListing];
-      localStorage.setItem('listings', JSON.stringify(updated));
-      console.log('💾 Saved listings to localStorage, total:', updated.length);
-      return updated;
-    });
+      if (result.success && result.data) {
+        setListings(prev => [...prev, result.data!]);
+        console.log('✅ Created new listing:', result.data);
+      } else {
+        console.error('Failed to create listing:', result.error);
+        alert('Failed to create listing. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error creating listing:', error);
+      alert('An error occurred while creating the listing.');
+    }
   };
 
   // Add an auction listing
-  const addAuctionListing = (listing: AddListingInput, auctionSettings: AuctionInput) => {
+  const addAuctionListing = async (listing: AddListingInput, auctionSettings: AuctionInput): Promise<void> => {
     if (!user || user.role !== 'seller') {
       alert('You must be logged in as a seller to create auction listings.');
       return;
@@ -353,83 +359,61 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
-    const newListing: Listing = {
-      id: uuidv4(),
-      date: new Date().toISOString(),
-      markedUpPrice: Math.round(listing.price * 1.1 * 100) / 100,
-      isVerified: isVerified,
-      ...listing,
-      auction: {
-        isAuction: true,
-        startingPrice: auctionSettings.startingPrice,
-        reservePrice: auctionSettings.reservePrice,
-        endTime: auctionSettings.endTime,
-        bids: [],
-        status: 'active' as AuctionStatus
-      }
-    };
-
-    setListings((prev) => {
-      const updated = [...prev, newListing];
-      localStorage.setItem('listings', JSON.stringify(updated));
-      return updated;
-    });
-
-    addSellerNotification(
-      user.username,
-      `🔨 You've created a new auction: "${listing.title}" starting at $${auctionSettings.startingPrice.toFixed(2)}`
-    );
-  };
-
-  const removeListing = (id: string) => {
-    setListings((prev) => {
-      const updated = prev.filter((listing) => listing.id !== id);
-      localStorage.setItem('listings', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  const updateListing = (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => {
-    setListings(prev => {
-      const updated = prev.map(listing => {
-        if (listing.id === id) {
-          const updatedItem = {
-            ...listing,
-            ...updatedListing,
-          };
-          if (updatedListing.price !== undefined) {
-            updatedItem.markedUpPrice = Math.round(updatedListing.price * 1.1 * 100) / 100;
-          }
-          return updatedItem;
-        }
-        return listing;
+    try {
+      const result = await listingsService.createListing({
+        ...listing,
+        seller: user.username,
+        isVerified: isVerified,
+        auction: auctionSettings,
       });
-      
-      localStorage.setItem('listings', JSON.stringify(updated));
-      return updated;
-    });
+
+      if (result.success && result.data) {
+        setListings(prev => [...prev, result.data!]);
+        
+        addSellerNotification(
+          user.username,
+          `🔨 You've created a new auction: "${listing.title}" starting at $${auctionSettings.startingPrice.toFixed(2)}`
+        );
+      } else {
+        alert('Failed to create auction listing. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error creating auction listing:', error);
+      alert('An error occurred while creating the auction listing.');
+    }
+  };
+
+  const removeListing = async (id: string): Promise<void> => {
+    try {
+      const result = await listingsService.deleteListing(id);
+      if (result.success) {
+        setListings(prev => prev.filter(listing => listing.id !== id));
+      }
+    } catch (error) {
+      console.error('Error removing listing:', error);
+    }
+  };
+
+  const updateListing = async (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>): Promise<void> => {
+    try {
+      const result = await listingsService.updateListing(id, updatedListing);
+      if (result.success && result.data) {
+        setListings(prev => prev.map(listing => 
+          listing.id === id ? result.data! : listing
+        ));
+      }
+    } catch (error) {
+      console.error('Error updating listing:', error);
+    }
   };
 
   // Place a bid on an auction listing
-  const placeBid = (listingId: string, bidder: string, amount: number): boolean => {
-    const listingIndex = listings.findIndex(listing => listing.id === listingId);
-    if (listingIndex === -1) return false;
-    
-    const listing = listings[listingIndex];
-    
-    if (!listing.auction || listing.auction.status !== 'active') return false;
+  const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
+    const listing = listings.find(l => l.id === listingId);
+    if (!listing || !listing.auction || listing.auction.status !== 'active') return false;
     
     if (new Date(listing.auction.endTime).getTime() <= new Date().getTime()) {
-      const updatedListings = [...listings];
-      updatedListings[listingIndex] = {
-        ...listing,
-        auction: {
-          ...listing.auction,
-          status: 'ended' as AuctionStatus
-        }
-      };
-      setListings(updatedListings);
-      localStorage.setItem('listings', JSON.stringify(updatedListings));
+      await checkEndedAuctions();
       return false;
     }
     
@@ -443,33 +427,23 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return false;
     }
     
-    const bid: Bid = {
-      id: uuidv4(),
-      bidder,
-      amount,
-      date: new Date().toISOString()
-    };
-    
-    const updatedListings = [...listings];
-    updatedListings[listingIndex] = {
-      ...listing,
-      auction: {
-        ...listing.auction,
-        bids: [...listing.auction.bids, bid],
-        highestBid: amount,
-        highestBidder: bidder
+    try {
+      const result = await listingsService.placeBid(listingId, bidder, amount);
+      if (result.success && result.data) {
+        setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
+        
+        addSellerNotification(
+          listing.seller,
+          `💰 New bid! ${bidder} bid $${amount.toFixed(2)} on "${listing.title}"`
+        );
+        
+        return true;
       }
-    };
+    } catch (error) {
+      console.error('Error placing bid:', error);
+    }
     
-    setListings(updatedListings);
-    localStorage.setItem('listings', JSON.stringify(updatedListings));
-    
-    addSellerNotification(
-      listing.seller,
-      `💰 New bid! ${bidder} bid $${amount.toFixed(2)} on "${listing.title}"`
-    );
-    
-    return true;
+    return false;
   };
 
   const getAuctionListings = (): Listing[] => {
@@ -508,24 +482,19 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return null;
   };
 
-  const checkEndedAuctions = () => {
+  const checkEndedAuctions = async (): Promise<void> => {
     const lockKey = 'auction_check_lock';
     const lockExpiry = 5000;
     const instanceId = uuidv4();
     
     try {
       const now = Date.now();
-      const existingLock = localStorage.getItem(lockKey);
+      const existingLock = await storageService.getItem<any>(lockKey, null);
       
       if (existingLock) {
-        try {
-          const lockData = JSON.parse(existingLock);
-          if (lockData.expiry > now) {
-            console.log(`[Auction Check ${instanceId}] Another instance is processing auctions`);
-            return;
-          }
-        } catch (e) {
-          // Invalid lock data, proceed to acquire
+        if (existingLock.expiry > now) {
+          console.log(`[Auction Check ${instanceId}] Another instance is processing auctions`);
+          return;
         }
       }
       
@@ -534,19 +503,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         instanceId: instanceId,
         timestamp: now
       };
-      localStorage.setItem(lockKey, JSON.stringify(lockData));
+      await storageService.setItem(lockKey, lockData);
       
-      const verifyLock = localStorage.getItem(lockKey);
-      if (verifyLock) {
-        try {
-          const verifyData = JSON.parse(verifyLock);
-          if (verifyData.instanceId !== instanceId) {
-            console.log(`[Auction Check ${instanceId}] Lost lock race to ${verifyData.instanceId}`);
-            return;
-          }
-        } catch (e) {
-          // Proceed if we can't verify
-        }
+      const verifyLock = await storageService.getItem<any>(lockKey, null);
+      if (verifyLock && verifyLock.instanceId !== instanceId) {
+        console.log(`[Auction Check ${instanceId}] Lost lock race to ${verifyLock.instanceId}`);
+        return;
       }
       
       console.log(`[Auction Check ${instanceId}] Acquired lock, processing auctions...`);
@@ -563,17 +525,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           updated = true;
           
           const processingKey = `auction_processing_${listing.id}`;
-          const existingProcessing = localStorage.getItem(processingKey);
+          const existingProcessing = await storageService.getItem<any>(processingKey, null);
           
           if (existingProcessing) {
             console.log(`[Auction Check ${instanceId}] Auction ${listing.id} already being processed`);
             return listing;
           }
           
-          localStorage.setItem(processingKey, JSON.stringify({
+          await storageService.setItem(processingKey, {
             instanceId: instanceId,
             expiry: now + 30000
-          }));
+          });
           
           try {
             if (listing.auction.bids.length > 0) {
@@ -629,7 +591,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                   });
                   
                   removedListings.push(listing.id);
-                  localStorage.removeItem(processingKey);
+                  await storageService.removeItem(processingKey);
                   return null;
                 } else {
                   addSellerNotification(
@@ -657,7 +619,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
               );
             }
             
-            localStorage.removeItem(processingKey);
+            await storageService.removeItem(processingKey);
             
             return {
               ...listing,
@@ -668,7 +630,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             };
           } catch (error) {
             console.error(`[Auction Check ${instanceId}] Error processing auction ${listing.id}:`, error);
-            localStorage.removeItem(processingKey);
+            storageService.removeItem(processingKey);
             return listing;
           }
         }
@@ -680,66 +642,56 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       
       if (updated || removedListings.length > 0) {
         setListings(finalListings);
-        localStorage.setItem('listings', JSON.stringify(finalListings));
+        await storageService.setItem('listings', finalListings);
         console.log(`[Auction Check ${instanceId}] Processed ${removedListings.length} auctions`);
       }
       
     } finally {
-      const currentLock = localStorage.getItem(lockKey);
-      if (currentLock) {
-        try {
-          const lockData = JSON.parse(currentLock);
-          if (lockData.instanceId === instanceId) {
-            localStorage.removeItem(lockKey);
-            console.log(`[Auction Check ${instanceId}] Released lock`);
-          }
-        } catch (e) {
-          localStorage.removeItem(lockKey);
-        }
+      const currentLock = await storageService.getItem<any>(lockKey, null);
+      if (currentLock && currentLock.instanceId === instanceId) {
+        await storageService.removeItem(lockKey);
+        console.log(`[Auction Check ${instanceId}] Released lock`);
       }
     }
   };
 
-  const cancelAuction = (listingId: string): boolean => {
+  const cancelAuction = async (listingId: string): Promise<boolean> => {
     if (!user) return false;
     
-    const listingIndex = listings.findIndex(l => l.id === listingId);
-    if (listingIndex === -1) return false;
-    
-    const listing = listings[listingIndex];
+    const listing = listings.find(l => l.id === listingId);
+    if (!listing) return false;
     
     if (user.role !== 'admin' && user.username !== listing.seller) return false;
     
     if (!listing.auction || listing.auction.status !== 'active') return false;
     
-    const updatedListings = [...listings];
-    updatedListings[listingIndex] = {
-      ...listing,
-      auction: {
-        ...listing.auction,
-        status: 'cancelled' as AuctionStatus
+    try {
+      const result = await listingsService.cancelAuction(listingId);
+      if (result.success && result.data) {
+        setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
+        
+        if (listing.auction.bids.length > 0) {
+          addSellerNotification(
+            listing.seller,
+            `🛑 You cancelled your auction: "${listing.title}" with ${listing.auction.bids.length} bids`
+          );
+        } else {
+          addSellerNotification(
+            listing.seller,
+            `🛑 You cancelled your auction: "${listing.title}" (no bids received)`
+          );
+        }
+        
+        return true;
       }
-    };
-    
-    setListings(updatedListings);
-    localStorage.setItem('listings', JSON.stringify(updatedListings));
-    
-    if (listing.auction.bids.length > 0) {
-      addSellerNotification(
-        listing.seller,
-        `🛑 You cancelled your auction: "${listing.title}" with ${listing.auction.bids.length} bids`
-      );
-    } else {
-      addSellerNotification(
-        listing.seller,
-        `🛑 You cancelled your auction: "${listing.title}" (no bids received)`
-      );
+    } catch (error) {
+      console.error('Error cancelling auction:', error);
     }
     
-    return true;
+    return false;
   };
 
-  const subscribeToSeller = (buyer: string, seller: string, price: number): boolean => {
+  const subscribeToSeller = async (buyer: string, seller: string, price: number): Promise<boolean> => {
     const success = subscribeToSellerWithPayment(buyer, seller, price);
     if (success) {
       setSubscriptions((prev) => {
@@ -747,7 +699,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           ...prev,
           [buyer]: [...(prev[buyer] || []), seller],
         };
-        localStorage.setItem('subscriptions', JSON.stringify(updated));
+        storageService.setItem('subscriptions', updated);
         return updated;
       });
       addSellerNotification(
@@ -758,13 +710,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return success;
   };
 
-  const unsubscribeFromSeller = (buyer: string, seller: string) => {
+  const unsubscribeFromSeller = async (buyer: string, seller: string): Promise<void> => {
     setSubscriptions((prev) => {
       const updated = {
         ...prev,
         [buyer]: (prev[buyer] || []).filter((s) => s !== seller),
       };
-      localStorage.setItem('subscriptions', JSON.stringify(updated));
+      storageService.setItem('subscriptions', updated);
       return updated;
     });
   };
@@ -867,75 +819,101 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
-  // ✅ FIXED: Use AuthContext for verification instead of separate user management
-  const requestVerification = (docs: VerificationDocs) => {
+  const requestVerification = async (docs: VerificationDocs): Promise<void> => {
     if (!user) return;
     
     console.log('🔍 requestVerification called with user:', user.username);
     
     const code = docs.code || `VERIF-${user.username}-${Math.floor(100000 + Math.random() * 900000)}`;
     
-    // ✅ FIXED: Update AuthContext user instead of local state
-    updateUser({
-      verificationStatus: 'pending',
-      verificationRequestedAt: new Date().toISOString(),
-      verificationDocs: { ...docs, code }, // Store docs in AuthContext too
-    });
-    
-    // Also update the legacy users store for admin functionality
-    const updatedUser = {
-      ...user,
-      verificationStatus: 'pending' as VerificationStatus,
-      verificationDocs: { ...docs, code },
-      verificationRequestedAt: new Date().toISOString(),
-    };
-    
-    persistUsers({
-      ...users,
-      [user.username]: updatedUser,
-    });
-    
-    console.log('✅ Verification request submitted for:', user.username);
+    try {
+      const result = await usersService.requestVerification(user.username, { ...docs, code });
+      
+      if (result.success) {
+        updateUser({
+          verificationStatus: 'pending',
+          verificationRequestedAt: new Date().toISOString(),
+          verificationDocs: { ...docs, code },
+        });
+        
+        // Also update the legacy users store for admin functionality
+        const updatedUser = {
+          ...user,
+          verificationStatus: 'pending' as VerificationStatus,
+          verificationDocs: { ...docs, code },
+          verificationRequestedAt: new Date().toISOString(),
+        };
+        
+        await persistUsers({
+          ...users,
+          [user.username]: updatedUser,
+        });
+        
+        console.log('✅ Verification request submitted for:', user.username);
+      } else {
+        console.error('Failed to submit verification request:', result.error);
+        alert('Failed to submit verification request. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting verification request:', error);
+      alert('An error occurred while submitting verification request.');
+    }
   };
 
-  const setVerificationStatus = (
+  const setVerificationStatus = async (
     username: string,
     status: VerificationStatus,
     rejectionReason?: string
-  ) => {
+  ): Promise<void> => {
     const existingUser = users[username];
     if (!existingUser) return;
     
-    const updatedUser = {
-      ...existingUser,
-      verificationStatus: status,
-      verified: status === 'verified',
-      verificationReviewedAt: new Date().toISOString(),
-      verificationRejectionReason: rejectionReason,
-    };
-    
-    // ✅ FIXED: Also update AuthContext if this is the current user
-    if (user?.username === username) {
-      updateUser({
-        verificationStatus: status,
-        isVerified: status === 'verified',
-        verificationRejectionReason: rejectionReason,
+    try {
+      const result = await usersService.updateVerificationStatus(username, {
+        status,
+        rejectionReason,
+        adminUsername: user?.username || 'admin',
       });
-    }
-    
-    persistUsers({
-      ...users,
-      [username]: updatedUser,
-    });
-
-    setListings(prev => {
-      return prev.map(listing => {
-        if (listing.seller === username) {
-          return { ...listing, isVerified: status === 'verified' };
+      
+      if (result.success) {
+        const updatedUser = {
+          ...existingUser,
+          verificationStatus: status,
+          verified: status === 'verified',
+          verificationReviewedAt: new Date().toISOString(),
+          verificationRejectionReason: rejectionReason,
+        };
+        
+        // Also update AuthContext if this is the current user
+        if (user?.username === username) {
+          updateUser({
+            verificationStatus: status,
+            isVerified: status === 'verified',
+            verificationRejectionReason: rejectionReason,
+          });
         }
-        return listing;
-      });
-    });
+        
+        await persistUsers({
+          ...users,
+          [username]: updatedUser,
+        });
+
+        setListings(prev => {
+          return prev.map(listing => {
+            if (listing.seller === username) {
+              return { ...listing, isVerified: status === 'verified' };
+            }
+            return listing;
+          });
+        });
+      } else {
+        console.error('Failed to update verification status:', result.error);
+        alert('Failed to update verification status. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error updating verification status:', error);
+      alert('An error occurred while updating verification status.');
+    }
   };
 
   const sellerNotifications = getCurrentSellerNotifications();

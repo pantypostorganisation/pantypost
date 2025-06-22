@@ -2,6 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { storageService } from '@/services';
 
 export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'edited' | 'paid';
 
@@ -54,38 +55,37 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
   const [requests, setRequests] = useState<CustomRequest[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load initial data from localStorage only once
+  // Load initial data from localStorage using service
   useEffect(() => {
-    if (typeof window !== 'undefined' && !isInitialized) {
+    const loadData = async () => {
+      if (typeof window === 'undefined' || isInitialized) return;
+      
       try {
-        const stored = localStorage.getItem('panty_custom_requests');
-        if (stored) {
-          const parsedRequests = JSON.parse(stored);
-          // Migrate old requests to include new fields if they don't exist
-          const migratedRequests = parsedRequests.map((req: any) => ({
-            ...req,
-            messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
-            lastModifiedBy: req.lastModifiedBy || req.buyer,
-            originalMessageId: req.originalMessageId || req.id
-          }));
-          setRequests(migratedRequests);
-        }
+        const stored = await storageService.getItem<CustomRequest[]>('panty_custom_requests', []);
+        
+        // Migrate old requests to include new fields if they don't exist
+        const migratedRequests = stored.map((req: any) => ({
+          ...req,
+          messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
+          lastModifiedBy: req.lastModifiedBy || req.buyer,
+          originalMessageId: req.originalMessageId || req.id
+        }));
+        
+        setRequests(migratedRequests);
         setIsInitialized(true);
       } catch (error) {
         console.error('Error loading requests from localStorage:', error);
         setIsInitialized(true);
       }
-    }
+    };
+
+    loadData();
   }, [isInitialized]);
 
-  // Save to localStorage whenever requests change
+  // Save to localStorage whenever requests change using service
   useEffect(() => {
     if (typeof window !== 'undefined' && isInitialized) {
-      try {
-        localStorage.setItem('panty_custom_requests', JSON.stringify(requests));
-      } catch (error) {
-        console.error('Error saving requests to localStorage:', error);
-      }
+      storageService.setItem('panty_custom_requests', requests);
     }
   }, [requests, isInitialized]);
 
