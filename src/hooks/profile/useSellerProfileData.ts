@@ -1,68 +1,84 @@
 // src/hooks/profile/useSellerProfileData.ts
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
-import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { getUserProfileData } from '@/utils/profileUtils';
+import { getSellerTierMemoized } from '@/utils/sellerTiers';
 
-export function useSellerProfileData(username: string) {
+export const useSellerProfileData = (username: string | undefined) => {
   const { user } = useAuth();
-  const { listings, users, subscriptions } = useListings();
-  const { orderHistory } = useWallet();
-
-  // Profile state
-  const [bio, setBio] = useState('');
+  const { users, orderHistory } = useListings();
+  
+  // Basic profile data
+  const [bio, setBio] = useState<string>('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Gallery data
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  
+  // Get seller user data
+  const sellerUser = username ? users?.[username] : null;
+  const isVerified = sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false;
+  
+  // Get seller tier info
+  const sellerTierInfo = username ? getSellerTierMemoized(username, orderHistory) : null;
+  
+  // Calculate stats
+  const totalPhotos = galleryImages.length;
+  const totalVideos = 0; // Placeholder for future video support
+  const followers = sellerUser?.subscriberCount || 0;
 
-  // Load profile data
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Load profile data using the utility function
-      const profileData = getUserProfileData(username);
-      if (profileData) {
-        setBio(profileData.bio);
-        setProfilePic(profileData.profilePic);
-        setSubscriptionPrice(parseFloat(profileData.subscriptionPrice) || null);
+    const loadProfileData = async () => {
+      if (!username) {
+        setIsLoading(false);
+        return;
       }
-      
-      // Gallery is already in localStorage
-      const storedGallery = localStorage.getItem(`profile_gallery_${username}`);
-      if (storedGallery) {
-        try {
-          const parsedGallery = JSON.parse(storedGallery);
-          if (Array.isArray(parsedGallery)) {
-            setGalleryImages(parsedGallery);
-          } else {
+
+      setIsLoading(true);
+      try {
+        const profileData = await getUserProfileData(username);
+        if (profileData) {
+          setBio(profileData.bio);
+          setProfilePic(profileData.profilePic);
+          setSubscriptionPrice(parseFloat(profileData.subscriptionPrice) || null);
+        } else {
+          // Reset to defaults if no profile data
+          setBio('');
+          setProfilePic(null);
+          setSubscriptionPrice(null);
+        }
+        
+        // Load gallery images from localStorage
+        const galleryKey = `profile_gallery_${username}`;
+        const storedGallery = localStorage.getItem(galleryKey);
+        if (storedGallery) {
+          try {
+            const parsed = JSON.parse(storedGallery);
+            setGalleryImages(Array.isArray(parsed) ? parsed : []);
+          } catch (e) {
+            console.error('Error parsing gallery images:', e);
             setGalleryImages([]);
           }
-        } catch (error) {
-          console.error('Failed to parse stored gallery data:', error);
+        } else {
           setGalleryImages([]);
         }
-      } else {
+      } catch (error) {
+        console.error('Error loading seller profile data:', error);
+        // Reset to defaults on error
+        setBio('');
+        setProfilePic(null);
+        setSubscriptionPrice(null);
         setGalleryImages([]);
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+
+    loadProfileData();
   }, [username]);
-
-  // Computed values
-  const sellerUser = users?.[username];
-  const isVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-  
-  const sellerListings = listings.filter(listing => listing.seller === username);
-  const totalPhotos = sellerListings.filter(listing => listing.imageUrls && listing.imageUrls.length > 0).length;
-  const totalVideos = 0;
-
-  const followers = Object.entries(subscriptions)
-    .filter(([_, sellers]) => Array.isArray(sellers) && sellers.includes(username))
-    .length;
-
-  const sellerTierInfo = useMemo(() => {
-    return getSellerTierMemoized(username, orderHistory);
-  }, [username, orderHistory]);
 
   return {
     // User data
@@ -81,5 +97,8 @@ export function useSellerProfileData(username: string) {
     totalPhotos,
     totalVideos,
     followers,
+    
+    // Loading state
+    isLoading
   };
-}
+};

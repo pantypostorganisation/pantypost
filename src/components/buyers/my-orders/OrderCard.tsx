@@ -1,7 +1,7 @@
 // src/components/buyers/my-orders/OrderCard.tsx
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Order } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
@@ -29,11 +29,24 @@ export default function OrderCard({
   const { users } = useListings();
   const styles = getOrderStyles(type);
   
+  // State for async profile pic
+  const [sellerProfilePic, setSellerProfilePic] = useState<string | null>(null);
+  
   // Get seller info
   const sellerUser = users?.[order.seller ?? ''];
   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-  const sellerProfilePic = getUserProfilePic(order.seller);
   const hasDeliveryAddress = !!order.deliveryAddress;
+
+  // Load seller profile pic asynchronously
+  useEffect(() => {
+    const loadProfilePic = async () => {
+      if (order.seller) {
+        const pic = await getUserProfilePic(order.seller);
+        setSellerProfilePic(pic);
+      }
+    };
+    loadProfilePic();
+  }, [order.seller]);
 
   return (
     <div

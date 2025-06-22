@@ -327,40 +327,57 @@ export const useBrowseDetail = () => {
 
   // Effects
   useEffect(() => {
-    if (listing?.seller) {
-      // Use the new getUserProfileData utility
-      const profileData = getUserProfileData(listing.seller);
-      if (profileData) {
-        updateState({ 
-          sellerProfile: { 
-            bio: profileData.bio,
-            pic: profileData.profilePic,
-            subscriptionPrice: profileData.subscriptionPrice
-          } 
-        });
-      } else {
-        // Fallback to sessionStorage for backward compatibility
-        const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
-        const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
-        const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
-        updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+    const loadProfileData = async () => {
+      if (listing?.seller) {
+        try {
+          // Use the new async getUserProfileData utility
+          const profileData = await getUserProfileData(listing.seller);
+          if (profileData) {
+            updateState({ 
+              sellerProfile: { 
+                bio: profileData.bio,
+                pic: profileData.profilePic,
+                subscriptionPrice: profileData.subscriptionPrice
+              } 
+            });
+          } else {
+            // Fallback to sessionStorage for backward compatibility
+            const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
+            const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
+            const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
+            updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+          }
+        } catch (error) {
+          console.error('Error loading seller profile:', error);
+          // Fallback to sessionStorage on error
+          const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
+          const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
+          const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
+          updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+        }
       }
-    }
+    };
+
+    loadProfileData();
   }, [listing?.seller, updateState]);
 
   // Listen for storage changes to update profile in real-time
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
+    const handleStorageChange = async (e: StorageEvent) => {
       if (e.key === 'user_profiles' && e.newValue && listing?.seller) {
-        const profileData = getUserProfileData(listing.seller);
-        if (profileData) {
-          updateState({ 
-            sellerProfile: { 
-              bio: profileData.bio,
-              pic: profileData.profilePic,
-              subscriptionPrice: profileData.subscriptionPrice
-            } 
-          });
+        try {
+          const profileData = await getUserProfileData(listing.seller);
+          if (profileData) {
+            updateState({ 
+              sellerProfile: { 
+                bio: profileData.bio,
+                pic: profileData.profilePic,
+                subscriptionPrice: profileData.subscriptionPrice
+              } 
+            });
+          }
+        } catch (error) {
+          console.error('Error updating seller profile:', error);
         }
       }
     };

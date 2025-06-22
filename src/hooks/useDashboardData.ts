@@ -23,49 +23,69 @@ export const useDashboardData = () => {
 
   // Load subscriptions
   useEffect(() => {
-    if (typeof window !== 'undefined' && user?.username) {
-      try {
-        const subsKey = 'subscriptions';
-        const storedSubs = localStorage.getItem(subsKey);
-        
-        if (storedSubs) {
-          const allSubscriptions = JSON.parse(storedSubs);
-          const userSubscriptions = allSubscriptions[user.username] || [];
+    const loadSubscriptions = async () => {
+      if (typeof window !== 'undefined' && user?.username) {
+        try {
+          const subsKey = 'subscriptions';
+          const storedSubs = localStorage.getItem(subsKey);
           
-          const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => {
-            const sellerUser = users[seller];
+          if (storedSubs) {
+            const allSubscriptions = JSON.parse(storedSubs);
+            const userSubscriptions = allSubscriptions[user.username] || [];
             
-            // Use the new getUserProfileData utility
-            const profileData = getUserProfileData(seller);
-            const sellerBio = profileData?.bio || 
-                             (sellerUser as any)?.bio || 
-                             'No bio available';
-            const sellerPic = profileData?.profilePic || null;
-            const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
+            const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
+              const sellerUser = users[seller];
+              
+              try {
+                // Use the new async getUserProfileData utility
+                const profileData = await getUserProfileData(seller);
+                const sellerBio = profileData?.bio || 
+                                 (sellerUser as any)?.bio || 
+                                 'No bio available';
+                const sellerPic = profileData?.profilePic || null;
+                const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
+                
+                return {
+                  seller,
+                  price: subscriptionPrice,
+                  bio: sellerBio,
+                  pic: sellerPic,
+                  newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
+                  lastActive: new Date().toISOString(),
+                  tier: (sellerUser as any)?.tier || 'Tease',
+                  verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
+                };
+              } catch (error) {
+                console.error(`Error loading profile for seller ${seller}:`, error);
+                // Return fallback data
+                return {
+                  seller,
+                  price: '25.00',
+                  bio: 'No bio available',
+                  pic: null,
+                  newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
+                  lastActive: new Date().toISOString(),
+                  tier: (sellerUser as any)?.tier || 'Tease',
+                  verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
+                };
+              }
+            });
             
-            return {
-              seller,
-              price: subscriptionPrice,
-              bio: sellerBio,
-              pic: sellerPic,
-              newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-              lastActive: new Date().toISOString(),
-              tier: (sellerUser as any)?.tier || 'Tease',
-              verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
-            };
-          });
-          
-          setSubscribedSellers(subscriptionData);
+            const subscriptionData = await Promise.all(subscriptionDataPromises);
+            setSubscribedSellers(subscriptionData);
+          }
+        } catch (error) {
+          console.error('Error loading subscriptions:', error);
         }
-      } catch (error) {
-        console.error('Error loading subscriptions:', error);
       }
-    }
+    };
+
+    loadSubscriptions();
   }, [user?.username, listings, users]);
 
   // Listen for storage changes to update profiles in real-time
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
+    const handleStorageChange = async (e: StorageEvent) => {
       if (e.key === 'user_profiles' && e.newValue && user?.username) {
         // Re-fetch subscriptions when profiles are updated
         try {
@@ -76,29 +96,45 @@ export const useDashboardData = () => {
             const allSubscriptions = JSON.parse(storedSubs);
             const userSubscriptions = allSubscriptions[user.username] || [];
             
-            const subscriptionData: SubscriptionInfo[] = userSubscriptions.map((seller: string) => {
+            const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
               const sellerUser = users[seller];
               
-              // Use the new getUserProfileData utility
-              const profileData = getUserProfileData(seller);
-              const sellerBio = profileData?.bio || 
-                               (sellerUser as any)?.bio || 
-                               'No bio available';
-              const sellerPic = profileData?.profilePic || null;
-              const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
-              
-              return {
-                seller,
-                price: subscriptionPrice,
-                bio: sellerBio,
-                pic: sellerPic,
-                newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-                lastActive: new Date().toISOString(),
-                tier: (sellerUser as any)?.tier || 'Tease',
-                verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
-              };
+              try {
+                // Use the new async getUserProfileData utility
+                const profileData = await getUserProfileData(seller);
+                const sellerBio = profileData?.bio || 
+                                 (sellerUser as any)?.bio || 
+                                 'No bio available';
+                const sellerPic = profileData?.profilePic || null;
+                const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
+                
+                return {
+                  seller,
+                  price: subscriptionPrice,
+                  bio: sellerBio,
+                  pic: sellerPic,
+                  newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
+                  lastActive: new Date().toISOString(),
+                  tier: (sellerUser as any)?.tier || 'Tease',
+                  verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
+                };
+              } catch (error) {
+                console.error(`Error loading profile for seller ${seller}:`, error);
+                // Return fallback data
+                return {
+                  seller,
+                  price: '25.00',
+                  bio: 'No bio available',
+                  pic: null,
+                  newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
+                  lastActive: new Date().toISOString(),
+                  tier: (sellerUser as any)?.tier || 'Tease',
+                  verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
+                };
+              }
             });
             
+            const subscriptionData = await Promise.all(subscriptionDataPromises);
             setSubscribedSellers(subscriptionData);
           }
         } catch (error) {

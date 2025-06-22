@@ -144,24 +144,45 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user]);
 
-  // Calculate other message data
-  const { unreadCounts, lastMessages, sellerProfiles, totalUnreadCount } = useMemo(() => {
+  // Calculate other message data with async profile loading
+  const [sellerProfiles, setSellerProfiles] = useState<{ [seller: string]: { pic: string | null, verified: boolean } }>({});
+  
+  useEffect(() => {
+    const loadSellerProfiles = async () => {
+      const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+      
+      for (const seller of Object.keys(threads)) {
+        try {
+          // Get seller profile using the new async utility
+          const profileData = await getUserProfileData(seller);
+          const sellerUser = users?.[seller];
+          
+          profiles[seller] = {
+            pic: profileData?.profilePic || null,
+            verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
+          };
+        } catch (error) {
+          console.error(`Error loading profile for ${seller}:`, error);
+          profiles[seller] = {
+            pic: null,
+            verified: false
+          };
+        }
+      }
+      
+      setSellerProfiles(profiles);
+    };
+    
+    loadSellerProfiles();
+  }, [threads, users]);
+
+  const { unreadCounts, lastMessages, totalUnreadCount } = useMemo(() => {
     const unreadCounts: { [seller: string]: number } = {};
     const lastMessages: { [seller: string]: Message } = {};
-    const sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
     let totalUnreadCount = 0;
     
     Object.entries(threads).forEach(([seller, msgs]) => {
       lastMessages[seller] = msgs[msgs.length - 1];
-      
-      // Get seller profile using the new utility
-      const profileData = getUserProfileData(seller);
-      const sellerUser = users?.[seller];
-      
-      sellerProfiles[seller] = {
-        pic: profileData?.profilePic || null,
-        verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
-      };
       
       // Count unread messages - use both isRead and read properties
       const unread = msgs.filter(msg => 
@@ -171,8 +192,8 @@ export const useBuyerMessages = () => {
       totalUnreadCount += unread;
     });
     
-    return { unreadCounts, lastMessages, sellerProfiles, totalUnreadCount };
-  }, [threads, users, user?.username]);
+    return { unreadCounts, lastMessages, totalUnreadCount };
+  }, [threads, user?.username]);
 
   // Update UI unread counts based on actual unread counts
   useEffect(() => {
@@ -265,16 +286,33 @@ export const useBuyerMessages = () => {
 
   // Listen for storage changes to update profiles in real-time
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
+    const handleStorageChange = async (e: StorageEvent) => {
       if (e.key === 'user_profiles' && e.newValue) {
-        // Force re-render by changing a dummy state
-        // This is handled internally by the context now
+        // Re-load seller profiles when storage changes
+        const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+        
+        for (const seller of Object.keys(threads)) {
+          try {
+            const profileData = await getUserProfileData(seller);
+            const sellerUser = users?.[seller];
+            
+            profiles[seller] = {
+              pic: profileData?.profilePic || null,
+              verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
+            };
+          } catch (error) {
+            console.error(`Error loading profile for ${seller}:`, error);
+            profiles[seller] = sellerProfiles[seller] || { pic: null, verified: false };
+          }
+        }
+        
+        setSellerProfiles(profiles);
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [threads, users, sellerProfiles]);
 
   // Action handlers
   const handleReply = useCallback(async () => {

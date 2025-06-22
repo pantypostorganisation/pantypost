@@ -16,8 +16,8 @@ export function useSellerProfile(username: string) {
   // Get listings
   const listings = useSellerListings(username);
   
-  // Get gallery functionality
-  const gallery = useSellerGallery(profileData.galleryImages);
+  // Get gallery functionality - pass empty array if galleryImages is not loaded yet
+  const gallery = useSellerGallery(profileData.galleryImages || []);
   
   // Get reviews functionality
   const reviews = useSellerReviews(username);
@@ -35,7 +35,7 @@ export function useSellerProfile(username: string) {
     bio: profileData.bio,
     profilePic: profileData.profilePic,
     subscriptionPrice: profileData.subscriptionPrice,
-    galleryImages: profileData.galleryImages,
+    galleryImages: profileData.galleryImages || [],
     sellerTierInfo: profileData.sellerTierInfo,
     
     // Stats
@@ -74,6 +74,9 @@ export function useSellerProfile(username: string) {
     rating: reviews.rating,
     comment: reviews.comment,
     submitted: reviews.submitted,
+    
+    // Loading state
+    isLoading: profileData.isLoading,
     
     // Handlers
     setShowSubscribeModal: subscription.setShowSubscribeModal,

@@ -11,18 +11,32 @@ export function useProfileData() {
   const [preview, setPreview] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   // Load profile data on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && user?.username) {
-      // Load profile data using the utility function
-      const profileData = getUserProfileData(user.username);
-      if (profileData) {
-        setBio(profileData.bio);
-        setProfilePic(profileData.profilePic);
-        setSubscriptionPrice(profileData.subscriptionPrice);
+    const loadProfileData = async () => {
+      if (typeof window !== 'undefined' && user?.username) {
+        setIsLoadingProfile(true);
+        try {
+          // Load profile data using the utility function
+          const profileData = await getUserProfileData(user.username);
+          if (profileData) {
+            setBio(profileData.bio);
+            setProfilePic(profileData.profilePic);
+            setSubscriptionPrice(profileData.subscriptionPrice);
+          }
+        } catch (error) {
+          console.error('Error loading profile data:', error);
+        } finally {
+          setIsLoadingProfile(false);
+        }
+      } else {
+        setIsLoadingProfile(false);
       }
-    }
+    };
+
+    loadProfileData();
   }, [user?.username]);
 
   // Handle profile picture change with Cloudinary
@@ -67,6 +81,7 @@ export function useProfileData() {
     subscriptionPrice,
     setSubscriptionPrice,
     isUploading,
+    isLoadingProfile,
     handleProfilePicChange,
     removeProfilePic
   };
