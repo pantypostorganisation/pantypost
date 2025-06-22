@@ -63,7 +63,7 @@ export default function BanCard({
             </span>
             {ban.appealSubmitted && (
               <span className="px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded font-medium">
-                Appeal {ban.appealStatus || 'Pending'}
+                Appeal {ban.appealStatus ?? 'Pending'}
               </span>
             )}
           </div>
@@ -117,7 +117,7 @@ export default function BanCard({
             </div>
             <div>
               <span className="text-gray-400">Banned By:</span>
-              <div className="text-gray-300">{ban.bannedBy}</div>
+              <div className="text-gray-300">{ban.bannedBy ?? 'Unknown'}</div>
             </div>
             {ban.endTime && (
               <div>
@@ -147,7 +147,7 @@ export default function BanCard({
                   </button>
                 )}
               </div>
-              <div className="text-sm text-gray-300">{ban.appealText || 'No appeal text provided'}</div>
+              <div className="text-sm text-gray-300">{ban.appealText ?? 'No appeal text provided'}</div>
               <div className="text-xs text-gray-500 mt-1">
                 {ban.appealDate ? new Date(ban.appealDate).toLocaleString() : 'Unknown date'}
               </div>
