@@ -16,12 +16,12 @@ export function useSellerSubscription(username: string, subscriptionPrice: numbe
   const hasAccess = user?.username ? isSubscribed(user.username, username) : undefined;
 
   // Handlers
-  const handleConfirmSubscribe = () => {
+  const handleConfirmSubscribe = async () => {
     if (!user?.username || user.role !== 'buyer' || subscriptionPrice === null) {
       alert('Cannot subscribe. Please check your login status and seller subscription price.');
       return;
     }
-    const success = subscribeToSeller(user.username, username, subscriptionPrice);
+    const success = await subscribeToSeller(user.username, username, subscriptionPrice);
     if (success) {
       setShowSubscribeModal(false);
       setShowToast(true);
@@ -32,9 +32,9 @@ export function useSellerSubscription(username: string, subscriptionPrice: numbe
     }
   };
 
-  const handleConfirmUnsubscribe = () => {
+  const handleConfirmUnsubscribe = async () => {
     if (!user?.username || user.role !== 'buyer') return;
-    unsubscribeFromSeller(user.username, username);
+    await unsubscribeFromSeller(user.username, username);
     setShowUnsubscribeModal(false);
   };
 

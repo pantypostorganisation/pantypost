@@ -68,7 +68,7 @@ export const useBuyerWallet = () => {
     };
   }, [user, getBuyerBalance, updateState]);
 
-  const handleAddFunds = useCallback(() => {
+  const handleAddFunds = useCallback(async () => {
     updateState({ isLoading: true });
     const amount = parseFloat(state.amountToAdd);
     
@@ -103,46 +103,46 @@ export const useBuyerWallet = () => {
 
     try {
       // Simulate a slight delay for better UX
-      setTimeout(() => {
-        try {
-          // Track the deposit first
-          const depositSuccess = addDeposit(
-            user.username!, 
-            roundedAmount, 
-            'credit_card', 
-            `Wallet deposit by ${user.username}`
-          );
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      try {
+        // Track the deposit first
+        const depositSuccess = await addDeposit(
+          user.username!, 
+          roundedAmount, 
+          'credit_card', 
+          `Wallet deposit by ${user.username}`
+        );
+        
+        if (depositSuccess) {
+          // Update local state to reflect the change immediately
+          const currentBalance = getBuyerBalance(user.username!);
+          const newBalance = currentBalance + roundedAmount;
           
-          if (depositSuccess) {
-            // Update local state to reflect the change immediately
-            const currentBalance = getBuyerBalance(user.username!);
-            const newBalance = currentBalance + roundedAmount;
-            
-            // Clear form and show success message
-            updateState({
-              balance: newBalance,
-              amountToAdd: '',
-              message: `Successfully added $${roundedAmount.toFixed(2)} to your wallet. Your new balance is $${newBalance.toFixed(2)}.`,
-              messageType: 'success',
-              walletUpdateTrigger: state.walletUpdateTrigger + 1,
-              isLoading: false
-            });
-          } else {
-            updateState({ 
-              message: 'Failed to process deposit. Please try again or contact support.',
-              messageType: 'error',
-              isLoading: false
-            });
-          }
-        } catch (depositError) {
-          console.error('Deposit processing error:', depositError);
+          // Clear form and show success message
+          updateState({
+            balance: newBalance,
+            amountToAdd: '',
+            message: `Successfully added $${roundedAmount.toFixed(2)} to your wallet. Your new balance is $${newBalance.toFixed(2)}.`,
+            messageType: 'success',
+            walletUpdateTrigger: state.walletUpdateTrigger + 1,
+            isLoading: false
+          });
+        } else {
           updateState({ 
-            message: 'An error occurred while processing your deposit. Please try again.',
+            message: 'Failed to process deposit. Please try again or contact support.',
             messageType: 'error',
             isLoading: false
           });
         }
-      }, 800);
+      } catch (depositError) {
+        console.error('Deposit processing error:', depositError);
+        updateState({ 
+          message: 'An error occurred while processing your deposit. Please try again.',
+          messageType: 'error',
+          isLoading: false
+        });
+      }
     } catch (error) {
       console.error('Add funds error:', error);
       updateState({ 

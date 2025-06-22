@@ -516,7 +516,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       let updated = false;
       let removedListings: string[] = [];
       
-      const updatedListings = listings.map(listing => {
+      const updatedListings = await Promise.all(listings.map(async (listing) => {
         if (!listing.auction || listing.auction.status !== 'active') {
           return listing;
         }
@@ -580,7 +580,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                     );
                   }
                   
-                  addOrder({
+                  await addOrder({
                     ...purchaseListingCopy,
                     buyer: winningBidder,
                     date: new Date().toISOString(),
@@ -630,15 +630,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             };
           } catch (error) {
             console.error(`[Auction Check ${instanceId}] Error processing auction ${listing.id}:`, error);
-            storageService.removeItem(processingKey);
+            await storageService.removeItem(processingKey);
             return listing;
           }
         }
         
         return listing;
-      }).filter(listing => listing !== null) as Listing[];
+      }));
       
-      const finalListings = updatedListings.filter(listing => !removedListings.includes(listing.id));
+      // Filter out null values after all promises resolve
+      const filteredListings = updatedListings.filter((listing): listing is Listing => listing !== null);
+      const finalListings = filteredListings.filter(listing => !removedListings.includes(listing.id));
       
       if (updated || removedListings.length > 0) {
         setListings(finalListings);
@@ -830,7 +832,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await usersService.requestVerification(user.username, { ...docs, code });
       
       if (result.success) {
-        updateUser({
+        await updateUser({
           verificationStatus: 'pending',
           verificationRequestedAt: new Date().toISOString(),
           verificationDocs: { ...docs, code },
@@ -886,7 +888,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Also update AuthContext if this is the current user
         if (user?.username === username) {
-          updateUser({
+          await updateUser({
             verificationStatus: status,
             isVerified: status === 'verified',
             verificationRejectionReason: rejectionReason,

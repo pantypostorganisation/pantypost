@@ -251,9 +251,9 @@ export default function AdminWalletManagementPage() {
 
     let success = false;
     if (actionType === 'credit') {
-      success = adminCreditUser(selectedUser!, roleForWallet, numAmount, reason);
+      success = await adminCreditUser(selectedUser!, roleForWallet, numAmount, reason);
     } else {
-      success = adminDebitUser(selectedUser!, roleForWallet, numAmount, reason);
+      success = await adminDebitUser(selectedUser!, roleForWallet, numAmount, reason);
     }
 
     if (success) {
@@ -284,9 +284,9 @@ export default function AdminWalletManagementPage() {
       let success = false;
       
       if (action === 'credit') {
-        success = adminCreditUser(username, userRole, amount, reason);
+        success = await adminCreditUser(username, userRole, amount, reason);
       } else {
-        success = adminDebitUser(username, userRole, amount, reason);
+        success = await adminDebitUser(username, userRole, amount, reason);
       }
 
       if (success) successCount++;
