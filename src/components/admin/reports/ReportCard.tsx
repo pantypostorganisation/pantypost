@@ -39,6 +39,14 @@ export default function ReportCard({
   
   // Get severity color and icon
   const getSeverityInfo = (severity: ReportCardProps['report']['severity']) => {
+    if (!severity) {
+      return { 
+        color: 'text-gray-400 bg-gray-900/20', 
+        icon: Info, 
+        label: 'Unknown' 
+      };
+    }
+    
     switch (severity) {
       case 'low': 
         return { 
