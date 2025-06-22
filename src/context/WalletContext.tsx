@@ -10,6 +10,8 @@ import {
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
+import { walletService, ordersService, storageService } from '@/services';
+import { v4 as uuidv4 } from 'uuid';
 
 // Export Order type to make it available to other components
 export type Order = {
@@ -120,7 +122,7 @@ type WalletContextType = {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  // Initialize state with empty values first
+  // State management
   const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
@@ -136,88 +138,106 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAddSellerNotification(() => fn);
   };
 
-  // Load data from localStorage on mount
+  // Load data using services
   useEffect(() => {
     if (typeof window === 'undefined' || isInitialized) return;
 
-    try {
-      const buyers = localStorage.getItem("wallet_buyers");
-      const admin = localStorage.getItem("wallet_admin");
-      const sellers = localStorage.getItem("wallet_sellers");
-      const orders = localStorage.getItem("wallet_orders");
-      const sellerWds = localStorage.getItem("wallet_sellerWithdrawals");
-      const adminWds = localStorage.getItem("wallet_adminWithdrawals");
-      const actions = localStorage.getItem("wallet_adminActions");
-      const deposits = localStorage.getItem("wallet_depositLogs");
+    const loadData = async () => {
+      try {
+        // Load buyer balances
+        const buyers = await storageService.getItem<{ [username: string]: number }>("wallet_buyers", {});
+        setBuyerBalancesState(buyers);
 
-      if (buyers) setBuyerBalancesState(JSON.parse(buyers));
-      if (admin) setAdminBalanceState(parseFloat(admin));
-      if (sellers) setSellerBalancesState(JSON.parse(sellers));
-      if (orders) setOrderHistory(JSON.parse(orders));
-      if (sellerWds) setSellerWithdrawals(JSON.parse(sellerWds));
-      if (adminWds) setAdminWithdrawals(JSON.parse(adminWds));
-      if (actions) setAdminActions(JSON.parse(actions));
-      if (deposits) setDepositLogs(JSON.parse(deposits));
-      
-      setIsInitialized(true);
-    } catch (error) {
-      console.error('Error loading wallet data from localStorage:', error);
-      setIsInitialized(true);
-    }
+        // Load admin balance
+        const admin = await storageService.getItem<number>("wallet_admin", 0);
+        setAdminBalanceState(admin);
+
+        // Load seller balances
+        const sellers = await storageService.getItem<{ [username: string]: number }>("wallet_sellers", {});
+        setSellerBalancesState(sellers);
+
+        // Load orders
+        const orders = await storageService.getItem<Order[]>("wallet_orders", []);
+        setOrderHistory(orders);
+
+        // Load seller withdrawals
+        const sellerWds = await storageService.getItem<{ [username: string]: Withdrawal[] }>("wallet_sellerWithdrawals", {});
+        setSellerWithdrawals(sellerWds);
+
+        // Load admin withdrawals
+        const adminWds = await storageService.getItem<Withdrawal[]>("wallet_adminWithdrawals", []);
+        setAdminWithdrawals(adminWds);
+
+        // Load admin actions
+        const actions = await storageService.getItem<AdminAction[]>("wallet_adminActions", []);
+        setAdminActions(actions);
+
+        // Load deposit logs
+        const deposits = await storageService.getItem<DepositLog[]>("wallet_depositLogs", []);
+        setDepositLogs(deposits);
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Error loading wallet data:', error);
+        setIsInitialized(true);
+      }
+    };
+
+    loadData();
   }, [isInitialized]);
 
-  // Save to localStorage whenever state changes
+  // Save data using services
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_buyers", JSON.stringify(buyerBalances));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_buyers", buyerBalances);
   }, [buyerBalances, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_admin", adminBalance.toString());
+    if (!isInitialized) return;
+    storageService.setItem("wallet_admin", adminBalance);
   }, [adminBalance, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_sellers", JSON.stringify(sellerBalances));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_sellers", sellerBalances);
   }, [sellerBalances, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_orders", JSON.stringify(orderHistory));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_orders", orderHistory);
   }, [orderHistory, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_sellerWithdrawals", JSON.stringify(sellerWithdrawals));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_sellerWithdrawals", sellerWithdrawals);
   }, [sellerWithdrawals, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_adminWithdrawals", JSON.stringify(adminWithdrawals));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_adminWithdrawals", adminWithdrawals);
   }, [adminWithdrawals, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_adminActions", JSON.stringify(adminActions));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_adminActions", adminActions);
   }, [adminActions, isInitialized]);
 
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_depositLogs", JSON.stringify(depositLogs));
+    if (!isInitialized) return;
+    storageService.setItem("wallet_depositLogs", depositLogs);
   }, [depositLogs, isInitialized]);
 
-  // Force update Header balance when context updates
+  // Dispatch wallet update event
   useEffect(() => {
     if (!isInitialized || typeof window === 'undefined') return;
     
-    // Trigger a custom event to update the header
     const event = new CustomEvent('walletUpdate', { 
       detail: { buyerBalances, sellerBalances, adminBalance } 
     });
     window.dispatchEvent(event);
   }, [buyerBalances, sellerBalances, adminBalance, isInitialized]);
 
+  // Helper functions
   const getBuyerBalance = (username: string): number => {
     return buyerBalances[username] || 0;
   };
@@ -350,10 +370,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    const currentUser = typeof window !== 'undefined' ? 
-      localStorage.getItem('panty_currentUser') : null;
-    const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
-
     try {
       if (role === 'buyer') {
         const currentBalance = getBuyerBalance(username);
@@ -370,7 +386,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       const action: AdminAction = {
-        adminUser,
+        adminUser: 'admin',
         username,
         role,
         amount,
@@ -392,10 +408,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    const currentUser = typeof window !== 'undefined' ? 
-      localStorage.getItem('panty_currentUser') : null;
-    const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
-
     try {
       if (role === 'buyer') {
         const currentBalance = getBuyerBalance(username);
@@ -414,7 +426,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       const action: AdminAction = {
-        adminUser,
+        adminUser: 'admin',
         username,
         role,
         amount,
@@ -445,10 +457,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const transactionLockKey = `transaction_lock_${buyerUsername}_${seller}`;
-    if (localStorage.getItem(transactionLockKey)) {
+    if (typeof window !== 'undefined' && localStorage.getItem(transactionLockKey)) {
       return false;
     }
-    localStorage.setItem(transactionLockKey, 'locked');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(transactionLockKey, 'locked');
+    }
 
     try {
       if (price <= 0 || !listing.title || !listing.id || !seller) {
@@ -511,7 +525,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       return true;
     } finally {
-      localStorage.removeItem(transactionLockKey);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(transactionLockKey);
+      }
     }
   };
 
@@ -528,10 +544,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const transactionLockKey = `custom_request_transaction_lock_${buyer}_${seller}_${requestId}`;
-    if (localStorage.getItem(transactionLockKey)) {
+    if (typeof window !== 'undefined' && localStorage.getItem(transactionLockKey)) {
       return false;
     }
-    localStorage.setItem(transactionLockKey, 'locked');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(transactionLockKey, 'locked');
+    }
 
     try {
       if (markedUpPrice <= 0 || !title || !requestId || !seller || !buyer) {
@@ -596,7 +614,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       return true;
     } finally {
-      localStorage.removeItem(transactionLockKey);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(transactionLockKey);
+      }
     }
   };
 
@@ -610,10 +630,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const transactionLockKey = `subscription_lock_${buyer}_${seller}`;
-    if (localStorage.getItem(transactionLockKey)) {
+    if (typeof window !== 'undefined' && localStorage.getItem(transactionLockKey)) {
       return false;
     }
-    localStorage.setItem(transactionLockKey, 'locked');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(transactionLockKey, 'locked');
+    }
 
     try {
       const buyerBalance = getBuyerBalance(buyer);
@@ -649,7 +671,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       return true;
     } finally {
-      localStorage.removeItem(transactionLockKey);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(transactionLockKey);
+      }
     }
   };
 
@@ -664,10 +688,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const withdrawalLockKey = `withdrawal_lock_${username}`;
-    if (localStorage.getItem(withdrawalLockKey)) {
+    if (typeof window !== 'undefined' && localStorage.getItem(withdrawalLockKey)) {
       throw new Error("Another withdrawal is in progress");
     }
-    localStorage.setItem(withdrawalLockKey, 'locked');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(withdrawalLockKey, 'locked');
+    }
 
     try {
       const date = new Date().toISOString();
@@ -677,7 +703,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }));
       setSellerBalance(username, currentBalance - amount);
     } finally {
-      localStorage.removeItem(withdrawalLockKey);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(withdrawalLockKey);
+      }
     }
   };
 
@@ -691,17 +719,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const adminWithdrawalLockKey = 'admin_withdrawal_lock';
-    if (localStorage.getItem(adminWithdrawalLockKey)) {
+    if (typeof window !== 'undefined' && localStorage.getItem(adminWithdrawalLockKey)) {
       throw new Error("Another admin withdrawal is in progress");
     }
-    localStorage.setItem(adminWithdrawalLockKey, 'locked');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(adminWithdrawalLockKey, 'locked');
+    }
 
     try {
       const date = new Date().toISOString();
       setAdminWithdrawals((prev) => [...prev, { amount, date }]);
       setAdminBalanceState((prev) => prev - amount);
     } finally {
-      localStorage.removeItem(adminWithdrawalLockKey);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(adminWithdrawalLockKey);
+      }
     }
   };
 

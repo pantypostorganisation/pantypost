@@ -2,6 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { authService } from '@/services';
 
 export interface User {
   id: string;
@@ -9,7 +10,7 @@ export interface User {
   role: 'buyer' | 'seller' | 'admin';
   email?: string;
   profilePicture?: string;
-  isVerified: boolean; // ✅ SIMPLIFIED: Single source of truth
+  isVerified: boolean;
   tier?: 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess';
   subscriberCount?: number;
   totalSales?: number;
@@ -21,12 +22,10 @@ export interface User {
   isBanned?: boolean;
   banReason?: string;
   banExpiresAt?: string;
-  
-  // ✅ SIMPLIFIED: Consolidated verification properties
   verificationStatus: 'pending' | 'verified' | 'rejected' | 'unverified';
   verificationRequestedAt?: string;
   verificationRejectionReason?: string;
-  verificationDocs?: any; // Add this to store docs in auth context
+  verificationDocs?: any;
 }
 
 interface AuthContextType {
@@ -37,45 +36,12 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
   isLoggedIn: boolean;
   loading: boolean;
-  error: string | null; // ✅ ADDED: Error state
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ✅ ADDED: Safe localStorage operations
-const safeLocalStorage = {
-  getItem: (key: string): string | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-      return localStorage.getItem(key);
-    } catch (error) {
-      console.error(`Error reading from localStorage (${key}):`, error);
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-      localStorage.setItem(key, value);
-      return true;
-    } catch (error) {
-      console.error(`Error writing to localStorage (${key}):`, error);
-      return false;
-    }
-  },
-  removeItem: (key: string): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-      localStorage.removeItem(key);
-      return true;
-    } catch (error) {
-      console.error(`Error removing from localStorage (${key}):`, error);
-      return false;
-    }
-  }
-};
-
-// ✅ ADDED: Input validation
+// Input validation
 const validateUsername = (username: string): string | null => {
   if (!username || typeof username !== 'string') return 'Username is required';
   if (username.length < 2) return 'Username must be at least 2 characters';
@@ -90,58 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ IMPROVED: Safe initialization with error handling
+  // Initialize auth state
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const storedUser = safeLocalStorage.getItem('currentUser');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          
-          // ✅ ADDED: Validate stored user data
-          if (parsedUser && typeof parsedUser === 'object' && parsedUser.username) {
-            // ✅ IMPORTANT: Check if we have verification data in the all_users_v2 store
-            const allUsersData = safeLocalStorage.getItem('all_users_v2');
-            if (allUsersData) {
-              try {
-                const allUsers = JSON.parse(allUsersData);
-                const storedUserData = allUsers[parsedUser.username];
-                
-                if (storedUserData && storedUserData.verificationStatus) {
-                  // Merge verification data from all_users_v2
-                  parsedUser.verificationStatus = storedUserData.verificationStatus;
-                  parsedUser.verificationRequestedAt = storedUserData.verificationRequestedAt;
-                  parsedUser.verificationRejectionReason = storedUserData.verificationRejectionReason;
-                  parsedUser.verificationDocs = storedUserData.verificationDocs;
-                  parsedUser.isVerified = storedUserData.verificationStatus === 'verified';
-                }
-              } catch (e) {
-                console.error('Error parsing all_users_v2 data:', e);
-              }
-            }
-            
-            // ✅ ADDED: Migrate old user data format
-            const migratedUser: User = {
-              ...parsedUser,
-              isVerified: parsedUser.isVerified ?? parsedUser.verified ?? false,
-              verificationStatus: parsedUser.verificationStatus ?? (parsedUser.verified ? 'verified' : 'unverified'),
-              createdAt: parsedUser.createdAt ?? new Date().toISOString(),
-              lastActive: new Date().toISOString(), // Always update last active
-            };
-            
-            setUser(migratedUser);
-            
-            // ✅ ADDED: Update stored user with migrated data
-            safeLocalStorage.setItem('currentUser', JSON.stringify(migratedUser));
-          } else {
-            // Invalid user data, clear it
-            safeLocalStorage.removeItem('currentUser');
-          }
+        const result = await authService.getCurrentUser();
+        if (result.success && result.data) {
+          setUser(result.data);
         }
       } catch (error) {
-        console.error('Error loading user from localStorage:', error);
-        safeLocalStorage.removeItem('currentUser');
-        setError('Failed to load user data');
+        console.error('Auth initialization error:', error);
       } finally {
         setIsAuthReady(true);
       }
@@ -150,76 +74,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
-  // ✅ IMPROVED: Better error handling and validation
+  // Login function using auth service
   const login = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin' = 'buyer'): Promise<boolean> => {
+    // Validate input
+    const validationError = validateUsername(username);
+    if (validationError) {
+      setError(validationError);
+      return false;
+    }
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      // ✅ ADDED: Input validation
-      const usernameError = validateUsername(username);
-      if (usernameError) {
-        setError(usernameError);
+      const result = await authService.login({ username, role });
+      
+      if (result.success && result.data) {
+        setUser(result.data.user);
+        return true;
+      } else {
+        setError(result.error?.message || 'Login failed');
         return false;
       }
-
-      const normalizedUsername = username.trim().toLowerCase();
-      
-      // Admin users check
-      const isAdmin = normalizedUsername === 'oakley' || normalizedUsername === 'gerome';
-      const userRole = isAdmin ? 'admin' : role;
-
-      // ✅ IMPORTANT: Check if user already exists in all_users_v2
-      let existingVerificationData = null;
-      const allUsersData = safeLocalStorage.getItem('all_users_v2');
-      if (allUsersData) {
-        try {
-          const allUsers = JSON.parse(allUsersData);
-          const existingUser = allUsers[normalizedUsername];
-          if (existingUser && existingUser.verificationStatus) {
-            existingVerificationData = {
-              verificationStatus: existingUser.verificationStatus,
-              verificationRequestedAt: existingUser.verificationRequestedAt,
-              verificationRejectionReason: existingUser.verificationRejectionReason,
-              verificationDocs: existingUser.verificationDocs,
-            };
-          }
-        } catch (e) {
-          console.error('Error checking existing user data:', e);
-        }
-      }
-
-      // Create user object with proper defaults
-      const newUser: User = {
-        id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        username: normalizedUsername,
-        role: userRole,
-        email: `${normalizedUsername}@pantypost.com`,
-        isVerified: existingVerificationData?.verificationStatus === 'verified' || isAdmin,
-        tier: userRole === 'seller' ? 'Tease' : undefined,
-        subscriberCount: 0,
-        totalSales: 0,
-        rating: 0,
-        reviewCount: 0,
-        createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-        bio: '',
-        isBanned: false,
-        verificationStatus: existingVerificationData?.verificationStatus || (isAdmin ? 'verified' : 'unverified'),
-        verificationRequestedAt: existingVerificationData?.verificationRequestedAt,
-        verificationRejectionReason: existingVerificationData?.verificationRejectionReason,
-        verificationDocs: existingVerificationData?.verificationDocs,
-      };
-
-      // Store in localStorage with error handling
-      const success = safeLocalStorage.setItem('currentUser', JSON.stringify(newUser));
-      if (!success) {
-        setError('Failed to save user data');
-        return false;
-      }
-      
-      setUser(newUser);
-      return true;
     } catch (error) {
       console.error('Login error:', error);
       setError('Login failed. Please try again.');
@@ -229,56 +105,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ✅ IMPROVED: Safe logout with cleanup
-  const logout = useCallback(() => {
+  // Logout function using auth service
+  const logout = useCallback(async () => {
     try {
-      safeLocalStorage.removeItem('currentUser');
+      await authService.logout();
       setUser(null);
       setError(null);
     } catch (error) {
       console.error('Logout error:', error);
-      // Still clear user state even if localStorage fails
+      // Still clear user state even if service fails
       setUser(null);
     }
   }, []);
 
-  // ✅ IMPROVED: Safe user updates with validation and persistence to all_users_v2
-  const updateUser = useCallback((updates: Partial<User>) => {
+  // Update user function using auth service
+  const updateUser = useCallback(async (updates: Partial<User>) => {
     if (!user) {
       setError('No user to update');
       return;
     }
 
     try {
-      const updatedUser = { 
-        ...user, 
-        ...updates,
-        lastActive: new Date().toISOString() // Always update last active
-      };
+      const result = await authService.updateCurrentUser(updates);
       
-      // Update currentUser in localStorage
-      const success = safeLocalStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      
-      // ✅ IMPORTANT: Also update all_users_v2 to maintain consistency
-      const allUsersData = safeLocalStorage.getItem('all_users_v2');
-      if (allUsersData) {
-        try {
-          const allUsers = JSON.parse(allUsersData);
-          allUsers[user.username] = {
-            ...allUsers[user.username],
-            ...updatedUser,
-          };
-          safeLocalStorage.setItem('all_users_v2', JSON.stringify(allUsers));
-        } catch (e) {
-          console.error('Error updating all_users_v2:', e);
-        }
-      }
-      
-      if (success) {
-        setUser(updatedUser);
+      if (result.success && result.data) {
+        setUser(result.data);
         setError(null);
       } else {
-        setError('Failed to update user data');
+        setError(result.error?.message || 'Failed to update user');
       }
     } catch (error) {
       console.error('Update user error:', error);
