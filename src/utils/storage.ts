@@ -1,7 +1,10 @@
 // src/utils/storage.ts
 /**
  * Enhanced storage utilities with error handling, quotas and compression
+ * MIGRATED TO USE DSAL via storageService
  */
+
+import { storageService } from '@/services';
 
 // Maximum localStorage size targets (in bytes)
 const MAX_STORAGE_BYTES = 4.5 * 1024 * 1024; // ~4.5MB
@@ -9,6 +12,8 @@ const STORAGE_WARNING_THRESHOLD = 0.8; // 80% of max
 
 /**
  * Get localStorage usage information
+ * NOTE: This remains synchronous for backward compatibility
+ * Use getStorageInfo() for async version with more details
  * @returns Object with used bytes and percentage
  */
 export const getStorageUsage = (): { bytes: number; percent: number } => {
@@ -16,6 +21,8 @@ export const getStorageUsage = (): { bytes: number; percent: number } => {
     let totalBytes = 0;
 
     // Calculate total size of all items
+    // This is one of the few places we still access localStorage directly
+    // because it needs to be synchronous for backward compatibility
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key) {
@@ -31,6 +38,38 @@ export const getStorageUsage = (): { bytes: number; percent: number } => {
   } catch (error) {
     console.error('Error calculating storage usage:', error);
     return { bytes: 0, percent: 0 };
+  }
+};
+
+/**
+ * Get async storage usage information via DSAL
+ * @returns Promise with storage info
+ */
+export const getStorageInfo = async (): Promise<{ 
+  used: number; 
+  quota: number; 
+  percentage: number;
+  bytes: number;
+  percent: number;
+}> => {
+  try {
+    const info = await storageService.getStorageInfo();
+    return {
+      ...info,
+      bytes: info.used,
+      percent: info.percentage / 100
+    };
+  } catch (error) {
+    console.error('Error getting storage info:', error);
+    // Fallback to synchronous calculation
+    const fallback = getStorageUsage();
+    return {
+      used: fallback.bytes,
+      quota: MAX_STORAGE_BYTES,
+      percentage: fallback.percent * 100,
+      bytes: fallback.bytes,
+      percent: fallback.percent
+    };
   }
 };
 
@@ -57,12 +96,13 @@ class StorageLRU {
   /**
    * Load cache metadata from localStorage
    */
-  private loadMetadata(): void {
+  private async loadMetadata(): Promise<void> {
     try {
-      const metadata = localStorage.getItem('_storage_lru_metadata');
-      if (metadata) {
-        this.cache = new Map(JSON.parse(metadata));
-      }
+      const metadata = await storageService.getItem<Array<[string, { timestamp: number; size: number }]>>(
+        '_storage_lru_metadata',
+        []
+      );
+      this.cache = new Map(metadata);
     } catch (error) {
       console.error('Error loading LRU metadata:', error);
       this.cache = new Map();
@@ -72,11 +112,11 @@ class StorageLRU {
   /**
    * Save cache metadata to localStorage
    */
-  private saveMetadata(): void {
+  private async saveMetadata(): Promise<void> {
     try {
-      localStorage.setItem(
+      await storageService.setItem(
         '_storage_lru_metadata',
-        JSON.stringify(Array.from(this.cache.entries()))
+        Array.from(this.cache.entries())
       );
     } catch (error) {
       console.error('Error saving LRU metadata:', error);
@@ -88,13 +128,13 @@ class StorageLRU {
    * @param key - The key that was accessed
    * @param size - The size of the item in bytes
    */
-  public recordAccess(key: string, size?: number): void {
+  public async recordAccess(key: string, size?: number): Promise<void> {
     const existingSize = this.cache.get(key)?.size || 0;
     this.cache.set(key, {
       timestamp: Date.now(),
       size: size || existingSize
     });
-    this.saveMetadata();
+    await this.saveMetadata();
   }
 
   /**
@@ -136,24 +176,41 @@ class StorageLRU {
       'all_users_v2',
       '_storage_lru_metadata',
       'ageVerified',
-      'wallet_admin'
+      'wallet_admin',
+      'currentUser'
     ];
 
     // Protect by exact match
     if (protectedKeys.includes(key)) return true;
 
     // Protect by prefix
-    const protectedPrefixes = ['auth_', 'critical_'];
+    const protectedPrefixes = ['auth_', 'critical_', 'wallet_'];
     if (protectedPrefixes.some(prefix => key.startsWith(prefix))) {
       return true;
     }
 
     return false;
   }
+
+  /**
+   * Initialize the LRU cache asynchronously
+   */
+  public async initialize(): Promise<void> {
+    await this.loadMetadata();
+  }
 }
 
 // Create a singleton instance
 const lruCache = new StorageLRU();
+
+// Initialize LRU cache when module loads
+let lruInitialized = false;
+const initializeLRU = async () => {
+  if (!lruInitialized) {
+    await lruCache.initialize();
+    lruInitialized = true;
+  }
+};
 
 /**
  * Enhanced localStorage get with error handling and LRU tracking
@@ -161,28 +218,19 @@ const lruCache = new StorageLRU();
  * @param defaultValue - Default value if key doesn't exist
  * @returns The stored value or default value
  */
-export function getItem<T>(key: string, defaultValue: T): T {
+export async function getItem<T>(key: string, defaultValue: T): Promise<T> {
   try {
-    const item = localStorage.getItem(key);
-
-    if (item === null) {
-      return defaultValue;
-    }
-
-    // Record access for LRU
-    lruCache.recordAccess(key, item.length);
-
-    const parsedItem = JSON.parse(item);
-
-    // Validate type safety
-    if (typeof parsedItem !== typeof defaultValue) {
-      console.error(`Type mismatch for key "${key}": expected ${typeof defaultValue}, got ${typeof parsedItem}`);
-      return defaultValue;
-    }
-
-    return parsedItem as T;
+    await initializeLRU();
+    
+    const value = await storageService.getItem<T>(key, defaultValue);
+    
+    // Record access for LRU (estimate size based on JSON string)
+    const size = JSON.stringify(value).length;
+    await lruCache.recordAccess(key, size);
+    
+    return value;
   } catch (error) {
-    console.error(`Error getting item "${key}" from localStorage:`, error);
+    console.error(`Error getting item "${key}" from storage:`, error);
     return defaultValue;
   }
 }
@@ -193,44 +241,46 @@ export function getItem<T>(key: string, defaultValue: T): T {
  * @param value - Value to store
  * @returns True if successful, false otherwise
  */
-export function setItem<T>(key: string, value: T): boolean {
+export async function setItem<T>(key: string, value: T): Promise<boolean> {
   try {
+    await initializeLRU();
+    
     const serialized = JSON.stringify(value);
-    localStorage.setItem(key, serialized);
-
-    // Record in LRU cache
-    lruCache.recordAccess(key, serialized.length);
-
-    return true;
-  } catch (error) {
-    // Handle quota exceeded error
-    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-      console.warn('localStorage quota exceeded, attempting to free space...');
-
-      try {
-        // Calculate how much space we need
-        const serialized = JSON.stringify(value);
-        const bytesNeeded = serialized.length + key.length + 50; // Add some buffer
-
-        // Get keys to evict
-        const keysToEvict = lruCache.getKeysToEvict(bytesNeeded);
-
-        // Remove them
-        keysToEvict.forEach(k => localStorage.removeItem(k));
-        console.log(`Evicted ${keysToEvict.length} items from localStorage`);
-
-        // Try again
-        localStorage.setItem(key, serialized);
-        lruCache.recordAccess(key, serialized.length);
-
-        return true;
-      } catch (retryError) {
-        console.error('Failed to make space in localStorage:', retryError);
-        return false;
-      }
+    const success = await storageService.setItem(key, value);
+    
+    if (success) {
+      // Record in LRU cache
+      await lruCache.recordAccess(key, serialized.length);
+      return true;
     }
-
-    console.error(`Error setting item "${key}" in localStorage:`, error);
+    
+    // If storage failed, it might be due to quota
+    if (isStorageNearCapacity()) {
+      console.warn('Storage near capacity, attempting to free space...');
+      
+      // Calculate how much space we need
+      const bytesNeeded = serialized.length + key.length + 50; // Add some buffer
+      
+      // Get keys to evict
+      const keysToEvict = lruCache.getKeysToEvict(bytesNeeded);
+      
+      // Remove them
+      for (const k of keysToEvict) {
+        await storageService.removeItem(k);
+      }
+      console.log(`Evicted ${keysToEvict.length} items from storage`);
+      
+      // Try again
+      const retrySuccess = await storageService.setItem(key, value);
+      if (retrySuccess) {
+        await lruCache.recordAccess(key, serialized.length);
+      }
+      return retrySuccess;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`Error setting item "${key}" in storage:`, error);
     return false;
   }
 }
@@ -240,12 +290,11 @@ export function setItem<T>(key: string, value: T): boolean {
  * @param key - Key to remove
  * @returns True if successful, false otherwise
  */
-export function removeItem(key: string): boolean {
+export async function removeItem(key: string): Promise<boolean> {
   try {
-    localStorage.removeItem(key);
-    return true;
+    return await storageService.removeItem(key);
   } catch (error) {
-    console.error(`Error removing item "${key}" from localStorage:`, error);
+    console.error(`Error removing item "${key}" from storage:`, error);
     return false;
   }
 }
@@ -256,23 +305,14 @@ export function removeItem(key: string): boolean {
  * @param updates - Object with fields to update
  * @returns True if successful, false otherwise
  */
-export function updateItem<T extends object>(
+export async function updateItem<T extends object>(
   key: string,
   updates: Partial<T>
-): boolean {
+): Promise<boolean> {
   try {
-    const current = getItem<T | null>(key, null);
-
-    // If item doesn't exist, create it with updates
-    if (current === null) {
-      return setItem(key, updates as T);
-    }
-
-    // Merge existing data with updates
-    const updated = { ...current, ...updates };
-    return setItem(key, updated);
+    return await storageService.updateItem(key, updates);
   } catch (error) {
-    console.error(`Error updating item "${key}" in localStorage:`, error);
+    console.error(`Error updating item "${key}" in storage:`, error);
     return false;
   }
 }
@@ -281,21 +321,13 @@ export function updateItem<T extends object>(
  * Get all keys in localStorage
  * @returns Array of keys
  */
-export function getAllKeys(): string[] {
-  const keys: string[] = [];
-
+export async function getAllKeys(): Promise<string[]> {
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key) {
-        keys.push(key);
-      }
-    }
+    return await storageService.getKeys();
   } catch (error) {
-    console.error('Error getting all keys from localStorage:', error);
+    console.error('Error getting all keys from storage:', error);
+    return [];
   }
-
-  return keys;
 }
 
 /**
@@ -303,11 +335,11 @@ export function getAllKeys(): string[] {
  * @param key - The key to check
  * @returns True if the key exists
  */
-export function hasKey(key: string): boolean {
+export async function hasKey(key: string): Promise<boolean> {
   try {
-    return localStorage.getItem(key) !== null;
+    return await storageService.hasKey(key);
   } catch (error) {
-    console.error(`Error checking if key "${key}" exists in localStorage:`, error);
+    console.error(`Error checking if key "${key}" exists in storage:`, error);
     return false;
   }
 }
@@ -317,34 +349,11 @@ export function hasKey(key: string): boolean {
  * @param preserveKeys - Array of keys to preserve
  * @returns True if successful, false otherwise
  */
-export function clearAll(preserveKeys: string[] = []): boolean {
+export async function clearAll(preserveKeys: string[] = []): Promise<boolean> {
   try {
-    if (preserveKeys.length === 0) {
-      localStorage.clear();
-      return true;
-    }
-
-    // If preserving keys, get their values first
-    const preserved: Record<string, string> = {};
-
-    for (const key of preserveKeys) {
-      const value = localStorage.getItem(key);
-      if (value !== null) {
-        preserved[key] = value;
-      }
-    }
-
-    // Clear storage
-    localStorage.clear();
-
-    // Restore preserved keys
-    for (const [key, value] of Object.entries(preserved)) {
-      localStorage.setItem(key, value);
-    }
-
-    return true;
+    return await storageService.clear(preserveKeys);
   } catch (error) {
-    console.error('Error clearing localStorage:', error);
+    console.error('Error clearing storage:', error);
     return false;
   }
 }
@@ -356,17 +365,17 @@ export function clearAll(preserveKeys: string[] = []): boolean {
  * @param ttlMs - Time to live in milliseconds
  * @returns True if successful, false otherwise
  */
-export function setItemWithExpiry<T>(
+export async function setItemWithExpiry<T>(
   key: string,
   value: T,
   ttlMs: number
-): boolean {
+): Promise<boolean> {
   const item = {
     value,
     expiry: Date.now() + ttlMs
   };
 
-  return setItem(`expiry_${key}`, item);
+  return await setItem(`expiry_${key}`, item);
 }
 
 /**
@@ -375,11 +384,11 @@ export function setItemWithExpiry<T>(
  * @param defaultValue - Default value if key doesn't exist or is expired
  * @returns The stored value or default value
  */
-export function getItemWithExpiry<T>(
+export async function getItemWithExpiry<T>(
   key: string,
   defaultValue: T
-): T {
-  const item = getItem<{ value: T; expiry: number } | null>(
+): Promise<T> {
+  const item = await getItem<{ value: T; expiry: number } | null>(
     `expiry_${key}`,
     null
   );
@@ -388,7 +397,7 @@ export function getItemWithExpiry<T>(
   if (item === null || Date.now() > item.expiry) {
     // Clean up expired item
     if (item !== null) {
-      removeItem(`expiry_${key}`);
+      await removeItem(`expiry_${key}`);
     }
     return defaultValue;
   }
@@ -400,6 +409,7 @@ export function getItemWithExpiry<T>(
  * Get estimated size of localStorage in use
  * @returns Size in KB
  */
-export function getStorageSizeKB(): number {
-  return Math.round(getStorageUsage().bytes / 1024);
+export async function getStorageSizeKB(): Promise<number> {
+  const info = await storageService.getStorageInfo();
+  return Math.round(info.used / 1024);
 }

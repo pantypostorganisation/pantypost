@@ -1,7 +1,7 @@
 // src/components/buyers/messages/TipModal.tsx
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Heart, DollarSign, AlertCircle } from 'lucide-react';
 
 interface TipModalProps {
@@ -27,6 +27,8 @@ export default function TipModal({
   user,
   onSendTip
 }: TipModalProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  
   if (!show) return null;
 
   const userBalance = wallet[user?.username] || 0;
@@ -34,6 +36,25 @@ export default function TipModal({
   const canAfford = tipValue > 0 && userBalance >= tipValue;
 
   const quickAmounts = [5, 10, 20, 50];
+
+  const handleSendTip = async () => {
+    if (!canAfford || isProcessing) return;
+    
+    console.log('TipModal: Sending tip...');
+    setIsProcessing(true);
+    try {
+      await onSendTip();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Clear result when modal closes
+  useEffect(() => {
+    if (!show && tipResult?.success) {
+      setTipAmount('');
+    }
+  }, [show, tipResult, setTipAmount]);
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -47,6 +68,7 @@ export default function TipModal({
           <button
             onClick={onClose}
             className="p-2 hover:bg-[#222] rounded-lg transition-colors"
+            disabled={isProcessing}
           >
             <X className="w-5 h-5 text-gray-400" />
           </button>
@@ -74,7 +96,8 @@ export default function TipModal({
                 placeholder="0.00"
                 min="0"
                 step="0.01"
-                className="w-full bg-[#222] text-white rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                disabled={isProcessing}
+                className="w-full bg-[#222] text-white rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:opacity-50"
               />
             </div>
             
@@ -84,7 +107,8 @@ export default function TipModal({
                 <button
                   key={amount}
                   onClick={() => setTipAmount(amount.toString())}
-                  className="flex-1 px-3 py-1.5 bg-[#222] text-white rounded-lg hover:bg-[#333] transition-colors text-sm"
+                  disabled={isProcessing}
+                  className="flex-1 px-3 py-1.5 bg-[#222] text-white rounded-lg hover:bg-[#333] transition-colors text-sm disabled:opacity-50"
                 >
                   ${amount}
                 </button>
@@ -141,21 +165,31 @@ export default function TipModal({
         <div className="flex gap-3 p-6 border-t border-gray-800">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+            disabled={isProcessing}
+            className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            onClick={onSendTip}
-            disabled={!canAfford}
+            onClick={handleSendTip}
+            disabled={!canAfford || isProcessing}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-              canAfford
+              canAfford && !isProcessing
                 ? 'bg-pink-500 text-white hover:bg-pink-600'
                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
           >
-            <Heart size={16} />
-            {canAfford ? `Send $${tipValue.toFixed(2)}` : 'Enter Amount'}
+            {isProcessing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Sending...</span>
+              </>
+            ) : (
+              <>
+                <Heart size={16} />
+                <span>{canAfford ? `Send ${tipValue.toFixed(2)}` : 'Enter Amount'}</span>
+              </>
+            )}
           </button>
         </div>
       </div>
