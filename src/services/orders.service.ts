@@ -8,12 +8,13 @@ import { v4 as uuidv4 } from 'uuid';
 // Define DeliveryAddress type here since it's not exported from WalletContext
 export interface DeliveryAddress {
   fullName: string;
-  streetAddress: string;
+  addressLine1: string;
+  addressLine2?: string;
   city: string;
   state: string;
-  zipCode: string;
+  postalCode: string;
   country: string;
-  phoneNumber?: string;
+  specialInstructions?: string;
 }
 
 export interface CreateOrderRequest {
