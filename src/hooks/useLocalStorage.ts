@@ -1,6 +1,6 @@
 // src/hooks/useLocalStorage.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
-import * as storage from '@/utils/storage';
+import { storageService } from '@/services';
 
 /**
  * Custom hook to integrate with localStorage while keeping React state in sync
@@ -28,7 +28,7 @@ export function useLocalStorage<T>(
     const loadInitialValue = async () => {
       try {
         setIsLoading(true);
-        const value = await storage.getItem<T>(key, initialValue);
+        const value = await storageService.getItem<T>(key, initialValue);
         if (isMounted.current) {
           setStoredValue(value);
           setIsLoading(false);
@@ -59,7 +59,7 @@ export function useLocalStorage<T>(
       setStoredValue(valueToStore);
       
       // Save to localStorage asynchronously
-      storage.setItem(key, valueToStore).then(success => {
+      storageService.setItem(key, valueToStore).then(success => {
         if (!success) {
           console.error(`Failed to save "${key}" to storage`);
         }
@@ -83,7 +83,7 @@ export function useLocalStorage<T>(
       setStoredValue(initialValue);
       
       // Remove from localStorage asynchronously
-      storage.removeItem(key).then(success => {
+      storageService.removeItem(key).then(success => {
         if (!success) {
           console.error(`Failed to remove "${key}" from storage`);
         }
@@ -149,9 +149,23 @@ export function useLocalStorageWithExpiry<T>(
     const loadInitialValue = async () => {
       try {
         setIsLoading(true);
-        const value = await storage.getItemWithExpiry<T>(`expiry_${key}`, initialValue);
+        // Get item with expiry check
+        const item = await storageService.getItem<{ value: T; expiry: number } | null>(
+          `expiry_${key}`,
+          null
+        );
+        
         if (isMounted.current) {
-          setStoredValue(value);
+          if (item === null || Date.now() > item.expiry) {
+            // Item doesn't exist or is expired
+            if (item !== null) {
+              // Clean up expired item
+              await storageService.removeItem(`expiry_${key}`);
+            }
+            setStoredValue(initialValue);
+          } else {
+            setStoredValue(item.value);
+          }
           setIsLoading(false);
         }
       } catch (error) {
@@ -167,7 +181,7 @@ export function useLocalStorageWithExpiry<T>(
     return () => {
       isMounted.current = false;
     };
-  }, [key]);
+  }, [key, initialValue]);
 
   // Function to update value with expiration
   const setValue = useCallback((value: T | ((val: T) => T)) => {
@@ -179,12 +193,17 @@ export function useLocalStorageWithExpiry<T>(
       setStoredValue(valueToStore);
       
       // Save to localStorage with expiry asynchronously
-      storage.setItemWithExpiry(`expiry_${key}`, valueToStore, ttlMs);
+      const itemWithExpiry = {
+        value: valueToStore,
+        expiry: Date.now() + ttlMs
+      };
+      
+      storageService.setItem(`expiry_${key}`, itemWithExpiry);
       
       // Dispatch custom event
       window.dispatchEvent(new StorageEvent('storage', {
         key: `expiry_${key}`,
-        newValue: JSON.stringify({ value: valueToStore, expiry: Date.now() + ttlMs }),
+        newValue: JSON.stringify(itemWithExpiry),
         url: window.location.href
       }));
     } catch (error) {
@@ -196,7 +215,7 @@ export function useLocalStorageWithExpiry<T>(
   const removeValue = useCallback(() => {
     try {
       setStoredValue(initialValue);
-      storage.removeItem(`expiry_${key}`);
+      storageService.removeItem(`expiry_${key}`);
       
       // Dispatch event
       window.dispatchEvent(new StorageEvent('storage', {
@@ -259,7 +278,7 @@ export function useLocalStorageObject<T extends object>(
  * @returns Object with storage usage information
  */
 export function useStorageUsage() {
-  const [usage, setUsage] = useState(() => storage.getStorageUsage());
+  const [usage, setUsage] = useState({ bytes: 0, percent: 0, sizeKB: 0 });
   const [isLoading, setIsLoading] = useState(false);
 
   // Update usage with async storage info
@@ -267,16 +286,12 @@ export function useStorageUsage() {
     const updateUsage = async () => {
       setIsLoading(true);
       try {
-        // Get basic usage synchronously
-        const basicUsage = storage.getStorageUsage();
-        setUsage(basicUsage);
-        
-        // Get detailed info asynchronously
-        const sizeKB = await storage.getStorageSizeKB();
-        setUsage(prev => ({
-          ...prev,
-          sizeKB
-        }));
+        const info = await storageService.getStorageInfo();
+        setUsage({
+          bytes: info.used,
+          percent: info.percentage / 100,
+          sizeKB: Math.round(info.used / 1024)
+        });
       } catch (error) {
         console.error('Error updating storage usage:', error);
       } finally {
@@ -304,7 +319,7 @@ export function useStorageUsage() {
   }, []);
 
   const isNearCapacity = usage.percent > 0.8;
-  const usageKB = Math.round(usage.bytes / 1024);
+  const usageKB = usage.sizeKB;
   
   return {
     bytes: usage.bytes,
@@ -327,7 +342,7 @@ export function usePreloadedStorage<T extends Record<string, any>>(
     // Initialize with default values
     const defaults = {} as T;
     Object.entries(keys).forEach(([prop, config]) => {
-      defaults[prop as keyof T] = config.defaultValue;
+      defaults[prop as keyof T] = (config as any).defaultValue;
     });
     return defaults;
   });
@@ -343,7 +358,10 @@ export function usePreloadedStorage<T extends Record<string, any>>(
       // Load all values in parallel
       await Promise.all(
         Object.entries(keys).map(async ([prop, config]) => {
-          const value = await storage.getItem(config.key, config.defaultValue);
+          const value = await storageService.getItem(
+            (config as any).key,
+            (config as any).defaultValue
+          );
           loadedValues[prop as keyof T] = value;
         })
       );

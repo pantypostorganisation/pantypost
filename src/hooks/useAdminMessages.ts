@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
+import { storageService } from '@/services';
 import { Message } from '@/types/message';
 
 export const useAdminMessages = () => {
@@ -38,12 +39,11 @@ export const useAdminMessages = () => {
   const username = user?.username || '';
 
   // Load views data with error handling
-  const loadViews = useCallback(() => {
+  const loadViews = useCallback(async () => {
     try {
       if (typeof window !== 'undefined') {
-        const data = localStorage.getItem('listing_views');
-        const parsedData = data ? JSON.parse(data) : {};
-        setViewsData(parsedData);
+        const data = await storageService.getItem<Record<string, number>>('listing_views', {});
+        setViewsData(data);
       }
     } catch (error) {
       console.error('Failed to load views data:', error);
@@ -68,21 +68,22 @@ export const useAdminMessages = () => {
 
   // Load previously read threads
   useEffect(() => {
-    try {
-      if (user) {
-        const readThreadsKey = `panty_read_threads_${user.username}`;
-        const readThreads = localStorage.getItem(readThreadsKey);
-        if (readThreads) {
-          const threads = JSON.parse(readThreads);
-          if (Array.isArray(threads)) {
-            readThreadsRef.current = new Set(threads);
+    const loadReadThreads = async () => {
+      try {
+        if (user) {
+          const readThreadsKey = `panty_read_threads_${user.username}`;
+          const readThreads = await storageService.getItem<string[]>(readThreadsKey, []);
+          if (Array.isArray(readThreads)) {
+            readThreadsRef.current = new Set(readThreads);
             setMessageUpdate(prev => prev + 1);
           }
         }
+      } catch (error) {
+        console.error('Failed to load read threads:', error);
       }
-    } catch (error) {
-      console.error('Failed to load read threads:', error);
-    }
+    };
+    
+    loadReadThreads();
   }, [user]);
 
   // UPDATED: Use new helper functions from MessageContext
@@ -111,13 +112,13 @@ export const useAdminMessages = () => {
       
       // Get user profile picture and verification status
       try {
-        const storedPic = sessionStorage.getItem(`profile_pic_${userKey}`);
+        // Note: Profile pics should come from users context or be loaded async
         const userInfo = users?.[userKey];
         const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
         const role = userInfo?.role || 'unknown';
         
         userProfiles[userKey] = { 
-          pic: storedPic, 
+          pic: null, // Profile pics should be loaded through proper channels
           verified: isVerified,
           role: role
         };
@@ -149,14 +150,13 @@ export const useAdminMessages = () => {
         username !== 'oakley' && username !== 'gerome' // Exclude other admins
       )
       .map(([username, userInfo]) => {
-        const storedPic = sessionStorage.getItem(`profile_pic_${username}`);
         const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
         
         return {
           username,
           role: userInfo?.role || 'unknown',
           verified: isVerified,
-          pic: storedPic
+          pic: null // Profile pics should be loaded through proper channels
         };
       });
     
@@ -165,52 +165,60 @@ export const useAdminMessages = () => {
 
   // Mark messages as read when thread is selected
   useEffect(() => {
-    if (activeThread && user) {
-      const hasUnreadMessages = threads[activeThread]?.some(
-        msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
-      );
-      
-      if (hasUnreadMessages) {
-        markMessagesAsRead(user.username, activeThread);
+    const markThreadAsRead = async () => {
+      if (activeThread && user) {
+        const hasUnreadMessages = threads[activeThread]?.some(
+          msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+        );
         
-        if (!readThreadsRef.current.has(activeThread)) {
-          readThreadsRef.current.add(activeThread);
+        if (hasUnreadMessages) {
+          markMessagesAsRead(user.username, activeThread);
           
-          if (typeof window !== 'undefined') {
-            const readThreadsKey = `panty_read_threads_${user.username}`;
-            localStorage.setItem(readThreadsKey, JSON.stringify(Array.from(readThreadsRef.current)));
+          if (!readThreadsRef.current.has(activeThread)) {
+            readThreadsRef.current.add(activeThread);
             
-            const event = new CustomEvent('readThreadsUpdated', { 
-              detail: { threads: Array.from(readThreadsRef.current), username: user.username }
-            });
-            window.dispatchEvent(event);
+            if (typeof window !== 'undefined') {
+              const readThreadsKey = `panty_read_threads_${user.username}`;
+              await storageService.setItem(readThreadsKey, Array.from(readThreadsRef.current));
+              
+              const event = new CustomEvent('readThreadsUpdated', { 
+                detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+              });
+              window.dispatchEvent(event);
+            }
+            
+            setMessageUpdate(prev => prev + 1);
           }
-          
-          setMessageUpdate(prev => prev + 1);
+        }
+        
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('threadSelected', { 
+            detail: { thread: activeThread, username: user.username }
+          });
+          window.dispatchEvent(event);
         }
       }
-      
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('threadSelected', { 
-          detail: { thread: activeThread, username: user.username }
-        });
-        window.dispatchEvent(event);
-      }
-    }
+    };
+    
+    markThreadAsRead();
   }, [activeThread, user, threads, markMessagesAsRead]);
 
   // Save read threads to localStorage
   useEffect(() => {
-    if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
-      const readThreadsKey = `panty_read_threads_${user.username}`;
-      const threadsArray = Array.from(readThreadsRef.current);
-      localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
-      
-      const event = new CustomEvent('readThreadsUpdated', { 
-        detail: { threads: threadsArray, username: user.username }
-      });
-      window.dispatchEvent(event);
-    }
+    const saveReadThreads = async () => {
+      if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
+        const readThreadsKey = `panty_read_threads_${user.username}`;
+        const threadsArray = Array.from(readThreadsRef.current);
+        await storageService.setItem(readThreadsKey, threadsArray);
+        
+        const event = new CustomEvent('readThreadsUpdated', { 
+          detail: { threads: threadsArray, username: user.username }
+        });
+        window.dispatchEvent(event);
+      }
+    };
+    
+    saveReadThreads();
   }, [messageUpdate, user]);
 
   const handleSend = useCallback(() => {

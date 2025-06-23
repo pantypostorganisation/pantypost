@@ -30,6 +30,7 @@ import {
   X
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { storageService } from '@/services';
 
 // ✅ Custom hooks for better reusability
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
@@ -77,26 +78,6 @@ const useInterval = (callback: () => void, delay: number | null) => {
       intervalRef.current = null;
     }
   };
-};
-
-// ✅ Safe localStorage operations with error handling
-const safeParseJSON = (str: string, fallback: any = {}) => {
-  try {
-    return JSON.parse(str);
-  } catch (error) {
-    console.error('Failed to parse JSON from localStorage:', error);
-    return fallback;
-  }
-};
-
-const safeSetLocalStorage = (key: string, value: any) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (error) {
-    console.error('Failed to save to localStorage:', error);
-    return false;
-  }
 };
 
 export default function Header() {
@@ -347,15 +328,15 @@ export default function Header() {
         cleared: notification.cleared ? notification.cleared : true
       }));
       
-      const notificationStore = safeParseJSON(localStorage.getItem('seller_notifications_store') || '{}', {});
+      const notificationStore = await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {});
       notificationStore[username] = updatedNotifications;
       
-      if (safeSetLocalStorage('seller_notifications_store', notificationStore)) {
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'seller_notifications_store',
-          newValue: JSON.stringify(notificationStore)
-        }));
-      }
+      await storageService.setItem('seller_notifications_store', notificationStore);
+      
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'seller_notifications_store',
+        newValue: JSON.stringify(notificationStore)
+      }));
     } catch (error) {
       console.error('Error clearing notifications:', error);
     } finally {
@@ -376,15 +357,15 @@ export default function Header() {
       
       const updatedNotifications = sellerNotifications.filter(notification => !notification.cleared);
       
-      const notificationStore = safeParseJSON(localStorage.getItem('seller_notifications_store') || '{}', {});
+      const notificationStore = await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {});
       notificationStore[username] = updatedNotifications;
       
-      if (safeSetLocalStorage('seller_notifications_store', notificationStore)) {
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'seller_notifications_store',
-          newValue: JSON.stringify(notificationStore)
-        }));
-      }
+      await storageService.setItem('seller_notifications_store', notificationStore);
+      
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'seller_notifications_store',
+        newValue: JSON.stringify(notificationStore)
+      }));
     } catch (error) {
       console.error('Error deleting cleared notifications:', error);
     } finally {

@@ -9,6 +9,7 @@ import { useMessages } from '@/context/MessageContext';
 import { useReviews } from '@/context/ReviewContext';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
+import { storageService } from '@/services';
 import { 
   isAuctionActive, 
   calculateTotalPayable, 
@@ -91,15 +92,21 @@ export const useBrowseDetail = () => {
 
   // Add view count tracking
   useEffect(() => {
-    if (listing && !viewIncrementedRef.current) {
-      viewIncrementedRef.current = true;
-      // Increment view count
-      const viewKey = `listing_views_${listing.id}`;
-      const currentViews = parseInt(localStorage.getItem(viewKey) || '0');
-      const newViews = currentViews + 1;
-      localStorage.setItem(viewKey, newViews.toString());
-      setState(prev => ({ ...prev, viewCount: newViews }));
-    }
+    const trackView = async () => {
+      if (listing && !viewIncrementedRef.current) {
+        viewIncrementedRef.current = true;
+        // Increment view count
+        const viewKey = `listing_views_${listing.id}`;
+        const viewsData = await storageService.getItem<Record<string, number>>('listing_views', {});
+        const currentViews = viewsData[listing.id] || 0;
+        const newViews = currentViews + 1;
+        viewsData[listing.id] = newViews;
+        await storageService.setItem('listing_views', viewsData);
+        setState(prev => ({ ...prev, viewCount: newViews }));
+      }
+    };
+    
+    trackView();
   }, [listing]);
 
   // Get seller reviews
@@ -341,19 +348,24 @@ export const useBrowseDetail = () => {
               } 
             });
           } else {
-            // Fallback to sessionStorage for backward compatibility
-            const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
-            const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
-            const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
-            updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+            // No fallback to sessionStorage - profile data should come from proper channels
+            updateState({ 
+              sellerProfile: { 
+                bio: null,
+                pic: null,
+                subscriptionPrice: null
+              } 
+            });
           }
         } catch (error) {
           console.error('Error loading seller profile:', error);
-          // Fallback to sessionStorage on error
-          const bio = sessionStorage.getItem(`profile_bio_${listing.seller}`);
-          const pic = sessionStorage.getItem(`profile_pic_${listing.seller}`);
-          const price = sessionStorage.getItem(`subscription_price_${listing.seller}`);
-          updateState({ sellerProfile: { bio, pic, subscriptionPrice: price } });
+          updateState({ 
+            sellerProfile: { 
+              bio: null,
+              pic: null,
+              subscriptionPrice: null
+            } 
+          });
         }
       }
     };

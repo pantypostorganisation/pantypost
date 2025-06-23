@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useRouter } from 'next/navigation';
+import { storageService } from '@/services';
 import { Listing } from '@/context/ListingContext';
 import { FilterOptions, CategoryCounts, SellerProfile, ListingWithProfile } from '@/types/browse';
 import { 
@@ -47,32 +48,29 @@ export const useBrowseListings = () => {
 
   // Load seller profiles
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const currentSellers = new Set(listings.map(listing => listing.seller));
-      const profiles: { [key: string]: SellerProfile } = {};
-      
-      const sellersArray = Array.from(currentSellers).slice(0, MAX_CACHED_PROFILES);
-      
-      sellersArray.forEach(seller => {
-        const bio = sessionStorage.getItem(`profile_bio_${seller}`);
-        const pic = sessionStorage.getItem(`profile_pic_${seller}`);
-        profiles[seller] = { bio, pic };
-      });
-      
-      setSellerProfiles(profiles);
-      
-      // Clean up unused profiles
-      const allProfileKeys = Object.keys(sessionStorage).filter(key => 
-        key.startsWith('profile_bio_') || key.startsWith('profile_pic_')
-      );
-      
-      allProfileKeys.forEach(key => {
-        const seller = key.replace('profile_bio_', '').replace('profile_pic_', '');
-        if (!currentSellers.has(seller)) {
-          sessionStorage.removeItem(key);
-        }
-      });
-    }
+    const loadSellerProfiles = async () => {
+      if (typeof window !== 'undefined') {
+        const currentSellers = new Set(listings.map(listing => listing.seller));
+        const profiles: { [key: string]: SellerProfile } = {};
+        
+        const sellersArray = Array.from(currentSellers).slice(0, MAX_CACHED_PROFILES);
+        
+        // Load all user profiles at once
+        const userProfiles = await storageService.getItem<any>('user_profiles', {});
+        
+        sellersArray.forEach(seller => {
+          const profileData = userProfiles[seller];
+          profiles[seller] = { 
+            bio: profileData?.bio || null, 
+            pic: profileData?.profilePic || null 
+          };
+        });
+        
+        setSellerProfiles(profiles);
+      }
+    };
+    
+    loadSellerProfiles();
   }, [listings]);
 
   // Debounced search

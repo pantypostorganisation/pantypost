@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
+import { storageService } from '@/services';
 import { SignupState, SignupFormData, FormErrors, UserRole } from '@/types/signup';
 import { validateForm, calculatePasswordStrength } from '@/utils/signupUtils';
 
@@ -127,17 +128,17 @@ export const useSignup = () => {
         return;
       }
       
-      // Store email and password in localStorage to prepare for backend later
+      // Store email and password in storage to prepare for backend later
       if (typeof window !== 'undefined') {
         // Store these separately from the user data as they would normally be handled by the backend
-        const userCredentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+        const userCredentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
         userCredentials[normalizedUsername] = {
           email: state.email,
           // In a real app, you would NEVER store passwords like this - this is temporary
           // until you add a proper backend with password hashing
           password: state.password,
         };
-        localStorage.setItem('userCredentials', JSON.stringify(userCredentials));
+        await storageService.setItem('userCredentials', userCredentials);
       }
       
       // Call login with only the parameters it's expecting (username and role)

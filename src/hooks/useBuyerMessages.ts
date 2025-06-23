@@ -37,7 +37,7 @@ export const useBuyerMessages = () => {
   const { getRequestsForUser, markRequestAsPaid, addRequest } = useRequests();
   const { users } = useListings();
   
-  // Initialize thread from URL or localStorage
+  // Initialize thread from URL
   const threadParam = searchParams.get('thread');
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);

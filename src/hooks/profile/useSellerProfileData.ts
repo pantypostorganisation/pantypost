@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
+import { storageService } from '@/services';
 
 export const useSellerProfileData = (username: string | undefined) => {
   const { user } = useAuth();
@@ -51,20 +52,10 @@ export const useSellerProfileData = (username: string | undefined) => {
           setSubscriptionPrice(null);
         }
         
-        // Load gallery images from localStorage
+        // Load gallery images from localStorage using storageService
         const galleryKey = `profile_gallery_${username}`;
-        const storedGallery = localStorage.getItem(galleryKey);
-        if (storedGallery) {
-          try {
-            const parsed = JSON.parse(storedGallery);
-            setGalleryImages(Array.isArray(parsed) ? parsed : []);
-          } catch (e) {
-            console.error('Error parsing gallery images:', e);
-            setGalleryImages([]);
-          }
-        } else {
-          setGalleryImages([]);
-        }
+        const storedGallery = await storageService.getItem<string[]>(galleryKey, []);
+        setGalleryImages(storedGallery);
       } catch (error) {
         console.error('Error loading seller profile data:', error);
         // Reset to defaults on error

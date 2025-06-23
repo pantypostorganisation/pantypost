@@ -1,4 +1,5 @@
 // src/utils/messageUtils.ts
+import { storageService } from '@/services';
 
 export interface Message {
   id?: string;
@@ -45,7 +46,7 @@ export interface CustomRequest {
 export function getLatestCustomRequestMessages(messages: Message[], requests: CustomRequest[]): Message[] {
   const seen = new Set<string>();
   const result: Message[] = [];
-  
+
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg.type === 'customRequest' && msg.meta && msg.meta.id) {
@@ -57,7 +58,7 @@ export function getLatestCustomRequestMessages(messages: Message[], requests: Cu
       result.unshift(msg);
     }
   }
-  
+
   return result;
 }
 
@@ -78,32 +79,31 @@ export function formatTimeAgo(date: string): string {
   const messageDate = new Date(date);
   const diffMs = now.getTime() - messageDate.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays > 0) {
     return diffDays === 1 ? '1d ago' : `${diffDays}d ago`;
   }
-  
+
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   if (diffHours > 0) {
     return diffHours === 1 ? '1h ago' : `${diffHours}h ago`;
   }
-  
+
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   if (diffMinutes > 0) {
     return diffMinutes === 1 ? '1m ago' : `${diffMinutes}m ago`;
   }
-  
+
   return 'Just now';
 }
 
 // Additional utility functions for messages
-export function saveRecentEmojis(emojis: string[]): void {
-  localStorage.setItem('recentEmojis', JSON.stringify(emojis));
+export async function saveRecentEmojis(emojis: string[]): Promise<void> {
+  await storageService.setItem('recentEmojis', emojis);
 }
 
-export function getRecentEmojis(): string[] {
-  const stored = localStorage.getItem('recentEmojis');
-  return stored ? JSON.parse(stored) : [];
+export async function getRecentEmojis(): Promise<string[]> {
+  return await storageService.getItem<string[]>('recentEmojis', []);
 }
 
 export function validateImageSize(file: File): string | null {

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
+import { storageService } from '@/services';
 import { Listing } from '@/context/ListingContext';
 import { ListingFormState, EditingState, ListingAnalytics } from '@/types/myListings';
 import { 
@@ -56,18 +57,26 @@ export const useMyListings = () => {
 
   // Load views data
   useEffect(() => {
-    function loadViews() {
+    const loadViews = async () => {
       if (typeof window !== 'undefined') {
-        const data = localStorage.getItem('listing_views');
-        setViewsData(data ? JSON.parse(data) : {});
+        const data = await storageService.getItem<Record<string, number>>('listing_views', {});
+        setViewsData(data);
       }
-    }
+    };
+    
     loadViews();
-    window.addEventListener('storage', loadViews);
-    window.addEventListener('focus', loadViews);
+    
+    // Listen for storage changes
+    const handleStorageChange = () => {
+      loadViews();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleStorageChange);
+    
     return () => {
-      window.removeEventListener('storage', loadViews);
-      window.removeEventListener('focus', loadViews);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleStorageChange);
     };
   }, [listings]);
 

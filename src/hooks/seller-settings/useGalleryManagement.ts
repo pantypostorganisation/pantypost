@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { uploadMultipleToCloudinary } from '@/utils/cloudinary';
+import { storageService } from '@/services';
 
 export function useGalleryManagement() {
   const { user } = useAuth();
@@ -13,25 +14,17 @@ export function useGalleryManagement() {
 
   // Load gallery images on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && user?.username) {
-      const storedGallery = localStorage.getItem(`profile_gallery_${user.username}`);
-      if (storedGallery) {
-        try {
-          const parsedGallery = JSON.parse(storedGallery);
-          if (Array.isArray(parsedGallery)) {
-            setGalleryImages(parsedGallery);
-          } else {
-            console.error('Stored gallery data is not an array:', parsedGallery);
-            setGalleryImages([]);
-          }
-        } catch (error) {
-          console.error('Failed to parse stored gallery data:', error);
-          setGalleryImages([]);
-        }
-      } else {
-        setGalleryImages([]);
+    const loadGalleryImages = async () => {
+      if (user?.username) {
+        const storedGallery = await storageService.getItem<string[]>(
+          `profile_gallery_${user.username}`,
+          []
+        );
+        setGalleryImages(storedGallery);
       }
-    }
+    };
+
+    loadGalleryImages();
   }, [user?.username]);
 
   // Handle multiple file selection

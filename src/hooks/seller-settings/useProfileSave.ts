@@ -1,12 +1,13 @@
 // src/hooks/seller-settings/useProfileSave.ts
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { storageService } from '@/services';
 
 export function useProfileSave() {
   const { user, updateUser } = useAuth();
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const handleSave = (data: {
+  const handleSave = async (data: {
     bio: string;
     profilePic: string | null;
     subscriptionPrice: string;
@@ -16,8 +17,7 @@ export function useProfileSave() {
 
     try {
       // Get existing user profiles data
-      const profilesData = localStorage.getItem('user_profiles') || '{}';
-      const profiles = JSON.parse(profilesData);
+      const profiles = await storageService.getItem<Record<string, any>>('user_profiles', {});
       
       // Update this user's profile with the actual profile pic (not preview)
       profiles[user.username] = {
@@ -29,7 +29,7 @@ export function useProfileSave() {
       };
       
       // Save back to localStorage (shared storage)
-      localStorage.setItem('user_profiles', JSON.stringify(profiles));
+      await storageService.setItem('user_profiles', profiles);
       
       // Also update sessionStorage for faster local access
       sessionStorage.setItem(`profile_bio_${user.username}`, data.bio);
@@ -42,7 +42,7 @@ export function useProfileSave() {
       
       // Save gallery if provided
       if (data.galleryImages !== undefined) {
-        localStorage.setItem(`profile_gallery_${user.username}`, JSON.stringify(data.galleryImages));
+        await storageService.setItem(`profile_gallery_${user.username}`, data.galleryImages);
       }
 
       // Update user in auth context if needed
@@ -59,9 +59,9 @@ export function useProfileSave() {
     }
   };
 
-  const handleSaveWithGallery = (galleryImages: string[]) => {
+  const handleSaveWithGallery = async (galleryImages: string[]) => {
     if (!user?.username) return;
-    localStorage.setItem(`profile_gallery_${user.username}`, JSON.stringify(galleryImages));
+    await storageService.setItem(`profile_gallery_${user.username}`, galleryImages);
   };
 
   return {

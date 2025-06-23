@@ -11,8 +11,7 @@ export interface UserProfile {
 
 /**
  * Get user profile data from shared storage
- * Checks localStorage first (shared), then sessionStorage (local) as fallback
- * NOW ASYNC - Returns Promise<UserProfile | null>
+ * Returns Promise<UserProfile | null>
  */
 export async function getUserProfileData(username: string): Promise<UserProfile | null> {
   if (!username || typeof window === 'undefined') return null;
@@ -25,16 +24,35 @@ export async function getUserProfileData(username: string): Promise<UserProfile 
       return profiles[username];
     }
 
-    // Fallback to sessionStorage for backward compatibility
-    // Note: sessionStorage is synchronous, but we wrap in async for consistency
-    const bio = sessionStorage.getItem(`profile_bio_${username}`) || '';
-    const profilePic = sessionStorage.getItem(`profile_pic_${username}`) || null;
-    const subscriptionPrice = sessionStorage.getItem(`subscription_price_${username}`) || '0';
+    // Fallback: check legacy storage keys for backward compatibility
+    const legacyBio = await storageService.getItem<string | null>(`profile_bio_${username}`, null);
+    const legacyProfilePic = await storageService.getItem<string | null>(`profile_pic_${username}`, null);
+    const legacySubscriptionPrice = await storageService.getItem<string | null>(`subscription_price_${username}`, null);
 
+    // If we found legacy data, migrate it
+    if (legacyBio !== null || legacyProfilePic !== null || legacySubscriptionPrice !== null) {
+      const profile: UserProfile = {
+        bio: legacyBio || '',
+        profilePic: legacyProfilePic || null,
+        subscriptionPrice: legacySubscriptionPrice || '0'
+      };
+      
+      // Save to new format
+      await saveUserProfileData(username, profile);
+      
+      // Clean up legacy keys
+      await storageService.removeItem(`profile_bio_${username}`);
+      await storageService.removeItem(`profile_pic_${username}`);
+      await storageService.removeItem(`subscription_price_${username}`);
+      
+      return profile;
+    }
+
+    // No data found, return default
     return {
-      bio,
-      profilePic,
-      subscriptionPrice
+      bio: '',
+      profilePic: null,
+      subscriptionPrice: '0'
     };
   } catch (error) {
     console.error('Error loading user profile:', error);
@@ -44,7 +62,7 @@ export async function getUserProfileData(username: string): Promise<UserProfile 
 
 /**
  * Save user profile data to shared storage
- * NOW ASYNC - Returns Promise<boolean>
+ * Returns Promise<boolean>
  */
 export async function saveUserProfileData(username: string, profile: UserProfile): Promise<boolean> {
   if (!username || typeof window === 'undefined') return false;
@@ -66,15 +84,15 @@ export async function saveUserProfileData(username: string, profile: UserProfile
       return false;
     }
     
-    // Also update sessionStorage for backward compatibility
-    // These remain synchronous as sessionStorage doesn't have async support
-    sessionStorage.setItem(`profile_bio_${username}`, profile.bio);
+    // For backward compatibility, also save individual keys
+    // This helps during the migration period
+    await storageService.setItem(`profile_bio_${username}`, profile.bio);
     if (profile.profilePic) {
-      sessionStorage.setItem(`profile_pic_${username}`, profile.profilePic);
+      await storageService.setItem(`profile_pic_${username}`, profile.profilePic);
     } else {
-      sessionStorage.removeItem(`profile_pic_${username}`);
+      await storageService.removeItem(`profile_pic_${username}`);
     }
-    sessionStorage.setItem(`subscription_price_${username}`, profile.subscriptionPrice);
+    await storageService.setItem(`subscription_price_${username}`, profile.subscriptionPrice);
     
     return true;
   } catch (error) {
@@ -85,7 +103,7 @@ export async function saveUserProfileData(username: string, profile: UserProfile
 
 /**
  * Get profile picture for a user
- * NOW ASYNC - Returns Promise<string | null>
+ * Returns Promise<string | null>
  */
 export async function getUserProfilePic(username: string): Promise<string | null> {
   const profile = await getUserProfileData(username);
@@ -94,7 +112,7 @@ export async function getUserProfilePic(username: string): Promise<string | null
 
 /**
  * Get bio for a user
- * NOW ASYNC - Returns Promise<string>
+ * Returns Promise<string>
  */
 export async function getUserBio(username: string): Promise<string> {
   const profile = await getUserProfileData(username);
@@ -103,7 +121,7 @@ export async function getUserBio(username: string): Promise<string> {
 
 /**
  * Get subscription price for a user
- * NOW ASYNC - Returns Promise<string>
+ * Returns Promise<string>
  */
 export async function getUserSubscriptionPrice(username: string): Promise<string> {
   const profile = await getUserProfileData(username);
@@ -112,7 +130,7 @@ export async function getUserSubscriptionPrice(username: string): Promise<string
 
 /**
  * Delete user profile data
- * NEW HELPER - Useful for cleanup operations
+ * Useful for cleanup operations
  */
 export async function deleteUserProfileData(username: string): Promise<boolean> {
   if (!username || typeof window === 'undefined') return false;
@@ -128,10 +146,10 @@ export async function deleteUserProfileData(username: string): Promise<boolean> 
     const success = await storageService.setItem('user_profiles', profiles);
     
     if (success) {
-      // Clean up sessionStorage too
-      sessionStorage.removeItem(`profile_bio_${username}`);
-      sessionStorage.removeItem(`profile_pic_${username}`);
-      sessionStorage.removeItem(`subscription_price_${username}`);
+      // Clean up individual keys too
+      await storageService.removeItem(`profile_bio_${username}`);
+      await storageService.removeItem(`profile_pic_${username}`);
+      await storageService.removeItem(`subscription_price_${username}`);
     }
     
     return success;
@@ -143,7 +161,7 @@ export async function deleteUserProfileData(username: string): Promise<boolean> 
 
 /**
  * Check if user has profile data
- * NEW HELPER - Useful for checking if profile exists
+ * Useful for checking if profile exists
  */
 export async function hasUserProfile(username: string): Promise<boolean> {
   if (!username || typeof window === 'undefined') return false;
@@ -159,7 +177,7 @@ export async function hasUserProfile(username: string): Promise<boolean> {
 
 /**
  * Get all user profiles
- * NEW HELPER - Useful for admin views
+ * Useful for admin views
  */
 export async function getAllUserProfiles(): Promise<Record<string, UserProfile>> {
   try {
@@ -171,10 +189,10 @@ export async function getAllUserProfiles(): Promise<Record<string, UserProfile>>
 }
 
 /**
- * Migrate profile data from sessionStorage to localStorage
- * NEW HELPER - One-time migration utility
+ * Migrate profile data from legacy storage format
+ * One-time migration utility
  */
-export async function migrateProfileFromSession(username: string): Promise<boolean> {
+export async function migrateProfileFromLegacy(username: string): Promise<boolean> {
   if (!username || typeof window === 'undefined') return false;
 
   try {
@@ -182,13 +200,13 @@ export async function migrateProfileFromSession(username: string): Promise<boole
     const hasProfile = await hasUserProfile(username);
     if (hasProfile) return true;
 
-    // Check sessionStorage
-    const bio = sessionStorage.getItem(`profile_bio_${username}`);
-    const profilePic = sessionStorage.getItem(`profile_pic_${username}`);
-    const subscriptionPrice = sessionStorage.getItem(`subscription_price_${username}`);
+    // Check legacy storage keys
+    const bio = await storageService.getItem<string | null>(`profile_bio_${username}`, null);
+    const profilePic = await storageService.getItem<string | null>(`profile_pic_${username}`, null);
+    const subscriptionPrice = await storageService.getItem<string | null>(`subscription_price_${username}`, null);
 
-    // If we have any session data, migrate it
-    if (bio || profilePic || subscriptionPrice) {
+    // If we have any legacy data, migrate it
+    if (bio !== null || profilePic !== null || subscriptionPrice !== null) {
       const profile: UserProfile = {
         bio: bio || '',
         profilePic: profilePic || null,
@@ -196,12 +214,64 @@ export async function migrateProfileFromSession(username: string): Promise<boole
         lastUpdated: new Date().toISOString()
       };
 
-      return await saveUserProfileData(username, profile);
+      const success = await saveUserProfileData(username, profile);
+      
+      // Clean up legacy keys after successful migration
+      if (success) {
+        await storageService.removeItem(`profile_bio_${username}`);
+        await storageService.removeItem(`profile_pic_${username}`);
+        await storageService.removeItem(`subscription_price_${username}`);
+      }
+      
+      return success;
     }
 
     return false;
   } catch (error) {
-    console.error('Error migrating profile from session:', error);
+    console.error('Error migrating profile from legacy:', error);
     return false;
+  }
+}
+
+/**
+ * Batch migrate all legacy profiles
+ * Useful for one-time migration of all existing profiles
+ */
+export async function migrateAllLegacyProfiles(): Promise<{ migrated: number; failed: number }> {
+  let migrated = 0;
+  let failed = 0;
+
+  try {
+    // Get all storage keys
+    const allKeys = await storageService.getKeys();
+    
+    // Find all unique usernames with profile data
+    const usernames = new Set<string>();
+    
+    allKeys.forEach(key => {
+      const bioMatch = key.match(/^profile_bio_(.+)$/);
+      const picMatch = key.match(/^profile_pic_(.+)$/);
+      const priceMatch = key.match(/^subscription_price_(.+)$/);
+      
+      if (bioMatch) usernames.add(bioMatch[1]);
+      if (picMatch) usernames.add(picMatch[1]);
+      if (priceMatch) usernames.add(priceMatch[1]);
+    });
+
+    // Migrate each user
+    for (const username of usernames) {
+      const success = await migrateProfileFromLegacy(username);
+      if (success) {
+        migrated++;
+      } else {
+        failed++;
+      }
+    }
+
+    console.log(`Profile migration complete: ${migrated} migrated, ${failed} failed`);
+    return { migrated, failed };
+  } catch (error) {
+    console.error('Error during batch migration:', error);
+    return { migrated, failed };
   }
 }

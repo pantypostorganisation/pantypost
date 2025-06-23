@@ -5,6 +5,7 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
+import { storageService } from '@/services';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper function
@@ -78,29 +79,30 @@ export function useSellerMessages() {
   useEffect(() => {
     if (!user) return;
     
-    try {
-      const readThreadsKey = `panty_read_threads_${user.username}`;
-      const readThreads = localStorage.getItem(readThreadsKey);
-      if (readThreads) {
-        const threads = JSON.parse(readThreads);
-        if (Array.isArray(threads)) {
-          readThreadsRef.current = new Set(threads);
+    const loadReadThreads = async () => {
+      try {
+        const readThreadsKey = `panty_read_threads_${user.username}`;
+        const readThreads = await storageService.getItem<string[]>(readThreadsKey, []);
+        if (Array.isArray(readThreads)) {
+          readThreadsRef.current = new Set(readThreads);
         }
+      } catch (e) {
+        console.error('Failed to load read threads', e);
       }
-    } catch (e) {
-      console.error('Failed to load read threads', e);
-    }
+    };
+    
+    loadReadThreads();
   }, [user?.username]);
   
   // Save read threads to localStorage
   useEffect(() => {
     if (!user || readThreadsRef.current.size === 0) return;
     
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
       try {
         const readThreadsKey = `panty_read_threads_${user.username}`;
         const threadsArray = Array.from(readThreadsRef.current);
-        localStorage.setItem(readThreadsKey, JSON.stringify(threadsArray));
+        await storageService.setItem(readThreadsKey, threadsArray);
         
         const event = new CustomEvent('readThreadsUpdated', { 
           detail: { threads: threadsArray, username: user.username }
@@ -119,26 +121,27 @@ export function useSellerMessages() {
     if (hasLoadedEmojis.current) return;
     hasLoadedEmojis.current = true;
     
-    try {
-      const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
-      if (storedRecentEmojis) {
-        const parsed = JSON.parse(storedRecentEmojis);
-        if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 30));
+    const loadRecentEmojis = async () => {
+      try {
+        const storedRecentEmojis = await storageService.getItem<string[]>('panty_recent_emojis', []);
+        if (Array.isArray(storedRecentEmojis)) {
+          setRecentEmojis(storedRecentEmojis.slice(0, 30));
         }
+      } catch (e) {
+        console.error('Failed to load recent emojis', e);
       }
-    } catch (e) {
-      console.error('Failed to load recent emojis', e);
-    }
+    };
+    
+    loadRecentEmojis();
   }, []);
   
   // Save recent emojis to localStorage
   useEffect(() => {
     if (recentEmojis.length === 0) return;
     
-    const timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(async () => {
       try {
-        localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
+        await storageService.setItem('panty_recent_emojis', recentEmojis);
       } catch (error) {
         console.error('Failed to save recent emojis:', error);
       }
@@ -186,12 +189,12 @@ export function useSellerMessages() {
       lastMessages[buyer] = msgs[msgs.length - 1];
       
       // Get buyer profile picture and verification status
-      const storedPic = sessionStorage.getItem(`profile_pic_${buyer}`);
+      // Note: Profile pics should come from users context or be loaded async
       const buyerInfo = users?.[buyer];
       const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
       
       buyerProfiles[buyer] = { 
-        pic: storedPic, 
+        pic: null, // Profile pics should be loaded through proper channels
         verified: isVerified
       };
       
