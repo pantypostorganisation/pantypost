@@ -2,19 +2,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { storageService } from '@/services';
 
 export default function AgeVerificationModal() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const verified = localStorage.getItem('ageVerified');
-    if (!verified) {
-      setIsVisible(true);
-    }
+    const checkVerification = async () => {
+      const verified = await storageService.getItem('ageVerified', null);
+      if (!verified) {
+        setIsVisible(true);
+      }
+    };
+
+    checkVerification();
   }, []);
 
-  const handleYes = () => {
-    localStorage.setItem('ageVerified', 'true');
+  const handleYes = async () => {
+    await storageService.setItem('ageVerified', 'true');
     setIsVisible(false);
   };
 
