@@ -558,7 +558,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const tierCreditPercent = sellerTierInfo.credit;
                 const tierCreditAmount = winningBid * tierCreditPercent;
                 
-                const success = purchaseListing(purchaseListingCopy, winningBidder);
+                const success = await purchaseListing(purchaseListingCopy, winningBidder);
                 
                 if (success) {
                   if (tierCreditAmount > 0) {
@@ -694,7 +694,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const subscribeToSeller = async (buyer: string, seller: string, price: number): Promise<boolean> => {
-    const success = subscribeToSellerWithPayment(buyer, seller, price);
+    const success = await subscribeToSellerWithPayment(buyer, seller, price);
     if (success) {
       setSubscriptions((prev) => {
         const updated = {

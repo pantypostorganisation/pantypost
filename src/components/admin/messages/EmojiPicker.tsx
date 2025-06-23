@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { storageService } from '@/services';
 
 // All emojis in a single flat array
 const ALL_EMOJIS = [
@@ -33,28 +34,33 @@ export default function EmojiPicker({ onEmojiSelect, onClose }: EmojiPickerProps
 
   // Load recent emojis
   useEffect(() => {
-    try {
-      const storedRecentEmojis = localStorage.getItem('panty_recent_emojis');
-      if (storedRecentEmojis) {
-        const parsed = JSON.parse(storedRecentEmojis);
-        if (Array.isArray(parsed)) {
-          setRecentEmojis(parsed.slice(0, 30));
+    const loadRecentEmojis = async () => {
+      try {
+        const stored = await storageService.getItem<string[]>('panty_recent_emojis', []);
+        if (Array.isArray(stored)) {
+          setRecentEmojis(stored.slice(0, 30));
         }
+      } catch (error) {
+        console.error('Failed to load recent emojis:', error);
       }
-    } catch (error) {
-      console.error('Failed to load recent emojis:', error);
-    }
+    };
+    
+    loadRecentEmojis();
   }, []);
 
   // Save recent emojis
   useEffect(() => {
     if (recentEmojis.length === 0) return;
     
-    try {
-      localStorage.setItem('panty_recent_emojis', JSON.stringify(recentEmojis));
-    } catch (error) {
-      console.error('Failed to save recent emojis:', error);
-    }
+    const saveRecentEmojis = async () => {
+      try {
+        await storageService.setItem('panty_recent_emojis', recentEmojis);
+      } catch (error) {
+        console.error('Failed to save recent emojis:', error);
+      }
+    };
+    
+    saveRecentEmojis();
   }, [recentEmojis]);
 
   // Handle clicks outside

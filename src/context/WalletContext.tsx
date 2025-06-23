@@ -90,13 +90,13 @@ type WalletContextType = {
   setAdminBalance: (balance: number) => Promise<void>;
   setSellerBalance: (seller: string, balance: number) => Promise<void>;
   getSellerBalance: (seller: string) => number;
-  purchaseListing: (listing: Listing, buyerUsername: string) => boolean;
-  purchaseCustomRequest: (customRequest: CustomRequestPurchase) => boolean;
+  purchaseListing: (listing: Listing, buyerUsername: string) => Promise<boolean>;
+  purchaseCustomRequest: (customRequest: CustomRequestPurchase) => Promise<boolean>;
   subscribeToSellerWithPayment: (
     buyer: string,
     seller: string,
     amount: number
-  ) => boolean;
+  ) => Promise<boolean>;
   orderHistory: Order[];
   addOrder: (order: Order) => Promise<void>;
   sellerWithdrawals: { [username: string]: Withdrawal[] };
@@ -481,7 +481,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const purchaseListing = (listing: Listing, buyerUsername: string): boolean => {
+  const purchaseListing = async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
       ? listing.markedUpPrice
       : listing.price;
@@ -495,12 +495,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const transactionLockKey = `transaction_lock_${buyerUsername}_${seller}`;
-    if (typeof window !== 'undefined' && localStorage.getItem(transactionLockKey)) {
+    
+    // Check if lock exists
+    const existingLock = await storageService.getItem<any>(transactionLockKey, null);
+    if (existingLock) {
       return false;
     }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(transactionLockKey, 'locked');
-    }
+    
+    // Set lock
+    await storageService.setItem(transactionLockKey, 'locked');
 
     try {
       if (price <= 0 || !listing.title || !listing.id || !seller) {
@@ -563,13 +566,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       return true;
     } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(transactionLockKey);
-      }
+      // Always release lock
+      await storageService.removeItem(transactionLockKey);
     }
   };
 
-  const purchaseCustomRequest = (customRequest: CustomRequestPurchase): boolean => {
+  const purchaseCustomRequest = async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     const { requestId, title, description, price, seller, buyer, tags } = customRequest;
     
     const markedUpPrice = Math.round(price * 1.1 * 100) / 100;
@@ -582,12 +584,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     const transactionLockKey = `custom_request_transaction_lock_${buyer}_${seller}_${requestId}`;
-    if (typeof window !== 'undefined' && localStorage.getItem(transactionLockKey)) {
+    
+    // Check if lock exists
+    const existingLock = await storageService.getItem<any>(transactionLockKey, null);
+    if (existingLock) {
       return false;
     }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(transactionLockKey, 'locked');
-    }
+    
+    // Set lock
+    await storageService.setItem(transactionLockKey, 'locked');
 
     try {
       if (markedUpPrice <= 0 || !title || !requestId || !seller || !buyer) {
@@ -652,28 +657,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       return true;
     } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(transactionLockKey);
-      }
+      // Always release lock
+      await storageService.removeItem(transactionLockKey);
     }
   };
 
-  const subscribeToSellerWithPayment = (
+  const subscribeToSellerWithPayment = async (
     buyer: string,
     seller: string,
     amount: number
-  ): boolean => {
+  ): Promise<boolean> => {
     if (!buyer || !seller || amount <= 0) {
       return false;
     }
 
     const transactionLockKey = `subscription_lock_${buyer}_${seller}`;
-    if (typeof window !== 'undefined' && localStorage.getItem(transactionLockKey)) {
+    
+    // Check if lock exists
+    const existingLock = await storageService.getItem<any>(transactionLockKey, null);
+    if (existingLock) {
       return false;
     }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(transactionLockKey, 'locked');
-    }
+    
+    // Set lock
+    await storageService.setItem(transactionLockKey, 'locked');
 
     try {
       const buyerBalance = getBuyerBalance(buyer);
@@ -709,9 +716,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       return true;
     } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(transactionLockKey);
-      }
+      // Always release lock
+      await storageService.removeItem(transactionLockKey);
     }
   };
 
