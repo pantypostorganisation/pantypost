@@ -54,7 +54,7 @@ export default function ListingCard({
 
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-black">
-        {listing.imageUrls && listing.imageUrls.length > 0 && (
+        {listing.imageUrls && listing.imageUrls.length > 0 ? (
           <img
             src={listing.imageUrls[0]}
             alt={listing.title}
@@ -62,10 +62,21 @@ export default function ListingCard({
               isLockedPremium ? 'blur-md' : ''
             }`}
             onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              // Use a placeholder image - you'll need to add this image to your public folder
+              target.src = '/placeholder-panty.png';
+              target.onerror = null; // Prevent infinite loop if placeholder also fails
               console.warn('Image failed to load:', listing.imageUrls?.[0]);
-              (e.target as HTMLImageElement).style.display = 'none';
             }}
           />
+        ) : (
+          // Show placeholder when no images are provided
+          <div className="w-full h-full flex items-center justify-center bg-gray-900">
+            <div className="text-center text-gray-400">
+              <Package className="w-16 h-16 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">No Image Available</p>
+            </div>
+          </div>
         )}
         
         {/* Enhanced bottom gradient */}
@@ -176,7 +187,10 @@ export default function ListingCard({
                 alt={listing.seller}
                 className="w-12 h-12 rounded-full object-cover border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
+                  const target = e.target as HTMLImageElement;
+                  // Use a default avatar placeholder
+                  target.src = '/default-avatar.png';
+                  target.onerror = null; // Prevent infinite loop
                 }}
               />
             ) : (

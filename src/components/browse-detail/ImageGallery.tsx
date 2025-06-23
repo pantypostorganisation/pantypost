@@ -37,6 +37,13 @@ export default function ImageGallery({
                 src={images[currentIndex]}
                 alt={`${listing.title} - Image ${currentIndex + 1}`}
                 className="w-full h-full object-cover transition-transform duration-300"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  // Use a placeholder image - you'll need to add this image to your public folder
+                  target.src = '/placeholder-panty.png';
+                  target.onerror = null; // Prevent infinite loop if placeholder also fails
+                  console.warn('Image failed to load:', images[currentIndex]);
+                }}
               />
               
               {/* Image Navigation */}
@@ -130,7 +137,17 @@ export default function ImageGallery({
               }`}
               onClick={() => onIndexChange(index)}
             >
-              <img src={url} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+              <img 
+                src={url} 
+                alt={`Thumbnail ${index + 1}`} 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  // Use same placeholder for thumbnails
+                  target.src = '/placeholder-panty.png';
+                  target.onerror = null;
+                }}
+              />
             </div>
           ))}
         </div>
