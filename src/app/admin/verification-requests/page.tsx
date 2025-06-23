@@ -10,6 +10,7 @@ import VerificationSearch from '@/components/admin/verification/VerificationSear
 import VerificationStats from '@/components/admin/verification/VerificationStats';
 import VerificationList from '@/components/admin/verification/VerificationList';
 import ReviewModal from '@/components/admin/verification/ReviewModal';
+import { storageService } from '@/services';
 import type { VerificationUser, SortOption, VerificationStats as StatsType } from '@/types/verification';
 
 export default function AdminVerificationRequestsPage() {
@@ -89,7 +90,7 @@ export default function AdminVerificationRequestsPage() {
   };
 
   // Handle approval
-  const handleApprove = (username: string): void => {
+  const handleApprove = async (username: string): Promise<void> => {
     setVerificationStatus(username, 'verified');
     
     // Add to resolved verifications (optional)
@@ -103,16 +104,15 @@ export default function AdminVerificationRequestsPage() {
       verificationDocs: users[username]?.verificationDocs
     };
     
-    const existingResolved = localStorage.getItem('panty_resolved_verifications');
-    const resolvedList = existingResolved ? JSON.parse(existingResolved) : [];
-    resolvedList.push(resolvedEntry);
-    localStorage.setItem('panty_resolved_verifications', JSON.stringify(resolvedList));
+    const existingResolved = await storageService.getItem<any[]>('panty_resolved_verifications', []);
+    existingResolved.push(resolvedEntry);
+    await storageService.setItem('panty_resolved_verifications', existingResolved);
     
     setSelected(null);
   };
 
   // Handle rejection
-  const handleReject = (username: string, reason: string): void => {
+  const handleReject = async (username: string, reason: string): Promise<void> => {
     setVerificationStatus(username, 'rejected', reason);
     
     // Add to resolved verifications (optional)
@@ -127,10 +127,9 @@ export default function AdminVerificationRequestsPage() {
       verificationDocs: users[username]?.verificationDocs
     };
     
-    const existingResolved = localStorage.getItem('panty_resolved_verifications');
-    const resolvedList = existingResolved ? JSON.parse(existingResolved) : [];
-    resolvedList.push(resolvedEntry);
-    localStorage.setItem('panty_resolved_verifications', JSON.stringify(resolvedList));
+    const existingResolved = await storageService.getItem<any[]>('panty_resolved_verifications', []);
+    existingResolved.push(resolvedEntry);
+    await storageService.setItem('panty_resolved_verifications', existingResolved);
     
     setSelected(null);
   };

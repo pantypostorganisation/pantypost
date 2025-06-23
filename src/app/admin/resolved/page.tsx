@@ -11,6 +11,7 @@ import BulkActions from '@/components/admin/resolved/BulkActions';
 import ResolvedList from '@/components/admin/resolved/ResolvedList';
 import RestoreModal from '@/components/admin/resolved/RestoreModal';
 import { AlertTriangle } from 'lucide-react';
+import { storageService } from '@/services';
 import type { ResolvedReport, FilterOptions, ResolvedStats as StatsType } from '@/types/resolved';
 
 export default function ResolvedReportsPage() {
@@ -32,30 +33,27 @@ export default function ResolvedReportsPage() {
     loadResolvedReports();
   }, []);
 
-  const loadResolvedReports = () => {
+  const loadResolvedReports = async () => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('panty_report_resolved');
-      if (stored) {
-        try {
-          const parsed: ResolvedReport[] = JSON.parse(stored);
-          // Add IDs if missing
-          const reportsWithIds = parsed.map((report, index) => ({
-            ...report,
-            id: report.id || `${report.reporter}-${report.reportee}-${report.date}-${index}`
-          }));
-          setResolved(reportsWithIds);
-          setLastRefresh(new Date());
-        } catch (error) {
-          console.error('Error parsing resolved reports:', error);
-          setResolved([]);
-        }
+      try {
+        const stored = await storageService.getItem<ResolvedReport[]>('panty_report_resolved', []);
+        // Add IDs if missing
+        const reportsWithIds = stored.map((report, index) => ({
+          ...report,
+          id: report.id || `${report.reporter}-${report.reportee}-${report.date}-${index}`
+        }));
+        setResolved(reportsWithIds);
+        setLastRefresh(new Date());
+      } catch (error) {
+        console.error('Error loading resolved reports:', error);
+        setResolved([]);
       }
     }
   };
 
-  const saveResolved = (newResolved: ResolvedReport[]) => {
+  const saveResolved = async (newResolved: ResolvedReport[]) => {
     setResolved(newResolved);
-    localStorage.setItem('panty_report_resolved', JSON.stringify(newResolved));
+    await storageService.setItem('panty_report_resolved', newResolved);
   };
 
   // Toggle expanded state
@@ -110,7 +108,7 @@ export default function ResolvedReportsPage() {
     setShowRestoreModal(true);
   };
 
-  const confirmRestore = () => {
+  const confirmRestore = async () => {
     if (!reportToRestore) return;
 
     // Generate a new report entry for active reports
@@ -127,14 +125,13 @@ export default function ResolvedReportsPage() {
     };
 
     // Add to active reports
-    const existingReportsRaw = localStorage.getItem('panty_report_logs');
-    const existingReports = existingReportsRaw ? JSON.parse(existingReportsRaw) : [];
+    const existingReports = await storageService.getItem<any[]>('panty_report_logs', []);
     existingReports.push(newReport);
-    localStorage.setItem('panty_report_logs', JSON.stringify(existingReports));
+    await storageService.setItem('panty_report_logs', existingReports);
 
     // Remove from resolved
     const reportId = reportToRestore.id || `${reportToRestore.reporter}-${reportToRestore.reportee}-${reportToRestore.date}`;
-    handleDelete(reportId);
+    await handleDelete(reportId);
 
     // Dispatch event to update report counter
     window.dispatchEvent(new Event('updateReports'));
@@ -145,12 +142,12 @@ export default function ResolvedReportsPage() {
   };
 
   // Handle delete
-  const handleDelete = (reportId: string) => {
+  const handleDelete = async (reportId: string) => {
     const updatedResolved = resolved.filter(r => {
       const rId = r.id || `${r.reporter}-${r.reportee}-${r.date}`;
       return rId !== reportId;
     });
-    saveResolved(updatedResolved);
+    await saveResolved(updatedResolved);
     
     // Remove from selection if selected
     setSelectedReports(prev => {
@@ -161,7 +158,7 @@ export default function ResolvedReportsPage() {
   };
 
   // Bulk actions
-  const handleBulkRestore = () => {
+  const handleBulkRestore = async () => {
     if (selectedReports.size === 0) return;
     
     if (confirm(`Are you sure you want to restore ${selectedReports.size} reports?`)) {
@@ -169,6 +166,9 @@ export default function ResolvedReportsPage() {
         const rId = r.id || `${r.reporter}-${r.reportee}-${r.date}`;
         return selectedReports.has(rId);
       });
+      
+      // Get existing reports
+      const existingReports = await storageService.getItem<any[]>('panty_report_logs', []);
       
       toRestore.forEach(report => {
         // Add to active reports
@@ -183,19 +183,18 @@ export default function ResolvedReportsPage() {
           category: report.category,
           adminNotes: `[Restored from resolved on ${new Date().toLocaleString()}]\n${report.adminNotes || report.notes || ''}`
         };
-
-        const existingReportsRaw = localStorage.getItem('panty_report_logs');
-        const existingReports = existingReportsRaw ? JSON.parse(existingReportsRaw) : [];
         existingReports.push(newReport);
-        localStorage.setItem('panty_report_logs', JSON.stringify(existingReports));
       });
+      
+      // Save updated reports
+      await storageService.setItem('panty_report_logs', existingReports);
 
       // Remove from resolved
       const updatedResolved = resolved.filter(r => {
         const rId = r.id || `${r.reporter}-${r.reportee}-${r.date}`;
         return !selectedReports.has(rId);
       });
-      saveResolved(updatedResolved);
+      await saveResolved(updatedResolved);
       
       window.dispatchEvent(new Event('updateReports'));
       clearSelection();
@@ -203,7 +202,7 @@ export default function ResolvedReportsPage() {
     }
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedReports.size === 0) return;
     
     if (confirm(`Are you sure you want to permanently delete ${selectedReports.size} reports? This cannot be undone.`)) {
@@ -211,7 +210,7 @@ export default function ResolvedReportsPage() {
         const rId = r.id || `${r.reporter}-${r.reportee}-${r.date}`;
         return !selectedReports.has(rId);
       });
-      saveResolved(updatedResolved);
+      await saveResolved(updatedResolved);
       clearSelection();
       alert(`${selectedReports.size} reports deleted.`);
     }
@@ -240,12 +239,12 @@ export default function ResolvedReportsPage() {
   };
 
   // Import data
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
         if (data.resolvedReports && Array.isArray(data.resolvedReports)) {
@@ -264,7 +263,7 @@ export default function ResolvedReportsPage() {
               r.date === report.date
             ))
           );
-          saveResolved(unique);
+          await saveResolved(unique);
           alert(`Imported ${imported.length} reports. Total: ${unique.length}`);
         } else {
           alert('Invalid file format');

@@ -11,6 +11,7 @@ import ReportsFilters from '@/components/admin/reports/ReportsFilters';
 import ReportsList from '@/components/admin/reports/ReportsList';
 import BanModal from '@/components/admin/reports/BanModal';
 import ResolveModal from '@/components/admin/reports/ResolveModal';
+import { storageService } from '@/services';
 import type { ReportLog, BanFormData, ReportStats, UserReportStats } from '@/components/admin/reports/types';
 
 export default function AdminReportsPage() {
@@ -71,26 +72,23 @@ export default function AdminReportsPage() {
     loadReports();
   }, []);
 
-  const loadReports = () => {
+  const loadReports = async () => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('panty_report_logs');
-      if (stored) {
-        try {
-          const parsed: ReportLog[] = JSON.parse(stored);
-          const enhancedReports = parsed.map((report, index) => ({
-            ...report,
-            id: report.id || `report_${Date.now()}_${index}`,
-            processed: report.processed || false,
-            severity: report.severity || 'medium',
-            category: report.category || 'other'
-          }));
-          enhancedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setReports(enhancedReports);
-          setLastRefresh(new Date());
-        } catch (error) {
-          console.error('Error parsing stored reports:', error);
-          setReports([]);
-        }
+      try {
+        const stored = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
+        const enhancedReports = stored.map((report, index) => ({
+          ...report,
+          id: report.id || `report_${Date.now()}_${index}`,
+          processed: report.processed || false,
+          severity: report.severity || 'medium',
+          category: report.category || 'other'
+        }));
+        enhancedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setReports(enhancedReports);
+        setLastRefresh(new Date());
+      } catch (error) {
+        console.error('Error loading reports:', error);
+        setReports([]);
       }
     }
   };
@@ -195,9 +193,9 @@ export default function AdminReportsPage() {
   }, [filteredAndSortedReports, banContext]);
 
   // Save reports
-  const saveReports = (newReports: ReportLog[]) => {
+  const saveReports = async (newReports: ReportLog[]) => {
     setReports(newReports);
-    localStorage.setItem('panty_report_logs', JSON.stringify(newReports));
+    await storageService.setItem('panty_report_logs', newReports);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('updateReports'));
     }
@@ -252,7 +250,7 @@ export default function AdminReportsPage() {
               processedAt: new Date().toISOString()
             } : r
           );
-          saveReports(updatedReports);
+          await saveReports(updatedReports);
         }
         
         setShowBanModal(false);
@@ -290,7 +288,7 @@ export default function AdminReportsPage() {
     setShowResolveModal(true);
   };
 
-  const confirmResolve = () => {
+  const confirmResolve = async () => {
     if (!selectedReport) return;
     
     const adminUsername = user?.username || 'admin';
@@ -306,7 +304,7 @@ export default function AdminReportsPage() {
         adminNotes: (r.adminNotes || '') + '\n[Resolved without ban]'
       } : r
     );
-    saveReports(updatedReports);
+    await saveReports(updatedReports);
     
     // Add to resolved reports
     const resolvedEntry = {
@@ -319,10 +317,9 @@ export default function AdminReportsPage() {
       notes: selectedReport.adminNotes || 'No admin notes'
     };
     
-    const existingResolved = localStorage.getItem('panty_report_resolved');
-    const resolvedList = existingResolved ? JSON.parse(existingResolved) : [];
-    resolvedList.push(resolvedEntry);
-    localStorage.setItem('panty_report_resolved', JSON.stringify(resolvedList));
+    const existingResolved = await storageService.getItem<any[]>('panty_report_resolved', []);
+    existingResolved.push(resolvedEntry);
+    await storageService.setItem('panty_report_resolved', existingResolved);
     
     setShowResolveModal(false);
     setSelectedReport(null);
@@ -330,36 +327,36 @@ export default function AdminReportsPage() {
   };
 
   // Delete report
-  const handleDeleteReport = (reportId: string) => {
+  const handleDeleteReport = async (reportId: string) => {
     if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
       const updatedReports = reports.filter(r => r.id !== reportId);
-      saveReports(updatedReports);
+      await saveReports(updatedReports);
       alert('Report deleted');
     }
   };
 
   // Update report severity
-  const updateReportSeverity = (reportId: string, severity: ReportLog['severity']) => {
+  const updateReportSeverity = async (reportId: string, severity: ReportLog['severity']) => {
     const updatedReports = reports.map(r => 
       r.id === reportId ? { ...r, severity } : r
     );
-    saveReports(updatedReports);
+    await saveReports(updatedReports);
   };
 
   // Update report category
-  const updateReportCategory = (reportId: string, category: ReportLog['category']) => {
+  const updateReportCategory = async (reportId: string, category: ReportLog['category']) => {
     const updatedReports = reports.map(r => 
       r.id === reportId ? { ...r, category } : r
     );
-    saveReports(updatedReports);
+    await saveReports(updatedReports);
   };
 
   // Update admin notes
-  const updateAdminNotes = (reportId: string, notes: string) => {
+  const updateAdminNotes = async (reportId: string, notes: string) => {
     const updatedReports = reports.map(report => 
       report.id === reportId ? { ...report, adminNotes: notes } : report
     );
-    saveReports(updatedReports);
+    await saveReports(updatedReports);
   };
 
   // Handle ban from report
