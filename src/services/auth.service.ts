@@ -2,7 +2,7 @@
 
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
-import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
+import { FEATURES, API_ENDPOINTS, API_BASE_URL, buildApiUrl, apiCall, ApiResponse, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './api.config';
 
 export interface LoginRequest {
   username: string;
@@ -32,16 +32,183 @@ export interface UsernameCheckResponse {
  * Handles all auth-related operations with localStorage fallback
  */
 export class AuthService {
+  private tokenRefreshTimer: NodeJS.Timeout | null = null;
+  private isRefreshing = false;
+  private refreshSubscribers: ((token: string) => void)[] = [];
+
+  constructor() {
+    // Initialize interceptor on service creation
+    if (typeof window !== 'undefined') {
+      this.initializeInterceptor();
+      this.initializeSessionPersistence();
+    }
+  }
+
+  /**
+   * Initialize fetch interceptor for auth headers
+   */
+  private initializeInterceptor() {
+    // Store original fetch
+    const originalFetch = window.fetch;
+
+    // Override fetch to add auth headers
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      // Get token from storage
+      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+      
+      // Add auth header if token exists and this is an API call
+      if (token && FEATURES.USE_API_AUTH && API_BASE_URL) {
+        const url = typeof input === 'string' ? input : input.toString();
+        if (url.startsWith(API_BASE_URL)) {
+          init = init || {};
+          init.headers = {
+            ...init.headers,
+            'Authorization': `Bearer ${token}`,
+          };
+        }
+      }
+
+      // Make the request
+      const response = await originalFetch(input, init);
+
+      // Handle 401 responses (unauthorized)
+      if (response.status === 401 && FEATURES.USE_API_AUTH) {
+        // Only try to refresh if we're not already refreshing
+        if (!this.isRefreshing) {
+          this.isRefreshing = true;
+
+          try {
+            // Try to refresh token
+            const refreshResult = await this.refreshToken();
+            
+            if (refreshResult.success && refreshResult.data) {
+              // Store new tokens
+              await storageService.setItem(AUTH_TOKEN_KEY, refreshResult.data.token);
+              await storageService.setItem(REFRESH_TOKEN_KEY, refreshResult.data.refreshToken);
+
+              // Notify all subscribers
+              this.refreshSubscribers.forEach(callback => callback(refreshResult.data!.token));
+              this.refreshSubscribers = [];
+
+              // Retry original request with new token
+              if (init?.headers) {
+                (init.headers as any)['Authorization'] = `Bearer ${refreshResult.data.token}`;
+              }
+              return originalFetch(input, init);
+            } else {
+              // Refresh failed, logout user
+              await this.logout();
+              window.location.href = '/login';
+            }
+          } finally {
+            this.isRefreshing = false;
+          }
+        } else {
+          // Wait for token refresh to complete
+          return new Promise((resolve) => {
+            this.refreshSubscribers.push((token: string) => {
+              if (init?.headers) {
+                (init.headers as any)['Authorization'] = `Bearer ${token}`;
+              }
+              resolve(originalFetch(input, init));
+            });
+          });
+        }
+      }
+
+      return response;
+    };
+  }
+
+  /**
+   * Initialize session persistence
+   */
+  private async initializeSessionPersistence() {
+    try {
+      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+      const user = await storageService.getItem<User | null>('currentUser', null);
+
+      if (token && user && FEATURES.USE_API_AUTH) {
+        // Verify token is still valid
+        const result = await apiCall<User>(API_ENDPOINTS.AUTH.ME);
+        
+        if (result.success && result.data) {
+          // Update user data with fresh data from server
+          await storageService.setItem('currentUser', result.data);
+          
+          // Set up token refresh timer
+          this.setupTokenRefreshTimer();
+        } else {
+          // Token invalid, clear auth state
+          await this.clearAuthState();
+        }
+      }
+    } catch (error) {
+      console.error('Session persistence error:', error);
+    }
+  }
+
+  /**
+   * Set up automatic token refresh
+   */
+  private setupTokenRefreshTimer() {
+    // Clear existing timer
+    if (this.tokenRefreshTimer) {
+      clearTimeout(this.tokenRefreshTimer);
+    }
+
+    // Refresh token 5 minutes before expiry
+    // For now, we'll refresh every 25 minutes (assuming 30 min tokens)
+    this.tokenRefreshTimer = setTimeout(async () => {
+      const result = await this.refreshToken();
+      if (result.success) {
+        this.setupTokenRefreshTimer();
+      }
+    }, 25 * 60 * 1000); // 25 minutes
+  }
+
+  /**
+   * Clear authentication state
+   */
+  private async clearAuthState() {
+    await storageService.removeItem('currentUser');
+    await storageService.removeItem(AUTH_TOKEN_KEY);
+    await storageService.removeItem(REFRESH_TOKEN_KEY);
+    
+    if (this.tokenRefreshTimer) {
+      clearTimeout(this.tokenRefreshTimer);
+      this.tokenRefreshTimer = null;
+    }
+  }
+
   /**
    * Login user
    */
   async login(request: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
       if (FEATURES.USE_API_AUTH) {
-        return await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.LOGIN, {
+        const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.LOGIN, {
           method: 'POST',
           body: JSON.stringify(request),
         });
+
+        if (response.success && response.data) {
+          // Store tokens
+          if (response.data.token) {
+            await storageService.setItem(AUTH_TOKEN_KEY, response.data.token);
+          }
+          if (response.data.refreshToken) {
+            await storageService.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+          }
+
+          // Store user
+          await storageService.setItem('currentUser', response.data.user);
+
+          // Set up token refresh
+          this.setupTokenRefreshTimer();
+        }
+
+        return response;
       }
 
       // LocalStorage implementation
@@ -103,10 +270,28 @@ export class AuthService {
   async signup(request: SignupRequest): Promise<ApiResponse<AuthResponse>> {
     try {
       if (FEATURES.USE_API_AUTH) {
-        return await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.SIGNUP, {
+        const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.SIGNUP, {
           method: 'POST',
           body: JSON.stringify(request),
         });
+
+        if (response.success && response.data) {
+          // Store tokens
+          if (response.data.token) {
+            await storageService.setItem(AUTH_TOKEN_KEY, response.data.token);
+          }
+          if (response.data.refreshToken) {
+            await storageService.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+          }
+
+          // Store user
+          await storageService.setItem('currentUser', response.data.user);
+
+          // Set up token refresh
+          this.setupTokenRefreshTimer();
+        }
+
+        return response;
       }
 
       // LocalStorage implementation
@@ -181,14 +366,14 @@ export class AuthService {
         });
       }
 
-      // Clear current user
-      await storageService.removeItem('currentUser');
-      await storageService.removeItem('auth_token');
-      await storageService.removeItem('refresh_token');
+      // Clear auth state
+      await this.clearAuthState();
 
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
+      // Clear local state even if API call fails
+      await this.clearAuthState();
       return {
         success: false,
         error: { message: 'Logout failed' },
@@ -202,6 +387,11 @@ export class AuthService {
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
       if (FEATURES.USE_API_AUTH) {
+        const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+        if (!token) {
+          return { success: true, data: null };
+        }
+
         return await apiCall<User>(API_ENDPOINTS.AUTH.ME);
       }
 
@@ -335,7 +525,7 @@ export class AuthService {
   async refreshToken(): Promise<ApiResponse<{ token: string; refreshToken: string }>> {
     try {
       if (FEATURES.USE_API_AUTH) {
-        const refreshToken = await storageService.getItem<string | null>('refresh_token', null);
+        const refreshToken = await storageService.getItem<string | null>(REFRESH_TOKEN_KEY, null);
         if (!refreshToken) {
           return {
             success: false,
@@ -343,13 +533,21 @@ export class AuthService {
           };
         }
 
-        return await apiCall<{ token: string; refreshToken: string }>(
+        const response = await apiCall<{ token: string; refreshToken: string }>(
           API_ENDPOINTS.AUTH.REFRESH,
           {
             method: 'POST',
             body: JSON.stringify({ refreshToken }),
           }
         );
+
+        if (response.success && response.data) {
+          // Store new tokens
+          await storageService.setItem(AUTH_TOKEN_KEY, response.data.token);
+          await storageService.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+        }
+
+        return response;
       }
 
       // LocalStorage doesn't need token refresh
@@ -364,6 +562,26 @@ export class AuthService {
         error: { message: 'Failed to refresh token' },
       };
     }
+  }
+
+  /**
+   * Check if user is authenticated
+   */
+  async isAuthenticated(): Promise<boolean> {
+    if (FEATURES.USE_API_AUTH) {
+      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+      return !!token;
+    }
+
+    const user = await storageService.getItem<User | null>('currentUser', null);
+    return !!user;
+  }
+
+  /**
+   * Get stored auth token
+   */
+  async getAuthToken(): Promise<string | null> {
+    return storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
   }
 }
 

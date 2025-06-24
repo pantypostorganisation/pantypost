@@ -1,60 +1,96 @@
+// src/components/Providers.tsx
 'use client';
 
-import { Suspense } from 'react';
-import { AuthProvider } from '@/context/AuthContext';
+import { ReactNode, useEffect } from 'react';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ListingProvider } from '@/context/ListingContext';
 import { MessageProvider } from '@/context/MessageContext';
-import { WalletProvider } from '@/context/WalletContext';
 import { RequestProvider } from '@/context/RequestContext';
-import { ReviewProvider } from '@/context/ReviewContext';
 import { BanProvider } from '@/context/BanContext';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import Header from '@/components/Header';
-import AgeVerificationModal from '@/components/AgeVerificationModal';
-import BanCheck from '@/components/BanCheck';
-import MessageNotifications from '@/components/MessageNotifications';
+import { WalletProvider } from '@/context/WalletContext';
+import { ReviewProvider } from '@/context/ReviewContext';
+import { apiClient, API_BASE_URL, FEATURES } from '@/services/api.config';
 
-// Simple loading component
-function LoadingFallback() {
-  return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
-        <p className="text-gray-400">Loading PantyPost...</p>
-      </div>
-    </div>
-  );
+/**
+ * Hook to set up API interceptors for automatic auth handling
+ * This is embedded here to avoid creating a new file
+ */
+function useApiInterceptor() {
+  const { logout } = useAuth();
+
+  useEffect(() => {
+    // Only set up interceptor if we're using API auth
+    if (!FEATURES.USE_API_AUTH) return;
+
+    // Store original fetch
+    const originalFetch = window.fetch;
+
+    // Create intercepted fetch
+    const interceptedFetch: typeof fetch = async (input, init) => {
+      try {
+        const response = await originalFetch(input, init);
+        
+        // If we get a 401 and it's not already a refresh request
+        if (response.status === 401 && API_BASE_URL) {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (!url.includes('/auth/refresh') && url.startsWith(API_BASE_URL)) {
+            // Token might be expired, trigger logout
+            await logout();
+            // Use window.location to ensure clean redirect
+            if (typeof window !== 'undefined') {
+              window.location.href = '/login';
+            }
+          }
+        }
+        
+        return response;
+      } catch (error) {
+        throw error;
+      }
+    };
+
+    // Only override if not already overridden by auth service
+    if (!window.fetch.toString().includes('Authorization')) {
+      window.fetch = interceptedFetch;
+    }
+
+    // Cleanup function
+    return () => {
+      // Cancel any pending requests when component unmounts
+      if (apiClient && apiClient.cancelAllRequests) {
+        apiClient.cancelAllRequests();
+      }
+    };
+  }, [logout]);
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+// Component to set up API interceptor after auth is available
+function ApiInterceptorSetup({ children }: { children: ReactNode }) {
+  useApiInterceptor();
+  return <>{children}</>;
+}
+
+/**
+ * Root provider component that wraps the entire app with necessary contexts
+ */
+export default function Providers({ children }: { children: ReactNode }) {
   return (
-    <ErrorBoundary>
-      <AuthProvider>
+    <AuthProvider>
+      <ApiInterceptorSetup>
         <BanProvider>
-          <WalletProvider>
-            <MessageProvider>
-              <RequestProvider>
-                <ListingProvider>
+          <ListingProvider>
+            <WalletProvider>
+              <MessageProvider>
+                <RequestProvider>
                   <ReviewProvider>
-                    <Suspense fallback={<LoadingFallback />}>
-                      <div className="min-h-screen bg-black text-white">
-                        <BanCheck>
-                          <Header />
-                          <main className="flex-grow">
-                            {children}
-                          </main>
-                          <AgeVerificationModal />
-                          <MessageNotifications />
-                        </BanCheck>
-                      </div>
-                    </Suspense>
+                    {children}
                   </ReviewProvider>
-                </ListingProvider>
-              </RequestProvider>
-            </MessageProvider>
-          </WalletProvider>
+                </RequestProvider>
+              </MessageProvider>
+            </WalletProvider>
+          </ListingProvider>
         </BanProvider>
-      </AuthProvider>
-    </ErrorBoundary>
+      </ApiInterceptorSetup>
+    </AuthProvider>
   );
 }

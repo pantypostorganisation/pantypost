@@ -134,7 +134,7 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
   }
   
   // Only prepend base URL if we're using the API
-  if (API_BASE_URL && !isDevelopment) {
+  if (API_BASE_URL && FEATURES.USE_API_AUTH) {
     return `${API_BASE_URL}${url}`;
   }
   
@@ -161,50 +161,160 @@ export interface ApiResponse<T> {
   };
 }
 
-// Generic API call wrapper
+// Create a more robust API client
+class ApiClient {
+  private static instance: ApiClient;
+  private abortControllers: Map<string, AbortController> = new Map();
+
+  static getInstance(): ApiClient {
+    if (!ApiClient.instance) {
+      ApiClient.instance = new ApiClient();
+    }
+    return ApiClient.instance;
+  }
+
+  /**
+   * Cancel a specific request
+   */
+  cancelRequest(key: string) {
+    const controller = this.abortControllers.get(key);
+    if (controller) {
+      controller.abort();
+      this.abortControllers.delete(key);
+    }
+  }
+
+  /**
+   * Cancel all pending requests
+   */
+  cancelAllRequests() {
+    this.abortControllers.forEach(controller => controller.abort());
+    this.abortControllers.clear();
+  }
+
+  /**
+   * Make an API call with abort capability
+   */
+  async call<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    requestKey?: string
+  ): Promise<ApiResponse<T>> {
+    // Cancel previous request with same key if exists
+    if (requestKey) {
+      this.cancelRequest(requestKey);
+    }
+
+    // Create new abort controller
+    const abortController = new AbortController();
+    if (requestKey) {
+      this.abortControllers.set(requestKey, abortController);
+    }
+
+    try {
+      const url = API_BASE_URL && FEATURES.USE_API_AUTH ? `${API_BASE_URL}${endpoint}` : endpoint;
+      const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
+      
+      const headers: Record<string, string> = {
+        ...getDefaultHeaders() as Record<string, string>,
+        ...(options.headers || {}) as Record<string, string>,
+      };
+      
+      if (token && FEATURES.USE_API_AUTH) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: abortController.signal,
+      });
+      
+      // Remove from active requests
+      if (requestKey) {
+        this.abortControllers.delete(requestKey);
+      }
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || { message: 'An error occurred' },
+        };
+      }
+      
+      return {
+        success: true,
+        data: data.data || data,
+        meta: data.meta,
+      };
+    } catch (error) {
+      // Remove from active requests
+      if (requestKey) {
+        this.abortControllers.delete(requestKey);
+      }
+
+      // Handle abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        return {
+          success: false,
+          error: { message: 'Request was cancelled' },
+        };
+      }
+
+      console.error('API call error:', error);
+      return {
+        success: false,
+        error: {
+          message: error instanceof Error ? error.message : 'Network error occurred',
+        },
+      };
+    }
+  }
+}
+
+// Export singleton API client
+export const apiClient = ApiClient.getInstance();
+
+// Generic API call wrapper (backward compatible)
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  try {
-    const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
-    const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
+  return apiClient.call<T>(endpoint, options);
+}
+
+// Retry utility for failed requests
+export async function apiCallWithRetry<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  maxRetries = REQUEST_CONFIG.RETRY_ATTEMPTS
+): Promise<ApiResponse<T>> {
+  let lastError: ApiError | undefined;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    const result = await apiCall<T>(endpoint, options);
     
-    const headers: Record<string, string> = {
-      ...getDefaultHeaders() as Record<string, string>,
-      ...(options.headers || {}) as Record<string, string>,
-    };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (result.success) {
+      return result;
     }
     
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    lastError = result.error;
     
-    const data = await response.json();
-    
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.error || { message: 'An error occurred' },
-      };
+    // Don't retry on client errors (4xx)
+    if (lastError?.code && lastError.code.startsWith('4')) {
+      return result;
     }
     
-    return {
-      success: true,
-      data: data.data || data,
-      meta: data.meta,
-    };
-  } catch (error) {
-    console.error('API call error:', error);
-    return {
-      success: false,
-      error: {
-        message: error instanceof Error ? error.message : 'Network error occurred',
-      },
-    };
+    // Wait before retrying
+    if (i < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, REQUEST_CONFIG.RETRY_DELAY * (i + 1)));
+    }
   }
+  
+  return {
+    success: false,
+    error: lastError || { message: 'Max retries exceeded' },
+  };
 }
