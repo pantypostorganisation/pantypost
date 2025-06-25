@@ -4,14 +4,7 @@
 
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { AuthProvider } from '@/context/AuthContext';
-import { ListingProvider } from '@/context/ListingContext';
-import { MessageProvider } from '@/context/MessageContext';
-import { WalletProvider } from '@/context/WalletContext';
-import { RequestProvider } from '@/context/RequestContext';
-import { ReviewProvider } from '@/context/ReviewContext';
-import { BanProvider } from '@/context/BanContext';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import EnhancedProviders from '@/components/Providers.enhanced';
 import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';
@@ -68,34 +61,20 @@ export default function RootLayout({
         <meta name="robots" content="noindex, nofollow" />
       </head>
       <body className={inter.className}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <BanProvider>
-              <WalletProvider>
-                <MessageProvider>
-                  <RequestProvider>
-                    <ListingProvider>
-                      <ReviewProvider>
-                        <Suspense fallback={<LoadingFallback />}>
-                          <div className="min-h-screen bg-black text-white">
-                            <BanCheck>
-                              <Header />
-                              <main className="flex-grow">
-                                {children}
-                              </main>
-                              <AgeVerificationModal />
-                              <MessageNotifications />
-                            </BanCheck>
-                          </div>
-                        </Suspense>
-                      </ReviewProvider>
-                    </ListingProvider>
-                  </RequestProvider>
-                </MessageProvider>
-              </WalletProvider>
-            </BanProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+        <EnhancedProviders>
+          <Suspense fallback={<LoadingFallback />}>
+            <div className="min-h-screen bg-black text-white">
+              <BanCheck>
+                <Header />
+                <main className="flex-grow">
+                  {children}
+                </main>
+                <AgeVerificationModal />
+                <MessageNotifications />
+              </BanCheck>
+            </div>
+          </Suspense>
+        </EnhancedProviders>
       </body>
     </html>
   );

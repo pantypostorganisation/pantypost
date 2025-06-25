@@ -108,6 +108,8 @@ function CoreProviders({ children }: { children: ReactNode }) {
 
 /**
  * Auth-dependent providers
+ * IMPORTANT: WalletProvider must come before ListingProvider
+ * because ListingProvider uses useWallet hook
  */
 function AuthDependentProviders({ children }: { children: ReactNode }) {
   return (
@@ -123,8 +125,8 @@ function AuthDependentProviders({ children }: { children: ReactNode }) {
             maxRetries={3}
           >
             <Suspense fallback={<SuspenseLoading />}>
-              <ListingProvider>
-                <WalletProvider>
+              <WalletProvider>
+                <ListingProvider>
                   <MessageProvider>
                     <RequestProvider>
                       <ReviewProvider>
@@ -132,8 +134,8 @@ function AuthDependentProviders({ children }: { children: ReactNode }) {
                       </ReviewProvider>
                     </RequestProvider>
                   </MessageProvider>
-                </WalletProvider>
-              </ListingProvider>
+                </ListingProvider>
+              </WalletProvider>
             </Suspense>
           </AsyncErrorBoundary>
         </BanProvider>
