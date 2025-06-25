@@ -13,15 +13,50 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "baseUrl": ".",                      // ✅ REQUIRED for @ alias to work
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]                // ✅ Alias to point to your /src
+      "@/*": ["./src/*"],
+      "@types/*": ["./src/types/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@services/*": ["./src/services/*"],
+      "@components/*": ["./src/components/*"],
+      "@context/*": ["./src/context/*"],
+      "@hooks/*": ["./src/hooks/*"]
     },
     "plugins": [
       {
         "name": "next"
       }
-    ]
+    ],
+    
+    // Strict checks (keeping core ones, disabling problematic ones)
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    
+    // Additional checks (relaxed)
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": false,
+    
+    // IMPORTANT: Disable this to fix optional property errors
+    "exactOptionalPropertyTypes": false,
+    
+    // Module resolution
+    "forceConsistentCasingInFileNames": true,
+    "preserveConstEnums": true,
+    
+    // Emit
+    "removeComments": false,
+    "sourceMap": true
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
