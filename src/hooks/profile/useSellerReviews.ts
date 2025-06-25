@@ -39,6 +39,7 @@ export function useSellerReviews(username: string) {
       const timeout = setTimeout(() => setSubmitted(false), 2000);
       return () => clearTimeout(timeout);
     }
+    return; // Add explicit return for else case
   }, [submitted]);
 
   // Handlers

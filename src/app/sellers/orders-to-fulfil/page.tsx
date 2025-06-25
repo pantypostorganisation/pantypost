@@ -89,6 +89,9 @@ export default function OrdersToFulfilPage() {
         </span>
       );
     }
+    
+    // Add default return for other cases
+    return null;
   }, []);
 
   const toggleExpand = useCallback((orderId: string) => {

@@ -84,4 +84,7 @@ export function getShippingStatusBadge(status?: string) {
       </div>
     );
   }
+  
+  // Add default return
+  return null;
 }

@@ -230,9 +230,11 @@ export function useSellerMessages() {
     return counts;
   }, [threads, unreadCounts]);
   
-  // Mark messages as read when thread is selected AND clear notifications
+  // Mark messages as read when thread is selected AND clear notifications - FIXED
   useEffect(() => {
-    if (!activeThread || !user || activeThread === lastActiveThread.current) return;
+    if (!activeThread || !user || activeThread === lastActiveThread.current) {
+      return; // Explicit return
+    }
     
     // Update the last active thread
     lastActiveThread.current = activeThread;
@@ -261,6 +263,8 @@ export function useSellerMessages() {
       
       return () => clearTimeout(timer);
     }
+    
+    return; // Add explicit return for else case
   }, [activeThread, user?.username, markMessagesAsRead, messages, clearMessageNotifications]);
   
   // Handle message visibility for marking as read

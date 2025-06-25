@@ -11,7 +11,7 @@ export type {
   BanReason,
   AppealStatus,
   BanEntry,
-  BanHistory,
+  // BanHistory - REMOVED as it doesn't exist
   BanHistoryEntry,
   AppealReview,
   IPBan,

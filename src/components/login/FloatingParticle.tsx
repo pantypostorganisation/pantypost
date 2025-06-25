@@ -1,107 +1,128 @@
 // src/components/login/FloatingParticle.tsx
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { FloatingParticleProps } from '@/types/login';
-import { generateParticleProps, getParticleColor, createGlowColor } from '@/utils/loginUtils';
+import { motion } from 'framer-motion';
+import { useMemo, useState, useEffect } from 'react';
+import { FloatingParticleProps as TypedFloatingParticleProps } from '@/types/login';
 
-export default function FloatingParticle({ delay = 0, index = 0 }: FloatingParticleProps) {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
-  const velocityRef = useRef({ x: 0, y: 0 });
-  const animationRef = useRef<number | null>(null);
+// Extend the typed props with additional props we need
+interface ExtendedFloatingParticleProps extends TypedFloatingParticleProps {
+  color?: string; // Just use string for color
+  size?: 'small' | 'medium' | 'large';
+}
 
-  // Memoize particle properties to prevent recalculation on every render
-  const particleProps = useMemo(() => generateParticleProps(), [index]);
-
-  // Memoize color selection
-  const particleColor = useMemo(() => getParticleColor(index), [index]);
+// Enhanced reduced motion detection with error handling
+const useReducedMotion = () => {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    try {
+      if (typeof window === 'undefined') {
+        setPrefersReducedMotion(false);
+        return; // Explicit return
+      }
       
-      // Set initial random position
-      setPosition({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight
-      });
-
-      // Set initial random velocity (speed and direction)
-      velocityRef.current = {
-        x: (Math.random() - 0.5) * 0.8, // Random speed between -0.4 and 0.4
-        y: (Math.random() - 0.5) * 0.8
+      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+      setPrefersReducedMotion(mediaQuery.matches);
+      
+      const handleChange = (event: MediaQueryListEvent) => {
+        setPrefersReducedMotion(event.matches);
       };
       
-      // Add window resize handler
-      const handleResize = () => {
-        setDimensions({ width: window.innerWidth, height: window.innerHeight });
-      };
+      mediaQuery.addEventListener('change', handleChange);
       
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+      return () => {
+        mediaQuery.removeEventListener('change', handleChange);
+      };
+    } catch (error) {
+      console.error('Error detecting reduced motion preference:', error);
+      setPrefersReducedMotion(false);
+      return; // Explicit return
     }
   }, []);
 
-  // Smooth animation loop
+  return prefersReducedMotion;
+};
+
+// Deterministic pseudo-random number generator
+const seededRandom = (seed: number): number => {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+};
+
+export default function FloatingParticle({ 
+  color = '#ff950e',
+  delay = 0,
+  size = 'small',
+  index = 0
+}: ExtendedFloatingParticleProps) {
+  const prefersReducedMotion = useReducedMotion();
+  const [isClient, setIsClient] = useState(false);
+
+  // Deterministic particle properties
+  const particleProps = useMemo(() => {
+    const seed = (delay + index) * 1000; // Use index in seed calculation
+    
+    const sizeMap = {
+      small: 'w-1 h-1',
+      medium: 'w-1.5 h-1.5',
+      large: 'w-2 h-2'
+    };
+    
+    const rand1 = seededRandom(seed);
+    const rand2 = seededRandom(seed + 1);
+    const rand3 = seededRandom(seed + 2);
+    const rand4 = seededRandom(seed + 3);
+    const rand5 = seededRandom(seed + 4);
+    
+    return {
+      left: rand1 * 100,
+      top: rand2 * 100,
+      duration: 12 + rand3 * 8, // 12-20s
+      horizontalDrift: (rand4 - 0.5) * 60,
+      verticalDrift: -60 - rand5 * 140, // -60 to -200
+      opacity: 0.2 + rand3 * 0.4,
+      sizeClass: sizeMap[size]
+    };
+  }, [delay, size, index]);
+
+  // Only render particles on client to avoid hydration mismatch
   useEffect(() => {
-    const animateParticle = () => {
-      setPosition(prev => {
-        let newX = prev.x + velocityRef.current.x;
-        let newY = prev.y + velocityRef.current.y;
-        
-        // Bounce off edges and slightly randomize velocity
-        if (newX <= 0 || newX >= dimensions.width) {
-          velocityRef.current.x = -velocityRef.current.x + (Math.random() - 0.5) * 0.1;
-          newX = Math.max(0, Math.min(dimensions.width, newX));
-        }
-        
-        if (newY <= 0 || newY >= dimensions.height) {
-          velocityRef.current.y = -velocityRef.current.y + (Math.random() - 0.5) * 0.1;
-          newY = Math.max(0, Math.min(dimensions.height, newY));
-        }
+    setIsClient(true);
+  }, []);
 
-        // Add slight random drift to make movement more organic
-        if (Math.random() < 0.02) { // 2% chance each frame
-          velocityRef.current.x += (Math.random() - 0.5) * 0.1;
-          velocityRef.current.y += (Math.random() - 0.5) * 0.1;
-          
-          // Keep velocity within reasonable bounds
-          velocityRef.current.x = Math.max(-1, Math.min(1, velocityRef.current.x));
-          velocityRef.current.y = Math.max(-1, Math.min(1, velocityRef.current.y));
-        }
-        
-        return { x: newX, y: newY };
-      });
-
-      animationRef.current = requestAnimationFrame(animateParticle);
-    };
-
-    animationRef.current = requestAnimationFrame(animateParticle);
-
-    return () => {
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-    };
-  }, [dimensions]);
-
-  // Create proper hex color with alpha for box shadow
-  const glowColor = createGlowColor(particleColor.hex, particleProps.glowIntensity);
+  // Respect accessibility preferences
+  if (prefersReducedMotion || !isClient) {
+    return null;
+  }
 
   return (
-    <div
-      className={`absolute ${particleColor.bg} rounded-full transition-opacity duration-1000 pointer-events-none`}
+    <motion.div
+      className={`absolute rounded-full ${particleProps.sizeClass}`}
       style={{
-        left: position.x,
-        top: position.y,
-        width: particleProps.size,
-        height: particleProps.size,
-        opacity: particleProps.opacity,
-        filter: `blur(0.5px)`,
-        boxShadow: `0 0 ${particleProps.glowIntensity * 10}px ${glowColor}`,
-        transform: 'translate(-50%, -50%)', // Center the particle on its position
+        left: `${particleProps.left}%`,
+        top: `${particleProps.top}%`,
+        background: `radial-gradient(circle at 30% 30%, ${color}, ${color}88)`,
+        boxShadow: `0 0 6px ${color}33, 0 0 12px ${color}22`,
+        filter: 'blur(0.5px)',
+        willChange: 'transform, opacity',
+      }}
+      animate={{
+        y: [0, particleProps.verticalDrift],
+        x: [0, particleProps.horizontalDrift, 0],
+        opacity: [0, particleProps.opacity, particleProps.opacity, 0],
+        scale: [0.8, 1.1, 0.8],
+      }}
+      transition={{
+        duration: particleProps.duration,
+        delay: delay,
+        repeat: Infinity,
+        ease: "easeInOut",
+        scale: {
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }
       }}
     />
   );

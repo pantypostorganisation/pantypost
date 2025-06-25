@@ -36,6 +36,7 @@ export const useBanManagement = () => {
       const interval = setInterval(updateExpiredBans, 60000);
       return () => clearInterval(interval);
     }
+    return; // Add explicit return for else case
   }, [updateExpiredBans]);
 
   return {
@@ -61,4 +62,3 @@ export const useBanManagement = () => {
     setEvidenceIndex
   };
 };
-

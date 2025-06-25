@@ -12,7 +12,7 @@ const useReducedMotion = () => {
     try {
       if (typeof window === 'undefined') {
         setPrefersReducedMotion(false);
-        return;
+        return; // Explicit return
       }
       
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -30,6 +30,7 @@ const useReducedMotion = () => {
     } catch (error) {
       console.error('Error detecting reduced motion preference:', error);
       setPrefersReducedMotion(false);
+      return; // Explicit return
     }
   }, []);
 
