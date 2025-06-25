@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { WalletIntegration } from '@/services/wallet.integration';
@@ -50,7 +50,7 @@ export const useEnhancedBuyerWallet = () => {
     lastSyncTime: null,
   });
 
-  const syncIntervalRef = useRef<NodeJS.Timeout>();
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastActivityCheckRef = useRef<Date>(new Date());
 
   // Get buyer's purchase history
@@ -83,13 +83,13 @@ export const useEnhancedBuyerWallet = () => {
       const history = await getTransactionHistory(user.username, 20);
       
       // Calculate daily limit usage
-      const todaysDeposits = history.filter(t => {
+      const todaysDeposits = history.filter((t: any) => {
         const isDeposit = t.displayType === 'Deposit' && t.isCredit;
         const isToday = new Date(t.rawTransaction.createdAt).toDateString() === new Date().toDateString();
         return isDeposit && isToday;
       });
       
-      const todaysDepositTotal = todaysDeposits.reduce((sum, t) => 
+      const todaysDepositTotal = todaysDeposits.reduce((sum: number, t: any) => 
         sum + Money.toDollars(t.rawTransaction.amount), 0
       );
       
@@ -122,6 +122,8 @@ export const useEnhancedBuyerWallet = () => {
         }
       };
     }
+    // Add return statement for when user is not defined
+    return undefined;
   }, [user, syncBalance]);
 
   // Enhanced add funds with validation

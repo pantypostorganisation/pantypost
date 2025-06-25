@@ -1,82 +1,33 @@
 // src/components/Providers.enhanced.tsx
 'use client';
 
-import { ReactNode } from 'react';
+import React, { Component, ReactNode } from 'react';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { BanProvider } from '@/context/BanContext';
-import { WalletProvider } from '@/context/WalletContext';
+import { WalletProvider } from '@/context/WalletContext.enhanced';
 import { ListingProvider } from '@/context/ListingContext';
 import { MessageProvider } from '@/context/MessageContext';
 import { ReviewProvider } from '@/context/ReviewContext';
 import { RequestProvider } from '@/context/RequestContext';
 import { LoadingProvider } from '@/context/LoadingContext';
 import { AppInitializationProvider } from './AppInitializationProvider';
-import { FinancialErrorBoundary } from './FinancialErrorBoundary';
-
-/**
- * Enhanced Providers with proper initialization order
- * 
- * Order matters:
- * 1. AppInitialization - Must be first to ensure services are ready
- * 2. Auth - Many other providers depend on user state
- * 3. Toast - Used by other providers for notifications
- * 4. Ban - Needs auth but used by many components
- * 5. Wallet - Depends on auth and initialization
- * 6. Listing - Depends on auth and wallet
- * 7. Others - Depend on the above
- */
-export function Providers({ children }: { children: ReactNode }) {
-  return (
-    <AppInitializationProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <BanProvider>
-            <FinancialErrorBoundary>
-              <WalletProvider>
-                <ListingProvider>
-                  <MessageProvider>
-                    <ReviewProvider>
-                      <RequestProvider>
-                        <LoadingProvider>
-                          {children}
-                        </LoadingProvider>
-                      </RequestProvider>
-                    </ReviewProvider>
-                  </MessageProvider>
-                </ListingProvider>
-              </WalletProvider>
-            </FinancialErrorBoundary>
-          </BanProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </AppInitializationProvider>
-  );
-}
-
-// src/components/FinancialErrorBoundary.tsx
-'use client';
-
-import React, { Component, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
-interface Props {
+// Financial Error Boundary component
+interface FinancialErrorBoundaryProps {
   children: ReactNode;
 }
 
-interface State {
+interface FinancialErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
   errorInfo: any;
   isFinancialError: boolean;
 }
 
-/**
- * Error boundary specifically for financial operations
- * Provides enhanced error handling for wallet-related failures
- */
-export class FinancialErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
+class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, FinancialErrorBoundaryState> {
+  constructor(props: FinancialErrorBoundaryProps) {
     super(props);
     this.state = {
       hasError: false,
@@ -86,8 +37,7 @@ export class FinancialErrorBoundary extends Component<Props, State> {
     };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
-    // Check if this is a financial error
+  static getDerivedStateFromError(error: Error): Partial<FinancialErrorBoundaryState> {
     const isFinancialError = 
       error.message.toLowerCase().includes('wallet') ||
       error.message.toLowerCase().includes('balance') ||
@@ -103,11 +53,9 @@ export class FinancialErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
-    // Log to error reporting service
+  override componentDidCatch(error: Error, errorInfo: any) {
     console.error('Financial Error Boundary caught:', error, errorInfo);
     
-    // In production, send to error tracking service
     if (process.env.NODE_ENV === 'production') {
       // Example: Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
     }
@@ -123,13 +71,12 @@ export class FinancialErrorBoundary extends Component<Props, State> {
       isFinancialError: false
     });
     
-    // Optionally reload the page for financial errors
     if (this.state.isFinancialError) {
       window.location.reload();
     }
   };
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       if (this.state.isFinancialError) {
         return (
@@ -179,7 +126,6 @@ export class FinancialErrorBoundary extends Component<Props, State> {
         );
       }
 
-      // Non-financial error - use simpler UI
       return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-white rounded-lg p-8 text-center shadow-lg">
@@ -204,61 +150,45 @@ export class FinancialErrorBoundary extends Component<Props, State> {
   }
 }
 
-// src/hooks/useWalletHealth.ts
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useAppInitialization } from '@/components/AppInitializationProvider';
-import { useWallet } from '@/context/WalletContext';
-import { useAuth } from '@/context/AuthContext';
-
 /**
- * Hook to monitor wallet health and initialization status
+ * Enhanced Providers with proper initialization order
+ * 
+ * Order matters:
+ * 1. AppInitialization - Must be first to ensure services are ready
+ * 2. Auth - Many other providers depend on user state
+ * 3. Toast - Used by other providers for notifications
+ * 4. Ban - Needs auth but used by many components
+ * 5. Wallet - Depends on auth and initialization
+ * 6. Listing - Depends on auth and wallet
+ * 7. Others - Depend on the above
  */
-export function useWalletHealth() {
-  const { isInitialized, healthStatus } = useAppInitialization();
-  const { reconcileBalance } = useWallet();
-  const { user } = useAuth();
-  const [isHealthy, setIsHealthy] = useState(true);
-  const [lastCheck, setLastCheck] = useState<Date | null>(null);
-
-  useEffect(() => {
-    if (!isInitialized || !user) return;
-
-    const checkHealth = async () => {
-      try {
-        // Check wallet service health
-        const walletHealthy = healthStatus?.wallet_service ?? false;
-        
-        // Perform reconciliation check
-        if (user.role === 'buyer' || user.role === 'seller') {
-          const reconciliation = await reconcileBalance(user.username, user.role);
-          const isReconciled = reconciliation.isReconciled;
-          
-          setIsHealthy(walletHealthy && isReconciled);
-        } else {
-          setIsHealthy(walletHealthy);
-        }
-        
-        setLastCheck(new Date());
-      } catch (error) {
-        console.error('Wallet health check failed:', error);
-        setIsHealthy(false);
-      }
-    };
-
-    // Check immediately
-    checkHealth();
-
-    // Check every 5 minutes
-    const interval = setInterval(checkHealth, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [isInitialized, user, healthStatus, reconcileBalance]);
-
-  return {
-    isHealthy,
-    lastCheck,
-    healthStatus: healthStatus?.wallet_service ?? false
-  };
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <AppInitializationProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <BanProvider>
+            <FinancialErrorBoundary>
+              <WalletProvider>
+                <ListingProvider>
+                  <MessageProvider>
+                    <ReviewProvider>
+                      <RequestProvider>
+                        <LoadingProvider>
+                          {children}
+                        </LoadingProvider>
+                      </RequestProvider>
+                    </ReviewProvider>
+                  </MessageProvider>
+                </ListingProvider>
+              </WalletProvider>
+            </FinancialErrorBoundary>
+          </BanProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </AppInitializationProvider>
+  );
 }
+
+// Default export for layout.tsx
+export default Providers;

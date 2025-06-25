@@ -11,7 +11,7 @@ import {
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { walletService, ordersService, storageService } from '@/services';
+import { walletService, storageService } from '@/services';
 import { WalletIntegration } from '@/services/wallet.integration';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -37,7 +37,49 @@ export type Order = {
   originalRequestId?: string;
 };
 
-// ... other types remain the same ...
+// Import Listing from ListingContext to avoid conflicts
+import { Listing as ListingContextType } from '@/context/ListingContext';
+
+// Use the ListingContext's Listing type directly
+type Listing = ListingContextType;
+
+type CustomRequestPurchase = {
+  requestId: string;
+  buyer: string;
+  seller: string;
+  amount: number;
+  description: string;
+  metadata?: any;
+};
+
+type Withdrawal = {
+  amount: number;
+  date: string;
+  status?: 'pending' | 'completed' | 'failed';
+  method?: string;
+};
+
+type AdminAction = {
+  id: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  targetUser: string;
+  adminUser: string;
+  reason: string;
+  date: string;
+  role: 'buyer' | 'seller';
+};
+
+type DepositLog = {
+  id: string;
+  username: string;
+  amount: number;
+  method: 'credit_card' | 'bank_transfer' | 'crypto' | 'admin_credit';
+  date: string;
+  status: 'pending' | 'completed' | 'failed';
+  transactionId: string;
+  notes?: string;
+};
 
 type WalletContextType = {
   // Existing interface remains the same for backward compatibility
@@ -229,10 +271,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const addOrder = useCallback(async (order: Order) => {
     try {
       setOrderHistory((prev) => [...prev, order]);
+      await storageService.setItem("wallet_orders", [...orderHistory, order]);
     } catch (error) {
       console.error('Error adding order:', error);
     }
-  }, []);
+  }, [orderHistory]);
 
   const addDeposit = useCallback(async (
     username: string, 
@@ -265,6 +308,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
         };
         setDepositLogs(prev => [...prev, newDeposit]);
+        await storageService.setItem("wallet_depositLogs", [...depositLogs, newDeposit]);
         
         return true;
       }
@@ -273,7 +317,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Error processing deposit:', error);
       return false;
     }
-  }, []);
+  }, [depositLogs]);
 
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
@@ -318,6 +362,50 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [orderHistory, addOrder, addSellerNotification]);
+
+  const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
+    try {
+      // Create a listing-like object for the custom request
+      const listing: Listing = {
+        id: customRequest.requestId,
+        title: customRequest.description,
+        description: customRequest.description,
+        price: customRequest.amount,
+        markedUpPrice: customRequest.amount * 1.1, // 10% markup
+        seller: customRequest.seller,
+        imageUrls: [],
+      };
+
+      const result = await WalletIntegration.createPurchaseTransaction(
+        listing,
+        customRequest.buyer,
+        customRequest.seller,
+        0 // No tier credit for custom requests
+      );
+
+      if (result.success && result.order) {
+        // Mark as custom request
+        result.order.isCustomRequest = true;
+        result.order.originalRequestId = customRequest.requestId;
+        
+        await addOrder(result.order);
+        await syncBalancesWithService();
+        
+        if (addSellerNotification) {
+          addSellerNotification(
+            customRequest.seller,
+            `Custom request purchased by ${customRequest.buyer} for $${customRequest.amount.toFixed(2)}`
+          );
+        }
+        
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Custom request purchase error:', error);
+      return false;
+    }
+  }, [addOrder, addSellerNotification]);
 
   const subscribeToSellerWithPayment = useCallback(async (
     buyer: string,
@@ -373,10 +461,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       if (result) {
         const date = new Date().toISOString();
+        const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
         setSellerWithdrawals((prev) => ({
           ...prev,
-          [username]: [...(prev[username] || []), { amount, date }],
+          [username]: [...(prev[username] || []), newWithdrawal],
         }));
+        await storageService.setItem("wallet_sellerWithdrawals", {
+          ...sellerWithdrawals,
+          [username]: [...(sellerWithdrawals[username] || []), newWithdrawal],
+        });
         await syncBalancesWithService();
       } else {
         throw new Error('Withdrawal failed');
@@ -384,7 +477,158 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       throw error;
     }
+  }, [sellerWithdrawals]);
+
+  const addAdminWithdrawal = useCallback(async (amount: number) => {
+    try {
+      const result = await WalletIntegration.processWithdrawal('admin', amount);
+      
+      if (result) {
+        const date = new Date().toISOString();
+        const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
+        setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
+        await storageService.setItem("wallet_adminWithdrawals", [...adminWithdrawals, newWithdrawal]);
+        await syncBalancesWithService();
+      } else {
+        throw new Error('Admin withdrawal failed');
+      }
+    } catch (error) {
+      throw error;
+    }
+  }, [adminWithdrawals]);
+
+  const updateWallet = useCallback((username: string, amount: number, orderToFulfil?: Order) => {
+    // This is a legacy method, now handled through transactions
+    console.warn('updateWallet is deprecated, use transaction-based methods');
   }, []);
+
+  const adminCreditUser = useCallback(async (
+    username: string,
+    role: 'buyer' | 'seller',
+    amount: number,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      const result = await walletService.processAdminAction({
+        adminUser: 'admin',
+        targetUser: username,
+        role,
+        amount,
+        type: 'credit',
+        reason,
+      });
+
+      if (result.success) {
+        const action: AdminAction = {
+          id: uuidv4(),
+          type: 'credit',
+          amount,
+          targetUser: username,
+          adminUser: 'admin',
+          reason,
+          date: new Date().toISOString(),
+          role,
+        };
+        setAdminActions(prev => [...prev, action]);
+        await storageService.setItem("wallet_adminActions", [...adminActions, action]);
+        await syncBalancesWithService();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Admin credit error:', error);
+      return false;
+    }
+  }, [adminActions]);
+
+  const adminDebitUser = useCallback(async (
+    username: string,
+    role: 'buyer' | 'seller',
+    amount: number,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      const result = await walletService.processAdminAction({
+        adminUser: 'admin',
+        targetUser: username,
+        role,
+        amount,
+        type: 'debit',
+        reason,
+      });
+
+      if (result.success) {
+        const action: AdminAction = {
+          id: uuidv4(),
+          type: 'debit',
+          amount,
+          targetUser: username,
+          adminUser: 'admin',
+          reason,
+          date: new Date().toISOString(),
+          role,
+        };
+        setAdminActions(prev => [...prev, action]);
+        await storageService.setItem("wallet_adminActions", [...adminActions, action]);
+        await syncBalancesWithService();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Admin debit error:', error);
+      return false;
+    }
+  }, [adminActions]);
+
+  const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
+    const updatedOrders = orderHistory.map(order =>
+      order.id === orderId ? { ...order, deliveryAddress: address } : order
+    );
+    setOrderHistory(updatedOrders);
+    await storageService.setItem("wallet_orders", updatedOrders);
+  }, [orderHistory]);
+
+  const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+    const updatedOrders = orderHistory.map(order =>
+      order.id === orderId ? { ...order, shippingStatus: status } : order
+    );
+    setOrderHistory(updatedOrders);
+    await storageService.setItem("wallet_orders", updatedOrders);
+  }, [orderHistory]);
+
+  const getDepositsForUser = useCallback((username: string): DepositLog[] => {
+    return depositLogs.filter(log => log.username === username);
+  }, [depositLogs]);
+
+  const getTotalDeposits = useCallback((): number => {
+    return depositLogs
+      .filter(log => log.status === 'completed')
+      .reduce((sum, log) => sum + log.amount, 0);
+  }, [depositLogs]);
+
+  const getDepositsByTimeframe = useCallback((timeframe: 'today' | 'week' | 'month' | 'year' | 'all'): DepositLog[] => {
+    const now = new Date();
+    const startDate = new Date();
+    
+    switch (timeframe) {
+      case 'today':
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      case 'all':
+        return depositLogs;
+    }
+    
+    return depositLogs.filter(log => new Date(log.date) >= startDate);
+  }, [depositLogs]);
 
   // New enhanced features
   const checkSuspiciousActivity = useCallback(async (username: string) => {
@@ -405,8 +649,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
     return await WalletIntegration.getFormattedTransactionHistory(username, { limit });
   }, []);
-
-  // ... rest of the existing methods remain the same but use enhanced service where applicable ...
 
   const contextValue: WalletContextType = {
     buyerBalances,

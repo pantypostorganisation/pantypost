@@ -9,9 +9,9 @@ import {
   ReactNode,
   useCallback,
 } from 'react';
-import { useWallet } from './WalletContext';
+import { useWallet } from './WalletContext.enhanced';
 import { useAuth } from './AuthContext';
-import { Order } from './WalletContext';
+import { Order } from './WalletContext.enhanced';
 import { v4 as uuidv4 } from 'uuid';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { listingsService, usersService, storageService } from '@/services';

@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 export type TransactionId = string & { readonly brand: unique symbol };
 export const TransactionId = (id: string): TransactionId => id as TransactionId;
 
-// Enhanced transaction types
+// Enhanced transaction types - include cancelled in status
 export interface Transaction {
   id: TransactionId;
   type: 'deposit' | 'withdrawal' | 'purchase' | 'sale' | 'tip' | 'subscription' | 
@@ -37,13 +37,20 @@ export interface TransactionMetadata {
   listingId?: string;
   subscriptionId?: string;
   paymentMethod?: string;
-  bankAccount?: string;
+  bankAccount?: string | {
+    accountNumber: string;
+    routingNumber: string;
+    accountHolderName?: string;
+    country?: string;
+  };
   notes?: string;
   ipAddress?: string;
   userAgent?: string;
   platformFee?: Money;
   tierCreditAmount?: Money;
   originalAmount?: Money;
+  adminUser?: string;
+  reason?: string;
 }
 
 // Wallet balance with proper typing
@@ -78,7 +85,7 @@ export interface TransferRequest {
   from: UserId;
   to: UserId;
   amount: Money;
-  type: 'purchase' | 'tip' | 'subscription' | 'refund';
+  type: 'purchase' | 'tip' | 'subscription' | 'refund' | 'tier_credit' | 'admin_credit' | 'admin_debit';
   description: string;
   metadata?: TransactionMetadata;
   idempotencyKey?: string;
@@ -129,7 +136,10 @@ export class EnhancedWalletService {
       'wallet_idempotency_cache',
       {}
     );
-    this.idempotencyCache = new Map(Object.entries(cache));
+    // Fix: Convert object entries to string pairs for Map
+    this.idempotencyCache = new Map(
+      Object.entries(cache).map(([key, value]) => [key, TransactionId(value)])
+    );
     
     // Clean up old pending transactions
     await this.cleanupPendingTransactions();
@@ -236,7 +246,7 @@ export class EnhancedWalletService {
       // Process deposit
       try {
         // Update balance
-        await this.updateBalance(request.userId, 'buyer', request.amount, 'credit');
+        await this.updateBalanceInternal(request.userId, 'buyer', request.amount, 'credit');
         
         // Mark transaction as completed
         transaction.status = 'completed';
@@ -332,7 +342,7 @@ export class EnhancedWalletService {
       // Process withdrawal
       try {
         // Update balance (deduct amount)
-        await this.updateBalance(request.userId, 'seller', request.amount, 'debit');
+        await this.updateBalanceInternal(request.userId, 'seller', request.amount, 'debit');
         
         // In real implementation, this would initiate bank transfer
         // For now, we'll mark as completed after a delay
@@ -348,7 +358,7 @@ export class EnhancedWalletService {
         return { success: true, data: transaction };
       } catch (error) {
         // Rollback on error
-        await this.updateBalance(request.userId, 'seller', request.amount, 'credit');
+        await this.updateBalanceInternal(request.userId, 'seller', request.amount, 'credit');
         
         transaction.status = 'failed';
         transaction.failedAt = new Date().toISOString() as ISOTimestamp;
@@ -442,7 +452,6 @@ export class EnhancedWalletService {
           createdAt: new Date().toISOString() as ISOTimestamp,
           metadata: {
             ...request.metadata,
-            originalTransactionId: mainTransaction.id,
           },
           idempotencyKey: `${idempotencyKey}_fee`,
         };
@@ -457,14 +466,14 @@ export class EnhancedWalletService {
       // Process transfers atomically
       try {
         // Deduct from buyer
-        await this.updateBalance(request.from, 'buyer', request.amount, 'debit');
+        await this.updateBalanceInternal(request.from, 'buyer', request.amount, 'debit');
         
         // Credit to seller (minus fee)
-        await this.updateBalance(request.to, 'seller', sellerAmount, 'credit');
+        await this.updateBalanceInternal(request.to, 'seller', sellerAmount, 'credit');
         
         // Credit platform fee to admin
         if (platformFee > 0) {
-          await this.updateBalance(UserId('admin'), 'admin', platformFee, 'credit');
+          await this.updateBalanceInternal(UserId('admin'), 'admin', platformFee, 'credit');
         }
 
         // Mark all transactions as completed
@@ -539,7 +548,6 @@ export class EnhancedWalletService {
       completedAt: new Date().toISOString() as ISOTimestamp,
       metadata: {
         ...transaction.metadata,
-        originalTransactionId: transaction.id,
       },
       reversalOf: transaction.id,
     };
@@ -548,7 +556,7 @@ export class EnhancedWalletService {
     const affectedBalances: WalletBalance[] = [];
     
     if (transaction.from) {
-      await this.updateBalance(transaction.from, transaction.fromRole!, transaction.amount, 'credit');
+      await this.updateBalanceInternal(transaction.from, transaction.fromRole!, transaction.amount, 'credit');
       const balance = await this.getBalance(transaction.from, transaction.fromRole!);
       if (balance.success && balance.data) {
         affectedBalances.push(balance.data);
@@ -556,7 +564,7 @@ export class EnhancedWalletService {
     }
     
     if (transaction.to) {
-      await this.updateBalance(transaction.to, transaction.toRole!, transaction.amount, 'debit');
+      await this.updateBalanceInternal(transaction.to, transaction.toRole!, transaction.amount, 'debit');
       const balance = await this.getBalance(transaction.to, transaction.toRole!);
       if (balance.success && balance.data) {
         affectedBalances.push(balance.data);
@@ -799,7 +807,7 @@ export class EnhancedWalletService {
     return `wallet_${role}_${userId}`;
   }
 
-  private async updateBalance(
+  private async updateBalanceInternal(
     userId: UserId,
     role: 'buyer' | 'seller' | 'admin',
     amount: Money,
@@ -822,6 +830,37 @@ export class EnhancedWalletService {
     }
     
     await storageService.setItem(balanceKey, newBalance);
+  }
+
+  /**
+   * Update balance for a user (API method)
+   */
+  async updateBalance(
+    username: string,
+    amount: number,
+    role?: 'buyer' | 'seller' | 'admin'
+  ): Promise<ApiResponse<any>> {
+    try {
+      const actualRole = role || (username === 'admin' ? 'admin' : 'buyer');
+      const balanceKey = this.getBalanceKey(UserId(username), actualRole);
+      const amountInCents = Math.round(amount * 100); // Convert to cents
+      
+      await storageService.setItem(balanceKey, amountInCents);
+      
+      return {
+        success: true,
+        data: {
+          username,
+          balance: amount,
+          role: actualRole,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: { message: 'Failed to update balance' },
+      };
+    }
   }
 
   private async calculatePendingBalance(
@@ -956,6 +995,34 @@ export class EnhancedWalletService {
   private async userExists(userId: UserId): Promise<boolean> {
     const users = await storageService.getItem<Record<string, any>>('all_users_v2', {});
     return userId in users;
+  }
+
+  /**
+   * Check for suspicious activity
+   */
+  async checkSuspiciousActivity(username: string): Promise<{
+    suspicious: boolean;
+    reasons: string[];
+    score: number;
+  }> {
+    try {
+      const userId = UserId(username);
+      const history = await this.getTransactionHistory();
+      
+      if (!history.success || !history.data) {
+        return { suspicious: false, reasons: [], score: 0 };
+      }
+
+      const result = WalletValidation.detectSuspiciousActivity(userId, history.data);
+      return {
+        suspicious: result.suspicious,
+        reasons: result.reasons,
+        score: result.riskScore,
+      };
+    } catch (error) {
+      console.error('Check suspicious activity error:', error);
+      return { suspicious: false, reasons: [], score: 0 };
+    }
   }
 }
 

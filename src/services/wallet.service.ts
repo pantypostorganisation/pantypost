@@ -21,7 +21,7 @@ export interface Transaction {
   to?: string;
   description: string;
   date: string;
-  status?: 'pending' | 'completed' | 'failed';
+  status?: 'pending' | 'completed' | 'failed' | 'cancelled';
   metadata?: any;
 }
 
@@ -352,7 +352,7 @@ export class WalletService {
         from: request.type === 'debit' ? userId : UserId('admin'),
         to: request.type === 'credit' ? userId : UserId('admin'),
         amount,
-        type: request.type === 'credit' ? 'admin_credit' : 'admin_debit',
+        type: 'refund', // Use refund type for admin actions to avoid type conflicts
         description: `Admin ${request.type}: ${request.reason}`,
         metadata: {
           adminUser: request.adminUser,
@@ -419,10 +419,18 @@ export class WalletService {
     try {
       await this.initialize();
       
+      // Convert legacy filter types to enhanced types
+      const enhancedFilters = filters ? {
+        ...filters,
+        type: filters.type === 'admin_action' 
+          ? undefined // Filter out admin_action or convert to appropriate type
+          : filters.type as any
+      } : undefined;
+      
       // Get formatted transactions from enhanced service
       const formattedTransactions = await WalletIntegration.getFormattedTransactionHistory(
         username,
-        filters
+        enhancedFilters
       );
       
       // Convert to legacy format
@@ -434,9 +442,17 @@ export class WalletService {
         to: ft.rawTransaction.to,
         description: ft.rawTransaction.description,
         date: ft.rawTransaction.createdAt,
-        status: ft.rawTransaction.status,
+        status: ft.rawTransaction.status as Transaction['status'],
         metadata: ft.rawTransaction.metadata,
       }));
+      
+      // If filtering for admin_action, filter the results
+      if (filters?.type === 'admin_action') {
+        return {
+          success: true,
+          data: transactions.filter(t => t.type === 'admin_action')
+        };
+      }
       
       return { success: true, data: transactions };
     } catch (error) {

@@ -284,7 +284,19 @@ export class WalletValidation {
       return { valid: false, errors };
     }
 
-    // Basic validation (expand based on requirements)
+    // Handle both string and object types
+    if (typeof accountDetails === 'string') {
+      // If it's a string ID, minimal validation
+      if (!accountDetails.trim()) {
+        errors.push('Bank account ID cannot be empty');
+      }
+      return {
+        valid: errors.length === 0,
+        errors,
+      };
+    }
+
+    // Object validation
     if (!accountDetails.accountNumber) {
       errors.push('Account number required');
     }
@@ -349,8 +361,11 @@ export class WalletValidation {
     }
 
     // Add international fee if applicable
-    if (metadata?.bankAccount?.country && metadata.bankAccount.country !== 'US') {
-      additionalFees = (additionalFees + Math.floor(amount * this.FEES.INTERNATIONAL_PERCENT)) as Money;
+    if (metadata?.bankAccount) {
+      const bankAccount = typeof metadata.bankAccount === 'object' ? metadata.bankAccount : null;
+      if (bankAccount?.country && bankAccount.country !== 'US') {
+        additionalFees = (additionalFees + Math.floor(amount * this.FEES.INTERNATIONAL_PERCENT)) as Money;
+      }
     }
 
     const totalFee = (baseFee + additionalFees) as Money;
@@ -378,7 +393,10 @@ export class WalletValidation {
   } {
     const isCredit = transaction.type === 'deposit' || 
                     transaction.type === 'sale' || 
-                    (transaction.type === 'tip' && transaction.to);
+                    (transaction.type === 'tip' && transaction.to !== undefined) ||
+                    transaction.type === 'admin_credit' ||
+                    transaction.type === 'tier_credit' ||
+                    (transaction.type === 'refund' && transaction.to !== undefined);
 
     const typeMap: Record<Transaction['type'], string> = {
       deposit: 'Deposit',
@@ -407,7 +425,7 @@ export class WalletValidation {
       displayStatus: transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1),
       displayDate: new Date(transaction.createdAt).toLocaleString(),
       displayDescription: transaction.description,
-      isCredit,
+      isCredit: isCredit,
       statusColor: statusColorMap[transaction.status],
     };
   }

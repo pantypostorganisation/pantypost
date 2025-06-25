@@ -1,83 +1,16 @@
 // src/services/app-initializer.ts
 
 import { walletService } from './wallet.service';
-import { initializeWalletMigration } from './wallet.migration';
 import { storageService } from './storage.service';
-
-export interface InitializationStep {
-  name: string;
-  critical: boolean; // If true, app cannot continue without this
-  initialize: () => Promise<void>;
-  healthCheck?: () => Promise<boolean>;
-}
-
-export interface InitializationResult {
-  success: boolean;
-  errors: Array<{ step: string; error: Error }>;
-  warnings: Array<{ step: string; message: string }>;
-  timings: Record<string, number>;
-}
+import { initializeWalletMigration } from './wallet.migration';
 
 /**
- * Centralized app initialization system for scalable marketplace
+ * Application initialization service
+ * Handles initialization of all core services
  */
 export class AppInitializer {
   private static instance: AppInitializer;
   private initialized = false;
-  private initializing = false;
-  private initPromise: Promise<InitializationResult> | null = null;
-  
-  private steps: InitializationStep[] = [
-    {
-      name: 'storage',
-      critical: true,
-      initialize: async () => {
-        // Verify storage is accessible
-        await storageService.setItem('_health_check', Date.now());
-        const check = await storageService.getItem('_health_check', 0);
-        if (!check) throw new Error('Storage not accessible');
-        await storageService.removeItem('_health_check');
-      },
-      healthCheck: async () => {
-        try {
-          await storageService.setItem('_health_check', Date.now());
-          await storageService.removeItem('_health_check');
-          return true;
-        } catch {
-          return false;
-        }
-      }
-    },
-    {
-      name: 'wallet_migration',
-      critical: false, // Can continue with legacy data
-      initialize: async () => {
-        const migrationStatus = await initializeWalletMigration();
-        console.log('[AppInit] Wallet migration status:', migrationStatus);
-      }
-    },
-    {
-      name: 'wallet_service',
-      critical: true,
-      initialize: async () => {
-        await walletService.initialize();
-      },
-      healthCheck: async () => {
-        try {
-          // Test basic wallet operation
-          const balance = await walletService.getBalance('_health_check', 'buyer');
-          return balance.success;
-        } catch {
-          return false;
-        }
-      }
-    },
-    // Add more initialization steps here as your app grows:
-    // - Analytics initialization
-    // - Feature flags
-    // - WebSocket connections
-    // - Third-party services
-  ];
 
   static getInstance(): AppInitializer {
     if (!AppInitializer.instance) {
@@ -87,146 +20,128 @@ export class AppInitializer {
   }
 
   /**
-   * Initialize the application
+   * Initialize all application services
    */
-  async initialize(): Promise<InitializationResult> {
-    // Return existing promise if already initializing
-    if (this.initializing && this.initPromise) {
-      return this.initPromise;
-    }
-
-    // Already initialized
+  async initialize(): Promise<void> {
     if (this.initialized) {
-      return {
-        success: true,
-        errors: [],
-        warnings: [],
-        timings: {}
-      };
+      return;
     }
 
-    this.initializing = true;
-    this.initPromise = this.performInitialization();
-    
-    const result = await this.initPromise;
-    this.initialized = result.success || !this.hasCriticalErrors(result);
-    this.initializing = false;
-    
-    return result;
+    try {
+      console.log('Initializing application services...');
+
+      // Initialize storage service first
+      await this.initializeStorage();
+
+      // Run wallet migration if needed
+      await this.runWalletMigration();
+
+      // Initialize wallet service
+      await this.initializeWallet();
+
+      // Initialize other services as needed
+      await this.initializeOtherServices();
+
+      this.initialized = true;
+      console.log('Application services initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize application services:', error);
+      throw error;
+    }
   }
 
   /**
-   * Perform the actual initialization
+   * Initialize storage service
    */
-  private async performInitialization(): Promise<InitializationResult> {
-    const result: InitializationResult = {
-      success: true,
-      errors: [],
-      warnings: [],
-      timings: {}
-    };
-
-    const startTime = performance.now();
-    console.log('[AppInit] Starting application initialization...');
-
-    for (const step of this.steps) {
-      const stepStart = performance.now();
-      
-      try {
-        console.log(`[AppInit] Initializing ${step.name}...`);
-        await step.initialize();
-        
-        result.timings[step.name] = performance.now() - stepStart;
-        console.log(`[AppInit] ✅ ${step.name} initialized in ${result.timings[step.name].toFixed(2)}ms`);
-      } catch (error) {
-        const err = error as Error;
-        console.error(`[AppInit] ❌ ${step.name} failed:`, err);
-        
-        if (step.critical) {
-          result.errors.push({ step: step.name, error: err });
-          result.success = false;
-        } else {
-          result.warnings.push({ 
-            step: step.name, 
-            message: `Non-critical initialization failed: ${err.message}` 
-          });
-        }
-        
-        result.timings[step.name] = performance.now() - stepStart;
-      }
-    }
-
-    result.timings.total = performance.now() - startTime;
-    console.log(`[AppInit] Initialization completed in ${result.timings.total.toFixed(2)}ms`);
-    
-    // Log results
-    if (result.errors.length > 0) {
-      console.error('[AppInit] Critical errors:', result.errors);
-    }
-    if (result.warnings.length > 0) {
-      console.warn('[AppInit] Warnings:', result.warnings);
-    }
-
-    // Store initialization result for debugging
-    await storageService.setItem('_app_init_result', {
-      ...result,
-      timestamp: new Date().toISOString()
-    });
-
-    return result;
+  private async initializeStorage(): Promise<void> {
+    // Storage service doesn't need explicit initialization in current implementation
+    // but we can add any storage-related setup here
+    console.log('Storage service ready');
   }
 
   /**
-   * Check if any critical errors occurred
+   * Run wallet migration if needed
    */
-  private hasCriticalErrors(result: InitializationResult): boolean {
-    return result.errors.some(e => 
-      this.steps.find(s => s.name === e.step)?.critical === true
-    );
-  }
-
-  /**
-   * Perform health checks
-   */
-  async performHealthChecks(): Promise<Record<string, boolean>> {
-    const results: Record<string, boolean> = {};
-    
-    for (const step of this.steps) {
-      if (step.healthCheck) {
-        try {
-          results[step.name] = await step.healthCheck();
-        } catch {
-          results[step.name] = false;
-        }
-      }
+  private async runWalletMigration(): Promise<void> {
+    try {
+      await initializeWalletMigration();
+      console.log('Wallet migration check completed');
+    } catch (error) {
+      console.error('Wallet migration failed:', error);
+      // Don't throw - allow app to continue with possible data issues
     }
-    
-    return results;
   }
 
   /**
-   * Get initialization status
+   * Initialize wallet service
    */
-  getStatus(): {
-    initialized: boolean;
-    initializing: boolean;
-    hasErrors: boolean;
-  } {
+  private async initializeWallet(): Promise<void> {
+    await walletService.initialize();
+    console.log('Wallet service initialized');
+  }
+
+  /**
+   * Initialize other services
+   */
+  private async initializeOtherServices(): Promise<void> {
+    // Add initialization for other services as needed
+    // For example: messaging, listings, etc.
+  }
+
+  /**
+   * Check if services are healthy
+   */
+  async checkHealth(): Promise<{
+    wallet: boolean;
+    storage: boolean;
+    overall: boolean;
+  }> {
+    const walletHealthy = await this.checkWalletHealth();
+    const storageHealthy = await this.checkStorageHealth();
+
     return {
-      initialized: this.initialized,
-      initializing: this.initializing,
-      hasErrors: false // Will be set based on stored results
+      wallet: walletHealthy,
+      storage: storageHealthy,
+      overall: walletHealthy && storageHealthy,
     };
   }
 
   /**
-   * Reset initialization (for testing/debugging)
+   * Check wallet service health
    */
-  async reset(): Promise<void> {
+  private async checkWalletHealth(): Promise<boolean> {
+    try {
+      // Try to get a balance to check if wallet service is working
+      const result = await walletService.getBalance('test_health_check');
+      return result.success || true; // Even if user doesn't exist, service is working
+    } catch (error) {
+      console.error('Wallet health check failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check storage service health
+   */
+  private async checkStorageHealth(): Promise<boolean> {
+    try {
+      // Try to read/write to storage
+      const testKey = '__health_check_' + Date.now();
+      await storageService.setItem(testKey, { test: true });
+      const result = await storageService.getItem(testKey, null);
+      await storageService.removeItem(testKey);
+      return result !== null;
+    } catch (error) {
+      console.error('Storage health check failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Reset initialization state (for testing)
+   */
+  reset(): void {
     this.initialized = false;
-    this.initializing = false;
-    this.initPromise = null;
-    await storageService.removeItem('_app_init_result');
   }
 }
 

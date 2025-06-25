@@ -1,7 +1,11 @@
 // src/utils/format.enhanced.ts
 
 import { Money, ISOTimestamp } from '@/types/common';
-import { Transaction, TransactionType, TransactionStatus } from '@/services/wallet.service.enhanced';
+import { Transaction } from '@/services/wallet.service.enhanced';
+
+// Define the missing types locally since they're not exported from wallet.service.enhanced
+type TransactionType = Transaction['type'];
+type TransactionStatus = Transaction['status'];
 
 /**
  * Enhanced formatting utilities with proper Money type support

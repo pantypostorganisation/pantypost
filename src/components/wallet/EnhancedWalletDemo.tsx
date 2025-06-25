@@ -6,6 +6,7 @@ import { useEnhancedBuyerWallet } from '@/hooks/useBuyerWallet.enhanced';
 import { WalletValidation } from '@/services/wallet.validation';
 import { WalletMockData } from '@/services/wallet.mock';
 import { formatMoney, formatLimit, formatRiskScore, formatTransactionSummary } from '@/utils/format.enhanced';
+import { Money } from '@/types/common';
 import { 
   Wallet, 
   CreditCard, 
@@ -95,8 +96,10 @@ export default function EnhancedWalletDemo() {
     }, 1000);
   };
 
+  // Calculate used amount correctly
+  const usedAmount = Money.fromDollars(dailyDepositLimit - remainingDepositLimit) as Money;
   const limitDisplay = formatLimit(
-    WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT - (remainingDepositLimit * 100), // Convert to Money
+    usedAmount,
     WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT
   );
 

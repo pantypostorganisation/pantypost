@@ -4,7 +4,7 @@
 
 import { Inter } from 'next/font/google';
 import './globals.css';
-import EnhancedProviders from '@/components/Providers.enhanced';
+import Providers from '@/components/Providers.enhanced';
 import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';
@@ -61,7 +61,7 @@ export default function RootLayout({
         <meta name="robots" content="noindex, nofollow" />
       </head>
       <body className={inter.className}>
-        <EnhancedProviders>
+        <Providers>
           <Suspense fallback={<LoadingFallback />}>
             <div className="min-h-screen bg-black text-white">
               <BanCheck>
@@ -74,7 +74,7 @@ export default function RootLayout({
               </BanCheck>
             </div>
           </Suspense>
-        </EnhancedProviders>
+        </Providers>
       </body>
     </html>
   );
