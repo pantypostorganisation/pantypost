@@ -2,9 +2,21 @@
 
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
-import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
+import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient } from './api.config';
+import { enhancedUsersService } from './users.service.enhanced';
+import {
+  UserProfile as EnhancedUserProfile,
+  UserSearchParams as EnhancedUserSearchParams,
+  VerificationRequest as EnhancedVerificationRequest,
+  VerificationUpdateRequest as EnhancedVerificationUpdateRequest,
+  BanRequest as EnhancedBanRequest,
+  UserErrorCode,
+  isValidUsername,
+  isValidBio,
+  isValidSubscriptionPrice,
+} from '@/types/users';
 
-// Define VerificationStatus type since it's not exported from AuthContext
+// Re-export types for backward compatibility
 export type VerificationStatus = 'pending' | 'verified' | 'rejected' | 'unverified';
 
 export interface UserProfile {
@@ -52,70 +64,43 @@ export interface BanRequest {
 }
 
 /**
- * Users Service
- * Handles all user-related operations
+ * Users Service - Enhanced Version with Backward Compatibility
+ * 
+ * This service now uses the enhanced implementation while maintaining
+ * the same API for backward compatibility.
  */
 export class UsersService {
+  private enhanced = enhancedUsersService;
+
   /**
    * Get all users
    */
   async getUsers(params?: UserSearchParams): Promise<ApiResponse<Record<string, User>>> {
     try {
-      if (FEATURES.USE_API_USERS) {
-        const queryParams = new URLSearchParams();
-        if (params) {
-          Object.entries(params).forEach(([key, value]) => {
-            if (value !== undefined) {
-              queryParams.append(key, String(value));
-            }
-          });
-        }
-        
-        return await apiCall<Record<string, User>>(
-          `${API_ENDPOINTS.USERS.LIST}?${queryParams.toString()}`
-        );
+      // Convert params to enhanced format
+      const enhancedParams: EnhancedUserSearchParams = {
+        ...params,
+        sortBy: 'username',
+        sortOrder: 'asc',
+      };
+
+      const result = await this.enhanced.getUsers(enhancedParams);
+      
+      if (!result.success) {
+        return result as any;
       }
 
-      // LocalStorage implementation
-      const allUsers = await storageService.getItem<Record<string, any>>(
-        'all_users_v2',
-        {}
-      );
-
-      let filteredUsers = { ...allUsers };
-
-      // Apply filters
-      if (params) {
-        const userEntries = Object.entries(allUsers);
-        
-        let filtered = userEntries;
-        
-        if (params.role) {
-          filtered = filtered.filter(([_, user]) => user.role === params.role);
-        }
-        
-        if (params.verified !== undefined) {
-          filtered = filtered.filter(
-            ([_, user]) => 
-              (user.verificationStatus === 'verified') === params.verified
-          );
-        }
-        
-        if (params.query) {
-          const query = params.query.toLowerCase();
-          filtered = filtered.filter(
-            ([username, user]) =>
-              username.toLowerCase().includes(query) ||
-              user.bio?.toLowerCase().includes(query)
-          );
-        }
-        
-        filteredUsers = Object.fromEntries(filtered);
+      // Convert UsersResponse to Record<string, User> for backward compatibility
+      const usersMap: Record<string, User> = {};
+      if (result.data?.users) {
+        result.data.users.forEach(user => {
+          usersMap[user.username] = user;
+        });
       }
 
       return {
         success: true,
-        data: filteredUsers,
+        data: usersMap,
       };
     } catch (error) {
       console.error('Get users error:', error);
@@ -130,32 +115,7 @@ export class UsersService {
    * Get user by username
    */
   async getUser(username: string): Promise<ApiResponse<User | null>> {
-    try {
-      if (FEATURES.USE_API_USERS) {
-        return await apiCall<User>(
-          buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username })
-        );
-      }
-
-      // LocalStorage implementation
-      const allUsers = await storageService.getItem<Record<string, any>>(
-        'all_users_v2',
-        {}
-      );
-
-      const user = allUsers[username];
-      
-      return {
-        success: true,
-        data: user || null,
-      };
-    } catch (error) {
-      console.error('Get user error:', error);
-      return {
-        success: false,
-        error: { message: 'Failed to get user' },
-      };
-    }
+    return this.enhanced.getUser(username);
   }
 
   /**
@@ -163,45 +123,26 @@ export class UsersService {
    */
   async getUserProfile(username: string): Promise<ApiResponse<UserProfile | null>> {
     try {
-      if (FEATURES.USE_API_USERS) {
-        return await apiCall<UserProfile>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username })}/profile`
-        );
-      }
-
-      // LocalStorage implementation
-      const profilesData = await storageService.getItem<Record<string, UserProfile>>(
-        'user_profiles',
-        {}
-      );
-
-      const profile = profilesData[username];
+      const result = await this.enhanced.getUserProfile(username);
       
-      if (!profile) {
-        // Fallback to legacy sessionStorage for backward compatibility
-        const bio = sessionStorage.getItem(`profile_bio_${username}`) || '';
-        const profilePic = sessionStorage.getItem(`profile_pic_${username}`) || null;
-        const subscriptionPrice = sessionStorage.getItem(`subscription_price_${username}`) || '0';
-        const galleryData = localStorage.getItem(`profile_gallery_${username}`);
-        const galleryImages = galleryData ? JSON.parse(galleryData) : [];
-
-        if (bio || profilePic || subscriptionPrice !== '0') {
-          return {
-            success: true,
-            data: {
-              bio,
-              profilePic,
-              subscriptionPrice,
-              galleryImages,
-            },
-          };
-        }
+      if (!result.success) {
+        return result as any;
       }
 
-      return {
-        success: true,
-        data: profile || null,
+      if (!result.data) {
+        return { success: true, data: null };
+      }
+
+      // Extract just the profile part for backward compatibility
+      const profile: UserProfile = {
+        bio: result.data.profile.bio,
+        profilePic: result.data.profile.profilePic,
+        subscriptionPrice: result.data.profile.subscriptionPrice,
+        lastUpdated: result.data.profile.lastUpdated,
+        galleryImages: result.data.profile.galleryImages,
       };
+
+      return { success: true, data: profile };
     } catch (error) {
       console.error('Get user profile error:', error);
       return {
@@ -219,67 +160,44 @@ export class UsersService {
     updates: UpdateProfileRequest
   ): Promise<ApiResponse<UserProfile>> {
     try {
-      if (FEATURES.USE_API_USERS) {
-        return await apiCall<UserProfile>(
-          buildApiUrl(API_ENDPOINTS.USERS.UPDATE_PROFILE, { username }),
-          {
-            method: 'PATCH',
-            body: JSON.stringify(updates),
-          }
-        );
+      // Validate inputs using enhanced validation
+      if (!isValidUsername(username)) {
+        return {
+          success: false,
+          error: { message: 'Invalid username format' },
+        };
       }
 
-      // LocalStorage implementation
-      const profilesData = await storageService.getItem<Record<string, UserProfile>>(
-        'user_profiles',
-        {}
-      );
+      if (updates.bio !== undefined && !isValidBio(updates.bio)) {
+        return {
+          success: false,
+          error: { message: 'Bio is too long (max 500 characters)' },
+        };
+      }
 
-      const updatedProfile: UserProfile = {
-        bio: updates.bio ?? profilesData[username]?.bio ?? '',
-        profilePic: updates.profilePic ?? profilesData[username]?.profilePic ?? null,
-        subscriptionPrice: updates.subscriptionPrice ?? profilesData[username]?.subscriptionPrice ?? '0',
-        galleryImages: updates.galleryImages ?? profilesData[username]?.galleryImages,
-        lastUpdated: new Date().toISOString(),
+      if (updates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(updates.subscriptionPrice)) {
+        return {
+          success: false,
+          error: { message: 'Invalid subscription price' },
+        };
+      }
+
+      const result = await this.enhanced.updateUserProfile(username, updates);
+      
+      if (!result.success) {
+        return result as any;
+      }
+
+      // Convert to simple profile format
+      const profile: UserProfile = {
+        bio: result.data!.bio,
+        profilePic: result.data!.profilePic,
+        subscriptionPrice: result.data!.subscriptionPrice,
+        lastUpdated: result.data!.lastUpdated,
+        galleryImages: result.data!.galleryImages,
       };
 
-      profilesData[username] = updatedProfile;
-      await storageService.setItem('user_profiles', profilesData);
-
-      // Also update sessionStorage for backward compatibility
-      if (updates.bio !== undefined) {
-        sessionStorage.setItem(`profile_bio_${username}`, updates.bio);
-      }
-      if (updates.profilePic !== undefined) {
-        if (updates.profilePic) {
-          sessionStorage.setItem(`profile_pic_${username}`, updates.profilePic);
-        } else {
-          sessionStorage.removeItem(`profile_pic_${username}`);
-        }
-      }
-      if (updates.subscriptionPrice !== undefined) {
-        sessionStorage.setItem(`subscription_price_${username}`, updates.subscriptionPrice);
-      }
-      if (updates.galleryImages !== undefined) {
-        localStorage.setItem(`profile_gallery_${username}`, JSON.stringify(updates.galleryImages));
-      }
-
-      // Update user bio in all_users_v2 if needed
-      if (updates.bio !== undefined) {
-        const allUsers = await storageService.getItem<Record<string, any>>(
-          'all_users_v2',
-          {}
-        );
-        if (allUsers[username]) {
-          allUsers[username].bio = updates.bio;
-          await storageService.setItem('all_users_v2', allUsers);
-        }
-      }
-
-      return {
-        success: true,
-        data: updatedProfile,
-      };
+      return { success: true, data: profile };
     } catch (error) {
       console.error('Update user profile error:', error);
       return {
@@ -296,50 +214,7 @@ export class UsersService {
     username: string,
     docs: VerificationRequest
   ): Promise<ApiResponse<void>> {
-    try {
-      if (FEATURES.USE_API_USERS) {
-        return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username }),
-          {
-            method: 'POST',
-            body: JSON.stringify(docs),
-          }
-        );
-      }
-
-      // LocalStorage implementation
-      const allUsers = await storageService.getItem<Record<string, any>>(
-        'all_users_v2',
-        {}
-      );
-
-      if (allUsers[username]) {
-        allUsers[username].verificationStatus = 'pending';
-        allUsers[username].verificationRequestedAt = new Date().toISOString();
-        allUsers[username].verificationDocs = docs;
-        await storageService.setItem('all_users_v2', allUsers);
-      }
-
-      // Store verification request
-      const verificationRequests = await storageService.getItem<Record<string, any>>(
-        'panty_verification_requests',
-        {}
-      );
-      verificationRequests[username] = {
-        ...docs,
-        requestedAt: new Date().toISOString(),
-        status: 'pending',
-      };
-      await storageService.setItem('panty_verification_requests', verificationRequests);
-
-      return { success: true };
-    } catch (error) {
-      console.error('Request verification error:', error);
-      return {
-        success: false,
-        error: { message: 'Failed to request verification' },
-      };
-    }
+    return this.enhanced.requestVerification(username, docs);
   }
 
   /**
@@ -350,12 +225,17 @@ export class UsersService {
     update: VerificationUpdateRequest
   ): Promise<ApiResponse<void>> {
     try {
+      const enhancedUpdate: EnhancedVerificationUpdateRequest = {
+        ...update,
+        reviewedAt: new Date().toISOString(),
+      };
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<void>(
           buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username }),
           {
             method: 'PATCH',
-            body: JSON.stringify(update),
+            body: JSON.stringify(enhancedUpdate),
           }
         );
       }
@@ -375,6 +255,9 @@ export class UsersService {
         }
         
         await storageService.setItem('all_users_v2', allUsers);
+        
+        // Clear cache
+        this.enhanced.clearCache();
       }
 
       // Update verification request
@@ -382,6 +265,7 @@ export class UsersService {
         'panty_verification_requests',
         {}
       );
+      
       if (verificationRequests[username]) {
         verificationRequests[username].status = update.status;
         verificationRequests[username].reviewedAt = new Date().toISOString();
@@ -391,6 +275,17 @@ export class UsersService {
         }
         await storageService.setItem('panty_verification_requests', verificationRequests);
       }
+
+      // Track activity
+      await this.enhanced.trackActivity({
+        userId: update.adminUsername || 'admin',
+        type: 'profile_update',
+        details: {
+          action: 'verification_status_updated',
+          targetUser: username,
+          newStatus: update.status,
+        },
+      });
 
       return { success: true };
     } catch (error) {
@@ -407,10 +302,15 @@ export class UsersService {
    */
   async banUser(request: BanRequest): Promise<ApiResponse<void>> {
     try {
+      const enhancedRequest: EnhancedBanRequest = {
+        ...request,
+        evidence: [],
+      };
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<void>(`${API_ENDPOINTS.USERS.LIST}/${request.username}/ban`, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(enhancedRequest),
         });
       }
 
@@ -431,6 +331,9 @@ export class UsersService {
         }
         
         await storageService.setItem('all_users_v2', allUsers);
+        
+        // Clear cache
+        this.enhanced.clearCache();
       }
 
       // Store ban log
@@ -443,6 +346,18 @@ export class UsersService {
         bannedAt: new Date().toISOString(),
       });
       await storageService.setItem('ban_logs', banLogs);
+
+      // Track activity
+      await this.enhanced.trackActivity({
+        userId: request.adminUsername,
+        type: 'profile_update',
+        details: {
+          action: 'user_banned',
+          targetUser: request.username,
+          reason: request.reason,
+          duration: request.duration,
+        },
+      });
 
       return { success: true };
     } catch (error) {
@@ -477,6 +392,9 @@ export class UsersService {
         delete allUsers[username].banReason;
         delete allUsers[username].banExpiresAt;
         await storageService.setItem('all_users_v2', allUsers);
+        
+        // Clear cache
+        this.enhanced.clearCache();
       }
 
       // Update ban log
@@ -488,6 +406,16 @@ export class UsersService {
         unbannedAt: new Date().toISOString(),
       });
       await storageService.setItem('ban_logs', banLogs);
+
+      // Track activity
+      await this.enhanced.trackActivity({
+        userId: adminUsername,
+        type: 'profile_update',
+        details: {
+          action: 'user_unbanned',
+          targetUser: username,
+        },
+      });
 
       return { success: true };
     } catch (error) {
@@ -508,28 +436,32 @@ export class UsersService {
     subscribedAt?: string;
   }>> {
     try {
-      if (FEATURES.USE_API_USERS) {
-        return await apiCall(`${API_ENDPOINTS.SUBSCRIPTIONS.CHECK}?seller=${seller}&buyer=${buyer}`);
+      const subResult = await this.enhanced.getSubscriptionStatus(buyer, seller);
+      
+      if (!subResult.success) {
+        return subResult as any;
       }
 
-      // LocalStorage implementation
-      const subscriptions = await storageService.getItem<Record<string, string[]>>(
-        'subscriptions',
-        {}
-      );
-
-      const isSubscribed = subscriptions[buyer]?.includes(seller) || false;
-      
-      // Get subscription price
-      const profileResult = await this.getUserProfile(seller);
-      const price = profileResult.data?.subscriptionPrice || '0';
+      // Get subscription price from profile if not subscribed
+      if (!subResult.data) {
+        const profileResult = await this.getUserProfile(seller);
+        const price = profileResult.data?.subscriptionPrice || '0';
+        
+        return {
+          success: true,
+          data: {
+            isSubscribed: false,
+            price,
+          },
+        };
+      }
 
       return {
         success: true,
         data: {
-          isSubscribed,
-          price,
-          subscribedAt: isSubscribed ? new Date().toISOString() : undefined,
+          isSubscribed: subResult.data.status === 'active',
+          price: subResult.data.price,
+          subscribedAt: subResult.data.subscribedAt,
         },
       };
     } catch (error) {
@@ -539,6 +471,52 @@ export class UsersService {
         error: { message: 'Failed to get subscription info' },
       };
     }
+  }
+
+  /**
+   * New enhanced methods - exposed for gradual adoption
+   */
+  
+  /**
+   * Get user preferences
+   */
+  async getUserPreferences(username: string) {
+    return this.enhanced.getUserPreferences(username);
+  }
+
+  /**
+   * Update user preferences
+   */
+  async updateUserPreferences(username: string, updates: any) {
+    return this.enhanced.updateUserPreferences(username, updates);
+  }
+
+  /**
+   * Track user activity
+   */
+  async trackActivity(activity: any) {
+    return this.enhanced.trackActivity(activity);
+  }
+
+  /**
+   * Get user activity history
+   */
+  async getUserActivity(username: string, limit?: number) {
+    return this.enhanced.getUserActivity(username, limit);
+  }
+
+  /**
+   * Batch update users
+   */
+  async batchUpdateUsers(updates: any[]) {
+    return this.enhanced.batchUpdateUsers(updates);
+  }
+
+  /**
+   * Clear cache
+   */
+  clearCache() {
+    this.enhanced.clearCache();
   }
 }
 
