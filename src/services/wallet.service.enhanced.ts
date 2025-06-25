@@ -4,6 +4,7 @@ import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { Money, UserId, ISOTimestamp } from '@/types/common';
 import { AppError, ErrorType, ErrorSeverity } from '@/utils/errorHandling';
+import { WalletValidation } from './wallet.validation';
 import { v4 as uuidv4 } from 'uuid';
 
 // Transaction types with proper branding

@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';

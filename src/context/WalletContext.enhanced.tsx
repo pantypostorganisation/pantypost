@@ -374,6 +374,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         markedUpPrice: customRequest.amount * 1.1, // 10% markup
         seller: customRequest.seller,
         imageUrls: [],
+        date: new Date().toISOString(), // Add missing date property
       };
 
       const result = await WalletIntegration.createPurchaseTransaction(
