@@ -3,6 +3,9 @@
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { v4 as uuidv4 } from 'uuid';
+import { walletService as enhancedWalletService } from './wallet.service.enhanced';
+import { WalletIntegration } from './wallet.integration';
+import { Money, UserId } from '@/types/common';
 
 export interface WalletBalance {
   username: string;
@@ -55,50 +58,45 @@ export interface AdminActionRequest {
 }
 
 /**
- * Wallet Service
- * Handles all wallet and financial operations
+ * Updated Wallet Service with enhanced features
+ * Maintains backward compatibility while adding new capabilities
  */
 export class WalletService {
+  private static instance: WalletService;
+  private initialized = false;
+
+  static getInstance(): WalletService {
+    if (!WalletService.instance) {
+      WalletService.instance = new WalletService();
+    }
+    return WalletService.instance;
+  }
+
   /**
-   * Get balance for a user
+   * Initialize the wallet service
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    
+    await WalletIntegration.initialize();
+    this.initialized = true;
+  }
+
+  /**
+   * Get balance for a user (backward compatible)
    */
   async getBalance(username: string, role?: 'buyer' | 'seller' | 'admin'): Promise<ApiResponse<WalletBalance>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        return await apiCall<WalletBalance>(
-          buildApiUrl(API_ENDPOINTS.WALLET.BALANCE, { username })
-        );
-      }
-
-      // LocalStorage implementation
-      let balance = 0;
-      let userRole: 'buyer' | 'seller' | 'admin' = role || 'buyer';
+      // Use enhanced service for better accuracy
+      const actualRole = role || (username === 'admin' ? 'admin' : 'buyer');
+      const balance = await WalletIntegration.getBalanceInDollars(username, actualRole);
       
-      if (username === 'admin') {
-        balance = await storageService.getItem<number>('panty_admin_balance', 0);
-        userRole = 'admin';
-      } else if (role === 'buyer' || !role) {
-        const buyerBalances = await storageService.getItem<Record<string, number>>(
-          'panty_buyer_balances',
-          {}
-        );
-        balance = buyerBalances[username] || 0;
-        userRole = 'buyer';
-      } else {
-        const sellerBalances = await storageService.getItem<Record<string, number>>(
-          'panty_seller_balances',
-          {}
-        );
-        balance = sellerBalances[username] || 0;
-        userRole = 'seller';
-      }
-
       return {
         success: true,
         data: {
           username,
           balance,
-          role: userRole,
+          role: actualRole,
         },
       };
     } catch (error) {
@@ -119,46 +117,49 @@ export class WalletService {
     role?: 'buyer' | 'seller' | 'admin'
   ): Promise<ApiResponse<WalletBalance>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        return await apiCall<WalletBalance>(
-          buildApiUrl(API_ENDPOINTS.WALLET.BALANCE, { username }),
-          {
-            method: 'PATCH',
-            body: JSON.stringify({ amount }),
-          }
-        );
-      }
-
-      // LocalStorage implementation
-      let userRole: 'buyer' | 'seller' | 'admin' = role || 'buyer';
+      // This is now handled through transactions in the enhanced service
+      // For backward compatibility, we'll create appropriate transactions
+      const actualRole = role || (username === 'admin' ? 'admin' : 'buyer');
+      const currentBalance = await WalletIntegration.getBalanceInDollars(username, actualRole);
       
-      if (username === 'admin') {
-        await storageService.setItem('panty_admin_balance', amount);
-        userRole = 'admin';
-      } else if (role === 'buyer' || !role) {
-        const buyerBalances = await storageService.getItem<Record<string, number>>(
-          'panty_buyer_balances',
-          {}
-        );
-        buyerBalances[username] = amount;
-        await storageService.setItem('panty_buyer_balances', buyerBalances);
-        userRole = 'buyer';
-      } else if (role === 'seller') {
-        const sellerBalances = await storageService.getItem<Record<string, number>>(
-          'panty_seller_balances',
-          {}
-        );
-        sellerBalances[username] = amount;
-        await storageService.setItem('panty_seller_balances', sellerBalances);
-        userRole = 'seller';
+      if (amount > currentBalance) {
+        // It's a credit
+        const creditAmount = amount - currentBalance;
+        const success = await this.processAdminAction({
+          adminUser: 'system',
+          targetUser: username,
+          role: actualRole as 'buyer' | 'seller',
+          amount: creditAmount,
+          type: 'credit',
+          reason: 'Balance adjustment',
+        });
+        
+        if (!success.success) {
+          throw new Error('Failed to credit balance');
+        }
+      } else if (amount < currentBalance) {
+        // It's a debit
+        const debitAmount = currentBalance - amount;
+        const success = await this.processAdminAction({
+          adminUser: 'system',
+          targetUser: username,
+          role: actualRole as 'buyer' | 'seller',
+          amount: debitAmount,
+          type: 'debit',
+          reason: 'Balance adjustment',
+        });
+        
+        if (!success.success) {
+          throw new Error('Failed to debit balance');
+        }
       }
-
+      
       return {
         success: true,
         data: {
           username,
           balance: amount,
-          role: userRole,
+          role: actualRole,
         },
       };
     } catch (error) {
@@ -175,37 +176,20 @@ export class WalletService {
    */
   async deposit(request: DepositRequest): Promise<ApiResponse<Transaction>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        return await apiCall<Transaction>(API_ENDPOINTS.WALLET.DEPOSIT, {
-          method: 'POST',
-          body: JSON.stringify(request),
-        });
-      }
-
-      // LocalStorage implementation
-      const balanceResult = await this.getBalance(request.username);
-      if (!balanceResult.success || !balanceResult.data) {
-        return {
-          success: false,
-          error: { message: 'Failed to get current balance' },
-        };
-      }
-
-      // Update balances
-      const updateResult = await this.updateBalance(
+      await this.initialize();
+      
+      // Use enhanced service
+      const success = await WalletIntegration.addFunds(
         request.username,
-        balanceResult.data.balance + request.amount,
-        balanceResult.data.role as 'buyer' | 'seller' | 'admin'
+        request.amount,
+        request.method as 'credit_card' | 'bank_transfer'
       );
       
-      if (!updateResult.success) {
-        return {
-          success: false,
-          error: { message: 'Failed to update balance' },
-        };
+      if (!success) {
+        throw new Error('Deposit failed');
       }
-
-      // Create transaction record
+      
+      // Create legacy transaction for backward compatibility
       const transaction: Transaction = {
         id: uuidv4(),
         type: 'deposit',
@@ -216,27 +200,10 @@ export class WalletService {
         status: 'completed',
         metadata: { method: request.method, notes: request.notes },
       };
-
+      
       await this.saveTransaction(transaction);
-
-      // Save deposit log
-      const depositLogs = await storageService.getItem<any[]>('deposit_logs', []);
-      depositLogs.push({
-        id: transaction.id,
-        username: request.username,
-        amount: request.amount,
-        method: request.method,
-        date: transaction.date,
-        status: 'completed',
-        transactionId: transaction.id,
-        notes: request.notes,
-      });
-      await storageService.setItem('deposit_logs', depositLogs);
-
-      return {
-        success: true,
-        data: transaction,
-      };
+      
+      return { success: true, data: transaction };
     } catch (error) {
       console.error('Deposit error:', error);
       return {
@@ -251,33 +218,20 @@ export class WalletService {
    */
   async withdraw(request: WithdrawalRequest): Promise<ApiResponse<Transaction>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        return await apiCall<Transaction>(API_ENDPOINTS.WALLET.WITHDRAW, {
-          method: 'POST',
-          body: JSON.stringify(request),
-        });
+      await this.initialize();
+      
+      // Use enhanced service
+      const success = await WalletIntegration.processWithdrawal(
+        request.username,
+        request.amount,
+        request.accountDetails
+      );
+      
+      if (!success) {
+        throw new Error('Withdrawal failed');
       }
-
-      // LocalStorage implementation
-      const balanceResult = await this.getBalance(request.username, 'seller');
-      if (!balanceResult.success || !balanceResult.data) {
-        return {
-          success: false,
-          error: { message: 'Failed to get current balance' },
-        };
-      }
-
-      if (balanceResult.data.balance < request.amount) {
-        return {
-          success: false,
-          error: { message: 'Insufficient balance' },
-        };
-      }
-
-      const newBalance = balanceResult.data.balance - request.amount;
-      await this.updateBalance(request.username, newBalance, 'seller');
-
-      // Create transaction record
+      
+      // Create legacy transaction
       const transaction: Transaction = {
         id: uuidv4(),
         type: 'withdrawal',
@@ -288,22 +242,10 @@ export class WalletService {
         status: 'pending',
         metadata: request.accountDetails,
       };
-
+      
       await this.saveTransaction(transaction);
-
-      // Save withdrawal log
-      const withdrawalKey = `seller_withdrawals_${request.username}`;
-      const withdrawals = await storageService.getItem<any[]>(withdrawalKey, []);
-      withdrawals.push({
-        amount: request.amount,
-        date: transaction.date,
-      });
-      await storageService.setItem(withdrawalKey, withdrawals);
-
-      return {
-        success: true,
-        data: transaction,
-      };
+      
+      return { success: true, data: transaction };
     } catch (error) {
       console.error('Withdrawal error:', error);
       return {
@@ -318,44 +260,59 @@ export class WalletService {
    */
   async transfer(request: TransferRequest): Promise<ApiResponse<Transaction>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        return await apiCall<Transaction>(`${API_ENDPOINTS.WALLET.BALANCE}/transfer`, {
-          method: 'POST',
-          body: JSON.stringify(request),
-        });
-      }
-
-      // LocalStorage implementation
-      // Check sender balance
-      const senderRole = request.type === 'sale' ? 'seller' : 'buyer';
-      const senderBalance = await this.getBalance(request.from, senderRole);
+      await this.initialize();
       
-      if (!senderBalance.success || !senderBalance.data || 
-          senderBalance.data.balance < request.amount) {
-        return {
-          success: false,
-          error: { message: 'Insufficient balance' },
-        };
-      }
-
-      // Update balances
-      await this.updateBalance(
-        request.from,
-        senderBalance.data.balance - request.amount,
-        senderRole
-      );
-
-      const receiverRole = request.type === 'sale' ? 'buyer' : 'seller';
-      const receiverBalance = await this.getBalance(request.to, receiverRole);
-      const currentReceiverBalance = receiverBalance.data?.balance || 0;
+      let success = false;
       
-      await this.updateBalance(
-        request.to,
-        currentReceiverBalance + request.amount,
-        receiverRole
-      );
-
-      // Create transaction record
+      switch (request.type) {
+        case 'purchase':
+        case 'sale':
+          // For purchases, use the enhanced purchase flow
+          const listing = {
+            id: request.metadata?.listingId || uuidv4(),
+            title: request.description,
+            description: request.description,
+            price: request.amount * 0.9, // Remove markup
+            markedUpPrice: request.amount,
+            seller: request.to!,
+            imageUrls: [],
+          };
+          
+          const purchaseResult = await WalletIntegration.createPurchaseTransaction(
+            listing as any,
+            request.from!,
+            request.to!,
+            request.metadata?.tierCreditAmount
+          );
+          
+          success = purchaseResult.success;
+          break;
+          
+        case 'tip':
+          success = await WalletIntegration.processTip(
+            request.from!,
+            request.to!,
+            request.amount
+          );
+          break;
+          
+        case 'subscription':
+          success = await WalletIntegration.processSubscription(
+            request.from!,
+            request.to!,
+            request.amount
+          );
+          break;
+          
+        default:
+          throw new Error(`Unsupported transfer type: ${request.type}`);
+      }
+      
+      if (!success) {
+        throw new Error('Transfer failed');
+      }
+      
+      // Create legacy transaction
       const transaction: Transaction = {
         id: uuidv4(),
         type: request.type,
@@ -367,13 +324,10 @@ export class WalletService {
         status: 'completed',
         metadata: request.metadata,
       };
-
+      
       await this.saveTransaction(transaction);
-
-      return {
-        success: true,
-        data: transaction,
-      };
+      
+      return { success: true, data: transaction };
     } catch (error) {
       console.error('Transfer error:', error);
       return {
@@ -388,37 +342,31 @@ export class WalletService {
    */
   async processAdminAction(request: AdminActionRequest): Promise<ApiResponse<Transaction>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        return await apiCall<Transaction>(API_ENDPOINTS.WALLET.ADMIN_ACTIONS, {
-          method: 'POST',
-          body: JSON.stringify(request),
-        });
+      await this.initialize();
+      
+      // Direct balance manipulation for admin actions
+      const userId = UserId(request.targetUser);
+      const amount = Money.fromDollars(request.amount);
+      
+      const result = await enhancedWalletService.transfer({
+        from: request.type === 'debit' ? userId : UserId('admin'),
+        to: request.type === 'credit' ? userId : UserId('admin'),
+        amount,
+        type: request.type === 'credit' ? 'admin_credit' : 'admin_debit',
+        description: `Admin ${request.type}: ${request.reason}`,
+        metadata: {
+          adminUser: request.adminUser,
+          reason: request.reason,
+        },
+        idempotencyKey: `admin_${request.type}_${request.targetUser}_${Date.now()}`,
+        platformFeePercent: 0, // No fees on admin actions
+      });
+      
+      if (!result.success) {
+        throw new Error('Admin action failed');
       }
-
-      // LocalStorage implementation
-      const balanceResult = await this.getBalance(request.targetUser, request.role);
-      if (!balanceResult.success || !balanceResult.data) {
-        return {
-          success: false,
-          error: { message: 'Failed to get current balance' },
-        };
-      }
-
-      const currentBalance = balanceResult.data.balance;
-      const newBalance = request.type === 'credit'
-        ? currentBalance + request.amount
-        : currentBalance - request.amount;
-
-      if (newBalance < 0) {
-        return {
-          success: false,
-          error: { message: 'Insufficient balance for debit' },
-        };
-      }
-
-      await this.updateBalance(request.targetUser, newBalance, request.role);
-
-      // Create transaction record
+      
+      // Create legacy transaction
       const transaction: Transaction = {
         id: uuidv4(),
         type: 'admin_action',
@@ -434,9 +382,9 @@ export class WalletService {
           reason: request.reason,
         },
       };
-
+      
       await this.saveTransaction(transaction);
-
+      
       // Save admin action log
       const adminActions = await storageService.getItem<any[]>('admin_actions', []);
       adminActions.push({
@@ -444,11 +392,8 @@ export class WalletService {
         date: transaction.date,
       });
       await storageService.setItem('admin_actions', adminActions);
-
-      return {
-        success: true,
-        data: transaction,
-      };
+      
+      return { success: true, data: transaction };
     } catch (error) {
       console.error('Admin action error:', error);
       return {
@@ -472,68 +417,28 @@ export class WalletService {
     }
   ): Promise<ApiResponse<Transaction[]>> {
     try {
-      if (FEATURES.USE_API_WALLET) {
-        const queryParams = new URLSearchParams();
-        if (username) queryParams.append('username', username);
-        if (filters) {
-          Object.entries(filters).forEach(([key, value]) => {
-            if (value !== undefined) {
-              queryParams.append(key, String(value));
-            }
-          });
-        }
-        
-        return await apiCall<Transaction[]>(
-          `${API_ENDPOINTS.WALLET.TRANSACTIONS}?${queryParams.toString()}`
-        );
-      }
-
-      // LocalStorage implementation
-      let transactions = await storageService.getItem<Transaction[]>(
-        'wallet_transactions',
-        []
+      await this.initialize();
+      
+      // Get formatted transactions from enhanced service
+      const formattedTransactions = await WalletIntegration.getFormattedTransactionHistory(
+        username,
+        filters
       );
-
-      // Apply filters
-      if (username) {
-        transactions = transactions.filter(
-          t => t.from === username || t.to === username
-        );
-      }
-
-      if (filters) {
-        if (filters.type) {
-          transactions = transactions.filter(t => t.type === filters.type);
-        }
-        
-        if (filters.fromDate) {
-          transactions = transactions.filter(
-            t => new Date(t.date) >= new Date(filters.fromDate!)
-          );
-        }
-        
-        if (filters.toDate) {
-          transactions = transactions.filter(
-            t => new Date(t.date) <= new Date(filters.toDate!)
-          );
-        }
-      }
-
-      // Sort by date (newest first)
-      transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      // Apply pagination
-      if (filters?.offset !== undefined && filters?.limit !== undefined) {
-        transactions = transactions.slice(
-          filters.offset,
-          filters.offset + filters.limit
-        );
-      }
-
-      return {
-        success: true,
-        data: transactions,
-      };
+      
+      // Convert to legacy format
+      const transactions: Transaction[] = formattedTransactions.map(ft => ({
+        id: ft.id,
+        type: this.mapTransactionType(ft.rawTransaction.type),
+        amount: Money.toDollars(ft.rawTransaction.amount),
+        from: ft.rawTransaction.from,
+        to: ft.rawTransaction.to,
+        description: ft.rawTransaction.description,
+        date: ft.rawTransaction.createdAt,
+        status: ft.rawTransaction.status,
+        metadata: ft.rawTransaction.metadata,
+      }));
+      
+      return { success: true, data: transactions };
     } catch (error) {
       console.error('Get transactions error:', error);
       return {
@@ -543,16 +448,71 @@ export class WalletService {
     }
   }
 
-  // Helper method to save transaction
+  /**
+   * Check for suspicious activity
+   */
+  async checkSuspiciousActivity(username: string): Promise<{
+    suspicious: boolean;
+    reasons: string[];
+    score: number;
+  }> {
+    try {
+      await this.initialize();
+      const result = await WalletIntegration.checkSuspiciousActivity(username);
+      
+      return {
+        suspicious: result.suspicious,
+        reasons: result.reasons,
+        score: result.riskScore,
+      };
+    } catch (error) {
+      console.error('Check suspicious activity error:', error);
+      return { suspicious: false, reasons: [], score: 0 };
+    }
+  }
+
+  /**
+   * Generate financial report
+   */
+  async generateReport(startDate: Date, endDate: Date): Promise<any> {
+    try {
+      await this.initialize();
+      return await WalletIntegration.generateFinancialReport(startDate, endDate);
+    } catch (error) {
+      console.error('Generate report error:', error);
+      return null;
+    }
+  }
+
+  // Helper method to save transaction (legacy support)
   private async saveTransaction(transaction: Transaction): Promise<void> {
     const transactions = await storageService.getItem<Transaction[]>(
-      'wallet_transactions',
+      'wallet_transactions_legacy',
       []
     );
     transactions.push(transaction);
-    await storageService.setItem('wallet_transactions', transactions);
+    await storageService.setItem('wallet_transactions_legacy', transactions);
+  }
+
+  // Map enhanced transaction types to legacy types
+  private mapTransactionType(type: string): Transaction['type'] {
+    const typeMap: Record<string, Transaction['type']> = {
+      'deposit': 'deposit',
+      'withdrawal': 'withdrawal',
+      'purchase': 'purchase',
+      'sale': 'sale',
+      'tip': 'tip',
+      'subscription': 'subscription',
+      'admin_credit': 'admin_action',
+      'admin_debit': 'admin_action',
+      'refund': 'sale',
+      'fee': 'purchase',
+      'tier_credit': 'admin_action',
+    };
+    
+    return typeMap[type] || 'purchase';
   }
 }
 
 // Export singleton instance
-export const walletService = new WalletService();
+export const walletService = WalletService.getInstance();
