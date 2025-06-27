@@ -1,19 +1,14 @@
 // src/hooks/useBuyerWallet.ts
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useWallet } from '@/context/WalletContext';
+import { useEffect, useState, useCallback, useContext } from 'react';
+import { WalletContext } from '@/context/WalletContext.enhanced';
 import { useAuth } from '@/context/AuthContext';
 import { BuyerWalletState } from '@/types/wallet';
 
 export const useBuyerWallet = () => {
   const { user } = useAuth();
-  const { 
-    getBuyerBalance, 
-    setBuyerBalance,
-    orderHistory, 
-    addDeposit 
-  } = useWallet();
+  const walletContext = useContext(WalletContext);
 
   const [state, setState] = useState<BuyerWalletState>({
     balance: 0,
@@ -23,6 +18,12 @@ export const useBuyerWallet = () => {
     isLoading: false,
     walletUpdateTrigger: 0
   });
+
+  // Get wallet functions safely
+  const getBuyerBalance = walletContext?.getBuyerBalance || (() => 0);
+  const setBuyerBalance = walletContext?.setBuyerBalance || (() => {});
+  const orderHistory = walletContext?.orderHistory || [];
+  const addDeposit = walletContext?.addDeposit || (async () => false);
 
   // Get buyer's purchase history
   const buyerPurchases = user?.username 
@@ -44,17 +45,17 @@ export const useBuyerWallet = () => {
 
   // Update balance whenever wallet context changes
   useEffect(() => {
-    if (user?.username) {
+    if (user?.username && walletContext) {
       const rawBalance = getBuyerBalance(user.username);
       const updatedBalance = Math.max(0, rawBalance);
       updateState({ balance: updatedBalance });
     }
-  }, [user, getBuyerBalance, orderHistory, state.walletUpdateTrigger, updateState]);
+  }, [user, getBuyerBalance, orderHistory, state.walletUpdateTrigger, updateState, walletContext]);
 
   // Listen for wallet updates
   useEffect(() => {
     const handleWalletUpdate = () => {
-      if (user?.username) {
+      if (user?.username && walletContext) {
         const rawBalance = getBuyerBalance(user.username);
         const updatedBalance = Math.max(0, rawBalance);
         updateState({ balance: updatedBalance });
@@ -66,9 +67,18 @@ export const useBuyerWallet = () => {
     return () => {
       window.removeEventListener('walletUpdate', handleWalletUpdate);
     };
-  }, [user, getBuyerBalance, updateState]);
+  }, [user, getBuyerBalance, updateState, walletContext]);
 
   const handleAddFunds = useCallback(async () => {
+    if (!walletContext) {
+      updateState({ 
+        message: 'Wallet service is not available. Please try again.',
+        messageType: 'error',
+        isLoading: false
+      });
+      return;
+    }
+
     updateState({ isLoading: true });
     const amount = parseFloat(state.amountToAdd);
     
@@ -156,7 +166,7 @@ export const useBuyerWallet = () => {
     setTimeout(() => {
       updateState({ message: '', messageType: '' });
     }, 5000);
-  }, [state.amountToAdd, state.walletUpdateTrigger, user, addDeposit, getBuyerBalance, updateState]);
+  }, [state.amountToAdd, state.walletUpdateTrigger, user, addDeposit, getBuyerBalance, updateState, walletContext]);
 
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;

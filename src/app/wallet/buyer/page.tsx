@@ -1,311 +1,81 @@
-// src/app/buyers/messages/page.tsx
+// src/app/wallet/buyer/page.tsx
 'use client';
 
 import React from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
-import { useBuyerMessages } from '@/hooks/useBuyerMessages';
-import ThreadsSidebar from '@/components/buyers/messages/ThreadsSidebar';
-import ConversationView from '@/components/buyers/messages/ConversationView';
-import EmptyState from '@/components/buyers/messages/EmptyState';
-import CustomRequestModal from '@/components/buyers/messages/CustomRequestModal';
-import PaymentModal from '@/components/buyers/messages/PaymentModal';
-import TipModal from '@/components/buyers/messages/TipModal';
-import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
-import { useWallet } from '@/context/WalletContext.enhanced';
+import BackgroundPattern from '@/components/wallet/buyer/BackgroundPattern';
+import WalletHeader from '@/components/wallet/buyer/WalletHeader';
+import BalanceCard from '@/components/wallet/buyer/BalanceCard';
+import TotalSpentCard from '@/components/wallet/buyer/TotalSpentCard';
+import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
+import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
+import EmptyState from '@/components/wallet/buyer/EmptyState';
+import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 
 // Inner component that uses the hooks after providers are ready
-function BuyerMessagesContent() {
+function BuyerWalletContent() {
   const {
-    // Auth & context
-    user,
-    users,
-    wallet,
-    isAdmin,
+    // State
+    balance,
+    amountToAdd,
+    message,
+    messageType,
+    isLoading,
     
-    // Messages & threads
-    threads,
-    unreadCounts,
-    uiUnreadCounts,
-    lastMessages,
-    sellerProfiles,
-    totalUnreadCount,
-    activeThread,
-    setActiveThread,
-    buyerRequests,
-    
-    // UI State
-    mounted,
-    searchQuery,
-    setSearchQuery,
-    activeTab,
-    setActiveTab,
-    filterBy,
-    setFilterBy,
-    previewImage,
-    setPreviewImage,
-    showEmojiPicker,
-    setShowEmojiPicker,
-    recentEmojis,
-    observerReadMessages,
-    setObserverReadMessages,
-    
-    // Message input
-    replyMessage,
-    setReplyMessage,
-    selectedImage,
-    setSelectedImage,
-    isImageLoading,
-    setIsImageLoading,
-    imageError,
-    setImageError,
-    
-    // Custom requests
-    showCustomRequestModal,
-    setShowCustomRequestModal,
-    customRequestForm,
-    setCustomRequestForm,
-    customRequestErrors,
-    isSubmittingRequest,
-    editRequestId,
-    setEditRequestId,
-    editPrice,
-    setEditPrice,
-    editTitle,
-    setEditTitle,
-    editTags,
-    setEditTags,
-    editMessage,
-    setEditMessage,
-    
-    // Payment
-    showPayModal,
-    setShowPayModal,
-    payingRequest,
-    setPayingRequest,
-    
-    // Tips
-    showTipModal,
-    setShowTipModal,
-    tipAmount,
-    setTipAmount,
-    tipResult,
-    setTipResult,
-    
-    // Refs
-    fileInputRef,
-    emojiPickerRef,
-    messagesEndRef,
-    messagesContainerRef,
-    inputRef,
-    lastManualScrollTime,
+    // Computed values
+    buyerPurchases,
+    recentPurchases,
+    totalSpent,
     
     // Actions
-    handleReply,
-    handleBlockToggle,
-    handleReport,
-    handleAccept,
-    handleDecline,
-    handleEditRequest,
-    handleEditSubmit,
-    handlePayNow,
-    handleConfirmPay,
-    handleImageSelect,
-    handleMessageVisible,
-    handleEmojiClick,
-    handleSendTip,
-    handleCustomRequestSubmit,
-    closeCustomRequestModal,
-    validateCustomRequest,
-    
-    // Status checks
-    isUserBlocked,
-    isUserReported,
-  } = useBuyerMessages();
-
-  // Create wallet object for components
-  const walletData = user ? { [user.username]: wallet.buyerBalance } : {};
-
-  if (!mounted || !user) {
-    return (
-      <div className="py-3 bg-black">
-        <div className="h-screen bg-black flex items-center justify-center">
-          <div className="text-white">Loading...</div>
-        </div>
-      </div>
-    );
-  }
+    handleAddFunds,
+    handleAmountChange,
+    handleKeyPress,
+    handleQuickAmountSelect
+  } = useBuyerWallet();
 
   return (
-    <>
-      {/* Top Padding */}
-      <div className="py-3 bg-black"></div>
+    <main className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-[#1a1a1a] text-white">
+      {/* Background Pattern */}
+      <BackgroundPattern />
       
-      <div className="h-screen bg-black flex flex-col overflow-hidden">
-        <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-          {/* Left column - Message threads */}
-          <ThreadsSidebar
-            threads={threads}
-            lastMessages={lastMessages}
-            sellerProfiles={sellerProfiles}
-            uiUnreadCounts={uiUnreadCounts}
-            activeThread={activeThread}
-            setActiveThread={setActiveThread}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            filterBy={filterBy}
-            setFilterBy={setFilterBy}
-            totalUnreadCount={totalUnreadCount}
-            buyerRequests={buyerRequests}
-            setObserverReadMessages={setObserverReadMessages}
-          />
-          
-          {/* Right column - Active conversation or empty state */}
-          <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
-            {activeThread ? (
-              <ConversationView
-                activeThread={activeThread}
-                threads={threads}
-                user={user}
-                sellerProfiles={sellerProfiles}
-                buyerRequests={buyerRequests}
-                wallet={walletData}
-                previewImage={previewImage}
-                setPreviewImage={setPreviewImage}
-                showEmojiPicker={showEmojiPicker}
-                setShowEmojiPicker={setShowEmojiPicker}
-                recentEmojis={recentEmojis}
-                replyMessage={replyMessage}
-                setReplyMessage={setReplyMessage}
-                selectedImage={selectedImage}
-                setSelectedImage={setSelectedImage}
-                isImageLoading={isImageLoading}
-                imageError={imageError}
-                editRequestId={editRequestId}
-                setEditRequestId={setEditRequestId}
-                editPrice={parseFloat(editPrice) || ''}
-                setEditPrice={(price: number | '') => setEditPrice(price.toString())}
-                editTitle={editTitle}
-                setEditTitle={setEditTitle}
-                editTags={editTags}
-                setEditTags={setEditTags}
-                editMessage={editMessage}
-                setEditMessage={setEditMessage}
-                handleReply={handleReply}
-                handleBlockToggle={handleBlockToggle}
-                handleReport={handleReport}
-                handleAccept={handleAccept}
-                handleDecline={handleDecline}
-                handleEditRequest={handleEditRequest}
-                handleEditSubmit={handleEditSubmit}
-                handlePayNow={handlePayNow}
-                handleImageSelect={handleImageSelect}
-                handleMessageVisible={handleMessageVisible}
-                handleEmojiClick={handleEmojiClick}
-                isUserBlocked={isUserBlocked(activeThread)}
-                isUserReported={isUserReported(activeThread)}
-                messagesEndRef={messagesEndRef}
-                messagesContainerRef={messagesContainerRef}
-                fileInputRef={fileInputRef}
-                emojiPickerRef={emojiPickerRef}
-                inputRef={inputRef}
-                lastManualScrollTime={lastManualScrollTime}
-                setShowCustomRequestModal={setShowCustomRequestModal}
-                setShowTipModal={setShowTipModal}
-              />
-            ) : (
-              <EmptyState />
-            )}
+      <div className="relative z-10 p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <WalletHeader />
+
+          {/* Balance and Total Spent Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <BalanceCard balance={balance} />
+            <TotalSpentCard totalSpent={totalSpent} totalOrders={buyerPurchases.length} />
           </div>
+
+          {/* Add Funds Section */}
+          <AddFundsSection
+            amountToAdd={amountToAdd}
+            message={message}
+            messageType={messageType}
+            isLoading={isLoading}
+            onAmountChange={handleAmountChange}
+            onKeyPress={handleKeyPress}
+            onAddFunds={handleAddFunds}
+            onQuickAmountSelect={handleQuickAmountSelect}
+          />
+
+          {/* Recent Purchases */}
+          <RecentPurchases purchases={recentPurchases} />
+
+          {/* Empty State */}
+          <EmptyState showEmptyState={buyerPurchases.length === 0} />
         </div>
       </div>
-
-      {/* Modals */}
-      {previewImage && (
-        <ImagePreviewModal
-          imageUrl={previewImage}
-          isOpen={true}
-          onClose={() => setPreviewImage(null)}
-        />
-      )}
-      
-      {showCustomRequestModal && (
-        <CustomRequestModal
-          show={showCustomRequestModal}
-          onClose={closeCustomRequestModal}
-          activeThread={activeThread || ''}
-          onSubmit={handleCustomRequestSubmit}
-          customRequestForm={{
-            title: customRequestForm.title,
-            price: customRequestForm.price,
-            description: customRequestForm.description
-          }}
-          setCustomRequestForm={(form: any) => {
-            if (typeof form === 'function') {
-              setCustomRequestForm(prev => {
-                const updated = form(prev);
-                return {
-                  ...prev,
-                  title: updated.title,
-                  price: updated.price,
-                  description: updated.description
-                };
-              });
-            } else {
-              setCustomRequestForm({
-                ...customRequestForm,
-                title: form.title,
-                price: form.price,
-                description: form.description
-              });
-            }
-          }}
-          customRequestErrors={customRequestErrors}
-          isSubmittingRequest={isSubmittingRequest}
-          wallet={walletData}
-          user={user}
-        />
-      )}
-      
-      {showPayModal && payingRequest && (
-        <PaymentModal
-          show={showPayModal}
-          onClose={() => {
-            setShowPayModal(false);
-            setPayingRequest(null);
-          }}
-          payingRequest={payingRequest}
-          wallet={walletData}
-          user={user}
-          onConfirmPay={handleConfirmPay}
-        />
-      )}
-      
-      {showTipModal && (
-        <TipModal
-          show={showTipModal}
-          onClose={() => {
-            setShowTipModal(false);
-            setTipAmount('');
-            setTipResult(null);
-          }}
-          activeThread={activeThread || ''}
-          tipAmount={tipAmount}
-          setTipAmount={setTipAmount}
-          tipResult={tipResult}
-          wallet={walletData}
-          user={user}
-          onSendTip={handleSendTip}
-        />
-      )}
-    </>
+    </main>
   );
 }
 
-// Main page component - simplified to avoid provider issues
-export default function BuyerMessagesPage() {
+// Main page component with provider readiness check
+export default function BuyerWalletPage() {
   const [isReady, setIsReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -321,14 +91,16 @@ export default function BuyerMessagesPage() {
     return (
       <BanCheck>
         <RequireAuth role="buyer">
-          <div className="py-3 bg-black">
-            <div className="h-screen bg-black flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading messages...</p>
+          <main className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-[#1a1a1a] text-white">
+            <div className="relative z-10 p-4 md:p-8">
+              <div className="max-w-7xl mx-auto">
+                <div className="text-center py-20">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
+                  <p className="text-gray-400 text-lg">Loading wallet...</p>
+                </div>
               </div>
             </div>
-          </div>
+          </main>
         </RequireAuth>
       </BanCheck>
     );
@@ -337,7 +109,7 @@ export default function BuyerMessagesPage() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <BuyerMessagesContent />
+        <BuyerWalletContent />
       </RequireAuth>
     </BanCheck>
   );
