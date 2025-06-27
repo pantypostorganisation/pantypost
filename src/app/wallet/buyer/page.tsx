@@ -36,39 +36,38 @@ function BuyerWalletContent() {
   } = useBuyerWallet();
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-[#1a1a1a] text-white">
+    <main className="min-h-screen bg-[#121212] text-white p-4 md:p-8">
       {/* Background Pattern */}
       <BackgroundPattern />
       
-      <div className="relative z-10 p-4 md:p-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <WalletHeader />
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <WalletHeader />
 
-          {/* Balance and Total Spent Cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <BalanceCard balance={balance} />
-            <TotalSpentCard totalSpent={totalSpent} totalOrders={buyerPurchases.length} />
-          </div>
-
-          {/* Add Funds Section */}
-          <AddFundsSection
-            amountToAdd={amountToAdd}
-            message={message}
-            messageType={messageType}
-            isLoading={isLoading}
-            onAmountChange={handleAmountChange}
-            onKeyPress={handleKeyPress}
-            onAddFunds={handleAddFunds}
-            onQuickAmountSelect={handleQuickAmountSelect}
-          />
-
-          {/* Recent Purchases */}
-          <RecentPurchases purchases={recentPurchases} />
-
-          {/* Empty State */}
-          <EmptyState showEmptyState={buyerPurchases.length === 0} />
+        {/* Balance and Total Spent Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <BalanceCard balance={balance} />
+          <TotalSpentCard totalSpent={totalSpent} totalOrders={buyerPurchases.length} />
         </div>
+
+        {/* Add Funds Section */}
+        <AddFundsSection
+          amountToAdd={amountToAdd}
+          message={message}
+          messageType={messageType}
+          isLoading={isLoading}
+          onAmountChange={handleAmountChange}
+          onKeyPress={handleKeyPress}
+          onAddFunds={handleAddFunds}
+          onQuickAmountSelect={handleQuickAmountSelect}
+        />
+
+        {/* Recent Purchases or Empty State */}
+        {buyerPurchases.length > 0 ? (
+          <RecentPurchases purchases={recentPurchases} />
+        ) : (
+          <EmptyState showEmptyState={true} />
+        )}
       </div>
     </main>
   );
@@ -91,13 +90,11 @@ export default function BuyerWalletPage() {
     return (
       <BanCheck>
         <RequireAuth role="buyer">
-          <main className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-[#1a1a1a] text-white">
-            <div className="relative z-10 p-4 md:p-8">
-              <div className="max-w-7xl mx-auto">
-                <div className="text-center py-20">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
-                  <p className="text-gray-400 text-lg">Loading wallet...</p>
-                </div>
+          <main className="min-h-screen bg-[#121212] text-white p-4 md:p-8">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
+                <p className="text-gray-400 text-lg">Loading wallet...</p>
               </div>
             </div>
           </main>

@@ -2,7 +2,10 @@
 'use client';
 
 import { ShoppingBag, ArrowRight } from 'lucide-react';
-import { EmptyStateProps } from '@/types/wallet';
+
+interface EmptyStateProps {
+  showEmptyState: boolean;
+}
 
 export default function EmptyState({ showEmptyState }: EmptyStateProps) {
   if (!showEmptyState) {
@@ -10,22 +13,17 @@ export default function EmptyState({ showEmptyState }: EmptyStateProps) {
   }
 
   return (
-    <div className="relative group">
-      <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur-md opacity-15"></div>
-      <div className="relative bg-gradient-to-br from-[#1f1f1f] to-[#2a2a2a] rounded-2xl p-12 border border-purple-500/20 shadow-xl text-center">
-        <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-purple-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
-          <ShoppingBag className="w-10 h-10 text-purple-400" />
-        </div>
-        <h3 className="text-2xl font-bold text-white mb-3">Start Your Journey</h3>
-        <p className="text-gray-400 mb-8 max-w-md mx-auto">Discover exclusive items from our verified sellers. Your first purchase awaits!</p>
-        <a 
-          href="/browse" 
-          className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg shadow-purple-500/20"
-        >
-          Browse Marketplace
-          <ArrowRight className="w-5 h-5 ml-2" />
-        </a>
-      </div>
+    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg text-center">
+      <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+      <h3 className="text-lg font-medium text-gray-300 mb-2">No purchases yet</h3>
+      <p className="text-gray-500 mb-4">Start browsing to find amazing items from verified sellers</p>
+      <a 
+        href="/browse" 
+        className="inline-flex items-center px-4 py-2 bg-[#ff950e] hover:bg-[#e88800] text-black rounded-lg font-medium transition-colors"
+      >
+        Browse Listings
+        <ArrowRight className="w-4 h-4 ml-2" />
+      </a>
     </div>
   );
 }

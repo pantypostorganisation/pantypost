@@ -1,43 +1,34 @@
 // src/components/wallet/buyer/BalanceCard.tsx
 'use client';
 
-import { DollarSign, AlertCircle, Sparkles } from 'lucide-react';
-import { BalanceCardProps } from '@/types/wallet';
+import { DollarSign, AlertCircle } from 'lucide-react';
+
+interface BalanceCardProps {
+  balance: number;
+}
 
 export default function BalanceCard({ balance }: BalanceCardProps) {
   return (
-    <div className="lg:col-span-2 relative group">
-      <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur-md opacity-20 group-hover:opacity-30 transition-opacity duration-500"></div>
-      <div className="relative bg-gradient-to-br from-[#1f1f1f] to-[#2a2a2a] rounded-2xl p-8 border border-purple-500/20 shadow-xl">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-medium text-gray-300 mb-1">Available Balance</h2>
-            <p className="text-sm text-gray-500">Instant access to your funds</p>
-          </div>
-          <div className="p-4 bg-gradient-to-br from-purple-500/20 to-purple-600/20 rounded-2xl backdrop-blur-sm">
-            <DollarSign className="w-8 h-8 text-purple-400" />
-          </div>
+    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg col-span-1 md:col-span-2">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium text-gray-300">Current Balance</h2>
+        <div className="p-2 bg-[#ff950e] bg-opacity-20 rounded-lg">
+          <DollarSign className="w-6 h-6 text-[#ff950e]" />
         </div>
-        <div className="flex items-baseline gap-3 mb-6">
-          <span className="text-5xl font-bold text-white tracking-tight">${Math.max(0, balance).toFixed(2)}</span>
-          <span className="text-lg text-gray-400">USD</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 h-2 bg-[#333] rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-1000"
-              style={{ width: balance > 0 ? '100%' : '0%' }}
-            />
-          </div>
-          <Sparkles className="w-5 h-5 text-purple-400" />
-        </div>
-        {balance < 20 && balance > 0 && (
-          <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-xl flex items-center text-sm text-yellow-400">
-            <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-            Low balance - top up to continue shopping
-          </div>
-        )}
       </div>
+      <div className="flex items-baseline">
+        <span className="text-4xl font-bold text-white">${Math.max(0, balance).toFixed(2)}</span>
+        <span className="ml-2 text-sm text-gray-400">USD</span>
+      </div>
+      <p className="mt-4 text-sm text-gray-400">
+        Use your wallet to purchase listings. Each transaction includes a 10% platform fee.
+      </p>
+      {balance < 20 && balance > 0 && (
+        <div className="mt-3 flex items-center text-sm text-yellow-400">
+          <AlertCircle className="w-4 h-4 mr-1" />
+          Low balance - consider adding more funds
+        </div>
+      )}
     </div>
   );
 }
