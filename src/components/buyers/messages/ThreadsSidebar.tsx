@@ -190,7 +190,7 @@ export default function ThreadsSidebar({
               filteredThreads.map((seller) => {
                 const lastMessage = lastMessages[seller];
                 const unreadCount = uiUnreadCounts[seller] || 0;
-                const profile = sellerProfiles[seller];
+                const profile = sellerProfiles[seller] || { pic: null, verified: false };
                 const isActive = activeThread === seller;
                 
                 return (

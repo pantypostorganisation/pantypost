@@ -1,10 +1,10 @@
 // src/hooks/useMyOrders.ts
-import { useState, useMemo, useCallback } from 'react';
+
+import { useState, useMemo, useCallback, useContext } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
+import { WalletContext } from '@/context/WalletContext.enhanced';
 import { useListings } from '@/context/ListingContext';
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
-import { Order } from '@/context/WalletContext';
 
 export interface OrderStats {
   totalSpent: number;
@@ -14,7 +14,7 @@ export interface OrderStats {
 
 export function useMyOrders() {
   const { user } = useAuth();
-  const { orderHistory, updateOrderAddress } = useWallet();
+  const walletContext = useContext(WalletContext);
   const { users } = useListings();
   
   // State
@@ -25,6 +25,10 @@ export function useMyOrders() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processing' | 'shipped'>('all');
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Get order history safely
+  const orderHistory = walletContext?.orderHistory || [];
+  const updateOrderAddress = walletContext?.updateOrderAddress || (() => {});
 
   // Filter and sort orders
   const userOrders = useMemo(() => {
@@ -106,12 +110,12 @@ export function useMyOrders() {
   }, []);
 
   const handleConfirmAddress = useCallback((address: DeliveryAddress) => {
-    if (selectedOrder) {
+    if (selectedOrder && walletContext) {
       updateOrderAddress(selectedOrder, address);
     }
     setAddressModalOpen(false);
     setSelectedOrder(null);
-  }, [selectedOrder, updateOrderAddress]);
+  }, [selectedOrder, updateOrderAddress, walletContext]);
 
   const getSelectedOrderAddress = useCallback((): DeliveryAddress | null => {
     if (!selectedOrder) return null;

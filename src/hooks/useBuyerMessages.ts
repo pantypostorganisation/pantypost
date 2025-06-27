@@ -1,10 +1,10 @@
 // src/hooks/useBuyerMessages.ts
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/context/MessageContext';
-import { useWallet } from '@/context/WalletContext';
+import { WalletContext } from '@/context/WalletContext.enhanced';
 import { useRequests } from '@/context/RequestContext';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfileData } from '@/utils/profileUtils';
@@ -33,7 +33,10 @@ export const useBuyerMessages = () => {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { messages, sendMessage, blockedUsers, reportedUsers, blockUser, unblockUser, reportUser, markMessagesAsRead } = useMessages();
-  const { sendTip, getBuyerBalance } = useWallet();
+  
+  // Use useContext directly to check if wallet context is available
+  const walletContext = useContext(WalletContext);
+  
   const { getRequestsForUser, markRequestAsPaid, addRequest } = useRequests();
   const { users } = useListings();
   
@@ -101,7 +104,19 @@ export const useBuyerMessages = () => {
   const hasMarkedReadRef = useRef<string | null>(null);
   
   const isAdmin = user?.role === 'admin';
-  const wallet = { buyerBalance: user ? getBuyerBalance(user.username) : 0 };
+  
+  // Handle wallet context availability
+  const getBuyerBalance = useCallback((username: string) => {
+    if (!walletContext) return 0;
+    return walletContext.getBuyerBalance(username);
+  }, [walletContext]);
+  
+  const sendTip = useCallback(async (buyer: string, seller: string, amount: number) => {
+    if (!walletContext) return false;
+    return walletContext.sendTip(buyer, seller, amount);
+  }, [walletContext]);
+  
+  const wallet = { buyerBalance: user && walletContext ? getBuyerBalance(user.username) : 0 };
   const buyerRequests = getRequestsForUser(user?.username || '', 'buyer');
 
   // Mark messages as read and update UI

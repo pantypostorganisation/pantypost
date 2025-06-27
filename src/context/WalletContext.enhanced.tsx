@@ -125,7 +125,7 @@ type WalletContextType = {
   getTransactionHistory: (username?: string, limit?: number) => Promise<any[]>;
 };
 
-const WalletContext = createContext<WalletContextType | undefined>(undefined);
+export const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   // State management
