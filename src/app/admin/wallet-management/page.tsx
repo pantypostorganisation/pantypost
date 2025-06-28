@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -13,12 +12,13 @@ import WalletActionPanel from '@/components/admin/wallet/WalletActionPanel';
 import BulkActionModal from '@/components/admin/wallet/BulkActionModal';
 import ConfirmationModal from '@/components/admin/wallet/ConfirmationModal';
 import WalletToast from '@/components/admin/wallet/WalletToast';
-import { Shield } from 'lucide-react';
+import { Shield, Loader2 } from 'lucide-react';
+import { WalletProvider, useWallet } from '@/context/WalletContext';
 
-export default function AdminWalletManagementPage() {
+function AdminWalletContent() {
   const { wallet, adminCreditUser, adminDebitUser, adminActions } = useWallet();
   const { user } = useAuth();
-  const { users: listingUsers } = useListings(); // Rename to be clear this might only be sellers
+  const { users: listingUsers } = useListings();
   
   // Search and filtering
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,33 +60,25 @@ export default function AdminWalletManagementPage() {
   useEffect(() => {
     console.log('=== DEBUGGING USER LOADING ===');
     console.log('ListingContext users:', listingUsers);
-    
-    // Check if we can get buyer accounts from wallet context or auth context
     console.log('Wallet context keys:', Object.keys(wallet));
     console.log('Current user from auth:', user);
     
-    // Get all users from wallet context (since wallet tracks both buyers and sellers)
     const walletUsernames = Object.keys(wallet);
     console.log('Users found in wallet:', walletUsernames);
     
-    // Combine listing users with wallet users
     let allUsers: {[key: string]: any} = {};
     
-    // Add all users from listings (mostly sellers)
     if (listingUsers && Object.keys(listingUsers).length > 0) {
       Object.entries(listingUsers).forEach(([username, userData]) => {
         allUsers[username] = userData;
       });
     }
     
-    // Add any users from wallet that might not be in listings (buyers)
     walletUsernames.forEach(username => {
       if (!allUsers[username]) {
-        // If user is in wallet but not in listings, they're likely a buyer
         allUsers[username] = {
           username: username,
-          role: 'buyer', // Assume buyers if not in listings
-          // Add other default properties as needed
+          role: 'buyer',
         };
       }
     });
@@ -94,11 +86,9 @@ export default function AdminWalletManagementPage() {
     console.log('Combined users object:', allUsers);
     
     if (allUsers && Object.keys(allUsers).length > 0) {
-      // Get ALL users regardless of role, then filter out only admins
       const allUserEntries = Object.entries(allUsers);
       console.log('All user entries before filtering:', allUserEntries);
       
-      // Log each user individually to see their structure
       allUserEntries.forEach(([username, userData]) => {
         console.log(`USER: ${username}`, {
           userData,
@@ -133,14 +123,11 @@ export default function AdminWalletManagementPage() {
       console.log('Buyers found:', nonAdminUsers.filter(u => u.role === 'buyer'));
       console.log('Sellers found:', nonAdminUsers.filter(u => u.role === 'seller'));
       
-      // Sort buyers first (alphabetically), then sellers (alphabetically)
       const sortedUsers = nonAdminUsers.sort((a, b) => {
-        // If roles are different, buyers come first
         if (a.role !== b.role) {
           if (a.role === 'buyer' && b.role === 'seller') return -1;
           if (a.role === 'seller' && b.role === 'buyer') return 1;
         }
-        // If roles are the same, sort alphabetically by username
         return a.username.localeCompare(b.username);
       });
       
@@ -156,19 +143,16 @@ export default function AdminWalletManagementPage() {
   useEffect(() => {
     let filtered = allUsers;
     
-    // Apply role filter
     if (roleFilter !== 'all') {
       filtered = filtered.filter(user => user.role === roleFilter);
     }
     
-    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(user => 
         user.username.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Apply balance filter
     if (balanceFilter !== 'all') {
       filtered = filtered.filter(user => {
         const balance = getUserBalance(user.username);
@@ -188,7 +172,7 @@ export default function AdminWalletManagementPage() {
   const handleSelectUser = (username: string, role: string) => {
     setSelectedUser(username);
     setSelectedUserRole(role as 'buyer' | 'seller' | 'admin');
-    setSelectedUsers([]); // Clear bulk selection when selecting individual user
+    setSelectedUsers([]);
   };
 
   // Handle bulk user selection
@@ -198,7 +182,7 @@ export default function AdminWalletManagementPage() {
         ? prev.filter(u => u !== username)
         : [...prev, username]
     );
-    setSelectedUser(null); // Clear individual selection when bulk selecting
+    setSelectedUser(null);
   };
 
   // Select all filtered users
@@ -231,7 +215,6 @@ export default function AdminWalletManagementPage() {
       return;
     }
 
-    // Show confirmation for debit actions or large amounts
     if (actionType === 'debit' || numAmount > 100) {
       setPendingAction(() => () => executeAction(numAmount));
       setShowConfirmModal(true);
@@ -244,7 +227,6 @@ export default function AdminWalletManagementPage() {
   const executeAction = async (numAmount: number) => {
     setIsLoading(true);
     
-    // Simulate API delay for better UX
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const roleForWallet: 'buyer' | 'seller' = selectedUserRole === 'admin' ? 'buyer' : selectedUserRole as 'buyer' | 'seller';
@@ -273,7 +255,6 @@ export default function AdminWalletManagementPage() {
   const handleBulkAction = async (action: 'credit' | 'debit', amount: number, reason: string) => {
     setIsBulkLoading(true);
     
-    // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     let successCount = 0;
@@ -317,7 +298,7 @@ export default function AdminWalletManagementPage() {
       Username: user.username,
       Role: user.role,
       Balance: getUserBalance(user.username).toFixed(2),
-      'Last Activity': 'N/A' // Would come from backend
+      'Last Activity': 'N/A'
     }));
 
     const csvContent = [
@@ -374,14 +355,123 @@ export default function AdminWalletManagementPage() {
 
   if (!isAdmin) {
     return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="bg-[#1a1a1a] p-8 rounded-xl shadow-xl max-w-md w-full border border-gray-800">
+          <div className="text-center">
+            <Shield className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
+            <p className="text-gray-400">Only admin accounts can access this page.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto">
+        <WalletHeader
+          totalUsers={allUsers.length}
+          onRefresh={handleRefresh}
+          onExport={exportUserData}
+          isRefreshing={isRefreshing}
+        />
+
+        <WalletFilters
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          roleFilter={roleFilter}
+          setRoleFilter={setRoleFilter}
+          balanceFilter={balanceFilter}
+          setBalanceFilter={setBalanceFilter}
+          showBalances={showBalances}
+          setShowBalances={setShowBalances}
+          selectedUsers={selectedUsers}
+          setSelectedUsers={setSelectedUsers}
+          displayedUsers={displayedUsers}
+          handleSelectAll={handleSelectAll}
+          setShowBulkModal={setShowBulkModal}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <WalletUserList
+            displayedUsers={displayedUsers}
+            selectedUsers={selectedUsers}
+            selectedUser={selectedUser}
+            showBalances={showBalances}
+            handleSelectUser={handleSelectUser}
+            handleBulkSelect={handleBulkSelect}
+            getUserBalance={getUserBalance}
+            getRoleBadgeColor={getRoleBadgeColor}
+            getBalanceColor={getBalanceColor}
+            formatRole={formatRole}
+          />
+
+          <WalletActionPanel
+            selectedUser={selectedUser}
+            selectedUserRole={selectedUserRole}
+            actionType={actionType}
+            setActionType={setActionType}
+            amount={amount}
+            setAmount={setAmount}
+            reason={reason}
+            setReason={setReason}
+            isLoading={isLoading}
+            handleAction={handleAction}
+            clearSelection={clearSelection}
+            getUserBalance={getUserBalance}
+            getRoleBadgeColor={getRoleBadgeColor}
+            getBalanceColor={getBalanceColor}
+            formatRole={formatRole}
+          />
+        </div>
+
+        <WalletToast
+          message={message}
+          type={messageType}
+          isVisible={showMessage}
+        />
+      </div>
+
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => {
+          setShowConfirmModal(false);
+          setPendingAction(null);
+        }}
+        onConfirm={() => pendingAction && pendingAction()}
+        title={`Confirm ${actionType === 'credit' ? 'Credit' : 'Debit'}`}
+        message={`Are you sure you want to ${actionType} $${amount} ${actionType === 'credit' ? 'to' : 'from'} ${selectedUser}'s account?`}
+        type={actionType === 'debit' ? 'danger' : 'warning'}
+        isLoading={isLoading}
+      />
+
+      <BulkActionModal
+        isOpen={showBulkModal}
+        onClose={() => setShowBulkModal(false)}
+        selectedUsers={selectedUsers}
+        onAction={handleBulkAction}
+        isLoading={isBulkLoading}
+      />
+    </main>
+  );
+}
+
+// Wrap the component with WalletProvider to ensure it's available
+export default function AdminWalletManagementPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
       <RequireAuth role="admin">
         <div className="min-h-screen bg-black flex items-center justify-center p-4">
-          <div className="bg-[#1a1a1a] p-8 rounded-xl shadow-xl max-w-md w-full border border-gray-800">
-            <div className="text-center">
-              <Shield className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
-              <p className="text-gray-400">Only admin accounts can access this page.</p>
-            </div>
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-[#ff950e] animate-spin mx-auto mb-4" />
+            <p className="text-gray-400">Loading wallet management...</p>
           </div>
         </div>
       </RequireAuth>
@@ -390,100 +480,9 @@ export default function AdminWalletManagementPage() {
 
   return (
     <RequireAuth role="admin">
-      <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <WalletHeader
-            totalUsers={allUsers.length}
-            onRefresh={handleRefresh}
-            onExport={exportUserData}
-            isRefreshing={isRefreshing}
-          />
-
-          {/* Enhanced Search and Filters */}
-          <WalletFilters
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            roleFilter={roleFilter}
-            setRoleFilter={setRoleFilter}
-            balanceFilter={balanceFilter}
-            setBalanceFilter={setBalanceFilter}
-            showBalances={showBalances}
-            setShowBalances={setShowBalances}
-            selectedUsers={selectedUsers}
-            setSelectedUsers={setSelectedUsers}
-            displayedUsers={displayedUsers}
-            handleSelectAll={handleSelectAll}
-            setShowBulkModal={setShowBulkModal}
-          />
-
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* User List */}
-            <WalletUserList
-              displayedUsers={displayedUsers}
-              selectedUsers={selectedUsers}
-              selectedUser={selectedUser}
-              showBalances={showBalances}
-              handleSelectUser={handleSelectUser}
-              handleBulkSelect={handleBulkSelect}
-              getUserBalance={getUserBalance}
-              getRoleBadgeColor={getRoleBadgeColor}
-              getBalanceColor={getBalanceColor}
-              formatRole={formatRole}
-            />
-
-            {/* Action Panel */}
-            <WalletActionPanel
-              selectedUser={selectedUser}
-              selectedUserRole={selectedUserRole}
-              actionType={actionType}
-              setActionType={setActionType}
-              amount={amount}
-              setAmount={setAmount}
-              reason={reason}
-              setReason={setReason}
-              isLoading={isLoading}
-              handleAction={handleAction}
-              clearSelection={clearSelection}
-              getUserBalance={getUserBalance}
-              getRoleBadgeColor={getRoleBadgeColor}
-              getBalanceColor={getBalanceColor}
-              formatRole={formatRole}
-            />
-          </div>
-
-          {/* Toast Notification */}
-          <WalletToast
-            message={message}
-            type={messageType}
-            isVisible={showMessage}
-          />
-        </div>
-
-        {/* Confirmation Modal */}
-        <ConfirmationModal
-          isOpen={showConfirmModal}
-          onClose={() => {
-            setShowConfirmModal(false);
-            setPendingAction(null);
-          }}
-          onConfirm={() => pendingAction && pendingAction()}
-          title={`Confirm ${actionType === 'credit' ? 'Credit' : 'Debit'}`}
-          message={`Are you sure you want to ${actionType} $${amount} ${actionType === 'credit' ? 'to' : 'from'} ${selectedUser}'s account?`}
-          type={actionType === 'debit' ? 'danger' : 'warning'}
-          isLoading={isLoading}
-        />
-
-        {/* Bulk Action Modal */}
-        <BulkActionModal
-          isOpen={showBulkModal}
-          onClose={() => setShowBulkModal(false)}
-          selectedUsers={selectedUsers}
-          onAction={handleBulkAction}
-          isLoading={isBulkLoading}
-        />
-      </main>
+      <WalletProvider>
+        <AdminWalletContent />
+      </WalletProvider>
     </RequireAuth>
   );
 }
