@@ -2,25 +2,79 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
 import { useRouter } from 'next/navigation';
-import { storageService } from '@/services';
-import { Listing } from '@/context/ListingContext';
+import { storageService, listingsService } from '@/services';
 import { FilterOptions, CategoryCounts, SellerProfile, ListingWithProfile } from '@/types/browse';
 import { 
   HOUR_RANGE_OPTIONS, 
   PAGE_SIZE, 
-  isAuctionListing, 
-  isListingActive, 
+  isAuctionListing as isAuctionListingUtil, 
+  isListingActive as isListingActiveUtil, 
   getDisplayPrice as getDisplayPriceUtil,
   formatTimeRemaining as formatTimeRemainingUtil
 } from '@/utils/browseUtils';
 
+// Type definitions - matching what we actually have in storage
+interface Listing {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  markedUpPrice?: number;
+  imageUrls?: string[];
+  images?: string[];
+  date: string;
+  seller: string;
+  isVerified?: boolean;
+  isPremium?: boolean;
+  tags?: string[];
+  hoursWorn?: number;
+  auction?: {
+    isAuction: boolean;
+    startingPrice: number;
+    reservePrice?: number;
+    endTime: string;
+    bids: any[];
+    highestBid?: number;
+    highestBidder?: string;
+    status: string;
+  };
+}
+
+interface Order {
+  id: string;
+  seller: string;
+  buyer: string;
+  date: string;
+}
+
+interface User {
+  username: string;
+  verified?: boolean;
+  verificationStatus?: string;
+}
+
+// Helper functions to normalize listings for utility functions
+const normalizeListing = (listing: Listing): any => ({
+  ...listing,
+  markedUpPrice: listing.markedUpPrice || Math.round(listing.price * 1.1 * 100) / 100,
+  imageUrls: listing.imageUrls || listing.images || []
+});
+
+const isAuctionListing = (listing: Listing): boolean => {
+  return isAuctionListingUtil(normalizeListing(listing));
+};
+
+const isListingActive = (listing: Listing): boolean => {
+  return isListingActiveUtil(normalizeListing(listing));
+};
+
+const getDisplayPrice = (listing: Listing) => {
+  return getDisplayPriceUtil(normalizeListing(listing));
+};
+
 export const useBrowseListings = () => {
   const { user } = useAuth();
-  const { listings, removeListing, users, isSubscribed, addSellerNotification, placeBid } = useListings();
-  const { purchaseListing, orderHistory } = useWallet();
   const router = useRouter();
 
   // State
@@ -36,6 +90,13 @@ export const useBrowseListings = () => {
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [listingErrors, setListingErrors] = useState<{ [listingId: string]: string }>({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  
+  // Data state
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [users, setUsers] = useState<Record<string, User>>({});
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Record<string, string[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   // Refs
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -46,10 +107,42 @@ export const useBrowseListings = () => {
 
   const MAX_CACHED_PROFILES = 100;
 
+  // Load data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Load listings
+        const listingsResponse = await listingsService.getListings();
+        if (listingsResponse.success && listingsResponse.data) {
+          setListings(listingsResponse.data);
+        }
+
+        // Load users
+        const usersData = await storageService.getItem<Record<string, User>>('users', {});
+        setUsers(usersData);
+
+        // Load orders
+        const ordersData = await storageService.getItem<Order[]>('orders', []);
+        setOrderHistory(ordersData);
+
+        // Load subscriptions
+        const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
+        setSubscriptions(subsData);
+
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
   // Load seller profiles
   useEffect(() => {
     const loadSellerProfiles = async () => {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !isLoading) {
         const currentSellers = new Set(listings.map(listing => listing.seller));
         const profiles: { [key: string]: SellerProfile } = {};
         
@@ -71,7 +164,7 @@ export const useBrowseListings = () => {
     };
     
     loadSellerProfiles();
-  }, [listings]);
+  }, [listings, isLoading]);
 
   // Debounced search
   useEffect(() => {
@@ -94,7 +187,7 @@ export const useBrowseListings = () => {
       const activeAuctions = listings.filter(listing => {
         if (!isAuctionListing(listing) || !isListingActive(listing)) return false;
         
-        const endTime = listing.auction.endTime ? new Date(listing.auction.endTime) : null;
+        const endTime = listing.auction?.endTime ? new Date(listing.auction.endTime) : null;
         return endTime && endTime > now;
       });
 
@@ -220,7 +313,7 @@ export const useBrowseListings = () => {
     return () => {
       clearInterval(cleanupInterval);
     };
-  }, []);
+  }, [auctionTimers]);
 
   // Memoized calculations
   const categoryCounts = useMemo(() => {
@@ -279,7 +372,7 @@ export const useBrowseListings = () => {
             
             let price: number;
             if (isAuctionListing(listing)) {
-              price = listing.auction.highestBid ?? listing.auction.startingPrice;
+              price = listing.auction?.highestBid ?? listing.auction?.startingPrice ?? 0;
             } else {
               price = listing.markedUpPrice || listing.price;
             }
@@ -298,8 +391,8 @@ export const useBrowseListings = () => {
           try {
             if (sortBy === 'endingSoon') {
               if (isAuctionListing(a) && isAuctionListing(b)) {
-                const aTime = new Date(a.auction.endTime).getTime();
-                const bTime = new Date(b.auction.endTime).getTime();
+                const aTime = new Date(a.auction!.endTime).getTime();
+                const bTime = new Date(b.auction!.endTime).getTime();
                 return aTime - bTime;
               }
               if (isAuctionListing(a)) return -1;
@@ -314,15 +407,15 @@ export const useBrowseListings = () => {
               let aPrice: number, bPrice: number;
               
               if (isAuctionListing(a)) {
-                aPrice = a.auction.highestBid ?? a.auction.startingPrice;
+                aPrice = a.auction?.highestBid ?? a.auction?.startingPrice ?? 0;
               } else {
-                aPrice = a.markedUpPrice ?? a.price;
+                aPrice = a.markedUpPrice || a.price;
               }
               
               if (isAuctionListing(b)) {
-                bPrice = b.auction.highestBid ?? b.auction.startingPrice;
+                bPrice = b.auction?.highestBid ?? b.auction?.startingPrice ?? 0;
               } else {
-                bPrice = b.markedUpPrice ?? b.price;
+                bPrice = b.markedUpPrice || b.price;
               }
               
               return sortBy === 'priceAsc' ? aPrice - bPrice : bPrice - aPrice;
@@ -374,6 +467,12 @@ export const useBrowseListings = () => {
       return 1;
     }
   }, [filteredListings.length]);
+
+  // Utility functions
+  const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
+    const buyerSubs = subscriptions[buyerUsername] || [];
+    return buyerSubs.includes(sellerUsername);
+  }, [subscriptions]);
 
   // Handlers
   const handleMouseEnter = useCallback((listingId: string) => {
@@ -437,10 +536,6 @@ export const useBrowseListings = () => {
     }
   }, []);
 
-  const getDisplayPrice = useCallback((listing: Listing) => {
-    return getDisplayPriceUtil(listing);
-  }, []);
-
   const formatTimeRemaining = useCallback((endTime: string) => {
     return formatTimeRemainingUtil(endTime, timeCache);
   }, []);
@@ -479,6 +574,9 @@ export const useBrowseListings = () => {
     paginatedListings,
     categoryCounts,
     totalPages,
+    
+    // Loading state
+    isLoading,
     
     // Handlers
     handleMouseEnter,

@@ -2,143 +2,213 @@
 
 import { useState, useEffect, useMemo, createElement } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
-import { useRequests } from '@/context/RequestContext';
-import { useListings } from '@/context/ListingContext';
-import { useMessages } from '@/context/MessageContext';
-import { getUserProfileData } from '@/utils/profileUtils';
 import { storageService } from '@/services';
+import { listingsService } from '@/services/listings.service';
 import { DashboardStats, SubscriptionInfo, RecentActivity } from '@/types/dashboard';
-import { Package, MessageCircle } from 'lucide-react';
+import { Package, MessageCircle, Crown, DollarSign } from 'lucide-react';
+// Type definitions
+interface Listing {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  markedUpPrice?: number;
+  imageUrls?: string[];
+  images?: string[];
+  date: string;
+  seller: string;
+  isVerified?: boolean;
+  isPremium?: boolean;
+  tags?: string[];
+  hoursWorn?: number;
+  auction?: any;
+}
+
+interface Order {
+  id: string;
+  title: string;
+  price: number;
+  markedUpPrice?: number;
+  seller: string;
+  buyer: string;
+  date: string;
+  shippingStatus?: string;
+}
+
+interface Transaction {
+  id: string;
+  userId: string;
+  walletType: 'buyer' | 'seller';
+  type: 'deposit' | 'withdrawal' | 'purchase' | 'sale';
+  amount: number;
+  date: string;
+}
+
+interface Message {
+  id: string;
+  sender: string;
+  receiver: string;
+  content: string;
+  timestamp: string;
+  read?: boolean;
+}
+
+interface Request {
+  id: string;
+  title: string;
+  seller: string;
+  buyer: string;
+  price: number;
+  status: 'pending' | 'accepted' | 'rejected' | 'completed';
+  date: string;
+}
 
 export const useDashboardData = () => {
   const { user } = useAuth();
-  const { orderHistory, getBuyerBalance } = useWallet();
-  const { getRequestsForUser } = useRequests();
-  const { listings, users } = useListings();
-  const { messages } = useMessages();
-
   const [subscribedSellers, setSubscribedSellers] = useState<SubscriptionInfo[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [featuredListings, setFeaturedListings] = useState<any[]>([]);
+  const [balance, setBalance] = useState(0);
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load wallet data
+  useEffect(() => {
+    const loadWalletData = async () => {
+      if (!user?.username) return;
+
+      try {
+        // Load transactions to calculate balance
+        const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
+        const userTransactions = transactions.filter(
+          t => t.userId === user.username && t.walletType === 'buyer'
+        );
+        
+        const calculatedBalance = userTransactions.reduce((sum, t) => {
+          return t.type === 'deposit' ? sum + t.amount : sum - t.amount;
+        }, 0);
+        
+        setBalance(calculatedBalance);
+
+        // Load orders
+        const orders = await storageService.getItem<Order[]>('orders', []);
+        const buyerOrders = orders.filter(order => order.buyer === user.username);
+        setOrderHistory(buyerOrders);
+      } catch (error) {
+        console.error('Error loading wallet data:', error);
+      }
+    };
+
+    loadWalletData();
+  }, [user?.username]);
+
+  // Load messages
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (!user?.username) return;
+
+      try {
+        const allMessages = await storageService.getItem<Record<string, Message[]>>('messages', {});
+        setMessages(allMessages);
+      } catch (error) {
+        console.error('Error loading messages:', error);
+      }
+    };
+
+    loadMessages();
+  }, [user?.username]);
+
+  // Load requests
+  useEffect(() => {
+    const loadRequests = async () => {
+      if (!user?.username) return;
+
+      try {
+        const allRequests = await storageService.getItem<Request[]>('requests', []);
+        const userRequests = allRequests.filter(
+          r => r.buyer === user.username
+        );
+        setRequests(userRequests);
+      } catch (error) {
+        console.error('Error loading requests:', error);
+      }
+    };
+
+    loadRequests();
+  }, [user?.username]);
+
+  // Load listings
+  useEffect(() => {
+    const loadListings = async () => {
+      try {
+        const response = await listingsService.getListings();
+        if (response.success && response.data) {
+          setListings(response.data);
+        }
+      } catch (error) {
+        console.error('Error loading listings:', error);
+      }
+    };
+
+    loadListings();
+  }, []);
 
   // Load subscriptions
   useEffect(() => {
     const loadSubscriptions = async () => {
-      if (typeof window !== 'undefined' && user?.username) {
-        try {
-          const subsKey = 'subscriptions';
-          const allSubscriptions = await storageService.getItem<{ [key: string]: string[] }>(subsKey, {});
-          const userSubscriptions = allSubscriptions[user.username] || [];
-          
-          const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
-            const sellerUser = users[seller];
+      if (!user?.username) return;
+
+      try {
+        const subsKey = 'subscriptions';
+        const allSubscriptions = await storageService.getItem<{ [key: string]: string[] }>(subsKey, {});
+        const userSubscriptions = allSubscriptions[user.username] || [];
+        
+        const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
+          try {
+            // Load seller profile data
+            const profileKey = `profile_${seller}`;
+            const profileData = await storageService.getItem<any>(profileKey, null);
             
-            try {
-              // Use the new async getUserProfileData utility
-              const profileData = await getUserProfileData(seller);
-              const sellerBio = profileData?.bio || 
-                               (sellerUser as any)?.bio || 
-                               'No bio available';
-              const sellerPic = profileData?.profilePic || null;
-              const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
-              
-              return {
-                seller,
-                price: subscriptionPrice,
-                bio: sellerBio,
-                pic: sellerPic,
-                newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-                lastActive: new Date().toISOString(),
-                tier: (sellerUser as any)?.tier || 'Tease',
-                verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
-              };
-            } catch (error) {
-              console.error(`Error loading profile for seller ${seller}:`, error);
-              // Return fallback data
-              return {
-                seller,
-                price: '25.00',
-                bio: 'No bio available',
-                pic: null,
-                newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-                lastActive: new Date().toISOString(),
-                tier: (sellerUser as any)?.tier || 'Tease',
-                verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
-              };
-            }
-          });
-          
-          const subscriptionData = await Promise.all(subscriptionDataPromises);
-          setSubscribedSellers(subscriptionData);
-        } catch (error) {
-          console.error('Error loading subscriptions:', error);
-        }
+            const sellerListings = listings.filter(l => l.seller === seller);
+            
+            return {
+              seller,
+              price: profileData?.subscriptionPrice || '25.00',
+              bio: profileData?.bio || 'No bio available',
+              pic: profileData?.profilePic || null,
+              newListings: sellerListings.filter(l => l.isPremium).length,
+              lastActive: new Date().toISOString(),
+              tier: profileData?.tier || 'Tease',
+              verified: profileData?.verificationStatus === 'verified'
+            };
+          } catch (error) {
+            console.error(`Error loading profile for seller ${seller}:`, error);
+            return {
+              seller,
+              price: '25.00',
+              bio: 'No bio available',
+              pic: null,
+              newListings: 0,
+              lastActive: new Date().toISOString(),
+              tier: 'Tease',
+              verified: false
+            };
+          }
+        });
+        
+        const subscriptionData = await Promise.all(subscriptionDataPromises);
+        setSubscribedSellers(subscriptionData);
+      } catch (error) {
+        console.error('Error loading subscriptions:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadSubscriptions();
-  }, [user?.username, listings, users]);
-
-  // Listen for storage changes to update profiles in real-time
-  useEffect(() => {
-    const handleStorageChange = async (e: StorageEvent) => {
-      if (e.key === 'user_profiles' && e.newValue && user?.username) {
-        // Re-fetch subscriptions when profiles are updated
-        try {
-          const subsKey = 'subscriptions';
-          const allSubscriptions = await storageService.getItem<{ [key: string]: string[] }>(subsKey, {});
-          const userSubscriptions = allSubscriptions[user.username] || [];
-          
-          const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
-            const sellerUser = users[seller];
-            
-            try {
-              // Use the new async getUserProfileData utility
-              const profileData = await getUserProfileData(seller);
-              const sellerBio = profileData?.bio || 
-                               (sellerUser as any)?.bio || 
-                               'No bio available';
-              const sellerPic = profileData?.profilePic || null;
-              const subscriptionPrice = profileData?.subscriptionPrice || '25.00';
-              
-              return {
-                seller,
-                price: subscriptionPrice,
-                bio: sellerBio,
-                pic: sellerPic,
-                newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-                lastActive: new Date().toISOString(),
-                tier: (sellerUser as any)?.tier || 'Tease',
-                verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
-              };
-            } catch (error) {
-              console.error(`Error loading profile for seller ${seller}:`, error);
-              // Return fallback data
-              return {
-                seller,
-                price: '25.00',
-                bio: 'No bio available',
-                pic: null,
-                newListings: listings.filter(l => l.seller === seller && l.isPremium).length,
-                lastActive: new Date().toISOString(),
-                tier: (sellerUser as any)?.tier || 'Tease',
-                verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified'
-              };
-            }
-          });
-          
-          const subscriptionData = await Promise.all(subscriptionDataPromises);
-          setSubscribedSellers(subscriptionData);
-        } catch (error) {
-          console.error('Error updating subscriptions:', error);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [user?.username, listings, users]);
+  }, [user?.username, listings]);
 
   // Calculate statistics
   const stats = useMemo<DashboardStats>(() => {
@@ -158,14 +228,10 @@ export const useDashboardData = () => {
       };
     }
 
-    const userOrders = orderHistory.filter(order => order.buyer === user.username);
-    const userRequests = getRequestsForUser(user.username, 'buyer');
-    
     // Count unread messages
     let unreadCount = 0;
     Object.values(messages).forEach((threadMessages) => {
       threadMessages.forEach((msg) => {
-        // Fixed: Use 'read' instead of 'isRead'
         if (msg.receiver === user.username && !msg.read) {
           unreadCount++;
         }
@@ -176,52 +242,49 @@ export const useDashboardData = () => {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-    // Fixed: Add type assertion for shippingStatus comparisons
-    const completedOrders = userOrders.filter(order => {
-      const status = order.shippingStatus as string | undefined;
-      return status === 'delivered';
-    }).length;
+    const completedOrders = orderHistory.filter(order => 
+      order.shippingStatus === 'delivered'
+    ).length;
     
-    const pendingShipments = userOrders.filter(order => {
-      const status = order.shippingStatus as string | undefined;
-      return status && status !== 'delivered';
-    }).length;
+    const pendingShipments = orderHistory.filter(order => 
+      order.shippingStatus && order.shippingStatus !== 'delivered'
+    ).length;
 
-    const weekSpent = userOrders
+    const weekSpent = orderHistory
       .filter(order => new Date(order.date) >= weekAgo)
       .reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
 
-    const monthOrders = userOrders
+    const monthOrders = orderHistory
       .filter(order => new Date(order.date) >= monthAgo)
       .length;
 
-    const favoriteSellerCount = new Set(userOrders.map(order => order.seller)).size;
-    const totalSpent = userOrders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+    const favoriteSellerCount = new Set(orderHistory.map(order => order.seller)).size;
+    const totalSpent = orderHistory.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+    const pendingRequests = requests.filter(r => r.status === 'pending').length;
 
     return {
       totalSpent,
-      totalOrders: userOrders.length,
+      totalOrders: orderHistory.length,
       activeSubscriptions: subscribedSellers.length,
-      pendingRequests: userRequests.filter(r => r.status === 'pending').length,
+      pendingRequests,
       unreadMessages: unreadCount,
       completedOrders,
       favoriteSellerCount,
-      averageOrderValue: userOrders.length > 0 ? totalSpent / userOrders.length : 0,
+      averageOrderValue: orderHistory.length > 0 ? totalSpent / orderHistory.length : 0,
       thisWeekSpent: weekSpent,
       thisMonthOrders: monthOrders,
       pendingShipments
     };
-  }, [user, orderHistory, subscribedSellers, getRequestsForUser, messages]);
+  }, [user, orderHistory, subscribedSellers, requests, messages]);
 
   // Generate recent activity
   useEffect(() => {
     if (!user?.username) return;
 
     const activities: RecentActivity[] = [];
-    const userOrders = orderHistory.filter(order => order.buyer === user.username);
-    const userRequests = getRequestsForUser(user.username, 'buyer');
 
-    userOrders
+    // Add recent orders
+    orderHistory
       .slice(0, 3)
       .forEach(order => {
         activities.push({
@@ -237,7 +300,8 @@ export const useDashboardData = () => {
         });
       });
 
-    userRequests
+    // Add recent requests
+    requests
       .slice(0, 2)
       .forEach(request => {
         activities.push({
@@ -253,39 +317,31 @@ export const useDashboardData = () => {
         });
       });
 
-    activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    setRecentActivity(activities.slice(0, 6));
-  }, [user, orderHistory, getRequestsForUser]);
+    // Add subscription activities
+    subscribedSellers.slice(0, 1).forEach(sub => {
+      activities.push({
+        id: `sub-${sub.seller}`,
+        type: 'subscription',
+        title: `Subscribed to ${sub.seller}`,
+        subtitle: `Premium content access`,
+        time: 'Active',
+        amount: parseFloat(sub.price),
+        href: `/sellers/${sub.seller}`,
+        icon: createElement(Crown, { className: "w-4 h-4" })
+      });
+    });
 
-  // Get featured listings
-  useEffect(() => {
-    const userOrders = orderHistory.filter(order => order.buyer === user?.username);
-    const purchasedSellers = new Set(userOrders.map(order => order.seller));
+    // Sort by time and limit
+    activities.sort((a, b) => {
+      if (a.time === 'Active') return -1;
+      if (b.time === 'Active') return 1;
+      return new Date(b.time).getTime() - new Date(a.time).getTime();
+    });
     
-    const recommendedListings = listings
-      .filter(listing => 
-        purchasedSellers.has(listing.seller) && 
-        !listing.isPremium &&
-        !listing.auction
-      )
-      .slice(0, 6);
+    setRecentActivity(activities.slice(0, 6));
+  }, [user, orderHistory, requests, subscribedSellers]);
 
-    if (recommendedListings.length < 6) {
-      const popularListings = listings
-        .filter(listing => 
-          !purchasedSellers.has(listing.seller) &&
-          !listing.isPremium &&
-          !listing.auction
-        )
-        .slice(0, 6 - recommendedListings.length);
-      
-      recommendedListings.push(...popularListings);
-    }
-
-    setFeaturedListings(recommendedListings);
-  }, [listings, orderHistory, user]);
-
-  const balance = user ? getBuyerBalance(user.username) : 0;
+  // Get featured listings (removed to avoid complexity)
 
   return {
     user,
@@ -293,6 +349,6 @@ export const useDashboardData = () => {
     stats,
     subscribedSellers,
     recentActivity,
-    featuredListings
+    isLoading
   };
 };

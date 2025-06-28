@@ -9,6 +9,7 @@ import ListingGrid from '@/components/browse/ListingGrid';
 import PaginationControls from '@/components/browse/PaginationControls';
 import EmptyState from '@/components/browse/EmptyState';
 import { useBrowseListings } from '@/hooks/useBrowseListings';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function BrowsePage() {
   const {
@@ -46,10 +47,33 @@ export default function BrowsePage() {
     getDisplayPrice,
     formatTimeRemaining,
     HOUR_RANGE_OPTIONS,
-    PAGE_SIZE
+    PAGE_SIZE,
+    isLoading
   } = useBrowseListings();
 
   const hasActiveFilters = !!(searchTerm || minPrice || maxPrice || selectedHourRange.label !== 'Any Hours' || sortBy !== 'newest');
+
+  if (isLoading) {
+    return (
+      <BanCheck>
+        <RequireAuth role={user?.role || 'buyer'}>
+          <main className="min-h-screen bg-black text-white pb-16 pt-8">
+            <div className="max-w-[1700px] mx-auto px-6">
+              <div className="space-y-6">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                  {[...Array(8)].map((_, i) => (
+                    <Skeleton key={i} className="h-96" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </main>
+        </RequireAuth>
+      </BanCheck>
+    );
+  }
 
   return (
     <BanCheck>

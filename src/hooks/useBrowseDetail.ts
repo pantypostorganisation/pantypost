@@ -3,13 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
-import { useMessages } from '@/context/MessageContext';
-import { useReviews } from '@/context/ReviewContext';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { storageService } from '@/services';
+import { storageService, listingsService } from '@/services';
 import { 
   isAuctionActive, 
   calculateTotalPayable, 
@@ -18,6 +14,7 @@ import {
   extractSellerInfo 
 } from '@/utils/browseDetailUtils';
 import { DetailState, ListingWithDetails } from '@/types/browseDetail';
+import { ensureBuyerHasInitialDeposit } from '@/utils/walletInitialization';
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -43,25 +40,89 @@ const initialState: DetailState = {
   currentImageIndex: 0
 };
 
+// Type definitions
+interface Listing {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  markedUpPrice?: number;
+  imageUrls?: string[];
+  date: string;
+  seller: string;
+  isVerified?: boolean;
+  isPremium?: boolean;
+  tags?: string[];
+  hoursWorn?: number;
+  auction?: {
+    isAuction: boolean;
+    startingPrice: number;
+    reservePrice?: number;
+    endTime: string;
+    bids: any[];
+    highestBid?: number;
+    highestBidder?: string;
+    status: string;
+  };
+}
+
+interface Order {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  markedUpPrice: number;
+  seller: string;
+  buyer: string;
+  date: string;
+  shippingStatus?: string;
+  wasAuction?: boolean;
+  imageUrls?: string[];
+}
+
+interface Transaction {
+  id: string;
+  userId: string;
+  walletType: 'buyer' | 'seller';
+  type: 'deposit' | 'withdrawal' | 'purchase' | 'sale' | 'refund';
+  amount: number;
+  date: string;
+  description?: string;
+}
+
+interface Review {
+  seller: string;
+  reviewer: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
+interface Message {
+  id?: string;
+  sender: string;
+  receiver: string;
+  content: string;
+  date: string;
+  read?: boolean;
+  isRead?: boolean;
+}
+
 export const useBrowseDetail = () => {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { 
-    listings, 
-    users, 
-    placeBid: contextPlaceBid, 
-    isSubscribed, 
-    updateListing,
-    orderHistory
-  } = useListings();
-  const { purchaseListing, getBuyerBalance } = useWallet();
-  const { markMessagesAsRead } = useMessages();
-  const { getReviewsForSeller } = useReviews();
   
   // State
   const [state, setState] = useState<DetailState>(initialState);
+  const [listing, setListing] = useState<ListingWithDetails | undefined>();
+  const [users, setUsers] = useState<Record<string, any>>({});
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Record<string, string[]>>({});
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [buyerBalance, setBuyerBalance] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Refs
   const lastProcessedPaymentRef = useRef<string | null>(null);
@@ -77,9 +138,110 @@ export const useBrowseDetail = () => {
 
   // Core data
   const listingId = params?.id as string;
-  const listing = listings.find(l => l.id === listingId) as ListingWithDetails | undefined;
   const currentUsername = user?.username || null;
-  
+
+  // Calculate buyer balance
+  const calculateBuyerBalance = useCallback(async (username: string) => {
+    try {
+      const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
+      
+      // Filter transactions for this buyer
+      const userTransactions = transactions.filter(
+        t => t.userId === username && t.walletType === 'buyer'
+      );
+      
+      // Calculate balance
+      const balance = userTransactions.reduce((sum, transaction) => {
+        switch (transaction.type) {
+          case 'deposit':
+          case 'refund':
+            return sum + transaction.amount;
+          case 'withdrawal':
+          case 'purchase':
+            return sum - transaction.amount;
+          default:
+            return sum;
+        }
+      }, 0);
+      
+      console.log('Calculated buyer balance:', {
+        username,
+        transactionCount: userTransactions.length,
+        balance,
+        transactions: userTransactions
+      });
+      
+      return Math.max(0, balance); // Ensure non-negative balance
+    } catch (error) {
+      console.error('Error calculating buyer balance:', error);
+      return 0;
+    }
+  }, []);
+
+  // Load data
+  useEffect(() => {
+    const loadData = async () => {
+      if (!listingId) return;
+
+      try {
+        setIsLoading(true);
+
+        // Load listing
+        const listingResponse = await listingsService.getListing(listingId);
+        if (listingResponse.success && listingResponse.data) {
+          // Ensure listing has required fields
+          const processedListing = {
+            ...listingResponse.data,
+            markedUpPrice: listingResponse.data.markedUpPrice || Math.round(listingResponse.data.price * 1.1 * 100) / 100,
+            imageUrls: listingResponse.data.imageUrls || []
+          };
+          setListing(processedListing as ListingWithDetails);
+        }
+
+        // Load users
+        const usersData = await storageService.getItem<Record<string, any>>('users', {});
+        setUsers(usersData);
+
+        // Load orders
+        const ordersData = await storageService.getItem<Order[]>('orders', []);
+        setOrderHistory(ordersData);
+
+        // Load subscriptions
+        const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
+        setSubscriptions(subsData);
+
+        // Load reviews
+        const reviewsData = await storageService.getItem<Review[]>('reviews', []);
+        setReviews(reviewsData);
+
+        // Load buyer balance if user is a buyer
+        if (user?.username && user.role === 'buyer') {
+          // Ensure buyer has initial deposit (for development/testing)
+          await ensureBuyerHasInitialDeposit(user.username, 1000);
+          
+          const balance = await calculateBuyerBalance(user.username);
+          setBuyerBalance(balance);
+        }
+
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [listingId, user, calculateBuyerBalance]);
+
+  // Refresh balance when user changes
+  useEffect(() => {
+    if (user?.username && user.role === 'buyer') {
+      calculateBuyerBalance(user.username).then(balance => {
+        setBuyerBalance(balance);
+      });
+    }
+  }, [user, calculateBuyerBalance]);
+
   // Computed values
   const isAuctionListing = !!listing?.auction;
   const isAuctionEnded = isAuctionListing && listing?.auction && !isAuctionActive(listing.auction);
@@ -88,6 +250,13 @@ export const useBrowseDetail = () => {
   const currentTotalPayable = isAuctionListing ? calculateTotalPayable(currentHighestBid) : 0;
   const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
   const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
+  
+  // Check subscription
+  const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
+    const buyerSubs = subscriptions[buyerUsername] || [];
+    return buyerSubs.includes(sellerUsername);
+  }, [subscriptions]);
+
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
   // Add view count tracking
@@ -95,25 +264,22 @@ export const useBrowseDetail = () => {
     const trackView = async () => {
       if (listing && !viewIncrementedRef.current) {
         viewIncrementedRef.current = true;
-        // Increment view count
-        const viewKey = `listing_views_${listing.id}`;
-        const viewsData = await storageService.getItem<Record<string, number>>('listing_views', {});
-        const currentViews = viewsData[listing.id] || 0;
-        const newViews = currentViews + 1;
-        viewsData[listing.id] = newViews;
-        await storageService.setItem('listing_views', viewsData);
-        setState(prev => ({ ...prev, viewCount: newViews }));
+        await listingsService.updateViews({ listingId: listing.id, viewerId: currentUsername || undefined });
+        const viewsResponse = await listingsService.getListingViews(listing.id);
+        if (viewsResponse.success && viewsResponse.data !== undefined) {
+          setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+        }
       }
     };
     
     trackView();
-  }, [listing]);
+  }, [listing, currentUsername]);
 
   // Get seller reviews
   const sellerReviews = useMemo(() => {
     if (!listing?.seller) return [];
-    return getReviewsForSeller(listing.seller);
-  }, [listing?.seller, getReviewsForSeller]);
+    return reviews.filter(review => review.seller === listing.seller);
+  }, [listing?.seller, reviews]);
 
   const sellerAverageRating = useMemo(() => {
     if (sellerReviews.length === 0) return null;
@@ -136,6 +302,10 @@ export const useBrowseDetail = () => {
     const elapsed = now - startTime;
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuctionListing, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
+
+  const getBuyerBalance = useCallback((username: string) => {
+    return buyerBalance;
+  }, [buyerBalance]);
 
   const checkCurrentUserFunds = useCallback(() => {
     if (!user || user.role !== "buyer" || !isAuctionListing || !listing?.auction) return;
@@ -168,6 +338,134 @@ export const useBrowseDetail = () => {
     return minBidAmount.toString();
   }, [isAuctionListing, listing?.auction]);
 
+  // Purchase listing
+  const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
+    try {
+      // Get fresh balance
+      const currentBalance = await calculateBuyerBalance(buyerUsername);
+      const price = listing.markedUpPrice || Math.round(listing.price * 1.1 * 100) / 100;
+      
+      console.log('Purchase attempt:', {
+        buyerUsername,
+        currentBalance,
+        price,
+        listingPrice: listing.price,
+        markedUpPrice: listing.markedUpPrice,
+        canAfford: currentBalance >= price
+      });
+      
+      if (currentBalance < price) {
+        console.log('Insufficient balance for purchase');
+        return false;
+      }
+
+      // Create order
+      const newOrder: Order = {
+        id: `order_${Date.now()}`,
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        markedUpPrice: price,
+        seller: listing.seller,
+        buyer: buyerUsername,
+        date: new Date().toISOString(),
+        shippingStatus: 'pending',
+        wasAuction: false,
+        imageUrls: listing.imageUrls
+      };
+
+      // Save order
+      const orders = await storageService.getItem<Order[]>('orders', []);
+      orders.push(newOrder);
+      await storageService.setItem('orders', orders);
+
+      // Update balance - create transaction
+      const newTransaction: Transaction = {
+        id: `tx_${Date.now()}`,
+        userId: buyerUsername,
+        walletType: 'buyer',
+        type: 'purchase',
+        amount: price,
+        date: new Date().toISOString(),
+        description: `Purchase: ${listing.title}`
+      };
+
+      const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
+      transactions.push(newTransaction);
+      await storageService.setItem('wallet_transactions', transactions);
+
+      // Update local balance
+      const newBalance = currentBalance - price;
+      setBuyerBalance(newBalance);
+
+      // Remove listing from available listings
+      const listings = await storageService.getItem<Listing[]>('listings', []);
+      const updatedListings = listings.filter(l => l.id !== listing.id);
+      await storageService.setItem('listings', updatedListings);
+
+      console.log('Purchase successful:', {
+        orderId: newOrder.id,
+        newBalance,
+        transactionId: newTransaction.id
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Purchase error:', error);
+      return false;
+    }
+  }, [calculateBuyerBalance]);
+
+  // Place bid
+  const placeBid = useCallback(async (listingId: string, bidderUsername: string, bidAmount: number): Promise<boolean> => {
+    try {
+      const result = await listingsService.placeBid(listingId, bidderUsername, bidAmount);
+      
+      if (result.success && result.data) {
+        // Update local listing with new bid data
+        setListing(prev => prev ? { ...prev, ...result.data } : result.data);
+        
+        // Refresh balance after bid
+        if (user?.username && user.role === 'buyer') {
+          const newBalance = await calculateBuyerBalance(user.username);
+          setBuyerBalance(newBalance);
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Place bid error:', error);
+      return false;
+    }
+  }, [user, calculateBuyerBalance]);
+
+  // Mark messages as read
+  const markMessagesAsRead = useCallback(async (receiverUsername: string, senderUsername: string) => {
+    try {
+      const messagesKey = `messages`;
+      const allMessages = await storageService.getItem<Record<string, Message[]>>(messagesKey, {});
+      
+      // Get conversation key
+      const conversationKey = [receiverUsername, senderUsername].sort().join('-');
+      const messages = allMessages[conversationKey] || [];
+      
+      // Mark messages as read
+      const updatedMessages = messages.map(msg => {
+        if (msg.receiver === receiverUsername && msg.sender === senderUsername && !msg.read) {
+          return { ...msg, read: true, isRead: true };
+        }
+        return msg;
+      });
+      
+      allMessages[conversationKey] = updatedMessages;
+      await storageService.setItem(messagesKey, allMessages);
+    } catch (error) {
+      console.error('Mark messages as read error:', error);
+    }
+  }, []);
+
   // Action handlers
   const handlePurchase = useCallback(async () => {
     if (!user || !listing || state.isProcessing) return;
@@ -183,7 +481,6 @@ export const useBrowseDetail = () => {
     updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
 
     try {
-      // FIXED: Pass the listing object and buyer username correctly
       const success = await purchaseListing(listing, user.username);
       
       if (success) {
@@ -236,7 +533,7 @@ export const useBrowseDetail = () => {
     });
 
     try {
-      const success = await contextPlaceBid(listing.id, user.username, bidValue);
+      const success = await placeBid(listing.id, user.username, bidValue);
       
       if (success) {
         updateState({ 
@@ -270,7 +567,7 @@ export const useBrowseDetail = () => {
         isBidding: false 
       });
     }
-  }, [listing, state.isBidding, state.bidAmount, user, contextPlaceBid, updateState]);
+  }, [listing, state.isBidding, state.bidAmount, user, placeBid, updateState]);
 
   const handleImageNavigation = useCallback((newIndex: number) => {
     if (newIndex >= 0 && newIndex < images.length) {
@@ -278,66 +575,11 @@ export const useBrowseDetail = () => {
     }
   }, [images.length, updateState]);
 
-  const validateBidAmount = useCallback(() => {
-    if (!listing?.auction || !state.bidAmount) return true;
-    
-    const bidValue = parseFloat(state.bidAmount);
-    const startingBid = listing.auction.startingPrice || 0;
-    const minimumBid = (listing.auction.highestBid || startingBid) + 1;
-    
-    if (isNaN(bidValue) || bidValue < minimumBid) {
-      updateState({
-        bidStatus: {
-          success: false,
-          message: `Minimum bid is $${minimumBid}`
-        }
-      });
-      return false;
-    }
-
-    const userBalance = user ? getBuyerBalance(user.username) : 0;
-    const totalRequired = calculateTotalPayable(bidValue);
-    
-    if (userBalance < totalRequired) {
-      updateState({
-        bidStatus: {
-          success: false,
-          message: `Insufficient funds. You need $${totalRequired.toFixed(2)}`
-        }
-      });
-      return false;
-    }
-
-    if (user?.username === listing.auction.highestBidder && listing.auction.highestBid) {
-      if (bidValue <= listing.auction.highestBid) {
-        updateState({
-          bidStatus: {
-            success: false,
-            message: 'Your new bid must be higher than your current bid'
-          }
-        });
-        return false;
-      } else {
-        if (state.bidStatus.message?.includes('Warning')) {
-          updateState({
-            bidStatus: {
-              success: true,
-              message: 'You are the highest bidder!'
-            }
-          });
-        }
-        return true;
-      }
-    }
-    return true;
-  }, [user?.username, listing?.auction, state.bidAmount, state.bidStatus.message, getBuyerBalance, updateState]);
-
   // Effects
   useEffect(() => {
     const loadProfileData = async () => {
       if (listing?.seller) {
         try {
-          // Use the new async getUserProfileData utility
           const profileData = await getUserProfileData(listing.seller);
           if (profileData) {
             updateState({ 
@@ -345,57 +587,16 @@ export const useBrowseDetail = () => {
                 bio: profileData.bio,
                 pic: profileData.profilePic,
                 subscriptionPrice: profileData.subscriptionPrice
-              } 
-            });
-          } else {
-            // No fallback to sessionStorage - profile data should come from proper channels
-            updateState({ 
-              sellerProfile: { 
-                bio: null,
-                pic: null,
-                subscriptionPrice: null
               } 
             });
           }
         } catch (error) {
           console.error('Error loading seller profile:', error);
-          updateState({ 
-            sellerProfile: { 
-              bio: null,
-              pic: null,
-              subscriptionPrice: null
-            } 
-          });
         }
       }
     };
 
     loadProfileData();
-  }, [listing?.seller, updateState]);
-
-  // Listen for storage changes to update profile in real-time
-  useEffect(() => {
-    const handleStorageChange = async (e: StorageEvent) => {
-      if (e.key === 'user_profiles' && e.newValue && listing?.seller) {
-        try {
-          const profileData = await getUserProfileData(listing.seller);
-          if (profileData) {
-            updateState({ 
-              sellerProfile: { 
-                bio: profileData.bio,
-                pic: profileData.profilePic,
-                subscriptionPrice: profileData.subscriptionPrice
-              } 
-            });
-          }
-        } catch (error) {
-          console.error('Error updating seller profile:', error);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, [listing?.seller, updateState]);
 
   useEffect(() => {
@@ -446,31 +647,6 @@ export const useBrowseDetail = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [updateState]);
 
-  // Auto-update bid status
-  useEffect(() => {
-    if (isAuctionListing && listing?.auction?.highestBidder === user?.username) {
-      const highestBid = listing.auction?.highestBid || 0;
-      const userBalance = user ? getBuyerBalance(user.username) : 0;
-      const totalPayable = calculateTotalPayable(highestBid);
-      
-      if (userBalance < totalPayable) {
-        updateState({
-          bidStatus: {
-            success: false,
-            message: `Warning: You need $${totalPayable.toFixed(2)} in your wallet to win this auction.`
-          }
-        });
-      } else {
-        updateState({
-          bidStatus: {
-            success: true,
-            message: "You are the highest bidder!"
-          }
-        });
-      }
-    }
-  }, [isAuctionListing, listing?.auction?.highestBidder, listing?.auction?.highestBid, user?.username, getBuyerBalance, updateState]);
-
   // Timer for auction updates
   useEffect(() => {
     if (!isAuctionListing || isAuctionEnded || !mountedRef.current) {
@@ -516,13 +692,50 @@ export const useBrowseDetail = () => {
   // Extract seller info
   const sellerInfo = useMemo(() => {
     if (!listing) return null;
-    const info = extractSellerInfo(listing, users || {}, orderHistory);
+    const info = extractSellerInfo(listing, users || {}, orderHistory as any);
     return info ? {
       ...info,
       averageRating: sellerAverageRating,
       reviewCount: sellerReviews.length
     } : null;
   }, [listing, users, orderHistory, sellerAverageRating, sellerReviews.length]);
+
+  // If loading, return loading state
+  if (isLoading) {
+    return {
+      user,
+      listing: undefined,
+      listingId,
+      images: [],
+      isAuctionListing: false,
+      isAuctionEnded: false,
+      didUserBid: false,
+      isUserHighestBidder: false,
+      currentHighestBid: 0,
+      currentTotalPayable: 0,
+      suggestedBidAmount: null,
+      needsSubscription: false,
+      currentUsername: '',
+      buyerBalance,
+      ...initialState,
+      imageRef,
+      bidInputRef,
+      bidButtonRef,
+      handlePurchase: () => {},
+      handleBidSubmit: () => {},
+      handleImageNavigation: () => {},
+      updateState: () => {},
+      getTimerProgress: () => 0,
+      formatTimeRemaining: () => '',
+      formatBidDate: () => '',
+      calculateTotalPayable: () => 0,
+      router,
+      sellerTierInfo: null,
+      isVerified: false,
+      sellerAverageRating: null,
+      sellerReviewCount: 0
+    };
+  }
 
   // Return everything
   return {
@@ -540,6 +753,7 @@ export const useBrowseDetail = () => {
     suggestedBidAmount,
     needsSubscription: needsSubscription || false,
     currentUsername: currentUsername || '',
+    buyerBalance,
     
     // State
     purchaseStatus: state.purchaseStatus,

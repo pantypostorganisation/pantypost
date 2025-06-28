@@ -1,5 +1,7 @@
 // src/types/dashboard.ts
 
+import { ReactNode } from 'react';
+
 export interface SubscriptionInfo {
   seller: string;
   price: string;
@@ -34,7 +36,7 @@ export interface RecentActivity {
   status?: string;
   amount?: number;
   href?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }
 
 // Component Props
