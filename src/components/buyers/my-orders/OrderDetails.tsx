@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Calendar, Tag, MapPin, CheckCircle, Eye, ChevronUp, Settings } from 'lucide-react';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 import { formatOrderDate, getShippingStatusBadge } from '@/utils/orderUtils';
 
 interface OrderDetailsProps {

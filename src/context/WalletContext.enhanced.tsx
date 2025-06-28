@@ -195,8 +195,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const adminWds = await storageService.getItem<Withdrawal[]>("wallet_adminWithdrawals", []);
         setAdminWithdrawals(adminWds);
 
-        // Load admin actions
+        // Load admin actions - ALWAYS load fresh from localStorage
         const actions = await storageService.getItem<AdminAction[]>("wallet_adminActions", []);
+        console.log('Loading admin actions from storage:', {
+          count: actions.length,
+          subscriptionActions: actions.filter(a => 
+            a.type === 'credit' && 
+            a.reason && 
+            a.reason.toLowerCase().includes('subscription')
+          )
+        });
         setAdminActions(actions);
 
         // Load deposit logs
@@ -225,6 +233,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!isInitialized) return;
     storageService.setItem("wallet_admin", adminBalance);
   }, [adminBalance, isInitialized]);
+
+  // Admin actions are saved immediately when created, so we don't need automatic saves
 
   // Helper functions - updated to use enhanced service
   const getBuyerBalance = useCallback((username: string): number => {
@@ -472,10 +482,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       setAdminBalanceState(prev => prev + adminCut);
       
+      // Create admin action for subscription tracking
+      const action: AdminAction = {
+        id: uuidv4(),
+        type: 'credit',
+        amount: adminCut,
+        targetUser: 'admin',
+        adminUser: 'system',
+        reason: `Subscription revenue from ${buyer} to ${seller} - ${amount}/month`,
+        date: new Date().toISOString(),
+        role: 'seller'
+      };
+      
+      // Update admin actions and save immediately
+      const updatedActions = [...adminActions, action];
+      setAdminActions(updatedActions);
+      await storageService.setItem("wallet_adminActions", updatedActions);
+      
       if (addSellerNotification) {
         addSellerNotification(
           seller,
-          `New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
+          `New subscriber: ${buyer} paid ${amount.toFixed(2)}/month`
         );
       }
       
@@ -590,15 +617,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString(),
         role,
       };
-      setAdminActions(prev => [...prev, action]);
-      await storageService.setItem("wallet_adminActions", [...adminActions, action]);
+      
+      // Update using functional update pattern
+      setAdminActions(prev => {
+        const updatedActions = [...prev, action];
+        storageService.setItem("wallet_adminActions", updatedActions).catch(console.error);
+        return updatedActions;
+      });
       
       return true;
     } catch (error) {
       console.error('Admin credit error:', error);
       return false;
     }
-  }, [adminActions, getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
+  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
 
   const adminDebitUser = useCallback(async (
     username: string,
@@ -629,15 +661,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString(),
         role,
       };
-      setAdminActions(prev => [...prev, action]);
-      await storageService.setItem("wallet_adminActions", [...adminActions, action]);
+      
+      // Update using functional update pattern
+      setAdminActions(prev => {
+        const updatedActions = [...prev, action];
+        storageService.setItem("wallet_adminActions", updatedActions).catch(console.error);
+        return updatedActions;
+      });
       
       return true;
     } catch (error) {
       console.error('Admin debit error:', error);
       return false;
     }
-  }, [adminActions, getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
+  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
 
   const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
     const updatedOrders = orderHistory.map(order =>

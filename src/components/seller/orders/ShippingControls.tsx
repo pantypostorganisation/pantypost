@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 import { Truck } from 'lucide-react';
 
 interface ShippingControlsProps {

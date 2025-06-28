@@ -1,7 +1,7 @@
 // src/hooks/profile/useSellerReviews.ts
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
 import { useReviews } from '@/context/ReviewContext';
 
 export function useSellerReviews(username: string) {

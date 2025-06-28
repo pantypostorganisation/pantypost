@@ -1,7 +1,7 @@
 // src/app/wallet/seller/page.tsx
 'use client';
 
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
 import { useAuth } from '@/context/AuthContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';

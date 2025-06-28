@@ -1,20 +1,22 @@
 // src/components/admin/wallet/AdminRecentActivity.tsx
 'use client';
 
-import { Clock, Download, Upload, Wallet, Activity } from 'lucide-react';
+import { Clock, Download, Upload, Wallet, Activity, TrendingUp } from 'lucide-react';
 
 interface AdminRecentActivityProps {
   timeFilter: string;
   filteredDeposits: any[];
   filteredSellerWithdrawals: any[];
   filteredAdminWithdrawals: any[];
+  filteredActions?: any[]; // Add filtered admin actions
 }
 
 export default function AdminRecentActivity({
   timeFilter,
   filteredDeposits,
   filteredSellerWithdrawals,
-  filteredAdminWithdrawals
+  filteredAdminWithdrawals,
+  filteredActions = []
 }: AdminRecentActivityProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -45,6 +47,14 @@ export default function AdminRecentActivity({
     }
   };
 
+  // Get subscription revenue actions
+  const subscriptionActions = filteredActions.filter(action => 
+    action.type === 'credit' && 
+    action.reason && 
+    action.reason.toLowerCase().includes('subscription') && 
+    action.reason.toLowerCase().includes('revenue')
+  );
+
   // Combine and sort all activities
   const allActivities = [
     ...filteredDeposits
@@ -65,6 +75,12 @@ export default function AdminRecentActivity({
         type: 'admin_withdrawal' as const,
         data: withdrawal,
         date: withdrawal.date
+      })),
+    ...subscriptionActions
+      .map(action => ({
+        type: 'subscription' as const,
+        data: action,
+        date: action.date
       }))
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -137,7 +153,7 @@ export default function AdminRecentActivity({
                       </div>
                     </div>
                   );
-                } else {
+                } else if (item.type === 'admin_withdrawal') {
                   const withdrawal = item.data;
                   return (
                     <div key={`admin-withdrawal-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-purple-500/50">
@@ -162,7 +178,39 @@ export default function AdminRecentActivity({
                       </div>
                     </div>
                   );
+                } else if (item.type === 'subscription') {
+                  const action = item.data;
+                  // Extract buyer and seller from the reason
+                  const match = action.reason.match(/from (.+) to (.+) - \$/);
+                  const buyer = match ? match[1] : 'Unknown';
+                  const seller = match ? match[2] : 'Unknown';
+                  const fullAmount = action.amount * 4; // Admin gets 25%, so multiply by 4 for full amount
+                  
+                  return (
+                    <div key={`subscription-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-pink-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-pink-500/20 text-pink-400">
+                          <TrendingUp className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-white truncate">
+                            🎉 Subscription Revenue
+                          </p>
+                          <p className="text-sm text-gray-400 truncate">
+                            {buyer} → {seller} ({formatCurrency(fullAmount)}/mo)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-pink-400">
+                          +{formatCurrency(action.amount)}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
+                      </div>
+                    </div>
+                  );
                 }
+                return null;
               })}
             </div>
           </div>

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfilePic } from '@/utils/profileUtils';
 import OrderHeader from './OrderHeader';

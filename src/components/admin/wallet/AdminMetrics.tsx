@@ -20,6 +20,7 @@ import {
   getPreviousPeriodData,
   getAllSellerWithdrawals
 } from '@/utils/admin/walletHelpers';
+import { useEffect } from 'react';
 
 interface AdminMetricsProps {
   timeFilter: string;
@@ -51,6 +52,20 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     sellerWithdrawals,
     adminWithdrawals
   } = props;
+
+  // Debug logging
+  useEffect(() => {
+    console.log('AdminMetrics Debug:', {
+      timeFilter,
+      adminActions: adminActions.length,
+      filteredActions: filteredActions.length,
+      subscriptionActions: adminActions.filter(a => 
+        a.type === 'credit' && 
+        a.reason.toLowerCase().includes('subscription') && 
+        a.reason.toLowerCase().includes('revenue')
+      )
+    });
+  }, [timeFilter, adminActions, filteredActions]);
 
   // All the calculation logic from the original file
   const periodSalesProfit = calculatePlatformProfit(filteredOrders);

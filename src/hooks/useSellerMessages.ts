@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
 import { storageService } from '@/services';
 import { v4 as uuidv4 } from 'uuid';
 

@@ -5,7 +5,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
 import RequireAuth from '@/components/RequireAuth';
 import AddressConfirmationModal, { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import OrderStats from '@/components/seller/orders/OrderStats';

@@ -13,7 +13,7 @@ import BulkActionModal from '@/components/admin/wallet/BulkActionModal';
 import ConfirmationModal from '@/components/admin/wallet/ConfirmationModal';
 import WalletToast from '@/components/admin/wallet/WalletToast';
 import { Shield, Loader2 } from 'lucide-react';
-import { WalletProvider, useWallet } from '@/context/WalletContext';
+import { WalletProvider, useWallet } from '@/context/WalletContext.enhanced';
 
 function AdminWalletContent() {
   const { wallet, adminCreditUser, adminDebitUser, adminActions } = useWallet();

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Settings, Star } from 'lucide-react';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 import { OrderStyles } from '@/utils/orderUtils';
 
 interface OrderHeaderProps {

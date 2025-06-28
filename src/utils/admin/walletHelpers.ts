@@ -121,10 +121,11 @@ export const calculateSubscriptionRevenue = (actions: AdminAction[]) => {
     .filter((action: AdminAction) => {
       if (action.type !== 'credit') return false;
       const reason = action.reason.toLowerCase();
-      return reason.includes('subscription') && !reason.includes('refund');
+      return reason.includes('subscription') && reason.includes('revenue') && !reason.includes('refund');
     })
     .reduce((sum: number, action: AdminAction) => {
-      return sum + (action.amount / 0.25);
+      // The admin action stores the 25% cut, so multiply by 4 to get full subscription amount
+      return sum + (action.amount * 4);
     }, 0);
 };
 
@@ -133,7 +134,7 @@ export const calculateSubscriptionProfit = (actions: AdminAction[]) => {
     .filter((action: AdminAction) => {
       if (action.type !== 'credit') return false;
       const reason = action.reason.toLowerCase();
-      return reason.includes('subscription') && !reason.includes('refund');
+      return reason.includes('subscription') && reason.includes('revenue') && !reason.includes('refund');
     })
     .reduce((sum: number, action: AdminAction) => sum + action.amount, 0);
 };
@@ -260,7 +261,9 @@ export const getRevenueByDay = (
       const hourActions = adminActions.filter(action => {
         const actionDate = new Date(action.date);
         return actionDate.getHours() === date.getHours() && 
-               actionDate.toDateString() === date.toDateString();
+               actionDate.toDateString() === date.toDateString() &&
+               action.reason.toLowerCase().includes('subscription') &&
+               action.reason.toLowerCase().includes('revenue');
       });
       
       const hourSalesRevenue = calculateTotalRevenue(hourOrders);
@@ -283,7 +286,9 @@ export const getRevenueByDay = (
       const monthActions = adminActions.filter(action => {
         const actionDate = new Date(action.date);
         return actionDate.getMonth() === date.getMonth() && 
-               actionDate.getFullYear() === date.getFullYear();
+               actionDate.getFullYear() === date.getFullYear() &&
+               action.reason.toLowerCase().includes('subscription') &&
+               action.reason.toLowerCase().includes('revenue');
       });
       
       const monthSalesRevenue = calculateTotalRevenue(monthOrders);
@@ -304,7 +309,9 @@ export const getRevenueByDay = (
       
       const dayActions = adminActions.filter(action => {
         const actionDate = new Date(action.date);
-        return actionDate.toDateString() === date.toDateString();
+        return actionDate.toDateString() === date.toDateString() &&
+               action.reason.toLowerCase().includes('subscription') &&
+               action.reason.toLowerCase().includes('revenue');
       });
       
       const daySalesRevenue = calculateTotalRevenue(dayOrders);

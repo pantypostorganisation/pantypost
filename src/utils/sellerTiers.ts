@@ -1,5 +1,5 @@
 // utils/sellerTiers.ts
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 
 export type TierLevel = 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess' | 'None';
 

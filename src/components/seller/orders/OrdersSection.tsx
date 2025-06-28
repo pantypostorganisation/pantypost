@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 import OrderCard from './OrderCard';
 import { Gavel, Settings, ShoppingBag } from 'lucide-react';
 

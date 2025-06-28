@@ -7,7 +7,7 @@ import { ListingProvider } from '@/context/ListingContext';
 import { MessageProvider } from '@/context/MessageContext';
 import { RequestProvider } from '@/context/RequestContext';
 import { BanProvider } from '@/context/BanContext';
-import { WalletProvider } from '@/context/WalletContext';
+import { WalletProvider } from '@/context/WalletContext.enhanced';
 import { ReviewProvider } from '@/context/ReviewContext';
 import { apiClient, API_BASE_URL, FEATURES } from '@/services/api.config';
 

@@ -3,7 +3,7 @@
 import { walletService, Transaction, TransactionId } from './wallet.service.enhanced';
 import { WalletValidation, WalletReconciliation } from './wallet.validation';
 import { Money, UserId, ISOTimestamp } from '@/types/common';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/context/WalletContext.enhanced';
 import { Listing } from '@/context/ListingContext';
 import { v4 as uuidv4 } from 'uuid';
 
