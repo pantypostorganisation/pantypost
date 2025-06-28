@@ -165,23 +165,44 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [isInitialized]);
 
-  // Load data using services (keep existing logic for backward compatibility)
+  // Helper function to get balance key (matching enhanced wallet service)
+  const getBalanceKey = (username: string, role: string): string => {
+    if (username === 'admin') return 'wallet_admin';
+    return `wallet_${role}_${username}`;
+  };
+
+  // Load data using services - FIXED to scan for individual keys
   useEffect(() => {
     if (typeof window === 'undefined' || !isInitialized) return;
 
     const loadData = async () => {
       try {
-        // Load buyer balances
-        const buyers = await storageService.getItem<{ [username: string]: number }>("wallet_buyers", {});
-        setBuyerBalancesState(buyers);
+        // Load all localStorage keys
+        const allKeys = Object.keys(localStorage);
+        
+        // Load buyer balances by scanning for wallet_buyer_* keys
+        const buyersMap: { [username: string]: number } = {};
+        const buyerKeys = allKeys.filter(key => key.startsWith('wallet_buyer_'));
+        for (const key of buyerKeys) {
+          const username = key.replace('wallet_buyer_', '');
+          const balanceInCents = await storageService.getItem<number>(key, 0);
+          buyersMap[username] = balanceInCents / 100; // Convert from cents to dollars
+        }
+        setBuyerBalancesState(buyersMap);
 
-        // Load seller balances
-        const sellers = await storageService.getItem<{ [username: string]: number }>("wallet_sellers", {});
-        setSellerBalancesState(sellers);
+        // Load seller balances by scanning for wallet_seller_* keys
+        const sellersMap: { [username: string]: number } = {};
+        const sellerKeys = allKeys.filter(key => key.startsWith('wallet_seller_'));
+        for (const key of sellerKeys) {
+          const username = key.replace('wallet_seller_', '');
+          const balanceInCents = await storageService.getItem<number>(key, 0);
+          sellersMap[username] = balanceInCents / 100; // Convert from cents to dollars
+        }
+        setSellerBalancesState(sellersMap);
 
         // Load admin balance
-        const admin = await storageService.getItem<number>("wallet_admin", 0);
-        setAdminBalanceState(admin);
+        const adminBalanceInCents = await storageService.getItem<number>("wallet_admin", 0);
+        setAdminBalanceState(adminBalanceInCents / 100); // Convert from cents to dollars
 
         // Load orders
         const orders = await storageService.getItem<Order[]>("wallet_orders", []);
@@ -195,7 +216,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const adminWds = await storageService.getItem<Withdrawal[]>("wallet_adminWithdrawals", []);
         setAdminWithdrawals(adminWds);
 
-        // Load admin actions - ALWAYS load fresh from localStorage
+        // Load admin actions
         const actions = await storageService.getItem<AdminAction[]>("wallet_adminActions", []);
         console.log('Loading admin actions from storage:', {
           count: actions.length,
@@ -210,6 +231,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Load deposit logs
         const deposits = await storageService.getItem<DepositLog[]>("wallet_depositLogs", []);
         setDepositLogs(deposits);
+
+        console.log('Loaded wallet balances:', {
+          buyers: buyersMap,
+          sellers: sellersMap,
+          admin: adminBalanceInCents / 100
+        });
       } catch (error) {
         console.error('Error loading wallet data:', error);
       }
@@ -218,25 +245,54 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     loadData();
   }, [isInitialized]);
 
-  // Save data to localStorage whenever state changes
+  // Save individual balances using the same key pattern as enhanced wallet service
+  const saveBuyerBalance = useCallback(async (username: string, balance: number) => {
+    const key = getBalanceKey(username, 'buyer');
+    const balanceInCents = Math.round(balance * 100); // Convert to cents
+    await storageService.setItem(key, balanceInCents);
+  }, []);
+
+  const saveSellerBalance = useCallback(async (username: string, balance: number) => {
+    const key = getBalanceKey(username, 'seller');
+    const balanceInCents = Math.round(balance * 100); // Convert to cents
+    await storageService.setItem(key, balanceInCents);
+  }, []);
+
+  const saveAdminBalance = useCallback(async (balance: number) => {
+    const balanceInCents = Math.round(balance * 100); // Convert to cents
+    await storageService.setItem('wallet_admin', balanceInCents);
+  }, []);
+
+  // Save orders when they change
   useEffect(() => {
     if (!isInitialized) return;
-    storageService.setItem("wallet_buyers", buyerBalances);
-  }, [buyerBalances, isInitialized]);
+    storageService.setItem("wallet_orders", orderHistory);
+  }, [orderHistory, isInitialized]);
+
+  // Save withdrawals when they change
+  useEffect(() => {
+    if (!isInitialized) return;
+    storageService.setItem("wallet_sellerWithdrawals", sellerWithdrawals);
+  }, [sellerWithdrawals, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
-    storageService.setItem("wallet_sellers", sellerBalances);
-  }, [sellerBalances, isInitialized]);
+    storageService.setItem("wallet_adminWithdrawals", adminWithdrawals);
+  }, [adminWithdrawals, isInitialized]);
 
+  // Save admin actions when they change
   useEffect(() => {
     if (!isInitialized) return;
-    storageService.setItem("wallet_admin", adminBalance);
-  }, [adminBalance, isInitialized]);
+    storageService.setItem("wallet_adminActions", adminActions);
+  }, [adminActions, isInitialized]);
 
-  // Admin actions are saved immediately when created, so we don't need automatic saves
+  // Save deposit logs when they change
+  useEffect(() => {
+    if (!isInitialized) return;
+    storageService.setItem("wallet_depositLogs", depositLogs);
+  }, [depositLogs, isInitialized]);
 
-  // Helper functions - updated to use enhanced service
+  // Helper functions
   const getBuyerBalance = useCallback((username: string): number => {
     return buyerBalances[username] || 0;
   }, [buyerBalances]);
@@ -247,10 +303,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...prev,
         [username]: balance,
       }));
+      // Save to localStorage immediately
+      await saveBuyerBalance(username, balance);
     } catch (error) {
       console.error('Error setting buyer balance:', error);
     }
-  }, []);
+  }, [saveBuyerBalance]);
 
   const getSellerBalance = useCallback((seller: string): number => {
     return sellerBalances[seller] || 0;
@@ -262,27 +320,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...prev,
         [seller]: balance,
       }));
+      // Save to localStorage immediately
+      await saveSellerBalance(seller, balance);
     } catch (error) {
       console.error('Error setting seller balance:', error);
     }
-  }, []);
+  }, [saveSellerBalance]);
 
   const setAdminBalance = useCallback(async (balance: number) => {
     try {
       setAdminBalanceState(balance);
+      // Save to localStorage immediately
+      await saveAdminBalance(balance);
     } catch (error) {
       console.error('Error setting admin balance:', error);
     }
-  }, []);
+  }, [saveAdminBalance]);
 
   const addOrder = useCallback(async (order: Order) => {
     try {
       setOrderHistory((prev) => [...prev, order]);
-      await storageService.setItem("wallet_orders", [...orderHistory, order]);
     } catch (error) {
       console.error('Error adding order:', error);
     }
-  }, [orderHistory]);
+  }, []);
 
   const addDeposit = useCallback(async (
     username: string, 
@@ -307,14 +368,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
       };
       setDepositLogs(prev => [...prev, newDeposit]);
-      await storageService.setItem("wallet_depositLogs", [...depositLogs, newDeposit]);
       
       return true;
     } catch (error) {
       console.error('Error processing deposit:', error);
       return false;
     }
-  }, [depositLogs, getBuyerBalance, setBuyerBalance]);
+  }, [getBuyerBalance, setBuyerBalance]);
 
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
@@ -335,18 +395,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sellerCut = listing.price * 0.9 + tierCreditAmount;
       const platformFee = price - listing.price * 0.9;
       
-      // Update balances immediately
-      setBuyerBalancesState(prev => ({
-        ...prev,
-        [buyerUsername]: prev[buyerUsername] - price
-      }));
-      
-      setSellerBalancesState(prev => ({
-        ...prev,
-        [listing.seller]: (prev[listing.seller] || 0) + sellerCut
-      }));
-      
-      setAdminBalanceState(prev => prev + platformFee);
+      // Update balances immediately with save
+      await setBuyerBalance(buyerUsername, buyerCurrentBalance - price);
+      await setSellerBalance(listing.seller, (sellerBalances[listing.seller] || 0) + sellerCut);
+      await setAdminBalance(adminBalance + platformFee);
       
       // Create order
       const order: Order = {
@@ -394,7 +446,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Purchase error:', error);
       return false;
     }
-  }, [orderHistory, addOrder, addSellerNotification, getBuyerBalance, buyerBalances, sellerBalances, adminBalance]);
+  }, [orderHistory, addOrder, addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
   const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     try {
@@ -409,18 +461,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sellerCut = customRequest.amount * 0.9;
       const platformFee = markedUpPrice - sellerCut;
       
-      // Update balances
-      setBuyerBalancesState(prev => ({
-        ...prev,
-        [customRequest.buyer]: prev[customRequest.buyer] - markedUpPrice
-      }));
-      
-      setSellerBalancesState(prev => ({
-        ...prev,
-        [customRequest.seller]: (prev[customRequest.seller] || 0) + sellerCut
-      }));
-      
-      setAdminBalanceState(prev => prev + platformFee);
+      // Update balances with save
+      await setBuyerBalance(customRequest.buyer, buyerCurrentBalance - markedUpPrice);
+      await setSellerBalance(customRequest.seller, (sellerBalances[customRequest.seller] || 0) + sellerCut);
+      await setAdminBalance(adminBalance + platformFee);
       
       // Create order
       const order: Order = {
@@ -451,7 +495,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Custom request purchase error:', error);
       return false;
     }
-  }, [addOrder, addSellerNotification, getBuyerBalance, buyerBalances, adminBalance]);
+  }, [addOrder, addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
   const subscribeToSellerWithPayment = useCallback(async (
     buyer: string,
@@ -469,18 +513,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sellerCut = amount * 0.75;
       const adminCut = amount * 0.25;
       
-      // Update balances
-      setBuyerBalancesState(prev => ({
-        ...prev,
-        [buyer]: prev[buyer] - amount
-      }));
-      
-      setSellerBalancesState(prev => ({
-        ...prev,
-        [seller]: (prev[seller] || 0) + sellerCut
-      }));
-      
-      setAdminBalanceState(prev => prev + adminCut);
+      // Update balances with save
+      await setBuyerBalance(buyer, buyerBalance - amount);
+      await setSellerBalance(seller, (sellerBalances[seller] || 0) + sellerCut);
+      await setAdminBalance(adminBalance + adminCut);
       
       // Create admin action for subscription tracking
       const action: AdminAction = {
@@ -494,10 +530,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         role: 'seller'
       };
       
-      // Update admin actions and save immediately
-      const updatedActions = [...adminActions, action];
-      setAdminActions(updatedActions);
-      await storageService.setItem("wallet_adminActions", updatedActions);
+      // Update admin actions
+      setAdminActions(prev => [...prev, action]);
       
       if (addSellerNotification) {
         addSellerNotification(
@@ -511,7 +545,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Subscription payment error:', error);
       return false;
     }
-  }, [addSellerNotification, getBuyerBalance, adminBalance]);
+  }, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
   const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
     try {
@@ -521,16 +555,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return false;
       }
       
-      // Update balances
-      setBuyerBalancesState(prev => ({
-        ...prev,
-        [buyer]: prev[buyer] - amount
-      }));
-      
-      setSellerBalancesState(prev => ({
-        ...prev,
-        [seller]: (prev[seller] || 0) + amount
-      }));
+      // Update balances with save
+      await setBuyerBalance(buyer, buyerBalance - amount);
+      await setSellerBalance(seller, (sellerBalances[seller] || 0) + amount);
       
       if (addSellerNotification) {
         addSellerNotification(
@@ -544,7 +571,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Error sending tip:', error);
       return false;
     }
-  }, [addSellerNotification, getBuyerBalance]);
+  }, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, sellerBalances]);
 
   const addSellerWithdrawal = useCallback(async (username: string, amount: number) => {
     try {
@@ -561,14 +588,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...prev,
         [username]: [...(prev[username] || []), newWithdrawal],
       }));
-      await storageService.setItem("wallet_sellerWithdrawals", {
-        ...sellerWithdrawals,
-        [username]: [...(sellerWithdrawals[username] || []), newWithdrawal],
-      });
     } catch (error) {
       throw error;
     }
-  }, [sellerWithdrawals, getSellerBalance, setSellerBalance]);
+  }, [getSellerBalance, setSellerBalance]);
 
   const addAdminWithdrawal = useCallback(async (amount: number) => {
     try {
@@ -581,11 +604,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const date = new Date().toISOString();
       const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
       setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
-      await storageService.setItem("wallet_adminWithdrawals", [...adminWithdrawals, newWithdrawal]);
     } catch (error) {
       throw error;
     }
-  }, [adminWithdrawals, adminBalance, setAdminBalance]);
+  }, [adminBalance, setAdminBalance]);
 
   const updateWallet = useCallback((username: string, amount: number, orderToFulfil?: Order) => {
     // This is a legacy method, now handled through transactions
@@ -619,11 +641,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       };
       
       // Update using functional update pattern
-      setAdminActions(prev => {
-        const updatedActions = [...prev, action];
-        storageService.setItem("wallet_adminActions", updatedActions).catch(console.error);
-        return updatedActions;
-      });
+      setAdminActions(prev => [...prev, action]);
       
       return true;
     } catch (error) {
@@ -663,11 +681,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       };
       
       // Update using functional update pattern
-      setAdminActions(prev => {
-        const updatedActions = [...prev, action];
-        storageService.setItem("wallet_adminActions", updatedActions).catch(console.error);
-        return updatedActions;
-      });
+      setAdminActions(prev => [...prev, action]);
       
       return true;
     } catch (error) {
@@ -681,7 +695,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       order.id === orderId ? { ...order, deliveryAddress: address } : order
     );
     setOrderHistory(updatedOrders);
-    await storageService.setItem("wallet_orders", updatedOrders);
   }, [orderHistory]);
 
   const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
@@ -689,7 +702,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       order.id === orderId ? { ...order, shippingStatus: status } : order
     );
     setOrderHistory(updatedOrders);
-    await storageService.setItem("wallet_orders", updatedOrders);
   }, [orderHistory]);
 
   const getDepositsForUser = useCallback((username: string): DepositLog[] => {

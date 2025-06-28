@@ -66,7 +66,6 @@ export const useBrowseDetail = () => {
   const router = useRouter();
   const { user } = useAuth();
   const { 
-    purchaseListing: walletPurchaseListing,
     getBuyerBalance,
     orderHistory
   } = useWallet();
@@ -74,7 +73,8 @@ export const useBrowseDetail = () => {
     listings,
     users,
     subscriptions,
-    placeBid: listingsPlaceBid
+    placeBid: listingsPlaceBid,
+    purchaseListingAndRemove
   } = useListings();
   
   // State
@@ -260,8 +260,8 @@ export const useBrowseDetail = () => {
     updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
 
     try {
-      // Use WalletContext's purchaseListing method
-      const success = await walletPurchaseListing(listing, user.username);
+      // Use the new purchaseListingAndRemove method that handles both purchase and removal
+      const success = await purchaseListingAndRemove(listing, user.username);
       
       if (success) {
         updateState({ 
@@ -292,7 +292,7 @@ export const useBrowseDetail = () => {
         isProcessing: false 
       });
     }
-  }, [user, listing, state.isProcessing, walletPurchaseListing, router, updateState]);
+  }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState]);
 
   const handleBidSubmit = useCallback(async () => {
     if (!listing || state.isBidding || !user || user.role !== 'buyer') return;

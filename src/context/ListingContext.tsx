@@ -93,6 +93,7 @@ type ListingContextType = {
   addAuctionListing: (listing: AddListingInput, auctionSettings: AuctionInput) => Promise<void>;
   removeListing: (id: string) => Promise<void>;
   updateListing: (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>) => Promise<void>;
+  purchaseListingAndRemove: (listing: Listing, buyerUsername: string) => Promise<boolean>;
   
   // Auction functions
   placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
@@ -391,6 +392,25 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     } catch (error) {
       console.error('Error removing listing:', error);
+    }
+  };
+
+  const purchaseListingAndRemove = async (listing: Listing, buyerUsername: string): Promise<boolean> => {
+    try {
+      // First, process the purchase through wallet
+      const success = await purchaseListing(listing, buyerUsername);
+      
+      if (success) {
+        // If purchase was successful, remove the listing
+        await removeListing(listing.id);
+        
+        console.log('✅ Listing purchased and removed:', listing.id);
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('Error in purchaseListingAndRemove:', error);
+      return false;
     }
   };
 
@@ -929,6 +949,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         addAuctionListing,
         removeListing,
         updateListing,
+        purchaseListingAndRemove,
         placeBid,
         getAuctionListings,
         getActiveAuctions,

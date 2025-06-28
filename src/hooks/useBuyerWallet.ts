@@ -1,4 +1,4 @@
-// src/hooks/useBuyerWallet.ts
+﻿// src/hooks/useBuyerWallet.ts
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { WalletIntegration } from '@/services/wallet.integration';
 import { WalletValidation } from '@/services/wallet.validation';
+import { storageService } from '@/services/storage.service';
 import { Money } from '@/types/common';
 
 interface EnhancedBuyerWalletState {
@@ -79,11 +80,13 @@ export const useBuyerWallet = () => {
 
   // Sync balance with enhanced service
   const syncBalance = useCallback(async () => {
+    console.log('syncBalance called for user:', user?.username);
     if (!user?.username) return;
 
     try {
       // Get detailed balance from enhanced service
       const balance = await WalletIntegration.getBalanceInDollars(user.username, 'buyer');
+      console.log('Balance from WalletIntegration:', balance);
       
       // Get transaction history for pending calculations
       const history = await getTransactionHistory(user.username, 20);
@@ -108,6 +111,26 @@ export const useBuyerWallet = () => {
         remainingDepositLimit: Math.max(0, remainingLimit),
         transactionHistory: history,
         lastSyncTime: new Date(),
+      });
+      
+      // Update WalletContext so header shows correct balance
+      console.log('Updating WalletContext balance:', { username: user.username, balance });
+      await setBuyerBalance(user.username, balance);
+      
+      // IMPORTANT: Also update the wallet_buyers storage that WalletContext reads from
+      const buyers = await storageService.getItem<Record<string, number>>("wallet_buyers", {});
+      buyers[user.username] = balance; // balance is already in dollars from WalletIntegration
+      await storageService.setItem("wallet_buyers", buyers);
+      
+      // Also update the individual key that enhanced service uses (in cents)
+      const balanceInCents = Math.round(balance * 100);
+      await storageService.setItem(`wallet_buyer_${user.username}`, balanceInCents);
+      
+      console.log('WalletContext balance updated successfully in both states:', {
+        username: user.username,
+        balanceInDollars: balance,
+        balanceInCents: balanceInCents,
+        buyers: buyers
       });
     } catch (error) {
       console.error('Balance sync error:', error);
@@ -306,7 +329,7 @@ export const useBuyerWallet = () => {
       console.error('Error loading transaction history:', error);
       updateState({ isLoadingHistory: false });
     }
-  }, [user, getTransactionHistory, updateState, setBuyerBalance]);
+  }, [user, getTransactionHistory, updateState]);
 
   // Check for suspicious activity periodically
   useEffect(() => {
