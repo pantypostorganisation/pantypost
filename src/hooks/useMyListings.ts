@@ -1,9 +1,9 @@
 // src/hooks/useMyListings.ts
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext';
+import { WalletContext } from '@/context/WalletContext.enhanced';
 import { storageService } from '@/services';
 import { Listing } from '@/context/ListingContext';
 import { ListingFormState, EditingState, ListingAnalytics } from '@/types/myListings';
@@ -16,7 +16,10 @@ import { uploadMultipleToCloudinary } from '@/utils/cloudinary';
 export const useMyListings = () => {
   const { user } = useAuth();
   const { listings = [], addListing, addAuctionListing, removeListing, updateListing, cancelAuction } = useListings();
-  const { orderHistory } = useWallet();
+  
+  // Use useContext to get wallet context - it might be undefined
+  const walletContext = useContext(WalletContext);
+  const orderHistory = walletContext?.orderHistory || [];
 
   // Form state
   const [formState, setFormState] = useState<ListingFormState>(INITIAL_FORM_STATE);

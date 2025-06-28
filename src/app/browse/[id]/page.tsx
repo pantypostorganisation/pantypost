@@ -1,6 +1,7 @@
-// src/app/browse/[id]/page.tsx Error here
+// src/app/browse/[id]/page.tsx
 'use client';
 
+import { useState } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -70,6 +71,20 @@ export default function ListingDetailPage() {
     // Navigation
     router
   } = useBrowseDetail();
+
+  // Local state for favorites (you might want to move this to a context or hook)
+  const [isFavorited, setIsFavorited] = useState(false);
+
+  const toggleFavorite = () => {
+    setIsFavorited(!isFavorited);
+    // TODO: Implement actual favorite saving logic
+  };
+
+  const handleSubscribeClick = () => {
+    if (listing?.seller) {
+      router.push(`/sellers/${listing.seller}`);
+    }
+  };
 
   if (!listingId) {
     return (
@@ -148,9 +163,12 @@ export default function ListingDetailPage() {
               {!isAuctionListing && (
                 <PurchaseSection
                   listing={listing}
+                  user={user}
+                  handlePurchase={handlePurchase}
                   isProcessing={isProcessing}
-                  onPurchase={handlePurchase}
-                  userRole={user?.role}
+                  isFavorited={isFavorited}
+                  toggleFavorite={toggleFavorite}
+                  onSubscribeClick={handleSubscribeClick}
                 />
               )}
 

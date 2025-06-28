@@ -1,54 +1,143 @@
 // src/components/browse-detail/PurchaseSection.tsx
-'use client';
+import React from 'react';
+import { Heart, Crown, ShoppingBag, AlertCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useListings } from '@/context/ListingContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
+import { formatPrice } from '@/utils/format';
+import { Listing } from '@/context/ListingContext';
 
-import Link from 'next/link';
-import { ShoppingBag, MessageCircle } from 'lucide-react';
-import { PurchaseSectionProps } from '@/types/browseDetail';
+interface PurchaseSectionProps {
+  listing: Listing;
+  user: any;
+  handlePurchase: () => void;
+  isProcessing: boolean;
+  isFavorited: boolean;
+  toggleFavorite: () => void;
+  onSubscribeClick: () => void;
+}
 
 export default function PurchaseSection({
   listing,
+  user,
+  handlePurchase,
   isProcessing,
-  onPurchase,
-  userRole
+  isFavorited,
+  toggleFavorite,
+  onSubscribeClick,
 }: PurchaseSectionProps) {
+  const router = useRouter();
+  const { isSubscribed } = useListings();
+  const { getBuyerBalance } = useWallet();
+  
+  const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
+  const isSeller = user?.username === listing.seller;
+  
+  // Get buyer's balance
+  const buyerBalance = user ? getBuyerBalance(user.username) : 0;
+  const canAfford = buyerBalance >= (listing.markedUpPrice || listing.price);
+
+  if (listing.auction && listing.auction.status === 'active') {
+    // Auction listing - show in AuctionSection instead
+    return null;
+  }
+
   return (
-    <div className="space-y-3">
-      {/* Price Display */}
-      <div className="bg-[#ff950e] text-black px-4 py-2 rounded-lg text-center">
-        <div className="text-lg font-bold">
-          ${listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2)}
+    <div className="bg-gray-900 rounded-lg p-6 space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-sm text-gray-400">Price</p>
+          <p className="text-3xl font-bold text-white">
+            {formatPrice(listing.markedUpPrice)}
+          </p>
         </div>
-        <p className="text-xs opacity-75">Includes platform fee</p>
+        <button
+          onClick={toggleFavorite}
+          className={`p-2 rounded-full transition-colors ${
+            isFavorited
+              ? 'bg-red-500 text-white'
+              : 'bg-gray-800 text-gray-400 hover:text-red-500'
+          }`}
+        >
+          <Heart className={`w-5 h-5 ${isFavorited ? 'fill-current' : ''}`} />
+        </button>
       </div>
-      
-      {/* Action Buttons */}
-      {userRole === 'buyer' && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={onPurchase}
-            disabled={isProcessing}
-            className="bg-[#ff950e] text-black px-3 py-2 rounded-lg font-medium hover:bg-[#e88800] transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
-          >
-            {isProcessing ? (
-              <>
-                <div className="animate-spin h-3.5 w-3.5 border-2 border-black border-t-transparent rounded-full"></div>
-                Processing
-              </>
-            ) : (
-              <>
-                <ShoppingBag className="w-4 h-4" />
-                Buy Now
-              </>
-            )}
-          </button>
-          
-          <Link
-            href={`/buyers/messages?thread=${listing.seller}`}
-            className="flex items-center justify-center gap-1.5 bg-gray-800 text-white px-3 py-2 rounded-lg font-medium border border-gray-700 hover:bg-gray-700 transition text-sm"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Message
-          </Link>
+
+      {listing.isPremium && !isUserSubscribed && !isSeller && (
+        <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <Crown className="w-5 h-5 text-yellow-500 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-yellow-500 font-semibold">Premium Content</p>
+              <p className="text-sm text-yellow-400 mt-1">
+                Subscribe to {listing.seller} to purchase this item
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {user && !canAfford && !isSeller && (
+        <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-500 font-semibold">Insufficient Balance</p>
+              <p className="text-sm text-red-400 mt-1">
+                You need {formatPrice(listing.markedUpPrice - buyerBalance)} more to purchase this item
+              </p>
+              <button
+                onClick={() => router.push('/wallet/buyer')}
+                className="text-sm text-[#ff950e] hover:underline mt-2"
+              >
+                Add funds to wallet →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!user ? (
+        <button
+          onClick={() => router.push('/login')}
+          className="w-full bg-[#ff950e] text-black py-3 rounded-lg font-semibold hover:bg-[#e0850d] transition flex items-center justify-center gap-2"
+        >
+          <ShoppingBag className="w-5 h-5" />
+          Login to Purchase
+        </button>
+      ) : isSeller ? (
+        <button
+          disabled
+          className="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-semibold cursor-not-allowed"
+        >
+          Your Listing
+        </button>
+      ) : listing.isPremium && !isUserSubscribed ? (
+        <button
+          onClick={onSubscribeClick}
+          className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700 transition flex items-center justify-center gap-2"
+        >
+          <Crown className="w-5 h-5" />
+          Subscribe to Purchase
+        </button>
+      ) : (
+        <button
+          onClick={handlePurchase}
+          disabled={isProcessing || !canAfford}
+          className={`w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+            canAfford
+              ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
+              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          <ShoppingBag className="w-5 h-5" />
+          {isProcessing ? 'Processing...' : 'Purchase Now'}
+        </button>
+      )}
+
+      {user && user.role === 'buyer' && (
+        <div className="text-sm text-gray-400 text-center">
+          Your balance: {formatPrice(buyerBalance)}
         </div>
       )}
     </div>

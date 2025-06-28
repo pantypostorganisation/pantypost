@@ -43,7 +43,7 @@ import { Listing as ListingContextType } from '@/context/ListingContext';
 // Use the ListingContext's Listing type directly
 type Listing = ListingContextType;
 
-type CustomRequestPurchase = {
+export type CustomRequestPurchase = {
   requestId: string;
   buyer: string;
   seller: string;
@@ -70,7 +70,7 @@ type AdminAction = {
   role: 'buyer' | 'seller';
 };
 
-type DepositLog = {
+export type DepositLog = {
   id: string;
   username: string;
   amount: number;
@@ -148,8 +148,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeServices = async () => {
       try {
-        await walletService.initialize();
-        await syncBalancesWithService();
+        // Only initialize if wallet service is available
+        if (typeof walletService?.initialize === 'function') {
+          await walletService.initialize();
+        }
+        // Don't sync with service on init - load from localStorage instead
         setIsInitialized(true);
       } catch (error) {
         console.error('Failed to initialize wallet service:', error);
@@ -162,36 +165,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [isInitialized]);
 
-  // Sync balances with enhanced service
-  const syncBalancesWithService = async () => {
-    try {
-      // Get all users
-      const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
-      
-      for (const [username, user] of Object.entries(allUsers)) {
-        if (user.role === 'buyer') {
-          const balance = await WalletIntegration.getBalanceInDollars(username, 'buyer');
-          setBuyerBalancesState(prev => ({ ...prev, [username]: balance }));
-        } else if (user.role === 'seller') {
-          const balance = await WalletIntegration.getBalanceInDollars(username, 'seller');
-          setSellerBalancesState(prev => ({ ...prev, [username]: balance }));
-        }
-      }
-      
-      // Sync admin balance
-      const adminBal = await WalletIntegration.getBalanceInDollars('admin', 'admin');
-      setAdminBalanceState(adminBal);
-    } catch (error) {
-      console.error('Error syncing balances:', error);
-    }
-  };
-
   // Load data using services (keep existing logic for backward compatibility)
   useEffect(() => {
     if (typeof window === 'undefined' || !isInitialized) return;
 
     const loadData = async () => {
       try {
+        // Load buyer balances
+        const buyers = await storageService.getItem<{ [username: string]: number }>("wallet_buyers", {});
+        setBuyerBalancesState(buyers);
+
+        // Load seller balances
+        const sellers = await storageService.getItem<{ [username: string]: number }>("wallet_sellers", {});
+        setSellerBalancesState(sellers);
+
+        // Load admin balance
+        const admin = await storageService.getItem<number>("wallet_admin", 0);
+        setAdminBalanceState(admin);
+
         // Load orders
         const orders = await storageService.getItem<Order[]>("wallet_orders", []);
         setOrderHistory(orders);
@@ -219,6 +210,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     loadData();
   }, [isInitialized]);
 
+  // Save data to localStorage whenever state changes
+  useEffect(() => {
+    if (!isInitialized) return;
+    storageService.setItem("wallet_buyers", buyerBalances);
+  }, [buyerBalances, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    storageService.setItem("wallet_sellers", sellerBalances);
+  }, [sellerBalances, isInitialized]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+    storageService.setItem("wallet_admin", adminBalance);
+  }, [adminBalance, isInitialized]);
+
   // Helper functions - updated to use enhanced service
   const getBuyerBalance = useCallback((username: string): number => {
     return buyerBalances[username] || 0;
@@ -226,14 +233,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setBuyerBalance = useCallback(async (username: string, balance: number) => {
     try {
-      // Use enhanced service for balance updates
-      const result = await walletService.updateBalance(username, balance, 'buyer');
-      if (result.success) {
-        setBuyerBalancesState((prev) => ({
-          ...prev,
-          [username]: balance,
-        }));
-      }
+      setBuyerBalancesState((prev) => ({
+        ...prev,
+        [username]: balance,
+      }));
     } catch (error) {
       console.error('Error setting buyer balance:', error);
     }
@@ -245,13 +248,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setSellerBalance = useCallback(async (seller: string, balance: number) => {
     try {
-      const result = await walletService.updateBalance(seller, balance, 'seller');
-      if (result.success) {
-        setSellerBalancesState((prev) => ({
-          ...prev,
-          [seller]: balance,
-        }));
-      }
+      setSellerBalancesState((prev) => ({
+        ...prev,
+        [seller]: balance,
+      }));
     } catch (error) {
       console.error('Error setting seller balance:', error);
     }
@@ -259,10 +259,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setAdminBalance = useCallback(async (balance: number) => {
     try {
-      const result = await walletService.updateBalance('admin', balance, 'admin');
-      if (result.success) {
-        setAdminBalanceState(balance);
-      }
+      setAdminBalanceState(balance);
     } catch (error) {
       console.error('Error setting admin balance:', error);
     }
@@ -284,129 +281,167 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     notes?: string
   ): Promise<boolean> => {
     try {
-      // Use enhanced service for deposits
-      const result = await walletService.deposit({
+      // Update buyer balance
+      const currentBalance = getBuyerBalance(username);
+      await setBuyerBalance(username, currentBalance + amount);
+      
+      // Add deposit log
+      const newDeposit: DepositLog = {
+        id: uuidv4(),
         username,
         amount,
         method,
+        date: new Date().toISOString(),
+        status: 'completed',
+        transactionId: uuidv4(),
         notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
-      });
+      };
+      setDepositLogs(prev => [...prev, newDeposit]);
+      await storageService.setItem("wallet_depositLogs", [...depositLogs, newDeposit]);
       
-      if (result.success) {
-        // Update local state
-        await syncBalancesWithService();
-        
-        // Add deposit log
-        const newDeposit: DepositLog = {
-          id: uuidv4(),
-          username,
-          amount,
-          method,
-          date: new Date().toISOString(),
-          status: 'completed',
-          transactionId: result.data?.id || uuidv4(),
-          notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
-        };
-        setDepositLogs(prev => [...prev, newDeposit]);
-        await storageService.setItem("wallet_depositLogs", [...depositLogs, newDeposit]);
-        
-        return true;
-      }
-      return false;
+      return true;
     } catch (error) {
       console.error('Error processing deposit:', error);
       return false;
     }
-  }, [depositLogs]);
+  }, [depositLogs, getBuyerBalance, setBuyerBalance]);
 
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
       const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
       const tierCreditAmount = listing.price * sellerTierInfo.credit;
       
-      // Use enhanced service for purchases
-      const result = await WalletIntegration.createPurchaseTransaction(
-        listing,
-        buyerUsername,
-        listing.seller,
-        tierCreditAmount
-      );
+      // Calculate prices
+      const price = listing.markedUpPrice || listing.price;
+      const buyerCurrentBalance = getBuyerBalance(buyerUsername);
       
-      if (result.success && result.order) {
-        // Add order
-        await addOrder(result.order);
-        
-        // Sync balances
-        await syncBalancesWithService();
-        
-        // Add notification
-        if (addSellerNotification) {
-          if (tierCreditAmount > 0) {
-            addSellerNotification(
-              listing.seller,
-              `New sale: "${listing.title}" for $${result.order.markedUpPrice.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
-            );
-          } else {
-            addSellerNotification(
-              listing.seller,
-              `New sale: "${listing.title}" for $${result.order.markedUpPrice.toFixed(2)}`
-            );
-          }
-        }
-        
-        return true;
+      // Check balance first
+      if (buyerCurrentBalance < price) {
+        console.error('Insufficient balance:', { buyerBalance: buyerCurrentBalance, price });
+        return false;
       }
-      return false;
+      
+      // Calculate amounts
+      const sellerCut = listing.price * 0.9 + tierCreditAmount;
+      const platformFee = price - listing.price * 0.9;
+      
+      // Update balances immediately
+      setBuyerBalancesState(prev => ({
+        ...prev,
+        [buyerUsername]: prev[buyerUsername] - price
+      }));
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [listing.seller]: (prev[listing.seller] || 0) + sellerCut
+      }));
+      
+      setAdminBalanceState(prev => prev + platformFee);
+      
+      // Create order
+      const order: Order = {
+        id: uuidv4(),
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        markedUpPrice: price,
+        seller: listing.seller,
+        buyer: buyerUsername,
+        date: new Date().toISOString(),
+        imageUrl: listing.imageUrls?.[0],
+        tierCreditAmount,
+        shippingStatus: 'pending'
+      };
+      
+      await addOrder(order);
+      
+      // Add notification
+      if (addSellerNotification) {
+        if (tierCreditAmount > 0) {
+          addSellerNotification(
+            listing.seller,
+            `New sale: "${listing.title}" for $${price.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+          );
+        } else {
+          addSellerNotification(
+            listing.seller,
+            `New sale: "${listing.title}" for $${price.toFixed(2)}`
+          );
+        }
+      }
+      
+      console.log('Purchase successful:', {
+        buyer: buyerUsername,
+        seller: listing.seller,
+        price,
+        buyerNewBalance: buyerCurrentBalance - price,
+        sellerNewBalance: (sellerBalances[listing.seller] || 0) + sellerCut,
+        adminNewBalance: adminBalance + platformFee
+      });
+      
+      return true;
     } catch (error) {
       console.error('Purchase error:', error);
       return false;
     }
-  }, [orderHistory, addOrder, addSellerNotification]);
+  }, [orderHistory, addOrder, addSellerNotification, getBuyerBalance, buyerBalances, sellerBalances, adminBalance]);
 
   const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     try {
-      // Create a listing-like object for the custom request
-      const listing: Listing = {
-        id: customRequest.requestId,
+      const markedUpPrice = customRequest.amount * 1.1;
+      const buyerCurrentBalance = getBuyerBalance(customRequest.buyer);
+      
+      if (buyerCurrentBalance < markedUpPrice) {
+        return false;
+      }
+      
+      // Calculate amounts
+      const sellerCut = customRequest.amount * 0.9;
+      const platformFee = markedUpPrice - sellerCut;
+      
+      // Update balances
+      setBuyerBalancesState(prev => ({
+        ...prev,
+        [customRequest.buyer]: prev[customRequest.buyer] - markedUpPrice
+      }));
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [customRequest.seller]: (prev[customRequest.seller] || 0) + sellerCut
+      }));
+      
+      setAdminBalanceState(prev => prev + platformFee);
+      
+      // Create order
+      const order: Order = {
+        id: `custom_${customRequest.requestId}_${Date.now()}`,
         title: customRequest.description,
         description: customRequest.description,
         price: customRequest.amount,
-        markedUpPrice: customRequest.amount * 1.1, // 10% markup
+        markedUpPrice,
         seller: customRequest.seller,
-        imageUrls: [],
-        date: new Date().toISOString(), // Add missing date property
+        buyer: customRequest.buyer,
+        date: new Date().toISOString(),
+        isCustomRequest: true,
+        originalRequestId: customRequest.requestId,
+        shippingStatus: 'pending'
       };
-
-      const result = await WalletIntegration.createPurchaseTransaction(
-        listing,
-        customRequest.buyer,
-        customRequest.seller,
-        0 // No tier credit for custom requests
-      );
-
-      if (result.success && result.order) {
-        // Mark as custom request
-        result.order.isCustomRequest = true;
-        result.order.originalRequestId = customRequest.requestId;
-        
-        await addOrder(result.order);
-        await syncBalancesWithService();
-        
-        if (addSellerNotification) {
-          addSellerNotification(
-            customRequest.seller,
-            `Custom request purchased by ${customRequest.buyer} for $${customRequest.amount.toFixed(2)}`
-          );
-        }
-        
-        return true;
+      
+      await addOrder(order);
+      
+      if (addSellerNotification) {
+        addSellerNotification(
+          customRequest.seller,
+          `Custom request purchased by ${customRequest.buyer} for $${customRequest.amount.toFixed(2)}`
+        );
       }
-      return false;
+      
+      return true;
     } catch (error) {
       console.error('Custom request purchase error:', error);
       return false;
     }
-  }, [addOrder, addSellerNotification]);
+  }, [addOrder, addSellerNotification, getBuyerBalance, buyerBalances, adminBalance]);
 
   const subscribeToSellerWithPayment = useCallback(async (
     buyer: string,
@@ -414,89 +449,116 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     amount: number
   ): Promise<boolean> => {
     try {
-      const result = await WalletIntegration.processSubscription(buyer, seller, amount);
+      const buyerBalance = getBuyerBalance(buyer);
       
-      if (result) {
-        await syncBalancesWithService();
-        
-        if (addSellerNotification) {
-          addSellerNotification(
-            seller,
-            `New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
-          );
-        }
+      if (buyerBalance < amount) {
+        return false;
       }
       
-      return result;
+      // Calculate amounts
+      const sellerCut = amount * 0.75;
+      const adminCut = amount * 0.25;
+      
+      // Update balances
+      setBuyerBalancesState(prev => ({
+        ...prev,
+        [buyer]: prev[buyer] - amount
+      }));
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [seller]: (prev[seller] || 0) + sellerCut
+      }));
+      
+      setAdminBalanceState(prev => prev + adminCut);
+      
+      if (addSellerNotification) {
+        addSellerNotification(
+          seller,
+          `New subscriber: ${buyer} paid $${amount.toFixed(2)}/month`
+        );
+      }
+      
+      return true;
     } catch (error) {
       console.error('Subscription payment error:', error);
       return false;
     }
-  }, [addSellerNotification]);
+  }, [addSellerNotification, getBuyerBalance, adminBalance]);
 
   const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
     try {
-      const result = await WalletIntegration.processTip(buyer, seller, amount);
+      const buyerBalance = getBuyerBalance(buyer);
       
-      if (result) {
-        await syncBalancesWithService();
-        
-        if (addSellerNotification) {
-          addSellerNotification(
-            seller,
-            `💰 Tip received from ${buyer} - $${amount.toFixed(2)}`
-          );
-        }
+      if (buyerBalance < amount) {
+        return false;
       }
       
-      return result;
+      // Update balances
+      setBuyerBalancesState(prev => ({
+        ...prev,
+        [buyer]: prev[buyer] - amount
+      }));
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [seller]: (prev[seller] || 0) + amount
+      }));
+      
+      if (addSellerNotification) {
+        addSellerNotification(
+          seller,
+          `💰 Tip received from ${buyer} - $${amount.toFixed(2)}`
+        );
+      }
+      
+      return true;
     } catch (error) {
       console.error('Error sending tip:', error);
       return false;
     }
-  }, [addSellerNotification]);
+  }, [addSellerNotification, getBuyerBalance]);
 
   const addSellerWithdrawal = useCallback(async (username: string, amount: number) => {
     try {
-      const result = await WalletIntegration.processWithdrawal(username, amount);
-      
-      if (result) {
-        const date = new Date().toISOString();
-        const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
-        setSellerWithdrawals((prev) => ({
-          ...prev,
-          [username]: [...(prev[username] || []), newWithdrawal],
-        }));
-        await storageService.setItem("wallet_sellerWithdrawals", {
-          ...sellerWithdrawals,
-          [username]: [...(sellerWithdrawals[username] || []), newWithdrawal],
-        });
-        await syncBalancesWithService();
-      } else {
-        throw new Error('Withdrawal failed');
+      const currentBalance = getSellerBalance(username);
+      if (currentBalance < amount) {
+        throw new Error('Insufficient balance');
       }
+      
+      await setSellerBalance(username, currentBalance - amount);
+      
+      const date = new Date().toISOString();
+      const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
+      setSellerWithdrawals((prev) => ({
+        ...prev,
+        [username]: [...(prev[username] || []), newWithdrawal],
+      }));
+      await storageService.setItem("wallet_sellerWithdrawals", {
+        ...sellerWithdrawals,
+        [username]: [...(sellerWithdrawals[username] || []), newWithdrawal],
+      });
     } catch (error) {
       throw error;
     }
-  }, [sellerWithdrawals]);
+  }, [sellerWithdrawals, getSellerBalance, setSellerBalance]);
 
   const addAdminWithdrawal = useCallback(async (amount: number) => {
     try {
-      const result = await WalletIntegration.processWithdrawal('admin', amount);
-      
-      if (result) {
-        const date = new Date().toISOString();
-        const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
-        setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
-        await storageService.setItem("wallet_adminWithdrawals", [...adminWithdrawals, newWithdrawal]);
-        await syncBalancesWithService();
-      } else {
-        throw new Error('Admin withdrawal failed');
+      if (adminBalance < amount) {
+        throw new Error('Insufficient admin balance');
       }
+      
+      await setAdminBalance(adminBalance - amount);
+      
+      const date = new Date().toISOString();
+      const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
+      setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
+      await storageService.setItem("wallet_adminWithdrawals", [...adminWithdrawals, newWithdrawal]);
     } catch (error) {
       throw error;
     }
-  }, [adminWithdrawals]);
+  }, [adminWithdrawals, adminBalance, setAdminBalance]);
 
   const updateWallet = useCallback((username: string, amount: number, orderToFulfil?: Order) => {
     // This is a legacy method, now handled through transactions
@@ -510,37 +572,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     reason: string
   ): Promise<boolean> => {
     try {
-      const result = await walletService.processAdminAction({
-        adminUser: 'admin',
-        targetUser: username,
-        role,
-        amount,
-        type: 'credit',
-        reason,
-      });
-
-      if (result.success) {
-        const action: AdminAction = {
-          id: uuidv4(),
-          type: 'credit',
-          amount,
-          targetUser: username,
-          adminUser: 'admin',
-          reason,
-          date: new Date().toISOString(),
-          role,
-        };
-        setAdminActions(prev => [...prev, action]);
-        await storageService.setItem("wallet_adminActions", [...adminActions, action]);
-        await syncBalancesWithService();
-        return true;
+      if (role === 'buyer') {
+        const currentBalance = getBuyerBalance(username);
+        await setBuyerBalance(username, currentBalance + amount);
+      } else {
+        const currentBalance = getSellerBalance(username);
+        await setSellerBalance(username, currentBalance + amount);
       }
-      return false;
+      
+      const action: AdminAction = {
+        id: uuidv4(),
+        type: 'credit',
+        amount,
+        targetUser: username,
+        adminUser: 'admin',
+        reason,
+        date: new Date().toISOString(),
+        role,
+      };
+      setAdminActions(prev => [...prev, action]);
+      await storageService.setItem("wallet_adminActions", [...adminActions, action]);
+      
+      return true;
     } catch (error) {
       console.error('Admin credit error:', error);
       return false;
     }
-  }, [adminActions]);
+  }, [adminActions, getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
 
   const adminDebitUser = useCallback(async (
     username: string,
@@ -549,37 +607,37 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     reason: string
   ): Promise<boolean> => {
     try {
-      const result = await walletService.processAdminAction({
-        adminUser: 'admin',
-        targetUser: username,
-        role,
-        amount,
-        type: 'debit',
-        reason,
-      });
-
-      if (result.success) {
-        const action: AdminAction = {
-          id: uuidv4(),
-          type: 'debit',
-          amount,
-          targetUser: username,
-          adminUser: 'admin',
-          reason,
-          date: new Date().toISOString(),
-          role,
-        };
-        setAdminActions(prev => [...prev, action]);
-        await storageService.setItem("wallet_adminActions", [...adminActions, action]);
-        await syncBalancesWithService();
-        return true;
+      const currentBalance = role === 'buyer' ? getBuyerBalance(username) : getSellerBalance(username);
+      
+      if (currentBalance < amount) {
+        return false;
       }
-      return false;
+      
+      if (role === 'buyer') {
+        await setBuyerBalance(username, currentBalance - amount);
+      } else {
+        await setSellerBalance(username, currentBalance - amount);
+      }
+      
+      const action: AdminAction = {
+        id: uuidv4(),
+        type: 'debit',
+        amount,
+        targetUser: username,
+        adminUser: 'admin',
+        reason,
+        date: new Date().toISOString(),
+        role,
+      };
+      setAdminActions(prev => [...prev, action]);
+      await storageService.setItem("wallet_adminActions", [...adminActions, action]);
+      
+      return true;
     } catch (error) {
       console.error('Admin debit error:', error);
       return false;
     }
-  }, [adminActions]);
+  }, [adminActions, getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
 
   const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
     const updatedOrders = orderHistory.map(order =>
@@ -633,22 +691,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // New enhanced features
   const checkSuspiciousActivity = useCallback(async (username: string) => {
-    const result = await walletService.checkSuspiciousActivity(username);
-    return {
-      suspicious: result.suspicious,
-      reasons: result.reasons,
-    };
+    if (walletService?.checkSuspiciousActivity) {
+      const result = await walletService.checkSuspiciousActivity(username);
+      return {
+        suspicious: result.suspicious,
+        reasons: result.reasons,
+      };
+    }
+    return { suspicious: false, reasons: [] };
   }, []);
 
   const reconcileBalance = useCallback(async (
     username: string, 
     role: 'buyer' | 'seller' | 'admin'
   ) => {
-    return await WalletIntegration.reconcileBalance(username, role);
+    if (typeof WalletIntegration?.reconcileBalance === 'function') {
+      return await WalletIntegration.reconcileBalance(username, role);
+    }
+    return null;
   }, []);
 
   const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
-    return await WalletIntegration.getFormattedTransactionHistory(username, { limit });
+    if (typeof WalletIntegration?.getFormattedTransactionHistory === 'function') {
+      return await WalletIntegration.getFormattedTransactionHistory(username, { limit });
+    }
+    return [];
   }, []);
 
   const contextValue: WalletContextType = {

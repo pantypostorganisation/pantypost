@@ -1,7 +1,19 @@
-// // src/utils/format.ts
+// src/utils/format.ts
 /**
  * Utility functions for formatting values consistently across the application
  */
+
+/**
+ * Format a price in dollars
+ * @param price The price to format (can be number or undefined)
+ * @returns A formatted price string with $ symbol
+ */
+export function formatPrice(price?: number): string {
+  if (price === undefined || price === null) {
+    return '$0.00';
+  }
+  return formatCurrency(price);
+}
 
 /**
  * Format a date string to a relative time (e.g., "2 hours ago")

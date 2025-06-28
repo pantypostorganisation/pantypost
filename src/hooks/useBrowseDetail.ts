@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useWallet } from '@/context/WalletContext.enhanced';
+import { useListings } from '@/context/ListingContext';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { storageService, listingsService } from '@/services';
@@ -14,7 +16,6 @@ import {
   extractSellerInfo 
 } from '@/utils/browseDetailUtils';
 import { DetailState, ListingWithDetails } from '@/types/browseDetail';
-import { ensureBuyerHasInitialDeposit } from '@/utils/walletInitialization';
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -41,55 +42,6 @@ const initialState: DetailState = {
 };
 
 // Type definitions
-interface Listing {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  markedUpPrice?: number;
-  imageUrls?: string[];
-  date: string;
-  seller: string;
-  isVerified?: boolean;
-  isPremium?: boolean;
-  tags?: string[];
-  hoursWorn?: number;
-  auction?: {
-    isAuction: boolean;
-    startingPrice: number;
-    reservePrice?: number;
-    endTime: string;
-    bids: any[];
-    highestBid?: number;
-    highestBidder?: string;
-    status: string;
-  };
-}
-
-interface Order {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  markedUpPrice: number;
-  seller: string;
-  buyer: string;
-  date: string;
-  shippingStatus?: string;
-  wasAuction?: boolean;
-  imageUrls?: string[];
-}
-
-interface Transaction {
-  id: string;
-  userId: string;
-  walletType: 'buyer' | 'seller';
-  type: 'deposit' | 'withdrawal' | 'purchase' | 'sale' | 'refund';
-  amount: number;
-  date: string;
-  description?: string;
-}
-
 interface Review {
   seller: string;
   reviewer: string;
@@ -113,15 +65,22 @@ export const useBrowseDetail = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { 
+    purchaseListing: walletPurchaseListing,
+    getBuyerBalance,
+    orderHistory
+  } = useWallet();
+  const { 
+    listings,
+    users,
+    subscriptions,
+    placeBid: listingsPlaceBid
+  } = useListings();
   
   // State
   const [state, setState] = useState<DetailState>(initialState);
   const [listing, setListing] = useState<ListingWithDetails | undefined>();
-  const [users, setUsers] = useState<Record<string, any>>({});
-  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
-  const [subscriptions, setSubscriptions] = useState<Record<string, string[]>>({});
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [buyerBalance, setBuyerBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   
   // Refs
@@ -140,107 +99,33 @@ export const useBrowseDetail = () => {
   const listingId = params?.id as string;
   const currentUsername = user?.username || null;
 
-  // Calculate buyer balance
-  const calculateBuyerBalance = useCallback(async (username: string) => {
-    try {
-      const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
-      
-      // Filter transactions for this buyer
-      const userTransactions = transactions.filter(
-        t => t.userId === username && t.walletType === 'buyer'
-      );
-      
-      // Calculate balance
-      const balance = userTransactions.reduce((sum, transaction) => {
-        switch (transaction.type) {
-          case 'deposit':
-          case 'refund':
-            return sum + transaction.amount;
-          case 'withdrawal':
-          case 'purchase':
-            return sum - transaction.amount;
-          default:
-            return sum;
-        }
-      }, 0);
-      
-      console.log('Calculated buyer balance:', {
-        username,
-        transactionCount: userTransactions.length,
-        balance,
-        transactions: userTransactions
-      });
-      
-      return Math.max(0, balance); // Ensure non-negative balance
-    } catch (error) {
-      console.error('Error calculating buyer balance:', error);
-      return 0;
+  // Get the listing from ListingContext
+  useEffect(() => {
+    if (listingId && listings.length > 0) {
+      const foundListing = listings.find(l => l.id === listingId);
+      if (foundListing) {
+        setListing(foundListing as ListingWithDetails);
+      }
+      setIsLoading(false);
+    } else if (listings.length > 0) {
+      setIsLoading(false);
     }
-  }, []);
+  }, [listingId, listings]);
 
-  // Load data
+  // Load additional data
   useEffect(() => {
     const loadData = async () => {
-      if (!listingId) return;
-
       try {
-        setIsLoading(true);
-
-        // Load listing
-        const listingResponse = await listingsService.getListing(listingId);
-        if (listingResponse.success && listingResponse.data) {
-          // Ensure listing has required fields
-          const processedListing = {
-            ...listingResponse.data,
-            markedUpPrice: listingResponse.data.markedUpPrice || Math.round(listingResponse.data.price * 1.1 * 100) / 100,
-            imageUrls: listingResponse.data.imageUrls || []
-          };
-          setListing(processedListing as ListingWithDetails);
-        }
-
-        // Load users
-        const usersData = await storageService.getItem<Record<string, any>>('users', {});
-        setUsers(usersData);
-
-        // Load orders
-        const ordersData = await storageService.getItem<Order[]>('orders', []);
-        setOrderHistory(ordersData);
-
-        // Load subscriptions
-        const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
-        setSubscriptions(subsData);
-
         // Load reviews
         const reviewsData = await storageService.getItem<Review[]>('reviews', []);
         setReviews(reviewsData);
-
-        // Load buyer balance if user is a buyer
-        if (user?.username && user.role === 'buyer') {
-          // Ensure buyer has initial deposit (for development/testing)
-          await ensureBuyerHasInitialDeposit(user.username, 1000);
-          
-          const balance = await calculateBuyerBalance(user.username);
-          setBuyerBalance(balance);
-        }
-
-        setIsLoading(false);
       } catch (error) {
-        console.error('Error loading data:', error);
-        setIsLoading(false);
+        console.error('Error loading additional data:', error);
       }
     };
 
     loadData();
-  }, [listingId, user, calculateBuyerBalance]);
-
-  // Refresh balance when user changes
-  useEffect(() => {
-    if (user?.username && user.role === 'buyer') {
-      calculateBuyerBalance(user.username).then(balance => {
-        setBuyerBalance(balance);
-      });
-    }
-  }, [user, calculateBuyerBalance]);
+  }, []);
 
   // Computed values
   const isAuctionListing = !!listing?.auction;
@@ -250,6 +135,7 @@ export const useBrowseDetail = () => {
   const currentTotalPayable = isAuctionListing ? calculateTotalPayable(currentHighestBid) : 0;
   const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
   const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
+  const buyerBalance = user ? getBuyerBalance(user.username) : 0;
   
   // Check subscription
   const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
@@ -303,10 +189,6 @@ export const useBrowseDetail = () => {
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuctionListing, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
-  const getBuyerBalance = useCallback((username: string) => {
-    return buyerBalance;
-  }, [buyerBalance]);
-
   const checkCurrentUserFunds = useCallback(() => {
     if (!user || user.role !== "buyer" || !isAuctionListing || !listing?.auction) return;
 
@@ -337,109 +219,6 @@ export const useBrowseDetail = () => {
     
     return minBidAmount.toString();
   }, [isAuctionListing, listing?.auction]);
-
-  // Purchase listing
-  const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
-    try {
-      // Get fresh balance
-      const currentBalance = await calculateBuyerBalance(buyerUsername);
-      const price = listing.markedUpPrice || Math.round(listing.price * 1.1 * 100) / 100;
-      
-      console.log('Purchase attempt:', {
-        buyerUsername,
-        currentBalance,
-        price,
-        listingPrice: listing.price,
-        markedUpPrice: listing.markedUpPrice,
-        canAfford: currentBalance >= price
-      });
-      
-      if (currentBalance < price) {
-        console.log('Insufficient balance for purchase');
-        return false;
-      }
-
-      // Create order
-      const newOrder: Order = {
-        id: `order_${Date.now()}`,
-        title: listing.title,
-        description: listing.description,
-        price: listing.price,
-        markedUpPrice: price,
-        seller: listing.seller,
-        buyer: buyerUsername,
-        date: new Date().toISOString(),
-        shippingStatus: 'pending',
-        wasAuction: false,
-        imageUrls: listing.imageUrls
-      };
-
-      // Save order
-      const orders = await storageService.getItem<Order[]>('orders', []);
-      orders.push(newOrder);
-      await storageService.setItem('orders', orders);
-
-      // Update balance - create transaction
-      const newTransaction: Transaction = {
-        id: `tx_${Date.now()}`,
-        userId: buyerUsername,
-        walletType: 'buyer',
-        type: 'purchase',
-        amount: price,
-        date: new Date().toISOString(),
-        description: `Purchase: ${listing.title}`
-      };
-
-      const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
-      transactions.push(newTransaction);
-      await storageService.setItem('wallet_transactions', transactions);
-
-      // Update local balance
-      const newBalance = currentBalance - price;
-      setBuyerBalance(newBalance);
-
-      // Remove listing from available listings
-      const listings = await storageService.getItem<Listing[]>('listings', []);
-      const updatedListings = listings.filter(l => l.id !== listing.id);
-      await storageService.setItem('listings', updatedListings);
-
-      console.log('Purchase successful:', {
-        orderId: newOrder.id,
-        newBalance,
-        transactionId: newTransaction.id
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Purchase error:', error);
-      return false;
-    }
-  }, [calculateBuyerBalance]);
-
-  // Place bid
-  const placeBid = useCallback(async (listingId: string, bidderUsername: string, bidAmount: number): Promise<boolean> => {
-    try {
-      const result = await listingsService.placeBid(listingId, bidderUsername, bidAmount);
-      
-      if (result.success && result.data) {
-        // Update local listing with new bid data
-        setListing(prev => prev ? { ...prev, ...result.data } : result.data);
-        
-        // Refresh balance after bid
-        if (user?.username && user.role === 'buyer') {
-          const newBalance = await calculateBuyerBalance(user.username);
-          setBuyerBalance(newBalance);
-        }
-        
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Place bid error:', error);
-      return false;
-    }
-  }, [user, calculateBuyerBalance]);
 
   // Mark messages as read
   const markMessagesAsRead = useCallback(async (receiverUsername: string, senderUsername: string) => {
@@ -481,7 +260,8 @@ export const useBrowseDetail = () => {
     updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
 
     try {
-      const success = await purchaseListing(listing, user.username);
+      // Use WalletContext's purchaseListing method
+      const success = await walletPurchaseListing(listing, user.username);
       
       if (success) {
         updateState({ 
@@ -498,7 +278,7 @@ export const useBrowseDetail = () => {
           if (mountedRef.current) {
             router.push('/buyers/my-orders');
           }
-        }, 10000);
+        }, 3000);
       } else {
         updateState({ 
           purchaseStatus: 'Purchase failed. Please check your wallet balance.',
@@ -512,7 +292,7 @@ export const useBrowseDetail = () => {
         isProcessing: false 
       });
     }
-  }, [user, listing, state.isProcessing, purchaseListing, router, updateState]);
+  }, [user, listing, state.isProcessing, walletPurchaseListing, router, updateState]);
 
   const handleBidSubmit = useCallback(async () => {
     if (!listing || state.isBidding || !user || user.role !== 'buyer') return;
@@ -533,7 +313,8 @@ export const useBrowseDetail = () => {
     });
 
     try {
-      const success = await placeBid(listing.id, user.username, bidValue);
+      // Use ListingContext's placeBid method
+      const success = await listingsPlaceBid(listing.id, user.username, bidValue);
       
       if (success) {
         updateState({ 
@@ -567,7 +348,7 @@ export const useBrowseDetail = () => {
         isBidding: false 
       });
     }
-  }, [listing, state.isBidding, state.bidAmount, user, placeBid, updateState]);
+  }, [listing, state.isBidding, state.bidAmount, user, listingsPlaceBid, updateState]);
 
   const handleImageNavigation = useCallback((newIndex: number) => {
     if (newIndex >= 0 && newIndex < images.length) {
