@@ -16,7 +16,7 @@ import {
 } from './common';
 import { User } from '@/context/AuthContext';
 import { Listing } from '@/context/ListingContext';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 import { Result } from './type-utils';
 
 // Basic type guards

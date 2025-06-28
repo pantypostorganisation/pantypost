@@ -1,29 +1,63 @@
 // src/hooks/useBuyerWallet.ts
 'use client';
 
-import { useEffect, useState, useCallback, useContext } from 'react';
-import { WalletContext } from '@/context/WalletContext.enhanced';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
-import { BuyerWalletState } from '@/types/wallet';
+import { useToast } from '@/context/ToastContext';
+import { WalletIntegration } from '@/services/wallet.integration';
+import { WalletValidation } from '@/services/wallet.validation';
+import { Money } from '@/types/common';
+
+interface EnhancedBuyerWalletState {
+  balance: number;
+  amountToAdd: string;
+  message: string;
+  messageType: 'success' | 'error' | '';
+  isLoading: boolean;
+  walletUpdateTrigger: number;
+  availableBalance: number;
+  pendingBalance: number;
+  dailyDepositLimit: number;
+  remainingDepositLimit: number;
+  transactionHistory: any[];
+  isLoadingHistory: boolean;
+  validationErrors: string[];
+  lastSyncTime: Date | null;
+}
 
 export const useBuyerWallet = () => {
   const { user } = useAuth();
-  const walletContext = useContext(WalletContext);
-
-  const [state, setState] = useState<BuyerWalletState>({
+  const { 
+    getBuyerBalance,
+    setBuyerBalance, 
+    orderHistory, 
+    addDeposit,
+    getTransactionHistory,
+    checkSuspiciousActivity,
+    reconcileBalance,
+  } = useWallet();
+  const toast = useToast();
+  
+  const [state, setState] = useState<EnhancedBuyerWalletState>({
     balance: 0,
+    availableBalance: 0,
+    pendingBalance: 0,
     amountToAdd: '',
     message: '',
     messageType: '',
     isLoading: false,
-    walletUpdateTrigger: 0
+    walletUpdateTrigger: 0,
+    dailyDepositLimit: Money.toDollars(WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT),
+    remainingDepositLimit: Money.toDollars(WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT),
+    transactionHistory: [],
+    isLoadingHistory: false,
+    validationErrors: [],
+    lastSyncTime: null,
   });
 
-  // Get wallet functions safely
-  const getBuyerBalance = walletContext?.getBuyerBalance || (() => 0);
-  const setBuyerBalance = walletContext?.setBuyerBalance || (() => {});
-  const orderHistory = walletContext?.orderHistory || [];
-  const addDeposit = walletContext?.addDeposit || (async () => false);
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityCheckRef = useRef<Date>(new Date());
 
   // Get buyer's purchase history
   const buyerPurchases = user?.username 
@@ -33,53 +67,74 @@ export const useBuyerWallet = () => {
   // Sort purchases by date (newest first)
   const recentPurchases = [...buyerPurchases]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 3); // Show only the 3 most recent purchases
+    .slice(0, 3);
 
   // Calculate total spent
   const totalSpent = buyerPurchases.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
 
   // Update state helper
-  const updateState = useCallback((updates: Partial<BuyerWalletState>) => {
+  const updateState = useCallback((updates: Partial<EnhancedBuyerWalletState>) => {
     setState(prev => ({ ...prev, ...updates }));
   }, []);
 
-  // Update balance whenever wallet context changes
-  useEffect(() => {
-    if (user?.username && walletContext) {
-      const rawBalance = getBuyerBalance(user.username);
-      const updatedBalance = Math.max(0, rawBalance);
-      updateState({ balance: updatedBalance });
-    }
-  }, [user, getBuyerBalance, orderHistory, state.walletUpdateTrigger, updateState, walletContext]);
+  // Sync balance with enhanced service
+  const syncBalance = useCallback(async () => {
+    if (!user?.username) return;
 
-  // Listen for wallet updates
-  useEffect(() => {
-    const handleWalletUpdate = () => {
-      if (user?.username && walletContext) {
-        const rawBalance = getBuyerBalance(user.username);
-        const updatedBalance = Math.max(0, rawBalance);
-        updateState({ balance: updatedBalance });
-      }
-    };
-
-    window.addEventListener('walletUpdate', handleWalletUpdate);
-    
-    return () => {
-      window.removeEventListener('walletUpdate', handleWalletUpdate);
-    };
-  }, [user, getBuyerBalance, updateState, walletContext]);
-
-  const handleAddFunds = useCallback(async () => {
-    if (!walletContext) {
-      updateState({ 
-        message: 'Wallet service is not available. Please try again.',
-        messageType: 'error',
-        isLoading: false
+    try {
+      // Get detailed balance from enhanced service
+      const balance = await WalletIntegration.getBalanceInDollars(user.username, 'buyer');
+      
+      // Get transaction history for pending calculations
+      const history = await getTransactionHistory(user.username, 20);
+      
+      // Calculate daily limit usage
+      const todaysDeposits = history.filter((t: any) => {
+        const isDeposit = t.displayType === 'Deposit' && t.isCredit;
+        const isToday = new Date(t.rawTransaction.createdAt).toDateString() === new Date().toDateString();
+        return isDeposit && isToday;
       });
-      return;
+      
+      const todaysDepositTotal = todaysDeposits.reduce((sum: number, t: any) => 
+        sum + Money.toDollars(t.rawTransaction.amount), 0
+      );
+      
+      const remainingLimit = Money.toDollars(WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT) - todaysDepositTotal;
+      
+      updateState({
+        balance,
+        availableBalance: balance, // Enhanced service handles pending
+        pendingBalance: 0, // Will be calculated by enhanced service
+        remainingDepositLimit: Math.max(0, remainingLimit),
+        transactionHistory: history,
+        lastSyncTime: new Date(),
+      });
+    } catch (error) {
+      console.error('Balance sync error:', error);
     }
+  }, [user, getTransactionHistory, updateState, setBuyerBalance]);
 
-    updateState({ isLoading: true });
+  // Initial sync and periodic updates
+  useEffect(() => {
+    if (user?.username) {
+      syncBalance();
+      
+      // Sync every 30 seconds
+      syncIntervalRef.current = setInterval(syncBalance, 30000);
+      
+      return () => {
+        if (syncIntervalRef.current) {
+          clearInterval(syncIntervalRef.current);
+        }
+      };
+    }
+    // Add return statement for when user is not defined
+    return undefined;
+  }, [user, syncBalance]);
+
+  // Enhanced add funds with validation
+  const handleAddFunds = useCallback(async () => {
+    updateState({ isLoading: true, validationErrors: [] });
     const amount = parseFloat(state.amountToAdd);
     
     if (!user?.username) {
@@ -91,64 +146,73 @@ export const useBuyerWallet = () => {
       return;
     }
 
-    if (isNaN(amount) || amount <= 0) {
+    // Validate amount using enhanced validation
+    const amountInCents = Money.fromDollars(amount);
+    const validation = WalletValidation.validateAmount(
+      amountInCents,
+      WalletValidation.LIMITS.MIN_DEPOSIT,
+      WalletValidation.LIMITS.MAX_DEPOSIT
+    );
+
+    if (!validation.valid) {
       updateState({ 
-        message: 'Please enter a valid amount greater than $0.',
+        message: validation.error!,
         messageType: 'error',
-        isLoading: false
+        isLoading: false,
+        validationErrors: [validation.error!]
       });
       return;
     }
 
-    if (amount > 10000) {
+    // Check daily limit
+    if (amount > state.remainingDepositLimit) {
       updateState({ 
-        message: 'Maximum deposit amount is $10,000. Please contact support for larger deposits.',
+        message: `Daily deposit limit exceeded. You can add up to $${state.remainingDepositLimit.toFixed(2)} today.`,
         messageType: 'error',
-        isLoading: false
+        isLoading: false,
+        validationErrors: ['Daily limit exceeded']
       });
       return;
     }
-
-    const roundedAmount = Math.round(amount * 100) / 100;
 
     try {
-      // Simulate a slight delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      try {
-        // Track the deposit first
-        const depositSuccess = await addDeposit(
-          user.username!, 
-          roundedAmount, 
-          'credit_card', 
-          `Wallet deposit by ${user.username}`
+      // Check for suspicious activity before processing
+      const activityCheck = await checkSuspiciousActivity(user.username!);
+      if (activityCheck.suspicious) {
+        toast.warning(
+          'Security Alert', 
+          'Unusual activity detected. Please contact support if you need assistance.'
         );
+      }
+
+      // Process deposit using enhanced service
+      const success = await WalletIntegration.addFunds(
+        user.username!,
+        amount,
+        'credit_card'
+      );
+      
+      if (success) {
+        // Sync balance immediately
+        await syncBalance();
         
-        if (depositSuccess) {
-          // Update local state to reflect the change immediately
-          const currentBalance = getBuyerBalance(user.username!);
-          const newBalance = currentBalance + roundedAmount;
-          
-          // Clear form and show success message
-          updateState({
-            balance: newBalance,
-            amountToAdd: '',
-            message: `Successfully added $${roundedAmount.toFixed(2)} to your wallet. Your new balance is $${newBalance.toFixed(2)}.`,
-            messageType: 'success',
-            walletUpdateTrigger: state.walletUpdateTrigger + 1,
-            isLoading: false
-          });
-        } else {
-          updateState({ 
-            message: 'Failed to process deposit. Please try again or contact support.',
-            messageType: 'error',
-            isLoading: false
-          });
+        updateState({
+          amountToAdd: '',
+          message: `Successfully added ${Money.format(amountInCents)} to your wallet.`,
+          messageType: 'success',
+          isLoading: false
+        });
+        
+        toast.success('Funds Added', `${Money.format(amountInCents)} has been added to your wallet`);
+        
+        // Check if reconciliation is needed
+        const reconciliation = await reconcileBalance(user.username!, 'buyer');
+        if (!reconciliation.isReconciled) {
+          console.warn('Balance reconciliation needed:', reconciliation);
         }
-      } catch (depositError) {
-        console.error('Deposit processing error:', depositError);
+      } else {
         updateState({ 
-          message: 'An error occurred while processing your deposit. Please try again.',
+          message: 'Failed to process deposit. Please try again.',
           messageType: 'error',
           isLoading: false
         });
@@ -164,28 +228,120 @@ export const useBuyerWallet = () => {
 
     // Clear message after 5 seconds
     setTimeout(() => {
-      updateState({ message: '', messageType: '' });
+      updateState({ message: '', messageType: '', validationErrors: [] });
     }, 5000);
-  }, [state.amountToAdd, state.walletUpdateTrigger, user, addDeposit, getBuyerBalance, updateState, walletContext]);
+  }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, syncBalance, reconcileBalance, toast, updateState]);
 
+  // Validate amount as user types
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
     // Allow empty string or valid decimal numbers
     if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
       updateState({ amountToAdd: value });
+      
+      // Real-time validation
+      if (value) {
+        const amount = parseFloat(value);
+        if (!isNaN(amount)) {
+          const amountInCents = Money.fromDollars(amount);
+          const validation = WalletValidation.validateAmount(
+            amountInCents,
+            WalletValidation.LIMITS.MIN_DEPOSIT,
+            WalletValidation.LIMITS.MAX_DEPOSIT
+          );
+          
+          if (!validation.valid) {
+            updateState({ validationErrors: [validation.error!] });
+          } else if (amount > state.remainingDepositLimit) {
+            updateState({ 
+              validationErrors: [`Daily limit: $${state.remainingDepositLimit.toFixed(2)} remaining`] 
+            });
+          } else {
+            updateState({ validationErrors: [] });
+          }
+        }
+      } else {
+        updateState({ validationErrors: [] });
+      }
     }
-  }, [updateState]);
+  }, [state.remainingDepositLimit, updateState]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && state.amountToAdd && !state.isLoading) {
+    if (e.key === 'Enter' && state.amountToAdd && !state.isLoading && state.validationErrors.length === 0) {
       handleAddFunds();
     }
-  }, [state.amountToAdd, state.isLoading, handleAddFunds]);
+  }, [state.amountToAdd, state.isLoading, state.validationErrors, handleAddFunds]);
 
   const handleQuickAmountSelect = useCallback((amount: string) => {
-    updateState({ amountToAdd: amount });
-  }, [updateState]);
+    const numAmount = parseFloat(amount);
+    
+    // Check if amount exceeds daily limit
+    if (numAmount > state.remainingDepositLimit) {
+      toast.warning(
+        'Limit Exceeded', 
+        `This amount exceeds your daily limit. Maximum: $${state.remainingDepositLimit.toFixed(2)}`
+      );
+      updateState({ 
+        amountToAdd: state.remainingDepositLimit.toFixed(2),
+        validationErrors: []
+      });
+    } else {
+      updateState({ amountToAdd: amount, validationErrors: [] });
+    }
+  }, [state.remainingDepositLimit, toast, updateState]);
+
+  // Load transaction history
+  const loadTransactionHistory = useCallback(async () => {
+    if (!user?.username) return;
+    
+    updateState({ isLoadingHistory: true });
+    try {
+      const history = await getTransactionHistory(user.username, 50);
+      updateState({ 
+        transactionHistory: history,
+        isLoadingHistory: false 
+      });
+    } catch (error) {
+      console.error('Error loading transaction history:', error);
+      updateState({ isLoadingHistory: false });
+    }
+  }, [user, getTransactionHistory, updateState, setBuyerBalance]);
+
+  // Check for suspicious activity periodically
+  useEffect(() => {
+    const checkActivity = async () => {
+      if (!user?.username) return;
+      
+      const now = new Date();
+      const timeSinceLastCheck = now.getTime() - lastActivityCheckRef.current.getTime();
+      
+      // Check every 5 minutes
+      if (timeSinceLastCheck > 5 * 60 * 1000) {
+        const activityCheck = await checkSuspiciousActivity(user.username);
+        if (activityCheck.suspicious) {
+          toast.warning(
+            'Security Notice',
+            'Unusual activity detected on your account. Please review your recent transactions.'
+          );
+        }
+        lastActivityCheckRef.current = now;
+      }
+    };
+
+    const interval = setInterval(checkActivity, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [user, checkSuspiciousActivity, toast]);
+
+  // Format currency for display
+  const formatCurrency = useCallback((amount: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  }, []);
 
   return {
     // State
@@ -197,10 +353,23 @@ export const useBuyerWallet = () => {
     totalSpent,
     user,
     
+    // Formatted values
+    formattedBalance: formatCurrency(state.balance),
+    formattedAvailableBalance: formatCurrency(state.availableBalance),
+    formattedPendingBalance: formatCurrency(state.pendingBalance),
+    formattedTotalSpent: formatCurrency(totalSpent),
+    formattedDailyLimit: formatCurrency(state.dailyDepositLimit),
+    formattedRemainingLimit: formatCurrency(state.remainingDepositLimit),
+    
     // Actions
     handleAddFunds,
     handleAmountChange,
     handleKeyPress,
-    handleQuickAmountSelect
+    handleQuickAmountSelect,
+    loadTransactionHistory,
+    syncBalance,
+    
+    // Utilities
+    formatCurrency,
   };
 };

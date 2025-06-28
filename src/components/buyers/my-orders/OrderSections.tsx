@@ -4,7 +4,7 @@
 import React from 'react';
 import { ShoppingBag, Settings, Gavel } from 'lucide-react';
 import OrderCard from './OrderCard';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 
 interface OrderSectionsProps {
   directOrders: Order[];

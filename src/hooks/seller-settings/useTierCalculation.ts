@@ -1,7 +1,7 @@
 // src/hooks/seller-settings/useTierCalculation.ts
 import { useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext.enhanced';
+import { useWallet } from '@/context/WalletContext';
 import { getSellerTierMemoized, TierLevel } from '@/utils/sellerTiers';
 
 // Define TIER_LEVELS locally to match the structure in sellerTiers.ts

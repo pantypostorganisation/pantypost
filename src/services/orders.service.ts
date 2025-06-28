@@ -1,6 +1,6 @@
 // src/services/orders.service.ts
 
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { v4 as uuidv4 } from 'uuid';

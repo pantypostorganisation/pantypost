@@ -1,7 +1,7 @@
 // src/hooks/profile/useSellerTips.ts
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext.enhanced';
+import { useWallet } from '@/context/WalletContext';
 
 export function useSellerTips(username: string) {
   const { user } = useAuth();

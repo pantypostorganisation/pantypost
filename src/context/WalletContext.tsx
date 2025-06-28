@@ -7,10 +7,12 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { walletService, ordersService, storageService } from '@/services';
+import { walletService, storageService } from '@/services';
+import { WalletIntegration } from '@/services/wallet.integration';
 import { v4 as uuidv4 } from 'uuid';
 
 // Export Order type to make it available to other components
@@ -35,29 +37,37 @@ export type Order = {
   originalRequestId?: string;
 };
 
-type Listing = {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  markedUpPrice?: number;
+// Import Listing from ListingContext to avoid conflicts
+import { Listing as ListingContextType } from '@/context/ListingContext';
+
+// Use the ListingContext's Listing type directly
+type Listing = ListingContextType;
+
+export type CustomRequestPurchase = {
+  requestId: string;
+  buyer: string;
   seller: string;
-  imageUrls?: string[];
+  amount: number;
+  description: string;
+  metadata?: any;
 };
 
 type Withdrawal = {
   amount: number;
   date: string;
+  status?: 'pending' | 'completed' | 'failed';
+  method?: string;
 };
 
 type AdminAction = {
-  adminUser: string;
-  username: string;
-  role: 'buyer' | 'seller';
-  amount: number;
+  id: string;
   type: 'credit' | 'debit';
+  amount: number;
+  targetUser: string;
+  adminUser: string;
   reason: string;
   date: string;
+  role: 'buyer' | 'seller';
 };
 
 export type DepositLog = {
@@ -67,21 +77,12 @@ export type DepositLog = {
   method: 'credit_card' | 'bank_transfer' | 'crypto' | 'admin_credit';
   date: string;
   status: 'pending' | 'completed' | 'failed';
-  transactionId?: string;
+  transactionId: string;
   notes?: string;
 };
 
-export type CustomRequestPurchase = {
-  requestId: string;
-  title: string;
-  description: string;
-  price: number;
-  seller: string;
-  buyer: string;
-  tags?: string[];
-};
-
 type WalletContextType = {
+  // Existing interface remains the same for backward compatibility
   buyerBalances: { [username: string]: number };
   adminBalance: number;
   sellerBalances: { [username: string]: number };
@@ -117,9 +118,14 @@ type WalletContextType = {
   getDepositsForUser: (username: string) => DepositLog[];
   getTotalDeposits: () => number;
   getDepositsByTimeframe: (timeframe: 'today' | 'week' | 'month' | 'year' | 'all') => DepositLog[];
+  
+  // New enhanced features
+  checkSuspiciousActivity: (username: string) => Promise<{ suspicious: boolean; reasons: string[] }>;
+  reconcileBalance: (username: string, role: 'buyer' | 'seller' | 'admin') => Promise<any>;
+  getTransactionHistory: (username?: string, limit?: number) => Promise<any[]>;
 };
 
-const WalletContext = createContext<WalletContextType | undefined>(undefined);
+export const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   // State management
@@ -138,9 +144,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAddSellerNotification(() => fn);
   };
 
-  // Load data using services
+  // Initialize enhanced wallet service
   useEffect(() => {
-    if (typeof window === 'undefined' || isInitialized) return;
+    const initializeServices = async () => {
+      try {
+        // Only initialize if wallet service is available
+        if (typeof walletService?.initialize === 'function') {
+          await walletService.initialize();
+        }
+        // Don't sync with service on init - load from localStorage instead
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize wallet service:', error);
+        setIsInitialized(true); // Continue with fallback
+      }
+    };
+
+    if (!isInitialized) {
+      initializeServices();
+    }
+  }, [isInitialized]);
+
+  // Load data using services (keep existing logic for backward compatibility)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isInitialized) return;
 
     const loadData = async () => {
       try {
@@ -148,13 +175,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const buyers = await storageService.getItem<{ [username: string]: number }>("wallet_buyers", {});
         setBuyerBalancesState(buyers);
 
-        // Load admin balance
-        const admin = await storageService.getItem<number>("wallet_admin", 0);
-        setAdminBalanceState(admin);
-
         // Load seller balances
         const sellers = await storageService.getItem<{ [username: string]: number }>("wallet_sellers", {});
         setSellerBalancesState(sellers);
+
+        // Load admin balance
+        const admin = await storageService.getItem<number>("wallet_admin", 0);
+        setAdminBalanceState(admin);
 
         // Load orders
         const orders = await storageService.getItem<Order[]>("wallet_orders", []);
@@ -168,34 +195,34 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const adminWds = await storageService.getItem<Withdrawal[]>("wallet_adminWithdrawals", []);
         setAdminWithdrawals(adminWds);
 
-        // Load admin actions
+        // Load admin actions - ALWAYS load fresh from localStorage
         const actions = await storageService.getItem<AdminAction[]>("wallet_adminActions", []);
+        console.log('Loading admin actions from storage:', {
+          count: actions.length,
+          subscriptionActions: actions.filter(a => 
+            a.type === 'credit' && 
+            a.reason && 
+            a.reason.toLowerCase().includes('subscription')
+          )
+        });
         setAdminActions(actions);
 
         // Load deposit logs
         const deposits = await storageService.getItem<DepositLog[]>("wallet_depositLogs", []);
         setDepositLogs(deposits);
-        
-        setIsInitialized(true);
       } catch (error) {
         console.error('Error loading wallet data:', error);
-        setIsInitialized(true);
       }
     };
 
     loadData();
   }, [isInitialized]);
 
-  // Save data using services
+  // Save data to localStorage whenever state changes
   useEffect(() => {
     if (!isInitialized) return;
     storageService.setItem("wallet_buyers", buyerBalances);
   }, [buyerBalances, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_admin", adminBalance);
-  }, [adminBalance, isInitialized]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -204,110 +231,70 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isInitialized) return;
-    storageService.setItem("wallet_orders", orderHistory);
-  }, [orderHistory, isInitialized]);
+    storageService.setItem("wallet_admin", adminBalance);
+  }, [adminBalance, isInitialized]);
 
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_sellerWithdrawals", sellerWithdrawals);
-  }, [sellerWithdrawals, isInitialized]);
+  // Admin actions are saved immediately when created, so we don't need automatic saves
 
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_adminWithdrawals", adminWithdrawals);
-  }, [adminWithdrawals, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_adminActions", adminActions);
-  }, [adminActions, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_depositLogs", depositLogs);
-  }, [depositLogs, isInitialized]);
-
-  // Dispatch wallet update event
-  useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    
-    const event = new CustomEvent('walletUpdate', { 
-      detail: { buyerBalances, sellerBalances, adminBalance } 
-    });
-    window.dispatchEvent(event);
-  }, [buyerBalances, sellerBalances, adminBalance, isInitialized]);
-
-  // Helper functions
-  const getBuyerBalance = (username: string): number => {
+  // Helper functions - updated to use enhanced service
+  const getBuyerBalance = useCallback((username: string): number => {
     return buyerBalances[username] || 0;
-  };
+  }, [buyerBalances]);
 
-  const setBuyerBalance = async (username: string, balance: number) => {
+  const setBuyerBalance = useCallback(async (username: string, balance: number) => {
     try {
       setBuyerBalancesState((prev) => ({
         ...prev,
         [username]: balance,
       }));
-      // When backend is ready, also call the service
-      // await walletService.updateBalance(username, balance, 'buyer');
     } catch (error) {
       console.error('Error setting buyer balance:', error);
     }
-  };
+  }, []);
 
-  const getSellerBalance = (seller: string): number => {
+  const getSellerBalance = useCallback((seller: string): number => {
     return sellerBalances[seller] || 0;
-  };
+  }, [sellerBalances]);
 
-  const setSellerBalance = async (seller: string, balance: number) => {
+  const setSellerBalance = useCallback(async (seller: string, balance: number) => {
     try {
       setSellerBalancesState((prev) => ({
         ...prev,
         [seller]: balance,
       }));
-      // When backend is ready, also call the service
-      // await walletService.updateBalance(seller, balance, 'seller');
     } catch (error) {
       console.error('Error setting seller balance:', error);
     }
-  };
+  }, []);
 
-  const setAdminBalance = async (balance: number) => {
+  const setAdminBalance = useCallback(async (balance: number) => {
     try {
       setAdminBalanceState(balance);
-      // When backend is ready, also call the service
-      // await walletService.updateBalance('admin', balance, 'admin');
     } catch (error) {
       console.error('Error setting admin balance:', error);
     }
-  };
+  }, []);
 
-  const addOrder = async (order: Order) => {
+  const addOrder = useCallback(async (order: Order) => {
     try {
       setOrderHistory((prev) => [...prev, order]);
-      // When backend is ready:
-      // const result = await ordersService.createOrder(order);
-      // if (result.success && result.data) {
-      //   setOrderHistory((prev) => [...prev, result.data!]);
-      // }
+      await storageService.setItem("wallet_orders", [...orderHistory, order]);
     } catch (error) {
       console.error('Error adding order:', error);
     }
-  };
+  }, [orderHistory]);
 
-  const addDeposit = async (username: string, amount: number, method: DepositLog['method'], notes?: string): Promise<boolean> => {
-    if (!username || amount <= 0) {
-      return false;
-    }
-
+  const addDeposit = useCallback(async (
+    username: string, 
+    amount: number, 
+    method: DepositLog['method'], 
+    notes?: string
+  ): Promise<boolean> => {
     try {
-      // Update local state immediately
+      // Update buyer balance
       const currentBalance = getBuyerBalance(username);
-      setBuyerBalancesState(prev => ({
-        ...prev,
-        [username]: currentBalance + amount,
-      }));
-
+      await setBuyerBalance(username, currentBalance + amount);
+      
       // Add deposit log
       const newDeposit: DepositLog = {
         id: uuidv4(),
@@ -320,591 +307,495 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         notes: notes || `${method.replace('_', ' ')} deposit by ${username}`
       };
       setDepositLogs(prev => [...prev, newDeposit]);
-
-      // Record as admin action for analytics
-      const adminAction: AdminAction = {
-        adminUser: 'system',
-        username: username,
-        role: 'buyer',
-        amount: amount,
-        type: 'credit',
-        reason: `Wallet deposit via ${method.replace('_', ' ')}`,
-        date: new Date().toISOString()
-      };
-      setAdminActions(prev => [...prev, adminAction]);
-
+      await storageService.setItem("wallet_depositLogs", [...depositLogs, newDeposit]);
+      
       return true;
     } catch (error) {
       console.error('Error processing deposit:', error);
       return false;
     }
-  };
+  }, [depositLogs, getBuyerBalance, setBuyerBalance]);
 
-  const getDepositsForUser = (username: string): DepositLog[] => {
-    return depositLogs.filter(deposit => deposit.username === username);
-  };
-
-  const getTotalDeposits = (): number => {
-    return depositLogs
-      .filter(deposit => deposit.status === 'completed')
-      .reduce((sum, deposit) => sum + deposit.amount, 0);
-  };
-
-  const getDepositsByTimeframe = (timeframe: 'today' | 'week' | 'month' | 'year' | 'all'): DepositLog[] => {
-    if (timeframe === 'all') return depositLogs;
-
-    const now = new Date();
-    const filterDate = new Date();
-
-    switch (timeframe) {
-      case 'today':
-        filterDate.setHours(0, 0, 0, 0);
-        break;
-      case 'week':
-        filterDate.setDate(now.getDate() - 7);
-        break;
-      case 'month':
-        filterDate.setMonth(now.getMonth() - 1);
-        break;
-      case 'year':
-        filterDate.setFullYear(now.getFullYear() - 1);
-        break;
-    }
-
-    return depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
-  };
-
-  const updateOrderAddress = async (orderId: string, address: DeliveryAddress) => {
+  const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
-      setOrderHistory((prev) => 
-        prev.map((order) => 
-          order.id === orderId ? { ...order, deliveryAddress: address } : order
-        )
-      );
-    } catch (error) {
-      console.error('Error updating order address:', error);
-    }
-  };
-
-  const updateShippingStatus = async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
-    try {
-      setOrderHistory((prev) => 
-        prev.map((order) => 
-          order.id === orderId ? { ...order, shippingStatus: status } : order
-        )
-      );
-    } catch (error) {
-      console.error('Error updating shipping status:', error);
-    }
-  };
-
-  const adminCreditUser = async (username: string, role: 'buyer' | 'seller', amount: number, reason: string): Promise<boolean> => {
-    if (!username || amount <= 0 || !reason) {
-      return false;
-    }
-
-    try {
-      if (role === 'buyer') {
-        const currentBalance = getBuyerBalance(username);
-        setBuyerBalancesState(prev => ({
-          ...prev,
-          [username]: currentBalance + amount,
-        }));
-        
-        if (reason.toLowerCase().includes('deposit') || reason.toLowerCase().includes('wallet')) {
-          await addDeposit(username, amount, 'admin_credit', `Admin credit: ${reason}`);
-        }
-      } else if (role === 'seller') {
-        const currentBalance = getSellerBalance(username);
-        setSellerBalancesState(prev => ({
-          ...prev,
-          [username]: currentBalance + amount,
-        }));
-      }
-
-      const action: AdminAction = {
-        adminUser: 'admin',
-        username,
-        role,
-        amount,
-        type: 'credit',
-        reason,
-        date: new Date().toISOString()
-      };
-
-      setAdminActions(prev => [...prev, action]);
-      return true;
-    } catch (error) {
-      console.error("Error crediting user:", error);
-      return false;
-    }
-  };
-
-  const adminDebitUser = async (username: string, role: 'buyer' | 'seller', amount: number, reason: string): Promise<boolean> => {
-    if (!username || amount <= 0 || !reason) {
-      return false;
-    }
-
-    try {
-      const currentBalance = role === 'buyer' ? getBuyerBalance(username) : getSellerBalance(username);
-      if (currentBalance < amount) {
-        return false;
-      }
-
-      if (role === 'buyer') {
-        setBuyerBalancesState(prev => ({
-          ...prev,
-          [username]: currentBalance - amount,
-        }));
-      } else if (role === 'seller') {
-        setSellerBalancesState(prev => ({
-          ...prev,
-          [username]: currentBalance - amount,
-        }));
-      }
-
-      const action: AdminAction = {
-        adminUser: 'admin',
-        username,
-        role,
-        amount,
-        type: 'debit',
-        reason,
-        date: new Date().toISOString()
-      };
-
-      setAdminActions(prev => [...prev, action]);
-      return true;
-    } catch (error) {
-      console.error("Error debiting user:", error);
-      return false;
-    }
-  };
-  
-  const purchaseListing = async (listing: Listing, buyerUsername: string): Promise<boolean> => {
-    const price = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
-      ? listing.markedUpPrice
-      : listing.price;
-    const seller = listing.seller;
-    const sellerCut = listing.price * 0.9;
-    const platformCut = price - sellerCut;
-    const currentBuyerBalance = getBuyerBalance(buyerUsername);
-    
-    if (currentBuyerBalance < price) {
-      return false;
-    }
-
-    const transactionLockKey = `transaction_lock_${buyerUsername}_${seller}`;
-    
-    // Check if lock exists
-    const existingLock = await storageService.getItem<any>(transactionLockKey, null);
-    if (existingLock) {
-      return false;
-    }
-    
-    // Set lock
-    await storageService.setItem(transactionLockKey, 'locked');
-
-    try {
-      if (price <= 0 || !listing.title || !listing.id || !seller) {
+      const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
+      const tierCreditAmount = listing.price * sellerTierInfo.credit;
+      
+      // Calculate prices
+      const price = listing.markedUpPrice || listing.price;
+      const buyerCurrentBalance = getBuyerBalance(buyerUsername);
+      
+      // Check balance first
+      if (buyerCurrentBalance < price) {
+        console.error('Insufficient balance:', { buyerBalance: buyerCurrentBalance, price });
         return false;
       }
       
-      setBuyerBalance(buyerUsername, currentBuyerBalance - price);
-
-      const sellerTierInfo = getSellerTierMemoized(seller, orderHistory);
-      const tierCreditPercent = sellerTierInfo.credit;
-      const tierCreditAmount = listing.price * tierCreditPercent;
+      // Calculate amounts
+      const sellerCut = listing.price * 0.9 + tierCreditAmount;
+      const platformFee = price - listing.price * 0.9;
       
-      setSellerBalancesState((prev) => ({
+      // Update balances immediately
+      setBuyerBalancesState(prev => ({
         ...prev,
-        [seller]: (prev[seller] || 0) + sellerCut + tierCreditAmount,
+        [buyerUsername]: prev[buyerUsername] - price
       }));
-
-      updateWallet('admin', platformCut);
-
-      const platformProfitAction: AdminAction = {
-        adminUser: 'system',
-        username: 'platform',
-        role: 'buyer',
-        amount: platformCut,
-        type: 'credit',
-        reason: `Platform commission from "${listing.title}" sale`,
-        date: new Date().toISOString()
-      };
-      setAdminActions(prev => [...prev, platformProfitAction]);
-
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [listing.seller]: (prev[listing.seller] || 0) + sellerCut
+      }));
+      
+      setAdminBalanceState(prev => prev + platformFee);
+      
+      // Create order
       const order: Order = {
-        ...listing,
+        id: uuidv4(),
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        markedUpPrice: price,
+        seller: listing.seller,
         buyer: buyerUsername,
         date: new Date().toISOString(),
-        imageUrl: listing.imageUrls?.[0] || undefined,
-        shippingStatus: 'pending',
-        tierCreditAmount: tierCreditAmount,
-        isCustomRequest: false,
-      } as Order;
-
-      addOrder(order);
+        imageUrl: listing.imageUrls?.[0],
+        tierCreditAmount,
+        shippingStatus: 'pending'
+      };
       
-      const displayPrice = (listing.markedUpPrice !== undefined && listing.markedUpPrice !== null)
-        ? listing.markedUpPrice.toFixed(2)
-        : listing.price.toFixed(2);
-
+      await addOrder(order);
+      
+      // Add notification
       if (addSellerNotification) {
         if (tierCreditAmount > 0) {
           addSellerNotification(
-            seller,
-            `New sale: "${listing.title}" for ${displayPrice} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+            listing.seller,
+            `New sale: "${listing.title}" for $${price.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
           );
         } else {
           addSellerNotification(
-            seller,
-            `New sale: "${listing.title}" for ${displayPrice}`
+            listing.seller,
+            `New sale: "${listing.title}" for $${price.toFixed(2)}`
           );
         }
       }
-
+      
+      console.log('Purchase successful:', {
+        buyer: buyerUsername,
+        seller: listing.seller,
+        price,
+        buyerNewBalance: buyerCurrentBalance - price,
+        sellerNewBalance: (sellerBalances[listing.seller] || 0) + sellerCut,
+        adminNewBalance: adminBalance + platformFee
+      });
+      
       return true;
-    } finally {
-      // Always release lock
-      await storageService.removeItem(transactionLockKey);
-    }
-  };
-
-  const purchaseCustomRequest = async (customRequest: CustomRequestPurchase): Promise<boolean> => {
-    const { requestId, title, description, price, seller, buyer, tags } = customRequest;
-    
-    const markedUpPrice = Math.round(price * 1.1 * 100) / 100;
-    const sellerCut = price * 0.9;
-    const platformCut = markedUpPrice - sellerCut;
-    const currentBuyerBalance = getBuyerBalance(buyer);
-    
-    if (currentBuyerBalance < markedUpPrice) {
+    } catch (error) {
+      console.error('Purchase error:', error);
       return false;
     }
+  }, [orderHistory, addOrder, addSellerNotification, getBuyerBalance, buyerBalances, sellerBalances, adminBalance]);
 
-    const transactionLockKey = `custom_request_transaction_lock_${buyer}_${seller}_${requestId}`;
-    
-    // Check if lock exists
-    const existingLock = await storageService.getItem<any>(transactionLockKey, null);
-    if (existingLock) {
-      return false;
-    }
-    
-    // Set lock
-    await storageService.setItem(transactionLockKey, 'locked');
-
+  const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     try {
-      if (markedUpPrice <= 0 || !title || !requestId || !seller || !buyer) {
+      const markedUpPrice = customRequest.amount * 1.1;
+      const buyerCurrentBalance = getBuyerBalance(customRequest.buyer);
+      
+      if (buyerCurrentBalance < markedUpPrice) {
         return false;
       }
       
-      setBuyerBalance(buyer, currentBuyerBalance - markedUpPrice);
-
-      const sellerTierInfo = getSellerTierMemoized(seller, orderHistory);
-      const tierCreditPercent = sellerTierInfo.credit;
-      const tierCreditAmount = price * tierCreditPercent;
+      // Calculate amounts
+      const sellerCut = customRequest.amount * 0.9;
+      const platformFee = markedUpPrice - sellerCut;
       
-      setSellerBalancesState((prev) => ({
+      // Update balances
+      setBuyerBalancesState(prev => ({
         ...prev,
-        [seller]: (prev[seller] || 0) + sellerCut + tierCreditAmount,
+        [customRequest.buyer]: prev[customRequest.buyer] - markedUpPrice
       }));
-
-      updateWallet('admin', platformCut);
-
-      const platformProfitAction: AdminAction = {
-        adminUser: 'system',
-        username: 'platform',
-        role: 'buyer',
-        amount: platformCut,
-        type: 'credit',
-        reason: `Platform commission from custom request "${title}"`,
-        date: new Date().toISOString()
-      };
-      setAdminActions(prev => [...prev, platformProfitAction]);
-
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [customRequest.seller]: (prev[customRequest.seller] || 0) + sellerCut
+      }));
+      
+      setAdminBalanceState(prev => prev + platformFee);
+      
+      // Create order
       const order: Order = {
-        id: `custom_${requestId}_${Date.now()}`,
-        title,
-        description,
-        price,
+        id: `custom_${customRequest.requestId}_${Date.now()}`,
+        title: customRequest.description,
+        description: customRequest.description,
+        price: customRequest.amount,
         markedUpPrice,
-        buyer,
-        seller,
+        seller: customRequest.seller,
+        buyer: customRequest.buyer,
         date: new Date().toISOString(),
-        tags,
-        shippingStatus: 'pending',
-        tierCreditAmount,
         isCustomRequest: true,
-        originalRequestId: requestId,
+        originalRequestId: customRequest.requestId,
+        shippingStatus: 'pending'
       };
-
-      addOrder(order);
-
+      
+      await addOrder(order);
+      
       if (addSellerNotification) {
-        if (tierCreditAmount > 0) {
-          addSellerNotification(
-            seller,
-            `Custom request paid: "${title}" for ${markedUpPrice.toFixed(2)} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
-          );
-        } else {
-          addSellerNotification(
-            seller,
-            `Custom request paid: "${title}" for ${markedUpPrice.toFixed(2)}`
-          );
-        }
+        addSellerNotification(
+          customRequest.seller,
+          `Custom request purchased by ${customRequest.buyer} for $${customRequest.amount.toFixed(2)}`
+        );
       }
-
+      
       return true;
-    } finally {
-      // Always release lock
-      await storageService.removeItem(transactionLockKey);
+    } catch (error) {
+      console.error('Custom request purchase error:', error);
+      return false;
     }
-  };
+  }, [addOrder, addSellerNotification, getBuyerBalance, buyerBalances, adminBalance]);
 
-  const subscribeToSellerWithPayment = async (
+  const subscribeToSellerWithPayment = useCallback(async (
     buyer: string,
     seller: string,
     amount: number
   ): Promise<boolean> => {
-    if (!buyer || !seller || amount <= 0) {
-      return false;
-    }
-
-    const transactionLockKey = `subscription_lock_${buyer}_${seller}`;
-    
-    // Check if lock exists
-    const existingLock = await storageService.getItem<any>(transactionLockKey, null);
-    if (existingLock) {
-      return false;
-    }
-    
-    // Set lock
-    await storageService.setItem(transactionLockKey, 'locked');
-
     try {
       const buyerBalance = getBuyerBalance(buyer);
+      
       if (buyerBalance < amount) {
         return false;
       }
-
+      
+      // Calculate amounts
       const sellerCut = amount * 0.75;
       const adminCut = amount * 0.25;
-
-      setBuyerBalance(buyer, buyerBalance - amount);
-      setSellerBalance(seller, getSellerBalance(seller) + sellerCut);
-
-      updateWallet('admin', adminCut);
-
-      const subscriptionProfitAction: AdminAction = {
-        adminUser: 'system',
-        username: 'platform',
-        role: 'buyer',
-        amount: adminCut,
+      
+      // Update balances
+      setBuyerBalancesState(prev => ({
+        ...prev,
+        [buyer]: prev[buyer] - amount
+      }));
+      
+      setSellerBalancesState(prev => ({
+        ...prev,
+        [seller]: (prev[seller] || 0) + sellerCut
+      }));
+      
+      setAdminBalanceState(prev => prev + adminCut);
+      
+      // Create admin action for subscription tracking
+      const action: AdminAction = {
+        id: uuidv4(),
         type: 'credit',
-        reason: `Subscription commission from ${buyer} to ${seller}`,
-        date: new Date().toISOString()
+        amount: adminCut,
+        targetUser: 'admin',
+        adminUser: 'system',
+        reason: `Subscription revenue from ${buyer} to ${seller} - ${amount}/month`,
+        date: new Date().toISOString(),
+        role: 'seller'
       };
-      setAdminActions(prev => [...prev, subscriptionProfitAction]);
-
+      
+      // Update admin actions and save immediately
+      const updatedActions = [...adminActions, action];
+      setAdminActions(updatedActions);
+      await storageService.setItem("wallet_adminActions", updatedActions);
+      
       if (addSellerNotification) {
         addSellerNotification(
           seller,
           `New subscriber: ${buyer} paid ${amount.toFixed(2)}/month`
         );
       }
-
+      
       return true;
-    } finally {
-      // Always release lock
-      await storageService.removeItem(transactionLockKey);
-    }
-  };
-
-  const addSellerWithdrawal = async (username: string, amount: number) => {
-    if (!username || amount <= 0) {
-      throw new Error("Invalid withdrawal parameters");
-    }
-
-    const currentBalance = getSellerBalance(username);
-    if (currentBalance < amount) {
-      throw new Error("Insufficient balance for withdrawal");
-    }
-
-    try {
-      const date = new Date().toISOString();
-      setSellerWithdrawals((prev) => ({
-        ...prev,
-        [username]: [...(prev[username] || []), { amount, date }],
-      }));
-      await setSellerBalance(username, currentBalance - amount);
     } catch (error) {
-      throw error;
-    }
-  };
-
-  const addAdminWithdrawal = async (amount: number) => {
-    if (amount <= 0) {
-      throw new Error("Invalid withdrawal amount");
-    }
-
-    if (adminBalance < amount) {
-      throw new Error("Insufficient admin balance for withdrawal");
-    }
-
-    try {
-      const date = new Date().toISOString();
-      setAdminWithdrawals((prev) => [...prev, { amount, date }]);
-      await setAdminBalance(adminBalance - amount);
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const wallet: { [username: string]: number } = {
-    ...buyerBalances,
-    ...sellerBalances,
-    admin: adminBalance,
-  };
-  
-  const updateWallet = (username: string, amount: number, orderToFulfil?: Order) => {
-    if (username === "admin") {
-      setAdminBalanceState((prev) => prev + amount);
-    } else if (username in sellerBalances || (orderToFulfil && orderToFulfil.seller === username)) {
-      setSellerBalance(username, (sellerBalances[username] || 0) + amount);
-      if (orderToFulfil) {
-        addOrder(orderToFulfil);
-        if (addSellerNotification) {
-          addSellerNotification(
-            username,
-            `New custom order to fulfil: "${orderToFulfil.title}" for ${orderToFulfil.price.toFixed(2)}`
-          );
-        }
-      }
-    } else if (username in buyerBalances) {
-      setBuyerBalance(username, (buyerBalances[username] || 0) + amount);
-    } else {
-      if (amount > 0) {
-        setSellerBalance(username, (sellerBalances[username] || 0) + amount);
-        if (orderToFulfil) {
-          addOrder(orderToFulfil);
-          if (addSellerNotification) {
-            addSellerNotification(
-              username,
-              `New custom order to fulfil: "${orderToFulfil.title}" for ${orderToFulfil.price.toFixed(2)}`
-            );
-          }
-        }
-      } else {
-        setBuyerBalance(username, (buyerBalances[username] || 0) + amount);
-      }
-    }
-  };
-
-  const sendTip = async (buyer: string, seller: string, amount: number): Promise<boolean> => {
-    console.log('sendTip called with:', { buyer, seller, amount });
-    
-    if (!buyer || !seller || amount <= 0) {
-      console.error('Invalid tip parameters:', { buyer, seller, amount });
+      console.error('Subscription payment error:', error);
       return false;
     }
-    
-    const buyerBalance = getBuyerBalance(buyer);
-    console.log('Buyer balance:', buyerBalance);
-    
-    if (buyerBalance < amount) {
-      console.error('Insufficient balance for tip:', { buyerBalance, amount });
-      return false;
-    }
+  }, [addSellerNotification, getBuyerBalance, adminBalance]);
 
+  const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
     try {
-      // Update buyer balance (deduct tip amount)
-      console.log('Deducting from buyer...');
+      const buyerBalance = getBuyerBalance(buyer);
+      
+      if (buyerBalance < amount) {
+        return false;
+      }
+      
+      // Update balances
       setBuyerBalancesState(prev => ({
         ...prev,
-        [buyer]: (prev[buyer] || 0) - amount
+        [buyer]: prev[buyer] - amount
       }));
-
-      // Update seller balance (add tip amount)
-      console.log('Adding to seller...');
+      
       setSellerBalancesState(prev => ({
         ...prev,
         [seller]: (prev[seller] || 0) + amount
       }));
-
-      // Add notification for seller
+      
       if (addSellerNotification) {
-        console.log('Adding seller notification...');
         addSellerNotification(
           seller,
           `💰 Tip received from ${buyer} - $${amount.toFixed(2)}`
         );
       }
-
-      // Log the transaction (for future backend sync)
-      const tipTransaction = {
-        id: `tip_${Date.now()}`,
-        from: buyer,
-        to: seller,
-        amount,
-        type: 'tip',
-        date: new Date().toISOString()
-      };
-
-      // Store tip transaction for record keeping
-      const tipHistory = await storageService.getItem<any[]>('tip_history', []);
-      tipHistory.push(tipTransaction);
-      await storageService.setItem('tip_history', tipHistory);
-
-      console.log('Tip sent successfully:', tipTransaction);
+      
       return true;
     } catch (error) {
       console.error('Error sending tip:', error);
-      // Rollback on error
-      setBuyerBalancesState(prev => ({
-        ...prev,
-        [buyer]: buyerBalance
-      }));
       return false;
     }
+  }, [addSellerNotification, getBuyerBalance]);
+
+  const addSellerWithdrawal = useCallback(async (username: string, amount: number) => {
+    try {
+      const currentBalance = getSellerBalance(username);
+      if (currentBalance < amount) {
+        throw new Error('Insufficient balance');
+      }
+      
+      await setSellerBalance(username, currentBalance - amount);
+      
+      const date = new Date().toISOString();
+      const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
+      setSellerWithdrawals((prev) => ({
+        ...prev,
+        [username]: [...(prev[username] || []), newWithdrawal],
+      }));
+      await storageService.setItem("wallet_sellerWithdrawals", {
+        ...sellerWithdrawals,
+        [username]: [...(sellerWithdrawals[username] || []), newWithdrawal],
+      });
+    } catch (error) {
+      throw error;
+    }
+  }, [sellerWithdrawals, getSellerBalance, setSellerBalance]);
+
+  const addAdminWithdrawal = useCallback(async (amount: number) => {
+    try {
+      if (adminBalance < amount) {
+        throw new Error('Insufficient admin balance');
+      }
+      
+      await setAdminBalance(adminBalance - amount);
+      
+      const date = new Date().toISOString();
+      const newWithdrawal: Withdrawal = { amount, date, status: 'pending' };
+      setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
+      await storageService.setItem("wallet_adminWithdrawals", [...adminWithdrawals, newWithdrawal]);
+    } catch (error) {
+      throw error;
+    }
+  }, [adminWithdrawals, adminBalance, setAdminBalance]);
+
+  const updateWallet = useCallback((username: string, amount: number, orderToFulfil?: Order) => {
+    // This is a legacy method, now handled through transactions
+    console.warn('updateWallet is deprecated, use transaction-based methods');
+  }, []);
+
+  const adminCreditUser = useCallback(async (
+    username: string,
+    role: 'buyer' | 'seller',
+    amount: number,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      if (role === 'buyer') {
+        const currentBalance = getBuyerBalance(username);
+        await setBuyerBalance(username, currentBalance + amount);
+      } else {
+        const currentBalance = getSellerBalance(username);
+        await setSellerBalance(username, currentBalance + amount);
+      }
+      
+      const action: AdminAction = {
+        id: uuidv4(),
+        type: 'credit',
+        amount,
+        targetUser: username,
+        adminUser: 'admin',
+        reason,
+        date: new Date().toISOString(),
+        role,
+      };
+      
+      // Update using functional update pattern
+      setAdminActions(prev => {
+        const updatedActions = [...prev, action];
+        storageService.setItem("wallet_adminActions", updatedActions).catch(console.error);
+        return updatedActions;
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Admin credit error:', error);
+      return false;
+    }
+  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
+
+  const adminDebitUser = useCallback(async (
+    username: string,
+    role: 'buyer' | 'seller',
+    amount: number,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      const currentBalance = role === 'buyer' ? getBuyerBalance(username) : getSellerBalance(username);
+      
+      if (currentBalance < amount) {
+        return false;
+      }
+      
+      if (role === 'buyer') {
+        await setBuyerBalance(username, currentBalance - amount);
+      } else {
+        await setSellerBalance(username, currentBalance - amount);
+      }
+      
+      const action: AdminAction = {
+        id: uuidv4(),
+        type: 'debit',
+        amount,
+        targetUser: username,
+        adminUser: 'admin',
+        reason,
+        date: new Date().toISOString(),
+        role,
+      };
+      
+      // Update using functional update pattern
+      setAdminActions(prev => {
+        const updatedActions = [...prev, action];
+        storageService.setItem("wallet_adminActions", updatedActions).catch(console.error);
+        return updatedActions;
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Admin debit error:', error);
+      return false;
+    }
+  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
+
+  const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
+    const updatedOrders = orderHistory.map(order =>
+      order.id === orderId ? { ...order, deliveryAddress: address } : order
+    );
+    setOrderHistory(updatedOrders);
+    await storageService.setItem("wallet_orders", updatedOrders);
+  }, [orderHistory]);
+
+  const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+    const updatedOrders = orderHistory.map(order =>
+      order.id === orderId ? { ...order, shippingStatus: status } : order
+    );
+    setOrderHistory(updatedOrders);
+    await storageService.setItem("wallet_orders", updatedOrders);
+  }, [orderHistory]);
+
+  const getDepositsForUser = useCallback((username: string): DepositLog[] => {
+    return depositLogs.filter(log => log.username === username);
+  }, [depositLogs]);
+
+  const getTotalDeposits = useCallback((): number => {
+    return depositLogs
+      .filter(log => log.status === 'completed')
+      .reduce((sum, log) => sum + log.amount, 0);
+  }, [depositLogs]);
+
+  const getDepositsByTimeframe = useCallback((timeframe: 'today' | 'week' | 'month' | 'year' | 'all'): DepositLog[] => {
+    const now = new Date();
+    const startDate = new Date();
+    
+    switch (timeframe) {
+      case 'today':
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      case 'all':
+        return depositLogs;
+    }
+    
+    return depositLogs.filter(log => new Date(log.date) >= startDate);
+  }, [depositLogs]);
+
+  // New enhanced features
+  const checkSuspiciousActivity = useCallback(async (username: string) => {
+    if (walletService?.checkSuspiciousActivity) {
+      const result = await walletService.checkSuspiciousActivity(username);
+      return {
+        suspicious: result.suspicious,
+        reasons: result.reasons,
+      };
+    }
+    return { suspicious: false, reasons: [] };
+  }, []);
+
+  const reconcileBalance = useCallback(async (
+    username: string, 
+    role: 'buyer' | 'seller' | 'admin'
+  ) => {
+    if (typeof WalletIntegration?.reconcileBalance === 'function') {
+      return await WalletIntegration.reconcileBalance(username, role);
+    }
+    return null;
+  }, []);
+
+  const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
+    if (typeof WalletIntegration?.getFormattedTransactionHistory === 'function') {
+      return await WalletIntegration.getFormattedTransactionHistory(username, { limit });
+    }
+    return [];
+  }, []);
+
+  const contextValue: WalletContextType = {
+    buyerBalances,
+    adminBalance,
+    sellerBalances,
+    setBuyerBalance,
+    getBuyerBalance,
+    setAdminBalance,
+    setSellerBalance,
+    getSellerBalance,
+    purchaseListing,
+    purchaseCustomRequest,
+    subscribeToSellerWithPayment,
+    orderHistory,
+    addOrder,
+    sellerWithdrawals,
+    adminWithdrawals,
+    addSellerWithdrawal,
+    addAdminWithdrawal,
+    wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
+    updateWallet,
+    sendTip,
+    setAddSellerNotificationCallback,
+    adminCreditUser,
+    adminDebitUser,
+    adminActions,
+    updateOrderAddress,
+    updateShippingStatus,
+    depositLogs,
+    addDeposit,
+    getDepositsForUser,
+    getTotalDeposits,
+    getDepositsByTimeframe,
+    
+    // New enhanced features
+    checkSuspiciousActivity,
+    reconcileBalance,
+    getTransactionHistory,
   };
 
   return (
-    <WalletContext.Provider
-      value={{
-        buyerBalances,
-        adminBalance,
-        sellerBalances,
-        setBuyerBalance,
-        getBuyerBalance,
-        setAdminBalance,
-        setSellerBalance,
-        getSellerBalance,
-        purchaseListing,
-        purchaseCustomRequest,
-        subscribeToSellerWithPayment,
-        orderHistory,
-        addOrder,
-        sellerWithdrawals,
-        adminWithdrawals,
-        addSellerWithdrawal,
-        addAdminWithdrawal,
-        wallet,
-        updateWallet,
-        sendTip,
-        setAddSellerNotificationCallback,
-        adminCreditUser,
-        adminDebitUser,
-        adminActions,
-        updateOrderAddress,
-        updateShippingStatus,
-        depositLogs,
-        addDeposit,
-        getDepositsForUser,
-        getTotalDeposits,
-        getDepositsByTimeframe,
-      }}
-    >
+    <WalletContext.Provider value={contextValue}>
       {children}
     </WalletContext.Provider>
   );

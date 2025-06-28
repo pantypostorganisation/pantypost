@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'r
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/context/MessageContext';
-import { WalletContext } from '@/context/WalletContext.enhanced';
+import { WalletContext } from '@/context/WalletContext';
 import { useRequests } from '@/context/RequestContext';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfileData } from '@/utils/profileUtils';

@@ -2,7 +2,7 @@
 'use client';
 
 import { ShoppingBag, ArrowRight } from 'lucide-react';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 
 interface RecentPurchasesProps {
   purchases: Order[];

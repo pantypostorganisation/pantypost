@@ -2,10 +2,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useEnhancedBuyerWallet } from '@/hooks/useBuyerWallet.enhanced';
+import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { WalletValidation } from '@/services/wallet.validation';
 import { WalletMockData } from '@/services/wallet.mock';
-import { formatMoney, formatLimit, formatRiskScore, formatTransactionSummary } from '@/utils/format.enhanced';
+import { formatMoney, formatLimit, formatRiskScore, formatTransactionSummary } from '@/utils/format';
 import { Money } from '@/types/common';
 import { 
   Wallet, 
@@ -54,7 +54,7 @@ export default function EnhancedWalletDemo() {
     handleQuickAmountSelect,
     loadTransactionHistory,
     syncBalance,
-  } = useEnhancedBuyerWallet();
+  } = useBuyerWallet();
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [riskScore, setRiskScore] = useState(0);

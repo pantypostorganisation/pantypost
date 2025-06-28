@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext.enhanced';
+import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';

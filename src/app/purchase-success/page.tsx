@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { CheckCircle } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { useWallet } from '@/context/WalletContext.enhanced';
+import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import BanCheck from '@/components/BanCheck';
 

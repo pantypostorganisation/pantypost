@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Listing } from '@/context/ListingContext';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 import { 
   User, 
   Gavel, 

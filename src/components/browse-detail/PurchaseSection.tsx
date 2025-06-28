@@ -3,8 +3,9 @@ import React from 'react';
 import { Heart, Crown, ShoppingBag, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
-import { useWallet } from '@/context/WalletContext.enhanced';
-import { formatPrice } from '@/utils/format';
+import { useWallet } from '@/context/WalletContext';
+import { formatMoney } from '@/utils/format';
+import { Money } from '@/types/common';
 import { Listing } from '@/context/ListingContext';
 
 interface PurchaseSectionProps {
@@ -48,7 +49,7 @@ export default function PurchaseSection({
         <div>
           <p className="text-sm text-gray-400">Price</p>
           <p className="text-3xl font-bold text-white">
-            {formatPrice(listing.markedUpPrice)}
+            {formatMoney(Money.fromDollars(listing.markedUpPrice))}
           </p>
         </div>
         <button
@@ -84,7 +85,7 @@ export default function PurchaseSection({
             <div className="flex-1">
               <p className="text-red-500 font-semibold">Insufficient Balance</p>
               <p className="text-sm text-red-400 mt-1">
-                You need {formatPrice(listing.markedUpPrice - buyerBalance)} more to purchase this item
+                You need {formatMoney(Money.fromDollars(listing.markedUpPrice - buyerBalance))} more to purchase this item
               </p>
               <button
                 onClick={() => router.push('/wallet/buyer')}
@@ -137,7 +138,7 @@ export default function PurchaseSection({
 
       {user && user.role === 'buyer' && (
         <div className="text-sm text-gray-400 text-center">
-          Your balance: {formatPrice(buyerBalance)}
+          Your balance: {formatMoney(Money.fromDollars(buyerBalance))}
         </div>
       )}
     </div>

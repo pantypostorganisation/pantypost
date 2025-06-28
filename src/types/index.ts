@@ -200,13 +200,6 @@ export type {
 
 // Wallet types
 export type {
-  BuyerWalletState,
-  Purchase,
-  BalanceCardProps,
-  TotalSpentCardProps,
-  AddFundsSectionProps,
-  RecentPurchasesProps,
-  EmptyStateProps as WalletEmptyStateProps,
 } from './wallet';
 
 // Export shared types with proper syntax

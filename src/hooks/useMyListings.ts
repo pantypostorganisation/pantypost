@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
-import { WalletContext } from '@/context/WalletContext.enhanced';
+import { WalletContext } from '@/context/WalletContext';
 import { storageService } from '@/services';
 import { Listing } from '@/context/ListingContext';
 import { ListingFormState, EditingState, ListingAnalytics } from '@/types/myListings';

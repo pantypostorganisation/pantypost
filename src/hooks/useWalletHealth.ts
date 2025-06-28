@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAppInitialization } from '@/components/AppInitializationProvider';
-import { useWallet } from '@/context/WalletContext.enhanced';
+import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 
 /**

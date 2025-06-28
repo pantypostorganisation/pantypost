@@ -4,7 +4,7 @@
 
 import { Inter } from 'next/font/google';
 import './globals.css';
-import Providers from '@/components/Providers.enhanced';
+import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';

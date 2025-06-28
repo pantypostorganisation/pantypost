@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { 
   AlertTriangle, 

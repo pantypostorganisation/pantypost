@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { MessageCircle, DollarSign, Tag, ExternalLink } from 'lucide-react';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 
 interface ExpandedOrderContentProps {
   order: Order;

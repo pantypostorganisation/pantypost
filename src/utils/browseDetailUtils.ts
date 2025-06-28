@@ -2,7 +2,7 @@
 
 import { Listing, AuctionSettings } from '@/context/ListingContext';
 import { User } from '@/context/AuthContext';
-import { Order } from '@/context/WalletContext.enhanced';
+import { Order } from '@/context/WalletContext';
 import { getSellerTierMemoized } from './sellerTiers';
 
 export const calculateTotalPayable = (bidPrice: number): number => {

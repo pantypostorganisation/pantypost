@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useContext } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { WalletContext } from '@/context/WalletContext.enhanced';
+import { WalletContext } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 
