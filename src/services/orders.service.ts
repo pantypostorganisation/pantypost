@@ -389,11 +389,13 @@ export class OrdersService {
 
   // Helper methods for localStorage
   private async getOrderHistoryFromStorage(): Promise<Order[]> {
-    return await storageService.getItem<Order[]>('panty_order_history', []);
+    // FIXED: Use the same key as WalletContext: 'wallet_orders'
+    return await storageService.getItem<Order[]>('wallet_orders', []);
   }
 
   private async saveOrderHistoryToStorage(orders: Order[]): Promise<void> {
-    await storageService.setItem('panty_order_history', orders);
+    // FIXED: Use the same key as WalletContext: 'wallet_orders'
+    await storageService.setItem('wallet_orders', orders);
   }
 }
 

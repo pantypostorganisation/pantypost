@@ -446,8 +446,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getBuyerBalance, setBuyerBalance]);
 
+  // ENHANCED purchaseListing with proper tracking
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
+      console.log('[Purchase] Starting purchase:', { listing: listing.title, buyer: buyerUsername, price: listing.markedUpPrice });
+      
       const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
       const tierCreditAmount = listing.price * sellerTierInfo.credit;
       
@@ -457,13 +460,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Check balance first
       if (buyerCurrentBalance < price) {
-        console.error('Insufficient balance:', { buyerBalance: buyerCurrentBalance, price });
+        console.error('[Purchase] Insufficient balance:', { buyerBalance: buyerCurrentBalance, price });
         return false;
       }
       
       // Calculate amounts
       const sellerCut = listing.price * 0.9 + tierCreditAmount;
       const platformFee = price - listing.price * 0.9;
+      
+      console.log('[Purchase] Calculated amounts:', {
+        price,
+        sellerCut,
+        platformFee,
+        tierCreditAmount
+      });
       
       // Update balances immediately with save
       await setBuyerBalance(buyerUsername, buyerCurrentBalance - price);
@@ -489,6 +499,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       };
       
       await addOrder(order);
+      console.log('[Purchase] Order created:', order);
+      
+      // Create admin action for platform fee tracking
+      const platformFeeAction: AdminAction = {
+        id: uuidv4(),
+        type: 'credit' as const,
+        amount: platformFee,
+        targetUser: 'admin',
+        username: 'admin',
+        adminUser: 'system',
+        reason: `Platform fee from sale of "${listing.title}" by ${listing.seller}`,
+        date: new Date().toISOString(),
+        role: 'buyer' as const
+      };
+      
+      setAdminActions(prev => {
+        const updated = [...prev, platformFeeAction];
+        console.log('[Purchase] Admin actions updated:', updated.length);
+        return updated;
+      });
       
       // Add notification
       if (addSellerNotification) {
@@ -505,18 +535,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      console.log('Purchase successful:', {
+      console.log('[Purchase] Purchase successful:', {
         buyer: buyerUsername,
         seller: listing.seller,
         price,
         buyerNewBalance: buyerCurrentBalance - price,
         sellerNewBalance: (sellerBalances[listing.seller] || 0) + sellerCut,
-        adminNewBalance: adminBalance + platformFee
+        adminNewBalance: adminBalance + platformFee,
+        platformFeeAction
       });
       
       return true;
     } catch (error) {
-      console.error('Purchase error:', error);
+      console.error('[Purchase] Purchase error:', error);
       return false;
     }
   }, [orderHistory, addOrder, addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
@@ -709,7 +740,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
       
       const currentUser = typeof window !== 'undefined' ? 
-        localStorage.getItem('panty_currentUser') : null;
+        localStorage.getItem('currentUser') : null;
       const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
       
       const action: AdminAction = {
@@ -754,7 +785,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
       
       const currentUser = typeof window !== 'undefined' ? 
-        localStorage.getItem('panty_currentUser') : null;
+        localStorage.getItem('currentUser') : null;
       const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
       
       const action: AdminAction = {
