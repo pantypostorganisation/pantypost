@@ -1,500 +1,329 @@
 // src/utils/admin/walletHelpers.ts
 
-import { Order, DepositLog } from '@/context/WalletContext';
+// Define types for better type safety
+interface Order {
+  price: number;
+  markedUpPrice?: number;
+  date: string;
+}
 
-/**
- * Admin Action type for analytics
- */
-type AdminAction = {
-  id: string;
-  type: 'credit' | 'debit';
-  amount: number;
-  targetUser?: string;
-  username?: string;
-  adminUser: string;
+interface AdminAction {
+  type: string;
   reason: string;
-  date: string;
-  role: 'buyer' | 'seller';
-};
-
-/**
- * Withdrawal type
- */
-type Withdrawal = {
   amount: number;
   date: string;
-  status?: 'pending' | 'completed' | 'failed';
-  method?: string;
-};
-
-/**
- * Time filter type
- */
-export type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
-
-/**
- * Filtered data result
- */
-export interface FilteredData {
-  orders: Order[];
-  deposits: DepositLog[];
-  adminActions: AdminAction[];
-  withdrawals: (Withdrawal & { seller: string })[];
-  dateRange: {
-    start: Date;
-    end: Date;
-  };
 }
 
-/**
- * Revenue chart data point
- */
-export interface RevenueDataPoint {
+interface Deposit {
+  username: string;
+  amount: number;
   date: string;
-  revenue: number;
-  sales: number;
-  label?: string;
+  status: string;
 }
 
-/**
- * Withdrawal metrics result
- */
-export interface WithdrawalMetrics {
-  totalSellerWithdrawals: number;
-  totalAdminWithdrawals: number;
-  totalWithdrawals: number;
-  withdrawalCount: number;
-  averageWithdrawal: number;
+interface Withdrawal {
+  seller?: string;
+  amount: number;
+  date: string;
 }
 
-/**
- * Get time-filtered data for admin analytics
- */
-export function getTimeFilteredData(
-  orders: Order[],
-  deposits: DepositLog[],
+// Export all the calculation functions from the original file
+export const getTimeFilteredData = (
+  timeFilter: string,
   adminActions: AdminAction[],
-  timeFilter: TimeFilter
-): FilteredData {
+  orderHistory: Order[],
+  depositLogs: Deposit[],
+  sellerWithdrawals: Record<string, Withdrawal[]>,
+  adminWithdrawals: Withdrawal[]
+) => {
   const now = new Date();
-  const startDate = new Date();
-  const endDate = new Date();
-
-  // Set start date based on filter
+  const filterDate = new Date();
+  
   switch (timeFilter) {
     case 'today':
-      startDate.setHours(0, 0, 0, 0);
+      filterDate.setHours(0, 0, 0, 0);
       break;
     case 'week':
-      startDate.setDate(now.getDate() - 7);
+      filterDate.setDate(now.getDate() - 7);
       break;
     case 'month':
-      startDate.setMonth(now.getMonth() - 1);
+      filterDate.setMonth(now.getMonth() - 1);
       break;
     case '3months':
-      startDate.setMonth(now.getMonth() - 3);
+      filterDate.setMonth(now.getMonth() - 3);
       break;
     case 'year':
-      startDate.setFullYear(now.getFullYear() - 1);
+      filterDate.setFullYear(now.getFullYear() - 1);
       break;
-    case 'all':
-      startDate.setFullYear(2020); // Set to a very early date
-      break;
+    default:
+      return { 
+        actions: adminActions, 
+        orders: orderHistory, 
+        deposits: depositLogs,
+        sellerWithdrawals: getAllSellerWithdrawals(sellerWithdrawals),
+        adminWithdrawals: adminWithdrawals
+      };
   }
-
-  // Filter data by date range
-  const filteredOrders = orders.filter(order => {
-    const orderDate = new Date(order.date);
-    return orderDate >= startDate && orderDate <= endDate;
-  });
-
-  const filteredDeposits = deposits.filter(deposit => {
-    const depositDate = new Date(deposit.date);
-    return depositDate >= startDate && depositDate <= endDate;
-  });
-
-  const filteredAdminActions = adminActions.filter(action => {
-    const actionDate = new Date(action.date);
-    return actionDate >= startDate && actionDate <= endDate;
-  });
-
-  // Empty withdrawals for now - to be populated by calling function if needed
-  const filteredWithdrawals: (Withdrawal & { seller: string })[] = [];
-
-  return {
-    orders: filteredOrders,
+  
+  const filteredActions = adminActions.filter(action => new Date(action.date) >= filterDate);
+  const filteredOrders = orderHistory.filter(order => new Date(order.date) >= filterDate);
+  const filteredDeposits = depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
+  
+  const filteredSellerWithdrawals = getAllSellerWithdrawals(sellerWithdrawals).filter(
+    withdrawal => new Date(withdrawal.date) >= filterDate
+  );
+  
+  const filteredAdminWithdrawals = adminWithdrawals.filter(
+    withdrawal => new Date(withdrawal.date) >= filterDate
+  );
+  
+  return { 
+    actions: filteredActions, 
+    orders: filteredOrders, 
     deposits: filteredDeposits,
-    adminActions: filteredAdminActions,
-    withdrawals: filteredWithdrawals,
-    dateRange: {
-      start: startDate,
-      end: endDate,
-    },
+    sellerWithdrawals: filteredSellerWithdrawals,
+    adminWithdrawals: filteredAdminWithdrawals
   };
-}
+};
 
-/**
- * Calculate platform profit from orders
- */
-export function calculatePlatformProfit(orders: Order[]): number {
-  return orders.reduce((sum, order) => {
-    const revenue = order.markedUpPrice || order.price;
-    const platformFee = revenue * 0.1; // 10% platform fee
-    return sum + platformFee;
+export const getAllSellerWithdrawals = (sellerWithdrawals: Record<string, Withdrawal[]>) => {
+  const allWithdrawals: Array<{seller: string, amount: number, date: string}> = [];
+  
+  Object.entries(sellerWithdrawals).forEach(([seller, withdrawals]) => {
+    (withdrawals as Withdrawal[]).forEach(withdrawal => {
+      allWithdrawals.push({
+        seller,
+        amount: withdrawal.amount,
+        date: withdrawal.date
+      });
+    });
+  });
+  
+  return allWithdrawals.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+export const calculatePlatformProfit = (orders: Order[]) => {
+  return orders.reduce((sum: number, order: Order) => {
+    const originalPrice = order.price;
+    const platformProfit = originalPrice * 0.2;
+    return sum + platformProfit;
   }, 0);
-}
+};
 
-/**
- * Calculate total revenue from orders
- */
-export function calculateTotalRevenue(orders: Order[]): number {
-  return orders.reduce((sum, order) => {
+export const calculateTotalRevenue = (orders: Order[]) => {
+  return orders.reduce((sum: number, order: Order) => {
     return sum + (order.markedUpPrice || order.price);
   }, 0);
-}
+};
 
-/**
- * Calculate subscription revenue from admin actions
- */
-export function calculateSubscriptionRevenue(adminActions: AdminAction[]): number {
-  return adminActions
-    .filter(action => 
-      action.type === 'credit' && 
-      action.reason && 
-      action.reason.toLowerCase().includes('subscription')
-    )
-    .reduce((sum, action) => sum + action.amount, 0);
-}
+export const calculateSubscriptionRevenue = (actions: AdminAction[]) => {
+  return actions
+    .filter((action: AdminAction) => {
+      if (action.type !== 'credit') return false;
+      const reason = action.reason.toLowerCase();
+      return reason.includes('subscription') && reason.includes('revenue') && !reason.includes('refund');
+    })
+    .reduce((sum: number, action: AdminAction) => {
+      // The admin action stores the 25% cut, so multiply by 4 to get full subscription amount
+      return sum + (action.amount * 4);
+    }, 0);
+};
 
-/**
- * Calculate subscription profit (platform fee from subscriptions)
- */
-export function calculateSubscriptionProfit(adminActions: AdminAction[]): number {
-  const subscriptionRevenue = calculateSubscriptionRevenue(adminActions);
-  return subscriptionRevenue * 0.25; // 25% platform fee for subscriptions
-}
+export const calculateSubscriptionProfit = (actions: AdminAction[]) => {
+  return actions
+    .filter((action: AdminAction) => {
+      if (action.type !== 'credit') return false;
+      const reason = action.reason.toLowerCase();
+      return reason.includes('subscription') && reason.includes('revenue') && !reason.includes('refund');
+    })
+    .reduce((sum: number, action: AdminAction) => sum + action.amount, 0);
+};
 
-/**
- * Calculate total withdrawals with proper typing
- */
-export function calculateWithdrawals(
-  sellerWithdrawals: { [username: string]: Withdrawal[] },
-  adminWithdrawals: Withdrawal[]
-): WithdrawalMetrics {
-  const sellerWithdrawalsList = getAllSellerWithdrawals(sellerWithdrawals)
-    .filter(w => w.status === 'completed');
-  
-  const completedAdminWithdrawals = adminWithdrawals
-    .filter(w => w.status === 'completed');
-  
-  const totalSellerWithdrawals = sellerWithdrawalsList.reduce((sum, w) => sum + w.amount, 0);
-  const totalAdminWithdrawals = completedAdminWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+export const calculateWithdrawals = (sellerWithdrawals: Withdrawal[], adminWithdrawals: Withdrawal[]) => {
+  const totalSellerWithdrawals = sellerWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+  const totalAdminWithdrawals = adminWithdrawals.reduce((sum, w) => sum + w.amount, 0);
   const totalWithdrawals = totalSellerWithdrawals + totalAdminWithdrawals;
-  const withdrawalCount = sellerWithdrawalsList.length + completedAdminWithdrawals.length;
-  const averageWithdrawal = withdrawalCount > 0 ? totalWithdrawals / withdrawalCount : 0;
-
+  const withdrawalCount = sellerWithdrawals.length + adminWithdrawals.length;
+  
   return {
     totalSellerWithdrawals,
     totalAdminWithdrawals,
     totalWithdrawals,
     withdrawalCount,
-    averageWithdrawal,
+    averageWithdrawal: withdrawalCount > 0 ? totalWithdrawals / withdrawalCount : 0
   };
-}
+};
 
-/**
- * Get previous period data for comparison - FIXED signature
- */
-export function getPreviousPeriodData(
-  orders: Order[],
-  deposits: DepositLog[],
-  adminActions: AdminAction[],
-  timeFilter: TimeFilter
-): FilteredData {
+export const getPreviousPeriodData = (
+  timeFilter: string, 
+  orderHistory: Order[], 
+  depositLogs: Deposit[], 
+  withdrawals: Withdrawal[], 
+  adminActions: AdminAction[]
+) => {
   const now = new Date();
-  let periodLength: number;
+  const currentPeriodStart = new Date();
+  const previousPeriodStart = new Date();
+  const previousPeriodEnd = new Date();
   
-  // Calculate period length in days
   switch (timeFilter) {
     case 'today':
-      periodLength = 1;
+      currentPeriodStart.setHours(0, 0, 0, 0);
+      previousPeriodEnd.setTime(currentPeriodStart.getTime() - 1);
+      previousPeriodStart.setDate(previousPeriodEnd.getDate());
+      previousPeriodStart.setHours(0, 0, 0, 0);
       break;
     case 'week':
-      periodLength = 7;
+      currentPeriodStart.setDate(now.getDate() - 7);
+      previousPeriodEnd.setTime(currentPeriodStart.getTime() - 1);
+      previousPeriodStart.setDate(previousPeriodEnd.getDate() - 7);
       break;
     case 'month':
-      periodLength = 30;
+      currentPeriodStart.setMonth(now.getMonth() - 1);
+      previousPeriodEnd.setTime(currentPeriodStart.getTime() - 1);
+      previousPeriodStart.setMonth(previousPeriodEnd.getMonth() - 1);
       break;
     case '3months':
-      periodLength = 90;
+      currentPeriodStart.setMonth(now.getMonth() - 3);
+      previousPeriodEnd.setTime(currentPeriodStart.getTime() - 1);
+      previousPeriodStart.setMonth(previousPeriodEnd.getMonth() - 3);
       break;
     case 'year':
-      periodLength = 365;
+      currentPeriodStart.setFullYear(now.getFullYear() - 1);
+      previousPeriodEnd.setTime(currentPeriodStart.getTime() - 1);
+      previousPeriodStart.setFullYear(previousPeriodEnd.getFullYear() - 1);
       break;
     default:
-      periodLength = 30;
+      return { orders: [], deposits: [], withdrawals: [], actions: [] };
   }
-
-  // Calculate previous period dates
-  const previousEndDate = new Date(now);
-  previousEndDate.setDate(previousEndDate.getDate() - periodLength);
   
-  const previousStartDate = new Date(previousEndDate);
-  previousStartDate.setDate(previousStartDate.getDate() - periodLength);
-
-  // Filter data for previous period
-  const previousOrders = orders.filter(order => {
+  const previousOrders = orderHistory.filter(order => {
     const orderDate = new Date(order.date);
-    return orderDate >= previousStartDate && orderDate <= previousEndDate;
+    return orderDate >= previousPeriodStart && orderDate <= previousPeriodEnd;
   });
 
-  const previousDeposits = deposits.filter(deposit => {
+  const previousDeposits = depositLogs.filter(deposit => {
     const depositDate = new Date(deposit.date);
-    return depositDate >= previousStartDate && depositDate <= previousEndDate;
+    return depositDate >= previousPeriodStart && depositDate <= previousPeriodEnd;
   });
 
-  const previousAdminActions = adminActions.filter(action => {
+  const previousWithdrawals = withdrawals.filter(withdrawal => {
+    const withdrawalDate = new Date(withdrawal.date);
+    return withdrawalDate >= previousPeriodStart && withdrawalDate <= previousPeriodEnd;
+  });
+
+  const previousActions = adminActions.filter(action => {
     const actionDate = new Date(action.date);
-    return actionDate >= previousStartDate && actionDate <= previousEndDate;
+    return actionDate >= previousPeriodStart && actionDate <= previousPeriodEnd;
   });
+  
+  return { orders: previousOrders, deposits: previousDeposits, withdrawals: previousWithdrawals, actions: previousActions };
+};
 
-  return {
-    orders: previousOrders,
-    deposits: previousDeposits,
-    adminActions: previousAdminActions,
-    withdrawals: [], // Empty for now
-    dateRange: {
-      start: previousStartDate,
-      end: previousEndDate,
-    },
-  };
-}
-
-/**
- * Get revenue by day for charts - FIXED signature
- */
-export function getRevenueByDay(orders: Order[], days: number = 30): RevenueDataPoint[] {
+export const getRevenueByDay = (
+  timeFilter: string, 
+  orderHistory: Order[], 
+  adminActions: AdminAction[]
+) => {
+  const periods = [];
   const now = new Date();
-  const chartData: RevenueDataPoint[] = [];
-
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const dateString = date.toISOString().split('T')[0];
-
-    const dayOrders = orders.filter(order => {
-      const orderDate = new Date(order.date);
-      return orderDate.toISOString().split('T')[0] === dateString;
-    });
-
-    const revenue = dayOrders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
-
-    chartData.push({
-      date: dateString,
-      revenue,
-      sales: dayOrders.length,
-      label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    });
+  let periodsToShow = 30;
+  
+  switch (timeFilter) {
+    case 'today':
+      periodsToShow = 24;
+      break;
+    case 'week':
+      periodsToShow = 7;
+      break;
+    case 'month':
+      periodsToShow = 30;
+      break;
+    case '3months':
+      periodsToShow = 90;
+      break;
+    case 'year':
+      periodsToShow = 12;
+      break;
   }
-
-  return chartData;
-}
-
-/**
- * Get all seller withdrawals from the complex nested structure
- */
-export function getAllSellerWithdrawals(sellerWithdrawals: { [username: string]: Withdrawal[] }): (Withdrawal & { seller: string })[] {
-  const allWithdrawals: (Withdrawal & { seller: string })[] = [];
-
-  for (const [seller, withdrawals] of Object.entries(sellerWithdrawals)) {
-    if (Array.isArray(withdrawals)) {
-      withdrawals.forEach(withdrawal => {
-        allWithdrawals.push({
-          ...withdrawal,
-          seller,
-        });
+  
+  for (let i = periodsToShow - 1; i >= 0; i--) {
+    const date = new Date();
+    
+    if (timeFilter === 'today') {
+      date.setHours(now.getHours() - i);
+      const hourOrders = orderHistory.filter(order => {
+        const orderDate = new Date(order.date);
+        return orderDate.getHours() === date.getHours() && 
+               orderDate.toDateString() === date.toDateString();
+      });
+      
+      const hourActions = adminActions.filter(action => {
+        const actionDate = new Date(action.date);
+        return actionDate.getHours() === date.getHours() && 
+               actionDate.toDateString() === date.toDateString() &&
+               action.reason.toLowerCase().includes('subscription') &&
+               action.reason.toLowerCase().includes('revenue');
+      });
+      
+      const hourSalesRevenue = calculateTotalRevenue(hourOrders);
+      const hourSubRevenue = calculateSubscriptionRevenue(hourActions);
+      const hourTotalRevenue = hourSalesRevenue + hourSubRevenue;
+      
+      periods.push({
+        date: date.toLocaleTimeString('en-US', { hour: 'numeric' }),
+        revenue: hourTotalRevenue,
+        transactions: hourOrders.length
+      });
+    } else if (timeFilter === 'year') {
+      date.setMonth(now.getMonth() - i);
+      const monthOrders = orderHistory.filter(order => {
+        const orderDate = new Date(order.date);
+        return orderDate.getMonth() === date.getMonth() && 
+               orderDate.getFullYear() === date.getFullYear();
+      });
+      
+      const monthActions = adminActions.filter(action => {
+        const actionDate = new Date(action.date);
+        return actionDate.getMonth() === date.getMonth() && 
+               actionDate.getFullYear() === date.getFullYear() &&
+               action.reason.toLowerCase().includes('subscription') &&
+               action.reason.toLowerCase().includes('revenue');
+      });
+      
+      const monthSalesRevenue = calculateTotalRevenue(monthOrders);
+      const monthSubRevenue = calculateSubscriptionRevenue(monthActions);
+      const monthTotalRevenue = monthSalesRevenue + monthSubRevenue;
+      
+      periods.push({
+        date: date.toLocaleDateString('en-US', { month: 'short' }),
+        revenue: monthTotalRevenue,
+        transactions: monthOrders.length
+      });
+    } else {
+      date.setDate(now.getDate() - i);
+      const dayOrders = orderHistory.filter(order => {
+        const orderDate = new Date(order.date);
+        return orderDate.toDateString() === date.toDateString();
+      });
+      
+      const dayActions = adminActions.filter(action => {
+        const actionDate = new Date(action.date);
+        return actionDate.toDateString() === date.toDateString() &&
+               action.reason.toLowerCase().includes('subscription') &&
+               action.reason.toLowerCase().includes('revenue');
+      });
+      
+      const daySalesRevenue = calculateTotalRevenue(dayOrders);
+      const daySubRevenue = calculateSubscriptionRevenue(dayActions);
+      const dayTotalRevenue = daySalesRevenue + daySubRevenue;
+      
+      periods.push({
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        revenue: dayTotalRevenue,
+        transactions: dayOrders.length
       });
     }
   }
-
-  return allWithdrawals;
-}
-
-/**
- * Calculate revenue metrics for a time period
- */
-export function calculateRevenueMetrics(orders: Order[]): {
-  totalSales: number;
-  totalRevenue: number;
-  platformFees: number;
-  averageOrderValue: number;
-  sellerEarnings: number;
-} {
-  const totalSales = orders.length;
-  const totalRevenue = orders.reduce((sum, order) => {
-    return sum + (order.markedUpPrice || order.price);
-  }, 0);
-
-  // Assuming 10% platform fee
-  const platformFees = totalRevenue * 0.1;
-  const sellerEarnings = totalRevenue * 0.9;
-  const averageOrderValue = totalSales > 0 ? totalRevenue / totalSales : 0;
-
-  return {
-    totalSales,
-    totalRevenue,
-    platformFees,
-    averageOrderValue,
-    sellerEarnings,
-  };
-}
-
-/**
- * Calculate deposit metrics
- */
-export function calculateDepositMetrics(deposits: DepositLog[]): {
-  totalDeposits: number;
-  completedDeposits: number;
-  pendingDeposits: number;
-  failedDeposits: number;
-  totalAmount: number;
-  averageAmount: number;
-} {
-  const completedDeposits = deposits.filter(d => d.status === 'completed');
-  const pendingDeposits = deposits.filter(d => d.status === 'pending');
-  const failedDeposits = deposits.filter(d => d.status === 'failed');
-
-  const totalAmount = completedDeposits.reduce((sum, deposit) => sum + deposit.amount, 0);
-  const averageAmount = completedDeposits.length > 0 ? totalAmount / completedDeposits.length : 0;
-
-  return {
-    totalDeposits: deposits.length,
-    completedDeposits: completedDeposits.length,
-    pendingDeposits: pendingDeposits.length,
-    failedDeposits: failedDeposits.length,
-    totalAmount,
-    averageAmount,
-  };
-}
-
-/**
- * Get top sellers by revenue
- */
-export function getTopSellers(orders: Order[], limit: number = 10): {
-  seller: string;
-  totalSales: number;
-  totalRevenue: number;
-  averageOrderValue: number;
-}[] {
-  const sellerStats: { [seller: string]: { sales: number; revenue: number } } = {};
-
-  orders.forEach(order => {
-    if (!sellerStats[order.seller]) {
-      sellerStats[order.seller] = { sales: 0, revenue: 0 };
-    }
-    
-    sellerStats[order.seller].sales += 1;
-    sellerStats[order.seller].revenue += (order.markedUpPrice || order.price);
-  });
-
-  return Object.entries(sellerStats)
-    .map(([seller, stats]) => ({
-      seller,
-      totalSales: stats.sales,
-      totalRevenue: stats.revenue,
-      averageOrderValue: stats.sales > 0 ? stats.revenue / stats.sales : 0,
-    }))
-    .sort((a, b) => b.totalRevenue - a.totalRevenue)
-    .slice(0, limit);
-}
-
-/**
- * Get top buyers by spending
- */
-export function getTopBuyers(orders: Order[], limit: number = 10): {
-  buyer: string;
-  totalOrders: number;
-  totalSpent: number;
-  averageOrderValue: number;
-}[] {
-  const buyerStats: { [buyer: string]: { orders: number; spent: number } } = {};
-
-  orders.forEach(order => {
-    if (!buyerStats[order.buyer]) {
-      buyerStats[order.buyer] = { orders: 0, spent: 0 };
-    }
-    
-    buyerStats[order.buyer].orders += 1;
-    buyerStats[order.buyer].spent += (order.markedUpPrice || order.price);
-  });
-
-  return Object.entries(buyerStats)
-    .map(([buyer, stats]) => ({
-      buyer,
-      totalOrders: stats.orders,
-      totalSpent: stats.spent,
-      averageOrderValue: stats.orders > 0 ? stats.spent / stats.orders : 0,
-    }))
-    .sort((a, b) => b.totalSpent - a.totalSpent)
-    .slice(0, limit);
-}
-
-/**
- * Generate daily revenue chart data
- */
-export function generateDailyRevenueData(orders: Order[], days: number = 30): RevenueDataPoint[] {
-  return getRevenueByDay(orders, days);
-}
-
-/**
- * Format currency for display
- */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
-
-/**
- * Format percentage for display
- */
-export function formatPercentage(value: number, total: number): string {
-  if (total === 0) return '0%';
-  const percentage = (value / total) * 100;
-  return `${percentage.toFixed(1)}%`;
-}
-
-/**
- * Get date range display text
- */
-export function getDateRangeText(timeFilter: TimeFilter): string {
-  const now = new Date();
-  
-  switch (timeFilter) {
-    case 'today':
-      return now.toLocaleDateString();
-    case 'week':
-      const weekAgo = new Date(now);
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return `${weekAgo.toLocaleDateString()} - ${now.toLocaleDateString()}`;
-    case 'month':
-      const monthAgo = new Date(now);
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      return `${monthAgo.toLocaleDateString()} - ${now.toLocaleDateString()}`;
-    case '3months':
-      const threeMonthsAgo = new Date(now);
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      return `${threeMonthsAgo.toLocaleDateString()} - ${now.toLocaleDateString()}`;
-    case 'year':
-      const yearAgo = new Date(now);
-      yearAgo.setFullYear(yearAgo.getFullYear() - 1);
-      return `${yearAgo.toLocaleDateString()} - ${now.toLocaleDateString()}`;
-    case 'all':
-      return 'All Time';
-    default:
-      return 'Unknown Range';
-  }
-}
+  return periods;
+};

@@ -1,89 +1,73 @@
 // src/services/index.ts
 
 /**
- * Central services export
- * Import services from here throughout the application
+ * Central export point for all services
+ * This makes it easy to import services throughout the app
  */
 
-// Storage service - always available
+// Export all service instances
+export { authService } from './auth.service';
+export { listingsService } from './listings.service';
+export { messagesService } from './messages.service';
+export { ordersService } from './orders.service';
 export { storageService } from './storage.service';
+export { usersService } from './users.service';
+export { walletService } from './wallet.service';
 
-// Initialize services with error handling for SSR
-let walletService: any = null;
-let WalletIntegration: any = null;
-let appInitializer: any = null;
-let authService: any = null;
-let listingsService: any = null;
-let usersService: any = null;
-let messagesService: any = null;
+// Export types from services
+export type {
+  LoginRequest,
+  SignupRequest,
+  AuthResponse,
+  UsernameCheckResponse,
+} from './auth.service';
 
-// Only import services on client side
-if (typeof window !== 'undefined') {
-  try {
-    const walletModule = require('./wallet.service');
-    walletService = walletModule.walletService;
-  } catch (error) {
-    console.warn('Could not load wallet service:', error);
-  }
+export type {
+  CreateListingRequest,
+  UpdateListingRequest,
+  ListingSearchParams,
+  ListingViewUpdate,
+} from './listings.service';
 
-  try {
-    const integrationModule = require('./wallet.integration');
-    WalletIntegration = integrationModule.WalletIntegration;
-  } catch (error) {
-    console.warn('Could not load wallet integration:', error);
-  }
+export type {
+  Message,
+  MessageThread,
+  SendMessageRequest,
+  BlockUserRequest,
+  ReportUserRequest,
+} from './messages.service';
 
-  try {
-    const initModule = require('./app-initializer');
-    appInitializer = initModule.appInitializer;
-  } catch (error) {
-    console.warn('Could not load app initializer:', error);
-  }
+export type {
+  CreateOrderRequest,
+  UpdateOrderStatusRequest,
+  OrderSearchParams,
+} from './orders.service';
 
-  // Auth service
-  try {
-    const authModule = require('./auth.service');
-    authService = authModule.authService;
-  } catch (error) {
-    console.warn('Could not load auth service:', error);
-  }
+export type {
+  UserProfile,
+  UpdateProfileRequest,
+  VerificationRequest,
+  VerificationUpdateRequest,
+  UserSearchParams,
+  BanRequest,
+} from './users.service';
 
-  // Listings service
-  try {
-    const listingsModule = require('./listings.service');
-    listingsService = listingsModule.listingsService;
-  } catch (error) {
-    console.warn('Could not load listings service:', error);
-  }
+export type {
+  WalletBalance,
+  Transaction,
+  DepositRequest,
+  WithdrawalRequest,
+  TransferRequest,
+  AdminActionRequest,
+} from './wallet.service';
 
-  // Users service
-  try {
-    const usersModule = require('./users.service');
-    usersService = usersModule.usersService;
-  } catch (error) {
-    // Try enhanced version
-    try {
-      const enhancedUsersModule = require('./users.service.enhanced');
-      usersService = enhancedUsersModule.usersService;
-    } catch (error2) {
-      console.warn('Could not load users service:', error2);
-    }
-  }
-
-  // Messages service
-  try {
-    const messagesModule = require('./messages.service');
-    messagesService = messagesModule.messagesService;
-  } catch (error) {
-    console.warn('Could not load messages service:', error);
-  }
-}
-
-// Safe exports
-export { walletService };
-export { WalletIntegration };
-export { appInitializer };
-export { authService };
-export { listingsService };
-export { usersService };
-export { messagesService };
+// Export API configuration
+export {
+  API_BASE_URL,
+  FEATURES,
+  API_ENDPOINTS,
+  REQUEST_CONFIG,
+  buildApiUrl,
+  type ApiError,
+  type ApiResponse,
+} from './api.config';

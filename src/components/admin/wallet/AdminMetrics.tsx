@@ -61,8 +61,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
       filteredActions: filteredActions.length,
       subscriptionActions: adminActions.filter(a => 
         a.type === 'credit' && 
-        a.reason && 
-        a.reason.toLowerCase().includes('subscription')
+        a.reason.toLowerCase().includes('subscription') && 
+        a.reason.toLowerCase().includes('revenue')
       )
     });
   }, [timeFilter, adminActions, filteredActions]);
@@ -97,38 +97,35 @@ export default function AdminMetrics(props: AdminMetricsProps) {
   const displayAverageOrderValue = timeFilter === 'all' ? allTimeAverageOrderValue : periodAverageOrderValue;
   
   const totalDepositsAllTime = depositLogs
-    .filter((deposit: any) => deposit.status === 'completed')
-    .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
+    .filter(deposit => deposit.status === 'completed')
+    .reduce((sum, deposit) => sum + deposit.amount, 0);
   const periodTotalDeposits = filteredDeposits
-    .filter((deposit: any) => deposit.status === 'completed')
-    .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
-  const periodDepositCount = filteredDeposits.filter((deposit: any) => deposit.status === 'completed').length;
+    .filter(deposit => deposit.status === 'completed')
+    .reduce((sum, deposit) => sum + deposit.amount, 0);
+  const periodDepositCount = filteredDeposits.filter(deposit => deposit.status === 'completed').length;
   const averageDepositAmount = periodDepositCount > 0 ? periodTotalDeposits / periodDepositCount : 0;
   
   const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
 
-  // FIXED: Pass correct parameters to calculateWithdrawals
-  const withdrawalMetrics = calculateWithdrawals(sellerWithdrawals, filteredAdminWithdrawals);
+  const withdrawalMetrics = calculateWithdrawals(filteredSellerWithdrawals, filteredAdminWithdrawals);
   const allTimeWithdrawals = timeFilter === 'all' ? {
-    totalSellerWithdrawals: getAllSellerWithdrawals(sellerWithdrawals).reduce((sum: number, w: any) => sum + w.amount, 0),
-    totalAdminWithdrawals: adminWithdrawals.reduce((sum: number, w: any) => sum + w.amount, 0),
-    totalWithdrawals: getAllSellerWithdrawals(sellerWithdrawals).reduce((sum: number, w: any) => sum + w.amount, 0) + adminWithdrawals.reduce((sum: number, w: any) => sum + w.amount, 0),
+    totalSellerWithdrawals: getAllSellerWithdrawals(sellerWithdrawals).reduce((sum, w) => sum + w.amount, 0),
+    totalAdminWithdrawals: adminWithdrawals.reduce((sum, w) => sum + w.amount, 0),
+    totalWithdrawals: getAllSellerWithdrawals(sellerWithdrawals).reduce((sum, w) => sum + w.amount, 0) + adminWithdrawals.reduce((sum, w) => sum + w.amount, 0),
     withdrawalCount: getAllSellerWithdrawals(sellerWithdrawals).length + adminWithdrawals.length,
     averageWithdrawal: (getAllSellerWithdrawals(sellerWithdrawals).length + adminWithdrawals.length) > 0 ? 
-      (getAllSellerWithdrawals(sellerWithdrawals).reduce((sum: number, w: any) => sum + w.amount, 0) + adminWithdrawals.reduce((sum: number, w: any) => sum + w.amount, 0)) / (getAllSellerWithdrawals(sellerWithdrawals).length + adminWithdrawals.length) : 0
+      (getAllSellerWithdrawals(sellerWithdrawals).reduce((sum, w) => sum + w.amount, 0) + adminWithdrawals.reduce((sum, w) => sum + w.amount, 0)) / (getAllSellerWithdrawals(sellerWithdrawals).length + adminWithdrawals.length) : 0
   } : withdrawalMetrics;
 
-  // FIXED: Use correct parameters for getPreviousPeriodData (only 4 parameters)
-  const previousPeriodData = getPreviousPeriodData(orderHistory, depositLogs, adminActions, timeFilter);
-  const { orders: previousPeriodOrders, deposits: previousPeriodDeposits, adminActions: previousPeriodActions } = previousPeriodData;
+  const { orders: previousPeriodOrders, deposits: previousPeriodDeposits, withdrawals: previousPeriodWithdrawals, actions: previousPeriodActions } = 
+    getPreviousPeriodData(timeFilter, orderHistory, depositLogs, getAllSellerWithdrawals(sellerWithdrawals), adminActions);
   
   const previousPeriodProfit = calculatePlatformProfit(previousPeriodOrders) + calculateSubscriptionProfit(previousPeriodActions);
   const previousPeriodDepositAmount = previousPeriodDeposits
-    .filter((deposit: any) => deposit.status === 'completed')
-    .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
-  
-  // Simple calculation for previous period withdrawals since we don't have filtered withdrawals in previous period
-  const previousPeriodWithdrawalAmount = 0; // Simplified for now
+    .filter(deposit => deposit.status === 'completed')
+    .reduce((sum, deposit) => sum + deposit.amount, 0);
+  const previousPeriodWithdrawalAmount = previousPeriodWithdrawals
+    .reduce((sum, withdrawal) => sum + withdrawal.amount, 0);
 
   const growthRate = timeFilter !== 'all' && previousPeriodProfit > 0 ? 
     ((displayTotalProfit - previousPeriodProfit) / previousPeriodProfit) * 100 : 0;
