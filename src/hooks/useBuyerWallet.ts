@@ -137,13 +137,20 @@ export const useBuyerWallet = () => {
     }
   }, [user, getTransactionHistory, updateState, setBuyerBalance]);
 
-  // Initial sync and periodic updates
+  // Create a ref to always have the latest syncBalance function
+  const syncBalanceRef = useRef(syncBalance);
+  syncBalanceRef.current = syncBalance;
+
+  // Initial sync and periodic updates - FIXED: removed syncBalance from dependencies
   useEffect(() => {
     if (user?.username) {
-      syncBalance();
+      // Call the ref version to avoid dependency issues
+      syncBalanceRef.current();
       
-      // Sync every 30 seconds
-      syncIntervalRef.current = setInterval(syncBalance, 30000);
+      // Sync every 30 seconds using ref
+      syncIntervalRef.current = setInterval(() => {
+        syncBalanceRef.current();
+      }, 30000);
       
       return () => {
         if (syncIntervalRef.current) {
@@ -151,9 +158,9 @@ export const useBuyerWallet = () => {
         }
       };
     }
-    // Add return statement for when user is not defined
+    // Return undefined when user is not logged in
     return undefined;
-  }, [user, syncBalance]);
+  }, [user?.username]); // Only depend on username changing
 
   // Enhanced add funds with validation
   const handleAddFunds = useCallback(async () => {
@@ -216,8 +223,8 @@ export const useBuyerWallet = () => {
       );
       
       if (success) {
-        // Sync balance immediately
-        await syncBalance();
+        // Sync balance immediately using ref
+        await syncBalanceRef.current();
         
         updateState({
           amountToAdd: '',
@@ -253,7 +260,7 @@ export const useBuyerWallet = () => {
     setTimeout(() => {
       updateState({ message: '', messageType: '', validationErrors: [] });
     }, 5000);
-  }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, syncBalance, reconcileBalance, toast, updateState]);
+  }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, reconcileBalance, toast, updateState]);
 
   // Validate amount as user types
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
