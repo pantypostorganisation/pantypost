@@ -7,6 +7,7 @@ import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import { storageService } from '@/services';
 import { v4 as uuidv4 } from 'uuid';
+import { useSearchParams } from 'next/navigation';
 
 // Helper function
 const getConversationKey = (userA: string, userB: string): string => {
@@ -42,10 +43,12 @@ export function useSellerMessages() {
     reportUser, 
     isBlocked, 
     hasReported,
-    clearMessageNotifications // NEW: Import this
+    clearMessageNotifications,
+    getThreadsForUser // Make sure this is imported
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
   const { wallet } = useWallet();
+  const searchParams = useSearchParams();
   
   // State for UI
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -73,72 +76,42 @@ export function useSellerMessages() {
   const hasLoadedEmojis = useRef(false);
   const lastActiveThread = useRef<string | null>(null);
   
-  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
+  const isAdmin = user?.role === 'admin';
   
-  // Load previously read threads from localStorage
+  // DEBUG: Log the raw messages object
   useEffect(() => {
-    if (!user) return;
+    console.log('=== DEBUG: Raw messages object ===');
+    console.log('messages:', messages);
+    console.log('messages keys:', Object.keys(messages));
+    console.log('messages entries:', Object.entries(messages));
     
-    const loadReadThreads = async () => {
-      try {
-        const readThreadsKey = `panty_read_threads_${user.username}`;
-        const readThreads = await storageService.getItem<string[]>(readThreadsKey, []);
-        if (Array.isArray(readThreads)) {
-          readThreadsRef.current = new Set(readThreads);
-        }
-      } catch (e) {
-        console.error('Failed to load read threads', e);
-      }
-    };
-    
-    loadReadThreads();
-  }, [user?.username]);
+    if (user) {
+      console.log('Current user:', user.username);
+      console.log('User role:', user.role);
+      
+      // Check what getThreadsForUser returns
+      const threads = getThreadsForUser(user.username, 'seller');
+      console.log('getThreadsForUser result:', threads);
+      console.log('Thread keys:', Object.keys(threads));
+    }
+  }, [messages, user, getThreadsForUser]);
   
-  // Save read threads to localStorage
+  // Load recent emojis once on mount
   useEffect(() => {
-    if (!user || readThreadsRef.current.size === 0) return;
-    
-    const timeoutId = setTimeout(async () => {
-      try {
-        const readThreadsKey = `panty_read_threads_${user.username}`;
-        const threadsArray = Array.from(readThreadsRef.current);
-        await storageService.setItem(readThreadsKey, threadsArray);
-        
-        const event = new CustomEvent('readThreadsUpdated', { 
-          detail: { threads: threadsArray, username: user.username }
-        });
-        window.dispatchEvent(event);
-      } catch (e) {
-        console.error('Failed to save read threads', e);
-      }
-    }, 1000);
-    
-    return () => clearTimeout(timeoutId);
-  }, [user?.username, activeThread]); // Update when activeThread changes
-  
-  // Load recent emojis from localStorage
-  useEffect(() => {
-    if (hasLoadedEmojis.current) return;
-    hasLoadedEmojis.current = true;
-    
     const loadRecentEmojis = async () => {
-      try {
-        const storedRecentEmojis = await storageService.getItem<string[]>('panty_recent_emojis', []);
-        if (Array.isArray(storedRecentEmojis)) {
-          setRecentEmojis(storedRecentEmojis.slice(0, 30));
+      if (!hasLoadedEmojis.current) {
+        hasLoadedEmojis.current = true;
+        const stored = await storageService.getItem<string[]>('panty_recent_emojis', []);
+        if (Array.isArray(stored)) {
+          setRecentEmojis(stored);
         }
-      } catch (e) {
-        console.error('Failed to load recent emojis', e);
       }
     };
-    
     loadRecentEmojis();
   }, []);
   
-  // Save recent emojis to localStorage
+  // Save recent emojis with debounce
   useEffect(() => {
-    if (recentEmojis.length === 0) return;
-    
     const timeoutId = setTimeout(async () => {
       try {
         await storageService.setItem('panty_recent_emojis', recentEmojis);
@@ -150,76 +123,91 @@ export function useSellerMessages() {
     return () => clearTimeout(timeoutId);
   }, [recentEmojis]);
   
-  // Process messages into threads
+  // Handle URL thread parameter
+  useEffect(() => {
+    const threadParam = searchParams.get('thread');
+    if (threadParam && !activeThread && user) {
+      console.log('=== DEBUG: Setting active thread from URL ===');
+      console.log('Thread param:', threadParam);
+      setActiveThread(threadParam);
+    }
+  }, [searchParams, user]); // Remove activeThread from dependencies to prevent loops
+  
+  // Process messages into threads - FIXED VERSION WITH DEBUG
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
+    console.log('=== DEBUG: Processing messages into threads ===');
+    
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
     const lastMessages: { [buyer: string]: Message } = {};
     const buyerProfiles: { [buyer: string]: { pic: string | null, verified: boolean } } = {};
     let totalUnreadCount = 0;
     
-    if (!user) return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
+    if (!user) {
+      console.log('No user, returning empty threads');
+      return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
+    }
     
-    // Get all messages for the seller
-    Object.values(messages).forEach((msgs) => {
-      msgs.forEach((msg) => {
-        // Only include messages where the current user is the seller (receiver) or sender
-        if (msg.sender === user.username || msg.receiver === user.username) {
-          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-          
-          // Skip if other party is also a seller/admin (seller-to-seller messages)
-          const otherUser = users?.[otherParty];
-          if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
-            return;
-          }
-          
-          if (!threads[otherParty]) threads[otherParty] = [];
-          threads[otherParty].push(msg);
+    console.log('Processing for user:', user.username);
+    
+    // Use the getThreadsForUser function from MessageContext
+    const allThreads = getThreadsForUser(user.username, 'seller');
+    console.log('All threads from getThreadsForUser:', allThreads);
+    console.log('Thread count:', Object.keys(allThreads).length);
+    
+    // Process each thread
+    Object.entries(allThreads).forEach(([otherParty, msgs]) => {
+      console.log(`Processing thread with ${otherParty}, message count: ${msgs.length}`);
+      
+      // Skip if other party is also a seller/admin (seller-to-seller messages)
+      const otherUser = users?.[otherParty];
+      if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
+        console.log(`Skipping ${otherParty} - they are a ${otherUser?.role}`);
+        return;
+      }
+      
+      // Only include if there are messages
+      if (msgs.length > 0) {
+        threads[otherParty] = msgs;
+        lastMessages[otherParty] = msgs[msgs.length - 1];
+        
+        // Get buyer profile picture and verification status
+        const buyerInfo = users?.[otherParty];
+        const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+        
+        buyerProfiles[otherParty] = { 
+          pic: null, // Profile pics should be loaded through proper channels
+          verified: isVerified
+        };
+        
+        // Count only messages FROM buyer TO seller as unread
+        const threadUnreadCount = msgs.filter(
+          (msg) => !msg.read && msg.sender === otherParty && msg.receiver === user?.username
+        ).length;
+        
+        unreadCounts[otherParty] = threadUnreadCount;
+        
+        // Only add to total if not in readThreadsRef
+        if (!readThreadsRef.current.has(otherParty) && threadUnreadCount > 0) {
+          totalUnreadCount += threadUnreadCount;
         }
-      });
-    });
-    
-    // Sort messages in each thread by date
-    Object.values(threads).forEach((thread) =>
-      thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    );
-    
-    // Get last message and unread count for each thread
-    Object.entries(threads).forEach(([buyer, msgs]) => {
-      lastMessages[buyer] = msgs[msgs.length - 1];
-      
-      // Get buyer profile picture and verification status
-      // Note: Profile pics should come from users context or be loaded async
-      const buyerInfo = users?.[buyer];
-      const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
-      
-      buyerProfiles[buyer] = { 
-        pic: null, // Profile pics should be loaded through proper channels
-        verified: isVerified
-      };
-      
-      // Count only messages FROM buyer TO seller as unread
-      const threadUnreadCount = msgs.filter(
-        (msg) => !msg.read && msg.sender === buyer && msg.receiver === user?.username
-      ).length;
-      
-      unreadCounts[buyer] = threadUnreadCount;
-      
-      // Only add to total if not in readThreadsRef
-      if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
-        totalUnreadCount += threadUnreadCount;
+        
+        console.log(`Thread ${otherParty}: ${msgs.length} messages, ${threadUnreadCount} unread`);
       }
     });
     
+    console.log('Final processed threads:', threads);
+    console.log('Thread count:', Object.keys(threads).length);
+    
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user?.username, messages, users]);
+  }, [user?.username, getThreadsForUser, users]);
   
   // Get seller's requests
   const sellerRequests = useMemo(() => {
     return user ? getRequestsForUser(user.username, 'seller') : [];
-  }, [user, getRequestsForUser]);
+  }, [user?.username, getRequestsForUser]);
   
-  // Calculate UI unread counts (considering read threads)
+  // Compute UI unread counts
   const uiUnreadCounts = useMemo(() => {
     const counts: { [buyer: string]: number } = {};
     if (threads) {
