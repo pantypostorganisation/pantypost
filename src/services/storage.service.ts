@@ -1,207 +1,385 @@
 // src/services/storage.service.ts
 
-import { FEATURES, ApiResponse } from './api.config';
-
 /**
- * Storage Service
- * Provides abstraction over localStorage with future API support
+ * Enhanced Storage Service
+ * Provides reliable localStorage access with error handling
  */
 
 export class StorageService {
+  private static instance: StorageService;
+  private isClient: boolean;
+
+  constructor() {
+    this.isClient = typeof window !== 'undefined';
+  }
+
+  static getInstance(): StorageService {
+    if (!StorageService.instance) {
+      StorageService.instance = new StorageService();
+    }
+    return StorageService.instance;
+  }
+
   /**
-   * Get item from storage
+   * Get item from localStorage with default value
    */
   async getItem<T>(key: string, defaultValue: T): Promise<T> {
-    try {
-      if (FEATURES.USE_MOCK_API) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+    if (!this.isClient) {
+      return defaultValue;
+    }
 
+    try {
       const item = localStorage.getItem(key);
       if (item === null) {
         return defaultValue;
       }
 
-      return JSON.parse(item) as T;
+      // Try to parse as JSON, fall back to string
+      try {
+        return JSON.parse(item);
+      } catch {
+        // If it's not JSON, return as string if T is string, otherwise default
+        return typeof defaultValue === 'string' ? (item as unknown as T) : defaultValue;
+      }
     } catch (error) {
-      console.error(`Error getting item "${key}" from storage:`, error);
+      console.error(`Storage get error for key "${key}":`, error);
       return defaultValue;
     }
   }
 
   /**
-   * Set item in storage
+   * Set item in localStorage
    */
   async setItem<T>(key: string, value: T): Promise<boolean> {
-    try {
-      if (FEATURES.USE_MOCK_API) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+    if (!this.isClient) {
+      return false;
+    }
 
-      const serialized = JSON.stringify(value);
-      localStorage.setItem(key, serialized);
+    try {
+      const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+      localStorage.setItem(key, stringValue);
       return true;
     } catch (error) {
-      console.error(`Error setting item "${key}" in storage:`, error);
+      console.error(`Storage set error for key "${key}":`, error);
       return false;
     }
   }
 
   /**
-   * Remove item from storage
+   * Remove item from localStorage
    */
   async removeItem(key: string): Promise<boolean> {
-    try {
-      if (FEATURES.USE_MOCK_API) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+    if (!this.isClient) {
+      return false;
+    }
 
+    try {
       localStorage.removeItem(key);
       return true;
     } catch (error) {
-      console.error(`Error removing item "${key}" from storage:`, error);
+      console.error(`Storage remove error for key "${key}":`, error);
       return false;
     }
   }
 
   /**
-   * Update specific fields of an object in storage
+   * Update item in localStorage (merge with existing object)
    */
-  async updateItem<T extends object>(
-    key: string,
-    updates: Partial<T>
-  ): Promise<boolean> {
-    try {
-      const current = await this.getItem<T | null>(key, null);
-      
-      if (current === null) {
-        return await this.setItem(key, updates as T);
-      }
+  async updateItem<T>(key: string, updates: Partial<T>): Promise<boolean> {
+    if (!this.isClient) {
+      return false;
+    }
 
-      const updated = { ...current, ...updates };
+    try {
+      const existing = await this.getItem<T>(key, {} as T);
+      const updated = { ...existing, ...updates };
       return await this.setItem(key, updated);
     } catch (error) {
-      console.error(`Error updating item "${key}" in storage:`, error);
+      console.error(`Storage update error for key "${key}":`, error);
       return false;
     }
   }
 
   /**
-   * Get all keys matching a pattern
+   * Check if key exists in localStorage
    */
-  async getKeys(pattern?: string): Promise<string[]> {
-    try {
-      if (FEATURES.USE_MOCK_API) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
+  async hasKey(key: string): Promise<boolean> {
+    if (!this.isClient) {
+      return false;
+    }
 
-      const keys: string[] = [];
+    try {
+      return localStorage.getItem(key) !== null;
+    } catch (error) {
+      console.error(`Storage hasKey error for key "${key}":`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get all keys from localStorage
+   */
+  async getKeys(): Promise<string[]> {
+    if (!this.isClient) {
+      return [];
+    }
+
+    try {
+      const keys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (!pattern || key.includes(pattern))) {
+        if (key) {
           keys.push(key);
         }
       }
       return keys;
     } catch (error) {
-      console.error('Error getting keys from storage:', error);
+      console.error('Storage getKeys error:', error);
       return [];
     }
   }
 
   /**
-   * Check if key exists
+   * Clear localStorage with optional preserve keys
    */
-  async hasKey(key: string): Promise<boolean> {
-    try {
-      if (FEATURES.USE_MOCK_API) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-
-      return localStorage.getItem(key) !== null;
-    } catch (error) {
-      console.error(`Error checking if key "${key}" exists:`, error);
+  async clear(preserveKeys: string[] = []): Promise<boolean> {
+    if (!this.isClient) {
       return false;
     }
-  }
 
-  /**
-   * Clear all storage
-   */
-  async clear(preserveKeys?: string[]): Promise<boolean> {
     try {
-      if (FEATURES.USE_MOCK_API) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      if (preserveKeys && preserveKeys.length > 0) {
-        // Preserve specified keys
-        const preserved: { [key: string]: any } = {};
-        for (const key of preserveKeys) {
-          const value = localStorage.getItem(key);
-          if (value !== null) {
-            preserved[key] = value;
+      if (preserveKeys.length === 0) {
+        localStorage.clear();
+      } else {
+        // Clear all except preserved keys
+        const allKeys = await this.getKeys();
+        for (const key of allKeys) {
+          if (!preserveKeys.includes(key)) {
+            localStorage.removeItem(key);
           }
         }
-
-        localStorage.clear();
-
-        // Restore preserved keys
-        for (const [key, value] of Object.entries(preserved)) {
-          localStorage.setItem(key, value);
-        }
-      } else {
-        localStorage.clear();
       }
-
       return true;
     } catch (error) {
-      console.error('Error clearing storage:', error);
+      console.error('Storage clear error:', error);
       return false;
     }
   }
 
   /**
-   * Get storage size information
+   * Get all keys with a prefix
    */
-  async getStorageInfo(): Promise<{
-    used: number;
-    quota: number;
-    percentage: number;
-  }> {
-    try {
-      if ('storage' in navigator && 'estimate' in navigator.storage) {
-        const estimate = await navigator.storage.estimate();
-        return {
-          used: estimate.usage || 0,
-          quota: estimate.quota || 0,
-          percentage: estimate.quota ? ((estimate.usage || 0) / estimate.quota) * 100 : 0,
-        };
-      }
+  async getKeysWithPrefix(prefix: string): Promise<string[]> {
+    if (!this.isClient) {
+      return [];
+    }
 
-      // Fallback calculation
-      let totalSize = 0;
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          keys.push(key);
+        }
+      }
+      return keys;
+    } catch (error) {
+      console.error('Storage getKeysWithPrefix error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get storage size estimate (in bytes)
+   */
+  getStorageSize(): number {
+    if (!this.isClient) {
+      return 0;
+    }
+
+    try {
+      let total = 0;
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key) {
-          totalSize += key.length + (localStorage.getItem(key) || '').length;
+          const value = localStorage.getItem(key);
+          if (value) {
+            total += key.length + value.length;
+          }
+        }
+      }
+      return total;
+    } catch (error) {
+      console.error('Storage size calculation error:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get storage info
+   */
+  getStorageInfo(): {
+    totalItems: number;
+    estimatedSize: number;
+    isAvailable: boolean;
+    used?: number;
+    quota?: number;
+    percentage?: number;
+  } {
+    if (!this.isClient) {
+      return {
+        totalItems: 0,
+        estimatedSize: 0,
+        isAvailable: false,
+      };
+    }
+
+    try {
+      const estimatedSize = this.getStorageSize();
+      const totalItems = localStorage.length;
+      
+      // Estimate quota (typical browser limit is 5-10MB)
+      const estimatedQuota = 5 * 1024 * 1024; // 5MB
+      const percentage = (estimatedSize / estimatedQuota) * 100;
+
+      return {
+        totalItems,
+        estimatedSize,
+        isAvailable: true,
+        used: estimatedSize,
+        quota: estimatedQuota,
+        percentage,
+      };
+    } catch (error) {
+      console.error('Storage info error:', error);
+      return {
+        totalItems: 0,
+        estimatedSize: 0,
+        isAvailable: false,
+      };
+    }
+  }
+
+  /**
+   * Validate localStorage is working
+   */
+  async validateStorage(): Promise<boolean> {
+    if (!this.isClient) {
+      return false;
+    }
+
+    try {
+      const testKey = '__storage_test_' + Date.now();
+      const testValue = { test: true, timestamp: Date.now() };
+      
+      const setSuccess = await this.setItem(testKey, testValue);
+      if (!setSuccess) return false;
+      
+      const retrieved = await this.getItem(testKey, null);
+      const removeSuccess = await this.removeItem(testKey);
+      
+      return retrieved !== null && 
+             typeof retrieved === 'object' && 
+             (retrieved as any).test === true &&
+             removeSuccess;
+    } catch (error) {
+      console.error('Storage validation error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Backup all data to JSON string
+   */
+  async createBackup(): Promise<string> {
+    if (!this.isClient) {
+      return '{}';
+    }
+
+    try {
+      const backup: { [key: string]: any } = {};
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          backup[key] = localStorage.getItem(key);
+        }
+      }
+      
+      return JSON.stringify({
+        timestamp: new Date().toISOString(),
+        data: backup,
+      }, null, 2);
+    } catch (error) {
+      console.error('Storage backup error:', error);
+      return '{}';
+    }
+  }
+
+  /**
+   * Restore from backup JSON string
+   */
+  async restoreFromBackup(backupString: string): Promise<boolean> {
+    if (!this.isClient) {
+      return false;
+    }
+
+    try {
+      const backup = JSON.parse(backupString);
+      
+      if (!backup.data || typeof backup.data !== 'object') {
+        throw new Error('Invalid backup format');
+      }
+
+      // Clear existing data first
+      const clearSuccess = await this.clear();
+      if (!clearSuccess) return false;
+
+      // Restore data
+      let successCount = 0;
+      for (const [key, value] of Object.entries(backup.data)) {
+        if (typeof value === 'string') {
+          localStorage.setItem(key, value);
+          successCount++;
         }
       }
 
-      return {
-        used: totalSize,
-        quota: 5 * 1024 * 1024, // 5MB estimate
-        percentage: (totalSize / (5 * 1024 * 1024)) * 100,
-      };
+      return successCount > 0;
     } catch (error) {
-      console.error('Error getting storage info:', error);
-      return { used: 0, quota: 0, percentage: 0 };
+      console.error('Storage restore error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get items in bulk
+   */
+  async getBulk<T>(keys: string[], defaultValue: T): Promise<{ [key: string]: T }> {
+    const result: { [key: string]: T } = {};
+    
+    for (const key of keys) {
+      result[key] = await this.getItem(key, defaultValue);
+    }
+    
+    return result;
+  }
+
+  /**
+   * Set items in bulk
+   */
+  async setBulk<T>(items: { [key: string]: T }): Promise<boolean> {
+    try {
+      for (const [key, value] of Object.entries(items)) {
+        const success = await this.setItem(key, value);
+        if (!success) return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Storage setBulk error:', error);
+      return false;
     }
   }
 }
 
 // Export singleton instance
-export const storageService = new StorageService();
+export const storageService = StorageService.getInstance();

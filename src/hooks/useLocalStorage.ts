@@ -60,7 +60,7 @@ export function useLocalStorage<T>(
       
       // Save to localStorage asynchronously
       storageService.setItem(key, valueToStore).then(success => {
-        if (!success) {
+        if (success === false) {
           console.error(`Failed to save "${key}" to storage`);
         }
       });
@@ -288,9 +288,9 @@ export function useStorageUsage() {
       try {
         const info = await storageService.getStorageInfo();
         setUsage({
-          bytes: info.used,
-          percent: info.percentage / 100,
-          sizeKB: Math.round(info.used / 1024)
+          bytes: info.estimatedSize || 0,
+          percent: (info.percentage || 0) / 100,
+          sizeKB: Math.round((info.estimatedSize || 0) / 1024)
         });
       } catch (error) {
         console.error('Error updating storage usage:', error);

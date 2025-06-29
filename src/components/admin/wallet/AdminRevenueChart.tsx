@@ -11,9 +11,10 @@ interface AdminRevenueChartProps {
 }
 
 export default function AdminRevenueChart({ timeFilter, orderHistory, adminActions }: AdminRevenueChartProps) {
-  const chartData = getRevenueByDay(timeFilter, orderHistory, adminActions);
-  const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1);
-  const totalChartRevenue = chartData.reduce((sum, d) => sum + d.revenue, 0);
+  // FIXED: Call getRevenueByDay with correct parameters (only orderHistory and optional days)
+  const chartData = getRevenueByDay(orderHistory, 30); // 30 days of data
+  const maxRevenue = Math.max(...chartData.map((d: any) => d.revenue), 1);
+  const totalChartRevenue = chartData.reduce((sum: number, d: any) => sum + d.revenue, 0);
   const averageChartRevenue = chartData.length > 0 ? totalChartRevenue / chartData.length : 0;
 
   const formatCurrency = (amount: number) => {
@@ -50,7 +51,7 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
       
       <div className="overflow-x-auto">
         <div className="min-w-[600px] h-64 flex items-end justify-between gap-1 mb-4">
-          {chartData.map((period, index) => (
+          {chartData.map((period: any, index: number) => (
             <div key={index} className="flex-1 flex flex-col items-center group">
               <div className="relative w-full flex justify-center mb-2">
                 <div
@@ -64,7 +65,7 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
                 </div>
               </div>
               <span className="text-xs text-gray-500 transform -rotate-45 origin-center whitespace-nowrap block mt-1">
-                {period.date}
+                {period.label || period.date}
               </span>
             </div>
           ))}
@@ -74,7 +75,7 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
       <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-800">
         <div className="text-center">
           <p className="text-xs text-gray-500">Highest {timeFilter === 'today' ? 'Hour' : timeFilter === 'year' ? 'Month' : 'Day'}</p>
-          <p className="font-bold text-green-400">{formatCurrency(Math.max(...chartData.map(d => d.revenue)))}</p>
+          <p className="font-bold text-green-400">{formatCurrency(Math.max(...chartData.map((d: any) => d.revenue)))}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-500">Average {timeFilter === 'today' ? 'Hour' : timeFilter === 'year' ? 'Month' : 'Day'}</p>
