@@ -1,4 +1,4 @@
-﻿// src/hooks/useBuyerWallet.ts 
+﻿// src/hooks/useBuyerWallet.ts
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -223,6 +223,21 @@ export const useBuyerWallet = () => {
       );
       
       if (success) {
+        // IMPORTANT: Add deposit log for admin dashboard tracking
+        const depositSuccess = await addDeposit(
+          user.username!,
+          amount,
+          'credit_card',
+          'Wallet deposit via buyer dashboard'
+        );
+        
+        if (!depositSuccess) {
+          console.warn('Failed to log deposit to admin dashboard');
+        }
+        
+        // Small delay to ensure deposit is saved before syncing
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Sync balance immediately using ref
         await syncBalanceRef.current();
         
@@ -260,7 +275,7 @@ export const useBuyerWallet = () => {
     setTimeout(() => {
       updateState({ message: '', messageType: '', validationErrors: [] });
     }, 5000);
-  }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, reconcileBalance, toast, updateState]);
+  }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, addDeposit, reconcileBalance, toast, updateState]);
 
   // Validate amount as user types
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

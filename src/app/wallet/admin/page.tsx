@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
-import { WalletProvider, useWallet } from '@/context/WalletContext';
+import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
 import { AlertCircle, BarChart3, Loader2 } from 'lucide-react';
 
@@ -31,7 +31,21 @@ function AdminProfitDashboardContent() {
   const { user } = useAuth();
   const { users, listings } = useListings();
   const [showDetails, setShowDetails] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | '3months' | 'year' | 'all'>('today');
+  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | '3months' | 'year' | 'all'>(() => {
+    // Load saved time filter or default to 'all'
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('admin_dashboard_timefilter');
+      if (saved && ['today', 'week', 'month', '3months', 'year', 'all'].includes(saved)) {
+        return saved as any;
+      }
+    }
+    return 'all';
+  });
+  
+  // Save time filter when it changes
+  useEffect(() => {
+    localStorage.setItem('admin_dashboard_timefilter', timeFilter);
+  }, [timeFilter]);
 
   const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
@@ -57,6 +71,17 @@ function AdminProfitDashboardContent() {
     sellerWithdrawals: filteredSellerWithdrawals,
     adminWithdrawals: filteredAdminWithdrawals
   } = getTimeFilteredData(timeFilter, adminActions, orderHistory, depositLogs, sellerWithdrawals, adminWithdrawals);
+  
+  // Debug logging for deposits
+  useEffect(() => {
+    console.log('Admin Dashboard Deposits:', {
+      timeFilter,
+      allDeposits: depositLogs.length,
+      filteredDeposits: filteredDeposits.length,
+      latestDeposit: depositLogs[depositLogs.length - 1],
+      filterShowingAll: timeFilter === 'all'
+    });
+  }, [timeFilter, depositLogs, filteredDeposits]);
 
   return (
     <main className="min-h-screen bg-black text-white py-6 px-4 sm:px-6 overflow-x-hidden">
@@ -176,9 +201,7 @@ export default function AdminProfitDashboard() {
 
   return (
     <RequireAuth role="admin">
-      <WalletProvider>
-        <AdminProfitDashboardContent />
-      </WalletProvider>
+      <AdminProfitDashboardContent />
     </RequireAuth>
   );
 }
