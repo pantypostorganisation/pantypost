@@ -8,6 +8,7 @@ import {
   useEffect,
   ReactNode,
   useCallback,
+  useRef,
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
@@ -87,6 +88,11 @@ export type DepositLog = {
 };
 
 type WalletContextType = {
+  // Loading state
+  isLoading: boolean;
+  isInitialized: boolean;
+  initializationError: string | null;
+  
   // Existing interface remains the same for backward compatibility
   buyerBalances: { [username: string]: number };
   adminBalance: number;
@@ -128,12 +134,28 @@ type WalletContextType = {
   checkSuspiciousActivity: (username: string) => Promise<{ suspicious: boolean; reasons: string[] }>;
   reconcileBalance: (username: string, role: 'buyer' | 'seller' | 'admin') => Promise<any>;
   getTransactionHistory: (username?: string, limit?: number) => Promise<any[]>;
+  
+  // Data management
+  reloadData: () => Promise<void>;
 };
 
 export const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
+// Storage keys constants
+const STORAGE_KEYS = {
+  BUYER_BALANCES: 'wallet_buyers',
+  SELLER_BALANCES: 'wallet_sellers',
+  ADMIN_BALANCE: 'wallet_admin',
+  ORDERS: 'wallet_orders',
+  SELLER_WITHDRAWALS: 'wallet_sellerWithdrawals',
+  ADMIN_WITHDRAWALS: 'wallet_adminWithdrawals',
+  ADMIN_ACTIONS: 'wallet_adminActions',
+  DEPOSIT_LOGS: 'wallet_depositLogs',
+  INITIALIZATION_STATE: 'wallet_init_state',
+} as const;
+
 export function WalletProvider({ children }: { children: ReactNode }) {
-  // State management
+  // State management with initial empty values
   const [buyerBalances, setBuyerBalancesState] = useState<{ [username: string]: number }>({});
   const [adminBalance, setAdminBalanceState] = useState<number>(0);
   const [sellerBalances, setSellerBalancesState] = useState<{ [username: string]: number }>({});
@@ -143,213 +165,282 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
   const [depositLogs, setDepositLogs] = useState<DepositLog[]>([]);
   const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
+  
+  // Loading and initialization state
+  const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
+  
+  // Refs to prevent multiple initializations and saves
+  const initializingRef = useRef(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveRef = useRef<number>(0);
+  const pendingSaveRef = useRef(false);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
 
-  // Initialize enhanced wallet service
+  // Consolidated save function with debouncing
+  const saveAllData = useCallback(async () => {
+    // Prevent saves if not initialized
+    if (!isInitialized) {
+      console.log('[WalletContext] Skipping save - not initialized');
+      return;
+    }
+
+    // Debounce saves to prevent rapid successive saves
+    const now = Date.now();
+    if (now - lastSaveRef.current < 100) {
+      // Schedule a save for later
+      if (!pendingSaveRef.current) {
+        pendingSaveRef.current = true;
+        setTimeout(() => {
+          pendingSaveRef.current = false;
+          saveAllData();
+        }, 100);
+      }
+      return;
+    }
+    
+    lastSaveRef.current = now;
+
+    try {
+      console.log('[WalletContext] Saving all wallet data...');
+      
+      // Use batch save for atomic operation
+      // Type as generic array to allow dynamic keys
+      const saveOperations: Array<{ key: string; value: any }> = [
+        { key: STORAGE_KEYS.BUYER_BALANCES, value: buyerBalances },
+        { key: STORAGE_KEYS.SELLER_BALANCES, value: sellerBalances },
+        { key: STORAGE_KEYS.ADMIN_BALANCE, value: adminBalance.toString() },
+        { key: STORAGE_KEYS.ORDERS, value: orderHistory },
+        { key: STORAGE_KEYS.SELLER_WITHDRAWALS, value: sellerWithdrawals },
+        { key: STORAGE_KEYS.ADMIN_WITHDRAWALS, value: adminWithdrawals },
+        { key: STORAGE_KEYS.ADMIN_ACTIONS, value: adminActions },
+        { key: STORAGE_KEYS.DEPOSIT_LOGS, value: depositLogs },
+      ];
+
+      // Also save individual balance keys for enhanced compatibility
+      Object.entries(buyerBalances).forEach(([username, balance]) => {
+        const balanceInCents = Math.round(balance * 100);
+        saveOperations.push({ 
+          key: `wallet_buyer_${username}`, 
+          value: balanceInCents 
+        });
+      });
+
+      Object.entries(sellerBalances).forEach(([username, balance]) => {
+        const balanceInCents = Math.round(balance * 100);
+        saveOperations.push({ 
+          key: `wallet_seller_${username}`, 
+          value: balanceInCents 
+        });
+      });
+
+      // Save admin balance in enhanced format
+      const adminBalanceInCents = Math.round(adminBalance * 100);
+      saveOperations.push({ 
+        key: 'wallet_admin_enhanced', 
+        value: adminBalanceInCents 
+      });
+
+      // Execute batch save
+      const success = await storageService.batchSet(saveOperations);
+      
+      if (!success) {
+        console.error('[WalletContext] Failed to save wallet data');
+      } else {
+        console.log('[WalletContext] Wallet data saved successfully');
+      }
+    } catch (error) {
+      console.error('[WalletContext] Error saving wallet data:', error);
+    }
+  }, [
+    isInitialized,
+    buyerBalances,
+    sellerBalances,
+    adminBalance,
+    orderHistory,
+    sellerWithdrawals,
+    adminWithdrawals,
+    adminActions,
+    depositLogs
+  ]);
+
+  // Load all data from storage
+  const loadAllData = useCallback(async () => {
+    try {
+      console.log('[WalletContext] Loading wallet data...');
+      
+      // Load collective data first (legacy format)
+      const [
+        storedBuyers,
+        storedSellers,
+        storedAdmin,
+        storedOrders,
+        storedSellerWithdrawals,
+        storedAdminWithdrawals,
+        storedAdminActions,
+        storedDepositLogs
+      ] = await Promise.all([
+        storageService.getItem<{ [username: string]: number }>(STORAGE_KEYS.BUYER_BALANCES, {}),
+        storageService.getItem<{ [username: string]: number }>(STORAGE_KEYS.SELLER_BALANCES, {}),
+        storageService.getItem<string>(STORAGE_KEYS.ADMIN_BALANCE, '0'),
+        storageService.getItem<Order[]>(STORAGE_KEYS.ORDERS, []),
+        storageService.getItem<{ [username: string]: Withdrawal[] }>(STORAGE_KEYS.SELLER_WITHDRAWALS, {}),
+        storageService.getItem<Withdrawal[]>(STORAGE_KEYS.ADMIN_WITHDRAWALS, []),
+        storageService.getItem<AdminAction[]>(STORAGE_KEYS.ADMIN_ACTIONS, []),
+        storageService.getItem<DepositLog[]>(STORAGE_KEYS.DEPOSIT_LOGS, [])
+      ]);
+
+      // Parse admin balance
+      let adminBalanceValue = parseFloat(storedAdmin) || 0;
+
+      // Merge with individual keys (enhanced format) for balances
+      const allKeys = await storageService.getKeys('wallet_');
+      
+      // Process buyer balances
+      const mergedBuyers = { ...storedBuyers };
+      for (const key of allKeys.filter(k => k.startsWith('wallet_buyer_'))) {
+        const username = key.replace('wallet_buyer_', '');
+        const balanceInCents = await storageService.getItem<number>(key, 0);
+        const balanceInDollars = balanceInCents / 100;
+        
+        // Use the higher balance to prevent data loss
+        if (!mergedBuyers[username] || balanceInDollars > mergedBuyers[username]) {
+          mergedBuyers[username] = balanceInDollars;
+        }
+      }
+
+      // Process seller balances
+      const mergedSellers = { ...storedSellers };
+      for (const key of allKeys.filter(k => k.startsWith('wallet_seller_'))) {
+        const username = key.replace('wallet_seller_', '');
+        const balanceInCents = await storageService.getItem<number>(key, 0);
+        const balanceInDollars = balanceInCents / 100;
+        
+        // Use the higher balance to prevent data loss
+        if (!mergedSellers[username] || balanceInDollars > mergedSellers[username]) {
+          mergedSellers[username] = balanceInDollars;
+        }
+      }
+
+      // Check for enhanced admin balance
+      const adminEnhanced = await storageService.getItem<number>('wallet_admin_enhanced', 0);
+      if (adminEnhanced > 0) {
+        const adminEnhancedInDollars = adminEnhanced / 100;
+        adminBalanceValue = Math.max(adminBalanceValue, adminEnhancedInDollars);
+      }
+
+      // Normalize admin actions for backward compatibility
+      const normalizedActions = storedAdminActions.map(action => ({
+        ...action,
+        targetUser: action.targetUser || action.username,
+        username: action.username || action.targetUser,
+      }));
+
+      // Update state with loaded data
+      setBuyerBalancesState(mergedBuyers);
+      setSellerBalancesState(mergedSellers);
+      setAdminBalanceState(adminBalanceValue);
+      setOrderHistory(storedOrders);
+      setSellerWithdrawals(storedSellerWithdrawals);
+      setAdminWithdrawals(storedAdminWithdrawals);
+      setAdminActions(normalizedActions);
+      setDepositLogs(storedDepositLogs);
+
+      console.log('[WalletContext] Data loaded successfully:', {
+        buyers: Object.keys(mergedBuyers).length,
+        sellers: Object.keys(mergedSellers).length,
+        admin: adminBalanceValue,
+        orders: storedOrders.length,
+        adminActions: normalizedActions.length,
+        deposits: storedDepositLogs.length
+      });
+
+      return true;
+    } catch (error) {
+      console.error('[WalletContext] Error loading wallet data:', error);
+      setInitializationError('Failed to load wallet data');
+      return false;
+    }
+  }, []);
+
+  // Initialize wallet service and load data
   useEffect(() => {
-    const initializeServices = async () => {
+    const initializeWallet = async () => {
+      // Prevent multiple initializations
+      if (initializingRef.current || isInitialized) {
+        return;
+      }
+      
+      initializingRef.current = true;
+      setIsLoading(true);
+      setInitializationError(null);
+
       try {
-        // Only initialize if wallet service is available
+        console.log('[WalletContext] Initializing wallet...');
+        
+        // Initialize wallet service first
         if (typeof walletService?.initialize === 'function') {
           await walletService.initialize();
         }
-        // Don't sync with service on init - load from localStorage instead
-        setIsInitialized(true);
+        
+        // Load all data
+        const loadSuccess = await loadAllData();
+        
+        if (loadSuccess) {
+          setIsInitialized(true);
+          console.log('[WalletContext] Wallet initialization complete');
+        } else {
+          throw new Error('Failed to load wallet data');
+        }
       } catch (error) {
-        console.error('Failed to initialize wallet service:', error);
-        setIsInitialized(true); // Continue with fallback
+        console.error('[WalletContext] Initialization error:', error);
+        setInitializationError(error instanceof Error ? error.message : 'Unknown error');
+      } finally {
+        setIsLoading(false);
+        initializingRef.current = false;
       }
     };
 
-    if (!isInitialized) {
-      initializeServices();
+    if (typeof window !== 'undefined') {
+      initializeWallet();
     }
-  }, [isInitialized]);
+  }, []); // Only run once on mount
 
-  // Helper function to get balance key (matching enhanced wallet service)
-  const getBalanceKey = (username: string, role: string): string => {
-    if (username === 'admin') return 'wallet_admin';
-    return `wallet_${role}_${username}`;
-  };
-
-  // FIXED: Load data from BOTH formats - individual keys AND collective keys
+  // Save data when state changes (debounced)
   useEffect(() => {
-    if (typeof window === 'undefined' || !isInitialized) return;
+    if (!isInitialized) return;
 
-    const loadData = async () => {
-      try {
-        console.log('Loading wallet data from localStorage...');
-        
-        // First, load from collective keys (legacy format)
-        const buyersLegacy = localStorage.getItem("wallet_buyers");
-        const sellersLegacy = localStorage.getItem("wallet_sellers");
-        const adminLegacy = localStorage.getItem("wallet_admin");
-        
-        // Initialize with legacy data if available
-        const buyersMap: { [username: string]: number } = buyersLegacy ? JSON.parse(buyersLegacy) : {};
-        const sellersMap: { [username: string]: number } = sellersLegacy ? JSON.parse(sellersLegacy) : {};
-        let adminBalanceValue = adminLegacy ? parseFloat(adminLegacy) : 0;
-        
-        // Then check for individual keys (enhanced format) and merge
-        const allKeys = Object.keys(localStorage);
-        
-        // Load buyer balances from individual keys
-        const buyerKeys = allKeys.filter(key => key.startsWith('wallet_buyer_'));
-        for (const key of buyerKeys) {
-          const username = key.replace('wallet_buyer_', '');
-          const balanceInCents = await storageService.getItem<number>(key, 0);
-          const balanceInDollars = balanceInCents / 100;
-          // Use the higher balance to prevent data loss
-          buyersMap[username] = Math.max(buyersMap[username] || 0, balanceInDollars);
-        }
-        
-        // Load seller balances from individual keys
-        const sellerKeys = allKeys.filter(key => key.startsWith('wallet_seller_'));
-        for (const key of sellerKeys) {
-          const username = key.replace('wallet_seller_', '');
-          const balanceInCents = await storageService.getItem<number>(key, 0);
-          const balanceInDollars = balanceInCents / 100;
-          // Use the higher balance to prevent data loss
-          sellersMap[username] = Math.max(sellersMap[username] || 0, balanceInDollars);
-        }
-        
-        // Check for enhanced admin balance
-        const adminEnhanced = localStorage.getItem("wallet_admin_enhanced");
-        if (adminEnhanced) {
-          const adminEnhancedInCents = parseInt(adminEnhanced, 10);
-          adminBalanceValue = Math.max(adminBalanceValue, adminEnhancedInCents / 100);
-        }
-        
-        setBuyerBalancesState(buyersMap);
-        setSellerBalancesState(sellersMap);
-        setAdminBalanceState(adminBalanceValue);
+    // Clear any existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
 
-        // Load orders
-        const orders = await storageService.getItem<Order[]>("wallet_orders", []);
-        setOrderHistory(orders);
-        console.log('Loaded orders:', orders.length);
+    // Debounce saves by 500ms
+    saveTimeoutRef.current = setTimeout(() => {
+      saveAllData();
+    }, 500);
 
-        // Load seller withdrawals
-        const sellerWds = await storageService.getItem<{ [username: string]: Withdrawal[] }>("wallet_sellerWithdrawals", {});
-        setSellerWithdrawals(sellerWds);
-
-        // Load admin withdrawals
-        const adminWds = await storageService.getItem<Withdrawal[]>("wallet_adminWithdrawals", []);
-        setAdminWithdrawals(adminWds);
-
-        // Load admin actions - ensure backward compatibility
-        const actions = await storageService.getItem<AdminAction[]>("wallet_adminActions", []);
-        // Normalize admin actions to ensure they have consistent structure
-        const normalizedActions = actions.map(action => ({
-          ...action,
-          targetUser: action.targetUser || action.username,
-          username: action.username || action.targetUser,
-        }));
-        setAdminActions(normalizedActions);
-        
-        console.log('Loaded admin actions:', {
-          count: normalizedActions.length,
-          subscriptionActions: normalizedActions.filter(a => 
-            a.type === 'credit' && 
-            a.reason && 
-            a.reason.toLowerCase().includes('subscription')
-          ).length
-        });
-
-        // Load deposit logs
-        const deposits = await storageService.getItem<DepositLog[]>("wallet_depositLogs", []);
-        setDepositLogs(deposits);
-
-        console.log('Wallet data loading complete:', {
-          buyers: Object.keys(buyersMap).length,
-          sellers: Object.keys(sellersMap).length,
-          admin: adminBalanceValue,
-          orders: orders.length,
-          adminActions: normalizedActions.length,
-          deposits: deposits.length
-        });
-      } catch (error) {
-        console.error('Error loading wallet data:', error);
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
     };
-
-    loadData();
-  }, [isInitialized]);
-
-  // FIXED: Save to BOTH formats to ensure compatibility
-  const saveBuyerBalance = useCallback(async (username: string, balance: number) => {
-    // Save to individual key (enhanced format)
-    const key = getBalanceKey(username, 'buyer');
-    const balanceInCents = Math.round(balance * 100);
-    await storageService.setItem(key, balanceInCents);
-    
-    // Also update collective storage
-    const allBuyers = { ...buyerBalances, [username]: balance };
-    localStorage.setItem("wallet_buyers", JSON.stringify(allBuyers));
-  }, [buyerBalances]);
-
-  const saveSellerBalance = useCallback(async (username: string, balance: number) => {
-    // Save to individual key (enhanced format)
-    const key = getBalanceKey(username, 'seller');
-    const balanceInCents = Math.round(balance * 100);
-    await storageService.setItem(key, balanceInCents);
-    
-    // Also update collective storage
-    const allSellers = { ...sellerBalances, [username]: balance };
-    localStorage.setItem("wallet_sellers", JSON.stringify(allSellers));
-  }, [sellerBalances]);
-
-  const saveAdminBalance = useCallback(async (balance: number) => {
-    // Save to both formats
-    const balanceInCents = Math.round(balance * 100);
-    await storageService.setItem('wallet_admin', balanceInCents);
-    localStorage.setItem('wallet_admin', balance.toString());
-  }, []);
-
-  // Save all collective data when state changes
-  useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_buyers", JSON.stringify(buyerBalances));
-  }, [buyerBalances, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_sellers", JSON.stringify(sellerBalances));
-  }, [sellerBalances, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    localStorage.setItem("wallet_admin", adminBalance.toString());
-  }, [adminBalance, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_orders", orderHistory);
-  }, [orderHistory, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_sellerWithdrawals", sellerWithdrawals);
-  }, [sellerWithdrawals, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_adminWithdrawals", adminWithdrawals);
-  }, [adminWithdrawals, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_adminActions", adminActions);
-  }, [adminActions, isInitialized]);
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    storageService.setItem("wallet_depositLogs", depositLogs);
-  }, [depositLogs, isInitialized]);
+  }, [
+    buyerBalances,
+    sellerBalances,
+    adminBalance,
+    orderHistory,
+    sellerWithdrawals,
+    adminWithdrawals,
+    adminActions,
+    depositLogs,
+    isInitialized,
+    saveAllData
+  ]);
 
   // Force update Header balance when context updates
   useEffect(() => {
@@ -368,51 +459,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [buyerBalances]);
 
   const setBuyerBalance = useCallback(async (username: string, balance: number) => {
-    try {
-      setBuyerBalancesState((prev) => ({
-        ...prev,
-        [username]: balance,
-      }));
-      // Save to localStorage immediately
-      await saveBuyerBalance(username, balance);
-    } catch (error) {
-      console.error('Error setting buyer balance:', error);
-    }
-  }, [saveBuyerBalance]);
+    setBuyerBalancesState((prev) => ({
+      ...prev,
+      [username]: balance,
+    }));
+  }, []);
 
   const getSellerBalance = useCallback((seller: string): number => {
     return sellerBalances[seller] || 0;
   }, [sellerBalances]);
 
   const setSellerBalance = useCallback(async (seller: string, balance: number) => {
-    try {
-      setSellerBalancesState((prev) => ({
-        ...prev,
-        [seller]: balance,
-      }));
-      // Save to localStorage immediately
-      await saveSellerBalance(seller, balance);
-    } catch (error) {
-      console.error('Error setting seller balance:', error);
-    }
-  }, [saveSellerBalance]);
+    setSellerBalancesState((prev) => ({
+      ...prev,
+      [seller]: balance,
+    }));
+  }, []);
 
   const setAdminBalance = useCallback(async (balance: number) => {
-    try {
-      setAdminBalanceState(balance);
-      // Save to localStorage immediately
-      await saveAdminBalance(balance);
-    } catch (error) {
-      console.error('Error setting admin balance:', error);
-    }
-  }, [saveAdminBalance]);
+    setAdminBalanceState(balance);
+  }, []);
 
   const addOrder = useCallback(async (order: Order) => {
-    try {
-      setOrderHistory((prev) => [...prev, order]);
-    } catch (error) {
-      console.error('Error adding order:', error);
-    }
+    setOrderHistory((prev) => [...prev, order]);
   }, []);
 
   const addDeposit = useCallback(async (
@@ -475,7 +544,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         tierCreditAmount
       });
       
-      // Update balances immediately with save
+      // Update balances
       await setBuyerBalance(buyerUsername, buyerCurrentBalance - price);
       await setSellerBalance(listing.seller, (sellerBalances[listing.seller] || 0) + sellerCut);
       await setAdminBalance(adminBalance + platformFee);
@@ -514,11 +583,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         role: 'buyer' as const
       };
       
-      setAdminActions(prev => {
-        const updated = [...prev, platformFeeAction];
-        console.log('[Purchase] Admin actions updated:', updated.length);
-        return updated;
-      });
+      setAdminActions(prev => [...prev, platformFeeAction]);
       
       // Add notification
       if (addSellerNotification) {
@@ -534,16 +599,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           );
         }
       }
-      
-      console.log('[Purchase] Purchase successful:', {
-        buyer: buyerUsername,
-        seller: listing.seller,
-        price,
-        buyerNewBalance: buyerCurrentBalance - price,
-        sellerNewBalance: (sellerBalances[listing.seller] || 0) + sellerCut,
-        adminNewBalance: adminBalance + platformFee,
-        platformFeeAction
-      });
       
       return true;
     } catch (error) {
@@ -565,7 +620,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sellerCut = customRequest.amount * 0.9;
       const platformFee = markedUpPrice - sellerCut;
       
-      // Update balances with save
+      // Update balances
       await setBuyerBalance(customRequest.buyer, buyerCurrentBalance - markedUpPrice);
       await setSellerBalance(customRequest.seller, (sellerBalances[customRequest.seller] || 0) + sellerCut);
       await setAdminBalance(adminBalance + platformFee);
@@ -617,7 +672,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sellerCut = amount * 0.75;
       const adminCut = amount * 0.25;
       
-      // Update balances with save
+      // Update balances
       await setBuyerBalance(buyer, buyerBalance - amount);
       await setSellerBalance(seller, (sellerBalances[seller] || 0) + sellerCut);
       await setAdminBalance(adminBalance + adminCut);
@@ -660,7 +715,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return false;
       }
       
-      // Update balances with save
+      // Update balances
       await setBuyerBalance(buyer, buyerBalance - amount);
       await setSellerBalance(seller, (sellerBalances[seller] || 0) + amount);
       
@@ -755,7 +810,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         role,
       };
       
-      // Update using functional update pattern
       setAdminActions(prev => [...prev, action]);
       
       return true;
@@ -800,7 +854,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         role,
       };
       
-      // Update using functional update pattern
       setAdminActions(prev => [...prev, action]);
       
       return true;
@@ -811,18 +864,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
 
   const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
-    const updatedOrders = orderHistory.map(order =>
+    setOrderHistory(prev => prev.map(order =>
       order.id === orderId ? { ...order, deliveryAddress: address } : order
-    );
-    setOrderHistory(updatedOrders);
-  }, [orderHistory]);
+    ));
+  }, []);
 
   const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
-    const updatedOrders = orderHistory.map(order =>
+    setOrderHistory(prev => prev.map(order =>
       order.id === orderId ? { ...order, shippingStatus: status } : order
-    );
-    setOrderHistory(updatedOrders);
-  }, [orderHistory]);
+    ));
+  }, []);
 
   const getDepositsForUser = useCallback((username: string): DepositLog[] => {
     return depositLogs.filter(log => log.username === username);
@@ -890,7 +941,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return [];
   }, []);
 
+  // Reload data function
+  const reloadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await loadAllData();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadAllData]);
+
   const contextValue: WalletContextType = {
+    // Loading state
+    isLoading,
+    isInitialized,
+    initializationError,
+    
+    // Core functionality
     buyerBalances,
     adminBalance,
     sellerBalances,
@@ -923,10 +990,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     getTotalDeposits,
     getDepositsByTimeframe,
     
-    // New enhanced features
+    // Enhanced features
     checkSuspiciousActivity,
     reconcileBalance,
     getTransactionHistory,
+    reloadData,
   };
 
   return (

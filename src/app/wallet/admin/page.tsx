@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { AlertCircle, BarChart3, Loader2 } from 'lucide-react';
+import { AlertCircle, BarChart3, Loader2, RefreshCw } from 'lucide-react';
 
 // Import split components
 import AdminMetrics from '@/components/admin/wallet/AdminMetrics';
@@ -17,6 +17,7 @@ import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
 import { getTimeFilteredData, getAllSellerWithdrawals } from '@/utils/admin/walletHelpers';
 
 function AdminProfitDashboardContent() {
+  // All hooks must be called before any conditional returns
   const { 
     adminBalance, 
     adminActions, 
@@ -26,11 +27,18 @@ function AdminProfitDashboardContent() {
     getTotalDeposits, 
     getDepositsByTimeframe,
     sellerWithdrawals,
-    adminWithdrawals
+    adminWithdrawals,
+    isLoading: walletLoading,
+    isInitialized: walletInitialized,
+    initializationError,
+    reloadData
   } = useWallet();
+  
   const { user } = useAuth();
-  const { users, listings } = useListings();
+  const { users, listings, isAuthReady: listingsReady } = useListings();
+  
   const [showDetails, setShowDetails] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | '3months' | 'year' | 'all'>(() => {
     // Load saved time filter or default to 'all'
     if (typeof window !== 'undefined') {
@@ -47,23 +55,7 @@ function AdminProfitDashboardContent() {
     localStorage.setItem('admin_dashboard_timefilter', timeFilter);
   }, [timeFilter]);
 
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
-
-  if (!isAdmin) {
-    return (
-      <main className="min-h-screen bg-black text-white p-8">
-        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
-          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-center mb-4">Access Denied</h1>
-          <p className="text-gray-400 text-center">
-            Only platform administrators can view this page.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  // Get filtered data
+  // Get filtered data (moved before conditional returns)
   const { 
     actions: filteredActions, 
     orders: filteredOrders, 
@@ -79,12 +71,92 @@ function AdminProfitDashboardContent() {
       allDeposits: depositLogs.length,
       filteredDeposits: filteredDeposits.length,
       latestDeposit: depositLogs[depositLogs.length - 1],
-      filterShowingAll: timeFilter === 'all'
+      filterShowingAll: timeFilter === 'all',
+      totalDepositsAmount: getTotalDeposits()
     });
-  }, [timeFilter, depositLogs, filteredDeposits]);
+  }, [timeFilter, depositLogs, filteredDeposits, getTotalDeposits]);
+
+  // Handle force reload
+  const handleForceReload = async () => {
+    setIsReloading(true);
+    try {
+      // Reload wallet data
+      if (reloadData) {
+        await reloadData();
+      }
+      // Small delay to show loading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } finally {
+      setIsReloading(false);
+    }
+  };
+
+  // Check admin status AFTER all hooks
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+
+  // Now we can do conditional returns
+  // Show loading state while wallet is initializing
+  if (!walletInitialized || walletLoading) {
+    return (
+      <main className="min-h-screen bg-black text-white p-8">
+        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+          <Loader2 className="w-16 h-16 text-[#ff950e] animate-spin mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-center mb-4">Loading Analytics</h1>
+          <p className="text-gray-400 text-center">
+            Initializing wallet data and calculating metrics...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // Show error state if initialization failed
+  if (initializationError) {
+    return (
+      <main className="min-h-screen bg-black text-white p-8">
+        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-center mb-4">Initialization Error</h1>
+          <p className="text-gray-400 text-center mb-6">
+            {initializationError}
+          </p>
+          <button
+            onClick={handleForceReload}
+            className="w-full px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg font-medium transition-colors"
+          >
+            Retry Loading
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <main className="min-h-screen bg-black text-white p-8">
+        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-center mb-4">Access Denied</h1>
+          <p className="text-gray-400 text-center">
+            Only platform administrators can view this page.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-black text-white py-6 px-4 sm:px-6 overflow-x-hidden">
+      {/* Loading overlay for reloads */}
+      {isReloading && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 shadow-xl">
+            <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-3" />
+            <p className="text-white font-medium">Reloading analytics data...</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
@@ -124,16 +196,30 @@ function AdminProfitDashboardContent() {
             
             {/* Force Reload button */}
             <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#1a1a1a] border border-gray-800 hover:bg-[#252525] text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              onClick={handleForceReload}
+              disabled={isReloading}
+              className="px-4 py-2 bg-[#1a1a1a] border border-gray-800 hover:bg-[#252525] text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+              <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
               Force Reload
             </button>
           </div>
         </div>
+
+        {/* Data status indicator */}
+        {walletInitialized && (
+          <div className="mb-6 p-4 bg-[#1a1a1a] border border-gray-800 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-gray-400">Data synchronized</span>
+              </div>
+              <div className="text-xs text-gray-500">
+                Last updated: {new Date().toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        )}
 
         <AdminMetrics
           timeFilter={timeFilter}
