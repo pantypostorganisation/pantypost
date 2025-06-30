@@ -564,7 +564,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         shippingStatus: 'pending',
         listingId: listing.id,
         listingTitle: listing.title,
-        quantity: 1
+        quantity: 1,
+        // Preserve auction metadata
+        wasAuction: (listing as any).wasAuction || false,
+        finalBid: (listing as any).finalBid
       };
       
       await addOrder(order);

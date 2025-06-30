@@ -571,7 +571,10 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const purchaseListingCopy = {
                   ...listing,
                   price: winningBid,
-                  markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100
+                  markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100,
+                  wasAuction: true,
+                  finalBid: winningBid,
+                  auctionEndTime: listing.auction.endTime
                 };
                 
                 const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
@@ -599,16 +602,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                       `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
                     );
                   }
-                  
-                  await addOrder({
-                    ...purchaseListingCopy,
-                    buyer: winningBidder,
-                    date: new Date().toISOString(),
-                    imageUrl: listing.imageUrls?.[0] || undefined,
-                    wasAuction: true,
-                    finalBid: winningBid,
-                    tierCreditAmount: tierCreditAmount
-                  });
                   
                   removedListings.push(listing.id);
                   await storageService.removeItem(processingKey);

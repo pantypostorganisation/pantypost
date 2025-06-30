@@ -18,13 +18,17 @@ export const INITIAL_FORM_STATE: ListingFormState = {
 
 /**
  * Calculate auction end time based on duration
- * @param duration - Duration in days as string
+ * @param duration - Duration in days as string (can be fractional for minutes/hours)
  * @returns Date string for the auction end time
  */
 export const calculateAuctionEndTime = (duration: string): string => {
-  const days = parseInt(duration, 10);
+  const days = parseFloat(duration); // Use parseFloat instead of parseInt
   const endTime = new Date();
-  endTime.setDate(endTime.getDate() + days);
+  
+  // Convert days to milliseconds and add to current time
+  const millisecondsToAdd = days * 24 * 60 * 60 * 1000;
+  endTime.setTime(endTime.getTime() + millisecondsToAdd);
+  
   return endTime.toISOString();
 };
 

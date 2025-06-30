@@ -148,7 +148,7 @@ export default function ListingForm({
                 onChange={(e) => onFormChange({ auctionDuration: e.target.value })}
                 className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
               >
-                <option value="0.017">1 Minute (Testing)</option>
+                <option value="0.000694">1 Minute (Testing)</option>
                 <option value="1">1 Day</option>
                 <option value="3">3 Days</option>
                 <option value="5">5 Days</option>
