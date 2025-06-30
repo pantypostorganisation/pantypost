@@ -323,12 +323,12 @@ export default function AdminMetrics(props: AdminMetricsProps) {
 
       {/* Total Platform Revenue */}
       <MetricCard
-        title={timeFilter === 'all' ? 'Total Platform Revenue' : `Revenue - ${periodName}`}
-        subtitle="All sales + subscriptions"
+        title={timeFilter === 'all' ? 'Total Revenue' : `Revenue - ${periodName}`}
+        subtitle="All revenue"
         value={metrics.totalRevenue}
         icon={BarChart3}
-        iconColor="bg-purple-500/20"
-        bgGradient="from-[#1a1a1a] to-[#1a1a1a] border-gray-800"
+        iconColor="bg-purple-500"
+        bgGradient="from-purple-500/20 to-purple-600/10 border-purple-500/30"
       />
 
       {/* Average Order Value */}
@@ -337,8 +337,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         subtitle="per transaction"
         value={metrics.averageOrderValue}
         icon={Target}
-        iconColor="bg-green-500/20"
-        bgGradient="from-[#1a1a1a] to-[#1a1a1a] border-gray-800"
+        iconColor="bg-green-500"
+        bgGradient="from-green-500/20 to-green-600/10 border-green-500/30"
       />
     </div>
   );
