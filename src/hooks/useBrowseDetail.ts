@@ -74,7 +74,8 @@ export const useBrowseDetail = () => {
     users,
     subscriptions,
     placeBid: listingsPlaceBid,
-    purchaseListingAndRemove
+    purchaseListingAndRemove,
+    refreshListings
   } = useListings();
   
   // State
@@ -82,6 +83,7 @@ export const useBrowseDetail = () => {
   const [listing, setListing] = useState<ListingWithDetails | undefined>();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Refs
   const lastProcessedPaymentRef = useRef<string | null>(null);
@@ -94,23 +96,68 @@ export const useBrowseDetail = () => {
   const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
   const viewIncrementedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Core data
   const listingId = params?.id as string;
   const currentUsername = user?.username || null;
 
-  // Get the listing from ListingContext
+  // Load listing using the service
   useEffect(() => {
-    if (listingId && listings.length > 0) {
-      const foundListing = listings.find(l => l.id === listingId);
-      if (foundListing) {
-        setListing(foundListing as ListingWithDetails);
+    const loadListing = async () => {
+      if (!listingId) return;
+
+      // Cancel any pending request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-      setIsLoading(false);
-    } else if (listings.length > 0) {
-      setIsLoading(false);
-    }
-  }, [listingId, listings]);
+
+      // Create new abort controller
+      abortControllerRef.current = new AbortController();
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // First, check if listing is in the context
+        const contextListing = listings.find(l => l.id === listingId);
+        
+        if (contextListing) {
+          setListing(contextListing as ListingWithDetails);
+          setIsLoading(false);
+        } else {
+          // If not in context, fetch from service
+          const result = await listingsService.getListing(listingId);
+          
+          if (!mountedRef.current) return;
+
+          if (result.success && result.data) {
+            setListing(result.data as ListingWithDetails);
+            
+            // Refresh listings context to include this listing
+            await refreshListings();
+          } else {
+            setError(result.error?.message || 'Listing not found');
+          }
+          
+          setIsLoading(false);
+        }
+      } catch (error: any) {
+        if (!mountedRef.current) return;
+        
+        if (error.name === 'AbortError') {
+          console.log('Request was cancelled');
+          return;
+        }
+
+        console.error('Error loading listing:', error);
+        setError(error.message || 'Failed to load listing');
+        setIsLoading(false);
+      }
+    };
+
+    loadListing();
+  }, [listingId, listings, refreshListings]);
 
   // Load additional data
   useEffect(() => {
@@ -145,15 +192,26 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // Add view count tracking
+  // Track view count
   useEffect(() => {
     const trackView = async () => {
       if (listing && !viewIncrementedRef.current) {
         viewIncrementedRef.current = true;
-        await listingsService.updateViews({ listingId: listing.id, viewerId: currentUsername || undefined });
-        const viewsResponse = await listingsService.getListingViews(listing.id);
-        if (viewsResponse.success && viewsResponse.data !== undefined) {
-          setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+        
+        try {
+          // Update view count
+          await listingsService.updateViews({ 
+            listingId: listing.id, 
+            viewerId: currentUsername || undefined 
+          });
+          
+          // Get updated view count
+          const viewsResponse = await listingsService.getListingViews(listing.id);
+          if (viewsResponse.success && viewsResponse.data !== undefined) {
+            setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+          }
+        } catch (error) {
+          console.error('Error tracking view:', error);
         }
       }
     };
@@ -328,6 +386,12 @@ export const useBrowseDetail = () => {
           }
         });
 
+        // Refresh listing to get updated bid data
+        const result = await listingsService.getListing(listing.id);
+        if (result.success && result.data) {
+          setListing(result.data as ListingWithDetails);
+        }
+
         setTimeout(() => {
           if (mountedRef.current) {
             updateState({ bidSuccess: null });
@@ -467,6 +531,9 @@ export const useBrowseDetail = () => {
       if (fundingTimerRef.current) {
         clearInterval(fundingTimerRef.current);
       }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
   }, []);
 
@@ -514,7 +581,9 @@ export const useBrowseDetail = () => {
       sellerTierInfo: null,
       isVerified: false,
       sellerAverageRating: null,
-      sellerReviewCount: 0
+      sellerReviewCount: 0,
+      isLoading: true,
+      error: null
     };
   }
 
@@ -577,6 +646,10 @@ export const useBrowseDetail = () => {
     sellerTierInfo: sellerInfo?.tierInfo,
     isVerified: sellerInfo?.isVerified || false,
     sellerAverageRating: sellerInfo?.averageRating,
-    sellerReviewCount: sellerInfo?.reviewCount || 0
+    sellerReviewCount: sellerInfo?.reviewCount || 0,
+    
+    // Loading/error state
+    isLoading: false,
+    error
   };
 };

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { storageService, listingsService } from '@/services';
+import type { ListingSearchParams } from '@/services';
 import { FilterOptions, CategoryCounts, SellerProfile, ListingWithProfile } from '@/types/browse';
 import { 
   HOUR_RANGE_OPTIONS, 
@@ -13,34 +14,9 @@ import {
   getDisplayPrice as getDisplayPriceUtil,
   formatTimeRemaining as formatTimeRemainingUtil
 } from '@/utils/browseUtils';
+import { Listing } from '@/context/ListingContext';
 
 // Type definitions - matching what we actually have in storage
-interface Listing {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  markedUpPrice?: number;
-  imageUrls?: string[];
-  images?: string[];
-  date: string;
-  seller: string;
-  isVerified?: boolean;
-  isPremium?: boolean;
-  tags?: string[];
-  hoursWorn?: number;
-  auction?: {
-    isAuction: boolean;
-    startingPrice: number;
-    reservePrice?: number;
-    endTime: string;
-    bids: any[];
-    highestBid?: number;
-    highestBidder?: string;
-    status: string;
-  };
-}
-
 interface Order {
   id: string;
   seller: string;
@@ -58,7 +34,7 @@ interface User {
 const normalizeListing = (listing: Listing): any => ({
   ...listing,
   markedUpPrice: listing.markedUpPrice || Math.round(listing.price * 1.1 * 100) / 100,
-  imageUrls: listing.imageUrls || listing.images || []
+  imageUrls: listing.imageUrls || []
 });
 
 const isAuctionListing = (listing: Listing): boolean => {
@@ -90,6 +66,7 @@ export const useBrowseListings = () => {
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [listingErrors, setListingErrors] = useState<{ [listingId: string]: string }>({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+  const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
   
   // Data state
   const [listings, setListings] = useState<Listing[]>([]);
@@ -97,6 +74,8 @@ export const useBrowseListings = () => {
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalListings, setTotalListings] = useState(0);
 
   // Refs
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -104,45 +83,121 @@ export const useBrowseListings = () => {
   const mountedRef = useRef(true);
   const lastClickTime = useRef<number>(0);
   const lastQuickViewTime = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const MAX_CACHED_PROFILES = 100;
 
-  // Load data
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Load listings
-        const listingsResponse = await listingsService.getListings();
-        if (listingsResponse.success && listingsResponse.data) {
-          setListings(listingsResponse.data);
+  // Load data using listings service
+  const loadListings = useCallback(async () => {
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Prepare search params
+      let sortByParam: 'date' | 'price' | 'views' | 'endingSoon' = 'date';
+      if (sortBy === 'newest') {
+        sortByParam = 'date';
+      } else if (sortBy === 'priceAsc' || sortBy === 'priceDesc') {
+        sortByParam = 'price';
+      } else if (sortBy === 'endingSoon') {
+        sortByParam = 'endingSoon';
+      }
+
+      const searchParams: ListingSearchParams = {
+        query: debouncedSearchTerm,
+        minPrice: minPrice ? parseFloat(minPrice) : undefined,
+        maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+        isPremium: filter === 'premium' ? true : filter === 'standard' ? false : undefined,
+        isAuction: filter === 'auction' ? true : filter === 'standard' ? false : undefined,
+        isActive: true,
+        sortBy: sortByParam,
+        sortOrder: sortBy === 'priceDesc' ? 'desc' : 'asc',
+        page: page,
+        limit: PAGE_SIZE,
+      };
+
+      // Load listings
+      const listingsResponse = await listingsService.getListings(searchParams);
+      
+      if (!mountedRef.current) return;
+
+      if (listingsResponse.success && listingsResponse.data) {
+        // Apply hour range filter (not supported by service)
+        let filteredListings = listingsResponse.data.filter((listing: Listing) => {
+          const hoursWorn = listing.hoursWorn ?? 0;
+          return hoursWorn >= selectedHourRange.min && hoursWorn <= selectedHourRange.max;
+        });
+
+        // Handle endingSoon sort (custom logic)
+        if (sortBy === 'endingSoon') {
+          filteredListings.sort((a: Listing, b: Listing) => {
+            if (a.auction && b.auction) {
+              return new Date(a.auction.endTime).getTime() - new Date(b.auction.endTime).getTime();
+            } else if (a.auction) {
+              return -1;
+            } else if (b.auction) {
+              return 1;
+            }
+            return 0;
+          });
         }
 
-        // Load users
-        const usersData = await storageService.getItem<Record<string, User>>('users', {});
-        setUsers(usersData);
-
-        // Load orders
-        const ordersData = await storageService.getItem<Order[]>('orders', []);
-        setOrderHistory(ordersData);
-
-        // Load subscriptions
-        const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
-        setSubscriptions(subsData);
-
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error loading data:', error);
-        setIsLoading(false);
+        setListings(filteredListings);
+        setTotalListings(listingsResponse.meta?.totalItems || filteredListings.length);
+      } else {
+        throw new Error(listingsResponse.error?.message || 'Failed to load listings');
       }
-    };
 
-    loadData();
-  }, []);
+      // Load users
+      const usersData = await storageService.getItem<Record<string, User>>('users', {});
+      setUsers(usersData);
+
+      // Load orders
+      const ordersData = await storageService.getItem<Order[]>('orders', []);
+      setOrderHistory(ordersData);
+
+      // Load subscriptions
+      const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
+      setSubscriptions(subsData);
+
+      // Load popular tags
+      const tagsResponse = await listingsService.getPopularTags(10);
+      if (tagsResponse.success && tagsResponse.data) {
+        setPopularTags(tagsResponse.data);
+      }
+
+      setIsLoading(false);
+    } catch (error: any) {
+      if (!mountedRef.current) return;
+      
+      if (error.name === 'AbortError') {
+        console.log('Request was cancelled');
+        return;
+      }
+
+      console.error('Error loading data:', error);
+      setError(error.message || 'Failed to load listings');
+      setIsLoading(false);
+    }
+  }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, page, selectedHourRange]);
+
+  // Load data on mount and when filters change
+  useEffect(() => {
+    loadListings();
+  }, [loadListings]);
 
   // Load seller profiles
   useEffect(() => {
     const loadSellerProfiles = async () => {
-      if (typeof window !== 'undefined' && !isLoading) {
+      if (typeof window !== 'undefined' && !isLoading && listings.length > 0) {
         const currentSellers = new Set(listings.map(listing => listing.seller));
         const profiles: { [key: string]: SellerProfile } = {};
         
@@ -180,7 +235,7 @@ export const useBrowseListings = () => {
     setPage(0);
   }, [filter, selectedHourRange, debouncedSearchTerm, minPrice, maxPrice, sortBy]);
 
-  // Timer management
+  // Timer management for auctions
   const auctionTimers = useMemo(() => {
     try {
       const now = new Date();
@@ -271,49 +326,11 @@ export const useBrowseListings = () => {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
   }, []);
-
-  // Timer cache cleanup
-  useEffect(() => {
-    const cleanupInterval = setInterval(() => {
-      if (!mountedRef.current) return;
-      
-      try {
-        const now = Date.now();
-        const cache = timeCache.current;
-        
-        Object.keys(cache).forEach(key => {
-          if (cache[key].expires < now) {
-            delete cache[key];
-          }
-        });
-
-        const activeAuctionEndTimes = new Set(
-          auctionTimers.map(timer => timer?.endTime ?? '')
-        );
-        
-        Object.keys(cache).forEach(key => {
-          if (!activeAuctionEndTimes.has(key)) {
-            delete cache[key];
-          }
-        });
-        
-        const cacheKeys = Object.keys(cache);
-        if (cacheKeys.length > 200) {
-          const sortedKeys = cacheKeys.sort((a, b) => cache[a].expires - cache[b].expires);
-          const keysToRemove = sortedKeys.slice(0, cacheKeys.length - 200);
-          keysToRemove.forEach(key => delete cache[key]);
-        }
-      } catch (error) {
-        console.error('Error cleaning up timer cache:', error);
-      }
-    }, 60000);
-    
-    return () => {
-      clearInterval(cleanupInterval);
-    };
-  }, [auctionTimers]);
 
   // Memoized calculations
   const categoryCounts = useMemo(() => {
@@ -321,7 +338,7 @@ export const useBrowseListings = () => {
       const activeListings = listings.filter(isListingActive);
       
       return {
-        all: activeListings.length,
+        all: totalListings,
         standard: activeListings.filter(l => !l.isPremium && !l.auction).length,
         premium: activeListings.filter(l => l.isPremium).length,
         auction: activeListings.filter(l => l.auction).length
@@ -330,7 +347,7 @@ export const useBrowseListings = () => {
       console.error('Error calculating category counts:', error);
       return { all: 0, standard: 0, premium: 0, auction: 0 };
     }
-  }, [listings]);
+  }, [listings, totalListings]);
 
   const getSellerSalesCount = useCallback((seller: string) => {
     try {
@@ -341,106 +358,9 @@ export const useBrowseListings = () => {
     }
   }, [orderHistory]);
 
-  const filteredListings = useMemo(() => {
-    try {
-      return listings
-        .filter((listing: Listing) => {
-          try {
-            if (!isListingActive(listing)) {
-              return false;
-            }
-            
-            if (filter === 'standard' && (listing.isPremium || listing.auction)) return false;
-            if (filter === 'premium' && !listing.isPremium) return false;
-            if (filter === 'auction' && !listing.auction) return false;
-            
-            const hoursWorn = listing.hoursWorn ?? 0;
-            if (hoursWorn < selectedHourRange.min || hoursWorn > selectedHourRange.max) {
-              return false;
-            }
-            
-            if (debouncedSearchTerm) {
-              const searchLower = debouncedSearchTerm.toLowerCase();
-              const matchesSearch = 
-                (listing.title?.toLowerCase().includes(searchLower)) || 
-                (listing.description?.toLowerCase().includes(searchLower)) || 
-                (listing.tags?.some(tag => tag.toLowerCase().includes(searchLower)) || false) ||
-                (listing.seller.toLowerCase().includes(searchLower));
-              
-              if (!matchesSearch) return false;
-            }
-            
-            let price: number;
-            if (isAuctionListing(listing)) {
-              price = listing.auction?.highestBid ?? listing.auction?.startingPrice ?? 0;
-            } else {
-              price = listing.markedUpPrice || listing.price;
-            }
-            
-            const min = parseFloat(minPrice) || 0;
-            const max = parseFloat(maxPrice) || Infinity;
-            if (price < min || price > max) return false;
-            
-            return true;
-          } catch (error) {
-            console.error('Error filtering listing:', error, listing.id);
-            return false;
-          }
-        })
-        .sort((a: Listing, b: Listing) => {
-          try {
-            if (sortBy === 'endingSoon') {
-              if (isAuctionListing(a) && isAuctionListing(b)) {
-                const aTime = new Date(a.auction!.endTime).getTime();
-                const bTime = new Date(b.auction!.endTime).getTime();
-                return aTime - bTime;
-              }
-              if (isAuctionListing(a)) return -1;
-              if (isAuctionListing(b)) return 1;
-              
-              const aDate = new Date(a.date).getTime();
-              const bDate = new Date(b.date).getTime();
-              return bDate - aDate;
-            }
-            
-            if (sortBy === 'priceAsc' || sortBy === 'priceDesc') {
-              let aPrice: number, bPrice: number;
-              
-              if (isAuctionListing(a)) {
-                aPrice = a.auction?.highestBid ?? a.auction?.startingPrice ?? 0;
-              } else {
-                aPrice = a.markedUpPrice || a.price;
-              }
-              
-              if (isAuctionListing(b)) {
-                bPrice = b.auction?.highestBid ?? b.auction?.startingPrice ?? 0;
-              } else {
-                bPrice = b.markedUpPrice || b.price;
-              }
-              
-              return sortBy === 'priceAsc' ? aPrice - bPrice : bPrice - aPrice;
-            }
-            
-            const aDate = new Date(a.date).getTime();
-            const bDate = new Date(b.date).getTime();
-            return bDate - aDate;
-          } catch (error) {
-            console.error('Error sorting listings:', error);
-            return 0;
-          }
-        });
-    } catch (error) {
-      console.error('Error filtering and sorting listings:', error);
-      return [];
-    }
-  }, [listings, filter, selectedHourRange, debouncedSearchTerm, minPrice, maxPrice, sortBy]);
-
   const paginatedListings = useMemo(() => {
     try {
-      const start = page * PAGE_SIZE;
-      const end = start + PAGE_SIZE;
-      
-      return filteredListings.slice(start, end).map(listing => {
+      return listings.map(listing => {
         const sellerUser = users?.[listing.seller];
         const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
         const sellerSalesCount = getSellerSalesCount(listing.seller);
@@ -454,19 +374,19 @@ export const useBrowseListings = () => {
         } as ListingWithProfile;
       });
     } catch (error) {
-      console.error('Error paginating listings:', error);
+      console.error('Error creating paginated listings:', error);
       return [];
     }
-  }, [filteredListings, page, users, getSellerSalesCount, sellerProfiles]);
+  }, [listings, users, getSellerSalesCount, sellerProfiles]);
   
   const totalPages = useMemo(() => {
     try {
-      return Math.ceil(filteredListings.length / PAGE_SIZE);
+      return Math.ceil(totalListings / PAGE_SIZE);
     } catch (error) {
       console.error('Error calculating total pages:', error);
       return 1;
     }
-  }, [filteredListings.length]);
+  }, [totalListings]);
 
   // Utility functions
   const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
@@ -527,14 +447,16 @@ export const useBrowseListings = () => {
   }, [page]);
 
   const handleNextPage = useCallback(() => {
-    setPage(prev => prev + 1);
-  }, []);
+    if (page < totalPages - 1) {
+      setPage(prev => prev + 1);
+    }
+  }, [page, totalPages]);
 
   const handlePageClick = useCallback((targetPage: number) => {
-    if (targetPage >= 0) {
+    if (targetPage >= 0 && targetPage < totalPages) {
       setPage(targetPage);
     }
-  }, []);
+  }, [totalPages]);
 
   const formatTimeRemaining = useCallback((endTime: string) => {
     return formatTimeRemainingUtil(endTime, timeCache);
@@ -548,6 +470,10 @@ export const useBrowseListings = () => {
     setSelectedHourRange(HOUR_RANGE_OPTIONS[0]);
     setSortBy('newest');
   }, []);
+
+  const refreshListings = useCallback(() => {
+    loadListings();
+  }, [loadListings]);
 
   return {
     // Auth & State
@@ -570,13 +496,15 @@ export const useBrowseListings = () => {
     forceUpdateTimer,
     
     // Data
-    filteredListings,
+    filteredListings: paginatedListings,
     paginatedListings,
     categoryCounts,
     totalPages,
+    popularTags,
     
     // Loading state
     isLoading,
+    error,
     
     // Handlers
     handleMouseEnter,
@@ -588,6 +516,7 @@ export const useBrowseListings = () => {
     handleNextPage,
     handlePageClick,
     resetFilters,
+    refreshListings,
     
     // Utils
     isSubscribed,

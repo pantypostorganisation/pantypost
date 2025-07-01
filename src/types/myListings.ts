@@ -25,6 +25,15 @@ export interface ListingAnalytics {
   views: number;
 }
 
+export interface ListingDraft {
+  id: string;
+  seller: string;
+  formState: ListingFormState;
+  createdAt: string;
+  lastModified: string;
+  name?: string; // Optional name for the draft
+}
+
 export interface StatsCardProps {
   title: string;
   count: number;
@@ -48,6 +57,8 @@ export interface ListingFormProps {
   onImageReorder: (dragIndex: number, dropIndex: number) => void;
   onSave: () => void;
   onCancel: () => void;
+  onSaveDraft?: () => void;
+  onLoadDraft?: (draft: ListingDraft) => void;
 }
 
 export interface ListingCardProps {
@@ -80,4 +91,17 @@ export interface TipsCardProps {
 
 export interface RecentSalesProps {
   orders: any[];
+}
+
+export interface DraftListProps {
+  drafts: ListingDraft[];
+  onLoadDraft: (draft: ListingDraft) => void;
+  onDeleteDraft: (draftId: string) => void;
+}
+
+export interface BulkActionsProps {
+  selectedListings: string[];
+  onBulkDelete: () => void;
+  onBulkUpdatePremium: (isPremium: boolean) => void;
+  onBulkUpdatePrice: (priceChange: number) => void;
 }

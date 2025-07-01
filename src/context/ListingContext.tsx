@@ -15,6 +15,7 @@ import { Order } from './WalletContext';
 import { v4 as uuidv4 } from 'uuid';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { listingsService, usersService, storageService } from '@/services';
+import { ListingDraft } from '@/types/myListings';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -103,6 +104,15 @@ type ListingContextType = {
   checkEndedAuctions: () => Promise<void>;
   cancelAuction: (listingId: string) => Promise<boolean>;
   
+  // Draft functions
+  saveDraft: (draft: ListingDraft) => Promise<boolean>;
+  getDrafts: () => Promise<ListingDraft[]>;
+  deleteDraft: (draftId: string) => Promise<boolean>;
+  
+  // Image functions
+  uploadImage: (file: File) => Promise<string | null>;
+  deleteImage: (imageUrl: string) => Promise<boolean>;
+  
   subscriptions: { [buyer: string]: string[] };
   subscribeToSeller: (buyer: string, seller: string, price: number) => Promise<boolean>;
   unsubscribeFromSeller: (buyer: string, seller: string) => Promise<void>;
@@ -121,6 +131,11 @@ type ListingContextType = {
   users: { [username: string]: any };
   
   orderHistory: Order[];
+  
+  // Loading and error states
+  isLoading: boolean;
+  error: string | null;
+  refreshListings: () => Promise<void>;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
@@ -133,26 +148,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [subscriptions, setSubscriptions] = useState<{ [buyer: string]: string[] }>({});
   const [notificationStore, setNotificationStore] = useState<NotificationStore>({});
   const [isAuthReady, setIsAuthReady] = useState(false);
-
-  // Health check: context state
-  useEffect(() => {
-    if (!user) {
-      console.warn('[PantyPost] ListingContext: No user loaded from AuthContext.');
-    }
-    if (!Array.isArray(listings)) {
-      console.error('[PantyPost] ListingContext: Listings is not an array!', listings);
-    }
-    if (typeof subscriptions !== 'object') {
-      console.error('[PantyPost] ListingContext: Subscriptions is not an object!', subscriptions);
-    }
-    if (
-      user?.role === 'seller' &&
-      notificationStore[user.username] !== undefined &&
-      !Array.isArray(notificationStore[user.username])
-    ) {
-      console.error('[PantyPost] sellerNotifications is not an array:', notificationStore[user.username]);
-    }
-  }, [user, listings, subscriptions, notificationStore]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Helper function to normalize notification items to the new format
   const normalizeNotification = (item: NotificationItem): Notification => {
@@ -227,51 +224,74 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   // Load initial data using services
-  useEffect(() => {
-    const loadData = async () => {
-      if (typeof window === 'undefined') return;
+  const loadData = useCallback(async () => {
+    if (typeof window === 'undefined') return;
 
-      try {
-        // Load users
-        const usersResult = await usersService.getUsers();
-        if (usersResult.success && usersResult.data) {
-          setUsers(usersResult.data);
-        }
+    setIsLoading(true);
+    setError(null);
 
-        // Load listings
-        const listingsResult = await listingsService.getListings();
-        if (listingsResult.success && listingsResult.data) {
-          setListings(listingsResult.data);
-        }
-
-        // Load subscriptions
-        const storedSubs = await storageService.getItem<{ [buyer: string]: string[] }>('subscriptions', {});
-        setSubscriptions(storedSubs);
-
-        // Load notifications
-        const storedNotifications = await storageService.getItem<NotificationStore>('seller_notifications_store', {});
-        const migrated: NotificationStore = {};
-        Object.keys(storedNotifications).forEach(username => {
-          if (Array.isArray(storedNotifications[username])) {
-            migrated[username] = migrateNotifications(storedNotifications[username]);
-          }
-        });
-        setNotificationStore(migrated);
-        await saveNotificationStore(migrated);
-
-        // Clean up old notification storage
-        await storageService.removeItem('seller_notifications');
-        await storageService.removeItem('seller_notifications_by_id');
-        await storageService.removeItem('seller_notifications_map');
-
-        setIsAuthReady(true);
-      } catch (error) {
-        console.error('Error loading ListingContext data:', error);
-        setIsAuthReady(true);
+    try {
+      // Load users
+      const usersResult = await usersService.getUsers();
+      if (usersResult.success && usersResult.data) {
+        setUsers(usersResult.data);
       }
-    };
 
+      // Load listings using the service
+      const listingsResult = await listingsService.getListings();
+      if (listingsResult.success && listingsResult.data) {
+        setListings(listingsResult.data);
+      } else {
+        throw new Error(listingsResult.error?.message || 'Failed to load listings');
+      }
+
+      // Load subscriptions
+      const storedSubs = await storageService.getItem<{ [buyer: string]: string[] }>('subscriptions', {});
+      setSubscriptions(storedSubs);
+
+      // Load notifications
+      const storedNotifications = await storageService.getItem<NotificationStore>('seller_notifications_store', {});
+      const migrated: NotificationStore = {};
+      Object.keys(storedNotifications).forEach(username => {
+        if (Array.isArray(storedNotifications[username])) {
+          migrated[username] = migrateNotifications(storedNotifications[username]);
+        }
+      });
+      setNotificationStore(migrated);
+      await saveNotificationStore(migrated);
+
+      setIsAuthReady(true);
+    } catch (error) {
+      console.error('Error loading ListingContext data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load data');
+      setIsAuthReady(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Refresh listings
+  const refreshListings = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const listingsResult = await listingsService.getListings();
+      if (listingsResult.success && listingsResult.data) {
+        setListings(listingsResult.data);
+      } else {
+        throw new Error(listingsResult.error?.message || 'Failed to refresh listings');
+      }
+    } catch (error) {
+      console.error('Error refreshing listings:', error);
+      setError(error instanceof Error ? error.message : 'Failed to refresh listings');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   // Check for ended auctions on load and at regular intervals
@@ -332,7 +352,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.log('✅ Created new listing:', result.data);
       } else {
         console.error('Failed to create listing:', result.error);
-        alert('Failed to create listing. Please try again.');
+        alert(result.error?.message || 'Failed to create listing. Please try again.');
       }
     } catch (error) {
       console.error('Error creating listing:', error);
@@ -376,7 +396,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           `🔨 You've created a new auction: "${listing.title}" starting at $${auctionSettings.startingPrice.toFixed(2)}`
         );
       } else {
-        alert('Failed to create auction listing. Please try again.');
+        alert(result.error?.message || 'Failed to create auction listing. Please try again.');
       }
     } catch (error) {
       console.error('Error creating auction listing:', error);
@@ -389,9 +409,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await listingsService.deleteListing(id);
       if (result.success) {
         setListings(prev => prev.filter(listing => listing.id !== id));
+      } else {
+        throw new Error(result.error?.message || 'Failed to delete listing');
       }
     } catch (error) {
       console.error('Error removing listing:', error);
+      alert(error instanceof Error ? error.message : 'Failed to remove listing');
     }
   };
 
@@ -421,9 +444,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         setListings(prev => prev.map(listing => 
           listing.id === id ? result.data! : listing
         ));
+      } else {
+        throw new Error(result.error?.message || 'Failed to update listing');
       }
     } catch (error) {
       console.error('Error updating listing:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update listing');
     }
   };
 
@@ -706,6 +732,70 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return false;
   };
 
+  // Draft management functions
+  const saveDraft = async (draft: ListingDraft): Promise<boolean> => {
+    if (!user || user.role !== 'seller') {
+      console.error('Only sellers can save drafts');
+      return false;
+    }
+
+    try {
+      const result = await listingsService.saveDraft({
+        ...draft,
+        seller: user.username,
+      });
+      return result.success;
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      return false;
+    }
+  };
+
+  const getDrafts = async (): Promise<ListingDraft[]> => {
+    if (!user || user.role !== 'seller') {
+      return [];
+    }
+
+    try {
+      const result = await listingsService.getDrafts(user.username);
+      return result.success && result.data ? result.data : [];
+    } catch (error) {
+      console.error('Error getting drafts:', error);
+      return [];
+    }
+  };
+
+  const deleteDraft = async (draftId: string): Promise<boolean> => {
+    try {
+      const result = await listingsService.deleteDraft(draftId);
+      return result.success;
+    } catch (error) {
+      console.error('Error deleting draft:', error);
+      return false;
+    }
+  };
+
+  // Image management functions
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      const result = await listingsService.uploadImage(file);
+      return result.success && result.data ? result.data : null;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  };
+
+  const deleteImage = async (imageUrl: string): Promise<boolean> => {
+    try {
+      const result = await listingsService.deleteImage(imageUrl);
+      return result.success;
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      return false;
+    }
+  };
+
   const subscribeToSeller = async (buyer: string, seller: string, price: number): Promise<boolean> => {
     const success = await subscribeToSellerWithPayment(buyer, seller, price);
     if (success) {
@@ -949,6 +1039,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         getEndedAuctions,
         checkEndedAuctions,
         cancelAuction,
+        saveDraft,
+        getDrafts,
+        deleteDraft,
+        uploadImage,
+        deleteImage,
         subscriptions,
         subscribeToSeller,
         unsubscribeFromSeller,
@@ -962,6 +1057,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         setVerificationStatus,
         users,
         orderHistory,
+        isLoading,
+        error,
+        refreshListings,
       }}
     >
       {children}
