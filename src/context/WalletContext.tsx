@@ -12,7 +12,7 @@ import {
 } from "react";
 import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { walletService, storageService } from '@/services';
+import { walletService, storageService, ordersService } from '@/services';
 import { WalletIntegration } from '@/services/wallet.integration';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -214,6 +214,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         { key: STORAGE_KEYS.BUYER_BALANCES, value: buyerBalances },
         { key: STORAGE_KEYS.SELLER_BALANCES, value: sellerBalances },
         { key: STORAGE_KEYS.ADMIN_BALANCE, value: adminBalance.toString() },
+        // Note: Orders are now managed by ordersService, but we still save here for backward compatibility
         { key: STORAGE_KEYS.ORDERS, value: orderHistory },
         { key: STORAGE_KEYS.SELLER_WITHDRAWALS, value: sellerWithdrawals },
         { key: STORAGE_KEYS.ADMIN_WITHDRAWALS, value: adminWithdrawals },
@@ -278,7 +279,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         storedBuyers,
         storedSellers,
         storedAdmin,
-        storedOrders,
+        // Orders are now loaded from ordersService
         storedSellerWithdrawals,
         storedAdminWithdrawals,
         storedAdminActions,
@@ -287,12 +288,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         storageService.getItem<{ [username: string]: number }>(STORAGE_KEYS.BUYER_BALANCES, {}),
         storageService.getItem<{ [username: string]: number }>(STORAGE_KEYS.SELLER_BALANCES, {}),
         storageService.getItem<string>(STORAGE_KEYS.ADMIN_BALANCE, '0'),
-        storageService.getItem<Order[]>(STORAGE_KEYS.ORDERS, []),
         storageService.getItem<{ [username: string]: Withdrawal[] }>(STORAGE_KEYS.SELLER_WITHDRAWALS, {}),
         storageService.getItem<Withdrawal[]>(STORAGE_KEYS.ADMIN_WITHDRAWALS, []),
         storageService.getItem<AdminAction[]>(STORAGE_KEYS.ADMIN_ACTIONS, []),
         storageService.getItem<DepositLog[]>(STORAGE_KEYS.DEPOSIT_LOGS, [])
       ]);
+
+      // Load orders using the service
+      const ordersResult = await ordersService.getOrders();
+      const storedOrders = ordersResult.success && ordersResult.data ? ordersResult.data : [];
 
       // Parse admin balance
       let adminBalanceValue = parseFloat(storedAdmin) || 0;
@@ -481,7 +485,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addOrder = useCallback(async (order: Order) => {
-    setOrderHistory((prev) => [...prev, order]);
+    // Use ordersService to create the order
+    const result = await ordersService.createOrder({
+      title: order.title,
+      description: order.description,
+      price: order.price,
+      markedUpPrice: order.markedUpPrice,
+      imageUrl: order.imageUrl,
+      seller: order.seller,
+      buyer: order.buyer,
+      tags: order.tags,
+      wearTime: order.wearTime,
+      wasAuction: order.wasAuction,
+      finalBid: order.finalBid,
+      deliveryAddress: order.deliveryAddress,
+      tierCreditAmount: order.tierCreditAmount,
+      isCustomRequest: order.isCustomRequest,
+      originalRequestId: order.originalRequestId,
+    });
+
+    if (result.success && result.data) {
+      // Update local state to maintain consistency
+      setOrderHistory((prev) => [...prev, result.data!]);
+    } else {
+      console.error('[WalletContext] Failed to create order:', result.error);
+      throw new Error(result.error?.message || 'Failed to create order');
+    }
   }, []);
 
   const addDeposit = useCallback(async (
@@ -532,6 +561,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         console.error('[Purchase] Insufficient balance:', { buyerBalance: buyerCurrentBalance, price });
         return false;
       }
+
+      // Generate idempotency key to prevent duplicate orders
+      const idempotencyKey = ordersService.generateIdempotencyKey(buyerUsername, listing.seller, listing.id);
+      
+      // Check if order already exists
+      const orderExists = await ordersService.checkOrderExists(idempotencyKey);
+      if (orderExists) {
+        console.log('[Purchase] Order already exists, skipping duplicate');
+        return true;
+      }
       
       // Calculate amounts
       const sellerCut = listing.price * 0.9 + tierCreditAmount;
@@ -549,66 +588,75 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       await setSellerBalance(listing.seller, (sellerBalances[listing.seller] || 0) + sellerCut);
       await setAdminBalance(adminBalance + platformFee);
       
-      // Create order
-      const order: Order = {
-        id: uuidv4(),
+      // Create order using the service
+      const orderResult = await ordersService.createOrder({
         title: listing.title,
         description: listing.description,
         price: listing.price,
         markedUpPrice: price,
         seller: listing.seller,
         buyer: buyerUsername,
-        date: new Date().toISOString(),
         imageUrl: listing.imageUrls?.[0],
         tierCreditAmount,
-        shippingStatus: 'pending',
-        listingId: listing.id,
-        listingTitle: listing.title,
-        quantity: 1,
         // Preserve auction metadata
         wasAuction: (listing as any).wasAuction || false,
         finalBid: (listing as any).finalBid
-      };
-      
-      await addOrder(order);
-      console.log('[Purchase] Order created:', order);
-      
-      // Create admin action for platform fee tracking
-      const platformFeeAction: AdminAction = {
-        id: uuidv4(),
-        type: 'credit' as const,
-        amount: platformFee,
-        targetUser: 'admin',
-        username: 'admin',
-        adminUser: 'system',
-        reason: `Platform fee from sale of "${listing.title}" by ${listing.seller}`,
-        date: new Date().toISOString(),
-        role: 'buyer' as const
-      };
-      
-      setAdminActions(prev => [...prev, platformFeeAction]);
-      
-      // Add notification
-      if (addSellerNotification) {
-        if (tierCreditAmount > 0) {
-          addSellerNotification(
-            listing.seller,
-            `New sale: "${listing.title}" for $${price.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
-          );
-        } else {
-          addSellerNotification(
-            listing.seller,
-            `New sale: "${listing.title}" for $${price.toFixed(2)}`
-          );
+      });
+
+      if (orderResult.success && orderResult.data) {
+        // Update local state
+        setOrderHistory(prev => [...prev, orderResult.data!]);
+        
+        // Mark order as processed
+        await ordersService.markOrderProcessed(idempotencyKey);
+        
+        console.log('[Purchase] Order created:', orderResult.data);
+        
+        // Create admin action for platform fee tracking
+        const platformFeeAction: AdminAction = {
+          id: uuidv4(),
+          type: 'credit' as const,
+          amount: platformFee,
+          targetUser: 'admin',
+          username: 'admin',
+          adminUser: 'system',
+          reason: `Platform fee from sale of "${listing.title}" by ${listing.seller}`,
+          date: new Date().toISOString(),
+          role: 'buyer' as const
+        };
+        
+        setAdminActions(prev => [...prev, platformFeeAction]);
+        
+        // Add notification
+        if (addSellerNotification) {
+          if (tierCreditAmount > 0) {
+            addSellerNotification(
+              listing.seller,
+              `New sale: "${listing.title}" for $${price.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+            );
+          } else {
+            addSellerNotification(
+              listing.seller,
+              `New sale: "${listing.title}" for $${price.toFixed(2)}`
+            );
+          }
         }
+        
+        return true;
+      } else {
+        // Rollback balance changes on failure
+        await setBuyerBalance(buyerUsername, buyerCurrentBalance);
+        await setSellerBalance(listing.seller, (sellerBalances[listing.seller] || 0));
+        await setAdminBalance(adminBalance);
+        
+        console.error('[Purchase] Failed to create order:', orderResult.error);
+        return false;
       }
-      
-      return true;
     } catch (error) {
       console.error('[Purchase] Purchase error:', error);
       return false;
     }
-  }, [orderHistory, addOrder, addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
+  }, [orderHistory, addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
   const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     try {
@@ -628,36 +676,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       await setSellerBalance(customRequest.seller, (sellerBalances[customRequest.seller] || 0) + sellerCut);
       await setAdminBalance(adminBalance + platformFee);
       
-      // Create order
-      const order: Order = {
-        id: `custom_${customRequest.requestId}_${Date.now()}`,
+      // Create order using the service
+      const orderResult = await ordersService.createOrder({
         title: customRequest.description,
         description: customRequest.description,
         price: customRequest.amount,
         markedUpPrice,
         seller: customRequest.seller,
         buyer: customRequest.buyer,
-        date: new Date().toISOString(),
         isCustomRequest: true,
         originalRequestId: customRequest.requestId,
-        shippingStatus: 'pending'
-      };
-      
-      await addOrder(order);
-      
-      if (addSellerNotification) {
-        addSellerNotification(
-          customRequest.seller,
-          `Custom request purchased by ${customRequest.buyer} for $${customRequest.amount.toFixed(2)}`
-        );
+      });
+
+      if (orderResult.success && orderResult.data) {
+        // Update local state
+        setOrderHistory(prev => [...prev, orderResult.data!]);
+        
+        if (addSellerNotification) {
+          addSellerNotification(
+            customRequest.seller,
+            `Custom request purchased by ${customRequest.buyer} for $${customRequest.amount.toFixed(2)}`
+          );
+        }
+        
+        return true;
+      } else {
+        // Rollback balance changes
+        await setBuyerBalance(customRequest.buyer, buyerCurrentBalance);
+        await setSellerBalance(customRequest.seller, (sellerBalances[customRequest.seller] || 0));
+        await setAdminBalance(adminBalance);
+        
+        return false;
       }
-      
-      return true;
     } catch (error) {
       console.error('Custom request purchase error:', error);
       return false;
     }
-  }, [addOrder, addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
+  }, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
   const subscribeToSellerWithPayment = useCallback(async (
     buyer: string,
@@ -867,15 +922,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
 
   const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
-    setOrderHistory(prev => prev.map(order =>
-      order.id === orderId ? { ...order, deliveryAddress: address } : order
-    ));
+    // Use ordersService to update the address
+    const result = await ordersService.updateOrderAddress(orderId, address);
+    
+    if (result.success && result.data) {
+      // Update local state to maintain consistency
+      setOrderHistory(prev => prev.map(order =>
+        order.id === orderId ? { ...order, deliveryAddress: address } : order
+      ));
+    } else {
+      console.error('[WalletContext] Failed to update order address:', result.error);
+      throw new Error(result.error?.message || 'Failed to update order address');
+    }
   }, []);
 
   const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
-    setOrderHistory(prev => prev.map(order =>
-      order.id === orderId ? { ...order, shippingStatus: status } : order
-    ));
+    // Use ordersService to update the status
+    const result = await ordersService.updateOrderStatus(orderId, { shippingStatus: status });
+    
+    if (result.success && result.data) {
+      // Update local state to maintain consistency
+      setOrderHistory(prev => prev.map(order =>
+        order.id === orderId ? { ...order, shippingStatus: status } : order
+      ));
+    } else {
+      console.error('[WalletContext] Failed to update shipping status:', result.error);
+      throw new Error(result.error?.message || 'Failed to update shipping status');
+    }
   }, []);
 
   const getDepositsForUser = useCallback((username: string): DepositLog[] => {

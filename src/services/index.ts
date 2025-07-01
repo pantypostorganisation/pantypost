@@ -1,73 +1,76 @@
 // src/services/index.ts
 
 /**
- * Central export point for all services
- * This makes it easy to import services throughout the app
+ * Central service exports
+ * Import services from here throughout the application
  */
 
-// Export all service instances
-export { authService } from './auth.service';
-export { listingsService } from './listings.service';
-export { messagesService } from './messages.service';
-export { ordersService } from './orders.service';
+// Storage service - foundation for all data persistence
 export { storageService } from './storage.service';
+
+// Auth service - authentication and authorization
+export { authService } from './auth.service';
+
+// Users service - user management and profiles
 export { usersService } from './users.service';
+
+// Wallet service - financial operations
 export { walletService } from './wallet.service';
 
-// Export types from services
-export type {
-  LoginRequest,
-  SignupRequest,
-  AuthResponse,
-  UsernameCheckResponse,
-} from './auth.service';
+// Listings service - marketplace listings
+export { listingsService } from './listings.service';
+
+// Orders service - order management
+export { ordersService } from './orders.service';
+
+// Messages service - messaging functionality
+export { messagesService } from './messages.service';
+
+// App initializer - application startup
+export { AppInitializer } from './app-initializer';
+
+// Re-export types that actually exist
+export type { 
+  ApiResponse, 
+  ApiError
+} from './api.config';
 
 export type {
   CreateListingRequest,
   UpdateListingRequest,
   ListingSearchParams,
   ListingViewUpdate,
+  BulkUpdateRequest,
+  PopularTag
 } from './listings.service';
-
-export type {
-  Message,
-  MessageThread,
-  SendMessageRequest,
-  BlockUserRequest,
-  ReportUserRequest,
-} from './messages.service';
 
 export type {
   CreateOrderRequest,
   UpdateOrderStatusRequest,
   OrderSearchParams,
+  DeliveryAddress
 } from './orders.service';
 
 export type {
-  UserProfile,
-  UpdateProfileRequest,
-  VerificationRequest,
-  VerificationUpdateRequest,
-  UserSearchParams,
-  BanRequest,
-} from './users.service';
+  LoginRequest,
+  SignupRequest,
+  AuthResponse
+} from './auth.service';
 
 export type {
-  WalletBalance,
   Transaction,
-  DepositRequest,
-  WithdrawalRequest,
-  TransferRequest,
-  AdminActionRequest,
+  WithdrawalRequest
 } from './wallet.service';
 
-// Export API configuration
-export {
-  API_BASE_URL,
-  FEATURES,
-  API_ENDPOINTS,
-  REQUEST_CONFIG,
-  buildApiUrl,
-  type ApiError,
-  type ApiResponse,
-} from './api.config';
+export type {
+  UserProfile,
+  UserSearchParams,
+  VerificationUpdateRequest,
+  BanRequest
+} from './users.service';
+
+// Export order types from WalletContext
+export type { Order, CustomRequestPurchase, DepositLog } from '../context/WalletContext';
+
+// Export feature flags for conditional logic
+export { FEATURES } from './api.config';

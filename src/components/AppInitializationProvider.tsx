@@ -2,7 +2,6 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { appInitializer } from '@/services/app-initializer';
 
 interface HealthStatus {
   wallet_service: boolean;
@@ -32,8 +31,9 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     setError(null);
     
     try {
-      // Initialize core services
-      await appInitializer.initialize();
+      // Import and initialize dynamically to avoid circular dependencies
+      const { appInitializer } = await import('@/services/app-initializer');
+      const result = await appInitializer.initialize();
       
       // Check health status
       const health: HealthStatus = {
@@ -42,8 +42,17 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         auth_service: true,
       };
       
+      // Update health based on any errors
+      if (result && !result.success && result.errors) {
+        result.errors.forEach((err: string) => {
+          if (err.includes('wallet')) health.wallet_service = false;
+          if (err.includes('storage')) health.storage_service = false;
+          if (err.includes('auth')) health.auth_service = false;
+        });
+      }
+      
       setHealthStatus(health);
-      setIsInitialized(true);
+      setIsInitialized(result?.success || true);
     } catch (err) {
       console.error('App initialization failed:', err);
       setError(err instanceof Error ? err : new Error('Initialization failed'));
