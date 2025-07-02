@@ -194,7 +194,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   }, []);
 
-  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance, addOrder, orderHistory } = useWallet();
+  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance, addOrder, orderHistory, holdBidFunds, refundBidFunds, finalizeAuctionPurchase } = useWallet();
 
   // On mount, set the notification callback in WalletContext
   useEffect(() => {
@@ -474,6 +474,20 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
     
     try {
+      // First, hold the bid funds
+      const fundsHeld = await holdBidFunds(listingId, bidder, amount, listing.title);
+      if (!fundsHeld) {
+        console.error('[PlaceBid] Failed to hold funds for bid');
+        return false;
+      }
+      
+      // If this user had a previous bid, refund it first
+      const previousBid = listing.auction.bids.find(b => b.bidder === bidder);
+      if (previousBid) {
+        await refundBidFunds(bidder, listingId);
+      }
+      
+      // Now place the bid
       const result = await listingsService.placeBid(listingId, bidder, amount);
       if (result.success && result.data) {
         setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
@@ -484,12 +498,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         );
         
         return true;
+      } else {
+        // If bid placement failed, refund the held funds
+        await refundBidFunds(bidder, listingId);
+        return false;
       }
     } catch (error) {
       console.error('Error placing bid:', error);
+      // On error, try to refund
+      await refundBidFunds(bidder, listingId);
+      return false;
     }
-    
-    return false;
   };
 
   const getAuctionListings = (): Listing[] => {
@@ -613,12 +632,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                   if (tierCreditAmount > 0) {
                     addSellerNotification(
                       listing.seller,
-                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)} (includes $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for ${winningBid.toFixed(2)} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
                     );
                   } else {
                     addSellerNotification(
                       listing.seller,
-                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for $${winningBid.toFixed(2)}`
+                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for ${winningBid.toFixed(2)}`
                     );
                   }
                   
@@ -627,6 +646,27 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                       listing.seller,
                       `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
                     );
+                  }
+                  
+                  // First, remove the winner's pending auction order
+                  await refundBidFunds(winningBidder, listing.id);
+                  
+                  // REFUND LOSING BIDDERS (not including the winner)
+                  const losingBidders = listing.auction.bids
+                    .filter(bid => bid.bidder !== winningBidder)
+                    .map(bid => bid.bidder);
+                  
+                  // Get unique bidders (in case someone bid multiple times)
+                  const uniqueLosingBidders = [...new Set(losingBidders)];
+                  
+                  // Refund each losing bidder
+                  for (const loser of uniqueLosingBidders) {
+                    const refunded = await refundBidFunds(loser, listing.id);
+                    if (refunded) {
+                      console.log(`[Auction] Refunded losing bidder ${loser} for listing ${listing.id}`);
+                    } else {
+                      console.error(`[Auction] Failed to refund ${loser} for listing ${listing.id}`);
+                    }
                   }
                   
                   removedListings.push(listing.id);
@@ -649,6 +689,15 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                     listing.seller,
                     `⚠️ Auction ended: Bidder ${listing.auction.highestBidder} had insufficient funds for "${listing.title}" and no other valid bidders were found.`
                   );
+                }
+                
+                // Refund all bidders since no valid winner
+                const allBidders = [...new Set(listing.auction.bids.map(bid => bid.bidder))];
+                for (const bidder of allBidders) {
+                  const refunded = await refundBidFunds(bidder, listing.id);
+                  if (refunded) {
+                    console.log(`[Auction] Refunded bidder ${bidder} for ended auction ${listing.id} with no valid winner`);
+                  }
                 }
               }
             } else {
@@ -711,10 +760,20 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (result.success && result.data) {
         setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
         
+        // REFUND ALL BIDDERS when auction is cancelled
         if (listing.auction.bids.length > 0) {
+          const uniqueBidders = [...new Set(listing.auction.bids.map(bid => bid.bidder))];
+          
+          for (const bidder of uniqueBidders) {
+            const refunded = await refundBidFunds(bidder, listingId);
+            if (refunded) {
+              console.log(`[CancelAuction] Refunded ${bidder} for cancelled auction ${listingId}`);
+            }
+          }
+          
           addSellerNotification(
             listing.seller,
-            `🛑 You cancelled your auction: "${listing.title}" with ${listing.auction.bids.length} bids`
+            `🛑 You cancelled your auction: "${listing.title}" with ${listing.auction.bids.length} bids. All bidders have been refunded.`
           );
         } else {
           addSellerNotification(

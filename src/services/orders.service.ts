@@ -36,6 +36,7 @@ export interface CreateOrderRequest {
   listingId?: string;
   listingTitle?: string;
   quantity?: number;
+  shippingStatus?: 'pending' | 'processing' | 'shipped' | 'pending-auction';
 }
 
 export interface UpdateOrderStatusRequest {
@@ -313,7 +314,7 @@ export class OrdersService {
         wasAuction: request.wasAuction,
         finalBid: request.finalBid,
         deliveryAddress: request.deliveryAddress,
-        shippingStatus: 'pending',
+        shippingStatus: request.shippingStatus || 'pending',
         tierCreditAmount: request.tierCreditAmount,
         isCustomRequest: request.isCustomRequest,
         originalRequestId: request.originalRequestId,
