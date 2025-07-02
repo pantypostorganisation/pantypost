@@ -64,17 +64,19 @@ function AdminProfitDashboardContent() {
     adminWithdrawals: filteredAdminWithdrawals
   } = getTimeFilteredData(timeFilter, adminActions, orderHistory, depositLogs, sellerWithdrawals, adminWithdrawals);
   
-  // Debug logging for deposits
+  // Debug logging for deposits and orders
   useEffect(() => {
-    console.log('Admin Dashboard Deposits:', {
+    console.log('Admin Dashboard Data:', {
       timeFilter,
+      allOrders: orderHistory.length,
+      filteredOrders: filteredOrders.length,
+      pendingAuctionOrders: orderHistory.filter(o => o.shippingStatus === 'pending-auction').length,
+      completedAuctionOrders: orderHistory.filter(o => o.wasAuction && o.shippingStatus !== 'pending-auction').length,
       allDeposits: depositLogs.length,
       filteredDeposits: filteredDeposits.length,
-      latestDeposit: depositLogs[depositLogs.length - 1],
-      filterShowingAll: timeFilter === 'all',
       totalDepositsAmount: getTotalDeposits()
     });
-  }, [timeFilter, depositLogs, filteredDeposits, getTotalDeposits]);
+  }, [timeFilter, orderHistory, filteredOrders, depositLogs, filteredDeposits, getTotalDeposits]);
 
   // Handle force reload
   const handleForceReload = async () => {
@@ -259,6 +261,7 @@ function AdminProfitDashboardContent() {
           filteredSellerWithdrawals={filteredSellerWithdrawals}
           filteredAdminWithdrawals={filteredAdminWithdrawals}
           filteredActions={filteredActions}
+          filteredOrders={filteredOrders}
         />
       </div>
     </main>

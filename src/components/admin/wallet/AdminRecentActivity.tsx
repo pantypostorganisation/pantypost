@@ -1,7 +1,7 @@
 // src/components/admin/wallet/AdminRecentActivity.tsx
 'use client';
 
-import { Clock, Download, Upload, Wallet, Activity, TrendingUp } from 'lucide-react';
+import { Clock, Download, Upload, Wallet, Activity, TrendingUp, Gavel, ShoppingBag } from 'lucide-react';
 
 interface AdminRecentActivityProps {
   timeFilter: string;
@@ -9,6 +9,7 @@ interface AdminRecentActivityProps {
   filteredSellerWithdrawals: any[];
   filteredAdminWithdrawals: any[];
   filteredActions?: any[]; // Add filtered admin actions
+  filteredOrders?: any[]; // Add filtered orders to show auction completions
 }
 
 export default function AdminRecentActivity({
@@ -16,7 +17,8 @@ export default function AdminRecentActivity({
   filteredDeposits,
   filteredSellerWithdrawals,
   filteredAdminWithdrawals,
-  filteredActions = []
+  filteredActions = [],
+  filteredOrders = []
 }: AdminRecentActivityProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -55,6 +57,18 @@ export default function AdminRecentActivity({
     action.reason.toLowerCase().includes('revenue')
   );
 
+  // Get auction completions (not pending auction orders)
+  const auctionCompletions = filteredOrders.filter(order => 
+    order.wasAuction && 
+    order.shippingStatus !== 'pending-auction'
+  );
+
+  // Get regular sales (not auctions)
+  const regularSales = filteredOrders.filter(order => 
+    !order.wasAuction && 
+    order.shippingStatus !== 'pending-auction'
+  );
+
   // Combine and sort all activities
   const allActivities = [
     ...filteredDeposits
@@ -81,6 +95,18 @@ export default function AdminRecentActivity({
         type: 'subscription' as const,
         data: action,
         date: action.date
+      })),
+    ...auctionCompletions
+      .map(order => ({
+        type: 'auction_completion' as const,
+        data: order,
+        date: order.date
+      })),
+    ...regularSales
+      .map(order => ({
+        type: 'regular_sale' as const,
+        data: order,
+        date: order.date
       }))
   ]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -116,7 +142,7 @@ export default function AdminRecentActivity({
                             💳 Deposit Received
                           </p>
                           <p className="text-sm text-gray-400 truncate">
-                            {deposit.username} via {deposit.method.replace('_', ' ')}
+                            {deposit.username} via {deposit.method?.replace('_', ' ') || 'unknown'}
                           </p>
                         </div>
                       </div>
@@ -206,6 +232,60 @@ export default function AdminRecentActivity({
                           +{formatCurrency(action.amount)}
                         </p>
                         <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
+                      </div>
+                    </div>
+                  );
+                } else if (item.type === 'auction_completion') {
+                  const order = item.data;
+                  const platformProfit = (order.finalBid || order.price) * 0.2; // 20% platform fee
+                  
+                  return (
+                    <div key={`auction-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-purple-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-purple-500/20 text-purple-400">
+                          <Gavel className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-white truncate">
+                            🔨 Auction Completed
+                          </p>
+                          <p className="text-sm text-gray-400 truncate">
+                            {order.buyer} won "{order.title}" for {formatCurrency(order.finalBid || order.price)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-purple-400">
+                          +{formatCurrency(platformProfit)}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatDate(order.date)}</p>
+                      </div>
+                    </div>
+                  );
+                } else if (item.type === 'regular_sale') {
+                  const order = item.data;
+                  const platformProfit = order.price * 0.2; // 20% platform fee
+                  
+                  return (
+                    <div key={`sale-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-green-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-green-500/20 text-green-400">
+                          <ShoppingBag className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-white truncate">
+                            🛍️ Regular Sale
+                          </p>
+                          <p className="text-sm text-gray-400 truncate">
+                            {order.buyer} bought "{order.title}" for {formatCurrency(order.price)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-green-400">
+                          +{formatCurrency(platformProfit)}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatDate(order.date)}</p>
                       </div>
                     </div>
                   );

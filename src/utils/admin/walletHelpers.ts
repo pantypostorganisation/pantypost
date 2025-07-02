@@ -2,9 +2,16 @@
 
 // Define types for better type safety
 interface Order {
+  id?: string;
+  title?: string;
+  buyer?: string;
+  seller?: string;
   price: number;
   markedUpPrice?: number;
   date: string;
+  shippingStatus?: string;
+  wasAuction?: boolean;
+  finalBid?: number;
 }
 
 interface AdminAction {
@@ -26,6 +33,12 @@ interface Withdrawal {
   amount: number;
   date: string;
 }
+
+// Helper function to filter out pending auction orders
+const isValidRevenueOrder = (order: Order): boolean => {
+  // Exclude orders that are pending auction bids
+  return order.shippingStatus !== 'pending-auction';
+};
 
 // Export all the calculation functions from the original file
 export const getTimeFilteredData = (
@@ -56,9 +69,10 @@ export const getTimeFilteredData = (
       filterDate.setFullYear(now.getFullYear() - 1);
       break;
     default:
+      // For 'all' time, filter out pending auction orders but include everything else
       return { 
         actions: adminActions, 
-        orders: orderHistory, 
+        orders: orderHistory.filter(isValidRevenueOrder), 
         deposits: depositLogs,
         sellerWithdrawals: getAllSellerWithdrawals(sellerWithdrawals),
         adminWithdrawals: adminWithdrawals
@@ -66,7 +80,9 @@ export const getTimeFilteredData = (
   }
   
   const filteredActions = adminActions.filter(action => new Date(action.date) >= filterDate);
-  const filteredOrders = orderHistory.filter(order => new Date(order.date) >= filterDate);
+  const filteredOrders = orderHistory
+    .filter(order => new Date(order.date) >= filterDate)
+    .filter(isValidRevenueOrder); // Also filter out pending auction orders
   const filteredDeposits = depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
   
   const filteredSellerWithdrawals = getAllSellerWithdrawals(sellerWithdrawals).filter(
@@ -103,17 +119,24 @@ export const getAllSellerWithdrawals = (sellerWithdrawals: Record<string, Withdr
 };
 
 export const calculatePlatformProfit = (orders: Order[]) => {
-  return orders.reduce((sum: number, order: Order) => {
-    const originalPrice = order.price;
-    const platformProfit = originalPrice * 0.2;
-    return sum + platformProfit;
-  }, 0);
+  return orders
+    .filter(isValidRevenueOrder) // Exclude pending auction orders
+    .reduce((sum: number, order: Order) => {
+      // For auction orders, use finalBid if available
+      const originalPrice = order.wasAuction && order.finalBid ? order.finalBid : order.price;
+      const platformProfit = originalPrice * 0.2; // 20% platform fee
+      return sum + platformProfit;
+    }, 0);
 };
 
 export const calculateTotalRevenue = (orders: Order[]) => {
-  return orders.reduce((sum: number, order: Order) => {
-    return sum + (order.markedUpPrice || order.price);
-  }, 0);
+  return orders
+    .filter(isValidRevenueOrder) // Exclude pending auction orders
+    .reduce((sum: number, order: Order) => {
+      // For regular orders, use markedUpPrice or price
+      // For auction orders, the markedUpPrice already includes the buyer fee
+      return sum + (order.markedUpPrice || order.price);
+    }, 0);
 };
 
 export const calculateSubscriptionRevenue = (actions: AdminAction[]) => {
@@ -197,10 +220,12 @@ export const getPreviousPeriodData = (
       return { orders: [], deposits: [], withdrawals: [], actions: [] };
   }
   
-  const previousOrders = orderHistory.filter(order => {
-    const orderDate = new Date(order.date);
-    return orderDate >= previousPeriodStart && orderDate <= previousPeriodEnd;
-  });
+  const previousOrders = orderHistory
+    .filter(order => {
+      const orderDate = new Date(order.date);
+      return orderDate >= previousPeriodStart && orderDate <= previousPeriodEnd;
+    })
+    .filter(isValidRevenueOrder); // Exclude pending auction orders
 
   const previousDeposits = depositLogs.filter(deposit => {
     const depositDate = new Date(deposit.date);
@@ -229,6 +254,9 @@ export const getRevenueByDay = (
   const now = new Date();
   let periodsToShow = 30;
   
+  // Filter out pending auction orders from the start
+  const validOrders = orderHistory.filter(isValidRevenueOrder);
+  
   switch (timeFilter) {
     case 'today':
       periodsToShow = 24;
@@ -252,7 +280,7 @@ export const getRevenueByDay = (
     
     if (timeFilter === 'today') {
       date.setHours(now.getHours() - i);
-      const hourOrders = orderHistory.filter(order => {
+      const hourOrders = validOrders.filter(order => {
         const orderDate = new Date(order.date);
         return orderDate.getHours() === date.getHours() && 
                orderDate.toDateString() === date.toDateString();
@@ -277,7 +305,7 @@ export const getRevenueByDay = (
       });
     } else if (timeFilter === 'year') {
       date.setMonth(now.getMonth() - i);
-      const monthOrders = orderHistory.filter(order => {
+      const monthOrders = validOrders.filter(order => {
         const orderDate = new Date(order.date);
         return orderDate.getMonth() === date.getMonth() && 
                orderDate.getFullYear() === date.getFullYear();
@@ -302,7 +330,7 @@ export const getRevenueByDay = (
       });
     } else {
       date.setDate(now.getDate() - i);
-      const dayOrders = orderHistory.filter(order => {
+      const dayOrders = validOrders.filter(order => {
         const orderDate = new Date(order.date);
         return orderDate.toDateString() === date.toDateString();
       });
@@ -326,4 +354,31 @@ export const getRevenueByDay = (
     }
   }
   return periods;
+};
+
+// New helper function to get auction-specific metrics
+export const getAuctionMetrics = (orders: Order[]) => {
+  const auctionOrders = orders.filter(order => 
+    order.wasAuction && isValidRevenueOrder(order)
+  );
+  
+  const totalAuctionRevenue = auctionOrders.reduce((sum, order) => {
+    return sum + (order.markedUpPrice || order.price);
+  }, 0);
+  
+  const totalAuctionProfit = auctionOrders.reduce((sum, order) => {
+    const bidAmount = order.finalBid || order.price;
+    return sum + (bidAmount * 0.2); // 20% platform fee
+  }, 0);
+  
+  const averageAuctionPrice = auctionOrders.length > 0 
+    ? totalAuctionRevenue / auctionOrders.length 
+    : 0;
+  
+  return {
+    totalAuctions: auctionOrders.length,
+    totalAuctionRevenue,
+    totalAuctionProfit,
+    averageAuctionPrice
+  };
 };
