@@ -40,7 +40,7 @@ export interface CreateOrderRequest {
 }
 
 export interface UpdateOrderStatusRequest {
-  shippingStatus: 'pending' | 'processing' | 'shipped';
+  shippingStatus: 'pending' | 'processing' | 'shipped' | 'pending-auction';
   trackingNumber?: string;
   shippedDate?: string;
 }

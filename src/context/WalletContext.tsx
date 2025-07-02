@@ -697,21 +697,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
       const tierCreditAmount = winningBid * sellerTierInfo.credit;
       
-      // Calculate amounts (no markup for auctions)
-      const sellerCut = winningBid * 0.9 + tierCreditAmount;
-      const platformFee = winningBid * 0.1;
+      // FIXED: Calculate amounts properly recognizing buyer fee was already paid
+      // The pending order has the full amount including buyer fee
+      const totalPaidByBuyer = pendingOrder.markedUpPrice; // This includes the 10% buyer fee
+      const actualBidAmount = winningBid; // The base bid amount
+      const buyerFee = totalPaidByBuyer - actualBidAmount; // Should be 10% of bid
+      const sellerFee = actualBidAmount * 0.1; // 10% seller fee
+      const sellerCut = actualBidAmount - sellerFee + tierCreditAmount; // What seller receives
+      const totalPlatformFee = buyerFee + sellerFee; // Total platform revenue (20%)
       
       console.log('[FinalizeAuction] Calculated amounts:', {
-        winningBid,
+        winningBid: actualBidAmount,
+        totalPaidByBuyer,
+        buyerFee,
+        sellerFee,
         sellerCut,
-        platformFee,
+        totalPlatformFee,
         tierCreditAmount
       });
       
       // Money was already deducted when bid was placed
       // Just distribute to seller and admin
       await setSellerBalance(listing.seller, (sellerBalances[listing.seller] || 0) + sellerCut);
-      await setAdminBalance(adminBalance + platformFee);
+      await setAdminBalance(adminBalance + totalPlatformFee);
       
       // Remove the pending auction order
       const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
@@ -720,14 +728,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const finalOrderResult = await ordersService.createOrder({
         title: listing.title,
         description: listing.description,
-        price: winningBid,
-        markedUpPrice: winningBid,
+        price: actualBidAmount,
+        markedUpPrice: totalPaidByBuyer, // Keep the total paid including buyer fee
         imageUrl: listing.imageUrls?.[0],
         seller: listing.seller,
         buyer: winnerUsername,
         tags: listing.tags,
         wasAuction: true,
-        finalBid: winningBid,
+        finalBid: actualBidAmount,
         shippingStatus: 'pending',
         tierCreditAmount,
         listingId: listing.id,
@@ -737,7 +745,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         console.error('[FinalizeAuction] Failed to create final order');
         // Rollback seller and admin balances
         await setSellerBalance(listing.seller, (sellerBalances[listing.seller] || 0) - sellerCut);
-        await setAdminBalance(adminBalance - platformFee);
+        await setAdminBalance(adminBalance - totalPlatformFee);
         return false;
       }
       
@@ -754,11 +762,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const platformFeeAction: AdminAction = {
         id: uuidv4(),
         type: 'credit' as const,
-        amount: platformFee,
+        amount: totalPlatformFee,
         targetUser: 'admin',
         username: 'admin',
         adminUser: 'system',
-        reason: `Platform fee from auction sale of "${listing.title}" by ${listing.seller}`,
+        reason: `Platform fee from auction sale of "${listing.title}" by ${listing.seller} (buyer fee: $${buyerFee.toFixed(2)}, seller fee: $${sellerFee.toFixed(2)})`,
         date: new Date().toISOString(),
         role: 'buyer' as const
       };
@@ -770,12 +778,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (tierCreditAmount > 0) {
           addSellerNotification(
             listing.seller,
-            `🏆 Auction ended: "${listing.title}" sold to ${winnerUsername} for ${winningBid.toFixed(2)} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+            `🏆 Auction ended: "${listing.title}" sold to ${winnerUsername} for $${actualBidAmount.toFixed(2)} (you receive $${sellerCut.toFixed(2)} including $${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
           );
         } else {
           addSellerNotification(
             listing.seller,
-            `🏆 Auction ended: "${listing.title}" sold to ${winnerUsername} for ${winningBid.toFixed(2)}`
+            `🏆 Auction ended: "${listing.title}" sold to ${winnerUsername} for $${actualBidAmount.toFixed(2)} (you receive $${sellerCut.toFixed(2)})`
           );
         }
       }
@@ -788,7 +796,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [orderHistory, addSellerNotification, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
-  // Hold funds for auction bid
+  // Hold funds for auction bid - FIXED to include buyer fee
   const holdBidFunds = useCallback(async (
     listingId: string,
     bidder: string,
@@ -798,21 +806,36 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const buyerCurrentBalance = getBuyerBalance(bidder);
       
-      // Check balance
-      if (buyerCurrentBalance < amount) {
-        console.error('[HoldBid] Insufficient balance:', { buyerBalance: buyerCurrentBalance, amount });
+      // FIXED: Calculate total with buyer fee (10%)
+      const buyerFee = amount * 0.1;
+      const totalWithFee = amount + buyerFee;
+      
+      console.log('[HoldBid] Holding funds:', { 
+        bidder, 
+        bidAmount: amount, 
+        buyerFee,
+        totalWithFee,
+        currentBalance: buyerCurrentBalance 
+      });
+      
+      // Check balance including fee
+      if (buyerCurrentBalance < totalWithFee) {
+        console.error('[HoldBid] Insufficient balance:', { 
+          buyerBalance: buyerCurrentBalance, 
+          required: totalWithFee 
+        });
         return false;
       }
       
-      // Deduct from buyer's wallet
-      await setBuyerBalance(bidder, buyerCurrentBalance - amount);
+      // Deduct from buyer's wallet INCLUDING FEE
+      await setBuyerBalance(bidder, buyerCurrentBalance - totalWithFee);
       
       // Create order using the service with all required fields
       const orderResult = await ordersService.createOrder({
         title: `Bid on: ${auctionTitle}`,
-        description: `Pending bid for auction - ${amount.toFixed(2)}`,
+        description: `Pending bid for auction - $${amount.toFixed(2)} (total with fee: $${totalWithFee.toFixed(2)})`,
         price: amount,
-        markedUpPrice: amount, // No markup for bids
+        markedUpPrice: totalWithFee, // Store the total including fee
         seller: 'AUCTION_SYSTEM', // Special seller for auction bids
         buyer: bidder,
         wasAuction: true,
@@ -827,7 +850,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         console.log('[HoldBid] Funds held for bid:', { 
           bidder, 
-          amount, 
+          bidAmount: amount,
+          totalHeld: totalWithFee,
           listingId, 
           orderId: orderResult.data.id
         });
@@ -845,20 +869,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getBuyerBalance, setBuyerBalance]);
 
-  // Refund bid funds
+  // FIXED: Refund bid funds - handles missing orders gracefully
   const refundBidFunds = useCallback(async (
     bidder: string,
     listingId: string
   ): Promise<boolean> => {
     try {
-      console.log('[RefundBid] Starting refund for:', { bidder, listingId });
-      
-      // First, let's see what's in local state
-      const localPendingOrders = orderHistory.filter(order => 
-        order.buyer === bidder && 
-        order.shippingStatus === 'pending-auction'
-      );
-      console.log('[RefundBid] Local pending orders:', localPendingOrders);
+      console.log('[RefundBid] Starting refund check for:', { bidder, listingId });
       
       // Load fresh order data from storage to ensure we have the latest
       const ordersResult = await ordersService.getOrders();
@@ -866,13 +883,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         console.error('[RefundBid] Failed to load orders for refund');
         return false;
       }
-      
-      // Find all pending auction orders for this buyer
-      const buyerPendingOrders = ordersResult.data.filter(order => 
-        order.buyer === bidder && 
-        order.shippingStatus === 'pending-auction'
-      );
-      console.log('[RefundBid] Storage pending orders for buyer:', buyerPendingOrders);
       
       // Find the specific pending auction order for this listing
       const pendingOrder = ordersResult.data.find(order => 
@@ -882,20 +892,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       );
       
       if (!pendingOrder) {
-        console.error('[RefundBid] No pending order found for refund', { 
+        // This is expected for users who raised their own bids with incremental charging
+        // They don't have pending orders because we charged them directly
+        console.log('[RefundBid] No pending order found - likely an incremental bid', { 
           bidder, 
-          listingId,
-          totalOrders: ordersResult.data.length,
-          pendingAuctionOrders: ordersResult.data.filter(o => o.shippingStatus === 'pending-auction').length
+          listingId
         });
-        return false;
+        return true; // Return true because there's nothing to refund
       }
       
       console.log('[RefundBid] Found pending order:', pendingOrder);
       
+      // Refund the full amount including buyer fee
+      const refundAmount = pendingOrder.markedUpPrice; // This includes the buyer fee
+      
       // Refund to buyer's wallet
       const currentBalance = getBuyerBalance(bidder);
-      await setBuyerBalance(bidder, currentBalance + pendingOrder.price);
+      await setBuyerBalance(bidder, currentBalance + refundAmount);
       
       // Remove the pending order from storage
       const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
@@ -911,7 +924,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       console.log('[RefundBid] Refunded bid:', { 
         bidder, 
-        amount: pendingOrder.price, 
+        amount: refundAmount, 
         listingId, 
         orderId: pendingOrder.id 
       });
@@ -920,7 +933,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[RefundBid] Error refunding bid:', error);
       return false;
     }
-  }, [getBuyerBalance, setBuyerBalance, orderHistory]);
+  }, [getBuyerBalance, setBuyerBalance]);
 
   const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     try {

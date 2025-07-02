@@ -78,6 +78,11 @@ export async function migrateOrdersToService(): Promise<{ success: boolean; migr
           tierCreditAmount: order.tierCreditAmount,
           isCustomRequest: order.isCustomRequest,
           originalRequestId: order.originalRequestId,
+          listingId: order.listingId,
+          listingTitle: order.listingTitle,
+          quantity: order.quantity,
+          // Ensure shippingStatus is cast correctly including pending-auction
+          shippingStatus: order.shippingStatus as 'pending' | 'processing' | 'shipped' | 'pending-auction' | undefined,
         });
 
         if (createResult.success) {
@@ -86,7 +91,7 @@ export async function migrateOrdersToService(): Promise<{ success: boolean; migr
           // If the order has a shipping status, update it
           if (order.shippingStatus && order.shippingStatus !== 'pending') {
             await ordersService.updateOrderStatus(order.id, {
-              shippingStatus: order.shippingStatus,
+              shippingStatus: order.shippingStatus as 'pending' | 'processing' | 'shipped' | 'pending-auction',
             });
           }
         } else {
@@ -169,6 +174,11 @@ export async function syncOrdersWithService(): Promise<void> {
             tierCreditAmount: order.tierCreditAmount,
             isCustomRequest: order.isCustomRequest,
             originalRequestId: order.originalRequestId,
+            listingId: order.listingId,
+            listingTitle: order.listingTitle,
+            quantity: order.quantity,
+            // Ensure shippingStatus is cast correctly including pending-auction
+            shippingStatus: order.shippingStatus as 'pending' | 'processing' | 'shipped' | 'pending-auction' | undefined,
           });
         } catch (error) {
           console.error(`[OrdersSync] Failed to sync order ${order.id}:`, error);

@@ -14,7 +14,7 @@ import { useAuth } from './AuthContext';
 import { Order } from './WalletContext';
 import { v4 as uuidv4 } from 'uuid';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { listingsService, usersService, storageService } from '@/services';
+import { listingsService, usersService, storageService, ordersService } from '@/services';
 import { ListingDraft } from '@/types/myListings';
 
 export type Role = 'buyer' | 'seller' | 'admin';
@@ -194,7 +194,18 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   }, []);
 
-  const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, getBuyerBalance, addOrder, orderHistory, holdBidFunds, refundBidFunds, finalizeAuctionPurchase } = useWallet();
+  const { 
+    subscribeToSellerWithPayment, 
+    setAddSellerNotificationCallback, 
+    purchaseListing, 
+    getBuyerBalance, 
+    setBuyerBalance,
+    addOrder, 
+    orderHistory, 
+    holdBidFunds, 
+    refundBidFunds, 
+    finalizeAuctionPurchase 
+  } = useWallet();
 
   // On mount, set the notification callback in WalletContext
   useEffect(() => {
@@ -453,7 +464,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // Place a bid on an auction listing
+  // FIXED: Place a bid on an auction listing with incremental charging
   const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
     const listing = listings.find(l => l.id === listingId);
     if (!listing || !listing.auction || listing.auction.status !== 'active') return false;
@@ -468,45 +479,102 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const currentHighestBid = listing.auction.highestBid || 0;
     if (amount <= currentHighestBid) return false;
     
-    const bidderBalance = getBuyerBalance(bidder);
-    if (bidderBalance < amount) {
-      return false;
-    }
-    
     try {
-      // First, hold the bid funds
-      const fundsHeld = await holdBidFunds(listingId, bidder, amount, listing.title);
-      if (!fundsHeld) {
-        console.error('[PlaceBid] Failed to hold funds for bid');
-        return false;
-      }
+      // Store the previous highest bidder
+      const previousHighestBidder = listing.auction.highestBidder;
+      const isCurrentHighestBidder = previousHighestBidder === bidder;
       
-      // If this user had a previous bid, refund it first
-      const previousBid = listing.auction.bids.find(b => b.bidder === bidder);
-      if (previousBid) {
-        await refundBidFunds(bidder, listingId);
-      }
-      
-      // Now place the bid
-      const result = await listingsService.placeBid(listingId, bidder, amount);
-      if (result.success && result.data) {
-        setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
+      if (isCurrentHighestBidder) {
+        // User is raising their own bid - handle incrementally
+        const bidDifference = amount - currentHighestBid;
+        const incrementalFee = bidDifference * 0.1;
+        const incrementalTotal = bidDifference + incrementalFee;
         
-        addSellerNotification(
-          listing.seller,
-          `💰 New bid! ${bidder} bid $${amount.toFixed(2)} on "${listing.title}"`
-        );
+        const bidderBalance = getBuyerBalance(bidder);
+        if (bidderBalance < incrementalTotal) {
+          console.error('[PlaceBid] Insufficient balance for bid increase:', { 
+            balance: bidderBalance, 
+            required: incrementalTotal 
+          });
+          return false;
+        }
         
-        return true;
+        console.log('[PlaceBid] User raising their own bid:', {
+          previousBid: currentHighestBid,
+          newBid: amount,
+          difference: bidDifference,
+          incrementalCharge: incrementalTotal
+        });
+        
+        // Deduct only the incremental amount
+        await setBuyerBalance(bidder, bidderBalance - incrementalTotal);
+        
+        // Place the bid update
+        const result = await listingsService.placeBid(listingId, bidder, amount);
+        
+        if (result.success && result.data) {
+          setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
+          
+          addSellerNotification(
+            listing.seller,
+            `📈 ${bidder} increased their bid to ${amount.toFixed(2)} on "${listing.title}"`
+          );
+          
+          return true;
+        } else {
+          // Rollback on failure
+          await setBuyerBalance(bidder, bidderBalance);
+          return false;
+        }
       } else {
-        // If bid placement failed, refund the held funds
-        await refundBidFunds(bidder, listingId);
-        return false;
+        // New highest bidder - use the standard flow
+        const fundsHeld = await holdBidFunds(listingId, bidder, amount, listing.title);
+        if (!fundsHeld) {
+          console.error('[PlaceBid] Failed to hold funds for bid');
+          return false;
+        }
+        
+        // Place the bid
+        const result = await listingsService.placeBid(listingId, bidder, amount);
+        
+        if (result.success && result.data) {
+          setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
+          
+          // Refund the previous highest bidder if different
+          if (previousHighestBidder && previousHighestBidder !== bidder) {
+            console.log(`[PlaceBid] Refunding outbid user: ${previousHighestBidder}`);
+            const refunded = await refundBidFunds(previousHighestBidder, listingId);
+            if (refunded) {
+              console.log(`[PlaceBid] Successfully refunded ${previousHighestBidder}`);
+            } else {
+              console.error(`[PlaceBid] Failed to refund outbid user ${previousHighestBidder}`);
+            }
+          }
+          
+          // Clean up any other stale pending orders
+          const uniqueBidders = [...new Set(listing.auction.bids.map(b => b.bidder))];
+          for (const otherBidder of uniqueBidders) {
+            if (otherBidder !== bidder && otherBidder !== previousHighestBidder) {
+              refundBidFunds(otherBidder, listingId).catch(err => 
+                console.log(`[PlaceBid] Cleanup refund skipped for ${otherBidder}:`, err)
+              );
+            }
+          }
+          
+          addSellerNotification(
+            listing.seller,
+            `💰 New bid! ${bidder} bid ${amount.toFixed(2)} on "${listing.title}"`
+          );
+          
+          return true;
+        } else {
+          // Bid placement failed - refund
+          await refundBidFunds(bidder, listingId);
+          return false;
+        }
       }
     } catch (error) {
-      console.error('Error placing bid:', error);
-      // On error, try to refund
-      await refundBidFunds(bidder, listingId);
+      console.error('[PlaceBid] Unexpected error:', error);
       return false;
     }
   };
@@ -529,7 +597,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   };
 
-  const findValidWinner = (bids: Bid[], reservePrice: number | undefined): Bid | null => {
+  // FIXED: Check for pending orders instead of balance
+  const findValidWinner = async (bids: Bid[], reservePrice: number | undefined, listingId: string): Promise<Bid | null> => {
     const sortedBids = [...bids].sort((a, b) => b.amount - a.amount);
     const validBids = reservePrice 
       ? sortedBids.filter(bid => bid.amount >= reservePrice)
@@ -537,13 +606,29 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       
     if (validBids.length === 0) return null;
     
+    // Get all orders to check for pending auction orders
+    const ordersResult = await ordersService.getOrders();
+    if (!ordersResult.success || !ordersResult.data) {
+      console.error('[findValidWinner] Failed to load orders');
+      return null;
+    }
+    
+    // Check each bid in order to find one with a valid pending order
     for (const bid of validBids) {
-      const bidderBalance = getBuyerBalance(bid.bidder);
-      if (bidderBalance >= bid.amount) {
-        return bid;
+      // Check if this bidder has a pending auction order for this listing
+      const hasPendingOrder = ordersResult.data.some(order => 
+        order.buyer === bid.bidder && 
+        order.listingId === listingId && 
+        order.shippingStatus === 'pending-auction'
+      );
+      
+      if (hasPendingOrder) {
+        console.log(`[findValidWinner] Found valid winner with pending order: ${bid.bidder}`);
+        return bid; // This bidder has funds already held
       }
     }
     
+    console.log('[findValidWinner] No valid winner found with pending orders');
     return null;
   };
 
@@ -604,54 +689,23 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           
           try {
             if (listing.auction.bids.length > 0) {
-              const validWinner = findValidWinner(
+              // FIXED: Pass listingId to findValidWinner
+              const validWinner = await findValidWinner(
                 listing.auction.bids, 
-                listing.auction.reservePrice
+                listing.auction.reservePrice,
+                listing.id
               );
               
               if (validWinner) {
                 const winningBidder = validWinner.bidder;
                 const winningBid = validWinner.amount;
                 
-                const purchaseListingCopy = {
-                  ...listing,
-                  price: winningBid,
-                  markedUpPrice: Math.round(winningBid * 1.1 * 100) / 100,
-                  wasAuction: true,
-                  finalBid: winningBid,
-                  auctionEndTime: listing.auction.endTime
-                };
-                
-                const sellerTierInfo = getSellerTierMemoized(listing.seller, orderHistory);
-                const tierCreditPercent = sellerTierInfo.credit;
-                const tierCreditAmount = winningBid * tierCreditPercent;
-                
-                const success = await purchaseListing(purchaseListingCopy, winningBidder);
+                // FIXED: Use finalizeAuctionPurchase which properly handles the already-held funds
+                const success = await finalizeAuctionPurchase(listing, winningBidder, winningBid);
                 
                 if (success) {
-                  if (tierCreditAmount > 0) {
-                    addSellerNotification(
-                      listing.seller,
-                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for ${winningBid.toFixed(2)} (includes ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
-                    );
-                  } else {
-                    addSellerNotification(
-                      listing.seller,
-                      `🏆 Auction ended: "${listing.title}" sold to ${winningBidder} for ${winningBid.toFixed(2)}`
-                    );
-                  }
-                  
-                  if (listing.auction.highestBidder && winningBidder !== listing.auction.highestBidder) {
-                    addSellerNotification(
-                      listing.seller,
-                      `ℹ️ Note: Original highest bidder ${listing.auction.highestBidder} had insufficient funds. Sold to next highest bidder.`
-                    );
-                  }
-                  
-                  // First, remove the winner's pending auction order
-                  await refundBidFunds(winningBidder, listing.id);
-                  
-                  // REFUND LOSING BIDDERS (not including the winner)
+                  // With incremental bidding, most losing bidders should already be refunded
+                  // But check for any remaining ones
                   const losingBidders = listing.auction.bids
                     .filter(bid => bid.bidder !== winningBidder)
                     .map(bid => bid.bidder);
@@ -659,13 +713,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                   // Get unique bidders (in case someone bid multiple times)
                   const uniqueLosingBidders = [...new Set(losingBidders)];
                   
-                  // Refund each losing bidder
+                  // Refund each losing bidder (if they haven't been refunded already)
                   for (const loser of uniqueLosingBidders) {
                     const refunded = await refundBidFunds(loser, listing.id);
                     if (refunded) {
                       console.log(`[Auction] Refunded losing bidder ${loser} for listing ${listing.id}`);
-                    } else {
-                      console.error(`[Auction] Failed to refund ${loser} for listing ${listing.id}`);
                     }
                   }
                   
@@ -687,7 +739,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                 } else if (listing.auction.highestBidder) {
                   addSellerNotification(
                     listing.seller,
-                    `⚠️ Auction ended: Bidder ${listing.auction.highestBidder} had insufficient funds for "${listing.title}" and no other valid bidders were found.`
+                    `⚠️ Auction ended: No valid winner found for "${listing.title}". All bidders have been refunded.`
                   );
                 }
                 

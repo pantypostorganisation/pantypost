@@ -139,9 +139,12 @@ export function useOrdersService(options: UseOrdersServiceOptions = {}): UseOrde
   // Filter and sort orders
   const filteredOrders = orders
     .filter(order => {
-      // Status filter
-      if (statusFilter !== 'all' && order.shippingStatus !== statusFilter) {
-        return false;
+      // Status filter - exclude pending-auction from normal filters
+      if (statusFilter !== 'all') {
+        const orderStatus = order.shippingStatus || 'pending';
+        // Don't show pending-auction orders in normal filters
+        if (orderStatus === 'pending-auction') return false;
+        if (orderStatus !== statusFilter) return false;
       }
       
       // Search filter
@@ -167,23 +170,31 @@ export function useOrdersService(options: UseOrdersServiceOptions = {}): UseOrde
           compareValue = (a.markedUpPrice || a.price) - (b.markedUpPrice || b.price);
           break;
         case 'status':
-          const statusOrder = { 'pending': 0, 'processing': 1, 'shipped': 2 };
+          const statusOrder: Record<string, number> = { 
+            'pending': 0, 
+            'processing': 1, 
+            'shipped': 2,
+            'pending-auction': 3 // Add pending-auction to order
+          };
           const aStatus = a.shippingStatus || 'pending';
           const bStatus = b.shippingStatus || 'pending';
-          compareValue = statusOrder[aStatus] - statusOrder[bStatus];
+          // Use default value of 99 for unknown statuses
+          compareValue = (statusOrder[aStatus] ?? 99) - (statusOrder[bStatus] ?? 99);
           break;
       }
       
       return sortOrder === 'asc' ? compareValue : -compareValue;
     });
   
-  // Calculate stats
+  // Calculate stats (excluding pending-auction orders)
   const stats = {
-    total: orders.length,
+    total: orders.filter(o => o.shippingStatus !== 'pending-auction').length,
     pending: orders.filter(o => !o.shippingStatus || o.shippingStatus === 'pending').length,
     processing: orders.filter(o => o.shippingStatus === 'processing').length,
     shipped: orders.filter(o => o.shippingStatus === 'shipped').length,
-    totalAmount: orders.reduce((sum, o) => sum + (o.markedUpPrice || o.price), 0),
+    totalAmount: orders
+      .filter(o => o.shippingStatus !== 'pending-auction')
+      .reduce((sum, o) => sum + (o.markedUpPrice || o.price), 0),
   };
   
   // Filter actions
