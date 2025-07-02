@@ -15,11 +15,23 @@ export default function RequireAuth({
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
+  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
+    // Skip if auth is not ready
+    if (!isAuthReady) {
+      console.log('[RequireAuth] Waiting for auth to be ready...');
+      return;
+    }
 
-    if (!isAuthReady) return;
+    // Only check once when auth becomes ready
+    if (hasChecked) return;
+
+    console.log('[RequireAuth] Auth ready, checking access for role:', role);
+    console.log('[RequireAuth] Current user:', user ? { 
+      username: user.username, 
+      role: user.role 
+    } : 'No user');
 
     const userRole = user?.role;
     const isAdmin = userRole === 'admin';
@@ -28,18 +40,21 @@ export default function RequireAuth({
     const hasAccess = user && (userRole === role || (role !== 'admin' && isAdmin));
     
     if (!hasAccess) {
-      router.push('/login');
-    } else if (isMounted) {
+      console.log('[RequireAuth] Access denied, redirecting to login');
+      // Small delay to prevent flash of content
+      setTimeout(() => {
+        router.push('/login');
+      }, 100);
+    } else {
+      console.log('[RequireAuth] Access granted');
       setAuthorized(true);
     }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isAuthReady, user, role, router]);
+    
+    setHasChecked(true);
+  }, [isAuthReady, user, role, router, hasChecked]);
 
   // Show loading state while checking auth
-  if (!isAuthReady) {
+  if (!isAuthReady || (!authorized && !hasChecked)) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center space-x-2">

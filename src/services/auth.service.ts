@@ -249,6 +249,8 @@ export class AuthService {
       // Set current user
       await storageService.setItem('currentUser', user);
 
+      console.log('[Auth] Login successful, saved user:', { username: user.username, role: user.role });
+
       return {
         success: true,
         data: { user },
@@ -404,14 +406,43 @@ export class AuthService {
         const storedUserData = allUsers[user.username];
         
         if (storedUserData) {
-          // Merge any updates from all_users_v2
+          // ✅ FIX: Selective merge - preserve critical auth fields
           const mergedUser = {
-            ...user,
-            ...storedUserData,
+            // Core auth fields from current session (never override these)
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            email: user.email || storedUserData.email,
+            
+            // Profile fields from stored data (can be updated)
+            bio: storedUserData.bio !== undefined ? storedUserData.bio : user.bio,
+            profilePicture: storedUserData.profilePicture || user.profilePicture,
+            
+            // Verification fields
+            verificationStatus: storedUserData.verificationStatus || user.verificationStatus,
+            isVerified: storedUserData.verificationStatus === 'verified' || user.isVerified,
+            verificationRequestedAt: storedUserData.verificationRequestedAt || user.verificationRequestedAt,
+            verificationRejectionReason: storedUserData.verificationRejectionReason || user.verificationRejectionReason,
+            verificationDocs: storedUserData.verificationDocs || user.verificationDocs,
+            
+            // Seller-specific fields
+            tier: storedUserData.tier || user.tier,
+            subscriberCount: storedUserData.subscriberCount ?? user.subscriberCount,
+            totalSales: storedUserData.totalSales ?? user.totalSales,
+            rating: storedUserData.rating ?? user.rating,
+            reviewCount: storedUserData.reviewCount ?? user.reviewCount,
+            
+            // Ban status
+            isBanned: storedUserData.isBanned ?? user.isBanned,
+            banReason: storedUserData.banReason || user.banReason,
+            banExpiresAt: storedUserData.banExpiresAt || user.banExpiresAt,
+            
+            // Timestamps
+            createdAt: user.createdAt || storedUserData.createdAt,
             lastActive: new Date().toISOString(),
           };
           
-          // Update currentUser if there were changes
+          // Only update if there are actual changes
           if (JSON.stringify(user) !== JSON.stringify(mergedUser)) {
             await storageService.setItem('currentUser', mergedUser);
           }

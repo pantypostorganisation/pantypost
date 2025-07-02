@@ -87,9 +87,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initializingRef.current = true;
 
       try {
+        console.log('[Auth] Starting auth initialization...');
+        
         // Check for existing session
         const result = await authService.getCurrentUser();
+        console.log('[Auth] getCurrentUser result:', result);
+        
         if (result.success && result.data) {
+          console.log('[Auth] User found:', { 
+            username: result.data.username, 
+            role: result.data.role,
+            isVerified: result.data.isVerified 
+          });
           setUser(result.data);
           
           // Set up session monitoring for API mode
@@ -98,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             sessionCheckIntervalRef.current = setInterval(async () => {
               const isAuthenticated = await authService.isAuthenticated();
               if (!isAuthenticated) {
+                console.log('[Auth] Session expired, clearing user');
                 setUser(null);
                 clearInterval(sessionCheckIntervalRef.current!);
               } else {
@@ -106,12 +116,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             }, 5 * 60 * 1000); // 5 minutes
           }
+        } else {
+          console.log('[Auth] No user found in session');
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('[Auth] Auth initialization error:', error);
       } finally {
         setIsAuthReady(true);
         initializingRef.current = false;
+        console.log('[Auth] Auth initialization complete, isAuthReady: true');
       }
     };
 
@@ -130,11 +143,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleStorageChange = async (e: StorageEvent) => {
       if (e.key === 'currentUser' && e.newValue === null) {
         // User logged out in another tab
+        console.log('[Auth] User logged out in another tab');
         setUser(null);
       } else if (e.key === 'currentUser' && e.newValue) {
         // User logged in or updated in another tab
         try {
           const updatedUser = JSON.parse(e.newValue);
+          console.log('[Auth] User updated in another tab:', { 
+            username: updatedUser.username, 
+            role: updatedUser.role 
+          });
           setUser(updatedUser);
         } catch (error) {
           console.error('Error parsing user from storage event:', error);
@@ -159,9 +177,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
+      console.log('[Auth] Attempting login:', { username, role });
       const result = await authService.login({ username, role });
       
       if (result.success && result.data) {
+        console.log('[Auth] Login successful:', { 
+          username: result.data.user.username, 
+          role: result.data.user.role 
+        });
         setUser(result.data.user);
         
         // Set up session monitoring for API mode
@@ -171,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         return true;
       } else {
+        console.error('[Auth] Login failed:', result.error);
         setError(result.error?.message || 'Login failed');
         return false;
       }
@@ -186,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout function using auth service
   const logout = useCallback(async () => {
     try {
+      console.log('[Auth] Logging out...');
       await authService.logout();
       setUser(null);
       setError(null);
@@ -195,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearInterval(sessionCheckIntervalRef.current);
         sessionCheckIntervalRef.current = null;
       }
+      console.log('[Auth] Logout complete');
     } catch (error) {
       console.error('Logout error:', error);
       // Still clear user state even if service fails
@@ -216,12 +242,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      console.log('[Auth] Updating user:', updates);
       const result = await authService.updateCurrentUser(updates);
       
       if (result.success && result.data) {
+        console.log('[Auth] User updated successfully');
         setUser(result.data);
         setError(null);
       } else {
+        console.error('[Auth] User update failed:', result.error);
         setError(result.error?.message || 'Failed to update user');
       }
     } catch (error) {
