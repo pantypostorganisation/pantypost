@@ -1,7 +1,7 @@
 // src/components/wallet/buyer/AddFundsSection.tsx
 'use client';
 
-import { PlusCircle, CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
+import { PlusCircle, CreditCard, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 
 interface AddFundsSectionProps {
   amountToAdd: string;
@@ -25,90 +25,104 @@ export default function AddFundsSection({
   onQuickAmountSelect
 }: AddFundsSectionProps) {
   return (
-    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg mb-8">
-      <h2 className="text-xl font-bold mb-4 flex items-center">
-        <PlusCircle className="w-5 h-5 mr-2 text-[#ff950e]" />
-        Add Funds
-      </h2>
+    <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 mb-8 relative overflow-hidden group">
+      {/* Background gradient effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
-      <div className="mb-6">
-        <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-          <div className="flex items-start">
-            <CheckCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-blue-200">
-              <p className="font-medium mb-1">Instant Deposits</p>
-              <p>Funds are added immediately to your account and available for purchases right away.</p>
-            </div>
+      <div className="relative z-10">
+        <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
+          <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2 rounded-lg mr-3 shadow-lg shadow-orange-500/20">
+            <PlusCircle className="w-6 h-6 text-white" />
           </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <label htmlFor="amount" className="block text-sm font-medium text-gray-400 mb-1">
-              Amount to add
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500">$</span>
+          Add Funds
+        </h2>
+        
+        <div className="mb-6">
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-600/10 to-cyan-600/10 border border-blue-500/30 rounded-xl">
+            <div className="flex items-start">
+              <div className="bg-blue-500/20 p-2 rounded-lg mr-3">
+                <Zap className="w-5 h-5 text-blue-400" />
               </div>
-              <input
-                type="text"
-                id="amount"
-                value={amountToAdd}
-                onChange={onAmountChange}
-                onKeyPress={onKeyPress}
-                placeholder="0.00"
-                className="w-full bg-[#222] border border-[#444] rounded-lg py-3 pl-8 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
-                disabled={isLoading}
-              />
-            </div>
-            <div className="flex gap-2 mt-2">
-              {[25, 50, 100, 200].map((quickAmount) => (
-                <button
-                  key={quickAmount}
-                  onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                  className="text-xs px-2 py-1 bg-[#333] hover:bg-[#444] text-gray-300 rounded transition-colors"
-                  disabled={isLoading}
-                >
-                  ${quickAmount}
-                </button>
-              ))}
+              <div className="text-sm">
+                <p className="font-semibold text-blue-300 mb-1">Instant Processing</p>
+                <p className="text-blue-200/80">Funds are added immediately and ready to use for any purchase</p>
+              </div>
             </div>
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={onAddFunds}
-              className="px-6 py-3 rounded-lg font-medium flex items-center justify-center min-w-[180px] bg-[#ff950e] hover:bg-[#e88800] text-black disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              disabled={isLoading || !amountToAdd || parseFloat(amountToAdd) <= 0}
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-5 h-5 mr-2" />
-                  Add Funds
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {message && (
-        <div className={`p-4 rounded-lg ${
-          messageType === 'success' ? 'bg-green-900 bg-opacity-20 text-green-400 border border-green-500/30' : 
-          messageType === 'error' ? 'bg-red-900 bg-opacity-20 text-red-400 border border-red-500/30' : ''
-        }`}>
-          <div className="flex items-center">
-            {messageType === 'success' && <CheckCircle className="w-5 h-5 mr-2" />}
-            {messageType === 'error' && <AlertCircle className="w-5 h-5 mr-2" />}
-            {message}
+          <div className="space-y-6">
+            <div>
+              <label htmlFor="amount" className="block text-sm font-medium text-gray-300 mb-2">
+                Amount to add (USD)
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <span className="text-gray-400 text-lg">$</span>
+                </div>
+                <input
+                  type="text"
+                  id="amount"
+                  value={amountToAdd}
+                  onChange={onAmountChange}
+                  onKeyPress={onKeyPress}
+                  placeholder="0.00"
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl py-4 pl-10 pr-4 text-white text-lg focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent transition-all placeholder-gray-600"
+                  disabled={isLoading}
+                />
+              </div>
+              
+              {/* Quick amount buttons */}
+              <div className="grid grid-cols-4 gap-3 mt-4">
+                {[25, 50, 100, 200].map((quickAmount) => (
+                  <button
+                    key={quickAmount}
+                    onClick={() => onQuickAmountSelect(quickAmount.toString())}
+                    className="py-3 px-4 bg-black/50 hover:bg-black/70 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white rounded-xl transition-all duration-200 font-medium"
+                    disabled={isLoading}
+                  >
+                    ${quickAmount}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex justify-center">
+              <button
+                onClick={onAddFunds}
+                className="px-8 py-3 rounded-xl font-semibold flex items-center justify-center bg-gradient-to-r from-[#ff950e] to-orange-600 hover:from-[#e88800] hover:to-orange-700 text-black shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-300"
+                disabled={isLoading || !amountToAdd || parseFloat(amountToAdd) <= 0}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Processing Transaction...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Add ${amountToAdd || '0.00'} to Wallet
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
-      )}
+
+        {message && (
+          <div className={`mt-6 p-4 rounded-xl flex items-start ${
+            messageType === 'success' 
+              ? 'bg-green-500/10 text-green-400 border border-green-500/30' 
+              : 'bg-red-500/10 text-red-400 border border-red-500/30'
+          }`}>
+            {messageType === 'success' ? (
+              <CheckCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
+            )}
+            <span className="text-sm font-medium">{message}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

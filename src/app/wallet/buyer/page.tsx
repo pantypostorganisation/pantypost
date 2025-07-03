@@ -36,11 +36,17 @@ function BuyerWalletContent() {
   } = useBuyerWallet();
 
   return (
-    <main className="min-h-screen bg-[#121212] text-white p-4 md:p-8">
-      {/* Background Pattern */}
-      <BackgroundPattern />
+    <main className="min-h-screen bg-black text-white p-4 md:p-10">
+      {/* Background Pattern - Updated */}
+      <div className="fixed inset-0 opacity-5 pointer-events-none">
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255, 149, 14, 0.3) 0%, transparent 50%),
+                          radial-gradient(circle at 80% 20%, rgba(255, 149, 14, 0.2) 0%, transparent 50%),
+                          radial-gradient(circle at 40% 40%, rgba(255, 149, 14, 0.15) 0%, transparent 50%)`
+        }} />
+      </div>
       
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
         <WalletHeader />
 
@@ -66,43 +72,15 @@ function BuyerWalletContent() {
         {buyerPurchases.length > 0 ? (
           <RecentPurchases purchases={recentPurchases} />
         ) : (
-          <EmptyState showEmptyState={true} />
+          <EmptyState />
         )}
       </div>
     </main>
   );
 }
 
-// Main page component with provider readiness check
+// Main component with auth wrappers
 export default function BuyerWalletPage() {
-  const [isReady, setIsReady] = React.useState(false);
-
-  React.useEffect(() => {
-    // Small delay to ensure providers are mounted
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!isReady) {
-    return (
-      <BanCheck>
-        <RequireAuth role="buyer">
-          <main className="min-h-screen bg-[#121212] text-white p-4 md:p-8">
-            <div className="max-w-4xl mx-auto">
-              <div className="text-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
-                <p className="text-gray-400 text-lg">Loading wallet...</p>
-              </div>
-            </div>
-          </main>
-        </RequireAuth>
-      </BanCheck>
-    );
-  }
-
   return (
     <BanCheck>
       <RequireAuth role="buyer">
