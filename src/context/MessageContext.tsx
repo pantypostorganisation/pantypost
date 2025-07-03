@@ -78,6 +78,7 @@ type MessageNotification = {
 // Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
+  isLoading: boolean; // Add loading state
   sendMessage: (
     sender: string,
     receiver: string,
@@ -124,6 +125,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
+  const [isLoading, setIsLoading] = useState(true); // Add loading state
 
   // Initialize service on mount
   useEffect(() => {
@@ -133,94 +135,105 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   // Load initial data using services
   useEffect(() => {
     const loadData = async () => {
-      if (typeof window === 'undefined') return;
+      if (typeof window === 'undefined') {
+        setIsLoading(false);
+        return;
+      }
 
       try {
+        setIsLoading(true);
+        
         // Load messages - using storageService since messagesService doesn't have a getAllMessages method
         const storedMessages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
         
-        // Migrate old format if needed
-        const needsMigration = Object.values(storedMessages).some(
-          value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
-        );
-        
-        if (needsMigration) {
-          console.log('Migrating message format...');
-          const migrated: { [key: string]: Message[] } = {};
+        // Ensure we have a valid object
+        if (storedMessages && typeof storedMessages === 'object') {
+          // Migrate old format if needed
+          const needsMigration = Object.values(storedMessages).some(
+            value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
+          );
           
-          Object.entries(storedMessages).forEach(([key, msgs]) => {
-            if (Array.isArray(msgs)) {
-              msgs.forEach((msg: any) => {
-                if (msg.sender && msg.receiver) {
-                  const conversationKey = getConversationKey(msg.sender, msg.receiver);
-                  if (!migrated[conversationKey]) {
-                    migrated[conversationKey] = [];
+          if (needsMigration) {
+            console.log('Migrating message format...');
+            const migrated: { [key: string]: Message[] } = {};
+            
+            Object.entries(storedMessages).forEach(([key, msgs]) => {
+              if (Array.isArray(msgs)) {
+                msgs.forEach((msg: any) => {
+                  if (msg.sender && msg.receiver) {
+                    const conversationKey = getConversationKey(msg.sender, msg.receiver);
+                    if (!migrated[conversationKey]) {
+                      migrated[conversationKey] = [];
+                    }
+                    migrated[conversationKey].push(msg);
                   }
-                  migrated[conversationKey].push(msg);
-                }
-              });
-            }
-          });
-          
-          setMessages(migrated);
-          await storageService.setItem('panty_messages', migrated);
-        } else {
-          setMessages(storedMessages);
+                });
+              }
+            });
+            
+            setMessages(migrated);
+            await storageService.setItem('panty_messages', migrated);
+          } else {
+            setMessages(storedMessages);
+          }
         }
 
         // Load blocked users
         const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
-        setBlockedUsers(blocked);
+        setBlockedUsers(blocked || {});
 
         // Load reported users
         const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
-        setReportedUsers(reported);
+        setReportedUsers(reported || {});
 
         // Load report logs
         const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
-        setReportLogs(reports);
+        setReportLogs(reports || []);
 
         // Load message notifications
         const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>('panty_message_notifications', {});
-        setMessageNotifications(notifications);
+        setMessageNotifications(notifications || {});
+        
       } catch (error) {
         console.error('Error loading message data:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, []); // Only run once on mount
 
   // Save data whenever it changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isLoading) {
       storageService.setItem('panty_messages', messages);
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isLoading) {
       storageService.setItem('panty_blocked', blockedUsers);
     }
-  }, [blockedUsers]);
+  }, [blockedUsers, isLoading]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isLoading) {
       storageService.setItem('panty_reported', reportedUsers);
     }
-  }, [reportedUsers]);
+  }, [reportedUsers, isLoading]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isLoading) {
       storageService.setItem('panty_report_logs', reportLogs);
     }
-  }, [reportLogs]);
+  }, [reportLogs, isLoading]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isLoading) {
       storageService.setItem('panty_message_notifications', messageNotifications);
     }
-  }, [messageNotifications]);
+  }, [messageNotifications, isLoading]);
 
   const sendMessage = async (
     sender: string,
@@ -533,6 +546,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     <MessageContext.Provider
       value={{
         messages,
+        isLoading, // Include loading state
         sendMessage,
         sendCustomRequest,
         getMessagesForUsers,
