@@ -1,150 +1,131 @@
 // src/app/wallet/seller/page.tsx
 'use client';
 
+import React, { useState, useEffect } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
-import { useState, useEffect } from 'react';
-import { Wallet } from 'lucide-react';
+import WalletHeader from '@/components/wallet/seller/WalletHeader';
+import BalanceCard from '@/components/wallet/seller/BalanceCard';
+import EarningsCard from '@/components/wallet/seller/EarningsCard';
+import WithdrawSection from '@/components/wallet/seller/WithdrawSection';
+import RecentWithdrawals from '@/components/wallet/seller/RecentWithdrawals';
+import EmptyState from '@/components/wallet/seller/EmptyState';
+import WithdrawConfirmModal from '@/components/wallet/seller/WithdrawConfirmModal';
+import { useSellerWallet } from '@/hooks/useSellerWallet';
 
-// Import split components
-import SellerWalletStats from '@/components/seller/wallet/SellerWalletStats';
-import SellerWithdrawForm from '@/components/seller/wallet/SellerWithdrawForm';
-import SellerWithdrawHistory from '@/components/seller/wallet/SellerWithdrawHistory';
-import SellerWithdrawConfirmModal from '@/components/seller/wallet/SellerWithdrawConfirmModal';
+// Inner component that uses the hooks after providers are ready
+function SellerWalletContent() {
+  const {
+    // State
+    balance,
+    withdrawAmount,
+    message,
+    messageType,
+    isLoading,
+    showConfirmation,
+    
+    // Computed values
+    sortedWithdrawals,
+    totalWithdrawn,
+    totalEarnings,
+    recentWithdrawals,
+    sellerSales,
+    
+    // Actions
+    handleWithdrawClick,
+    handleConfirmWithdraw,
+    handleAmountChange,
+    handleKeyPress,
+    handleQuickAmountSelect,
+    setShowConfirmation,
+    setWithdrawAmount
+  } = useSellerWallet();
 
-export default function SellerWalletPage() {
-  const { user } = useAuth();
-  const { getSellerBalance, addSellerWithdrawal, sellerWithdrawals, orderHistory } = useWallet();
+  return (
+    <main className="min-h-screen bg-black text-white p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <WalletHeader />
 
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
-  const [balance, setBalance] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  
-  const logs = user ? sellerWithdrawals[user.username] || [] : [];
-  
-  // Sort withdrawals by date (newest first)
-  const sortedWithdrawals = [...logs].sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
+        {/* Balance and Earnings Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <BalanceCard balance={balance} />
+          <EarningsCard 
+            totalEarnings={totalEarnings} 
+            totalWithdrawn={totalWithdrawn}
+            salesCount={sellerSales.length} 
+          />
+        </div>
+
+        {/* Withdraw Section */}
+        <WithdrawSection
+          balance={balance}
+          withdrawAmount={withdrawAmount}
+          message={message}
+          messageType={messageType}
+          isLoading={isLoading}
+          onAmountChange={handleAmountChange}
+          onKeyPress={handleKeyPress}
+          onWithdraw={handleWithdrawClick}
+          onQuickAmountSelect={handleQuickAmountSelect}
+        />
+
+        {/* Recent Withdrawals or Empty State */}
+        {sortedWithdrawals.length > 0 ? (
+          <RecentWithdrawals withdrawals={recentWithdrawals} />
+        ) : (
+          <EmptyState showEmptyState={true} />
+        )}
+      </div>
+
+      {/* Confirmation Modal */}
+      <WithdrawConfirmModal
+        showConfirmation={showConfirmation}
+        setShowConfirmation={setShowConfirmation}
+        withdrawAmount={withdrawAmount}
+        isLoading={isLoading}
+        handleConfirmWithdraw={handleConfirmWithdraw}
+      />
+    </main>
   );
-  
-  // Calculate total withdrawn
-  const totalWithdrawn = logs.reduce((sum, log) => sum + log.amount, 0);
-  
-  // Get seller's sales history
-  const sellerSales = user?.username 
-    ? orderHistory.filter(order => order.seller === user.username)
-    : [];
-  
-  // Calculate total earnings (including current balance)
-  const totalEarnings = balance + totalWithdrawn;
+}
 
-  useEffect(() => {
-    if (user?.username) {
-      const raw = getSellerBalance(user.username);
-      setBalance(parseFloat(raw.toFixed(2)));
-    }
-  }, [user, getSellerBalance, logs]);
+// Main page component with provider readiness check
+export default function SellerWalletPage() {
+  const [isReady, setIsReady] = React.useState(false);
 
-  const handleWithdrawClick = () => {
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setMessage('Please enter a valid amount.');
-      setMessageType('error');
-      return;
-    }
+  React.useEffect(() => {
+    // Small delay to ensure providers are mounted
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 100);
 
-    const rounded = parseFloat(amount.toFixed(2));
-    if (rounded > balance) {
-      setMessage('Withdrawal exceeds available balance.');
-      setMessageType('error');
-      return;
-    }
-    
-    setShowConfirmation(true);
-  };
+    return () => clearTimeout(timer);
+  }, []);
 
-  const handleConfirmWithdraw = () => {
-    setIsLoading(true);
-    const amount = parseFloat(withdrawAmount);
-    const rounded = parseFloat(amount.toFixed(2));
-    
-    try {
-      if (user && user.username) {
-        // Simulate a slight delay for better UX
-        setTimeout(() => {
-          addSellerWithdrawal(user.username!, rounded);
-          setMessage(`Successfully withdrew $${rounded.toFixed(2)}.`);
-          setMessageType('success');
-          setWithdrawAmount('');
-          setShowConfirmation(false);
-          setIsLoading(false);
-        }, 800);
-      }
-    } catch (error) {
-      setMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
-      setMessageType('error');
-      setIsLoading(false);
-    }
-
-    // Clear message after 5 seconds
-    setTimeout(() => {
-      setMessage('');
-      setMessageType('');
-    }, 5000);
-  };
+  if (!isReady) {
+    return (
+      <BanCheck>
+        <RequireAuth role="seller">
+          <main className="min-h-screen bg-black text-white p-4 md:p-8">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
+                <p className="text-gray-400 text-lg">Loading wallet...</p>
+              </div>
+            </div>
+          </main>
+        </RequireAuth>
+      </BanCheck>
+    );
+  }
 
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <main className="min-h-screen bg-[#121212] text-white p-4 md:p-8">
-          <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-2 text-[#ff950e] flex items-center">
-                <Wallet className="mr-3 h-8 w-8" />
-                Seller Wallet
-              </h1>
-              <p className="text-gray-400">
-                Manage your earnings and withdrawals
-              </p>
-            </div>
-
-            <SellerWalletStats
-              balance={balance}
-              totalEarnings={totalEarnings}
-              totalWithdrawn={totalWithdrawn}
-              sellerSales={sellerSales}
-              logs={logs}
-            />
-
-            <SellerWithdrawForm
-              balance={balance}
-              withdrawAmount={withdrawAmount}
-              setWithdrawAmount={setWithdrawAmount}
-              message={message}
-              messageType={messageType}
-              isLoading={isLoading}
-              handleWithdrawClick={handleWithdrawClick}
-            />
-
-            <SellerWithdrawHistory
-              sortedWithdrawals={sortedWithdrawals}
-            />
-          </div>
-        </main>
-
-        <SellerWithdrawConfirmModal
-          showConfirmation={showConfirmation}
-          setShowConfirmation={setShowConfirmation}
-          withdrawAmount={withdrawAmount}
-          isLoading={isLoading}
-          handleConfirmWithdraw={handleConfirmWithdraw}
-        />
+        <SellerWalletContent />
       </RequireAuth>
     </BanCheck>
   );
