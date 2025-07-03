@@ -9,7 +9,7 @@ export interface Message {
   date: string;
   isRead?: boolean;
   read?: boolean;
-  type?: 'normal' | 'customRequest' | 'image';
+  type?: 'normal' | 'customRequest' | 'image' | 'tip';
   imageUrl?: string;
   isTip?: boolean;
   tipAmount?: number;
@@ -23,6 +23,7 @@ export interface Message {
     tags?: string[];
     message?: string;
     imageUrl?: string;
+    tipAmount?: number;
   };
 }
 

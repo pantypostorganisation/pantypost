@@ -13,7 +13,7 @@ type Message = {
   date: string;
   isRead?: boolean;
   read?: boolean;
-  type?: 'normal' | 'customRequest' | 'image';
+  type?: 'normal' | 'customRequest' | 'image' | 'tip';
   meta?: {
     id?: string;
     title?: string;
@@ -21,6 +21,7 @@ type Message = {
     tags?: string[];
     message?: string;
     imageUrl?: string;
+    tipAmount?: number;
   };
 };
 
@@ -42,7 +43,7 @@ type ReportLog = {
 };
 
 type MessageOptions = {
-  type?: 'normal' | 'customRequest' | 'image';
+  type?: 'normal' | 'customRequest' | 'image' | 'tip';
   meta?: {
     id?: string;
     title?: string;
@@ -50,6 +51,7 @@ type MessageOptions = {
     tags?: string[];
     message?: string;
     imageUrl?: string;
+    tipAmount?: number;
   };
 };
 
@@ -122,6 +124,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
+
+  // Initialize service on mount
+  useEffect(() => {
+    messagesService.initialize();
+  }, []);
 
   // Load initial data using services
   useEffect(() => {
@@ -236,9 +243,21 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       if (result.success && result.data) {
         const conversationKey = getConversationKey(sanitizedSender, sanitizedReceiver);
+        const newMessage: Message = {
+          id: result.data.id,
+          sender: result.data.sender,
+          receiver: result.data.receiver,
+          content: result.data.content,
+          date: result.data.date,
+          isRead: result.data.isRead,
+          read: result.data.read,
+          type: result.data.type,
+          meta: result.data.meta,
+        };
+        
         setMessages(prev => ({
           ...prev,
-          [conversationKey]: [...(prev[conversationKey] || []), result.data!],
+          [conversationKey]: [...(prev[conversationKey] || []), newMessage],
         }));
 
         // Update notifications if needed

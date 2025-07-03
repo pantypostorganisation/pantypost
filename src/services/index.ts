@@ -69,6 +69,18 @@ export type {
   BanRequest
 } from './users.service';
 
+// Messages service types
+export type { 
+  Message, 
+  MessageThread, 
+  SendMessageRequest, 
+  BlockUserRequest, 
+  ReportUserRequest,
+  MessageNotification,
+  CustomRequestData,
+  MessageAttachment
+} from './messages.service';
+
 // Export order types from WalletContext
 export type { Order, CustomRequestPurchase, DepositLog } from '../context/WalletContext';
 

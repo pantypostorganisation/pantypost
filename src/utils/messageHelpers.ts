@@ -1,5 +1,7 @@
 // src/utils/messageHelpers.ts
 
+import type { Message, MessageThread } from '@/types/message';
+
 /**
  * Check if a string contains only a single emoji
  */
@@ -67,4 +69,72 @@ export const getUserInitials = (username: string): string => {
 export const truncateMessage = (content: string, maxLength: number = 50): string => {
   if (content.length <= maxLength) return content;
   return content.substring(0, maxLength).trim() + '...';
+};
+
+/**
+ * Sort threads by most recent activity
+ */
+export const sortThreadsByRecent = (threads: MessageThread[]): MessageThread[] => {
+  return [...threads].sort((a, b) => 
+    new Date(b.updatedAt || b.lastMessage.date).getTime() - 
+    new Date(a.updatedAt || a.lastMessage.date).getTime()
+  );
+};
+
+/**
+ * Filter threads by unread status
+ */
+export const filterUnreadThreads = (threads: MessageThread[]): MessageThread[] => {
+  return threads.filter(thread => thread.unreadCount > 0);
+};
+
+/**
+ * Get thread title (other participant's username)
+ */
+export const getThreadTitle = (thread: MessageThread, currentUsername: string): string => {
+  return thread.participants.find(p => p !== currentUsername) || 'Unknown';
+};
+
+/**
+ * Check if message is from current user
+ */
+export const isOwnMessage = (message: Message, currentUsername: string): boolean => {
+  return message.sender === currentUsername;
+};
+
+/**
+ * Get thread preview text
+ */
+export const getThreadPreview = (thread: MessageThread): string => {
+  const lastMessage = thread.lastMessage;
+  
+  if (lastMessage.type === 'image') {
+    return '📷 Image';
+  } else if (lastMessage.type === 'customRequest') {
+    return `📦 ${lastMessage.meta?.title || 'Custom Request'}`;
+  } else if (lastMessage.type === 'tip') {
+    return `💰 Tip sent`;
+  }
+  
+  return truncateMessage(lastMessage.content);
+};
+
+/**
+ * Group messages by date
+ */
+export const groupMessagesByDate = (messages: Message[]): { date: string; messages: Message[] }[] => {
+  const groups: { [date: string]: Message[] } = {};
+  
+  messages.forEach(message => {
+    const date = new Date(message.date).toDateString();
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(message);
+  });
+  
+  return Object.entries(groups).map(([date, messages]) => ({
+    date,
+    messages
+  }));
 };

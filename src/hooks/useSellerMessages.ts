@@ -20,7 +20,7 @@ type Message = {
   content: string;
   date: string;
   read?: boolean;
-  type?: 'normal' | 'customRequest' | 'image';
+  type?: 'normal' | 'customRequest' | 'image' | 'tip';
   meta?: {
     id?: string;
     title?: string;
@@ -28,6 +28,7 @@ type Message = {
     tags?: string[];
     message?: string;
     imageUrl?: string;
+    tipAmount?: number;
   };
 };
 
