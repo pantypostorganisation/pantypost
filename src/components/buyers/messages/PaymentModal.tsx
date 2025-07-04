@@ -1,7 +1,7 @@
 // src/components/buyers/messages/PaymentModal.tsx
 'use client';
 
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useRef } from 'react';
 import { X, DollarSign, AlertCircle, Check } from 'lucide-react';
 import { WalletContext } from '@/context/WalletContext';
 
@@ -24,14 +24,26 @@ export default function PaymentModal({
 }: PaymentModalProps) {
   // Get fresh wallet balance directly from context
   const walletContext = useContext(WalletContext);
+  const [isProcessing, setIsProcessing] = React.useState(false);
   
-  // Force reload wallet when modal opens
+  // Use a ref to track if we've already reloaded for this modal open
+  const hasReloadedRef = useRef(false);
+  
+  // Force reload wallet when modal opens - FIXED to prevent infinite loops
   React.useEffect(() => {
-    if (show && walletContext && walletContext.reloadData) {
+    if (show && walletContext && walletContext.reloadData && !hasReloadedRef.current && !walletContext.isLoading) {
       console.log('PaymentModal: Reloading wallet data...');
-      walletContext.reloadData();
+      hasReloadedRef.current = true;
+      walletContext.reloadData().catch(error => {
+        console.error('PaymentModal: Error reloading wallet data:', error);
+      });
     }
-  }, [show, walletContext]);
+    
+    // Reset the ref when modal closes
+    if (!show) {
+      hasReloadedRef.current = false;
+    }
+  }, [show]); // Remove walletContext from dependencies to prevent loops
   
   if (!show || !payingRequest) return null;
 
@@ -59,13 +71,13 @@ export default function PaymentModal({
     if (walletContext && walletContext.getBuyerBalance) {
       const contextBalance = walletContext.getBuyerBalance(user.username);
       console.log('PaymentModal: Got balance from context', contextBalance);
-      if (contextBalance > 0) return contextBalance;
+      if (contextBalance >= 0) return contextBalance; // Changed from > 0 to >= 0
     }
     
     // Fallback to wallet prop
     const propBalance = wallet[user.username] || 0;
     console.log('PaymentModal: Wallet prop balance', propBalance);
-    if (propBalance > 0) return propBalance;
+    if (propBalance >= 0) return propBalance; // Changed from > 0 to >= 0
     
     // Last resort: try to get from localStorage
     try {
@@ -94,6 +106,17 @@ export default function PaymentModal({
   
   const canAfford = userBalance >= markupPrice;
 
+  const handleConfirm = async () => {
+    if (isProcessing || !canAfford) return;
+    
+    setIsProcessing(true);
+    try {
+      await onConfirmPay();
+    } finally {
+      // Don't reset isProcessing here - let the parent component handle closing the modal
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#1a1a1a] rounded-xl w-full max-w-md border border-gray-800 shadow-2xl">
@@ -105,7 +128,8 @@ export default function PaymentModal({
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-[#222] rounded-lg transition-colors"
+            disabled={isProcessing}
+            className="p-2 hover:bg-[#222] rounded-lg transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5 text-gray-400" />
           </button>
@@ -185,20 +209,32 @@ export default function PaymentModal({
         <div className="flex gap-3 p-6 border-t border-gray-800">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+            disabled={isProcessing}
+            className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
-            onClick={onConfirmPay}
-            disabled={!canAfford || isWalletLoading}
-            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-              canAfford && !isWalletLoading
+            onClick={handleConfirm}
+            disabled={!canAfford || isWalletLoading || isProcessing}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+              canAfford && !isWalletLoading && !isProcessing
                 ? 'bg-[#ff950e] text-black hover:bg-[#e88800]'
                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {isWalletLoading ? 'Loading...' : canAfford ? `Pay ${markupPrice.toFixed(2)}` : 'Insufficient Funds'}
+            {isProcessing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : isWalletLoading ? (
+              'Loading...'
+            ) : canAfford ? (
+              `Pay $${markupPrice.toFixed(2)}`
+            ) : (
+              'Insufficient Funds'
+            )}
           </button>
         </div>
       </div>

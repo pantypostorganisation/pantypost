@@ -181,29 +181,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<number>(0);
   const pendingSaveRef = useRef(false);
+  const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isSavingRef = useRef(false);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
 
-  // Consolidated save function with debouncing
+  // Consolidated save function with debouncing - FIXED to prevent infinite loops
   const saveAllData = useCallback(async () => {
-    // Prevent saves if not initialized
-    if (!isInitialized) {
-      console.log('[WalletContext] Skipping save - not initialized');
+    // Prevent saves if not initialized or already saving
+    if (!isInitialized || isSavingRef.current) {
+      console.log('[WalletContext] Skipping save - not initialized or already saving');
       return;
     }
 
+    // Set saving flag
+    isSavingRef.current = true;
+
     // Debounce saves to prevent rapid successive saves
     const now = Date.now();
-    if (now - lastSaveRef.current < 100) {
+    if (now - lastSaveRef.current < 1000) {
       // Schedule a save for later
       if (!pendingSaveRef.current) {
         pendingSaveRef.current = true;
         setTimeout(() => {
           pendingSaveRef.current = false;
+          isSavingRef.current = false;
           saveAllData();
-        }, 100);
+        }, 1000);
       }
       return;
     }
@@ -214,12 +220,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('[WalletContext] Saving all wallet data...');
       
       // Use batch save for atomic operation
-      // Type as generic array to allow dynamic keys
       const saveOperations: Array<{ key: string; value: any }> = [
         { key: STORAGE_KEYS.BUYER_BALANCES, value: buyerBalances },
         { key: STORAGE_KEYS.SELLER_BALANCES, value: sellerBalances },
         { key: STORAGE_KEYS.ADMIN_BALANCE, value: adminBalance.toString() },
-        // Note: Orders are now managed by ordersService, but we still save here for backward compatibility
         { key: STORAGE_KEYS.ORDERS, value: orderHistory },
         { key: STORAGE_KEYS.SELLER_WITHDRAWALS, value: sellerWithdrawals },
         { key: STORAGE_KEYS.ADMIN_WITHDRAWALS, value: adminWithdrawals },
@@ -261,6 +265,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('[WalletContext] Error saving wallet data:', error);
+    } finally {
+      // Reset saving flag
+      isSavingRef.current = false;
     }
   }, [
     isInitialized,
@@ -284,7 +291,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         storedBuyers,
         storedSellers,
         storedAdmin,
-        // Orders are now loaded from ordersService
         storedSellerWithdrawals,
         storedAdminWithdrawals,
         storedAdminActions,
@@ -376,7 +382,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Initialize wallet service and load data
+  // Initialize wallet service and load data - FIXED to prevent infinite loops
   useEffect(() => {
     const initializeWallet = async () => {
       // Prevent multiple initializations
@@ -408,6 +414,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         console.error('[WalletContext] Initialization error:', error);
         setInitializationError(error instanceof Error ? error.message : 'Unknown error');
+        // Still set initialized to true to prevent infinite retries
+        setIsInitialized(true);
       } finally {
         setIsLoading(false);
         initializingRef.current = false;
@@ -417,21 +425,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       initializeWallet();
     }
-  }, []); // Only run once on mount
+  }, []); // Empty dependency array - only run once
 
-  // Save data when state changes (debounced)
+  // Save data when state changes (debounced) - FIXED to prevent loops
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isLoading) return;
 
     // Clear any existing timeout
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Debounce saves by 500ms
+    // Debounce saves by 1000ms
     saveTimeoutRef.current = setTimeout(() => {
       saveAllData();
-    }, 500);
+    }, 1000);
 
     return () => {
       if (saveTimeoutRef.current) {
@@ -448,19 +456,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     adminActions,
     depositLogs,
     isInitialized,
-    saveAllData
-  ]);
+    isLoading
+  ]); // Removed saveAllData from dependencies to prevent loops
 
-  // Force update Header balance when context updates
+  // Clean up intervals on unmount
   useEffect(() => {
-    if (!isInitialized || typeof window === 'undefined') return;
-    
-    // Trigger a custom event to update the header
-    const event = new CustomEvent('walletUpdate', { 
-      detail: { buyerBalances, sellerBalances, adminBalance } 
-    });
-    window.dispatchEvent(event);
-  }, [buyerBalances, sellerBalances, adminBalance, isInitialized]);
+    return () => {
+      if (sessionCheckIntervalRef.current) {
+        clearInterval(sessionCheckIntervalRef.current);
+      }
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Helper functions
   const getBuyerBalance = useCallback((username: string): number => {
@@ -1294,15 +1303,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return [];
   }, []);
 
-  // Reload data function
+  // Reload data function - FIXED to prevent infinite loops
   const reloadData = useCallback(async () => {
+    if (isLoading) {
+      console.log('[WalletContext] Already loading, skipping reload');
+      return;
+    }
+    
     setIsLoading(true);
     try {
       await loadAllData();
     } finally {
       setIsLoading(false);
     }
-  }, [loadAllData]);
+  }, [loadAllData, isLoading]);
 
   const contextValue: WalletContextType = {
     // Loading state

@@ -91,6 +91,7 @@ export const useBuyerMessages = () => {
   // Payment states
   const [showPayModal, setShowPayModal] = useState(false);
   const [payingRequest, setPayingRequest] = useState<any | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   
   // Tip states
   const [showTipModal, setShowTipModal] = useState(false);
@@ -124,16 +125,18 @@ export const useBuyerMessages = () => {
     return walletContext.sendTip(buyer, seller, amount);
   }, [walletContext]);
   
-  // FIXED: Create proper wallet object with username -> balance mapping
-  // Remove memoization to ensure we always get fresh balance
-  const wallet = (() => {
+  // FIXED: Memoize wallet object properly
+  const wallet = useMemo(() => {
     if (!user || !walletContext) return {};
     const balances: { [username: string]: number } = {};
     balances[user.username] = getBuyerBalance(user.username);
     return balances;
-  })();
+  }, [user, walletContext, getBuyerBalance]);
   
-  const buyerRequests = getRequestsForUser(user?.username || '', 'buyer');
+  const buyerRequests = useMemo(() => 
+    getRequestsForUser(user?.username || '', 'buyer'),
+    [user?.username, getRequestsForUser]
+  );
 
   // Mark messages as read and update UI
   const markMessageAsReadAndUpdateUI = useCallback((message: Message) => {
@@ -506,79 +509,137 @@ export const useBuyerMessages = () => {
     setEditMessage('');
   }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
 
-  const handlePayNow = useCallback((request: any) => {
-    // Refresh wallet data before showing payment modal
-    if (walletContext && walletContext.reloadData) {
-      walletContext.reloadData().then(() => {
-        setPayingRequest(request);
-        setShowPayModal(true);
-      });
-    } else {
+  // FIXED: Handle pay now with better error handling and debugging
+  const handlePayNow = useCallback(async (request: any) => {
+    console.log('handlePayNow called with request:', request);
+    
+    try {
+      // Set the request first to ensure we have it
+      setPayingRequest(request);
+      
+      // Try to refresh wallet data if possible
+      if (walletContext && walletContext.reloadData) {
+        console.log('Attempting to reload wallet data...');
+        try {
+          await walletContext.reloadData();
+          console.log('Wallet data reloaded successfully');
+        } catch (error) {
+          console.error('Error reloading wallet data:', error);
+          // Continue anyway - don't block showing the modal
+        }
+      }
+      
+      // Now show the modal
+      console.log('Setting showPayModal to true');
+      setShowPayModal(true);
+      
+    } catch (error) {
+      console.error('Error in handlePayNow:', error);
+      // Even if there's an error, try to show the modal
       setPayingRequest(request);
       setShowPayModal(true);
     }
   }, [walletContext]);
 
-  // FIXED: Handle confirm payment properly with fresh balance check
+  // FIXED: Complete the handleConfirmPay function
   const handleConfirmPay = useCallback(async () => {
-    if (!payingRequest || !user || !walletContext) return;
-    
-    // Refresh wallet data first to ensure we have the latest balance
-    if (walletContext.reloadData) {
-      await walletContext.reloadData();
-    }
-    
-    const markupPrice = payingRequest.price * 1.1;
-    const currentBalance = getBuyerBalance(user.username);
-    
-    console.log('Payment attempt:', {
-      currentBalance,
-      markupPrice,
-      canPay: currentBalance >= markupPrice
+    console.log('handleConfirmPay called');
+    console.log('Current state:', {
+      isProcessingPayment,
+      hasPayingRequest: !!payingRequest,
+      hasUser: !!user,
+      hasWalletContext: !!walletContext,
+      payingRequest
     });
     
-    if (currentBalance < markupPrice) {
-      alert(`Insufficient balance. You have ${currentBalance.toFixed(2)} but need ${markupPrice.toFixed(2)}.`);
+    // Prevent double-clicks and ensure we have all required data
+    if (isProcessingPayment || !payingRequest || !user || !walletContext) {
+      console.log('Payment blocked - missing requirements');
       return;
     }
     
-    // Process the actual payment
-    const customRequest = {
-      requestId: payingRequest.id,
-      buyer: user.username,
-      seller: payingRequest.seller,
-      amount: payingRequest.price,
-      description: payingRequest.title,
-      metadata: payingRequest
-    };
+    // Set processing flag
+    setIsProcessingPayment(true);
     
-    const success = await walletContext.purchaseCustomRequest(customRequest);
-    
-    if (success) {
-      // Mark as paid
-      await markRequestAsPaid(payingRequest.id);
+    try {
+      // Refresh wallet data first to ensure we have the latest balance
+      console.log('Refreshing wallet data...');
+      if (walletContext.reloadData) {
+        await walletContext.reloadData();
+      }
       
-      // Send notification to seller
-      addSellerNotification(
-        payingRequest.seller,
-        `💰 Custom request "${payingRequest.title}" has been paid! Check your orders to fulfill.`
-      );
+      const markupPrice = payingRequest.price * 1.1;
+      const currentBalance = getBuyerBalance(user.username);
       
-      // Send payment confirmation message
-      await sendMessage(
-        user.username,
-        payingRequest.seller,
-        `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`,
-        { type: 'normal' }
-      );
+      console.log('Payment attempt:', {
+        currentBalance,
+        markupPrice,
+        canPay: currentBalance >= markupPrice,
+        request: payingRequest
+      });
       
-      setShowPayModal(false);
-      setPayingRequest(null);
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    } else {
-      alert('Payment failed. Please try again.');
+      if (currentBalance < markupPrice) {
+        alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but need $${markupPrice.toFixed(2)}.`);
+        setIsProcessingPayment(false);
+        return;
+      }
+      
+      // Process the actual payment
+      const customRequest = {
+        requestId: payingRequest.id,
+        buyer: user.username,
+        seller: payingRequest.seller,
+        amount: payingRequest.price,
+        description: payingRequest.title,
+        metadata: payingRequest
+      };
+      
+      console.log('Processing payment...', customRequest);
+      const success = await walletContext.purchaseCustomRequest(customRequest);
+      
+      if (success) {
+        console.log('Payment successful, updating request status...');
+        
+        // Mark as paid
+        await markRequestAsPaid(payingRequest.id);
+        
+        // Send notification to seller
+        addSellerNotification(
+          payingRequest.seller,
+          `💰 Custom request "${payingRequest.title}" has been paid! Check your orders to fulfill.`
+        );
+        
+        // Send payment confirmation message
+        await sendMessage(
+          user.username,
+          payingRequest.seller,
+          `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`,
+          { type: 'normal' }
+        );
+        
+        // Close modal and clear state
+        console.log('Closing modal...');
+        setShowPayModal(false);
+        setPayingRequest(null);
+        
+        // Scroll to bottom to show the new message
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+        
+        console.log('Payment completed successfully');
+      } else {
+        console.error('Payment failed');
+        alert('Payment failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('An error occurred while processing payment. Please try again.');
+    } finally {
+      // Always reset processing state
+      setIsProcessingPayment(false);
     }
-  }, [payingRequest, user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage]);
+  }, [payingRequest, user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage, isProcessingPayment]);
 
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
