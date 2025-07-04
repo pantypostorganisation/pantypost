@@ -45,7 +45,7 @@ export function useSellerMessages() {
     isBlocked, 
     hasReported,
     clearMessageNotifications,
-    getThreadsForUser // Make sure this is imported
+    getMessagesForUsers
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest, markRequestAsPaid, getRequestById } = useRequests();
   const { getBuyerBalance, purchaseCustomRequest } = useWallet();
@@ -79,24 +79,6 @@ export function useSellerMessages() {
   
   const isAdmin = user?.role === 'admin';
   
-  // DEBUG: Log the raw messages object
-  useEffect(() => {
-    console.log('=== DEBUG: Raw messages object ===');
-    console.log('messages:', messages);
-    console.log('messages keys:', Object.keys(messages));
-    console.log('messages entries:', Object.entries(messages));
-    
-    if (user) {
-      console.log('Current user:', user.username);
-      console.log('User role:', user.role);
-      
-      // Check what getThreadsForUser returns
-      const threads = getThreadsForUser(user.username, 'seller');
-      console.log('getThreadsForUser result:', threads);
-      console.log('Thread keys:', Object.keys(threads));
-    }
-  }, [messages, user, getThreadsForUser]);
-  
   // Load recent emojis once on mount
   useEffect(() => {
     const loadRecentEmojis = async () => {
@@ -128,16 +110,12 @@ export function useSellerMessages() {
   useEffect(() => {
     const threadParam = searchParams.get('thread');
     if (threadParam && !activeThread && user) {
-      console.log('=== DEBUG: Setting active thread from URL ===');
-      console.log('Thread param:', threadParam);
       setActiveThread(threadParam);
     }
-  }, [searchParams, user]); // Remove activeThread from dependencies to prevent loops
+  }, [searchParams, user]);
   
-  // Process messages into threads - FIXED VERSION WITH DEBUG
+  // Process messages into threads - FIXED VERSION
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
-    console.log('=== DEBUG: Processing messages into threads ===');
-    
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
     const lastMessages: { [buyer: string]: Message } = {};
@@ -145,63 +123,73 @@ export function useSellerMessages() {
     let totalUnreadCount = 0;
     
     if (!user) {
-      console.log('No user, returning empty threads');
       return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
     }
     
-    console.log('Processing for user:', user.username);
-    
-    // Use the getThreadsForUser function from MessageContext
-    const allThreads = getThreadsForUser(user.username, 'seller');
-    console.log('All threads from getThreadsForUser:', allThreads);
-    console.log('Thread count:', Object.keys(allThreads).length);
-    
-    // Process each thread
-    Object.entries(allThreads).forEach(([otherParty, msgs]) => {
-      console.log(`Processing thread with ${otherParty}, message count: ${msgs.length}`);
+    // Process all messages to find conversations where the seller is involved
+    Object.entries(messages).forEach(([conversationKey, msgs]) => {
+      if (!Array.isArray(msgs) || msgs.length === 0) return;
       
-      // Skip if other party is also a seller/admin (seller-to-seller messages)
-      const otherUser = users?.[otherParty];
-      if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
-        console.log(`Skipping ${otherParty} - they are a ${otherUser?.role}`);
-        return;
-      }
+      // Check each message to see if our seller is involved
+      msgs.forEach((msg) => {
+        // Only process if the current user (seller) is either sender or receiver
+        if (msg.sender === user.username || msg.receiver === user.username) {
+          // Determine the other party
+          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
+          
+          // Skip if other party is also a seller/admin
+          const otherUser = users?.[otherParty];
+          if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
+            return;
+          }
+          
+          // Initialize thread if not exists
+          if (!threads[otherParty]) {
+            threads[otherParty] = [];
+            
+            // Get buyer profile
+            const buyerInfo = users?.[otherParty];
+            const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+            
+            buyerProfiles[otherParty] = { 
+              pic: null,
+              verified: isVerified
+            };
+          }
+        }
+      });
+    });
+    
+    // Now populate the threads with actual messages
+    Object.keys(threads).forEach(buyer => {
+      const conversationKey = getConversationKey(user.username, buyer);
+      const conversationMessages = messages[conversationKey] || [];
       
-      // Only include if there are messages
-      if (msgs.length > 0) {
-        threads[otherParty] = msgs;
-        lastMessages[otherParty] = msgs[msgs.length - 1];
+      if (conversationMessages.length > 0) {
+        // Sort messages by date
+        threads[buyer] = conversationMessages.sort((a, b) => 
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
         
-        // Get buyer profile picture and verification status
-        const buyerInfo = users?.[otherParty];
-        const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+        // Get last message
+        lastMessages[buyer] = threads[buyer][threads[buyer].length - 1];
         
-        buyerProfiles[otherParty] = { 
-          pic: null, // Profile pics should be loaded through proper channels
-          verified: isVerified
-        };
-        
-        // Count only messages FROM buyer TO seller as unread
-        const threadUnreadCount = msgs.filter(
-          (msg) => !msg.read && msg.sender === otherParty && msg.receiver === user?.username
+        // Count unread messages (messages FROM buyer TO seller)
+        const threadUnreadCount = threads[buyer].filter(
+          (msg) => !msg.read && msg.sender === buyer && msg.receiver === user.username
         ).length;
         
-        unreadCounts[otherParty] = threadUnreadCount;
+        unreadCounts[buyer] = threadUnreadCount;
         
-        // Only add to total if not in readThreadsRef
-        if (!readThreadsRef.current.has(otherParty) && threadUnreadCount > 0) {
+        // Add to total if not already marked as read
+        if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
           totalUnreadCount += threadUnreadCount;
         }
-        
-        console.log(`Thread ${otherParty}: ${msgs.length} messages, ${threadUnreadCount} unread`);
       }
     });
     
-    console.log('Final processed threads:', threads);
-    console.log('Thread count:', Object.keys(threads).length);
-    
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user?.username, getThreadsForUser, users]);
+  }, [user?.username, messages, users]);
   
   // Get seller's requests
   const sellerRequests = useMemo(() => {
@@ -219,16 +207,16 @@ export function useSellerMessages() {
     return counts;
   }, [threads, unreadCounts]);
   
-  // Mark messages as read when thread is selected AND clear notifications - FIXED
+  // Mark messages as read when thread is selected AND clear notifications
   useEffect(() => {
     if (!activeThread || !user || activeThread === lastActiveThread.current) {
-      return; // Explicit return
+      return;
     }
     
     // Update the last active thread
     lastActiveThread.current = activeThread;
     
-    // NEW: Clear message notifications for this buyer
+    // Clear message notifications for this buyer
     clearMessageNotifications(user.username, activeThread);
     
     // Check if there are unread messages
@@ -253,7 +241,7 @@ export function useSellerMessages() {
       return () => clearTimeout(timer);
     }
     
-    return; // Add explicit return for else case
+    return;
   }, [activeThread, user?.username, markMessagesAsRead, messages, clearMessageNotifications]);
   
   // Handle message visibility for marking as read
@@ -324,7 +312,7 @@ export function useSellerMessages() {
     }
   }, [activeThread, user, hasReported, reportUser]);
   
-  // FIXED: Handle accepting custom request with auto-payment
+  // Handle accepting custom request with auto-payment
   const handleAccept = useCallback(async (customRequestId: string) => {
     if (!user) return;
     
@@ -398,7 +386,7 @@ export function useSellerMessages() {
     setEditMessage(message);
   }, []);
   
-  // FIXED: Handle submitting edited request
+  // Handle submitting edited request
   const handleEditSubmit = useCallback(() => {
     if (!editRequestId || !user || editTitle.trim() === '' || editPrice === '' || editPrice <= 0) return;
     
@@ -415,7 +403,7 @@ export function useSellerMessages() {
         price: Number(editPrice),
         description: editMessage.trim()
       },
-      user.username // Mark seller as the one who edited
+      user.username
     );
     
     // Send message about the edit
