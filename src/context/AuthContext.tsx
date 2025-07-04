@@ -65,6 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
+  // Clear session monitoring interval
+  const clearSessionMonitoring = useCallback(() => {
+    if (sessionCheckIntervalRef.current) {
+      clearInterval(sessionCheckIntervalRef.current);
+      sessionCheckIntervalRef.current = null;
+    }
+  }, []);
+
   // Refresh session
   const refreshSession = useCallback(async () => {
     try {
@@ -73,13 +81,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(result.data);
       } else {
         setUser(null);
+        clearSessionMonitoring(); // Clear monitoring if no user
       }
     } catch (error) {
       console.error('Session refresh error:', error);
     }
-  }, []);
+  }, [clearSessionMonitoring]);
 
-  // Initialize auth state and set up session monitoring
+  // Set up session monitoring
+  const setupSessionMonitoring = useCallback(() => {
+    // Clear any existing interval first
+    clearSessionMonitoring();
+    
+    if (process.env.NEXT_PUBLIC_USE_API_AUTH === 'true') {
+      // Check session every 5 minutes
+      sessionCheckIntervalRef.current = setInterval(async () => {
+        const isAuthenticated = await authService.isAuthenticated();
+        if (!isAuthenticated) {
+          console.log('[Auth] Session expired, clearing user');
+          setUser(null);
+          clearSessionMonitoring();
+        } else {
+          // Refresh user data
+          await refreshSession();
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+    }
+  }, [clearSessionMonitoring, refreshSession]);
+
+  // Initialize auth state
   useEffect(() => {
     const initAuth = async () => {
       // Prevent double initialization
@@ -102,20 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(result.data);
           
           // Set up session monitoring for API mode
-          if (process.env.NEXT_PUBLIC_USE_API_AUTH === 'true') {
-            // Check session every 5 minutes
-            sessionCheckIntervalRef.current = setInterval(async () => {
-              const isAuthenticated = await authService.isAuthenticated();
-              if (!isAuthenticated) {
-                console.log('[Auth] Session expired, clearing user');
-                setUser(null);
-                clearInterval(sessionCheckIntervalRef.current!);
-              } else {
-                // Refresh user data
-                await refreshSession();
-              }
-            }, 5 * 60 * 1000); // 5 minutes
-          }
+          setupSessionMonitoring();
         } else {
           console.log('[Auth] No user found in session');
         }
@@ -132,11 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Cleanup
     return () => {
-      if (sessionCheckIntervalRef.current) {
-        clearInterval(sessionCheckIntervalRef.current);
-      }
+      clearSessionMonitoring();
     };
-  }, [refreshSession]);
+  }, [setupSessionMonitoring, clearSessionMonitoring]);
 
   // Listen for storage events (for multi-tab logout)
   useEffect(() => {
@@ -145,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // User logged out in another tab
         console.log('[Auth] User logged out in another tab');
         setUser(null);
+        clearSessionMonitoring();
       } else if (e.key === 'currentUser' && e.newValue) {
         // User logged in or updated in another tab
         try {
@@ -154,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             role: updatedUser.role 
           });
           setUser(updatedUser);
+          setupSessionMonitoring();
         } catch (error) {
           console.error('Error parsing user from storage event:', error);
         }
@@ -162,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [setupSessionMonitoring, clearSessionMonitoring]);
 
   // Login function using auth service
   const login = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin' = 'buyer'): Promise<boolean> => {
@@ -188,9 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(result.data.user);
         
         // Set up session monitoring for API mode
-        if (process.env.NEXT_PUBLIC_USE_API_AUTH === 'true' && !sessionCheckIntervalRef.current) {
-          sessionCheckIntervalRef.current = setInterval(refreshSession, 5 * 60 * 1000);
-        }
+        setupSessionMonitoring();
         
         return true;
       } else {
@@ -205,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [refreshSession]);
+  }, [setupSessionMonitoring]);
 
   // Logout function using auth service
   const logout = useCallback(async () => {
@@ -216,10 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       
       // Clear session monitoring
-      if (sessionCheckIntervalRef.current) {
-        clearInterval(sessionCheckIntervalRef.current);
-        sessionCheckIntervalRef.current = null;
-      }
+      clearSessionMonitoring();
+      
       console.log('[Auth] Logout complete');
     } catch (error) {
       console.error('Logout error:', error);
@@ -227,12 +240,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       
       // Clear session monitoring
-      if (sessionCheckIntervalRef.current) {
-        clearInterval(sessionCheckIntervalRef.current);
-        sessionCheckIntervalRef.current = null;
-      }
+      clearSessionMonitoring();
     }
-  }, []);
+  }, [clearSessionMonitoring]);
 
   // Update user function using auth service
   const updateUser = useCallback(async (updates: Partial<User>) => {
