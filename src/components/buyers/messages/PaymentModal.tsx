@@ -1,8 +1,9 @@
 // src/components/buyers/messages/PaymentModal.tsx
 'use client';
 
-import React from 'react';
+import React, { useContext, useMemo } from 'react';
 import { X, DollarSign, AlertCircle, Check } from 'lucide-react';
+import { WalletContext } from '@/context/WalletContext';
 
 interface PaymentModalProps {
   show: boolean;
@@ -21,12 +22,76 @@ export default function PaymentModal({
   user,
   onConfirmPay
 }: PaymentModalProps) {
+  // Get fresh wallet balance directly from context
+  const walletContext = useContext(WalletContext);
+  
+  // Force reload wallet when modal opens
+  React.useEffect(() => {
+    if (show && walletContext && walletContext.reloadData) {
+      console.log('PaymentModal: Reloading wallet data...');
+      walletContext.reloadData();
+    }
+  }, [show, walletContext]);
+  
   if (!show || !payingRequest) return null;
 
   const basePrice = payingRequest.price || 0;
   const markupPrice = Math.round(basePrice * 1.1 * 100) / 100;
   const platformFee = Math.round((markupPrice - basePrice) * 100) / 100;
-  const userBalance = wallet[user?.username] || 0;
+  
+  // Check if wallet is still loading
+  const isWalletLoading = walletContext?.isLoading || false;
+  
+  // FIXED: Get fresh balance with multiple fallbacks
+  const userBalance = useMemo(() => {
+    if (!user) {
+      console.log('PaymentModal: No user');
+      return 0;
+    }
+    
+    // Don't calculate if still loading
+    if (isWalletLoading) {
+      console.log('PaymentModal: Wallet still loading');
+      return 0;
+    }
+    
+    // Try to get from wallet context first
+    if (walletContext && walletContext.getBuyerBalance) {
+      const contextBalance = walletContext.getBuyerBalance(user.username);
+      console.log('PaymentModal: Got balance from context', contextBalance);
+      if (contextBalance > 0) return contextBalance;
+    }
+    
+    // Fallback to wallet prop
+    const propBalance = wallet[user.username] || 0;
+    console.log('PaymentModal: Wallet prop balance', propBalance);
+    if (propBalance > 0) return propBalance;
+    
+    // Last resort: try to get from localStorage
+    try {
+      const walletBuyers = localStorage.getItem('wallet_buyers');
+      if (walletBuyers) {
+        const buyers = JSON.parse(walletBuyers);
+        const localBalance = buyers[user.username] || 0;
+        console.log('PaymentModal: LocalStorage balance', localBalance);
+        return localBalance;
+      }
+      
+      // Also check individual key
+      const individualKey = localStorage.getItem(`wallet_buyer_${user.username}`);
+      if (individualKey) {
+        const balanceInCents = parseInt(individualKey);
+        const balanceInDollars = balanceInCents / 100;
+        console.log('PaymentModal: Individual key balance', balanceInDollars);
+        return balanceInDollars;
+      }
+    } catch (error) {
+      console.error('PaymentModal: Error reading localStorage', error);
+    }
+    
+    return 0;
+  }, [user, walletContext, wallet, isWalletLoading]);
+  
   const canAfford = userBalance >= markupPrice;
 
   return (
@@ -72,27 +137,38 @@ export default function PaymentModal({
           </div>
           
           {/* Balance Info */}
-          <div className={`rounded-lg p-3 ${canAfford ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
-            <div className="flex items-center gap-2">
-              {canAfford ? (
-                <>
-                  <Check className="w-4 h-4 text-green-400" />
-                  <div className="text-sm">
-                    <p className="text-green-400 font-medium">Sufficient Balance</p>
-                    <p className="text-gray-400">Current: ${userBalance.toFixed(2)} | After: ${(userBalance - markupPrice).toFixed(2)}</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-4 h-4 text-red-400" />
-                  <div className="text-sm">
-                    <p className="text-red-400 font-medium">Insufficient Balance</p>
-                    <p className="text-gray-400">Need ${(markupPrice - userBalance).toFixed(2)} more</p>
-                  </div>
-                </>
-              )}
+          {isWalletLoading ? (
+            <div className="rounded-lg p-3 bg-gray-500/10 border border-gray-500/30">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                <p className="text-gray-400 text-sm">Loading wallet balance...</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className={`rounded-lg p-3 ${canAfford ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+              <div className="flex items-center gap-2">
+                {canAfford ? (
+                  <>
+                    <Check className="w-4 h-4 text-green-400" />
+                    <div className="text-sm">
+                      <p className="text-green-400 font-medium">Sufficient Balance</p>
+                      <p className="text-gray-400">Current: ${userBalance.toFixed(2)} | After: ${(userBalance - markupPrice).toFixed(2)}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-red-400" />
+                    <div className="text-sm">
+                      <p className="text-red-400 font-medium">Insufficient Balance</p>
+                      <p className="text-gray-400">
+                        Current: ${userBalance.toFixed(2)} | Need ${(markupPrice - userBalance).toFixed(2)} more
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Info */}
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-xs text-blue-400">
@@ -115,14 +191,14 @@ export default function PaymentModal({
           </button>
           <button
             onClick={onConfirmPay}
-            disabled={!canAfford}
+            disabled={!canAfford || isWalletLoading}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-              canAfford
+              canAfford && !isWalletLoading
                 ? 'bg-[#ff950e] text-black hover:bg-[#e88800]'
                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {canAfford ? `Pay $${markupPrice.toFixed(2)}` : 'Insufficient Funds'}
+            {isWalletLoading ? 'Loading...' : canAfford ? `Pay ${markupPrice.toFixed(2)}` : 'Insufficient Funds'}
           </button>
         </div>
       </div>

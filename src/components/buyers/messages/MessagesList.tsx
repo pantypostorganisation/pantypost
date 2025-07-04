@@ -68,18 +68,29 @@ export default function MessagesList({
           
           const isLatestCustom = !!customReq &&
             (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
-            index === (messages.length - 1) &&
             msg.type === 'customRequest';
           
+          // FIXED: Show pay now button for accepted requests that aren't paid yet
+          // Don't require it to be the last message anymore
           const showPayNow = !!customReq &&
             customReq.status === 'accepted' &&
-            index === (messages.length - 1) &&
+            !customReq.paid &&
             msg.type === 'customRequest';
           
           const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-          const buyerBalance = currentUser ? wallet[currentUser.username] ?? 0 : 0;
+          // Get balance from wallet prop or default to 0
+          const buyerBalance = currentUser && wallet ? (wallet[currentUser.username] || 0) : 0;
           const canPay = !!(customReq && buyerBalance >= markupPrice);
           const isPaid = !!(customReq && (customReq.paid || customReq.status === 'paid'));
+          
+          console.log('MessagesList: Payment button check', {
+            showPayNow,
+            customReqStatus: customReq?.status,
+            markupPrice,
+            buyerBalance,
+            canPay,
+            username: currentUser?.username
+          });
           
           return (
             <MessageItem

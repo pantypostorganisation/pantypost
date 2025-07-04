@@ -1,5 +1,12 @@
 // src/hooks/useBuyerMessages.ts
 
+// Declare global to prevent TypeScript errors
+declare global {
+  interface Window {
+    _processingPayment?: boolean;
+  }
+}
+
 import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -117,7 +124,15 @@ export const useBuyerMessages = () => {
     return walletContext.sendTip(buyer, seller, amount);
   }, [walletContext]);
   
-  const wallet = { buyerBalance: user && walletContext ? getBuyerBalance(user.username) : 0 };
+  // FIXED: Create proper wallet object with username -> balance mapping
+  // Remove memoization to ensure we always get fresh balance
+  const wallet = (() => {
+    if (!user || !walletContext) return {};
+    const balances: { [username: string]: number } = {};
+    balances[user.username] = getBuyerBalance(user.username);
+    return balances;
+  })();
+  
   const buyerRequests = getRequestsForUser(user?.username || '', 'buyer');
 
   // Mark messages as read and update UI
@@ -492,20 +507,38 @@ export const useBuyerMessages = () => {
   }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
 
   const handlePayNow = useCallback((request: any) => {
-    setPayingRequest(request);
-    setShowPayModal(true);
-  }, []);
+    // Refresh wallet data before showing payment modal
+    if (walletContext && walletContext.reloadData) {
+      walletContext.reloadData().then(() => {
+        setPayingRequest(request);
+        setShowPayModal(true);
+      });
+    } else {
+      setPayingRequest(request);
+      setShowPayModal(true);
+    }
+  }, [walletContext]);
 
-  // FIXED: Handle confirm payment properly
+  // FIXED: Handle confirm payment properly with fresh balance check
   const handleConfirmPay = useCallback(async () => {
     if (!payingRequest || !user || !walletContext) return;
+    
+    // Refresh wallet data first to ensure we have the latest balance
+    if (walletContext.reloadData) {
+      await walletContext.reloadData();
+    }
     
     const markupPrice = payingRequest.price * 1.1;
     const currentBalance = getBuyerBalance(user.username);
     
+    console.log('Payment attempt:', {
+      currentBalance,
+      markupPrice,
+      canPay: currentBalance >= markupPrice
+    });
+    
     if (currentBalance < markupPrice) {
-      alert('Insufficient balance. Please add funds to your wallet.');
-      setShowPayModal(false);
+      alert(`Insufficient balance. You have ${currentBalance.toFixed(2)} but need ${markupPrice.toFixed(2)}.`);
       return;
     }
     

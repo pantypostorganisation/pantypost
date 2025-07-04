@@ -1,5 +1,6 @@
 // src/components/buyers/messages/ConversationView.tsx
-import React, { useCallback } from 'react';
+import React, { useCallback, useContext } from 'react';
+import { WalletContext } from '@/context/WalletContext';
 import {
   BadgeCheck,
   AlertTriangle,
@@ -198,6 +199,8 @@ export default function ConversationView({
   setShowCustomRequestModal,
   setShowTipModal,
 }: ConversationViewProps) {
+  // Get wallet context for fresh balance checks
+  const walletContext = useContext(WalletContext);
   // Get the messages for the active thread
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
   
@@ -310,18 +313,20 @@ export default function ConversationView({
             const isLatestCustom =
               !!customReq &&
               (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
-              index === (threadMessages.length - 1) &&
               msg.type === 'customRequest';
             
+            // FIXED: Show pay now button for accepted requests that aren't paid yet
+            // Don't require it to be the last message anymore
             const showPayNow =
               !!customReq &&
               customReq.status === 'accepted' &&
-              index === (threadMessages.length - 1) &&
+              !customReq.paid &&
               msg.type === 'customRequest';
             
             const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-            const buyerBalance = user ? wallet[user.username] ?? 0 : 0;
-            const canPay = !!(customReq && buyerBalance >= markupPrice);
+            // Force fresh balance check
+            const currentBalance = user && walletContext ? walletContext.getBuyerBalance(user.username) : 0;
+            const canPay = !!(customReq && currentBalance >= markupPrice);
             const isPaid = !!(customReq && (customReq.paid || customReq.status === 'paid'));
             
             return (

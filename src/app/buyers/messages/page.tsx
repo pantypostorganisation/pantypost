@@ -121,8 +121,20 @@ export default function BuyerMessagesPage() {
     isUserReported,
   } = useBuyerMessages();
 
-  // Create wallet object for components
-  const walletData = user ? { [user.username]: wallet.buyerBalance } : {};
+  // FIXED: wallet is already in the correct format from useBuyerMessages
+  // It's a { [username: string]: number } object
+  const walletData = wallet || {};
+  
+  // Log wallet data for debugging
+  React.useEffect(() => {
+    if (user && wallet) {
+      console.log('BuyerMessagesPage: Wallet data', {
+        username: user.username,
+        wallet,
+        balance: wallet[user.username]
+      });
+    }
+  }, [user, wallet]);
 
   if (!mounted || !user) {
     return (

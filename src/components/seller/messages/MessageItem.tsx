@@ -1,4 +1,4 @@
-// src/components/sellers/messages/MessageItem.tsx
+// src/components/seller/messages/MessageItem.tsx
 'use client';
 
 import React, { useRef, useState } from 'react';
@@ -26,9 +26,9 @@ interface MessageItemProps {
   isLatestCustom: boolean;
   isPaid: boolean;
   showActionButtons: boolean;
-  handleAccept: (req: any) => void;
-  handleDecline: (req: any) => void;
-  handleEditRequest: (req: any) => void;
+  handleAccept: () => void;
+  handleDecline: () => void;
+  handleEditRequest: () => void;
   editRequestId: string | null;
   editTitle: string;
   setEditTitle: (title: string) => void;
@@ -162,12 +162,31 @@ export default function MessageItem({
                 {statusBadge(customReq.status)}
               </p>
             )}
+            
+            {/* Show who needs to take action */}
+            {customReq && isLatestCustom && (customReq.status === 'pending' || customReq.status === 'edited') && !isPaid && (
+              <p className={`text-xs italic ${isFromMe ? 'text-black/70' : 'text-[#fefefe]/70'}`}>
+                {customReq.pendingWith === user?.username ? (
+                  <span className="flex items-center">
+                    <Clock size={12} className="mr-1" />
+                    Action required from you
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <Clock size={12} className="mr-1" />
+                    Waiting for {customReq.pendingWith || activeThread} to respond...
+                  </span>
+                )}
+              </p>
+            )}
+            
+            {/* Action buttons */}
             {showActionButtons && !isPaid && (
               <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    customReq && handleAccept(customReq);
+                    handleAccept();
                   }}
                   className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                 >
@@ -177,7 +196,7 @@ export default function MessageItem({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    customReq && handleDecline(customReq);
+                    handleDecline();
                   }}
                   className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                 >
@@ -187,7 +206,7 @@ export default function MessageItem({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    customReq && handleEditRequest(customReq);
+                    handleEditRequest();
                   }}
                   className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                 >
@@ -196,6 +215,8 @@ export default function MessageItem({
                 </button>
               </div>
             )}
+            
+            {/* Edit form */}
             {editRequestId === customReq?.id && customReq && (
               <div className="mt-3 space-y-2 bg-white/90 p-3 rounded border border-black/20 shadow-sm">
                 <input
