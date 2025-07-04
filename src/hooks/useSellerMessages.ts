@@ -47,8 +47,8 @@ export function useSellerMessages() {
     clearMessageNotifications,
     getThreadsForUser // Make sure this is imported
   } = useMessages();
-  const { requests, addRequest, getRequestsForUser, respondToRequest } = useRequests();
-  const { wallet } = useWallet();
+  const { requests, addRequest, getRequestsForUser, respondToRequest, markRequestAsPaid, getRequestById } = useRequests();
+  const { getBuyerBalance, purchaseCustomRequest } = useWallet();
   const searchParams = useSearchParams();
   
   // State for UI
@@ -324,21 +324,57 @@ export function useSellerMessages() {
     }
   }, [activeThread, user, hasReported, reportUser]);
   
-  // Handle accepting custom request
-  const handleAccept = useCallback((customRequestId: string) => {
+  // FIXED: Handle accepting custom request with auto-payment
+  const handleAccept = useCallback(async (customRequestId: string) => {
     if (!user) return;
     
-    respondToRequest(customRequestId, 'accepted', undefined, undefined, user.username);
-    
     const request = requests.find(r => r.id === customRequestId);
-    if (request) {
-      addSellerNotification(user.username, `Custom request "${request.title}" accepted! Buyer will be notified.`);
+    if (!request) return;
+    
+    // Check if buyer has sufficient balance
+    const markupPrice = request.price * 1.1;
+    const buyerBalance = getBuyerBalance(request.buyer);
+    
+    if (buyerBalance >= markupPrice) {
+      // Auto-process payment
+      const customRequest = {
+        requestId: request.id,
+        buyer: request.buyer,
+        seller: user.username,
+        amount: request.price,
+        description: request.title,
+        metadata: request
+      };
       
-      sendMessage(user.username, request.buyer, `Your custom request "${request.title}" has been accepted!`, {
+      const success = await purchaseCustomRequest(customRequest);
+      
+      if (success) {
+        // Mark as paid
+        markRequestAsPaid(request.id);
+        
+        // Notify seller (self)
+        addSellerNotification(user.username, `💰 Custom request "${request.title}" has been paid! Check your orders to fulfill.`);
+        
+        // Send confirmation message to buyer
+        await sendMessage(user.username, request.buyer, `✅ Your custom request "${request.title}" has been accepted and automatically paid!`, {
+          type: 'normal'
+        });
+      } else {
+        // Payment failed
+        await sendMessage(user.username, request.buyer, `⚠️ Custom request "${request.title}" accepted but payment failed. Please try paying manually.`, {
+          type: 'normal'
+        });
+        respondToRequest(customRequestId, 'accepted', undefined, undefined, user.username);
+      }
+    } else {
+      // Insufficient balance - just accept without payment
+      respondToRequest(customRequestId, 'accepted', undefined, undefined, user.username);
+      
+      await sendMessage(user.username, request.buyer, `✅ Your custom request "${request.title}" has been accepted! Payment required - you have insufficient balance (need $${markupPrice.toFixed(2)}).`, {
         type: 'normal'
       });
     }
-  }, [user, respondToRequest, requests, addSellerNotification, sendMessage]);
+  }, [user, requests, getBuyerBalance, purchaseCustomRequest, markRequestAsPaid, addSellerNotification, sendMessage, respondToRequest]);
   
   // Handle declining custom request
   const handleDecline = useCallback((customRequestId: string) => {
@@ -362,14 +398,14 @@ export function useSellerMessages() {
     setEditMessage(message);
   }, []);
   
-  // Handle submitting edited request
+  // FIXED: Handle submitting edited request
   const handleEditSubmit = useCallback(() => {
     if (!editRequestId || !user || editTitle.trim() === '' || editPrice === '' || editPrice <= 0) return;
     
     const request = requests.find(r => r.id === editRequestId);
     if (!request) return;
     
-    // Update the request
+    // Update the request with seller as editor
     respondToRequest(
       editRequestId, 
       'edited',
@@ -379,14 +415,14 @@ export function useSellerMessages() {
         price: Number(editPrice),
         description: editMessage.trim()
       },
-      user.username
+      user.username // Mark seller as the one who edited
     );
     
     // Send message about the edit
     sendMessage(
       user.username,
       request.buyer,
-      `I've modified your custom request "${editTitle.trim()}"`,
+      `📝 I've modified your custom request "${editTitle.trim()}"`,
       {
         type: 'customRequest',
         meta: {

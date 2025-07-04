@@ -22,6 +22,8 @@ export type CustomRequest = {
   messageThreadId?: string; // Links to the conversation
   lastModifiedBy?: string; // Who made the last edit
   originalMessageId?: string; // Reference to original message
+  lastEditedBy?: string; // NEW: Track who last edited (buyer or seller)
+  pendingWith?: string; // NEW: Track who needs to respond (buyer or seller)
 };
 
 type RequestContextType = {
@@ -68,7 +70,9 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
           ...req,
           messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
           lastModifiedBy: req.lastModifiedBy || req.buyer,
-          originalMessageId: req.originalMessageId || req.id
+          originalMessageId: req.originalMessageId || req.id,
+          lastEditedBy: req.lastEditedBy || req.buyer,
+          pendingWith: req.pendingWith || req.seller
         }));
         
         setRequests(migratedRequests);
@@ -94,7 +98,9 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
       ...req,
       messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
       lastModifiedBy: req.lastModifiedBy || req.buyer,
-      originalMessageId: req.originalMessageId || req.id
+      originalMessageId: req.originalMessageId || req.id,
+      lastEditedBy: req.buyer,
+      pendingWith: req.seller
     };
     setRequests((prev) => [...prev, requestWithDefaults]);
   };
@@ -116,17 +122,32 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     modifiedBy?: string
   ) => {
     setRequests((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status,
-              response,
-              lastModifiedBy: modifiedBy || r.lastModifiedBy,
-              ...(updateFields || {}),
-            }
-          : r
-      )
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        
+        // Determine who it's pending with based on who modified it
+        let pendingWith = r.pendingWith;
+        let lastEditedBy = r.lastEditedBy;
+        
+        if (status === 'edited' && modifiedBy) {
+          // If edited, it's pending with the other party
+          pendingWith = modifiedBy === r.buyer ? r.seller : r.buyer;
+          lastEditedBy = modifiedBy;
+        } else if (status === 'accepted' || status === 'rejected') {
+          // No longer pending with anyone
+          pendingWith = undefined;
+        }
+        
+        return {
+          ...r,
+          status,
+          response,
+          lastModifiedBy: modifiedBy || r.lastModifiedBy,
+          lastEditedBy: status === 'edited' ? lastEditedBy : r.lastEditedBy,
+          pendingWith,
+          ...(updateFields || {}),
+        };
+      })
     );
   };
 
@@ -138,7 +159,8 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
           ? {
               ...r,
               status: 'paid' as RequestStatus,
-              paid: true
+              paid: true,
+              pendingWith: undefined
             }
           : r
       )

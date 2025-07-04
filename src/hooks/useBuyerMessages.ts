@@ -19,6 +19,7 @@ import {
   Message
 } from '@/utils/messageUtils';
 import { FREQUENT_EMOJIS } from '@/constants/emojis';
+import { v4 as uuidv4 } from 'uuid';
 
 interface CustomRequestForm {
   title: string;
@@ -37,8 +38,8 @@ export const useBuyerMessages = () => {
   // Use useContext directly to check if wallet context is available
   const walletContext = useContext(WalletContext);
   
-  const { getRequestsForUser, markRequestAsPaid, addRequest } = useRequests();
-  const { users } = useListings();
+  const { getRequestsForUser, markRequestAsPaid, addRequest, respondToRequest, getRequestById } = useRequests();
+  const { users, addSellerNotification } = useListings();
   
   // Initialize thread from URL
   const threadParam = searchParams.get('thread');
@@ -366,100 +367,185 @@ export const useBuyerMessages = () => {
     reportUser(user.username, activeThread);
   }, [activeThread, user, reportUser]);
 
+  // FIXED: Handle accepting custom request (by buyer when seller edits)
   const handleAccept = useCallback(async (request: any) => {
-    if (!user || !request) return;
+    if (!user || !request || !walletContext) return;
     
-    // For now, just mark the request as accepted in messages
-    const acceptMessage: Message = {
-      id: `accept_${Date.now()}`,
-      sender: user.username,
-      receiver: request.seller,
-      content: `✅ Accepted custom request: ${request.title}`,
-      date: new Date().toISOString(),
-      isRead: false
-    };
+    // Check if buyer has sufficient balance
+    const markupPrice = request.price * 1.1;
+    const currentBalance = getBuyerBalance(user.username);
     
-    await sendMessage(
-      acceptMessage.sender,
-      acceptMessage.receiver,
-      acceptMessage.content
-    );
-  }, [user, sendMessage]);
+    if (currentBalance >= markupPrice) {
+      // Auto-process payment
+      const customRequest = {
+        requestId: request.id,
+        buyer: user.username,
+        seller: request.seller,
+        amount: request.price,
+        description: request.title,
+        metadata: request
+      };
+      
+      const success = await walletContext.purchaseCustomRequest(customRequest);
+      
+      if (success) {
+        // Mark as paid
+        markRequestAsPaid(request.id);
+        
+        // Send notification to seller
+        addSellerNotification(
+          request.seller,
+          `💰 Custom request "${request.title}" has been paid! Check your orders to fulfill.`
+        );
+        
+        // Send confirmation message
+        await sendMessage(
+          user.username,
+          request.seller,
+          `✅ Accepted and paid for custom request: ${request.title}`,
+          { type: 'normal' }
+        );
+      } else {
+        alert('Payment failed. Please try again.');
+      }
+    } else {
+      // Update status to accepted but not paid
+      respondToRequest(request.id, 'accepted', undefined, undefined, user.username);
+      
+      // Send message
+      await sendMessage(
+        user.username,
+        request.seller,
+        `✅ Accepted custom request: ${request.title} (payment pending - insufficient balance)`,
+        { type: 'normal' }
+      );
+    }
+  }, [user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage, respondToRequest]);
 
   const handleDecline = useCallback(async (request: any) => {
     if (!user || !request) return;
     
-    // For now, just mark the request as declined in messages
-    const declineMessage: Message = {
-      id: `decline_${Date.now()}`,
-      sender: user.username,
-      receiver: request.seller,
-      content: `❌ Declined custom request: ${request.title}`,
-      date: new Date().toISOString(),
-      isRead: false
-    };
+    // Update status
+    respondToRequest(request.id, 'rejected', undefined, undefined, user.username);
     
+    // Send decline message
     await sendMessage(
-      declineMessage.sender,
-      declineMessage.receiver,
-      declineMessage.content
+      user.username,
+      request.seller,
+      `❌ Declined custom request: ${request.title}`,
+      { type: 'normal' }
     );
-  }, [user, sendMessage]);
+  }, [user, sendMessage, respondToRequest]);
 
   const handleEditRequest = useCallback((request: any) => {
     setEditRequestId(request.id);
     setEditPrice(request.price.toString());
     setEditTitle(request.title);
-    setEditTags(request.tags || '');
-    setEditMessage(request.notes || '');
+    setEditTags(request.tags?.join(', ') || '');
+    setEditMessage(request.description || '');
   }, []);
 
+  // FIXED: Handle submitting edited request
   const handleEditSubmit = useCallback(async () => {
     if (!editRequestId || !user || !activeThread) return;
     
-    // For now, just send an update message
-    const editMessage: Message = {
-      id: `edit_${Date.now()}`,
-      sender: user.username,
-      receiver: activeThread,
-      content: `📝 Updated custom request: ${editTitle} - $${editPrice}`,
-      date: new Date().toISOString(),
-      isRead: false
-    };
+    const request = buyerRequests.find(r => r.id === editRequestId);
+    if (!request) return;
     
-    await sendMessage(
-      editMessage.sender,
-      editMessage.receiver,
-      editMessage.content
+    // Update the request with edited info
+    respondToRequest(
+      editRequestId,
+      'edited',
+      editMessage.trim(),
+      {
+        title: editTitle.trim(),
+        price: Number(editPrice),
+        tags: editTags.split(',').map(t => t.trim()).filter(Boolean),
+        description: editMessage.trim()
+      },
+      user.username // Mark buyer as the one who edited
     );
     
+    // Send update message
+    await sendMessage(
+      user.username,
+      activeThread,
+      `📝 Updated custom request: ${editTitle} - $${editPrice}`,
+      {
+        type: 'customRequest',
+        meta: {
+          id: editRequestId,
+          title: editTitle.trim(),
+          price: Number(editPrice),
+          tags: editTags.split(',').map(t => t.trim()).filter(Boolean),
+          message: editMessage.trim()
+        }
+      }
+    );
+    
+    // Reset edit state
     setEditRequestId(null);
     setEditPrice('');
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
-  }, [editRequestId, user, activeThread, editTitle, editPrice, sendMessage]);
+  }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
 
   const handlePayNow = useCallback((request: any) => {
     setPayingRequest(request);
     setShowPayModal(true);
   }, []);
 
+  // FIXED: Handle confirm payment properly
   const handleConfirmPay = useCallback(async () => {
-    if (!payingRequest || !user) return;
+    if (!payingRequest || !user || !walletContext) return;
     
+    const markupPrice = payingRequest.price * 1.1;
     const currentBalance = getBuyerBalance(user.username);
-    if (currentBalance < payingRequest.price) {
+    
+    if (currentBalance < markupPrice) {
       alert('Insufficient balance. Please add funds to your wallet.');
       setShowPayModal(false);
       return;
     }
     
-    await markRequestAsPaid(payingRequest.id);
-    setShowPayModal(false);
-    setPayingRequest(null);
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [payingRequest, user, getBuyerBalance, markRequestAsPaid]);
+    // Process the actual payment
+    const customRequest = {
+      requestId: payingRequest.id,
+      buyer: user.username,
+      seller: payingRequest.seller,
+      amount: payingRequest.price,
+      description: payingRequest.title,
+      metadata: payingRequest
+    };
+    
+    const success = await walletContext.purchaseCustomRequest(customRequest);
+    
+    if (success) {
+      // Mark as paid
+      await markRequestAsPaid(payingRequest.id);
+      
+      // Send notification to seller
+      addSellerNotification(
+        payingRequest.seller,
+        `💰 Custom request "${payingRequest.title}" has been paid! Check your orders to fulfill.`
+      );
+      
+      // Send payment confirmation message
+      await sendMessage(
+        user.username,
+        payingRequest.seller,
+        `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`,
+        { type: 'normal' }
+      );
+      
+      setShowPayModal(false);
+      setPayingRequest(null);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      alert('Payment failed. Please try again.');
+    }
+  }, [payingRequest, user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage]);
 
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -583,7 +669,7 @@ export const useBuyerMessages = () => {
     setIsSubmittingRequest(true);
     
     const requestData = {
-      id: `req_${Date.now()}`,
+      id: `req_${Date.now()}_${uuidv4().slice(0, 8)}`,
       buyer: user.username,
       seller: activeThread,
       title: customRequestForm.title.trim(),
@@ -591,7 +677,9 @@ export const useBuyerMessages = () => {
       price: parseFloat(customRequestForm.price),
       tags: customRequestForm.tags.trim().split(',').map(t => t.trim()).filter(Boolean),
       status: 'pending' as const,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      lastEditedBy: user.username,
+      pendingWith: activeThread
     };
     
     await addRequest(requestData);
