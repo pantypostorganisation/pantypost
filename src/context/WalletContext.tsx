@@ -183,6 +183,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const pendingSaveRef = useRef(false);
   const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSavingRef = useRef(false);
+  const saveAllDataRef = useRef<(() => Promise<void>) | null>(null);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
@@ -208,7 +209,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setTimeout(() => {
           pendingSaveRef.current = false;
           isSavingRef.current = false;
-          saveAllData();
+          saveAllDataRef.current?.();
         }, 1000);
       }
       return;
@@ -280,6 +281,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     adminActions,
     depositLogs
   ]);
+
+  // Update the ref whenever saveAllData changes
+  useEffect(() => {
+    saveAllDataRef.current = saveAllData;
+  }, [saveAllData]);
 
   // Load all data from storage
   const loadAllData = useCallback(async () => {
@@ -438,7 +444,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     // Debounce saves by 1000ms
     saveTimeoutRef.current = setTimeout(() => {
-      saveAllData();
+      // Use the ref version to avoid dependency issues
+      saveAllDataRef.current?.();
     }, 1000);
 
     return () => {
@@ -457,7 +464,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     depositLogs,
     isInitialized,
     isLoading
-  ]); // Removed saveAllData from dependencies to prevent loops
+    // Removed saveAllData from dependencies to prevent loops
+  ]);
 
   // Clean up intervals on unmount
   useEffect(() => {
