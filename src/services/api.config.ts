@@ -5,6 +5,9 @@
  * Centralizes all API-related configuration and provides environment-based settings
  */
 
+import { mockApiCall } from './mock/mock-api';
+import { getMockConfig } from './mock/mock.config';
+
 // Environment detection
 export const isDevelopment = process.env.NODE_ENV === 'development';
 export const isProduction = process.env.NODE_ENV === 'production';
@@ -133,8 +136,8 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
     });
   }
   
-  // Only prepend base URL if we're using the API
-  if (API_BASE_URL && FEATURES.USE_API_AUTH) {
+  // Only prepend base URL if we're using the API and not mocking
+  if (API_BASE_URL && !FEATURES.USE_MOCK_API) {
     return `${API_BASE_URL}${url}`;
   }
   
@@ -200,6 +203,27 @@ class ApiClient {
     options: RequestInit = {},
     requestKey?: string
   ): Promise<ApiResponse<T>> {
+    // Use mock API if enabled
+    if (FEATURES.USE_MOCK_API) {
+      try {
+        return await mockApiCall<T>(endpoint, options);
+      } catch (error) {
+        // Handle mock API errors
+        if (error && typeof error === 'object' && 'response' in error) {
+          const errorResponse = (error as any).response;
+          return errorResponse.data;
+        }
+        
+        return {
+          success: false,
+          error: {
+            message: error instanceof Error ? error.message : 'Mock API error',
+            code: 'MOCK_ERROR',
+          },
+        };
+      }
+    }
+    
     // Cancel previous request with same key if exists
     if (requestKey) {
       this.cancelRequest(requestKey);
@@ -212,7 +236,7 @@ class ApiClient {
     }
 
     try {
-      const url = API_BASE_URL && FEATURES.USE_API_AUTH ? `${API_BASE_URL}${endpoint}` : endpoint;
+      const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
       const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
       
       const headers: Record<string, string> = {
@@ -220,7 +244,7 @@ class ApiClient {
         ...(options.headers || {}) as Record<string, string>,
       };
       
-      if (token && FEATURES.USE_API_AUTH) {
+      if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
       
@@ -304,6 +328,11 @@ export async function apiCallWithRetry<T>(
     
     // Don't retry on client errors (4xx)
     if (lastError?.code && lastError.code.startsWith('4')) {
+      return result;
+    }
+    
+    // Don't retry if using mock API
+    if (FEATURES.USE_MOCK_API) {
       return result;
     }
     
