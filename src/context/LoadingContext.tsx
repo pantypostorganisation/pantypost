@@ -1,4 +1,4 @@
-// src/context/LoadingContext.tsx a
+// src/context/LoadingContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
