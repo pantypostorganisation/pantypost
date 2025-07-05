@@ -7,6 +7,23 @@ import { Order } from '@/context/WalletContext';
 import { Message } from '@/services/messages.service';
 import { v4 as uuidv4 } from 'uuid';
 
+// Extended types for mock data
+interface MockOrder extends Order {
+  trackingNumber?: string;
+  shippedDate?: string;
+}
+
+interface MockSubscriptionInfo {
+  id: string;
+  buyer: string;
+  seller: string;
+  price: string;
+  status: 'active' | 'cancelled';
+  subscribedAt: string;
+  nextBillingDate: string;
+  cancelledAt?: string;
+}
+
 /**
  * Seed initial mock data for testing
  */
@@ -73,7 +90,7 @@ async function seedUsers(): Promise<void> {
   
   // Seller users
   const sellerNames = ['alice', 'betty', 'carol', 'diana', 'emma', 'fiona', 'grace', 'helen'];
-  const tiers = ['Tease', 'Flirt', 'Desire', 'Obsession', 'Goddess'];
+  const tiers: Array<'Tease' | 'Flirt' | 'Desire' | 'Obsession' | 'Goddess'> = ['Tease', 'Flirt', 'Desire', 'Obsession', 'Goddess'];
   
   sellerNames.forEach((name, index) => {
     users[name] = {
@@ -145,6 +162,14 @@ async function seedUsers(): Promise<void> {
         `https://picsum.photos/400/600?random=${index * 3 + 1}`,
         `https://picsum.photos/400/600?random=${index * 3 + 2}`,
       ],
+      completeness: {
+        percentage: 85,
+        missingFields: [],
+        suggestions: [
+          'Consider adding more gallery images',
+          'Update your bio regularly to keep followers engaged',
+        ],
+      },
     };
   });
   
@@ -237,7 +262,7 @@ async function seedListings(): Promise<void> {
 }
 
 async function seedOrders(): Promise<void> {
-  const orders: Order[] = [];
+  const orders: MockOrder[] = [];
   const buyers = ['buyer1', 'buyer2', 'buyer3', 'john', 'mike'];
   const sellers = ['alice', 'betty', 'carol', 'diana'];
   
@@ -250,7 +275,7 @@ async function seedOrders(): Promise<void> {
       const daysAgo = Math.floor(Math.random() * 60);
       const statuses: Order['shippingStatus'][] = ['pending', 'processing', 'shipped'];
       
-      const order: Order = {
+      const order: MockOrder = {
         id: uuidv4(),
         title: `Premium Set from ${seller}`,
         description: `High quality items from ${seller}'s collection`,
@@ -365,7 +390,7 @@ async function seedWalletBalances(): Promise<void> {
 }
 
 async function seedSubscriptions(): Promise<void> {
-  const subscriptions: Record<string, any[]> = {
+  const subscriptions: Record<string, MockSubscriptionInfo[]> = {
     'buyer1': [
       {
         id: 'sub_1',

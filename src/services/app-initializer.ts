@@ -2,6 +2,8 @@
 
 import { authService, walletService, storageService } from '@/services';
 import { runOrdersMigration } from '@/utils/ordersMigration';
+import { getMockConfig } from './mock/mock.config';
+import { mockInterceptor } from './mock/mock-interceptor';
 
 export interface InitializationResult {
   success: boolean;
@@ -64,7 +66,15 @@ export class AppInitializer {
         errors.push(`Storage initialization failed: ${error}`);
       }
 
-      // 2. Initialize auth service
+      // 2. Initialize mock API if enabled
+      try {
+        await this.initializeMockApi();
+      } catch (error) {
+        warnings.push(`Mock API initialization warning: ${error}`);
+        // Don't treat mock API failure as critical error
+      }
+
+      // 3. Initialize auth service
       try {
         console.log('[AppInitializer] Initializing auth service...');
         // Auth service doesn't need explicit initialization
@@ -73,7 +83,7 @@ export class AppInitializer {
         errors.push(`Auth initialization failed: ${error}`);
       }
 
-      // 3. Initialize wallet service
+      // 4. Initialize wallet service
       try {
         console.log('[AppInitializer] Initializing wallet service...');
         if (typeof walletService?.initialize === 'function') {
@@ -83,7 +93,7 @@ export class AppInitializer {
         warnings.push(`Wallet initialization warning: ${error}`);
       }
 
-      // 4. Run orders migration
+      // 5. Run orders migration
       try {
         console.log('[AppInitializer] Running orders migration...');
         await runOrdersMigration();
@@ -91,7 +101,7 @@ export class AppInitializer {
         warnings.push(`Orders migration warning: ${error}`);
       }
 
-      // 5. Perform data integrity checks
+      // 6. Perform data integrity checks
       try {
         console.log('[AppInitializer] Checking data integrity...');
         await this.checkDataIntegrity();
@@ -99,7 +109,7 @@ export class AppInitializer {
         warnings.push(`Data integrity check warning: ${error}`);
       }
 
-      // 6. Clean up old data
+      // 7. Clean up old data
       try {
         console.log('[AppInitializer] Cleaning up old data...');
         await this.cleanupOldData();
@@ -149,6 +159,37 @@ export class AppInitializer {
     }
   }
 
+  private async initializeMockApi(): Promise<void> {
+    const config = getMockConfig();
+    
+    if (config.enabled) {
+      console.log('[AppInitializer] Mock API is enabled, initializing...');
+      console.log(`[AppInitializer] Mock scenario: ${config.scenario.name}`);
+      
+      try {
+        await mockInterceptor.initialize();
+        console.log('[AppInitializer] Mock API initialized successfully');
+        
+        // Log mock configuration for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[AppInitializer] Mock API Configuration:', {
+            enabled: config.enabled,
+            scenario: config.scenario.name,
+            errorRate: `${(config.scenario.errorRate * 100).toFixed(0)}%`,
+            networkDelay: `${config.scenario.networkDelay.min}-${config.scenario.networkDelay.max}ms`,
+            persistState: config.persistState,
+            logRequests: config.logRequests,
+          });
+        }
+      } catch (error) {
+        console.error('[AppInitializer] Failed to initialize mock API:', error);
+        throw error;
+      }
+    } else {
+      console.log('[AppInitializer] Mock API is disabled, using real API');
+    }
+  }
+
   private async checkDataIntegrity(): Promise<void> {
     // Check for critical data
     const criticalKeys = [
@@ -157,6 +198,13 @@ export class AppInitializer {
       'wallet_admin',
       'wallet_orders',
     ];
+
+    // Skip integrity check if using mock API
+    const mockConfig = getMockConfig();
+    if (mockConfig.enabled) {
+      console.log('[AppInitializer] Skipping data integrity check in mock mode');
+      return;
+    }
 
     for (const key of criticalKeys) {
       const data = await storageService.getItem(key, null);
@@ -174,6 +222,12 @@ export class AppInitializer {
       'temp_listings',
       '__test_data__',
     ];
+
+    // Don't clean up mock data
+    const mockConfig = getMockConfig();
+    if (mockConfig.enabled && mockConfig.persistState) {
+      deprecatedKeys.push(...deprecatedKeys.filter(key => !key.startsWith('mock_api_')));
+    }
 
     for (const key of deprecatedKeys) {
       try {
@@ -197,6 +251,26 @@ export class AppInitializer {
     } catch (error) {
       console.warn('[AppInitializer] Session cleanup error:', error);
     }
+
+    // Clean up old auth tokens
+    try {
+      interface AuthData {
+        expiresAt: string | number;
+        [key: string]: any;
+      }
+      
+      const authData = await storageService.getItem<AuthData | null>('auth_data', null);
+      if (authData && authData.expiresAt) {
+        const expiresAt = new Date(authData.expiresAt).getTime();
+        if (expiresAt < Date.now()) {
+          await storageService.removeItem('auth_data');
+          await storageService.removeItem('auth_token');
+          console.log('[AppInitializer] Cleaned up expired auth tokens');
+        }
+      }
+    } catch (error) {
+      console.warn('[AppInitializer] Auth cleanup error:', error);
+    }
   }
 
   /**
@@ -213,6 +287,22 @@ export class AppInitializer {
    */
   isInitialized(): boolean {
     return this.initialized;
+  }
+
+  /**
+   * Get initialization status with details
+   */
+  getStatus(): {
+    initialized: boolean;
+    mockApiEnabled: boolean;
+    mockScenario?: string;
+  } {
+    const mockConfig = getMockConfig();
+    return {
+      initialized: this.initialized,
+      mockApiEnabled: mockConfig.enabled,
+      mockScenario: mockConfig.enabled ? mockConfig.scenario.name : undefined,
+    };
   }
 }
 

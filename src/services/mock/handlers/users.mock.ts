@@ -11,6 +11,13 @@ interface MockUserProfile extends UserProfile {
   username: string;
 }
 
+// Extended type for internal mock storage
+interface MockSubscriptionInfo extends SubscriptionInfo {
+  id?: string;
+  cancelledAt?: string;
+  nextBillingDate?: string;
+}
+
 export const mockUserHandlers = {
   // List users
   list: async (method: string, endpoint: string, data?: any, params?: Record<string, string>): Promise<ApiResponse<UsersResponse>> => {
@@ -142,7 +149,11 @@ export const mockUserHandlers = {
     let profile = profiles[username];
     
     if (!profile) {
-      // Create default profile
+      // Create default profile with all required fields
+      const missingFields = [];
+      if (!user.bio) missingFields.push('bio');
+      missingFields.push('galleryImages'); // New profiles always need gallery images
+      
       profile = {
         username,
         bio: user.bio || '',
@@ -151,7 +162,12 @@ export const mockUserHandlers = {
         galleryImages: [],
         completeness: {
           percentage: 50,
-          missingFields: ['bio', 'galleryImages'],
+          missingFields,
+          suggestions: [
+            'Add a profile picture to increase visibility',
+            'Write a compelling bio to attract more buyers',
+            'Upload gallery images to showcase your style',
+          ],
         },
       };
       profiles[username] = profile;
@@ -351,12 +367,15 @@ export const mockUserHandlers = {
       };
     }
     
-    const subscriptions = await mockDataStore.get<Record<string, SubscriptionInfo[]>>('subscriptions', {});
+    const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
     const userSubs = subscriptions[username] || [];
+    
+    // Remove internal properties before returning
+    const cleanSubs: SubscriptionInfo[] = userSubs.map(({ id, cancelledAt, nextBillingDate, ...sub }) => sub);
     
     return {
       success: true,
-      data: userSubs,
+      data: cleanSubs,
     };
   },
   
@@ -378,7 +397,7 @@ export const mockUserHandlers = {
       };
     }
     
-    const subscriptions = await mockDataStore.get<Record<string, SubscriptionInfo[]>>('subscriptions', {});
+    const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
     
     if (!subscriptions[buyer]) {
       subscriptions[buyer] = [];
@@ -393,7 +412,7 @@ export const mockUserHandlers = {
       };
     }
     
-    const newSub: SubscriptionInfo = {
+    const newSub: MockSubscriptionInfo = {
       id: `sub_${uuidv4()}`,
       buyer,
       seller,
@@ -401,6 +420,7 @@ export const mockUserHandlers = {
       status: 'active',
       subscribedAt: new Date().toISOString(),
       nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      autoRenew: true, // Default to auto-renew enabled
     };
     
     subscriptions[buyer].push(newSub);
@@ -413,9 +433,12 @@ export const mockUserHandlers = {
       await mockDataStore.set('users', users);
     }
     
+    // Remove internal properties before returning
+    const { id, nextBillingDate, ...cleanSub } = newSub;
+    
     return {
       success: true,
-      data: newSub,
+      data: cleanSub,
     };
   },
   
@@ -437,7 +460,7 @@ export const mockUserHandlers = {
       };
     }
     
-    const subscriptions = await mockDataStore.get<Record<string, SubscriptionInfo[]>>('subscriptions', {});
+    const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
     
     if (subscriptions[buyer]) {
       const subIndex = subscriptions[buyer].findIndex(sub => sub.seller === seller);
@@ -470,13 +493,23 @@ export const mockUserHandlers = {
       };
     }
     
-    const subscriptions = await mockDataStore.get<Record<string, SubscriptionInfo[]>>('subscriptions', {});
+    const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
     const buyerSubs = subscriptions[buyer] || [];
     const subscription = buyerSubs.find(sub => sub.seller === seller && sub.status === 'active');
     
+    if (!subscription) {
+      return {
+        success: true,
+        data: null,
+      };
+    }
+    
+    // Remove internal properties before returning
+    const { id, cancelledAt, nextBillingDate, ...cleanSub } = subscription;
+    
     return {
       success: true,
-      data: subscription || null,
+      data: cleanSub,
     };
   },
 } as const;

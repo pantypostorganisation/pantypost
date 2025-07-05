@@ -7,8 +7,14 @@ import { Order } from '@/context/WalletContext';
 import { DeliveryAddress } from '@/services/orders.service';
 import { v4 as uuidv4 } from 'uuid';
 
+// Extend Order type for mock data to include tracking info
+interface MockOrder extends Order {
+  trackingNumber?: string;
+  shippedDate?: string;
+}
+
 // Generate mock order
-function generateMockOrder(buyer: string, seller: string, index: number): Order {
+function generateMockOrder(buyer: string, seller: string, index: number): MockOrder {
   const titles = [
     'Lacy Dream Set',
     'Silk Sensation',
@@ -31,7 +37,7 @@ function generateMockOrder(buyer: string, seller: string, index: number): Order 
     country: 'US',
   };
   
-  return {
+  const order: MockOrder = {
     id: uuidv4(),
     title: titles[index % titles.length],
     description: `Beautiful ${titles[index % titles.length]} from ${seller}`,
@@ -48,13 +54,21 @@ function generateMockOrder(buyer: string, seller: string, index: number): Order 
     shippingStatus: statuses[Math.floor(Math.random() * statuses.length)],
     tierCreditAmount: Math.random() > 0.8 ? Math.round(price * 0.1 * 100) / 100 : undefined,
   };
+  
+  // Add tracking info for shipped orders
+  if (order.shippingStatus === 'shipped') {
+    order.trackingNumber = `TRACK${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+    order.shippedDate = new Date(Date.now() - (daysAgo - 5) * 24 * 60 * 60 * 1000).toISOString();
+  }
+  
+  return order;
 }
 
 export const mockOrderHandlers = {
   // List orders
   list: async (method: string, endpoint: string, data?: any, params?: Record<string, string>): Promise<ApiResponse<Order[]>> => {
     if (method === 'GET') {
-      let orders = await mockDataStore.get<Order[]>('orders', []);
+      let orders = await mockDataStore.get<MockOrder[]>('orders', []);
       
       // Generate initial orders if empty
       if (orders.length === 0) {
@@ -106,9 +120,12 @@ export const mockOrderHandlers = {
       
       const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
       
+      // Remove mock-specific properties before returning
+      const cleanOrders: Order[] = paginatedOrders.map(({ trackingNumber, shippedDate, ...order }) => order);
+      
       return {
         success: true,
-        data: paginatedOrders,
+        data: cleanOrders,
         meta: {
           page,
           totalPages: Math.ceil(filteredOrders.length / limit),
@@ -119,14 +136,14 @@ export const mockOrderHandlers = {
     
     if (method === 'POST') {
       // Create order
-      const newOrder: Order = {
+      const newOrder: MockOrder = {
         id: uuidv4(),
         date: new Date().toISOString(),
         shippingStatus: 'pending',
         ...data,
       };
       
-      const orders = await mockDataStore.get<Order[]>('orders', []);
+      const orders = await mockDataStore.get<MockOrder[]>('orders', []);
       orders.push(newOrder);
       await mockDataStore.set('orders', orders);
       
@@ -137,9 +154,13 @@ export const mockOrderHandlers = {
         await mockDataStore.set('users', users);
       }
       
+      // Remove mock-specific properties before returning
+      const { trackingNumber, shippedDate, ...cleanOrder } = newOrder;
+      
+      // Return array with the new order to match expected type
       return {
         success: true,
-        data: newOrder,
+        data: [cleanOrder],
       };
     }
     
@@ -160,7 +181,7 @@ export const mockOrderHandlers = {
       };
     }
     
-    const orders = await mockDataStore.get<Order[]>('orders', []);
+    const orders = await mockDataStore.get<MockOrder[]>('orders', []);
     const order = orders.find(o => o.id === id);
     
     if (!order) {
@@ -170,9 +191,12 @@ export const mockOrderHandlers = {
       };
     }
     
+    // Remove mock-specific properties before returning
+    const { trackingNumber, shippedDate, ...cleanOrder } = order;
+    
     return {
       success: true,
-      data: order,
+      data: cleanOrder,
     };
   },
   
@@ -187,14 +211,17 @@ export const mockOrderHandlers = {
       };
     }
     
-    const orders = await mockDataStore.get<Order[]>('orders', []);
+    const orders = await mockDataStore.get<MockOrder[]>('orders', []);
     const buyerOrders = orders
       .filter(o => o.buyer === username)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
+    // Remove mock-specific properties before returning
+    const cleanOrders: Order[] = buyerOrders.map(({ trackingNumber, shippedDate, ...order }) => order);
+    
     return {
       success: true,
-      data: buyerOrders,
+      data: cleanOrders,
     };
   },
   
@@ -209,14 +236,17 @@ export const mockOrderHandlers = {
       };
     }
     
-    const orders = await mockDataStore.get<Order[]>('orders', []);
+    const orders = await mockDataStore.get<MockOrder[]>('orders', []);
     const sellerOrders = orders
       .filter(o => o.seller === username)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
+    // Remove mock-specific properties before returning
+    const cleanOrders: Order[] = sellerOrders.map(({ trackingNumber, shippedDate, ...order }) => order);
+    
     return {
       success: true,
-      data: sellerOrders,
+      data: cleanOrders,
     };
   },
   
@@ -239,7 +269,7 @@ export const mockOrderHandlers = {
       };
     }
     
-    const orders = await mockDataStore.get<Order[]>('orders', []);
+    const orders = await mockDataStore.get<MockOrder[]>('orders', []);
     const order = orders.find(o => o.id === id);
     
     if (!order) {
@@ -260,9 +290,12 @@ export const mockOrderHandlers = {
     
     await mockDataStore.set('orders', orders);
     
+    // Remove mock-specific properties before returning
+    const { trackingNumber: tn, shippedDate: sd, ...cleanOrder } = order;
+    
     return {
       success: true,
-      data: order,
+      data: cleanOrder,
     };
   },
   
@@ -285,7 +318,7 @@ export const mockOrderHandlers = {
       };
     }
     
-    const orders = await mockDataStore.get<Order[]>('orders', []);
+    const orders = await mockDataStore.get<MockOrder[]>('orders', []);
     const order = orders.find(o => o.id === id);
     
     if (!order) {
@@ -309,9 +342,12 @@ export const mockOrderHandlers = {
     order.deliveryAddress = deliveryAddress;
     await mockDataStore.set('orders', orders);
     
+    // Remove mock-specific properties before returning
+    const { trackingNumber, shippedDate, ...cleanOrder } = order;
+    
     return {
       success: true,
-      data: order,
+      data: cleanOrder,
     };
   },
 } as const;

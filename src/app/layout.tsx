@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-// Keep this as a client component for now since your entire app is client-side
+
 'use client';
 
 import { Inter } from 'next/font/google';
@@ -9,6 +9,7 @@ import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';
 import MessageNotifications from '@/components/MessageNotifications';
+import { MockApiDevTools } from '@/components/MockApiDevTools';
 import { Suspense, useState, useEffect } from 'react';
 
 const inter = Inter({ 
@@ -74,6 +75,8 @@ export default function RootLayout({
               </BanCheck>
             </div>
           </Suspense>
+          {/* Mock API Dev Tools - Outside BanCheck so it's always accessible during development */}
+          <MockApiDevTools />
         </Providers>
       </body>
     </html>

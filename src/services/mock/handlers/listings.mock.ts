@@ -221,9 +221,10 @@ export const mockListingHandlers = {
       listings.push(newListing);
       await mockDataStore.set('listings', listings);
       
+      // Return array with the new listing to match expected type
       return {
         success: true,
-        data: newListing,
+        data: [newListing],
       };
     }
     
@@ -312,39 +313,32 @@ export const mockListingHandlers = {
     };
   },
   
-  // Update views
-  views: async (method: string, endpoint: string, data?: any, params?: Record<string, string>): Promise<ApiResponse<void>> => {
+  // Update views - returns void with view count in separate endpoint
+  views: async (method: string, endpoint: string, data?: any, params?: Record<string, string>): Promise<ApiResponse<any>> => {
+    const id = params?.id;
+    if (!id) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Listing ID is required' },
+      };
+    }
+    
+    const views = await mockDataStore.get<Record<string, number>>('listingViews', {});
+    
     if (method === 'GET') {
-      // Get view count
-      const id = params?.id;
-      if (!id) {
-        return {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Listing ID is required' },
-        };
-      }
-      
-      const views = await mockDataStore.get<Record<string, number>>('listingViews', {});
+      // Get view count - return as object with count property
       return {
         success: true,
-        data: views[id] || 0,
+        data: { views: views[id] || 0 },
       };
     }
     
     if (method === 'POST') {
       // Increment views
-      const id = params?.id;
-      if (!id) {
-        return {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Listing ID is required' },
-        };
-      }
-      
-      const views = await mockDataStore.get<Record<string, number>>('listingViews', {});
       views[id] = (views[id] || 0) + 1;
       await mockDataStore.set('listingViews', views);
       
+      // Return void response
       return { success: true };
     }
     
