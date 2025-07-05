@@ -178,114 +178,61 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   
   // Refs to prevent multiple initializations and saves
   const initializingRef = useRef(false);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSaveRef = useRef<number>(0);
-  const pendingSaveRef = useRef(false);
+  const dataVersionRef = useRef(0);
   const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isSavingRef = useRef(false);
-  const saveAllDataRef = useRef<(() => Promise<void>) | null>(null);
 
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
 
-  // Consolidated save function with debouncing - FIXED to prevent infinite loops
+  // Save all data without causing re-renders
   const saveAllData = useCallback(async () => {
-    // Prevent saves if not initialized or already saving
-    if (!isInitialized || isSavingRef.current) {
-      console.log('[WalletContext] Skipping save - not initialized or already saving');
+    if (!isInitialized) {
       return;
     }
-
-    // Set saving flag
-    isSavingRef.current = true;
-
-    // Debounce saves to prevent rapid successive saves
-    const now = Date.now();
-    if (now - lastSaveRef.current < 1000) {
-      // Schedule a save for later
-      if (!pendingSaveRef.current) {
-        pendingSaveRef.current = true;
-        setTimeout(() => {
-          pendingSaveRef.current = false;
-          isSavingRef.current = false;
-          saveAllDataRef.current?.();
-        }, 1000);
-      }
-      return;
-    }
-    
-    lastSaveRef.current = now;
 
     try {
-      console.log('[WalletContext] Saving all wallet data...');
+      // Use refs to get current state values without dependencies
+      const currentDataVersion = dataVersionRef.current;
       
-      // Use batch save for atomic operation
-      const saveOperations: Array<{ key: string; value: any }> = [
-        { key: STORAGE_KEYS.BUYER_BALANCES, value: buyerBalances },
-        { key: STORAGE_KEYS.SELLER_BALANCES, value: sellerBalances },
-        { key: STORAGE_KEYS.ADMIN_BALANCE, value: adminBalance.toString() },
-        { key: STORAGE_KEYS.ORDERS, value: orderHistory },
-        { key: STORAGE_KEYS.SELLER_WITHDRAWALS, value: sellerWithdrawals },
-        { key: STORAGE_KEYS.ADMIN_WITHDRAWALS, value: adminWithdrawals },
-        { key: STORAGE_KEYS.ADMIN_ACTIONS, value: adminActions },
-        { key: STORAGE_KEYS.DEPOSIT_LOGS, value: depositLogs },
+      // Batch save operations
+      const savePromises = [
+        storageService.setItem(STORAGE_KEYS.BUYER_BALANCES, buyerBalances),
+        storageService.setItem(STORAGE_KEYS.SELLER_BALANCES, sellerBalances),
+        storageService.setItem(STORAGE_KEYS.ADMIN_BALANCE, adminBalance.toString()),
+        storageService.setItem(STORAGE_KEYS.ORDERS, orderHistory),
+        storageService.setItem(STORAGE_KEYS.SELLER_WITHDRAWALS, sellerWithdrawals),
+        storageService.setItem(STORAGE_KEYS.ADMIN_WITHDRAWALS, adminWithdrawals),
+        storageService.setItem(STORAGE_KEYS.ADMIN_ACTIONS, adminActions),
+        storageService.setItem(STORAGE_KEYS.DEPOSIT_LOGS, depositLogs),
       ];
 
-      // Also save individual balance keys for enhanced compatibility
+      // Save individual balance keys for enhanced compatibility
       Object.entries(buyerBalances).forEach(([username, balance]) => {
         const balanceInCents = Math.round(balance * 100);
-        saveOperations.push({ 
-          key: `wallet_buyer_${username}`, 
-          value: balanceInCents 
-        });
+        savePromises.push(storageService.setItem(`wallet_buyer_${username}`, balanceInCents));
       });
 
       Object.entries(sellerBalances).forEach(([username, balance]) => {
         const balanceInCents = Math.round(balance * 100);
-        saveOperations.push({ 
-          key: `wallet_seller_${username}`, 
-          value: balanceInCents 
-        });
+        savePromises.push(storageService.setItem(`wallet_seller_${username}`, balanceInCents));
       });
 
       // Save admin balance in enhanced format
       const adminBalanceInCents = Math.round(adminBalance * 100);
-      saveOperations.push({ 
-        key: 'wallet_admin_enhanced', 
-        value: adminBalanceInCents 
-      });
+      savePromises.push(storageService.setItem('wallet_admin_enhanced', adminBalanceInCents));
 
-      // Execute batch save
-      const success = await storageService.batchSet(saveOperations);
+      await Promise.all(savePromises);
       
-      if (!success) {
-        console.error('[WalletContext] Failed to save wallet data');
-      } else {
-        console.log('[WalletContext] Wallet data saved successfully');
+      // Check if data changed while we were saving
+      if (currentDataVersion !== dataVersionRef.current) {
+        // Data changed, we'll need to save again on next update
+        return;
       }
     } catch (error) {
       console.error('[WalletContext] Error saving wallet data:', error);
-    } finally {
-      // Reset saving flag
-      isSavingRef.current = false;
     }
-  }, [
-    isInitialized,
-    buyerBalances,
-    sellerBalances,
-    adminBalance,
-    orderHistory,
-    sellerWithdrawals,
-    adminWithdrawals,
-    adminActions,
-    depositLogs
-  ]);
-
-  // Update the ref whenever saveAllData changes
-  useEffect(() => {
-    saveAllDataRef.current = saveAllData;
-  }, [saveAllData]);
+  }, [isInitialized, buyerBalances, sellerBalances, adminBalance, orderHistory, sellerWithdrawals, adminWithdrawals, adminActions, depositLogs]);
 
   // Load all data from storage
   const loadAllData = useCallback(async () => {
@@ -388,7 +335,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Initialize wallet service and load data - FIXED to prevent infinite loops
+  // Initialize wallet service and load data
   useEffect(() => {
     const initializeWallet = async () => {
       // Prevent multiple initializations
@@ -433,26 +380,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []); // Empty dependency array - only run once
 
-  // Save data when state changes (debounced) - FIXED to prevent loops
+  // Debounced save effect
   useEffect(() => {
     if (!isInitialized || isLoading) return;
 
-    // Clear any existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
+    // Increment data version to track changes
+    dataVersionRef.current += 1;
 
-    // Debounce saves by 1000ms
-    saveTimeoutRef.current = setTimeout(() => {
-      // Use the ref version to avoid dependency issues
-      saveAllDataRef.current?.();
+    // Debounce save by 1 second
+    const timeoutId = setTimeout(() => {
+      saveAllData();
     }, 1000);
 
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
+    return () => clearTimeout(timeoutId);
   }, [
     buyerBalances,
     sellerBalances,
@@ -463,8 +403,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     adminActions,
     depositLogs,
     isInitialized,
-    isLoading
-    // Removed saveAllData from dependencies to prevent loops
+    isLoading,
+    saveAllData
   ]);
 
   // Clean up intervals on unmount
@@ -472,9 +412,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => {
       if (sessionCheckIntervalRef.current) {
         clearInterval(sessionCheckIntervalRef.current);
-      }
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
       }
     };
   }, []);
@@ -1311,7 +1248,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return [];
   }, []);
 
-  // Reload data function - FIXED to prevent infinite loops
+  // Reload data function
   const reloadData = useCallback(async () => {
     if (isLoading) {
       console.log('[WalletContext] Already loading, skipping reload');
