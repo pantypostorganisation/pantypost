@@ -92,13 +92,28 @@ export const MOCK_SCENARIOS: Record<string, MockScenario> = {
 
 // Get current mock configuration
 export function getMockConfig(): MockConfig {
-  // Check localStorage first (for dynamic changes)
-  const localEnabled = typeof window !== 'undefined' ? localStorage.getItem('MOCK_API_ENABLED') : null;
-  const localScenario = typeof window !== 'undefined' ? localStorage.getItem('MOCK_API_SCENARIO') : null;
+  // ALWAYS prioritize environment variables over localStorage
+  const envEnabled = process.env.NEXT_PUBLIC_USE_MOCK_API === 'true';
   
-  // Use localStorage values if available, otherwise fall back to env vars
-  const enabled = localEnabled ? localEnabled === 'true' : process.env.NEXT_PUBLIC_USE_MOCK_API === 'true';
-  const scenarioName = localScenario || process.env.NEXT_PUBLIC_MOCK_SCENARIO || 'REALISTIC';
+  // Only check localStorage if env var explicitly enables mocks
+  // This prevents old localStorage values from overriding env config
+  let enabled = envEnabled;
+  let scenarioName = process.env.NEXT_PUBLIC_MOCK_SCENARIO || 'REALISTIC';
+  
+  // If mocks are enabled via env, allow localStorage override for development
+  if (envEnabled && typeof window !== 'undefined') {
+    const localEnabled = localStorage.getItem('MOCK_API_ENABLED');
+    const localScenario = localStorage.getItem('MOCK_API_SCENARIO');
+    
+    // Only use localStorage if explicitly set (not null)
+    if (localEnabled !== null) {
+      enabled = localEnabled === 'true';
+    }
+    if (localScenario !== null) {
+      scenarioName = localScenario;
+    }
+  }
+  
   const logRequests = process.env.NEXT_PUBLIC_MOCK_LOG_REQUESTS === 'true';
   const persistState = process.env.NEXT_PUBLIC_MOCK_PERSIST_STATE !== 'false'; // Default true
   const seedData = process.env.NEXT_PUBLIC_MOCK_SEED_DATA !== 'false'; // Default true
