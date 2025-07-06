@@ -2,6 +2,8 @@
 'use client';
 
 import { EmailFieldProps } from '@/types/signup';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { Mail } from 'lucide-react';
 
 export default function EmailField({ 
   email, 
@@ -10,25 +12,25 @@ export default function EmailField({
 }: EmailFieldProps) {
   return (
     <div className="mb-4">
-      <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1.5">
-        Email Address
-      </label>
-      <input
+      <SecureInput
         id="email"
         name="email"
         type="email"
+        label="Email Address"
         value={email}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
+        error={error}
+        touched={!!error} // Show error if exists
         placeholder="you@example.com"
-        className={`w-full px-3.5 py-2.5 bg-black/50 backdrop-blur-sm border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 transition-colors ${
-          error
-            ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500'
-            : 'border-gray-700 focus:border-[#ff950e] focus:ring-[#ff950e]'
-        }`}
+        autoComplete="email"
+        spellCheck={false}
+        maxLength={100}
+        characterCount={false}
+        sanitize={true}
+        validationIndicator={true}
+        helpText="We'll never share your email with anyone"
+        className="w-full"
       />
-      {error && (
-        <p className="mt-1 text-xs text-red-400">{error}</p>
-      )}
     </div>
   );
 }
