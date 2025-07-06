@@ -4,6 +4,7 @@ import { authService, walletService, storageService } from '@/services';
 import { runOrdersMigration } from '@/utils/ordersMigration';
 import { getMockConfig } from './mock/mock.config';
 import { mockInterceptor } from './mock/mock-interceptor';
+import { validateConfiguration, getAllConfig, isDevelopment } from '@/config/environment';
 
 export interface InitializationResult {
   success: boolean;
@@ -57,6 +58,22 @@ export class AppInitializer {
 
     try {
       console.log('[AppInitializer] Starting application initialization...');
+
+      // 0. Validate environment configuration
+      try {
+        console.log('[AppInitializer] Validating environment configuration...');
+        const validation = validateConfiguration();
+        if (!validation.valid) {
+          validation.errors.forEach(error => warnings.push(`Configuration: ${error}`));
+        }
+        
+        // Log configuration in development
+        if (isDevelopment()) {
+          console.log('[AppInitializer] Environment configuration:', getAllConfig());
+        }
+      } catch (error) {
+        warnings.push(`Configuration validation warning: ${error}`);
+      }
 
       // 1. Initialize storage service
       try {

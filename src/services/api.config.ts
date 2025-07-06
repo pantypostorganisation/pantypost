@@ -7,23 +7,22 @@
 
 import { mockApiCall } from './mock/mock-api';
 import { getMockConfig } from './mock/mock.config';
+import { apiConfig, appConfig, securityConfig, isDevelopment } from '@/config/environment';
 
-// Environment detection
-export const isDevelopment = process.env.NODE_ENV === 'development';
-export const isProduction = process.env.NODE_ENV === 'production';
+// Re-export from environment config for backward compatibility
+export { isDevelopment };
+export const isProduction = !isDevelopment();
 
-// API Base URL - defaults to localStorage in development, can be overridden with env var
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-
-// Feature flags for gradual backend migration
+// Use environment configuration
+export const API_BASE_URL = apiConfig.baseUrl;
 export const FEATURES = {
-  USE_API_AUTH: process.env.NEXT_PUBLIC_USE_API_AUTH === 'true',
-  USE_API_LISTINGS: process.env.NEXT_PUBLIC_USE_API_LISTINGS === 'true',
-  USE_API_ORDERS: process.env.NEXT_PUBLIC_USE_API_ORDERS === 'true',
-  USE_API_MESSAGES: process.env.NEXT_PUBLIC_USE_API_MESSAGES === 'true',
-  USE_API_WALLET: process.env.NEXT_PUBLIC_USE_API_WALLET === 'true',
-  USE_API_USERS: process.env.NEXT_PUBLIC_USE_API_USERS === 'true',
-  USE_MOCK_API: process.env.NEXT_PUBLIC_USE_MOCK_API === 'true',
+  USE_API_AUTH: apiConfig.features.useAuth,
+  USE_API_LISTINGS: apiConfig.features.useListings,
+  USE_API_ORDERS: apiConfig.features.useOrders,
+  USE_API_MESSAGES: apiConfig.features.useMessages,
+  USE_API_WALLET: apiConfig.features.useWallet,
+  USE_API_USERS: apiConfig.features.useUsers,
+  USE_MOCK_API: apiConfig.features.useMockApi,
 };
 
 // API Endpoints
@@ -108,17 +107,18 @@ export const API_ENDPOINTS = {
   },
 };
 
-// Request configuration
+// Request configuration from environment
 export const REQUEST_CONFIG = {
-  TIMEOUT: 30000, // 30 seconds
-  RETRY_ATTEMPTS: 3,
+  TIMEOUT: apiConfig.timeout,
+  RETRY_ATTEMPTS: apiConfig.retryAttempts,
   RETRY_DELAY: 1000, // 1 second
 };
 
-// Headers configuration
+// Headers configuration with version from environment
 export const getDefaultHeaders = (): HeadersInit => ({
   'Content-Type': 'application/json',
-  'X-Client-Version': process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+  'X-Client-Version': appConfig.version,
+  'X-App-Name': appConfig.name,
 });
 
 // Auth token management
@@ -168,6 +168,8 @@ export interface ApiResponse<T> {
 class ApiClient {
   private static instance: ApiClient;
   private abortControllers: Map<string, AbortController> = new Map();
+  private requestCount: number = 0;
+  private requestWindowStart: number = Date.now();
 
   static getInstance(): ApiClient {
     if (!ApiClient.instance) {
@@ -196,6 +198,25 @@ class ApiClient {
   }
 
   /**
+   * Check rate limit
+   */
+  private checkRateLimit(): boolean {
+    if (!securityConfig.enableRateLimiting) return true;
+
+    const now = Date.now();
+    const windowDuration = 60000; // 1 minute
+
+    // Reset window if expired
+    if (now - this.requestWindowStart > windowDuration) {
+      this.requestCount = 0;
+      this.requestWindowStart = now;
+    }
+
+    this.requestCount++;
+    return this.requestCount <= securityConfig.maxRequestsPerMinute;
+  }
+
+  /**
    * Make an API call with abort capability
    */
   async call<T>(
@@ -203,6 +224,17 @@ class ApiClient {
     options: RequestInit = {},
     requestKey?: string
   ): Promise<ApiResponse<T>> {
+    // Check rate limit
+    if (!this.checkRateLimit()) {
+      return {
+        success: false,
+        error: {
+          message: 'Rate limit exceeded. Please try again later.',
+          code: 'RATE_LIMIT_EXCEEDED',
+        },
+      };
+    }
+
     // Use mock API if enabled
     if (FEATURES.USE_MOCK_API) {
       try {

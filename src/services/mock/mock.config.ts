@@ -5,6 +5,8 @@
  * Central configuration for all mock API responses
  */
 
+import { mockConfig as envMockConfig, apiConfig } from '@/config/environment';
+
 export interface MockScenario {
   name: string;
   description: string;
@@ -92,20 +94,15 @@ export const MOCK_SCENARIOS: Record<string, MockScenario> = {
 
 // Get current mock configuration
 export function getMockConfig(): MockConfig {
-  // ALWAYS prioritize environment variables over localStorage
-  const envEnabled = process.env.NEXT_PUBLIC_USE_MOCK_API === 'true';
+  // Use environment configuration as primary source
+  let enabled = apiConfig.features.useMockApi;
+  let scenarioName = envMockConfig.scenario;
   
-  // Only check localStorage if env var explicitly enables mocks
-  // This prevents old localStorage values from overriding env config
-  let enabled = envEnabled;
-  let scenarioName = process.env.NEXT_PUBLIC_MOCK_SCENARIO || 'REALISTIC';
-  
-  // If mocks are enabled via env, allow localStorage override for development
-  if (envEnabled && typeof window !== 'undefined') {
+  // Allow localStorage override in development only
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     const localEnabled = localStorage.getItem('MOCK_API_ENABLED');
     const localScenario = localStorage.getItem('MOCK_API_SCENARIO');
     
-    // Only use localStorage if explicitly set (not null)
     if (localEnabled !== null) {
       enabled = localEnabled === 'true';
     }
@@ -114,18 +111,14 @@ export function getMockConfig(): MockConfig {
     }
   }
   
-  const logRequests = process.env.NEXT_PUBLIC_MOCK_LOG_REQUESTS === 'true';
-  const persistState = process.env.NEXT_PUBLIC_MOCK_PERSIST_STATE !== 'false'; // Default true
-  const seedData = process.env.NEXT_PUBLIC_MOCK_SEED_DATA !== 'false'; // Default true
-  
   const scenario = MOCK_SCENARIOS[scenarioName] || MOCK_SCENARIOS.REALISTIC;
   
   return {
     enabled,
     scenario,
-    logRequests,
-    persistState,
-    seedData,
+    logRequests: envMockConfig.logRequests,
+    persistState: envMockConfig.persistState,
+    seedData: envMockConfig.seedData,
   };
 }
 
