@@ -11,6 +11,7 @@ import { MessageProvider } from '@/context/MessageContext';
 import { ReviewProvider } from '@/context/ReviewContext';
 import { RequestProvider } from '@/context/RequestContext';
 import { LoadingProvider } from '@/context/LoadingContext';
+import { WebSocketProvider } from '@/context/WebSocketContext';
 import { AppInitializationProvider } from './AppInitializationProvider';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
@@ -158,9 +159,10 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
  * 2. Auth - Many other providers depend on user state
  * 3. Toast - Used by other providers for notifications
  * 4. Ban - Needs auth but used by many components
- * 5. Wallet - Depends on auth and initialization
- * 6. Listing - Depends on auth and wallet
- * 7. Others - Depend on the above
+ * 5. WebSocket - Needs auth for connection but provides real-time features to others
+ * 6. Wallet - Depends on auth and initialization
+ * 7. Listing - Depends on auth and wallet
+ * 8. Others - Depend on the above
  */
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -168,21 +170,23 @@ export function Providers({ children }: { children: ReactNode }) {
       <AuthProvider>
         <ToastProvider>
           <BanProvider>
-            <FinancialErrorBoundary>
-              <WalletProvider>
-                <ListingProvider>
-                  <MessageProvider>
-                    <ReviewProvider>
-                      <RequestProvider>
-                        <LoadingProvider>
-                          {children}
-                        </LoadingProvider>
-                      </RequestProvider>
-                    </ReviewProvider>
-                  </MessageProvider>
-                </ListingProvider>
-              </WalletProvider>
-            </FinancialErrorBoundary>
+            <WebSocketProvider>
+              <FinancialErrorBoundary>
+                <WalletProvider>
+                  <ListingProvider>
+                    <MessageProvider>
+                      <ReviewProvider>
+                        <RequestProvider>
+                          <LoadingProvider>
+                            {children}
+                          </LoadingProvider>
+                        </RequestProvider>
+                      </ReviewProvider>
+                    </MessageProvider>
+                  </ListingProvider>
+                </WalletProvider>
+              </FinancialErrorBoundary>
+            </WebSocketProvider>
           </BanProvider>
         </ToastProvider>
       </AuthProvider>

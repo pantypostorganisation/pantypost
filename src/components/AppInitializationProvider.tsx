@@ -291,8 +291,10 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       }}
     >
       {children}
-      {/* Dev mode indicator for mock API */}
-      {process.env.NODE_ENV === 'development' && mockApiEnabled && (
+      {/* Dev mode indicator for mock API - Only show when explicitly enabled via env var */}
+      {process.env.NODE_ENV === 'development' && 
+       process.env.NEXT_PUBLIC_USE_MOCK_API === 'true' && 
+       mockApiEnabled && (
         <div className="fixed top-4 right-4 z-50 bg-purple-600/20 text-purple-300 px-3 py-1 rounded-md text-xs backdrop-blur-sm">
           🎭 Mock API: {mockScenario}
         </div>

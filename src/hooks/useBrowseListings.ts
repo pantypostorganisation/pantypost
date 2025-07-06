@@ -49,6 +49,25 @@ const getDisplayPrice = (listing: Listing) => {
   return getDisplayPriceUtil(normalizeListing(listing));
 };
 
+// Check if we have cached listings to determine initial loading state
+const getCachedListings = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('browse_listings_cache');
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // Check if cache is less than 2 minutes old
+        if (Date.now() - timestamp < 2 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (e) {
+      // Ignore cache errors
+    }
+  }
+  return null;
+};
+
 export const useBrowseListings = () => {
   const { user } = useAuth();
   const router = useRouter();
@@ -68,14 +87,15 @@ export const useBrowseListings = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
   
-  // Data state
-  const [listings, setListings] = useState<Listing[]>([]);
+  // Initialize with cached data if available
+  const cachedListings = getCachedListings();
+  const [listings, setListings] = useState<Listing[]>(cachedListings || []);
   const [users, setUsers] = useState<Record<string, User>>({});
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<Record<string, string[]>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!cachedListings); // Only show loading if no cache
   const [error, setError] = useState<string | null>(null);
-  const [totalListings, setTotalListings] = useState(0);
+  const [totalListings, setTotalListings] = useState(cachedListings?.length || 0);
 
   // Refs
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -152,6 +172,18 @@ export const useBrowseListings = () => {
 
         setListings(filteredListings);
         setTotalListings(listingsResponse.meta?.totalItems || filteredListings.length);
+
+        // Cache the listings
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('browse_listings_cache', JSON.stringify({
+              data: filteredListings,
+              timestamp: Date.now()
+            }));
+          } catch (e) {
+            // Ignore cache errors (storage might be full)
+          }
+        }
       } else {
         throw new Error(listingsResponse.error?.message || 'Failed to load listings');
       }
