@@ -648,7 +648,19 @@ export default function Header() {
                 <span>Wallets</span>
               </Link>
               
-              <Link href="/wallet/admin" className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs">
+              {/* FIXED: Added preventDefault and explicit navigation */}
+              <Link 
+                href="/wallet/admin" 
+                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
+                onClick={(e) => {
+                  // Prevent any default behavior that might interfere
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Force navigation using window.location
+                  window.location.href = '/wallet/admin';
+                }}
+                style={{ touchAction: 'manipulation' }}
+              >
                 <Wallet className="w-3.5 h-3.5 text-purple-400" />
                 <span className="font-bold text-purple-300">${adminBalance.toFixed(2)}</span>
               </Link>
@@ -672,7 +684,19 @@ export default function Header() {
                 <span className="font-medium">Get Verified</span>
               </Link>
               
-              <Link href="/wallet/seller" className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs">
+              {/* FIXED: Added preventDefault and explicit navigation for seller wallet */}
+              <Link 
+                href="/wallet/seller" 
+                className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
+                onClick={(e) => {
+                  // Prevent any default behavior that might interfere
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Force navigation using window.location
+                  window.location.href = '/wallet/seller';
+                }}
+                style={{ touchAction: 'manipulation' }}
+              >
                 <Wallet className="w-3.5 h-3.5 text-[#ff950e]" />
                 <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
@@ -865,7 +889,19 @@ export default function Header() {
                 <span>My Orders</span>
               </Link>
               
-              <Link href="/wallet/buyer" className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs">
+              {/* FIXED: Added preventDefault and explicit navigation for buyer wallet */}
+              <Link 
+                href="/wallet/buyer" 
+                className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs"
+                onClick={(e) => {
+                  // Prevent any default behavior that might interfere
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Force navigation using window.location
+                  window.location.href = '/wallet/buyer';
+                }}
+                style={{ touchAction: 'manipulation' }}
+              >
                 <Wallet className="w-3.5 h-3.5 text-purple-400" />
                 <span className="font-bold text-purple-400">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>

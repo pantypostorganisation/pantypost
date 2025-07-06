@@ -34,20 +34,31 @@ export default function RequireAuth({
     } : 'No user');
 
     const userRole = user?.role;
-    const isAdmin = userRole === 'admin';
+    const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
 
-    // Allow access if role matches or if admin accessing buyer/seller page
-    const hasAccess = user && (userRole === role || (role !== 'admin' && isAdmin));
-    
-    if (!hasAccess) {
-      console.log('[RequireAuth] Access denied, redirecting to login');
-      // Small delay to prevent flash of content
-      setTimeout(() => {
+    // Special handling for admin users
+    if (role === 'admin') {
+      // Only oakley and gerome can access admin pages
+      const hasAccess = isAdmin;
+      if (!hasAccess) {
+        console.log('[RequireAuth] Admin access denied, redirecting to login');
         router.push('/login');
-      }, 100);
+      } else {
+        console.log('[RequireAuth] Admin access granted');
+        setAuthorized(true);
+      }
     } else {
-      console.log('[RequireAuth] Access granted');
-      setAuthorized(true);
+      // For buyer/seller pages
+      // Allow access if role matches OR if user is admin
+      const hasAccess = user && (userRole === role || isAdmin);
+      
+      if (!hasAccess) {
+        console.log('[RequireAuth] Access denied, redirecting to login');
+        router.push('/login');
+      } else {
+        console.log('[RequireAuth] Access granted');
+        setAuthorized(true);
+      }
     }
     
     setHasChecked(true);

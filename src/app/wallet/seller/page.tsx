@@ -14,6 +14,7 @@ import RecentWithdrawals from '@/components/wallet/seller/RecentWithdrawals';
 import EmptyState from '@/components/wallet/seller/EmptyState';
 import WithdrawConfirmModal from '@/components/wallet/seller/WithdrawConfirmModal';
 import { useSellerWallet } from '@/hooks/useSellerWallet';
+import { useRouter } from 'next/navigation';
 
 // Inner component that uses the hooks after providers are ready
 function SellerWalletContent() {
@@ -92,40 +93,48 @@ function SellerWalletContent() {
   );
 }
 
-// Main page component with provider readiness check
-export default function SellerWalletPage() {
-  const [isReady, setIsReady] = React.useState(false);
+// Wrapper to ensure proper auth flow
+function SellerWalletWrapper() {
+  const { user, isAuthReady } = useAuth();
+  const router = useRouter();
+  const [isChecking, setIsChecking] = useState(true);
 
-  React.useEffect(() => {
-    // Small delay to ensure providers are mounted
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 100);
+  useEffect(() => {
+    if (!isAuthReady) return;
 
-    return () => clearTimeout(timer);
-  }, []);
+    // Check if user is authorized
+    const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+    const canAccess = user && (user.role === 'seller' || isAdmin);
 
-  if (!isReady) {
+    if (!canAccess) {
+      console.log('[SellerWallet] Unauthorized access, redirecting to login');
+      router.push('/login');
+    } else {
+      setIsChecking(false);
+    }
+  }, [user, isAuthReady, router]);
+
+  if (!isAuthReady || isChecking) {
     return (
-      <BanCheck>
-        <RequireAuth role="seller">
-          <main className="min-h-screen bg-black text-white p-4 md:p-8">
-            <div className="max-w-4xl mx-auto">
-              <div className="text-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
-                <p className="text-gray-400 text-lg">Loading wallet...</p>
-              </div>
-            </div>
-          </main>
-        </RequireAuth>
-      </BanCheck>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+      </div>
     );
   }
 
+  return <SellerWalletContent />;
+}
+
+// Main page component with provider readiness check
+export default function SellerWalletPage() {
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <SellerWalletContent />
+        <SellerWalletWrapper />
       </RequireAuth>
     </BanCheck>
   );

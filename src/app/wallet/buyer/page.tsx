@@ -1,7 +1,7 @@
 // src/app/wallet/buyer/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import BackgroundPattern from '@/components/wallet/buyer/BackgroundPattern';
@@ -12,6 +12,8 @@ import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import EmptyState from '@/components/wallet/buyer/EmptyState';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 // Inner component that uses the hooks after providers are ready
 function BuyerWalletContent() {
@@ -79,12 +81,48 @@ function BuyerWalletContent() {
   );
 }
 
+// Wrapper to ensure proper auth flow
+function BuyerWalletWrapper() {
+  const { user, isAuthReady } = useAuth();
+  const router = useRouter();
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    // Check if user is authorized
+    const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+    const canAccess = user && (user.role === 'buyer' || isAdmin);
+
+    if (!canAccess) {
+      console.log('[BuyerWallet] Unauthorized access, redirecting to login');
+      router.push('/login');
+    } else {
+      setIsChecking(false);
+    }
+  }, [user, isAuthReady, router]);
+
+  if (!isAuthReady || isChecking) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  return <BuyerWalletContent />;
+}
+
 // Main component with auth wrappers
 export default function BuyerWalletPage() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <BuyerWalletContent />
+        <BuyerWalletWrapper />
       </RequireAuth>
     </BanCheck>
   );
