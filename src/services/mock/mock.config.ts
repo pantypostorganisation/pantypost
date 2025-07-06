@@ -92,9 +92,13 @@ export const MOCK_SCENARIOS: Record<string, MockScenario> = {
 
 // Get current mock configuration
 export function getMockConfig(): MockConfig {
-  // Check environment variables
-  const enabled = process.env.NEXT_PUBLIC_USE_MOCK_API === 'true';
-  const scenarioName = process.env.NEXT_PUBLIC_MOCK_SCENARIO || 'REALISTIC';
+  // Check localStorage first (for dynamic changes)
+  const localEnabled = typeof window !== 'undefined' ? localStorage.getItem('MOCK_API_ENABLED') : null;
+  const localScenario = typeof window !== 'undefined' ? localStorage.getItem('MOCK_API_SCENARIO') : null;
+  
+  // Use localStorage values if available, otherwise fall back to env vars
+  const enabled = localEnabled ? localEnabled === 'true' : process.env.NEXT_PUBLIC_USE_MOCK_API === 'true';
+  const scenarioName = localScenario || process.env.NEXT_PUBLIC_MOCK_SCENARIO || 'REALISTIC';
   const logRequests = process.env.NEXT_PUBLIC_MOCK_LOG_REQUESTS === 'true';
   const persistState = process.env.NEXT_PUBLIC_MOCK_PERSIST_STATE !== 'false'; // Default true
   const seedData = process.env.NEXT_PUBLIC_MOCK_SEED_DATA !== 'false'; // Default true

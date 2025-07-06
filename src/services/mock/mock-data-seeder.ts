@@ -49,7 +49,7 @@ export async function seedMockData(): Promise<void> {
   // Seed messages
   await seedMessages();
   
-  // Seed wallet balances
+  // Seed wallet balances - FIXED
   await seedWalletBalances();
   
   // Seed subscriptions
@@ -363,6 +363,7 @@ async function seedMessages(): Promise<void> {
 }
 
 async function seedWalletBalances(): Promise<void> {
+  // Set up the basic balance structure for mock API
   const balances: Record<string, number> = {
     // Admin balances
     'admin_oakley': 10000,
@@ -387,6 +388,98 @@ async function seedWalletBalances(): Promise<void> {
   };
   
   await mockDataStore.set('walletBalances', balances);
+  
+  // IMPORTANT: Also set up the wallet data in the format WalletContext expects
+  // This prevents the NaN issue
+  
+  // Set up collective buyer balances
+  const buyerBalances: Record<string, number> = {
+    'buyer1': 500,
+    'buyer2': 250,
+    'buyer3': 1000,
+    'john': 750,
+    'mike': 300,
+  };
+  
+  // Set up collective seller balances with proper structure
+  const sellerBalances: Record<string, any> = {
+    'alice': {
+      balance: 1250,
+      earnings: 1250,
+      withdrawn: 0,
+      orders: []
+    },
+    'betty': {
+      balance: 980,
+      earnings: 980,
+      withdrawn: 0,
+      orders: []
+    },
+    'carol': {
+      balance: 650,
+      earnings: 650,
+      withdrawn: 0,
+      orders: []
+    },
+    'diana': {
+      balance: 1500,
+      earnings: 1500,
+      withdrawn: 0,
+      orders: []
+    },
+    'emma': {
+      balance: 450,
+      earnings: 450,
+      withdrawn: 0,
+      orders: []
+    },
+    'fiona': {
+      balance: 200,
+      earnings: 200,
+      withdrawn: 0,
+      orders: []
+    },
+    'grace': {
+      balance: 100,
+      earnings: 100,
+      withdrawn: 0,
+      orders: []
+    },
+    'helen': {
+      balance: 50,
+      earnings: 50,
+      withdrawn: 0,
+      orders: []
+    }
+  };
+  
+  // Store collective data using mockDataStore
+  await mockDataStore.set('wallet_buyers', buyerBalances);
+  await mockDataStore.set('wallet_sellers', sellerBalances);
+  
+  // Also store individual keys and other wallet data if in browser context
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    // Set individual buyer balance keys (in cents)
+    Object.entries(buyerBalances).forEach(([username, balance]) => {
+      localStorage.setItem(`wallet_buyer_${username}`, (balance * 100).toString());
+    });
+    
+    // Set individual seller balance keys (in cents)
+    Object.entries(sellerBalances).forEach(([username, data]) => {
+      localStorage.setItem(`wallet_seller_${username}`, (data.balance * 100).toString());
+    });
+    
+    // Set admin balance
+    localStorage.setItem('wallet_admin', '10000');
+    localStorage.setItem('wallet_admin_enhanced', '1000000'); // In cents
+    
+    // Initialize empty arrays for other wallet data
+    localStorage.setItem('wallet_orders', '[]');
+    localStorage.setItem('wallet_adminActions', '[]');
+    localStorage.setItem('wallet_sellerWithdrawals', '{}');
+    localStorage.setItem('wallet_adminWithdrawals', '[]');
+    localStorage.setItem('wallet_depositLogs', '[]');
+  }
 }
 
 async function seedSubscriptions(): Promise<void> {
@@ -443,5 +536,17 @@ async function seedSubscriptions(): Promise<void> {
  */
 export async function clearMockData(): Promise<void> {
   await mockDataStore.clear();
+  
+  // Also clear wallet-specific localStorage keys
+  if (typeof window !== 'undefined') {
+    const keysToRemove = Object.keys(localStorage).filter(key => 
+      key.startsWith('wallet_') && !key.startsWith('mock_api_')
+    );
+    
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+    });
+  }
+  
   console.log('🧹 Mock data cleared');
 }

@@ -1,7 +1,7 @@
 // src/components/AppInitializationProvider.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import { InitializationResult } from '@/services/app-initializer';
 
 interface HealthStatus {
@@ -81,8 +81,44 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
   const [warnings, setWarnings] = useState<string[]>([]);
   const [mockApiEnabled, setMockApiEnabled] = useState(false);
   const [mockScenario, setMockScenario] = useState<string | undefined>();
+  const hasInitializedRef = useRef(false);
 
   const initializeApp = async () => {
+    // Check if already initialized in this session
+    if (typeof window !== 'undefined') {
+      const sessionInit = sessionStorage.getItem('app_initialized');
+      const sessionHealth = sessionStorage.getItem('app_health_status');
+      const sessionMockEnabled = sessionStorage.getItem('app_mock_enabled');
+      const sessionMockScenario = sessionStorage.getItem('app_mock_scenario');
+      
+      if (sessionInit === 'true' && !hasInitializedRef.current) {
+        console.log('[AppInitializer] Already initialized in this session, using cached state');
+        
+        setIsInitialized(true);
+        setIsInitializing(false);
+        setMockApiEnabled(sessionMockEnabled === 'true');
+        setMockScenario(sessionMockScenario || undefined);
+        
+        if (sessionHealth) {
+          try {
+            setHealthStatus(JSON.parse(sessionHealth));
+          } catch (e) {
+            console.error('Failed to parse cached health status:', e);
+          }
+        }
+        
+        hasInitializedRef.current = true;
+        return;
+      }
+    }
+    
+    // Prevent multiple simultaneous initializations
+    if (hasInitializedRef.current) {
+      console.log('[AppInitializer] Already initializing, skipping duplicate call');
+      return;
+    }
+    
+    hasInitializedRef.current = true;
     setIsInitializing(true);
     setError(null);
     setWarnings([]);
@@ -128,6 +164,14 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       setHealthStatus(health);
       setIsInitialized(result?.success || false);
       
+      // Cache initialization state in session storage
+      if (typeof window !== 'undefined' && result?.success) {
+        sessionStorage.setItem('app_initialized', 'true');
+        sessionStorage.setItem('app_health_status', JSON.stringify(health));
+        sessionStorage.setItem('app_mock_enabled', status.mockApiEnabled.toString());
+        sessionStorage.setItem('app_mock_scenario', status.mockScenario || '');
+      }
+      
       // If initialization failed with errors, throw to show error UI
       if (!result.success && result.errors.length > 0) {
         throw new Error(result.errors[0]);
@@ -147,6 +191,15 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       console.error('App initialization failed:', err);
       setError(err instanceof Error ? err : new Error('Initialization failed'));
       setIsInitialized(false);
+      hasInitializedRef.current = false;
+      
+      // Clear cached state on error
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('app_initialized');
+        sessionStorage.removeItem('app_health_status');
+        sessionStorage.removeItem('app_mock_enabled');
+        sessionStorage.removeItem('app_mock_scenario');
+      }
     } finally {
       setIsInitializing(false);
     }
@@ -157,6 +210,17 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
   }, []);
 
   const reinitialize = async () => {
+    // Clear cached state
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('app_initialized');
+      sessionStorage.removeItem('app_health_status');
+      sessionStorage.removeItem('app_mock_enabled');
+      sessionStorage.removeItem('app_mock_scenario');
+    }
+    
+    // Reset ref
+    hasInitializedRef.current = false;
+    
     // Reset app initializer before reinitializing
     try {
       const { appInitializer } = await import('@/services/app-initializer');
@@ -189,7 +253,7 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
   }
 
   // Show loading state while initializing
-  if (isInitializing) {
+  if (isInitializing && !isInitialized) {
     return (
       <AppInitializationContext.Provider
         value={{

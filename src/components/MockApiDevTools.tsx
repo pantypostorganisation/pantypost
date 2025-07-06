@@ -18,6 +18,14 @@ export function MockApiDevTools() {
     const config = getMockConfig();
     setEnabled(config.enabled);
     setScenario(config.scenario.name);
+    
+    // Update localStorage to match
+    if (config.enabled) {
+      localStorage.setItem('MOCK_API_ENABLED', 'true');
+      localStorage.setItem('MOCK_API_SCENARIO', Object.keys(MOCK_SCENARIOS).find(
+        key => MOCK_SCENARIOS[key].name === config.scenario.name
+      ) || 'REALISTIC');
+    }
   }, []);
 
   const toggleMockApi = async () => {
@@ -151,18 +159,18 @@ export function MockApiDevTools() {
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  {MOCK_SCENARIOS[scenario]?.description}
+                  {MOCK_SCENARIOS[scenario]?.description || 'No description'}
                 </p>
               </div>
 
               {/* Scenario details */}
               <div className="mb-6 p-3 bg-gray-100 dark:bg-gray-700 rounded text-xs">
                 <p className="mb-1">
-                  <strong>Error Rate:</strong> {(MOCK_SCENARIOS[scenario]?.errorRate * 100).toFixed(0)}%
+                  <strong>Error Rate:</strong> {((MOCK_SCENARIOS[scenario]?.errorRate || 0) * 100).toFixed(0)}%
                 </p>
                 <p>
-                  <strong>Network Delay:</strong> {MOCK_SCENARIOS[scenario]?.networkDelay.min}-
-                  {MOCK_SCENARIOS[scenario]?.networkDelay.max}ms
+                  <strong>Network Delay:</strong> {MOCK_SCENARIOS[scenario]?.networkDelay?.min || 0}-
+                  {MOCK_SCENARIOS[scenario]?.networkDelay?.max || 0}ms
                 </p>
               </div>
 
