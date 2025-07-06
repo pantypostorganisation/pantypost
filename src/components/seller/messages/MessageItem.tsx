@@ -14,6 +14,14 @@ import {
 } from 'lucide-react';
 import { useIntersectionObserver } from '@/hooks/useIntersectionObserver';
 import { isSingleEmoji } from '@/utils/messageUtils';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
+import { securityService, validationSchemas } from '@/services';
+import { 
+  sanitizeStrict, 
+  sanitizeCurrency, 
+  sanitizeNumber 
+} from '@/utils/security/sanitization';
 
 interface MessageItemProps {
   msg: any;
@@ -70,6 +78,11 @@ export default function MessageItem({
 }: MessageItemProps) {
   const messageRef = useRef<HTMLDivElement>(null);
   const [hasBeenVisible, setHasBeenVisible] = useState(false);
+  const [editErrors, setEditErrors] = useState<{
+    title?: string;
+    price?: string;
+    description?: string;
+  }>({});
 
   // Use Intersection Observer to track when message becomes visible
   useIntersectionObserver(messageRef, {
@@ -89,6 +102,33 @@ export default function MessageItem({
 
   const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
 
+  // Validate edit form before submission
+  const handleSecureEditSubmit = () => {
+    // Validate the custom request data
+    const validationResult = securityService.validateAndSanitize(
+      {
+        title: editTitle,
+        description: editMessage,
+        price: typeof editPrice === 'string' ? parseFloat(editPrice) || 0 : editPrice
+      },
+      validationSchemas.messageSchemas.customRequest
+    );
+
+    if (!validationResult.success) {
+      setEditErrors(validationResult.errors || {});
+      return;
+    }
+
+    // Clear errors and submit
+    setEditErrors({});
+    handleEditSubmit();
+  };
+
+  // Sanitize display names
+  const sanitizedSender = sanitizeStrict(msg.sender || '');
+  const sanitizedActiveThread = sanitizeStrict(activeThread || '');
+  const sanitizedUsername = sanitizeStrict(user?.username || '');
+
   return (
     <div ref={messageRef} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
       <div className={`rounded-lg p-3 max-w-[75%] ${
@@ -99,7 +139,7 @@ export default function MessageItem({
         {/* Message header */}
         <div className="flex items-center text-xs mb-1">
           <span className={isFromMe ? 'text-black opacity-75' : 'text-[#fefefe] opacity-75'}>
-            {isFromMe ? 'You' : msg.sender} • {time}
+            {isFromMe ? 'You' : sanitizedSender} • {time}
           </span>
           {isFromMe && (
             <span className="ml-2 text-[10px]">
@@ -114,47 +154,73 @@ export default function MessageItem({
           )}
         </div>
         
-        {/* Image message */}
+        {/* Image message with secure display */}
         {msg.type === 'image' && msg.meta?.imageUrl && (
           <div className="mt-1 mb-2">
-            <img 
-              src={msg.meta.imageUrl} 
-              alt="Shared image" 
+            <SecureImage
+              src={msg.meta.imageUrl}
+              alt="Shared image"
               className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-              onClick={(e) => {
+              onError={() => console.error('Failed to load image')}
+              onClick={(e: React.MouseEvent<HTMLImageElement>) => {
                 e.stopPropagation();
                 setPreviewImage(msg.meta?.imageUrl || null);
               }}
             />
             {msg.content && (
-              <p className={`${isFromMe ? 'text-black' : 'text-[#fefefe]'} mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                {msg.content}
-              </p>
+              <div className={`mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                <SecureMessageDisplay 
+                  content={msg.content}
+                  allowBasicFormatting={false}
+                  className={isFromMe ? 'text-black' : 'text-[#fefefe]'}
+                />
+              </div>
             )}
           </div>
         )}
         
-        {/* Text content */}
+        {/* Text content with XSS protection */}
         {msg.type !== 'image' && msg.type !== 'customRequest' && (
-          <p className={`${isFromMe ? 'text-black' : 'text-[#fefefe]'} ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-            {msg.content}
-          </p>
+          <div className={isSingleEmojiMsg ? 'text-3xl' : ''}>
+            <SecureMessageDisplay 
+              content={msg.content || ''}
+              allowBasicFormatting={false}
+              className={isFromMe ? 'text-black' : 'text-[#fefefe]'}
+            />
+          </div>
         )}
         
-        {/* Custom request content */}
+        {/* Custom request content with sanitized display */}
         {msg.type === 'customRequest' && msg.meta && (
           <div className={`mt-2 text-sm space-y-1 border-t ${isFromMe ? 'border-black/20' : 'border-white/20'} pt-2`}>
             <div className={`font-semibold flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
               <div className="relative mr-2 flex items-center justify-center">
                 <div className="bg-white w-6 h-6 rounded-full absolute"></div>
-                <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
+                <SecureImage 
+                  src="/Custom_Request_Icon.png" 
+                  alt="Custom Request" 
+                  className="w-8 h-8 relative z-10"
+                />
               </div>
               Custom Request
             </div>
-            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Title:</b> {customReq ? customReq.title : msg.meta.title}</p>
-            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Price:</b> ${customReq ? customReq.price.toFixed(2) : msg.meta.price?.toFixed(2)}</p>
+            
+            {/* Sanitize all displayed custom request data */}
+            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}>
+              <b>Title:</b> {sanitizeStrict(customReq ? customReq.title : msg.meta.title || '')}
+            </p>
+            <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}>
+              <b>Price:</b> ${sanitizeCurrency(customReq ? customReq.price : msg.meta.price || 0).toFixed(2)}
+            </p>
             {(customReq ? customReq.description : msg.meta.message) && (
-              <p className={isFromMe ? 'text-black' : 'text-[#fefefe]'}><b>Message:</b> {customReq ? customReq.description : msg.meta.message}</p>
+              <div className={isFromMe ? 'text-black' : 'text-[#fefefe]'}>
+                <b>Message:</b> 
+                <SecureMessageDisplay 
+                  content={customReq ? customReq.description : msg.meta.message || ''}
+                  allowBasicFormatting={false}
+                  className="inline"
+                />
+              </div>
             )}
             {customReq && (
               <p className={`flex items-center ${isFromMe ? 'text-black' : 'text-[#fefefe]'}`}>
@@ -163,10 +229,10 @@ export default function MessageItem({
               </p>
             )}
             
-            {/* Show who needs to take action */}
+            {/* Show who needs to take action with sanitized names */}
             {customReq && isLatestCustom && (customReq.status === 'pending' || customReq.status === 'edited') && !isPaid && (
               <p className={`text-xs italic ${isFromMe ? 'text-black/70' : 'text-[#fefefe]/70'}`}>
-                {customReq.pendingWith === user?.username ? (
+                {customReq.pendingWith === sanitizedUsername ? (
                   <span className="flex items-center">
                     <Clock size={12} className="mr-1" />
                     Action required from you
@@ -174,7 +240,7 @@ export default function MessageItem({
                 ) : (
                   <span className="flex items-center">
                     <Clock size={12} className="mr-1" />
-                    Waiting for {customReq.pendingWith || activeThread} to respond...
+                    Waiting for {sanitizeStrict(customReq.pendingWith || sanitizedActiveThread)} to respond...
                   </span>
                 )}
               </p>
@@ -216,42 +282,52 @@ export default function MessageItem({
               </div>
             )}
             
-            {/* Edit form */}
+            {/* Edit form with secure inputs */}
             {editRequestId === customReq?.id && customReq && (
               <div className="mt-3 space-y-2 bg-white/90 p-3 rounded border border-black/20 shadow-sm">
-                <input
+                <SecureInput
                   type="text"
                   placeholder="Title"
                   value={editTitle}
-                  onChange={e => setEditTitle(e.target.value)}
-                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
-                  onClick={(e) => e.stopPropagation()}
+                  onChange={setEditTitle}
+                  error={editErrors.title}
+                  touched={true}
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  maxLength={100}
                 />
-                <input
+                <SecureInput
                   type="number"
                   placeholder="Price (USD)"
-                  value={editPrice}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setEditPrice(val === '' ? '' : Number(val));
+                  value={editPrice.toString()}
+                  onChange={(val: string) => {
+                    const sanitized = sanitizeNumber(val, 0.01, 1000);
+                    setEditPrice(val === '' ? '' : sanitized);
                   }}
+                  error={editErrors.price}
+                  touched={true}
                   min="0.01"
+                  max="1000"
                   step="0.01"
-                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
-                  onClick={(e) => e.stopPropagation()}
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 />
-                <textarea
+                <SecureTextarea
                   placeholder="Message"
                   value={editMessage}
-                  onChange={e => setEditMessage(e.target.value)}
-                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
-                  onClick={(e) => e.stopPropagation()}
+                  onChange={setEditMessage}
+                  error={editErrors.description}
+                  touched={true}
+                  maxLength={500}
+                  characterCount={true}
+                  className="w-full p-2 border rounded bg-white border-gray-300 text-black placeholder-gray-500 min-h-[80px]"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleEditSubmit();
+                      handleSecureEditSubmit();
                     }}
                     className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                   >
@@ -262,6 +338,7 @@ export default function MessageItem({
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditRequestId(null);
+                      setEditErrors({});
                     }}
                     className="bg-gray-600 text-white px-3 py-1 rounded text-xs hover:bg-gray-700 flex items-center transition-colors duration-150 font-medium shadow-sm"
                   >

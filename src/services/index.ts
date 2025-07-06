@@ -26,8 +26,18 @@ export { ordersService } from './orders.service';
 // Messages service - messaging functionality
 export { messagesService } from './messages.service';
 
+// Security service - validation, sanitization, and security features
+export { securityService, sanitize } from './security.service';
+
 // App initializer - application startup
 export { AppInitializer } from './app-initializer';
+
+// Re-export validation schemas for easy access
+export * as validationSchemas from '../utils/validation/schemas';
+
+// Re-export security utilities
+export { getRateLimiter, RATE_LIMITS } from '../utils/security/rate-limiter';
+export { CSRFTokenManager } from '../utils/security/validation';
 
 // Re-export types that actually exist
 export type { 
