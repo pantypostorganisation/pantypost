@@ -81,24 +81,7 @@ export default function BrowsePage() {
           />
 
           <div className="max-w-[1700px] mx-auto px-6">
-            {isLoading ? (
-              // Show loading grid
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-gray-900 rounded-lg animate-pulse">
-                    <div className="aspect-square bg-gray-800 rounded-t-lg" />
-                    <div className="p-4 space-y-3">
-                      <div className="h-4 bg-gray-800 rounded w-3/4" />
-                      <div className="h-4 bg-gray-800 rounded w-1/2" />
-                      <div className="flex justify-between">
-                        <div className="h-6 bg-gray-800 rounded w-20" />
-                        <div className="h-6 bg-gray-800 rounded w-16" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : paginatedListings.length === 0 ? (
+            {paginatedListings.length === 0 && !isLoading ? (
               <EmptyState
                 searchTerm={searchTerm}
                 onResetFilters={resetFilters}
@@ -121,15 +104,17 @@ export default function BrowsePage() {
                   onListingError={handleListingError}
                 />
 
-                <PaginationControls
-                  currentPage={page}
-                  totalPages={totalPages}
-                  filteredListingsCount={filteredListings.length}
-                  pageSize={PAGE_SIZE}
-                  onPreviousPage={handlePreviousPage}
-                  onNextPage={handleNextPage}
-                  onPageClick={handlePageClick}
-                />
+                {totalPages > 1 && (
+                  <PaginationControls
+                    currentPage={page}
+                    totalPages={totalPages}
+                    filteredListingsCount={filteredListings.length}
+                    pageSize={PAGE_SIZE}
+                    onPreviousPage={handlePreviousPage}
+                    onNextPage={handleNextPage}
+                    onPageClick={handlePageClick}
+                  />
+                )}
               </>
             )}
           </div>

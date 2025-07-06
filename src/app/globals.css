@@ -489,8 +489,94 @@ button:focus-visible, a:focus-visible {
   }
 }
 
-/* Add this to your existing src/app/globals.css file */
-/* If you're replacing the entire file, include your existing styles first */
+/* ======== BROWSE PAGE ANIMATIONS ======== */
+
+/* Smooth fade in animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-bottom {
+  from {
+    transform: translateY(1rem);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: fade-in, slide-in-from-bottom;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+.delay-100 {
+  animation-delay: 100ms;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+/* Prevent layout shift for images */
+.listing-image-container {
+  aspect-ratio: 1 / 1;
+  background-color: #1a1a1a;
+  overflow: hidden;
+}
+
+/* Smooth skeleton loading */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #1a1a1a 0%,
+    #2a2a2a 50%,
+    #1a1a1a 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Subtle skeleton animation for browse page */
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.1;
+  }
+}
+
+/* Override skeleton colors for browse page */
+.browse-loading-skeleton {
+  background-color: rgba(31, 41, 55, 0.3); /* Very subtle gray */
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+/* Even more subtle version */
+.browse-loading-skeleton-invisible {
+  background-color: transparent;
+  border: 1px solid rgba(31, 41, 55, 0.2);
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+/* ======== MESSAGE NOTIFICATIONS ======== */
 
 /* Message notification animation */
 @keyframes slide-in {
@@ -525,18 +611,6 @@ button:focus-visible, a:focus-visible {
 }
 
 /* Optional: Add a subtle pulse animation for new notifications */
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(147, 51, 234, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(147, 51, 234, 0);
-  }
-}
-
 .animate-pulse-once {
   animation: pulse 1.5s;
 }
