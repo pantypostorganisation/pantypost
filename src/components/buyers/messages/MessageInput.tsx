@@ -10,6 +10,8 @@ import {
   Package 
 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { MAX_IMAGE_SIZE, ALLOWED_IMAGE_TYPES } from '@/constants/emojis';
 
 interface MessageInputProps {
@@ -56,6 +58,15 @@ export default function MessageInput({
     }
   };
 
+  // Message sanitizer that preserves newlines and basic formatting
+  const messageSanitizer = (value: string): string => {
+    // Allow newlines and basic punctuation for messages
+    return value
+      .replace(/<[^>]*>/g, '') // Remove any HTML tags
+      .replace(/[^\w\s\n\r.,!?'"()-]/g, '') // Keep alphanumeric, whitespace, newlines, and basic punctuation
+      .slice(0, 1000); // Limit message length
+  };
+
   if (isBlocked) {
     return (
       <div className="bg-[#1a1a1a] border-t border-gray-800 p-4">
@@ -87,7 +98,7 @@ export default function MessageInput({
       
       {/* Image error */}
       {imageError && (
-        <div className="mb-2 text-red-400 text-sm">{imageError}</div>
+        <div className="mb-2 text-red-400 text-sm">{sanitizeStrict(imageError)}</div>
       )}
       
       {/* Main input area */}
@@ -129,19 +140,24 @@ export default function MessageInput({
           </button>
         </div>
         
-        {/* Message input */}
-        <textarea
-          value={replyMessage}
-          onChange={(e) => setReplyMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type a message..."
-          rows={1}
-          className="flex-1 bg-[#222] text-white rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[40px] max-h-[120px]"
-          style={{
-            height: 'auto',
-            overflowY: replyMessage.split('\n').length > 3 ? 'auto' : 'hidden'
-          }}
-        />
+        {/* Message input - SECURED */}
+        <div className="flex-1">
+          <SecureTextarea
+            value={replyMessage}
+            onChange={setReplyMessage}
+            onKeyPress={handleKeyPress}
+            placeholder="Type a message..."
+            rows={1}
+            className="w-full !bg-[#222] !text-white !border-0 rounded-lg px-3 py-2 resize-none focus:outline-none focus:!ring-2 focus:!ring-[#ff950e] min-h-[40px] max-h-[120px]"
+            style={{
+              height: 'auto',
+              overflowY: replyMessage.split('\n').length > 3 ? 'auto' : 'hidden'
+            }}
+            sanitizer={messageSanitizer}
+            maxLength={1000}
+            characterCount={false}
+          />
+        </div>
         
         {/* Send button */}
         <button
