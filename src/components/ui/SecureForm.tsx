@@ -103,13 +103,6 @@ export const SecureForm: React.FC<SecureFormProps> = ({
 
       {/* Form Content */}
       {children}
-
-      {/* Loading Overlay */}
-      {isSubmitting && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-lg">
-          <Loader2 className="w-6 h-6 text-white animate-spin" />
-        </div>
-      )}
     </form>
   );
 };

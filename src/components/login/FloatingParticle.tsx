@@ -101,7 +101,7 @@ export default function FloatingParticle({ delay = 0, index = 0 }: FloatingParti
         width: particleProps.size,
         height: particleProps.size,
         opacity: particleProps.opacity,
-        filter: `blur(0.5px)`,
+        // REMOVED: filter: `blur(0.5px)`,
         boxShadow: `0 0 ${particleProps.glowIntensity * 10}px ${glowColor}`,
         transform: 'translate(-50%, -50%)', // Center the particle on its position
       }}

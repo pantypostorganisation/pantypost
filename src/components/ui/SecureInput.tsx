@@ -140,7 +140,7 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
               onBlur?.();
             }}
             className={`
-              w-full px-3.5 py-2.5 bg-black/50 backdrop-blur-sm border rounded-lg 
+              w-full px-3.5 py-2.5 bg-black/50 border rounded-lg 
               text-white placeholder-gray-500 focus:outline-none focus:ring-1 
               transition-colors ${getBorderColor()} ${className}
               ${showPasswordToggle || validationIndicator ? 'pr-10' : ''}
@@ -314,7 +314,7 @@ export const SecureTextarea = forwardRef<HTMLTextAreaElement, SecureTextareaProp
               onBlur?.();
             }}
             className={`
-              w-full px-3.5 py-2.5 bg-black/50 backdrop-blur-sm border rounded-lg 
+              w-full px-3.5 py-2.5 bg-black/50 border rounded-lg 
               text-white placeholder-gray-500 focus:outline-none focus:ring-1 
               transition-colors ${getBorderColor()} ${resizeClass} ${className}
             `}
