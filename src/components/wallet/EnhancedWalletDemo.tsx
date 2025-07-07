@@ -7,6 +7,7 @@ import { WalletValidation } from '@/services/wallet.validation';
 import { WalletMockData } from '@/services/wallet.mock';
 import { formatMoney, formatLimit, formatRiskScore, formatTransactionSummary } from '@/utils/format';
 import { Money } from '@/types/common';
+import { SecureInput } from '@/components/ui/SecureInput';
 import { 
   Wallet, 
   CreditCard, 
@@ -94,6 +95,31 @@ export default function EnhancedWalletDemo() {
       loadTransactionHistory();
       setMockMode(false);
     }, 1000);
+  };
+
+  // Currency sanitizer that returns a string
+  const currencySanitizer = (value: string): string => {
+    // Remove any non-numeric characters except decimal point
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      return parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // Limit to 2 decimal places
+    if (parts.length === 2 && parts[1].length > 2) {
+      return parts[0] + '.' + parts[1].slice(0, 2);
+    }
+    
+    return cleaned;
+  };
+
+  // Secure amount change handler
+  const handleSecureAmountChange = (value: string) => {
+    // The SecureInput component will handle sanitization
+    handleAmountChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>);
   };
 
   // Calculate used amount correctly
@@ -187,32 +213,29 @@ export default function EnhancedWalletDemo() {
             </div>
           </div>
 
-          {/* Amount Input */}
+          {/* Amount Input - SECURED */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amount to Add
-            </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-              <input
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10">$</span>
+              <SecureInput
                 type="text"
                 value={amountToAdd}
-                onChange={handleAmountChange}
+                onChange={handleSecureAmountChange}
                 onKeyPress={handleKeyPress}
                 placeholder="0.00"
-                className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
+                className={`w-full pl-8 pr-4 py-3 ${
                   validationErrors.length > 0 
-                    ? 'border-red-300 focus:ring-red-500' 
-                    : 'border-gray-300 focus:ring-purple-500'
-                }`}
+                    ? '!border-red-300 focus:!ring-red-500' 
+                    : '!border-gray-300 focus:!ring-purple-500'
+                } !bg-white !text-black`}
                 disabled={isLoading}
+                sanitizer={currencySanitizer}
+                error={validationErrors.length > 0 ? validationErrors[0] : undefined}
+                touched={amountToAdd.length > 0}
+                validationIndicator={false}
+                label="Amount to Add"
               />
             </div>
-            {validationErrors.length > 0 && (
-              <div className="mt-1 text-sm text-red-600">
-                {validationErrors[0]}
-              </div>
-            )}
           </div>
 
           {/* Quick Amount Buttons */}
