@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import { getLatestCustomRequestMessages, Message, CustomRequest, getInitial } from '@/utils/messageUtils';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 // All emojis in a single flat array - ordered by likely usage for this platform
 const ALL_EMOJIS = [
@@ -218,6 +220,14 @@ export default function ConversationView({
     return lastMsg && lastMsg.sender === user?.username;
   }
 
+  // Message sanitizer for secure textarea
+  const messageSanitizer = (value: string): string => {
+    // Allow basic punctuation and emojis for messages
+    return value
+      .replace(/<[^>]*>/g, '') // Remove any HTML tags
+      .slice(0, 250); // Limit message length
+  };
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -263,7 +273,7 @@ export default function ConversationView({
             )}
           </div>
           <div>
-            <h2 className="font-bold text-lg text-white">{activeThread}</h2>
+            <h2 className="font-bold text-lg text-white">{sanitizeStrict(activeThread)}</h2>
             <p className="text-xs text-[#ff950e] flex items-center">
               <Sparkles size={12} className="mr-1 text-[#ff950e]" />
               Active now
@@ -446,22 +456,24 @@ export default function ConversationView({
           {imageError && (
             <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
               <AlertTriangle size={14} className="mr-1" />
-              {imageError}
+              {sanitizeStrict(imageError)}
             </div>
           )}
           
           {/* Message input */}
           <div className="px-4 py-3">
             <div className="relative mb-2">
-              <textarea
+              <SecureTextarea
                 ref={inputRef}
                 value={replyMessage}
-                onChange={(e) => stableSetReplyMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onChange={stableSetReplyMessage}
+                onKeyPress={handleKeyDown}
                 placeholder={selectedImage ? "Add a caption..." : "Type a message"}
-                className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+                className="w-full p-3 pr-12 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
                 rows={1}
                 maxLength={250}
+                sanitizer={messageSanitizer}
+                characterCount={false}
               />
               
               {/* Fixed emoji button position */}
