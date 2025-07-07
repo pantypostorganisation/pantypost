@@ -4,6 +4,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Paperclip, Send, X } from 'lucide-react';
 import { compressImage } from '@/utils/imageUtils';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { securityService } from '@/services';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface MessageInputProps {
   onSendMessage: (text: string, image?: string | null) => void;
@@ -16,7 +19,7 @@ interface MessageInputProps {
 }
 
 /**
- * Reusable message input component with image attachment support
+ * Reusable message input component with image attachment support and security
  */
 const MessageInput: React.FC<MessageInputProps> = ({
   onSendMessage,
@@ -30,6 +33,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   const [content, setContent] = useState<string>('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -57,19 +61,36 @@ const MessageInput: React.FC<MessageInputProps> = ({
   // Handle attachment click
   const triggerFileInput = () => {
     if (disabled) return;
+    setValidationError(null);
     fileInputRef.current?.click();
   };
 
-  // Handle image selection
+  // Handle image selection with security validation
   const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     // Fixed: Added null check for event.target
     if (!event.target) return;
     
     const file = event.target.files?.[0];
     if (!file) return;
+
+    // Validate file before processing
+    const validation = securityService.validateFileUpload(file, {
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+    });
+
+    if (!validation.valid) {
+      setValidationError(validation.error || 'Invalid file');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
     
     try {
       setIsUploading(true);
+      setValidationError(null);
       
       // Compress the image before using it
       const compressedImage = await compressImage(file, 1200, 0.7);
@@ -81,7 +102,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
       }
     } catch (error) {
       console.error('Error processing image:', error);
-      alert('Error processing image. Please try again.');
+      setValidationError('Error processing image. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -90,6 +111,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   // Handle removing the selected image
   const handleRemoveImage = () => {
     setSelectedImage(null);
+    setValidationError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -108,6 +130,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
     if (disabled || (!content.trim() && !selectedImage) || isUploading) {
       return;
     }
+    
+    // Clear any validation errors
+    setValidationError(null);
     
     onSendMessage(content.trim(), selectedImage);
     
@@ -139,6 +164,14 @@ const MessageInput: React.FC<MessageInputProps> = ({
           Optimizing image...
         </div>
       )}
+
+      {/* Validation error display */}
+      {validationError && (
+        <div className="mb-2 text-sm text-red-400 flex items-center">
+          <span className="mr-1">⚠️</span>
+          {sanitizeStrict(validationError)}
+        </div>
+      )}
       
       {/* Selected image preview */}
       {selectedImage && (
@@ -147,7 +180,11 @@ const MessageInput: React.FC<MessageInputProps> = ({
             <img 
               src={selectedImage} 
               alt="Preview" 
-              className="max-h-20 rounded shadow-md" 
+              className="max-h-20 rounded shadow-md"
+              onError={() => {
+                setValidationError('Failed to load image');
+                setSelectedImage(null);
+              }}
             />
             <button
               type="button"
@@ -164,16 +201,19 @@ const MessageInput: React.FC<MessageInputProps> = ({
       )}
       
       <div className="flex flex-col gap-2">
-        {/* Message input */}
+        {/* Message input with SecureTextarea */}
         <div className="relative">
-          <textarea
+          <SecureTextarea
             ref={textareaRef}
             value={content}
-            onChange={(e) => setContent(e.target.value.slice(0, maxLength))}
+            onChange={setContent}
             onKeyDown={handleKeyDown}
             placeholder={selectedImage ? "Add a caption..." : placeholder}
             className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] resize-none"
-            rows={1} // Start with 1 row, will auto-expand
+            rows={1}
+            maxLength={maxLength}
+            characterCount={false}
+            sanitize={true}
             disabled={disabled}
             aria-label="Message text"
           />
@@ -201,10 +241,10 @@ const MessageInput: React.FC<MessageInputProps> = ({
               </button>
             )}
             
-            {/* Hidden file input */}
+            {/* Hidden file input with secure constraints */}
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               ref={fileInputRef}
               style={{ display: 'none' }}
               onChange={handleImageSelect}

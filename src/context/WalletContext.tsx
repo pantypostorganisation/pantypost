@@ -16,6 +16,20 @@ import { walletService, storageService, ordersService } from '@/services';
 import { WalletIntegration } from '@/services/wallet.integration';
 import { v4 as uuidv4 } from 'uuid';
 
+// Constants for mock data detection
+const MOCK_SIGNATURES = {
+  aliceBalance: 1250,
+  bettyBalance: 980,
+  carolBalance: 650,
+  dianaBalance: 1500,
+  buyer1Balance: 500,
+  buyer2Balance: 250,
+  buyer3Balance: 1000,
+  adminBalance: 10000,
+} as const;
+
+const MOCK_CLEARED_FLAG = '__walletMockDataCleared__';
+
 // Export Order type to make it available to other components
 export type Order = {
   id: string;
@@ -262,8 +276,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const ordersResult = await ordersService.getOrders();
       const storedOrders = ordersResult.success && ordersResult.data ? ordersResult.data : [];
 
-      // Parse admin balance
-      let adminBalanceValue = parseFloat(storedAdmin) || 0;
+      // Parse admin balance - prefer enhanced format (FIXED for TypeScript)
+      let adminBalanceValue = 0;
+
+      // Check for enhanced admin balance first - properly handle as string then parse
+      const adminEnhancedRaw = await storageService.getItem<string>('wallet_admin_enhanced', '');
+      const adminEnhanced = adminEnhancedRaw ? parseInt(adminEnhancedRaw) : null;
+      
+      if (adminEnhanced !== null && !isNaN(adminEnhanced) && adminEnhanced !== 0) {
+        adminBalanceValue = adminEnhanced / 100;
+      } else {
+        // Fallback to legacy format
+        const legacyAdmin = parseFloat(storedAdmin) || 0;
+        adminBalanceValue = legacyAdmin;
+      }
 
       // Merge with individual keys (enhanced format) for balances
       const allKeys = await storageService.getKeys('wallet_');
@@ -294,11 +320,66 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Check for enhanced admin balance
-      const adminEnhanced = await storageService.getItem<number>('wallet_admin_enhanced', 0);
-      if (adminEnhanced > 0) {
-        const adminEnhancedInDollars = adminEnhanced / 100;
-        adminBalanceValue = Math.max(adminBalanceValue, adminEnhancedInDollars);
+      // MOCK DATA DETECTION AND CLEANUP
+      const isMockDisabled = process.env.NEXT_PUBLIC_USE_MOCK_API !== 'true';
+      
+      if (isMockDisabled) {
+        // Check if we've already cleared mock data
+        const alreadyCleared = typeof localStorage !== 'undefined' && 
+                             localStorage.getItem(MOCK_CLEARED_FLAG) === 'true';
+        
+        if (!alreadyCleared) {
+          // Check if this looks like mock-seeded data
+          const isClearlyMockSeeded = 
+            (mergedSellers['alice'] === MOCK_SIGNATURES.aliceBalance) || 
+            (mergedSellers['betty'] === MOCK_SIGNATURES.bettyBalance) ||
+            (mergedSellers['carol'] === MOCK_SIGNATURES.carolBalance) ||
+            (mergedSellers['diana'] === MOCK_SIGNATURES.dianaBalance) ||
+            (mergedBuyers['buyer1'] === MOCK_SIGNATURES.buyer1Balance) ||
+            (mergedBuyers['buyer2'] === MOCK_SIGNATURES.buyer2Balance) ||
+            (mergedBuyers['buyer3'] === MOCK_SIGNATURES.buyer3Balance) ||
+            (adminBalanceValue === MOCK_SIGNATURES.adminBalance);
+            
+          if (isClearlyMockSeeded) {
+            console.warn('[WalletContext] Detected mock data while mock API is disabled. Clearing all wallet data...');
+            
+            // Clear all wallet data from storage
+            const walletKeys = await storageService.getKeys('wallet_');
+            for (const key of walletKeys) {
+              await storageService.removeItem(key);
+            }
+            
+            // Clear localStorage wallet data
+            if (typeof localStorage !== 'undefined') {
+              Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('wallet_')) {
+                  localStorage.removeItem(key);
+                }
+              });
+              
+              // Set flag to prevent repeated clearing
+              localStorage.setItem(MOCK_CLEARED_FLAG, 'true');
+            }
+            
+            // Clear orders
+            await ordersService.clearCache();
+            await storageService.removeItem('wallet_orders');
+            
+            console.log('[WalletContext] Mock data cleared. Starting with clean slate.');
+            
+            // Set all state to empty/default values
+            setBuyerBalancesState({});
+            setSellerBalancesState({});
+            setAdminBalanceState(0);
+            setOrderHistory([]);
+            setSellerWithdrawals({});
+            setAdminWithdrawals([]);
+            setAdminActions([]);
+            setDepositLogs([]);
+            
+            return true;
+          }
+        }
       }
 
       // Normalize admin actions for backward compatibility

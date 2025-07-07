@@ -1,8 +1,11 @@
 // src/components/sellers/messages/MessageInput.tsx
 'use client';
 
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState, useCallback } from 'react';
 import { AlertTriangle, X, Smile, ShieldAlert } from 'lucide-react';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { securityService } from '@/services';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface MessageInputProps {
   replyMessage: string;
@@ -41,6 +44,33 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(({
   emojiPickerRef,
   onImageSelect
 }, ref) => {
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Secure image selection with validation
+  const handleSecureImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file before processing
+    const validation = securityService.validateFileUpload(file, {
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+    });
+
+    if (!validation.valid) {
+      setValidationError(validation.error || 'Invalid file');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Clear validation error and proceed
+    setValidationError(null);
+    onImageSelect(e);
+  }, [onImageSelect, fileInputRef]);
+
   if (isUserBlocked) {
     return (
       <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
@@ -65,10 +95,19 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(({
       {selectedImage && (
         <div className="px-4 pt-3 pb-2">
           <div className="relative inline-block">
-            <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
+            <img 
+              src={selectedImage} 
+              alt="Preview" 
+              className="max-h-20 rounded shadow-md"
+              onError={() => {
+                setValidationError('Failed to load image');
+                setSelectedImage(null);
+              }}
+            />
             <button
               onClick={() => {
                 setSelectedImage(null);
+                setValidationError(null);
                 if (fileInputRef.current) {
                   fileInputRef.current.value = '';
                 }
@@ -82,32 +121,35 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(({
         </div>
       )}
       
-      {/* Image loading and error states */}
+      {/* Image loading state */}
       {isImageLoading && (
         <div className="px-4 pt-3 pb-0 text-sm text-gray-400">
           Loading image...
         </div>
       )}
       
-      {imageError && (
+      {/* Error display */}
+      {(imageError || validationError) && (
         <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
           <AlertTriangle size={14} className="mr-1" />
-          {imageError}
+          {sanitizeStrict(imageError || validationError || '')}
         </div>
       )}
       
-      {/* Message input */}
+      {/* Message input with security */}
       <div className="px-4 py-3">
         <div className="relative mb-2">
-          <textarea
+          <SecureTextarea
             ref={ref}
             value={replyMessage}
-            onChange={(e) => setReplyMessage(e.target.value)}
+            onChange={setReplyMessage}
             onKeyDown={onKeyDown}
             placeholder={selectedImage ? "Add a caption..." : "Type a message"}
             className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
             rows={1}
             maxLength={250}
+            characterCount={false}
+            sanitize={true}
           />
           
           {/* Fixed emoji button position */}
@@ -152,13 +194,13 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(({
             title="Attach Image"
           />
           
-          {/* Hidden file input */}
+          {/* Hidden file input with secure constraints */}
           <input
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
             ref={fileInputRef}
             style={{ display: 'none' }}
-            onChange={onImageSelect}
+            onChange={handleSecureImageSelect}
           />
           
           {/* Send Button */}

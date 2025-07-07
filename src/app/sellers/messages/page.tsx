@@ -124,35 +124,37 @@ export default function SellerMessagesPage() {
                   handleReport={handleReport}
                   handleBlockToggle={handleBlockToggle}
                   user={user}
-                  // Pass all the props needed by MessageInputContainer
-                  replyMessage={replyMessage}
-                  setReplyMessage={setReplyMessage}
-                  selectedImage={selectedImage}
-                  setSelectedImage={setSelectedImage}
-                  isImageLoading={isImageLoading}
-                  setIsImageLoading={setIsImageLoading}
-                  imageError={imageError}
-                  setImageError={setImageError}
-                  showEmojiPicker={showEmojiPicker}
-                  setShowEmojiPicker={setShowEmojiPicker}
-                  recentEmojis={recentEmojis}
-                  handleReply={handleReply}
-                  handleEmojiClick={handleEmojiClick}
-                  handleImageSelect={handleImageSelect}
-                  // Pass message handlers
+                  messageInputControls={{
+                    replyMessage,
+                    setReplyMessage,
+                    selectedImage,
+                    setSelectedImage,
+                    isImageLoading,
+                    setIsImageLoading,
+                    imageError,
+                    setImageError,
+                    showEmojiPicker,
+                    setShowEmojiPicker,
+                    recentEmojis,
+                    handleReply,
+                    handleEmojiClick,
+                    handleImageSelect,
+                  }}
+                  editRequestControls={{
+                    editRequestId,
+                    setEditRequestId,
+                    editPrice,
+                    setEditPrice,
+                    editTitle,
+                    setEditTitle,
+                    editMessage,
+                    setEditMessage,
+                    handleEditSubmit,
+                  }}
                   handleAccept={handleAccept}
                   handleDecline={handleDecline}
                   handleEditRequest={handleEditRequest}
-                  handleEditSubmit={handleEditSubmit}
                   handleMessageVisible={handleMessageVisible}
-                  editRequestId={editRequestId}
-                  setEditRequestId={setEditRequestId}
-                  editPrice={editPrice}
-                  setEditPrice={setEditPrice}
-                  editTitle={editTitle}
-                  setEditTitle={setEditTitle}
-                  editMessage={editMessage}
-                  setEditMessage={setEditMessage}
                   setPreviewImage={setPreviewImage}
                 />
               ) : (
