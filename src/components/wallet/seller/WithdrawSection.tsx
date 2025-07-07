@@ -1,7 +1,14 @@
 // src/components/wallet/seller/WithdrawSection.tsx
+
 'use client';
 
 import { ArrowDownCircle, AlertCircle, CheckCircle } from 'lucide-react';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { SecureForm } from '@/components/ui/SecureForm';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeCurrency } from '@/utils/security/sanitization';
+import { RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { useState } from 'react';
 
 interface WithdrawSectionProps {
   balance: number;
@@ -27,7 +34,58 @@ export default function WithdrawSection({
   onQuickAmountSelect
 }: WithdrawSectionProps) {
   const quickAmounts = [25, 50, 100, 250];
+  const [amountError, setAmountError] = useState<string>('');
   
+  // Handle amount change with validation
+  const handleAmountChange = (value: string) => {
+    setAmountError('');
+    
+    // Allow empty string
+    if (value === '') {
+      const syntheticEvent = {
+        target: { value: '' }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onAmountChange(syntheticEvent);
+      return;
+    }
+    
+    // Check valid number format
+    const regex = /^\d*\.?\d{0,2}$/;
+    if (!regex.test(value)) {
+      setAmountError('Please enter a valid amount');
+      return;
+    }
+    
+    const numValue = parseFloat(value);
+    
+    // Validate amount
+    if (!isNaN(numValue)) {
+      if (numValue < 10 && value !== '') {
+        setAmountError('Minimum withdrawal is $10.00');
+      } else if (numValue > balance) {
+        setAmountError(`Cannot exceed balance of $${balance.toFixed(2)}`);
+      }
+    }
+    
+    // Create synthetic event for compatibility
+    const syntheticEvent = {
+      target: { value }
+    } as React.ChangeEvent<HTMLInputElement>;
+    onAmountChange(syntheticEvent);
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const numValue = parseFloat(withdrawAmount);
+    if (isNaN(numValue) || numValue < 10 || numValue > balance) {
+      return;
+    }
+    
+    onWithdraw();
+  };
+
   return (
     <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg mb-8">
       <h2 className="text-xl font-bold mb-4 flex items-center">
@@ -35,7 +93,12 @@ export default function WithdrawSection({
         Withdraw Funds
       </h2>
       
-      <div className="mb-6">
+      <SecureForm
+        onSubmit={handleSubmit}
+        rateLimitKey="withdrawal"
+        rateLimitConfig={RATE_LIMITS.WITHDRAWAL}
+        className="mb-6"
+      >
         <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
           <div className="flex items-start">
             <CheckCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
@@ -53,28 +116,31 @@ export default function WithdrawSection({
             </label>
             <div className="flex gap-3">
               <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ paddingTop: '12px' }}>
                   <span className="text-gray-500">$</span>
                 </div>
-                <input
-                  type="text"
+                <SecureInput
                   id="amount"
+                  type="text"
                   value={withdrawAmount}
-                  onChange={onAmountChange}
-                  onKeyPress={onKeyPress}
+                  onChange={handleAmountChange}
+                  onKeyDown={onKeyPress}
                   placeholder="0.00"
-                  className="w-full bg-[#222] border border-[#444] rounded-lg py-3 pl-8 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+                  error={amountError}
+                  touched={!!withdrawAmount}
                   disabled={balance <= 0 || isLoading}
+                  className="pl-8"
+                  sanitize={false}
                 />
               </div>
               <button
-                onClick={onWithdraw}
+                type="submit"
                 className={`px-6 py-3 rounded-lg font-medium flex items-center justify-center whitespace-nowrap transition-colors ${
-                  balance <= 0 || isLoading
+                  balance <= 0 || isLoading || !!amountError || !withdrawAmount || parseFloat(withdrawAmount) <= 0
                     ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
                     : 'bg-[#ff950e] hover:bg-[#e88800] text-black'
                 }`}
-                disabled={balance <= 0 || isLoading}
+                disabled={balance <= 0 || isLoading || !!amountError || !withdrawAmount || parseFloat(withdrawAmount) <= 0}
               >
                 {isLoading ? (
                   <>
@@ -93,6 +159,7 @@ export default function WithdrawSection({
               {quickAmounts.map((amount) => (
                 <button
                   key={amount}
+                  type="button"
                   onClick={() => onQuickAmountSelect(amount.toString())}
                   disabled={amount > balance || isLoading}
                   className={`px-3 py-1 text-sm rounded-md transition-colors ${
@@ -105,6 +172,7 @@ export default function WithdrawSection({
                 </button>
               ))}
               <button
+                type="button"
                 onClick={() => onQuickAmountSelect(balance.toFixed(2))}
                 disabled={balance <= 0 || isLoading}
                 className="px-3 py-1 text-sm rounded-md bg-[#222] text-[#ff950e] hover:bg-[#333] border border-[#ff950e] transition-colors"
@@ -114,7 +182,7 @@ export default function WithdrawSection({
             </div>
           </div>
         </div>
-      </div>
+      </SecureForm>
 
       {/* Status message */}
       {message && (
@@ -128,7 +196,10 @@ export default function WithdrawSection({
           ) : (
             <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
           )}
-          {message}
+          <SecureMessageDisplay 
+            content={message}
+            allowBasicFormatting={false}
+          />
         </div>
       )}
     </div>

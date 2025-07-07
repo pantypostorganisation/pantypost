@@ -1,7 +1,14 @@
 // src/components/wallet/buyer/AddFundsSection.tsx
+
 'use client';
 
 import { PlusCircle, CreditCard, CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { SecureForm } from '@/components/ui/SecureForm';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeCurrency } from '@/utils/security/sanitization';
+import { RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { useState } from 'react';
 
 interface AddFundsSectionProps {
   amountToAdd: string;
@@ -24,6 +31,64 @@ export default function AddFundsSection({
   onAddFunds,
   onQuickAmountSelect
 }: AddFundsSectionProps) {
+  const [amountError, setAmountError] = useState<string>('');
+
+  // Handle amount change with validation
+  const handleAmountChange = (value: string) => {
+    // Clear any previous errors
+    setAmountError('');
+    
+    // Allow empty string or valid number format
+    if (value === '') {
+      // Create synthetic event to maintain compatibility
+      const syntheticEvent = {
+        target: { value: '' }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onAmountChange(syntheticEvent);
+      return;
+    }
+    
+    // Check if it's a valid number format (including decimals)
+    const regex = /^\d*\.?\d{0,2}$/;
+    if (!regex.test(value)) {
+      setAmountError('Please enter a valid amount');
+      return;
+    }
+    
+    const numValue = parseFloat(value);
+    
+    // Validate amount range
+    if (!isNaN(numValue)) {
+      if (numValue < 5 && value !== '') {
+        setAmountError('Minimum amount is $5.00');
+      } else if (numValue > 5000) {
+        setAmountError('Maximum amount is $5,000.00');
+      }
+    }
+    
+    // Create synthetic event to maintain compatibility
+    const syntheticEvent = {
+      target: { value }
+    } as React.ChangeEvent<HTMLInputElement>;
+    onAmountChange(syntheticEvent);
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Final validation before submission
+    const numValue = parseFloat(amountToAdd);
+    if (isNaN(numValue) || numValue < 5 || numValue > 5000) {
+      return;
+    }
+    
+    onAddFunds();
+  };
+
+  // Sanitize amount for display
+  const displayAmount = amountToAdd ? sanitizeCurrency(amountToAdd).toFixed(2) : '0.00';
+
   return (
     <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 mb-8 relative overflow-hidden group">
       {/* Background gradient effect */}
@@ -37,7 +102,12 @@ export default function AddFundsSection({
           Add Funds
         </h2>
         
-        <div className="mb-6">
+        <SecureForm
+          onSubmit={handleSubmit}
+          rateLimitKey="deposit"
+          rateLimitConfig={RATE_LIMITS.DEPOSIT}
+          className="mb-6"
+        >
           <div className="mb-6 p-4 bg-gradient-to-r from-blue-600/10 to-cyan-600/10 border border-blue-500/30 rounded-xl">
             <div className="flex items-start">
               <div className="bg-blue-500/20 p-2 rounded-lg mr-3">
@@ -52,22 +122,24 @@ export default function AddFundsSection({
 
           <div className="space-y-6">
             <div>
-              <label htmlFor="amount" className="block text-sm font-medium text-gray-300 mb-2">
-                Amount to add (USD)
-              </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10" style={{ paddingTop: '28px' }}>
                   <span className="text-gray-400 text-lg">$</span>
                 </div>
-                <input
-                  type="text"
+                <SecureInput
                   id="amount"
+                  type="text"
+                  label="Amount to add (USD)"
                   value={amountToAdd}
-                  onChange={onAmountChange}
-                  onKeyPress={onKeyPress}
+                  onChange={handleAmountChange}
+                  onKeyDown={onKeyPress}
                   placeholder="0.00"
-                  className="w-full bg-black/50 border border-gray-700 rounded-xl py-4 pl-10 pr-4 text-white text-lg focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent transition-all placeholder-gray-600"
+                  error={amountError}
+                  touched={!!amountToAdd}
                   disabled={isLoading}
+                  className="pl-10 text-lg"
+                  sanitize={false} // We handle sanitization in handleAmountChange
+                  helpText="Minimum $5.00, Maximum $5,000.00"
                 />
               </div>
               
@@ -76,6 +148,7 @@ export default function AddFundsSection({
                 {[25, 50, 100, 200].map((quickAmount) => (
                   <button
                     key={quickAmount}
+                    type="button"
                     onClick={() => onQuickAmountSelect(quickAmount.toString())}
                     className="py-3 px-4 bg-black/50 hover:bg-black/70 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white rounded-xl transition-all duration-200 font-medium"
                     disabled={isLoading}
@@ -88,9 +161,9 @@ export default function AddFundsSection({
             
             <div className="flex justify-center">
               <button
-                onClick={onAddFunds}
+                type="submit"
                 className="px-8 py-3 rounded-xl font-semibold flex items-center justify-center bg-gradient-to-r from-[#ff950e] to-orange-600 hover:from-[#e88800] hover:to-orange-700 text-black shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-300"
-                disabled={isLoading || !amountToAdd || parseFloat(amountToAdd) <= 0}
+                disabled={isLoading || !amountToAdd || parseFloat(amountToAdd) <= 0 || !!amountError}
               >
                 {isLoading ? (
                   <>
@@ -100,13 +173,13 @@ export default function AddFundsSection({
                 ) : (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
-                    Add ${amountToAdd || '0.00'} to Wallet
+                    Add ${displayAmount} to Wallet
                   </>
                 )}
               </button>
             </div>
           </div>
-        </div>
+        </SecureForm>
 
         {message && (
           <div className={`mt-6 p-4 rounded-xl flex items-start ${
@@ -119,7 +192,11 @@ export default function AddFundsSection({
             ) : (
               <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
             )}
-            <span className="text-sm font-medium">{message}</span>
+            <SecureMessageDisplay 
+              content={message}
+              allowBasicFormatting={false}
+              className="text-sm font-medium"
+            />
           </div>
         )}
       </div>
