@@ -4,6 +4,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CheckCheck } from 'lucide-react';
 import ImagePreviewModal from './ImagePreviewModal';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict, sanitizeCurrency } from '@/utils/security/sanitization';
 
 type MessageType = 'normal' | 'customRequest' | 'image';
 
@@ -49,6 +51,9 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
   const [initialHeight, setInitialHeight] = useState(0);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // Sanitize current user for comparison
+  const sanitizedCurrentUser = sanitizeStrict(currentUser);
   
   // Setup intersection observer for infinite scrolling
   useEffect(() => {
@@ -107,15 +112,20 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
     if (message.type === 'image' && message.meta?.imageUrl) {
       return (
         <div className="mt-1 mb-2">
-          <img 
+          <SecureImage 
             src={message.meta.imageUrl} 
             alt="Shared image" 
             className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
-            loading="lazy"
             onClick={() => setPreviewImage(message.meta?.imageUrl || null)}
           />
           {message.content && (
-            <p className="text-white mt-2">{message.content}</p>
+            <div className="mt-2">
+              <SecureMessageDisplay 
+                content={message.content}
+                allowBasicFormatting={false}
+                className="text-white"
+              />
+            </div>
           )}
         </div>
       );
@@ -125,17 +135,31 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
     if (message.type === 'customRequest' && message.meta) {
       return (
         <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
-          <p><strong> Custom Request</strong></p>
-          <p> Title: {message.meta.title}</p>
-          <p> Price: ${message.meta.price != null ? message.meta.price.toFixed(2) : "0.00"}</p>
-          <p> Tags: {message.meta.tags?.join(', ')}</p>
-          {message.meta.message && <p> {message.meta.message}</p>}
+          <p><strong>Custom Request</strong></p>
+          <p>Title: {sanitizeStrict(message.meta.title || '')}</p>
+          <p>Price: ${sanitizeCurrency(message.meta.price || 0).toFixed(2)}</p>
+          <p>Tags: {message.meta.tags?.map(tag => sanitizeStrict(tag)).join(', ')}</p>
+          {message.meta.message && (
+            <div>
+              <SecureMessageDisplay 
+                content={message.meta.message}
+                allowBasicFormatting={false}
+                className="text-white"
+              />
+            </div>
+          )}
         </div>
       );
     }
     
     // Regular text message
-    return <p className="text-white">{message.content}</p>;
+    return (
+      <SecureMessageDisplay 
+        content={message.content || ''}
+        allowBasicFormatting={false}
+        className="text-white"
+      />
+    );
   }, []);
   
   return (
@@ -171,12 +195,13 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
         {messages.map((msg, index) => {
           const isFromMe = msg.sender === currentUser;
           const time = formatTime(msg.date);
+          const sanitizedSender = sanitizeStrict(msg.sender || '');
           
           return (
             <div 
               key={`${msg.date}-${index}`} 
               className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
-              aria-label={`Message from ${isFromMe ? 'you' : msg.sender}`}
+              aria-label={`Message from ${isFromMe ? 'you' : sanitizedSender}`}
             >
               <div 
                 className={`rounded-lg p-3 max-w-[75%] ${
@@ -186,7 +211,7 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
                 {/* Message header */}
                 <div className="flex items-center text-xs mb-1">
                   <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                    {isFromMe ? 'You' : msg.sender}  {time}
+                    {isFromMe ? 'You' : sanitizedSender} • {time}
                   </span>
                   {isFromMe && (
                     <span className="ml-2 text-[10px]">

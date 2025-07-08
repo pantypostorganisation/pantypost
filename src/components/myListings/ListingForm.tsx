@@ -4,6 +4,12 @@
 import { ListingFormProps } from '@/types/myListings';
 import { Sparkles, Gavel, LockIcon, ImageIcon, Upload, X, MoveVertical, Edit, AlertCircle, Crown } from 'lucide-react';
 import Link from 'next/link';
+import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
+import { SecureForm } from '@/components/ui/SecureForm';
+import { SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { useState } from 'react';
+import { sanitizeStrict, sanitizeNumber, sanitizeCurrency } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 export default function ListingForm({
   formState,
@@ -21,28 +27,121 @@ export default function ListingForm({
   onSave,
   onCancel
 }: ListingFormProps) {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  // Handle file selection with validation
+  const handleSecureFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles: File[] = [];
+    
+    files.forEach(file => {
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      });
+      
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        setErrors(prev => ({ ...prev, files: validation.error || 'Invalid file' }));
+      }
+    });
+    
+    if (validFiles.length > 0) {
+      onFileSelect({ target: { files: validFiles } } as any);
+      // Remove files error if valid files were selected
+      setErrors(prev => {
+        const { files, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  // Validate form before submission
+  const handleSecureSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Clear previous errors
+    setErrors({});
+    
+    // Basic validation
+    const validationErrors: Record<string, string> = {};
+    
+    if (!formState.title || formState.title.trim().length < 3) {
+      validationErrors.title = 'Title must be at least 3 characters';
+    }
+    
+    if (!formState.description || formState.description.trim().length < 10) {
+      validationErrors.description = 'Description must be at least 10 characters';
+    }
+    
+    if (formState.isAuction) {
+      if (!formState.startingPrice || parseFloat(formState.startingPrice) <= 0) {
+        validationErrors.startingPrice = 'Starting price must be greater than 0';
+      }
+      if (formState.reservePrice && parseFloat(formState.reservePrice) < parseFloat(formState.startingPrice)) {
+        validationErrors.reservePrice = 'Reserve price must be greater than starting price';
+      }
+    } else {
+      if (!formState.price || parseFloat(formState.price) <= 0) {
+        validationErrors.price = 'Price must be greater than 0';
+      }
+    }
+    
+    if (formState.imageUrls.length === 0 && selectedFiles.length === 0) {
+      validationErrors.images = 'At least one image is required';
+    }
+    
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      // Mark all fields as touched
+      const allTouched = Object.keys(validationErrors).reduce((acc, key) => ({ ...acc, [key]: true }), {});
+      setTouched(prev => ({ ...prev, ...allTouched }));
+      return;
+    }
+    
+    // If validation passes, save
+    await onSave();
+  };
+
   return (
-    <>
+    <SecureForm 
+      onSubmit={handleSecureSave}
+      rateLimitKey="listing_create"
+      rateLimitConfig={{ maxAttempts: 10, windowMs: 60 * 60 * 1000 }}
+    >
       <h2 className="text-2xl font-bold mb-6 text-white">
         {isEditing ? 'Edit Listing' : 'Create New Listing'}
       </h2>
       <div className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
-          <input
+          <SecureInput
+            label="Title"
             type="text"
             placeholder="e.g. 'Black Lace Panties Worn 24 Hours'"
             value={formState.title}
-            onChange={(e) => onFormChange({ title: e.target.value })}
-            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            onChange={(value) => onFormChange({ title: value })}
+            onBlur={() => setTouched(prev => ({ ...prev, title: true }))}
+            error={errors.title}
+            touched={touched.title}
+            maxLength={100}
+            required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-          <textarea
+          <SecureTextarea
+            label="Description"
             placeholder="Describe your item in detail to attract buyers"
             value={formState.description}
-            onChange={(e) => onFormChange({ description: e.target.value })}
+            onChange={(value) => onFormChange({ description: value })}
+            onBlur={() => setTouched(prev => ({ ...prev, description: true }))}
+            error={errors.description}
+            touched={touched.description}
+            maxLength={500}
+            characterCount={true}
+            required
             className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e] h-28"
           />
         </div>
@@ -116,30 +215,43 @@ export default function ListingForm({
         {formState.isAuction ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Starting Bid ($)</label>
-              <input
+              <SecureInput
+                label="Starting Bid ($)"
                 type="number"
                 step="0.01"
                 placeholder="e.g. 9.99"
                 value={formState.startingPrice}
-                onChange={(e) => onFormChange({ startingPrice: e.target.value })}
-                className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                min="0"
+                onChange={(value) => {
+                  const sanitized = sanitizeCurrency(value);
+                  onFormChange({ startingPrice: sanitized.toString() });
+                }}
+                onBlur={() => setTouched(prev => ({ ...prev, startingPrice: true }))}
+                error={errors.startingPrice}
+                touched={touched.startingPrice}
+                min="0.01"
+                max="9999.99"
+                helpText="Minimum price to start bidding"
+                required
               />
-              <p className="text-xs text-gray-500 mt-1">Minimum price to start bidding</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Reserve Price ($) <span className="text-gray-500 text-xs">(Optional)</span></label>
-              <input
+              <SecureInput
+                label="Reserve Price ($)"
                 type="number"
                 step="0.01"
                 placeholder="e.g. 19.99"
                 value={formState.reservePrice}
-                onChange={(e) => onFormChange({ reservePrice: e.target.value })}
-                className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                onChange={(value) => {
+                  const sanitized = sanitizeCurrency(value);
+                  onFormChange({ reservePrice: sanitized.toString() });
+                }}
+                onBlur={() => setTouched(prev => ({ ...prev, reservePrice: true }))}
+                error={errors.reservePrice}
+                touched={touched.reservePrice}
                 min="0"
+                max="9999.99"
+                helpText="Minimum winning bid price (hidden from buyers)"
               />
-              <p className="text-xs text-gray-500 mt-1">Minimum winning bid price (hidden from buyers)</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Auction Duration</label>
@@ -160,15 +272,22 @@ export default function ListingForm({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Price ($)</label>
-              <input
+              <SecureInput
+                label="Price ($)"
                 type="number"
                 step="0.01"
                 placeholder="e.g. 29.99"
                 value={formState.price}
-                onChange={(e) => onFormChange({ price: e.target.value })}
-                className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                min="0"
+                onChange={(value) => {
+                  const sanitized = sanitizeCurrency(value);
+                  onFormChange({ price: sanitized.toString() });
+                }}
+                onBlur={() => setTouched(prev => ({ ...prev, price: true }))}
+                error={errors.price}
+                touched={touched.price}
+                min="0.01"
+                max="9999.99"
+                required
               />
             </div>
             {/* Image Upload Section */}
@@ -179,12 +298,18 @@ export default function ListingForm({
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={onFileSelect}
+                  onChange={handleSecureFileSelect}
                   className="hidden"
                 />
                 <ImageIcon className="w-5 h-5 text-[#ff950e]" />
                 <span className="text-gray-300">Select images from your computer</span>
               </label>
+              {errors.files && (
+                <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.files}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -198,12 +323,26 @@ export default function ListingForm({
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={onFileSelect}
+                onChange={handleSecureFileSelect}
                 className="hidden"
               />
               <ImageIcon className="w-5 h-5 text-purple-500" />
               <span className="text-gray-300">Select images from your computer</span>
             </label>
+            {errors.files && (
+              <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {errors.files}
+              </p>
+            )}
+          </div>
+        )}
+        
+        {/* Error message for images */}
+        {errors.images && touched.images && (
+          <div className="text-xs text-red-400 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {errors.images}
           </div>
         )}
         
@@ -234,14 +373,14 @@ export default function ListingForm({
               <div className="mb-3">
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
                   <span>Uploading images...</span>
-                  <span>{uploadProgress}%</span>
+                  <span>{sanitizeNumber(uploadProgress, 0, 100)}%</span>
                 </div>
                 <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
                   <div 
                     className={`h-full transition-all duration-300 ${
                       formState.isAuction ? 'bg-purple-500' : 'bg-[#ff950e]'
                     }`}
-                    style={{ width: `${uploadProgress}%` }}
+                    style={{ width: `${sanitizeNumber(uploadProgress, 0, 100)}%` }}
                   />
                 </div>
               </div>
@@ -250,7 +389,7 @@ export default function ListingForm({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {selectedFiles.map((file, index) => (
                 <div key={index} className="relative border border-gray-700 rounded-lg overflow-hidden group">
-                  <img
+                  <SecureImage
                     src={URL.createObjectURL(file)}
                     alt={`Selected ${index + 1}`}
                     className="w-full h-24 object-cover"
@@ -263,7 +402,7 @@ export default function ListingForm({
                     <X className="w-4 h-4" />
                   </button>
                   <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2">
-                    <p className="text-xs text-white truncate">{file.name}</p>
+                    <p className="text-xs text-white truncate">{sanitizeStrict(file.name)}</p>
                   </div>
                 </div>
               ))}
@@ -286,7 +425,7 @@ export default function ListingForm({
                   onDragOver={(e) => e.preventDefault()}
                   className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'}`}
                 >
-                  <img
+                  <SecureImage
                     src={url}
                     alt={`Listing Image ${index + 1}`}
                     className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`}
@@ -314,26 +453,32 @@ export default function ListingForm({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma separated)</label>
-          <input
+          <SecureInput
+            label="Tags (comma separated)"
             type="text"
             placeholder="e.g. thong, black, lace, cotton, gym"
             value={formState.tags}
-            onChange={(e) => onFormChange({ tags: e.target.value })}
-            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            onChange={(value) => onFormChange({ tags: value })}
+            onBlur={() => setTouched(prev => ({ ...prev, tags: true }))}
+            error={errors.tags}
+            touched={touched.tags}
+            maxLength={200}
+            helpText="Help buyers find your items with relevant tags"
           />
-          <p className="text-xs text-gray-500 mt-1">Help buyers find your items with relevant tags</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Hours Worn (optional)</label>
-          <input
+          <SecureInput
+            label="Hours Worn (optional)"
             type="number"
             placeholder="e.g. 24"
-            value={formState.hoursWorn}
-            onChange={(e) => onFormChange({ hoursWorn: e.target.value === '' ? '' : Number(e.target.value) })}
-            className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            value={formState.hoursWorn?.toString() || ''}
+            onChange={(value) => {
+              const num = value === '' ? '' : sanitizeNumber(value, 0, 999);
+              onFormChange({ hoursWorn: num });
+            }}
             min="0"
+            max="999"
           />
         </div>
         
@@ -376,7 +521,7 @@ export default function ListingForm({
         
         <div className="flex flex-col sm:flex-row gap-4 mt-6">
           <button
-            onClick={onSave}
+            type="submit"
             className={`w-full sm:flex-1 text-black px-6 py-3 rounded-lg font-bold text-lg transition flex items-center justify-center gap-2 ${
               formState.isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
             }`}
@@ -399,6 +544,7 @@ export default function ListingForm({
             )}
           </button>
           <button
+            type="button"
             onClick={onCancel}
             className="w-full sm:flex-1 bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-600 font-medium text-lg transition flex items-center justify-center gap-2"
           >
@@ -406,6 +552,6 @@ export default function ListingForm({
           </button>
         </div>
       </div>
-    </>
+    </SecureForm>
   );
 }

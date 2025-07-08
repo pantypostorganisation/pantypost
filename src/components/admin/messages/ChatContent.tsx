@@ -18,6 +18,10 @@ import {
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { Message } from '@/types/message';
 import EmojiPicker from './EmojiPicker';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict, sanitizeCurrency } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -86,13 +90,15 @@ export default function ChatContent({
     
     if (!file) return;
     
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setImageError("Please select a valid image file (JPEG, PNG, GIF, WEBP)");
-      return;
-    }
-    
-    if (file.size > MAX_IMAGE_SIZE) {
-      setImageError(`Image too large. Maximum size is ${MAX_IMAGE_SIZE / (1024 * 1024)}MB`);
+    // Use security service to validate file
+    const validation = securityService.validateFileUpload(file, {
+      maxSize: MAX_IMAGE_SIZE,
+      allowedTypes: ALLOWED_IMAGE_TYPES,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+    });
+
+    if (!validation.valid) {
+      setImageError(validation.error || 'Invalid file');
       return;
     }
     
@@ -131,6 +137,10 @@ export default function ChatContent({
     }
   }, [setContent]);
 
+  // Sanitize thread name for display
+  const sanitizedActiveThread = activeThread ? sanitizeStrict(activeThread) : null;
+  const sanitizedUsername = sanitizeStrict(username);
+
   if (!activeThread) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -159,9 +169,13 @@ export default function ChatContent({
         <div className="flex items-center">
           <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
             {userProfiles[activeThread]?.pic ? (
-              <img src={userProfiles[activeThread].pic} alt={activeThread} className="w-full h-full object-cover" />
+              <SecureImage 
+                src={userProfiles[activeThread].pic} 
+                alt={sanitizedActiveThread || ''} 
+                className="w-full h-full object-cover" 
+              />
             ) : (
-              getInitial(activeThread)
+              getInitial(sanitizedActiveThread || '')
             )}
             
             {/* Verified badge if applicable */}
@@ -173,7 +187,7 @@ export default function ChatContent({
           </div>
           <div>
             <div className="flex items-center gap-1">
-              <h2 className="font-bold text-lg text-white">{activeThread}</h2>
+              <h2 className="font-bold text-lg text-white">{sanitizedActiveThread}</h2>
               <span className="text-xs px-2 py-0.5 rounded bg-[#333] text-gray-300">
                 {userProfiles[activeThread]?.role === 'buyer' ? 'Buyer' : 
                  userProfiles[activeThread]?.role === 'seller' ? 'Seller' : 'User'}
@@ -220,6 +234,7 @@ export default function ChatContent({
             });
             
             const isSingleEmojiMsg = msg.content && isSingleEmoji(msg.content);
+            const sanitizedSender = sanitizeStrict(msg.sender || '');
             
             return (
               <div key={index} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
@@ -231,7 +246,7 @@ export default function ChatContent({
                   {/* Message header */}
                   <div className="flex items-center text-xs mb-1">
                     <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
-                      {isFromMe ? 'You' : msg.sender} • {time}
+                      {isFromMe ? 'You' : sanitizedSender} • {time}
                     </span>
                     {isFromMe && (
                       <span className="ml-2 text-[10px]">
@@ -249,7 +264,7 @@ export default function ChatContent({
                   {/* Image message */}
                   {msg.type === 'image' && msg.meta?.imageUrl && (
                     <div className="mt-1 mb-2">
-                      <img 
+                      <SecureImage 
                         src={msg.meta.imageUrl} 
                         alt="Shared image" 
                         className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
@@ -259,31 +274,48 @@ export default function ChatContent({
                         }}
                       />
                       {msg.content && (
-                        <p className={`text-white mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                          {msg.content}
-                        </p>
+                        <div className={`mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
+                          <SecureMessageDisplay 
+                            content={msg.content}
+                            allowBasicFormatting={false}
+                            className="text-white"
+                          />
+                        </div>
                       )}
                     </div>
                   )}
                   
-                  {/* Text content */}
+                  {/* Text content - Using SecureMessageDisplay */}
                   {msg.type !== 'image' && msg.type !== 'customRequest' && (
-                    <p className={`text-white ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                      {msg.content}
-                    </p>
+                    <div className={isSingleEmojiMsg ? 'text-3xl' : ''}>
+                      <SecureMessageDisplay 
+                        content={msg.content || ''}
+                        allowBasicFormatting={false}
+                        className="text-white"
+                      />
+                    </div>
                   )}
                   
-                  {/* Custom request content */}
+                  {/* Custom request content - Sanitized */}
                   {msg.type === 'customRequest' && msg.meta && (
                     <div className="mt-2 text-sm text-orange-400 space-y-1 border-t border-white/20 pt-2">
                       <p className="font-semibold flex items-center">
                         <Paperclip size={16} className="mr-1" />
                         Custom Request
                       </p>
-                      <p><b>Title:</b> {msg.meta.title}</p>
-                      <p><b>Price:</b> ${msg.meta.price?.toFixed(2)}</p>
-                      <p><b>Tags:</b> {msg.meta.tags?.join(', ')}</p>
-                      {msg.meta.message && <p><b>Message:</b> {msg.meta.message}</p>}
+                      <p><b>Title:</b> {sanitizeStrict(msg.meta.title || '')}</p>
+                      <p><b>Price:</b> ${sanitizeCurrency(msg.meta.price || 0).toFixed(2)}</p>
+                      <p><b>Tags:</b> {msg.meta.tags?.map(tag => sanitizeStrict(tag)).join(', ')}</p>
+                      {msg.meta.message && (
+                        <div>
+                          <b>Message:</b> 
+                          <SecureMessageDisplay 
+                            content={msg.meta.message}
+                            allowBasicFormatting={false}
+                            className="inline text-orange-400"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -311,7 +343,11 @@ export default function ChatContent({
           {selectedImage && (
             <div className="px-4 pt-3 pb-2">
               <div className="relative inline-block">
-                <img src={selectedImage} alt="Preview" className="max-h-20 rounded shadow-md" />
+                <SecureImage 
+                  src={selectedImage} 
+                  alt="Preview" 
+                  className="max-h-20 rounded shadow-md" 
+                />
                 <button
                   onClick={() => {
                     setSelectedImage(null);
@@ -345,15 +381,17 @@ export default function ChatContent({
           {/* Message input */}
           <div className="px-4 py-3">
             <div className="relative mb-2">
-              <textarea
+              <SecureTextarea
                 ref={inputRef}
                 value={content}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
+                onChange={setContent}
                 onKeyDown={handleKeyDown}
                 placeholder={selectedImage ? "Add a caption..." : "Type a message"}
                 className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
                 rows={1}
                 maxLength={250}
+                characterCount={false}
+                sanitize={true}
               />
               
               {/* Emoji button */}

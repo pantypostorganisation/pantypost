@@ -1,8 +1,11 @@
 // src/components/myListings/ImageUploadSection.tsx
 'use client';
 
-import { Image as ImageIcon, Upload, X, MoveVertical } from 'lucide-react';
-import { useRef } from 'react';
+import { Image as ImageIcon, Upload, X, MoveVertical, AlertCircle } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 interface ImageUploadSectionProps {
   selectedFiles: File[];
@@ -31,6 +34,7 @@ export default function ImageUploadSection({
 }: ImageUploadSectionProps) {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+  const [fileError, setFileError] = useState<string>('');
 
   const handleDragStart = (index: number) => {
     dragItem.current = index;
@@ -47,6 +51,53 @@ export default function ImageUploadSection({
     dragOverItem.current = null;
   };
 
+  // Handle secure file selection with validation
+  const handleSecureFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError('');
+    const files = Array.from(e.target.files || []);
+    
+    // Validate each file
+    const validFiles: File[] = [];
+    let hasError = false;
+    
+    files.forEach(file => {
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      });
+      
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        hasError = true;
+        setFileError(validation.error || 'Invalid file selected');
+      }
+    });
+    
+    // Only proceed if we have valid files
+    if (validFiles.length > 0) {
+      // Create a new event with only valid files
+      const newEvent = {
+        ...e,
+        target: {
+          ...e.target,
+          files: validFiles as unknown as FileList
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      
+      onFileSelect(newEvent);
+    }
+    
+    // Clear the input if there were errors
+    if (hasError && e.target) {
+      e.target.value = '';
+    }
+  };
+
+  // Sanitize upload progress
+  const sanitizedProgress = sanitizeNumber(uploadProgress, 0, 100);
+
   return (
     <>
       <div>
@@ -58,12 +109,20 @@ export default function ImageUploadSection({
             type="file"
             accept="image/*"
             multiple
-            onChange={onFileSelect}
+            onChange={handleSecureFileSelect}
             className="hidden"
           />
           <ImageIcon className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-[#ff950e]'}`} />
           <span className="text-gray-300">Select images from your computer</span>
         </label>
+        
+        {/* File error message */}
+        {fileError && (
+          <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {fileError}
+          </p>
+        )}
       </div>
 
       {selectedFiles.length > 0 && (
@@ -94,14 +153,14 @@ export default function ImageUploadSection({
             <div className="mb-3">
               <div className="flex justify-between text-xs text-gray-400 mb-1">
                 <span>Uploading images...</span>
-                <span>{uploadProgress}%</span>
+                <span>{sanitizedProgress}%</span>
               </div>
               <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
                 <div 
                   className={`h-full transition-all duration-300 ${
                     isAuction ? 'bg-purple-500' : 'bg-[#ff950e]'
                   }`}
-                  style={{ width: `${uploadProgress}%` }}
+                  style={{ width: `${sanitizedProgress}%` }}
                 />
               </div>
             </div>
@@ -110,7 +169,7 @@ export default function ImageUploadSection({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {selectedFiles.map((file, index) => (
               <div key={`selected-file-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">
-                <img
+                <SecureImage
                   src={URL.createObjectURL(file)}
                   alt={`Selected ${index + 1}`}
                   className="w-full h-24 object-cover"
@@ -123,7 +182,7 @@ export default function ImageUploadSection({
                   <X className="w-4 h-4" />
                 </button>
                 <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2">
-                  <p className="text-xs text-white truncate">{file.name}</p>
+                  <p className="text-xs text-white truncate">{sanitizeStrict(file.name)}</p>
                 </div>
               </div>
             ))}
@@ -147,7 +206,7 @@ export default function ImageUploadSection({
                   index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'
                 }`}
               >
-                <img
+                <SecureImage
                   src={url}
                   alt={`Listing Image ${index + 1}`}
                   className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`}

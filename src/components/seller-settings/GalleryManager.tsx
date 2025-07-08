@@ -1,8 +1,11 @@
 // src/components/seller-settings/GalleryManager.tsx
 'use client';
 
-import { X, ImageIcon, Trash2, PlusCircle, Image as ImageLucide } from 'lucide-react';
-import { RefObject } from 'react';
+import { X, ImageIcon, Trash2, PlusCircle, Image as ImageLucide, AlertCircle } from 'lucide-react';
+import { RefObject, useState } from 'react';
+import { SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 interface GalleryManagerProps {
   galleryImages: string[];
@@ -29,6 +32,59 @@ export default function GalleryManager({
   removeSelectedFile,
   clearAllGalleryImages
 }: GalleryManagerProps) {
+  const [fileError, setFileError] = useState<string>('');
+
+  // Handle secure file selection with validation
+  const handleSecureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError('');
+    const files = Array.from(e.target.files || []);
+    
+    // Validate each file
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+    
+    files.forEach(file => {
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif']
+      });
+      
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        errors.push(validation.error || 'Invalid file');
+      }
+    });
+    
+    // Show first error if any
+    if (errors.length > 0) {
+      setFileError(`${errors[0]}${errors.length > 1 ? ` (and ${errors.length - 1} more)` : ''}`);
+    }
+    
+    // Only proceed if we have valid files
+    if (validFiles.length > 0) {
+      // Create a new event with only valid files
+      const newEvent = {
+        ...e,
+        target: {
+          ...e.target,
+          files: validFiles as unknown as FileList
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      
+      handleMultipleFileChange(newEvent);
+    }
+    
+    // Clear the input if all files were invalid
+    if (validFiles.length === 0 && e.target) {
+      e.target.value = '';
+    }
+  };
+
+  // Sanitize upload progress
+  const sanitizedProgress = sanitizeNumber(uploadProgress, 0, 100);
+
   return (
     <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6">
       <div className="flex justify-between items-center mb-6">
@@ -39,7 +95,7 @@ export default function GalleryManager({
 
         <div className="flex gap-2">
           {galleryImages.length > 0 && (
-            <img
+            <SecureImage
               src="/Clear_All.png"
               alt="Clear All"
               onClick={clearAllGalleryImages}
@@ -54,16 +110,16 @@ export default function GalleryManager({
       </p>
 
       {/* Upload Progress */}
-      {isUploading && uploadProgress > 0 && (
+      {isUploading && sanitizedProgress > 0 && (
         <div className="mb-4">
           <div className="flex items-center justify-between text-sm text-gray-300 mb-1">
             <span>Uploading to cloud storage...</span>
-            <span>{uploadProgress}%</span>
+            <span>{sanitizedProgress}%</span>
           </div>
           <div className="w-full bg-gray-800 rounded-full h-2">
             <div 
               className="bg-[#ff950e] h-2 rounded-full transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
+              style={{ width: `${sanitizedProgress}%` }}
             />
           </div>
         </div>
@@ -83,7 +139,7 @@ export default function GalleryManager({
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={handleMultipleFileChange}
+                onChange={handleSecureFileChange}
                 className="hidden"
                 disabled={isUploading}
               />
@@ -92,7 +148,7 @@ export default function GalleryManager({
             </label>
           </div>
 
-          <img
+          <SecureImage
             src="/Add_To_Gallery.png"
             alt="Add to Gallery"
             onClick={uploadGalleryImages}
@@ -104,6 +160,14 @@ export default function GalleryManager({
           />
         </div>
 
+        {/* File error message */}
+        {fileError && (
+          <p className="text-xs text-red-400 flex items-center gap-1 mb-2">
+            <AlertCircle className="w-3 h-3" />
+            {fileError}
+          </p>
+        )}
+
         {/* Selected Files Preview */}
         {selectedFiles.length > 0 && (
           <div className="mb-6">
@@ -111,7 +175,7 @@ export default function GalleryManager({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {selectedFiles.map((file, index) => (
                 <div key={index} className="relative group border border-gray-700 rounded-lg overflow-hidden">
-                  <img
+                  <SecureImage
                     src={URL.createObjectURL(file)}
                     alt={`Selected ${index + 1}`}
                     className="w-full h-28 object-cover"
@@ -125,7 +189,7 @@ export default function GalleryManager({
                     <X className="w-4 h-4" />
                   </button>
                   <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2 text-xs text-white truncate">
-                    {file.name}
+                    {sanitizeStrict(file.name)}
                   </div>
                 </div>
               ))}
@@ -149,7 +213,7 @@ export default function GalleryManager({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {galleryImages.map((img, index) => (
               <div key={index} className="relative group">
-                <img
+                <SecureImage
                   src={img}
                   alt={`Gallery ${index + 1}`}
                   className="w-full h-40 object-cover rounded-lg border border-gray-700"
