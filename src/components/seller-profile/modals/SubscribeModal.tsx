@@ -1,6 +1,8 @@
 // src/components/seller-profile/modals/SubscribeModal.tsx
 'use client';
 
+import { sanitizeStrict } from '@/utils/security/sanitization';
+
 interface SubscribeModalProps {
   show: boolean;
   username: string;
@@ -18,6 +20,9 @@ export default function SubscribeModal({
 }: SubscribeModalProps) {
   if (!show) return null;
 
+  // Sanitize username for display
+  const sanitizedUsername = sanitizeStrict(username);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
       <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
@@ -25,7 +30,7 @@ export default function SubscribeModal({
           Confirm Subscription
         </h2>
         <p className="mb-6 text-center text-white text-base">
-          Subscribe to <strong className="text-[#ff950e]">{username}</strong> for{' '}
+          Subscribe to <strong className="text-[#ff950e]">{sanitizedUsername}</strong> for{' '}
           <span className="text-xl font-bold text-[#ff950e]">
             ${subscriptionPrice ? subscriptionPrice.toFixed(2) : '...'}/month
           </span>?

@@ -3,6 +3,8 @@
 
 import { Gavel, Clock, ArrowUp, BarChart2 } from 'lucide-react';
 import { AuctionSectionProps } from '@/types/browseDetail';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { sanitizeCurrency } from '@/utils/security/sanitization';
 
 export default function AuctionSection({
   listing,
@@ -32,6 +34,16 @@ export default function AuctionSection({
 
   const isUserSeller = username === listing.seller;
   const canBid = !isAuctionEnded && userRole === 'buyer' && !isUserSeller;
+
+  // Handle secure bid amount change
+  const handleSecureBidChange = (value: string) => {
+    if (value === '') {
+      onBidAmountChange('');
+    } else {
+      const sanitized = sanitizeCurrency(value);
+      onBidAmountChange(sanitized.toString());
+    }
+  };
 
   return (
     <div className={`rounded-xl border p-5 ${
@@ -101,16 +113,17 @@ export default function AuctionSection({
         <div className="space-y-2">
           <div className="flex gap-2">
             <div className="flex-1">
-              <input
+              <SecureInput
                 ref={bidInputRef}
                 type="number"
                 placeholder="Enter your bid"
                 value={bidAmount}
-                onChange={(e) => onBidAmountChange(e.target.value)}
+                onChange={handleSecureBidChange}
                 onKeyPress={onBidKeyPress}
-                min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toFixed(2) : listing.auction.startingPrice.toFixed(2)}
+                min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toString() : listing.auction.startingPrice.toString()}
                 step="0.01"
                 className="w-full px-3 py-2 rounded-lg bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
+                sanitize={false} // We handle sanitization in handleSecureBidChange
               />
             </div>
             <button
@@ -127,7 +140,7 @@ export default function AuctionSection({
           <div className="flex gap-2">
             {suggestedBidAmount && (
               <button
-                onClick={() => onBidAmountChange(suggestedBidAmount)}
+                onClick={() => handleSecureBidChange(suggestedBidAmount)}
                 className="bg-purple-800/50 text-purple-300 px-3 py-1 rounded text-sm hover:bg-purple-700/50 transition"
               >
                 ${suggestedBidAmount}
