@@ -2,24 +2,35 @@
 'use client';
 
 import { Search, ChevronUp, ChevronDown } from 'lucide-react';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
 import type { ResolvedFiltersProps } from '@/types/resolved';
 
 export default function ResolvedFilters({
   filters,
   onFiltersChange
 }: ResolvedFiltersProps) {
+  const handleSearchChange = (value: string) => {
+    // Sanitize search input
+    const sanitizedValue = sanitizeSearchQuery(value);
+    onFiltersChange({ searchTerm: sanitizedValue });
+  };
+
   return (
     <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <input
+          <Search className="absolute left-3 top-3 text-gray-400 z-10" size={16} />
+          <SecureInput
             type="text"
             placeholder="Search by username or notes..."
             value={filters.searchTerm}
-            onChange={(e) => onFiltersChange({ searchTerm: e.target.value })}
+            onChange={handleSearchChange}
             className="w-full pl-10 pr-4 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] transition-all"
+            maxLength={100}
+            sanitize={true}
+            sanitizer={sanitizeSearchQuery}
           />
         </div>
 

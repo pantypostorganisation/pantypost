@@ -2,6 +2,8 @@
 'use client';
 
 import { Search, UserCheck } from 'lucide-react';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
 import type { VerificationSearchProps } from '@/types/verification';
 
 export default function VerificationSearch({
@@ -11,18 +13,27 @@ export default function VerificationSearch({
   onSortChange,
   pendingCount
 }: VerificationSearchProps) {
+  const handleSearchChange = (value: string) => {
+    // Sanitize search input
+    const sanitizedValue = sanitizeSearchQuery(value);
+    onSearchChange(sanitizedValue);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-6">
       {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
-          <input
+          <Search className="absolute left-3 top-3 text-gray-500 w-4 h-4 z-10" />
+          <SecureInput
             type="text"
             placeholder="Search username..."
             value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full bg-[#121212] border border-[#2a2a2a] text-white rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+            maxLength={100}
+            sanitize={true}
+            sanitizer={sanitizeSearchQuery}
           />
         </div>
       </div>

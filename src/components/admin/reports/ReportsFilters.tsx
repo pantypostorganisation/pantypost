@@ -3,6 +3,7 @@
 
 import { Search, ChevronUp, ChevronDown } from 'lucide-react';
 import { ReportsFiltersProps } from './types';
+import { SecureInput } from '@/components/ui/SecureInput';
 
 export default function ReportsFilters({
   searchTerm,
@@ -23,13 +24,14 @@ export default function ReportsFilters({
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4">
         {/* Search */}
         <div className="relative xl:col-span-2">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <input
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={16} />
+          <SecureInput
             type="text"
             placeholder="Search by username or notes..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={setSearchTerm}
             className="w-full pl-10 pr-4 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] transition-all"
+            maxLength={100}
           />
         </div>
 

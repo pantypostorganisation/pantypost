@@ -3,6 +3,8 @@
 
 import { Search, DollarSign, X } from 'lucide-react';
 import { BrowseFiltersProps } from '@/types/browse';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { sanitizeCurrency } from '@/utils/security/sanitization';
 
 export default function BrowseFilters({
   searchTerm,
@@ -19,16 +21,37 @@ export default function BrowseFilters({
   onClearFilters,
   hasActiveFilters
 }: BrowseFiltersProps) {
+  
+  // Handle secure price changes
+  const handleMinPriceChange = (value: string) => {
+    if (value === '') {
+      onMinPriceChange('');
+    } else {
+      const sanitized = sanitizeCurrency(value);
+      onMinPriceChange(sanitized.toString());
+    }
+  };
+
+  const handleMaxPriceChange = (value: string) => {
+    if (value === '') {
+      onMaxPriceChange('');
+    } else {
+      const sanitized = sanitizeCurrency(value);
+      onMaxPriceChange(sanitized.toString());
+    }
+  };
+
   return (
     <div className="max-w-[1700px] mx-auto px-6 mb-6">
       <div className="flex flex-wrap gap-3 items-center bg-gradient-to-r from-[#1a1a1a]/80 to-[#222]/80 backdrop-blur-sm p-3 rounded-lg border border-gray-800 shadow-lg">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-          <input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 z-10" />
+          <SecureInput
             value={searchTerm}
-            onChange={e => onSearchTermChange(e.target.value)}
+            onChange={onSearchTermChange}
             placeholder="Search by title, description, tags, or seller..."
             className="w-full pl-10 pr-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+            maxLength={100}
           />
         </div>
 
@@ -37,20 +60,28 @@ export default function BrowseFilters({
             <DollarSign size={14} />
             <span className="text-xs font-medium">Price</span>
           </div>
-          <input
+          <SecureInput
             value={minPrice}
-            onChange={e => onMinPriceChange(e.target.value)}
+            onChange={handleMinPriceChange}
             placeholder="Min"
             type="number"
             className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+            min="0"
+            max="9999"
+            step="0.01"
+            sanitize={false}
           />
           <span className="text-gray-500 text-xs">—</span>
-          <input
+          <SecureInput
             value={maxPrice}
-            onChange={e => onMaxPriceChange(e.target.value)}
+            onChange={handleMaxPriceChange}
             placeholder="Max"
             type="number"
             className="px-2 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white placeholder-gray-400 w-16 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+            min="0"
+            max="9999"
+            step="0.01"
+            sanitize={false}
           />
         </div>
 

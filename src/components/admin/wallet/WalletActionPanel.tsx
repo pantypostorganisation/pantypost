@@ -2,6 +2,9 @@
 'use client';
 
 import { DollarSign, ArrowUpRight, ArrowDownRight, UserCheck, Loader2 } from 'lucide-react';
+import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
+import { sanitizeCurrency } from '@/utils/security/sanitization';
+import { useState } from 'react';
 
 interface WalletActionPanelProps {
   selectedUser: string | null;
@@ -38,6 +41,18 @@ export default function WalletActionPanel({
   getBalanceColor,
   formatRole
 }: WalletActionPanelProps) {
+  const [touched, setTouched] = useState({ amount: false, reason: false });
+
+  // Handle secure amount change
+  const handleSecureAmountChange = (value: string) => {
+    if (value === '') {
+      setAmount('');
+    } else {
+      const sanitized = sanitizeCurrency(value);
+      setAmount(sanitized.toString());
+    }
+  };
+
   return (
     <div className="bg-[#1a1a1a] p-6 rounded-xl border border-gray-800 shadow-lg h-fit">
       <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
@@ -91,34 +106,45 @@ export default function WalletActionPanel({
 
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Amount ($)</label>
-            <input
+            <SecureInput
+              label="Amount ($)"
               type="number"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={handleSecureAmountChange}
+              onBlur={() => setTouched(prev => ({ ...prev, amount: true }))}
               step="0.01"
               min="0"
+              max="999999.99"
               className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
               placeholder="0.00"
+              touched={touched.amount}
+              sanitize={false} // We handle sanitization in handleSecureAmountChange
             />
           </div>
 
           {/* Reason */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Reason</label>
-            <textarea
+            <SecureTextarea
+              label="Reason"
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={setReason}
+              onBlur={() => setTouched(prev => ({ ...prev, reason: true }))}
               className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e] resize-none"
               rows={3}
               placeholder="Reason for this action..."
+              maxLength={500}
+              characterCount={true}
+              touched={touched.reason}
             />
           </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3">
             <button
-              onClick={clearSelection}
+              onClick={() => {
+                clearSelection();
+                setTouched({ amount: false, reason: false });
+              }}
               className="flex-1 py-2 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
             >
               Clear

@@ -4,6 +4,8 @@
 import { useState, useRef } from 'react';
 import { XCircle, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { SecureForm } from '@/components/ui/SecureForm';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import VerificationStatusHeader from '../VerificationStatusHeader';
 import VerificationCodeDisplay from '../VerificationCodeDisplay';
 import VerificationInstructions from '../VerificationInstructions';
@@ -24,6 +26,7 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
   const [passport, setPassport] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [validationError, setValidationError] = useState<string>('');
   
   const codePhotoInputRef = useRef<HTMLInputElement>(null);
   const idFrontInputRef = useRef<HTMLInputElement>(null);
@@ -39,19 +42,23 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
       try {
         const base64 = await toBase64(file);
         setter(base64);
+        setValidationError(''); // Clear any previous errors
       } catch (error) {
         console.error("Error converting file:", error);
-        alert("Failed to process image. Please try again with a smaller file.");
+        setValidationError("Failed to process image. Please try again with a smaller file.");
       }
     }
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError('');
+    
     if (!codePhoto || (!idFront && !passport)) {
-      alert('Please upload all required documents.');
+      setValidationError('Please upload all required documents.');
       return;
     }
+    
     setSubmitting(true);
 
     const docs = {
@@ -62,11 +69,22 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
       passport: passport || undefined,
     };
 
-    onSubmit(docs);
-    setSubmitting(false);
-    setSubmitted(true);
-    setTimeout(() => router.push('/sellers/profile'), 2000);
+    try {
+      await onSubmit(docs);
+      setSubmitting(false);
+      setSubmitted(true);
+      setTimeout(() => router.push('/sellers/profile'), 2000);
+    } catch (error) {
+      setSubmitting(false);
+      setValidationError('Failed to submit verification. Please try again.');
+    }
   };
+  
+  // Sanitize rejection reason for display
+  const sanitizedRejectionReason = sanitizeStrict(
+    user.verificationRejectionReason || 
+    "Your verification documents did not meet our requirements. Please review and submit again."
+  );
   
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white py-10 px-4 sm:px-6">
@@ -90,7 +108,7 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
                 Reason for Rejection
               </h3>
               <p className="text-gray-300 text-sm">
-                {user.verificationRejectionReason || "Your verification documents did not meet our requirements. Please review and submit again."}
+                {sanitizedRejectionReason}
               </p>
             </div>
             
@@ -106,50 +124,67 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
             <VerificationInstructions />
             
             {/* Upload Form */}
-            <div className="mt-4">
-              <h3 className="font-medium text-white mb-4">Upload New Documents</h3>
-              
-              <DocumentUploadSection
-                codePhoto={codePhoto}
-                idFront={idFront}
-                idBack={idBack}
-                passport={passport}
-                onCodePhotoChange={(e) => handleFileChange(e, setCodePhoto)}
-                onIdFrontChange={(e) => handleFileChange(e, setIdFront)}
-                onIdBackChange={(e) => handleFileChange(e, setIdBack)}
-                onPassportChange={(e) => handleFileChange(e, setPassport)}
-                codePhotoRef={codePhotoInputRef}
-                idFrontRef={idFrontInputRef}
-                idBackRef={idBackInputRef}
-                passportRef={passportInputRef}
-              />
-              
-              <div className="mt-8 flex gap-3">
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting || !codePhoto || (!idFront && !passport)}
-                  className={`flex-1 px-4 py-3 font-bold rounded-lg text-center transition ${
-                    submitting || !codePhoto || (!idFront && !passport)
-                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                      : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                  }`}
-                >
-                  {submitting ? 'Submitting...' : 'Submit New Verification'}
-                </button>
-                <button
-                  onClick={() => router.push('/sellers/profile')}
-                  className="flex-1 px-4 py-3 bg-[#1a1a1a] text-white border border-gray-700 rounded-lg hover:bg-[#222] transition text-center"
-                >
-                  Back to Profile
-                </button>
+            <SecureForm
+              onSubmit={handleSubmit}
+              rateLimitKey="verification_resubmit"
+              rateLimitConfig={{ maxAttempts: 3, windowMs: 60 * 60 * 1000 }}
+            >
+              <div className="mt-4">
+                <h3 className="font-medium text-white mb-4">Upload New Documents</h3>
+                
+                <DocumentUploadSection
+                  codePhoto={codePhoto}
+                  idFront={idFront}
+                  idBack={idBack}
+                  passport={passport}
+                  onCodePhotoChange={(e) => handleFileChange(e, setCodePhoto)}
+                  onIdFrontChange={(e) => handleFileChange(e, setIdFront)}
+                  onIdBackChange={(e) => handleFileChange(e, setIdBack)}
+                  onPassportChange={(e) => handleFileChange(e, setPassport)}
+                  codePhotoRef={codePhotoInputRef}
+                  idFrontRef={idFrontInputRef}
+                  idBackRef={idBackInputRef}
+                  passportRef={passportInputRef}
+                />
+                
+                {/* Validation Error */}
+                {validationError && (
+                  <div className="mt-4 p-3 bg-red-900/20 border border-red-700 rounded-lg">
+                    <p className="text-sm text-red-400 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      {validationError}
+                    </p>
+                  </div>
+                )}
+                
+                <div className="mt-8 flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={submitting || !codePhoto || (!idFront && !passport)}
+                    className={`flex-1 px-4 py-3 font-bold rounded-lg text-center transition ${
+                      submitting || !codePhoto || (!idFront && !passport)
+                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                        : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
+                    }`}
+                  >
+                    {submitting ? 'Submitting...' : 'Submit New Verification'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/sellers/profile')}
+                    className="flex-1 px-4 py-3 bg-[#1a1a1a] text-white border border-gray-700 rounded-lg hover:bg-[#222] transition text-center"
+                  >
+                    Back to Profile
+                  </button>
+                </div>
+                
+                {submitted && (
+                  <p className="text-green-500 text-center mt-4">
+                    ✅ Verification submitted successfully! Redirecting...
+                  </p>
+                )}
               </div>
-              
-              {submitted && (
-                <p className="text-green-500 text-center mt-4">
-                  ✅ Verification submitted successfully! Redirecting...
-                </p>
-              )}
-            </div>
+            </SecureForm>
           </div>
         </div>
       </div>
