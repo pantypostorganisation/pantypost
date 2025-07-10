@@ -3,6 +3,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { BarChart3, MessageSquare, FileText } from 'lucide-react';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { ReportDetailsProps } from './types';
 
 export default function ReportDetails({
@@ -14,6 +17,12 @@ export default function ReportDetails({
 }: ReportDetailsProps) {
   const [adminNotes, setAdminNotes] = useState(report.adminNotes || '');
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const handleAdminNotesChange = (value: string) => {
+    // Sanitize admin notes input
+    const sanitizedValue = sanitizeStrict(value);
+    setAdminNotes(sanitizedValue);
+  };
 
   // Auto-save admin notes with debounce
   useEffect(() => {
@@ -87,7 +96,12 @@ export default function ReportDetails({
                 <div className="text-xs text-gray-500">
                   {new Date(msg.date).toLocaleString()}
                 </div>
-                <div className="mt-1">{msg.content}</div>
+                <SecureMessageDisplay 
+                  content={msg.content}
+                  className="mt-1"
+                  allowBasicFormatting={false}
+                  maxLength={500}
+                />
               </div>
             ))
           ) : (
@@ -132,15 +146,18 @@ export default function ReportDetails({
       <div>
         <div className="flex items-center gap-2 mb-2">
           <FileText size={14} className="text-gray-400" />
-          <label className="text-sm font-medium text-gray-300">Admin Notes</label>
+          <span className="text-sm font-medium text-gray-300">Admin Notes</span>
           <span className="text-xs text-gray-500">(Auto-saves)</span>
         </div>
-        <textarea
+        <SecureTextarea
           value={adminNotes}
-          onChange={(e) => setAdminNotes(e.target.value)}
-          className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] resize-none"
-          rows={3}
+          onChange={handleAdminNotesChange}
           placeholder="Add internal notes about this report..."
+          rows={3}
+          maxLength={1000}
+          characterCount={true}
+          sanitize={true}
+          sanitizer={sanitizeStrict}
         />
       </div>
 

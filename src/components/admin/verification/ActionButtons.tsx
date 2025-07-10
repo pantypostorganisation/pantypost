@@ -2,6 +2,8 @@
 'use client';
 
 import { CheckCircle, XCircle } from 'lucide-react';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import type { ActionButtonsProps } from '@/types/verification';
 
 export default function ActionButtons({
@@ -13,6 +15,12 @@ export default function ActionButtons({
   onRejectInputCancel,
   onRejectReasonChange
 }: ActionButtonsProps) {
+  const handleRejectReasonChange = (value: string) => {
+    // Sanitize reject reason input
+    const sanitizedValue = sanitizeStrict(value);
+    onRejectReasonChange(sanitizedValue);
+  };
+
   if (!showRejectInput) {
     return (
       <div className="flex gap-3">
@@ -36,13 +44,16 @@ export default function ActionButtons({
 
   return (
     <div className="space-y-3">
-      <textarea
-        className="w-full p-3 border border-[#2a2a2a] rounded-lg bg-[#121212] text-white resize-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent focus:outline-none transition-all text-sm"
+      <SecureTextarea
         placeholder="Provide a reason for rejection..."
         value={rejectReason}
-        onChange={e => onRejectReasonChange(e.target.value)}
+        onChange={handleRejectReasonChange}
         rows={2}
-        autoFocus
+        maxLength={500}
+        characterCount={true}
+        sanitize={true}
+        sanitizer={sanitizeStrict}
+        className="w-full p-3 border border-[#2a2a2a] rounded-lg bg-[#121212] text-white resize-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent focus:outline-none transition-all text-sm"
       />
       <div className="flex gap-2">
         <button

@@ -1,7 +1,11 @@
+// src/components/admin/bans/AppealReviewModal.tsx
 'use client';
 
 import { useState } from 'react';
 import { MessageSquare, CheckCircle, XCircle, AlertTriangle, Eye } from 'lucide-react';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { BanEntry } from '@/types/ban';
 import { getBanReasonDisplay } from '@/utils/banUtils';
 
@@ -32,6 +36,12 @@ export default function AppealReviewModal({
       return;
     }
     onConfirm(decision);
+  };
+
+  const handleNotesChange = (value: string) => {
+    // Sanitize review notes
+    const sanitizedValue = sanitizeStrict(value);
+    setAppealReviewNotes(sanitizedValue);
   };
 
   return (
@@ -66,7 +76,11 @@ export default function AppealReviewModal({
           {ban.notes && (
             <div className="mt-2">
               <span className="text-gray-400">Original Notes:</span>
-              <div className="text-gray-300 mt-1">{ban.notes}</div>
+              <SecureMessageDisplay 
+                content={ban.notes} 
+                className="text-gray-300 mt-1"
+                allowBasicFormatting={false}
+              />
             </div>
           )}
         </div>
@@ -86,9 +100,12 @@ export default function AppealReviewModal({
             )}
           </div>
           
-          <div className="text-sm text-gray-300 mb-2">
-            {ban.appealText || 'No appeal text provided'}
-          </div>
+          <SecureMessageDisplay 
+            content={ban.appealText || 'No appeal text provided'} 
+            className="text-sm text-gray-300 mb-2"
+            allowBasicFormatting={false}
+            maxLength={500}
+          />
           
           <div className="text-xs text-gray-500">
             Submitted: {ban.appealDate ? new Date(ban.appealDate).toLocaleString() : 'Unknown'}
@@ -97,21 +114,18 @@ export default function AppealReviewModal({
 
         {/* Review Notes */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Review Notes <span className="text-red-400">*</span>
-          </label>
-          <textarea
+          <SecureTextarea
+            label="Review Notes"
             value={appealReviewNotes}
-            onChange={(e) => setAppealReviewNotes(e.target.value)}
-            className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-            rows={4}
+            onChange={handleNotesChange}
             placeholder="Explain your decision and reasoning..."
             maxLength={1000}
+            characterCount={true}
             required
+            rows={4}
+            sanitize={true}
+            sanitizer={sanitizeStrict}
           />
-          <div className="text-xs text-gray-500 mt-1">
-            {appealReviewNotes.length}/1000 characters
-          </div>
         </div>
 
         {/* Action Buttons */}

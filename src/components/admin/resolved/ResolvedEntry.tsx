@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { User, Calendar, Shield, AlertTriangle, ChevronDown, ChevronUp, RotateCcw, Trash2, MessageSquare, FileText } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import type { ResolvedEntryProps } from '@/types/resolved';
 
 const getSeverityColor = (severity?: string) => {
@@ -201,9 +202,12 @@ export default function ResolvedEntry({
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-300 mb-2">Admin Notes</h4>
               <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-3">
-                <p className="text-sm text-gray-400 whitespace-pre-wrap">
-                  {report.notes || report.adminNotes}
-                </p>
+                <SecureMessageDisplay
+                  content={report.notes || report.adminNotes || ''}
+                  className="text-sm text-gray-400 whitespace-pre-wrap"
+                  allowBasicFormatting={false}
+                  maxLength={1000}
+                />
               </div>
             </div>
           )}
@@ -226,7 +230,12 @@ export default function ResolvedEntry({
                         {new Date(msg.date).toLocaleString()}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-300">{msg.content}</p>
+                    <SecureMessageDisplay
+                      content={msg.content}
+                      className="text-sm text-gray-300"
+                      allowBasicFormatting={false}
+                      maxLength={500}
+                    />
                   </div>
                 ))}
               </div>

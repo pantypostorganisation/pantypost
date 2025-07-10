@@ -3,6 +3,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import DocumentCard from './DocumentCard';
 import ActionButtons from './ActionButtons';
 import type { ReviewModalProps, ImageViewData } from '@/types/verification';
@@ -38,13 +39,21 @@ export default function ReviewModal({
     };
 
     const handleReject = () => {
-        onReject(user.username, rejectReason);
+        // Sanitize reject reason before sending
+        const sanitizedReason = sanitizeStrict(rejectReason);
+        onReject(user.username, sanitizedReason);
     };
 
     const handleClose = () => {
         setShowRejectInput(false);
         setRejectReason('');
         onClose();
+    };
+
+    const handleRejectReasonChange = (value: string) => {
+        // Sanitize reject reason input
+        const sanitizedValue = sanitizeStrict(value);
+        setRejectReason(sanitizedValue);
     };
 
     return (
@@ -125,7 +134,7 @@ export default function ReviewModal({
                                 setShowRejectInput(false);
                                 setRejectReason('');
                             }}
-                            onRejectReasonChange={setRejectReason}
+                            onRejectReasonChange={handleRejectReasonChange}
                         />
                     </div>
                 </div>

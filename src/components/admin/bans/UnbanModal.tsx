@@ -1,7 +1,10 @@
+// src/components/admin/bans/UnbanModal.tsx
 'use client';
 
 import { useState } from 'react';
 import { UserCheck } from 'lucide-react';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { BanEntry } from '@/types/ban';
 import { getBanReasonDisplay } from '@/utils/banUtils';
 
@@ -27,6 +30,12 @@ export default function UnbanModal({ ban, isLoading, onClose, onConfirm }: Unban
     setUnbanReason('');
   };
   
+  const handleReasonChange = (value: string) => {
+    // Sanitize unban reason
+    const sanitizedValue = sanitizeStrict(value);
+    setUnbanReason(sanitizedValue);
+  };
+  
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-md w-full">
@@ -47,16 +56,16 @@ export default function UnbanModal({ ban, isLoading, onClose, onConfirm }: Unban
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            Reason for unbanning (optional)
-          </label>
-          <textarea
+          <SecureTextarea
+            label="Reason for unbanning (optional)"
             value={unbanReason}
-            onChange={(e) => setUnbanReason(e.target.value)}
-            className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-            rows={3}
+            onChange={handleReasonChange}
             placeholder="Reason for lifting this ban..."
             maxLength={500}
+            characterCount={true}
+            rows={3}
+            sanitize={true}
+            sanitizer={sanitizeStrict}
           />
         </div>
 

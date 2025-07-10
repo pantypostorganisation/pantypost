@@ -2,6 +2,9 @@
 'use client';
 
 import { Star } from 'lucide-react';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import StarRating from '@/components/StarRating';
 
 interface Review {
@@ -32,6 +35,12 @@ export default function ReviewsSection({
   onCommentChange,
   onSubmit,
 }: ReviewsSectionProps) {
+  const handleCommentChange = (value: string) => {
+    // Sanitize comment input
+    const sanitizedValue = sanitizeStrict(value);
+    onCommentChange(sanitizedValue);
+  };
+
   return (
     <div className="mt-12">
       <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
@@ -50,7 +59,12 @@ export default function ReviewsSection({
                   {new Date(review.date).toLocaleDateString()}
                 </span>
               </div>
-              <p className="text-base text-gray-300 leading-relaxed">{review.comment}</p>
+              <SecureMessageDisplay 
+                content={review.comment}
+                className="text-base text-gray-300 leading-relaxed"
+                allowBasicFormatting={false}
+                maxLength={1000}
+              />
             </li>
           ))}
         </ul>
@@ -73,13 +87,16 @@ export default function ReviewsSection({
             </select>
           </div>
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Comment</label>
-            <textarea
+            <SecureTextarea
+              label="Comment"
               value={comment}
-              onChange={(e) => onCommentChange(e.target.value)}
-              className="w-full border border-gray-700 rounded-lg p-3 bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-              rows={4}
+              onChange={handleCommentChange}
               placeholder="Share your experience..."
+              rows={4}
+              maxLength={1000}
+              characterCount={true}
+              sanitize={true}
+              sanitizer={sanitizeStrict}
             />
           </div>
           <button

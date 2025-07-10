@@ -1,6 +1,9 @@
+// src/components/admin/messages/MessagesHeader.tsx
 'use client';
 
 import { MessageCircle, Filter, User, BellRing, Users, Search } from 'lucide-react';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
 
 interface MessagesHeaderProps {
   filterBy: 'all' | 'buyers' | 'sellers';
@@ -25,6 +28,17 @@ export default function MessagesHeader({
   directorySearchQuery,
   setDirectorySearchQuery
 }: MessagesHeaderProps) {
+  const handleSearchChange = (value: string) => {
+    // Sanitize search input
+    const sanitizedValue = sanitizeSearchQuery(value);
+    
+    if (showUserDirectory) {
+      setDirectorySearchQuery(sanitizedValue);
+    } else {
+      setSearchQuery(sanitizedValue);
+    }
+  };
+
   return (
     <>
       {/* Admin header */}
@@ -104,14 +118,17 @@ export default function MessagesHeader({
       {/* Search Bar */}
       <div className="px-4 pb-3">
         <div className="relative">
-          <input
+          <SecureInput
             type="text"
             placeholder={showUserDirectory ? "Search all users..." : "Search conversations..."}
             value={showUserDirectory ? directorySearchQuery : searchQuery}
-            onChange={(e) => showUserDirectory ? setDirectorySearchQuery(e.target.value) : setSearchQuery(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+            maxLength={100}
+            sanitize={true}
+            sanitizer={sanitizeSearchQuery}
           />
-          <div className="absolute right-3 top-2.5 text-gray-400">
+          <div className="absolute right-3 top-3 text-gray-400 z-10">
             <Search size={18} />
           </div>
         </div>
