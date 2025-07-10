@@ -180,6 +180,110 @@ const compressImage = (file: File): Promise<string> => {
   });
 };
 
+// Mock data generator for development
+const generateMockBanData = (): { bans: UserBan[], history: BanHistory[] } => {
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  const mockBans: UserBan[] = [
+    // Active temporary ban with appeal
+    {
+      id: 'ban-001',
+      username: 'troublemaker123',
+      banType: 'temporary',
+      reason: 'harassment',
+      customReason: 'Repeatedly sending inappropriate messages to multiple users',
+      startTime: oneDayAgo.toISOString(),
+      endTime: new Date(now.getTime() + 23 * 60 * 60 * 1000).toISOString(),
+      remainingHours: 23,
+      bannedBy: 'admin',
+      active: true,
+      appealable: true,
+      appealSubmitted: true,
+      appealText: 'I apologize for my behavior. I didn\'t realize my messages were inappropriate. I promise to follow the community guidelines from now on.',
+      appealDate: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      appealStatus: 'pending',
+      notes: 'Multiple users reported this account for harassment',
+      reportIds: ['report-123', 'report-124', 'report-125']
+    },
+    // Active permanent ban
+    {
+      id: 'ban-002',
+      username: 'scammer456',
+      banType: 'permanent',
+      reason: 'scam',
+      customReason: 'Attempted to scam multiple buyers with fake listings',
+      startTime: twoDaysAgo.toISOString(),
+      bannedBy: 'admin',
+      active: true,
+      appealable: true,
+      notes: 'Evidence of fraudulent activity confirmed',
+      reportIds: ['report-200', 'report-201']
+    },
+    // Expired ban
+    {
+      id: 'ban-003',
+      username: 'spammer789',
+      banType: 'temporary',
+      reason: 'spam',
+      customReason: 'Mass messaging users with promotional content',
+      startTime: oneWeekAgo.toISOString(),
+      endTime: twoDaysAgo.toISOString(),
+      bannedBy: 'moderator1',
+      active: false,
+      appealable: false,
+      notes: 'First offense - temporary ban issued'
+    }
+  ];
+  
+  const mockHistory: BanHistory[] = [
+    {
+      id: 'history-001',
+      username: 'troublemaker123',
+      action: 'banned',
+      details: 'Banned for 48 hours for harassment: Repeatedly sending inappropriate messages to multiple users',
+      timestamp: oneDayAgo.toISOString(),
+      adminUsername: 'admin'
+    },
+    {
+      id: 'history-002',
+      username: 'troublemaker123',
+      action: 'appeal_submitted',
+      details: 'Appeal submitted: "I apologize for my behavior..."',
+      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      adminUsername: 'troublemaker123'
+    },
+    {
+      id: 'history-003',
+      username: 'scammer456',
+      action: 'banned',
+      details: 'Permanently banned for scam: Attempted to scam multiple buyers with fake listings',
+      timestamp: twoDaysAgo.toISOString(),
+      adminUsername: 'admin'
+    },
+    {
+      id: 'history-004',
+      username: 'spammer789',
+      action: 'banned',
+      details: 'Banned for 24 hours for spam: Mass messaging users with promotional content',
+      timestamp: oneWeekAgo.toISOString(),
+      adminUsername: 'moderator1'
+    },
+    {
+      id: 'history-005',
+      username: 'spammer789',
+      action: 'unbanned',
+      details: 'Temporary ban expired automatically',
+      timestamp: twoDaysAgo.toISOString(),
+      adminUsername: 'system'
+    }
+  ];
+  
+  return { bans: mockBans, history: mockHistory };
+};
+
 export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [bans, setBans] = useState<UserBan[]>([]);
   const [banHistory, setBanHistory] = useState<BanHistory[]>([]);
@@ -201,15 +305,36 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const storedAppealReviews = await storageService.getItem<AppealReview[]>('panty_appeal_reviews', []);
         const storedIPBans = await storageService.getItem<IPBan[]>('panty_ip_bans', []);
         
-        setBans(storedBans);
-        // Schedule expiration for active temporary bans
-        storedBans.forEach((ban: UserBan) => {
-          if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-            scheduleExpiration(ban);
-          }
-        });
+        // If no data exists and we're in development, create mock data
+        if (storedBans.length === 0 && storedHistory.length === 0 && process.env.NODE_ENV === 'development') {
+          console.log('[BanContext] No ban data found, creating mock data...');
+          const { bans: mockBans, history: mockHistory } = generateMockBanData();
+          
+          setBans(mockBans);
+          setBanHistory(mockHistory);
+          
+          // Save mock data to storage
+          await storageService.setItem('panty_user_bans', mockBans);
+          await storageService.setItem('panty_ban_history', mockHistory);
+          
+          // Schedule expiration for active temporary bans
+          mockBans.forEach((ban: UserBan) => {
+            if (ban.active && ban.banType === 'temporary' && ban.endTime) {
+              scheduleExpiration(ban);
+            }
+          });
+        } else {
+          setBans(storedBans);
+          setBanHistory(storedHistory);
+          
+          // Schedule expiration for active temporary bans
+          storedBans.forEach((ban: UserBan) => {
+            if (ban.active && ban.banType === 'temporary' && ban.endTime) {
+              scheduleExpiration(ban);
+            }
+          });
+        }
         
-        setBanHistory(storedHistory);
         setAppealReviews(storedAppealReviews);
         setIPBans(storedIPBans);
         
