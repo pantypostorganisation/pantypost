@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useMessages } from '@/context/MessageContext';
 import { useRouter } from 'next/navigation';
 import { MessageCircle, X } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function MessageNotifications() {
   const { user } = useAuth();
@@ -72,9 +73,12 @@ export default function MessageNotifications() {
                     : `New message from ${notif.buyer}`
                   }
                 </p>
-                <p className="text-sm opacity-90 truncate mt-1">
-                  {notif.lastMessage}
-                </p>
+                <SecureMessageDisplay
+                  content={notif.lastMessage}
+                  className="text-sm opacity-90 truncate mt-1"
+                  allowBasicFormatting={false}
+                  maxLength={100}
+                />
                 <p className="text-xs opacity-75 mt-1">
                   {new Date(notif.timestamp).toLocaleTimeString()}
                 </p>

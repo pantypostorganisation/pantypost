@@ -11,6 +11,8 @@ import VerificationStats from '@/components/admin/verification/VerificationStats
 import VerificationList from '@/components/admin/verification/VerificationList';
 import ReviewModal from '@/components/admin/verification/ReviewModal';
 import { storageService } from '@/services';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 import type { VerificationUser, SortOption, VerificationStats as StatsType } from '@/types/verification';
 
 export default function AdminVerificationRequestsPage() {
@@ -44,6 +46,12 @@ export default function AdminVerificationRequestsPage() {
     setPending(sortedUsers);
     setSelected(null);
   }, [users, sortBy]);
+
+  // Handle search term update with sanitization
+  const handleSearchTermChange = (newSearchTerm: string) => {
+    const sanitized = securityService.sanitizeSearchQuery(newSearchTerm);
+    setSearchTerm(sanitized);
+  };
 
   // Filter users based on search term
   const filteredUsers = pending.filter(user => 
@@ -89,17 +97,20 @@ export default function AdminVerificationRequestsPage() {
     });
   };
 
-  // Handle approval
+  // Handle approval with sanitization
   const handleApprove = async (username: string): Promise<void> => {
-    setVerificationStatus(username, 'verified');
+    // Sanitize username
+    const sanitizedUsername = sanitizeStrict(username);
     
-    // Add to resolved verifications (optional)
+    setVerificationStatus(sanitizedUsername, 'verified');
+    
+    // Add to resolved verifications with sanitized data
     const resolvedEntry = {
       id: `verification_${Date.now()}`,
-      username,
+      username: sanitizedUsername,
       requestDate: users[username]?.verificationRequestedAt || new Date().toISOString(),
       resolvedDate: new Date().toISOString(),
-      resolvedBy: user?.username || 'admin',
+      resolvedBy: sanitizeStrict(user?.username || 'admin'),
       status: 'approved' as const,
       verificationDocs: users[username]?.verificationDocs
     };
@@ -111,19 +122,23 @@ export default function AdminVerificationRequestsPage() {
     setSelected(null);
   };
 
-  // Handle rejection
+  // Handle rejection with sanitization
   const handleReject = async (username: string, reason: string): Promise<void> => {
-    setVerificationStatus(username, 'rejected', reason);
+    // Sanitize inputs
+    const sanitizedUsername = sanitizeStrict(username);
+    const sanitizedReason = sanitizeStrict(reason);
     
-    // Add to resolved verifications (optional)
+    setVerificationStatus(sanitizedUsername, 'rejected', sanitizedReason);
+    
+    // Add to resolved verifications with sanitized data
     const resolvedEntry = {
       id: `verification_${Date.now()}`,
-      username,
+      username: sanitizedUsername,
       requestDate: users[username]?.verificationRequestedAt || new Date().toISOString(),
       resolvedDate: new Date().toISOString(),
-      resolvedBy: user?.username || 'admin',
+      resolvedBy: sanitizeStrict(user?.username || 'admin'),
       status: 'rejected' as const,
-      rejectionReason: reason,
+      rejectionReason: sanitizedReason,
       verificationDocs: users[username]?.verificationDocs
     };
     
@@ -146,7 +161,7 @@ export default function AdminVerificationRequestsPage() {
         
         <VerificationSearch
           searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
+          onSearchChange={handleSearchTermChange}
           sortBy={sortBy}
           onSortChange={setSortBy}
           pendingCount={filteredUsers.length}

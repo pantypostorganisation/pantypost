@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { uploadToCloudinary } from '@/utils/cloudinary';
+import { securityService } from '@/services/security.service';
 
 export default function CloudinaryTest() {
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -14,6 +15,19 @@ export default function CloudinaryTest() {
     if (!file) return;
 
     setError('');
+    
+    // Validate file before upload
+    const validation = securityService.validateFileUpload(file, {
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+    });
+
+    if (!validation.valid) {
+      setError(validation.error || 'Invalid file');
+      return;
+    }
+
     setIsUploading(true);
 
     try {

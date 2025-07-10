@@ -18,6 +18,8 @@ import { Shield, AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import { FilterOptions, BanStats } from '@/types/ban';
 import { useBanManagement } from '@/hooks/useBanManagement';
 import { isValidBan } from '@/utils/banUtils';
+import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 type TabKey = 'active' | 'expired' | 'appeals' | 'history' | 'analytics';
 
@@ -160,15 +162,22 @@ export default function BanManagementPage() {
       return;
     }
     
+    // Sanitize the reason
+    const sanitizedReason = sanitizeStrict(reason || 'Manually unbanned by admin');
+    
     setIsLoading(true);
     try {
       if (typeof unbanUser !== 'function') {
         alert('Unban function not available');
         return;
       }
-      const success = unbanUser(selectedBan.username, user?.username || 'admin', reason || 'Manually unbanned by admin');
+      const success = unbanUser(
+        selectedBan.username, 
+        user?.username || 'admin', 
+        sanitizedReason
+      );
       if (success) {
-        alert(`Successfully unbanned ${selectedBan.username}`);
+        alert(`Successfully unbanned ${sanitizeStrict(selectedBan.username)}`);
         setShowUnbanModal(false);
         setSelectedBan(null);
       } else {
@@ -207,13 +216,21 @@ export default function BanManagementPage() {
       return;
     }
     
+    // Sanitize the review notes
+    const sanitizedNotes = sanitizeStrict(appealReviewNotes.trim());
+    
     setIsLoading(true);
     try {
       if (typeof reviewAppeal !== 'function') {
         alert('Review appeal function not available');
         return;
       }
-      const success = reviewAppeal(selectedBan.id, decision, appealReviewNotes.trim(), user?.username || 'admin');
+      const success = reviewAppeal(
+        selectedBan.id, 
+        decision, 
+        sanitizedNotes, 
+        user?.username || 'admin'
+      );
       if (success) {
         alert(`Appeal ${decision}d successfully`);
         setShowAppealModal(false);
@@ -252,18 +269,50 @@ export default function BanManagementPage() {
 
   const exportBanData = () => {
     try {
-      const data = {
-        activeBans: activeBans || [],
-        expiredBans: expiredBans || [],
-        banHistory: banHistory || [],
-        banStats: banStats || {},
+      // Sanitize data before export
+      const sanitizedData = {
+        activeBans: activeBans.map(ban => sanitizeObject(ban, {
+          maxDepth: 3,
+          keySanitizer: (key) => sanitizeStrict(key),
+          valueSanitizer: (value) => {
+            if (typeof value === 'string') {
+              return sanitizeStrict(value);
+            }
+            return value;
+          }
+        })) || [],
+        expiredBans: expiredBans.map(ban => sanitizeObject(ban, {
+          maxDepth: 3,
+          keySanitizer: (key) => sanitizeStrict(key),
+          valueSanitizer: (value) => {
+            if (typeof value === 'string') {
+              return sanitizeStrict(value);
+            }
+            return value;
+          }
+        })) || [],
+        banHistory: (banHistory || []).map(entry => sanitizeObject(entry, {
+          maxDepth: 3,
+          keySanitizer: (key) => sanitizeStrict(key),
+          valueSanitizer: (value) => {
+            if (typeof value === 'string') {
+              return sanitizeStrict(value);
+            }
+            return value;
+          }
+        })),
+        banStats: sanitizeObject(banStats || {}, {
+          maxDepth: 3,
+          keySanitizer: (key) => sanitizeStrict(key),
+          valueSanitizer: (value) => value
+        }),
         exportDate: new Date().toISOString(),
         version: '1.0',
-        exportedBy: user?.username || 'admin',
+        exportedBy: sanitizeStrict(user?.username || 'admin'),
         totalRecords: (activeBans?.length || 0) + (expiredBans?.length || 0)
       };
       
-      const blob = new Blob([JSON.stringify(data, null, 2)], { 
+      const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], { 
         type: 'application/json' 
       });
       const url = URL.createObjectURL(blob);
@@ -280,6 +329,18 @@ export default function BanManagementPage() {
       console.error('Error exporting ban data:', error);
       alert('Failed to export ban data - please try again');
     }
+  };
+
+  // Update filters with sanitization
+  const handleFiltersChange = (newFilters: Partial<FilterOptions>) => {
+    const sanitizedFilters = { ...newFilters };
+    
+    // Sanitize search term if it exists
+    if ('searchTerm' in sanitizedFilters && sanitizedFilters.searchTerm) {
+      sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(sanitizedFilters.searchTerm);
+    }
+    
+    setFilters(prev => ({ ...prev, ...sanitizedFilters }));
   };
 
   if (!banContext) {
@@ -352,7 +413,7 @@ export default function BanManagementPage() {
 
           <BanFilters
             filters={filters}
-            onFiltersChange={(newFilters) => setFilters(prev => ({ ...prev, ...newFilters }))}
+            onFiltersChange={handleFiltersChange}
             showTypeFilter={['active', 'expired'].includes(activeTab)}
             isVisible={['active', 'expired', 'appeals'].includes(activeTab)}
           />

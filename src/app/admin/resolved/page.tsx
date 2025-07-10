@@ -12,6 +12,8 @@ import ResolvedList from '@/components/admin/resolved/ResolvedList';
 import RestoreModal from '@/components/admin/resolved/RestoreModal';
 import { AlertTriangle } from 'lucide-react';
 import { storageService } from '@/services';
+import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 import type { ResolvedReport, FilterOptions, ResolvedStats as StatsType } from '@/types/resolved';
 
 export default function ResolvedReportsPage() {
@@ -37,10 +39,17 @@ export default function ResolvedReportsPage() {
     if (typeof window !== 'undefined') {
       try {
         const stored = await storageService.getItem<ResolvedReport[]>('panty_report_resolved', []);
-        // Add IDs if missing
+        // Add IDs if missing and sanitize text fields
         const reportsWithIds = stored.map((report, index) => ({
           ...report,
-          id: report.id || `${report.reporter}-${report.reportee}-${report.date}-${index}`
+          id: report.id || `${report.reporter}-${report.reportee}-${report.date}-${index}`,
+          // Sanitize text fields
+          reporter: sanitizeStrict(report.reporter || ''),
+          reportee: sanitizeStrict(report.reportee || ''),
+          resolvedBy: sanitizeStrict(report.resolvedBy || ''),
+          resolvedReason: sanitizeStrict(report.resolvedReason || ''),
+          notes: sanitizeStrict(report.notes || ''),
+          adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
         }));
         setResolved(reportsWithIds);
         setLastRefresh(new Date());
@@ -52,8 +61,19 @@ export default function ResolvedReportsPage() {
   };
 
   const saveResolved = async (newResolved: ResolvedReport[]) => {
-    setResolved(newResolved);
-    await storageService.setItem('panty_report_resolved', newResolved);
+    // Sanitize before saving
+    const sanitizedResolved = newResolved.map(report => ({
+      ...report,
+      reporter: sanitizeStrict(report.reporter || ''),
+      reportee: sanitizeStrict(report.reportee || ''),
+      resolvedBy: sanitizeStrict(report.resolvedBy || ''),
+      resolvedReason: sanitizeStrict(report.resolvedReason || ''),
+      notes: sanitizeStrict(report.notes || ''),
+      adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
+    }));
+    
+    setResolved(sanitizedResolved);
+    await storageService.setItem('panty_report_resolved', sanitizedResolved);
   };
 
   // Toggle expanded state
@@ -97,9 +117,16 @@ export default function ResolvedReportsPage() {
     setSelectedReports(new Set());
   };
 
-  // Handle filter changes
+  // Handle filter changes with sanitization
   const handleFiltersChange = (newFilters: Partial<FilterOptions>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+    const sanitizedFilters = { ...newFilters };
+    
+    // Sanitize search term if present
+    if ('searchTerm' in sanitizedFilters && sanitizedFilters.searchTerm) {
+      sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(sanitizedFilters.searchTerm);
+    }
+    
+    setFilters(prev => ({ ...prev, ...sanitizedFilters }));
   };
 
   // Handle restore
@@ -111,17 +138,19 @@ export default function ResolvedReportsPage() {
   const confirmRestore = async () => {
     if (!reportToRestore) return;
 
-    // Generate a new report entry for active reports
+    // Generate a new report entry for active reports with sanitized data
     const newReport = {
       id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      reporter: reportToRestore.reporter,
-      reportee: reportToRestore.reportee,
+      reporter: sanitizeStrict(reportToRestore.reporter),
+      reportee: sanitizeStrict(reportToRestore.reportee),
       messages: reportToRestore.messages || [],
       date: reportToRestore.originalReportDate || reportToRestore.date,
       processed: false,
       severity: reportToRestore.severity,
       category: reportToRestore.category,
-      adminNotes: `[Restored from resolved on ${new Date().toLocaleString()}]\n${reportToRestore.adminNotes || reportToRestore.notes || ''}`
+      adminNotes: sanitizeStrict(
+        `[Restored from resolved on ${new Date().toLocaleString()}]\n${reportToRestore.adminNotes || reportToRestore.notes || ''}`
+      )
     };
 
     // Add to active reports
@@ -138,7 +167,7 @@ export default function ResolvedReportsPage() {
 
     setShowRestoreModal(false);
     setReportToRestore(null);
-    alert(`Restored report from ${reportToRestore.reporter} about ${reportToRestore.reportee}.`);
+    alert(`Restored report from ${sanitizeStrict(reportToRestore.reporter)} about ${sanitizeStrict(reportToRestore.reportee)}.`);
   };
 
   // Handle delete
@@ -171,17 +200,19 @@ export default function ResolvedReportsPage() {
       const existingReports = await storageService.getItem<any[]>('panty_report_logs', []);
       
       toRestore.forEach(report => {
-        // Add to active reports
+        // Add to active reports with sanitized data
         const newReport = {
           id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          reporter: report.reporter,
-          reportee: report.reportee,
+          reporter: sanitizeStrict(report.reporter),
+          reportee: sanitizeStrict(report.reportee),
           messages: report.messages || [],
           date: report.originalReportDate || report.date,
           processed: false,
           severity: report.severity,
           category: report.category,
-          adminNotes: `[Restored from resolved on ${new Date().toLocaleString()}]\n${report.adminNotes || report.notes || ''}`
+          adminNotes: sanitizeStrict(
+            `[Restored from resolved on ${new Date().toLocaleString()}]\n${report.adminNotes || report.notes || ''}`
+          )
         };
         existingReports.push(newReport);
       });
@@ -216,16 +247,26 @@ export default function ResolvedReportsPage() {
     }
   };
 
-  // Export data
+  // Export data with sanitization
   const exportData = () => {
-    const data = {
-      resolvedReports: resolved,
+    // Sanitize data before export
+    const sanitizedData = {
+      resolvedReports: resolved.map(report => sanitizeObject(report, {
+        maxDepth: 3,
+        keySanitizer: (key) => sanitizeStrict(key),
+        valueSanitizer: (value) => {
+          if (typeof value === 'string') {
+            return sanitizeStrict(value);
+          }
+          return value;
+        }
+      })),
       exportDate: new Date().toISOString(),
-      exportedBy: user?.username || 'admin',
+      exportedBy: sanitizeStrict(user?.username || 'admin'),
       totalRecords: resolved.length
     };
     
-    const blob = new Blob([JSON.stringify(data, null, 2)], { 
+    const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], { 
       type: 'application/json' 
     });
     const url = URL.createObjectURL(blob);
@@ -238,10 +279,22 @@ export default function ResolvedReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Import data
+  // Import data with validation and sanitization
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    
+    // Validate file type
+    const validationResult = securityService.validateFileUpload(file, {
+      maxSize: 10 * 1024 * 1024, // 10MB
+      allowedTypes: ['application/json'],
+      allowedExtensions: ['json']
+    });
+    
+    if (!validationResult.valid) {
+      alert(validationResult.error || 'Invalid file');
+      return;
+    }
     
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -249,12 +302,20 @@ export default function ResolvedReportsPage() {
         const data = JSON.parse(e.target?.result as string);
         if (data.resolvedReports && Array.isArray(data.resolvedReports)) {
           const imported = data.resolvedReports as ResolvedReport[];
-          // Add IDs if missing
-          const importedWithIds = imported.map((report, index) => ({
+          
+          // Sanitize imported data
+          const sanitizedImports = imported.map((report, index) => ({
             ...report,
-            id: report.id || `${report.reporter}-${report.reportee}-${report.date}-imported-${index}`
+            id: report.id || `${report.reporter}-${report.reportee}-${report.date}-imported-${index}`,
+            reporter: sanitizeStrict(report.reporter || ''),
+            reportee: sanitizeStrict(report.reportee || ''),
+            resolvedBy: sanitizeStrict(report.resolvedBy || ''),
+            resolvedReason: sanitizeStrict(report.resolvedReason || ''),
+            notes: sanitizeStrict(report.notes || ''),
+            adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
           }));
-          const merged = [...resolved, ...importedWithIds];
+          
+          const merged = [...resolved, ...sanitizedImports];
           // Remove duplicates based on reporter + reportee + date
           const unique = merged.filter((report, index, self) =>
             index === self.findIndex((r) => (
@@ -264,7 +325,7 @@ export default function ResolvedReportsPage() {
             ))
           );
           await saveResolved(unique);
-          alert(`Imported ${imported.length} reports. Total: ${unique.length}`);
+          alert(`Imported ${sanitizedImports.length} reports. Total: ${unique.length}`);
         } else {
           alert('Invalid file format');
         }
@@ -274,6 +335,9 @@ export default function ResolvedReportsPage() {
       }
     };
     reader.readAsText(file);
+    
+    // Reset input
+    event.target.value = '';
   };
 
   // Calculate stats

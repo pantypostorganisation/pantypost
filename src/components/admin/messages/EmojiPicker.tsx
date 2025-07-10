@@ -1,3 +1,4 @@
+// src/components/admin/messages/EmojiPicker.tsx
 'use client';
 
 import { useRef, useEffect, useState } from 'react';

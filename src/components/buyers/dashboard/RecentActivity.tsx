@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, Clock, CheckCircle, AlertCircle, Truck } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { RecentActivityProps } from '@/types/dashboard';
 
 export default function RecentActivity({ activities }: RecentActivityProps) {
@@ -61,10 +62,18 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
                   {activity.icon}
                 </div>
                 <div>
-                  <p className="text-white font-medium text-sm group-hover:text-[#ff950e] transition-colors">
-                    {activity.title}
-                  </p>
-                  <p className="text-gray-500 text-xs mt-0.5">{activity.subtitle}</p>
+                  <SecureMessageDisplay
+                    content={activity.title}
+                    className="text-white font-medium text-sm group-hover:text-[#ff950e] transition-colors"
+                    allowBasicFormatting={false}
+                    maxLength={100}
+                  />
+                  <SecureMessageDisplay
+                    content={activity.subtitle}
+                    className="text-gray-500 text-xs mt-0.5"
+                    allowBasicFormatting={false}
+                    maxLength={80}
+                  />
                 </div>
               </div>
               
