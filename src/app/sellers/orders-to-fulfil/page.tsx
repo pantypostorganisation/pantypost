@@ -13,6 +13,7 @@ import OrdersSection from '@/components/seller/orders/OrdersSection';
 import OrdersEmptyState from '@/components/seller/orders/OrdersEmptyState';
 import AddressDisplay from '@/components/seller/orders/AddressDisplay';
 import ShippingControls from '@/components/seller/orders/ShippingControls';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { 
   Clock, 
   Package, 
@@ -120,12 +121,13 @@ export default function OrdersToFulfilPage() {
   }, []);
 
   const formatAddressForCopy = useCallback((address: DeliveryAddress): string => {
+    // Sanitize all address fields before formatting
     const lines = [
-      address.fullName,
-      address.addressLine1,
-      address.addressLine2,
-      `${address.city}, ${address.state} ${address.postalCode}`,
-      address.country,
+      sanitizeStrict(address.fullName),
+      sanitizeStrict(address.addressLine1),
+      address.addressLine2 ? sanitizeStrict(address.addressLine2) : '',
+      `${sanitizeStrict(address.city)}, ${sanitizeStrict(address.state)} ${sanitizeStrict(address.postalCode)}`,
+      sanitizeStrict(address.country),
     ].filter(Boolean);
     
     return lines.join('\n');
@@ -160,12 +162,13 @@ export default function OrdersToFulfilPage() {
     if (!order.deliveryAddress) return '';
 
     const address = order.deliveryAddress;
+    // Sanitize all address fields before creating shipping label
     const lines = [
-      address.fullName,
-      address.addressLine1,
-      address.addressLine2,
-      `${address.city}, ${address.state} ${address.postalCode}`,
-      address.country,
+      sanitizeStrict(address.fullName),
+      sanitizeStrict(address.addressLine1),
+      address.addressLine2 ? sanitizeStrict(address.addressLine2) : '',
+      `${sanitizeStrict(address.city)}, ${sanitizeStrict(address.state)} ${sanitizeStrict(address.postalCode)}`,
+      sanitizeStrict(address.country),
     ].filter(Boolean);
 
     return lines.join('\n');

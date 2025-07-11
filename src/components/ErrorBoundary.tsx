@@ -1,6 +1,7 @@
 // src/components/ErrorBoundary.tsx
 'use client';
 import React from 'react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -102,11 +103,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       if (typeof window !== 'undefined') {
         const errorLog = {
           error: {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
+            message: sanitizeStrict(error.message),
+            stack: sanitizeStrict(error.stack || ''),
+            name: sanitizeStrict(error.name)
           },
-          context,
+          context: {
+            ...context,
+            url: sanitizeStrict(context.url),
+            componentStack: sanitizeStrict(context.componentStack)
+          },
           timestamp: new Date().toISOString()
         };
 
@@ -163,6 +168,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         return this.props.fallback;
       }
       
+      // Sanitize error message for display
+      const sanitizedErrorMessage = sanitizeStrict(
+        this.state.error?.message || 'An unexpected error occurred'
+      );
+      const sanitizedErrorStack = sanitizeStrict(this.state.error?.stack || '');
+      const sanitizedComponentStack = sanitizeStrict(
+        this.state.errorInfo?.componentStack || ''
+      );
+      
       // Enhanced default fallback UI
       return (
         <div className="p-8 max-w-md mx-auto bg-[#1a1a1a] border border-red-800 rounded-lg my-8 text-white shadow-lg error-state">
@@ -182,12 +196,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 Error Details {this.state.errorId ? `(${this.state.errorId.slice(-8)})` : ''}
               </summary>
               <p className="text-red-400 font-mono text-xs whitespace-pre-wrap break-words">
-                {this.state.error?.message || 'An unexpected error occurred'}
+                {sanitizedErrorMessage}
               </p>
               {this.state.error?.stack && process.env.NODE_ENV === 'development' && (
                 <div className="mt-2 max-h-32 overflow-y-auto">
                   <pre className="text-red-500 text-xs whitespace-pre-wrap break-words">
-                    {this.state.error.stack}
+                    {sanitizedErrorStack}
                   </pre>
                 </div>
               )}
@@ -240,7 +254,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                   Component Stack (Development Only)
                 </summary>
                 <pre className="text-red-400 font-mono text-xs overflow-x-auto whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
-                  {this.state.errorInfo.componentStack}
+                  {sanitizedComponentStack}
                 </pre>
               </details>
             </div>
@@ -327,13 +341,16 @@ export const AsyncErrorBoundary: React.FC<ErrorBoundaryProps & {
   }, [onRetry, retryCount, maxRetries]);
 
   const fallback = React.useCallback((error: Error, errorInfo: React.ErrorInfo) => {
+    // Sanitize error message for display
+    const sanitizedMessage = sanitizeStrict(error.message);
+    
     return (
       <div className="p-6 text-center error-state rounded-lg">
         <h3 className="text-lg font-semibold text-red-400 mb-2">
           Loading Error
         </h3>
         <p className="text-gray-400 text-sm mb-4">
-          {error.message}
+          {sanitizedMessage}
         </p>
         {retryCount < maxRetries && onRetry && (
           <button

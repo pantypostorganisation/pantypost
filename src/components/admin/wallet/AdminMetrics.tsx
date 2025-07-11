@@ -1,9 +1,8 @@
 // src/components/admin/wallet/AdminMetrics.tsx
 'use client';
 
-import { 
-  DollarSign, 
-  TrendingUp, 
+import {
+  DollarSign,
   ArrowUpRight,
   ArrowDownRight,
   Download,
@@ -38,7 +37,6 @@ interface AdminMetricsProps {
   adminWithdrawals: any[];
 }
 
-// Metric card component for consistent display
 function MetricCard({
   title,
   subtitle,
@@ -89,7 +87,7 @@ function MetricCard({
             <p className="text-xs text-gray-500">{subtitle}</p>
           </div>
         </div>
-        
+
         {loading ? (
           <div className="flex items-center gap-2 mb-2">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
@@ -108,7 +106,7 @@ function MetricCard({
                 </span>
               )}
             </div>
-            
+
             {breakdown && breakdown.length > 0 && (
               <p className="text-sm text-gray-400">
                 {breakdown.map((item, idx) => (
@@ -142,7 +140,6 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     adminWithdrawals
   } = props;
 
-  // Local state for calculated values to prevent flickering
   const [metrics, setMetrics] = useState({
     platformProfit: 0,
     subscriptionProfit: 0,
@@ -156,36 +153,33 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     withdrawalGrowthRate: 0
   });
 
-  // Calculate metrics with proper error handling
   useEffect(() => {
     try {
-      // Calculate all metrics
       const periodSalesProfit = calculatePlatformProfit(filteredOrders);
       const allTimeSalesProfit = calculatePlatformProfit(orderHistory);
-      
+
       const periodSubscriptionProfit = calculateSubscriptionProfit(filteredActions);
       const allTimeSubscriptionProfit = calculateSubscriptionProfit(adminActions);
-      
+
       const periodSubscriptionRevenue = calculateSubscriptionRevenue(filteredActions);
       const allTimeSubscriptionRevenue = calculateSubscriptionRevenue(adminActions);
-      
+
       const periodSalesRevenue = calculateTotalRevenue(filteredOrders);
       const allTimeSalesRevenue = calculateTotalRevenue(orderHistory);
-      
+
       const periodTotalRevenue = periodSalesRevenue + periodSubscriptionRevenue;
       const allTimeTotalRevenue = allTimeSalesRevenue + allTimeSubscriptionRevenue;
-      
+
       const periodAverageOrderValue = filteredOrders.length > 0 ? (periodSalesRevenue / filteredOrders.length) : 0;
       const allTimeAverageOrderValue = orderHistory.length > 0 ? (allTimeSalesRevenue / orderHistory.length) : 0;
-      
+
       const displayPlatformProfit = timeFilter === 'all' ? allTimeSalesProfit : periodSalesProfit;
       const displaySubscriptionProfit = timeFilter === 'all' ? allTimeSubscriptionProfit : periodSubscriptionProfit;
       const displayTotalProfit = displayPlatformProfit + displaySubscriptionProfit;
-      
+
       const displayTotalRevenue = timeFilter === 'all' ? allTimeTotalRevenue : periodTotalRevenue;
       const displayAverageOrderValue = timeFilter === 'all' ? allTimeAverageOrderValue : periodAverageOrderValue;
-      
-      // Deposits calculation
+
       const totalDepositsAllTime = depositLogs
         .filter((deposit: any) => deposit.status === 'completed')
         .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
@@ -194,17 +188,15 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
       const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
 
-      // Withdrawals calculation
       const withdrawalMetrics = calculateWithdrawals(filteredSellerWithdrawals, filteredAdminWithdrawals);
       const allTimeWithdrawalData = timeFilter === 'all' ? {
         totalWithdrawals: getAllSellerWithdrawals(sellerWithdrawals).reduce((sum: number, w: any) => sum + w.amount, 0) + 
                          adminWithdrawals.reduce((sum: number, w: any) => sum + w.amount, 0)
       } : withdrawalMetrics;
 
-      // Growth rate calculations
-      const { orders: previousPeriodOrders, deposits: previousPeriodDeposits, withdrawals: previousPeriodWithdrawals, actions: previousPeriodActions } = 
+      const { orders: previousPeriodOrders, deposits: previousPeriodDeposits, withdrawals: previousPeriodWithdrawals, actions: previousPeriodActions } =
         getPreviousPeriodData(timeFilter, orderHistory, depositLogs, getAllSellerWithdrawals(sellerWithdrawals), adminActions);
-      
+
       const previousPeriodProfit = calculatePlatformProfit(previousPeriodOrders) + calculateSubscriptionProfit(previousPeriodActions);
       const previousPeriodDepositAmount = previousPeriodDeposits
         .filter((deposit: any) => deposit.status === 'completed')
@@ -212,16 +204,15 @@ export default function AdminMetrics(props: AdminMetricsProps) {
       const previousPeriodWithdrawalAmount = previousPeriodWithdrawals
         .reduce((sum: number, withdrawal: any) => sum + withdrawal.amount, 0);
 
-      const growthRate = timeFilter !== 'all' && previousPeriodProfit > 0 ? 
+      const growthRate = timeFilter !== 'all' && previousPeriodProfit > 0 ?
         ((displayTotalProfit - previousPeriodProfit) / previousPeriodProfit) * 100 : 0;
 
-      const depositGrowthRate = timeFilter !== 'all' && previousPeriodDepositAmount > 0 ? 
+      const depositGrowthRate = timeFilter !== 'all' && previousPeriodDepositAmount > 0 ?
         ((periodTotalDeposits - previousPeriodDepositAmount) / previousPeriodDepositAmount) * 100 : 0;
 
-      const withdrawalGrowthRate = timeFilter !== 'all' && previousPeriodWithdrawalAmount > 0 ? 
+      const withdrawalGrowthRate = timeFilter !== 'all' && previousPeriodWithdrawalAmount > 0 ?
         ((withdrawalMetrics.totalWithdrawals - previousPeriodWithdrawalAmount) / previousPeriodWithdrawalAmount) * 100 : 0;
 
-      // Update state with calculated metrics
       setMetrics({
         platformProfit: displayPlatformProfit,
         subscriptionProfit: displaySubscriptionProfit,
@@ -237,7 +228,6 @@ export default function AdminMetrics(props: AdminMetricsProps) {
 
     } catch (error) {
       console.error('Error calculating metrics:', error);
-      // Keep previous values on error
     }
   }, [
     timeFilter,
@@ -253,40 +243,10 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     adminWithdrawals
   ]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('AdminMetrics State:', {
-      timeFilter,
-      metrics,
-      dataLengths: {
-        adminActions: adminActions.length,
-        filteredActions: filteredActions.length,
-        orderHistory: orderHistory.length,
-        filteredOrders: filteredOrders.length,
-        depositLogs: depositLogs.length,
-        filteredDeposits: filteredDeposits.length
-      }
-    });
-  }, [metrics, timeFilter]);
-
-  const getPeriodDisplayName = () => {
-    switch (timeFilter) {
-      case 'today': return 'Today';
-      case 'week': return 'This Week';
-      case 'month': return 'This Month';
-      case '3months': return 'Last 3 Months';
-      case 'year': return 'This Year';
-      default: return 'All Time';
-    }
-  };
-
-  const periodName = getPeriodDisplayName();
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-      {/* Total Money Made */}
       <MetricCard
-        title={timeFilter === 'all' ? 'Total Money Made' : `Money Made - ${periodName}`}
+        title="Money Made"
         subtitle="Your platform profit"
         value={metrics.totalProfit}
         icon={DollarSign}
@@ -299,9 +259,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         ]}
       />
 
-      {/* Total Deposits */}
       <MetricCard
-        title={timeFilter === 'all' ? 'Total Deposits' : `Deposits - ${periodName}`}
+        title="Deposits"
         subtitle="Cash collected upfront"
         value={metrics.totalDeposits}
         icon={Download}
@@ -310,9 +269,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         growthRate={timeFilter !== 'all' ? metrics.depositGrowthRate : undefined}
       />
 
-      {/* Total Withdrawals */}
       <MetricCard
-        title={timeFilter === 'all' ? 'Total Withdrawals' : `Withdrawals - ${periodName}`}
+        title="Withdrawals"
         subtitle="Money paid out"
         value={metrics.totalWithdrawals}
         icon={Upload}
@@ -321,9 +279,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         growthRate={timeFilter !== 'all' ? metrics.withdrawalGrowthRate : undefined}
       />
 
-      {/* Total Platform Revenue */}
       <MetricCard
-        title={timeFilter === 'all' ? 'Total Revenue' : `Revenue - ${periodName}`}
+        title="Revenue"
         subtitle="All revenue"
         value={metrics.totalRevenue}
         icon={BarChart3}
@@ -331,10 +288,9 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         bgGradient="from-purple-500/20 to-purple-600/10 border-purple-500/30"
       />
 
-      {/* Average Order Value */}
       <MetricCard
-        title={timeFilter === 'all' ? 'Avg Order Value' : `Avg Order - ${periodName}`}
-        subtitle="per transaction"
+        title="Avg Order Value"
+        subtitle="Per transaction"
         value={metrics.averageOrderValue}
         icon={Target}
         iconColor="bg-green-500"

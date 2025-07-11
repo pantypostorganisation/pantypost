@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { storageService } from '@/services';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 // ✅ Custom hooks for better reusability
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
@@ -116,10 +118,10 @@ export default function Header() {
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
 
-  // Derived values
+  // Derived values with sanitization
   const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
   const role = user?.role ?? null;
-  const username = user?.username ?? '';
+  const username = user?.username ? sanitizeStrict(user.username) : '';
 
   // ✅ Click outside handlers using custom hook
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
@@ -136,33 +138,36 @@ export default function Header() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // ✅ Memoized notification processing with safe error handling
+  // ✅ Memoized notification processing with safe error handling and sanitization
   const processedNotifications = useMemo(() => {
     if (!user?.username || user.role !== 'seller' || !sellerNotifications) {
       return { active: [], cleared: [] };
     }
 
     const addNotificationEmojis = (message: string): string => {
-      if (message.includes('New sale:') && !message.includes('Auction ended:')) {
-        return `💰🛍️ ${message}`;
+      // Sanitize the message first
+      const sanitizedMessage = sanitizeStrict(message);
+      
+      if (sanitizedMessage.includes('New sale:') && !sanitizedMessage.includes('Auction ended:')) {
+        return `💰🛍️ ${sanitizedMessage}`;
       }
-      if (message.includes('Auction ended:') && message.includes('sold to')) {
-        return `💰🏆 ${message}`;
+      if (sanitizedMessage.includes('Auction ended:') && sanitizedMessage.includes('sold to')) {
+        return `💰🏆 ${sanitizedMessage}`;
       }
-      if (!message.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆💰🛍️]/)) {
-        if (message.includes('subscribed to you')) return `🎉 ${message}`;
-        if (message.includes('Tip received')) return `💸 ${message}`;
-        if (message.includes('New custom order')) return `🛒 ${message}`;
-        if (message.includes('New bid')) return `💰 ${message}`;
-        if (message.includes('created a new auction')) return `🔨 ${message}`;
-        if (message.includes('cancelled your auction')) return `🛑 ${message}`;
-        if (message.includes('Reserve price not met')) return `🔨 ${message}`;
-        if (message.includes('No bids were placed')) return `🔨 ${message}`;
-        if (message.includes('insufficient funds')) return `⚠️ ${message}`;
-        if (message.includes('payment error')) return `⚠️ ${message}`;
-        if (message.includes('Original highest bidder')) return `ℹ️ ${message}`;
+      if (!sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆💰🛍️]/)) {
+        if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('Tip received')) return `💸 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('New bid')) return `💰 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('created a new auction')) return `🔨 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('cancelled your auction')) return `🛑 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('Reserve price not met')) return `🔨 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('No bids were placed')) return `🔨 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('insufficient funds')) return `⚠️ ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('payment error')) return `⚠️ ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('Original highest bidder')) return `ℹ️ ${sanitizedMessage}`;
       }
-      return message;
+      return sanitizedMessage;
     };
 
     const deduplicateNotifications = (notifications: any[]): any[] => {
@@ -815,7 +820,11 @@ export default function Header() {
                           processedNotifications.active.map((notification, i) => (
                             <li key={notification.id || i} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
                               <div className="flex-1 pr-2">
-                                <span className="text-gray-200 leading-snug">{notification.message}</span>
+                                <SecureMessageDisplay 
+                                  content={notification.message}
+                                  className="text-gray-200 leading-snug"
+                                  allowBasicFormatting={false}
+                                />
                                 {notification.timestamp && (
                                   <div className="text-xs text-gray-500 mt-1">
                                     {new Date(notification.timestamp).toLocaleString()}
@@ -839,7 +848,11 @@ export default function Header() {
                           processedNotifications.cleared.map((notification, i) => (
                             <li key={notification.id || `cleared-${i}`} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
                               <div className="flex-1 pr-2">
-                                <span className="text-gray-400 leading-snug">{notification.message}</span>
+                                <SecureMessageDisplay 
+                                  content={notification.message}
+                                  className="text-gray-400 leading-snug"
+                                  allowBasicFormatting={false}
+                                />
                                 {notification.timestamp && (
                                   <div className="text-xs text-gray-600 mt-1">
                                     {new Date(notification.timestamp).toLocaleString()}

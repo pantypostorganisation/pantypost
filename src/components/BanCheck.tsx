@@ -4,6 +4,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
 import { useAuth } from '@/context/AuthContext';
+import { SecureTextarea } from '@/components/ui/SecureInput';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { 
   Ban, 
   Clock, 
@@ -43,6 +46,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
   const [retryCount, setRetryCount] = useState(0);
   const [lastCheckTime, setLastCheckTime] = useState<number>(0);
   const [connectionError, setConnectionError] = useState(false);
+  const [appealError, setAppealError] = useState('');
   
   const maxRetries = 3;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -139,25 +143,34 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
 
   // Handle appeal submission
   const handleSubmitAppeal = async () => {
-    if (!user || !appealText.trim()) {
-      alert('Please enter an appeal message');
+    if (!user) {
+      setAppealError('User not found');
+      return;
+    }
+
+    const trimmedAppeal = appealText.trim();
+    
+    if (!trimmedAppeal) {
+      setAppealError('Please enter an appeal message');
       return;
     }
     
-    if (appealText.length < 10) {
-      alert('Appeal message must be at least 10 characters long');
+    if (trimmedAppeal.length < 10) {
+      setAppealError('Appeal message must be at least 10 characters long');
       return;
     }
     
-    if (appealText.length > 1000) {
-      alert('Appeal message must be less than 1000 characters');
+    if (trimmedAppeal.length > 1000) {
+      setAppealError('Appeal message must be less than 1000 characters');
       return;
     }
     
     setIsSubmittingAppeal(true);
+    setAppealError('');
     
     try {
-      const success = await submitAppeal(user.username, appealText.trim(), appealFiles);
+      // Appeal text is already sanitized by SecureTextarea
+      const success = await submitAppeal(user.username, trimmedAppeal, appealFiles);
       
       if (success) {
         setAppealSubmitted(true);
@@ -174,11 +187,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
           alert('Appeal submitted successfully! You will be notified of the decision.');
         }, 500);
       } else {
-        alert('Failed to submit appeal. Please try again.');
+        setAppealError('Failed to submit appeal. Please try again.');
       }
     } catch (error) {
       console.error('Error submitting appeal:', error);
-      alert('An error occurred while submitting your appeal. Please try again.');
+      setAppealError('An error occurred while submitting your appeal. Please try again.');
     } finally {
       setIsSubmittingAppeal(false);
     }
@@ -244,7 +257,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
     };
     
     const reasonInfo = reasonMap[reason] || { title: reason, description: '' };
-    const displayReason = customReason ? `${reasonInfo.title}: ${customReason}` : reasonInfo.title;
+    const displayReason = customReason ? `${reasonInfo.title}: ${sanitizeStrict(customReason)}` : reasonInfo.title;
     
     return { display: displayReason, description: reasonInfo.description };
   };
@@ -387,7 +400,9 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                     <Shield size={16} />
                     <span className="font-medium">Moderator</span>
                   </div>
-                  <p className="text-white">{banInfo.bannedBy}</p>
+                  <p className="text-white">
+                    <SecureMessageDisplay content={banInfo.bannedBy} allowBasicFormatting={false} />
+                  </p>
                 </div>
               </div>
             </div>
@@ -400,7 +415,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                 <span className="font-medium">Additional Information</span>
               </div>
               <div className="bg-[#1a1a1a] rounded-lg p-3">
-                <p className="text-gray-300 text-sm">{banInfo.notes}</p>
+                <SecureMessageDisplay 
+                  content={banInfo.notes} 
+                  allowBasicFormatting={false}
+                  className="text-gray-300 text-sm"
+                />
               </div>
             </div>
           )}
@@ -425,7 +444,10 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
             {!showAppealForm ? (
               <div className="text-center">
                 <button
-                  onClick={() => setShowAppealForm(true)}
+                  onClick={() => {
+                    setShowAppealForm(true);
+                    setAppealError('');
+                  }}
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                 >
                   Start Appeal Process
@@ -437,24 +459,18 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                   <label className="block text-sm font-medium text-blue-400 mb-2">
                     Explain why this suspension should be lifted *
                   </label>
-                  <textarea
+                  <SecureTextarea
                     value={appealText}
-                    onChange={(e) => setAppealText(e.target.value)}
+                    onChange={setAppealText}
+                    onBlur={() => setAppealError('')}
                     placeholder="Please provide a detailed explanation of why you believe this suspension was issued in error, or describe any circumstances that should be considered..."
-                    className="w-full p-3 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     rows={5}
                     maxLength={1000}
+                    characterCount={true}
+                    error={appealError}
+                    touched={!!appealError}
+                    className="w-full"
                   />
-                  <div className="flex justify-between items-center mt-2">
-                    <div className="text-xs text-gray-400">
-                      {appealText.length}/1000 characters
-                    </div>
-                    {appealText.length < 10 && (
-                      <div className="text-xs text-red-400">
-                        Minimum 10 characters required
-                      </div>
-                    )}
-                  </div>
                 </div>
                 
                 {/* Evidence Upload */}
@@ -520,6 +536,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                       setShowAppealForm(false);
                       setAppealText('');
                       setAppealFiles([]);
+                      setAppealError('');
                     }}
                     className="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                     disabled={isSubmittingAppeal}
@@ -583,7 +600,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
             {banInfo.appealText && (
               <div className="mt-4 p-3 bg-[#222] rounded border-l-4 border-orange-400">
                 <div className="text-sm text-orange-400 mb-1">Your appeal message:</div>
-                <div className="text-sm text-gray-300">{banInfo.appealText}</div>
+                <SecureMessageDisplay 
+                  content={banInfo.appealText} 
+                  allowBasicFormatting={false}
+                  className="text-sm text-gray-300"
+                />
                 {banInfo.appealDate && (
                   <div className="text-xs text-gray-500 mt-2">
                     Submitted: {new Date(banInfo.appealDate).toLocaleString()}
@@ -626,7 +647,9 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
               For urgent matters or technical issues, you can contact our support team.
             </p>
             <p>
-              Please reference your username: <strong className="text-white">{user?.username}</strong>
+              Please reference your username: <strong className="text-white">
+                <SecureMessageDisplay content={user?.username || ''} allowBasicFormatting={false} />
+              </strong>
             </p>
           </div>
           

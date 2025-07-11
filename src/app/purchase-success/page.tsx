@@ -7,6 +7,7 @@ import { useEffect, useRef } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import BanCheck from '@/components/BanCheck';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export default function PurchaseSuccessPage() {
   const { orderHistory } = useWallet();
@@ -17,8 +18,15 @@ export default function PurchaseSuccessPage() {
     if (orderHistory.length > 0 && !hasNotified.current) {
       const latest = orderHistory[orderHistory.length - 1];
       
+      // Sanitize seller name and title before adding to notification
+      const sanitizedSeller = sanitizeStrict(latest.seller);
+      const sanitizedTitle = sanitizeStrict(latest.title);
+      
       // Add seller name to notification message to make it easier to filter
-      addSellerNotification(latest.seller, `💌 [For ${latest.seller}] A buyer purchased: ${latest.title}`);
+      addSellerNotification(
+        sanitizedSeller, 
+        `💌 [For ${sanitizedSeller}] A buyer purchased: ${sanitizedTitle}`
+      );
       hasNotified.current = true;
     }
   }, [orderHistory, addSellerNotification]);
