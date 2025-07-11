@@ -14,6 +14,7 @@ import { LoadingProvider } from '@/context/LoadingContext';
 import { WebSocketProvider } from '@/context/WebSocketContext';
 import { AppInitializationProvider } from './AppInitializationProvider';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 // Financial Error Boundary component
 interface FinancialErrorBoundaryProps {
@@ -39,26 +40,46 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
   }
 
   static getDerivedStateFromError(error: Error): Partial<FinancialErrorBoundaryState> {
+    // Sanitize error message to prevent XSS
+    const sanitizedMessage = sanitizeStrict(error.message || 'Unknown error');
+    
     const isFinancialError = 
-      error.message.toLowerCase().includes('wallet') ||
-      error.message.toLowerCase().includes('balance') ||
-      error.message.toLowerCase().includes('payment') ||
-      error.message.toLowerCase().includes('transaction') ||
-      error.stack?.includes('wallet') ||
-      error.stack?.includes('WalletContext');
+      sanitizedMessage.toLowerCase().includes('wallet') ||
+      sanitizedMessage.toLowerCase().includes('balance') ||
+      sanitizedMessage.toLowerCase().includes('payment') ||
+      sanitizedMessage.toLowerCase().includes('transaction');
+
+    // Create sanitized error object
+    const sanitizedError = new Error(sanitizedMessage);
+    sanitizedError.name = sanitizeStrict(error.name || 'Error');
 
     return {
       hasError: true,
-      error,
+      error: sanitizedError,
       isFinancialError
     };
   }
 
   override componentDidCatch(error: Error, errorInfo: any) {
-    console.error('Financial Error Boundary caught:', error, errorInfo);
+    // Log full error details only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Financial Error Boundary caught:', error, errorInfo);
+    } else {
+      // In production, log sanitized version
+      console.error('Application error occurred');
+    }
     
     if (process.env.NODE_ENV === 'production') {
-      // Example: Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
+      // Send sanitized error to monitoring service
+      // Example: Sentry.captureException(error, { 
+      //   contexts: { 
+      //     react: { 
+      //       componentStack: errorInfo.componentStack 
+      //     } 
+      //   },
+      //   // Sanitize any user data before sending
+      //   sanitizeKeys: ['user', 'email', 'password']
+      // });
     }
 
     this.setState({ errorInfo });
@@ -73,6 +94,12 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
     });
     
     if (this.state.isFinancialError) {
+      // Clear any potentially corrupted data before reload
+      try {
+        sessionStorage.clear();
+      } catch (e) {
+        // Ignore storage errors
+      }
       window.location.reload();
     }
   };
@@ -112,14 +139,21 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
                 </button>
               </div>
               
-              {process.env.NODE_ENV === 'development' && (
+              {process.env.NODE_ENV === 'development' && this.state.error && (
                 <details className="mt-6 text-left">
                   <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-300">
                     Error details (dev only)
                   </summary>
-                  <pre className="mt-2 p-3 bg-black/50 rounded-lg text-xs text-gray-400 overflow-auto">
-                    {this.state.error?.stack}
-                  </pre>
+                  <div className="mt-2 p-3 bg-black/50 rounded-lg overflow-auto">
+                    <p className="text-xs text-gray-400 font-mono break-all">
+                      {this.state.error.name}: {this.state.error.message}
+                    </p>
+                    {this.state.error.stack && (
+                      <pre className="mt-2 text-xs text-gray-500 whitespace-pre-wrap">
+                        {sanitizeStrict(this.state.error.stack)}
+                      </pre>
+                    )}
+                  </div>
                 </details>
               )}
             </div>
@@ -142,6 +176,19 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
             >
               Try Again
             </button>
+            
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <details className="mt-6 text-left">
+                <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-600">
+                  Error details (dev only)
+                </summary>
+                <div className="mt-2 p-3 bg-gray-100 rounded text-xs text-gray-600 overflow-auto">
+                  <p className="font-mono break-all">
+                    {this.state.error.name}: {this.state.error.message}
+                  </p>
+                </div>
+              </details>
+            )}
           </div>
         </div>
       );

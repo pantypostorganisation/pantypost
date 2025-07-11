@@ -5,6 +5,9 @@ import React, { useState, useEffect } from 'react';
 import { Settings, X, RefreshCw, Trash2, ChevronRight } from 'lucide-react';
 import { getMockConfig, MOCK_SCENARIOS } from '@/services/mock/mock.config';
 import { resetMockApi, clearMockData } from '@/services/mock';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export function MockApiDevTools() {
   // Check if mock API is enabled via environment variable
@@ -19,6 +22,8 @@ export function MockApiDevTools() {
   const [config, setConfig] = useState(getMockConfig());
   const [localEnabled, setLocalEnabled] = useState(config.enabled);
   const [scenario, setScenario] = useState(config.scenario.name);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   useEffect(() => {
     const currentConfig = getMockConfig();
@@ -28,29 +33,92 @@ export function MockApiDevTools() {
   }, []);
 
   const handleToggleMock = () => {
+    // Rate limit toggling to prevent spam
+    const rateLimiter = getRateLimiter();
+    const result = rateLimiter.check('MOCK_TOGGLE', { maxAttempts: 5, windowMs: 60000 });
+    
+    if (!result.allowed) {
+      alert(`Too many toggle attempts. Please wait ${result.waitTime} seconds.`);
+      return;
+    }
+
     const newEnabled = !localEnabled;
     setLocalEnabled(newEnabled);
-    localStorage.setItem('MOCK_API_ENABLED', newEnabled.toString());
+    
+    // Sanitize boolean value before storing
+    const sanitizedValue = newEnabled ? 'true' : 'false';
+    localStorage.setItem('MOCK_API_ENABLED', sanitizedValue);
     window.location.reload();
   };
 
   const handleScenarioChange = (newScenario: string) => {
-    setScenario(newScenario);
-    localStorage.setItem('MOCK_API_SCENARIO', newScenario);
+    // Validate scenario exists
+    if (!MOCK_SCENARIOS[newScenario]) {
+      console.error('Invalid scenario selected');
+      return;
+    }
+
+    // Rate limit scenario changes
+    const rateLimiter = getRateLimiter();
+    const result = rateLimiter.check('MOCK_SCENARIO_CHANGE', { maxAttempts: 10, windowMs: 60000 });
+    
+    if (!result.allowed) {
+      alert(`Too many scenario changes. Please wait ${result.waitTime} seconds.`);
+      return;
+    }
+
+    // Sanitize scenario value
+    const sanitizedScenario = sanitizeStrict(newScenario);
+    setScenario(sanitizedScenario);
+    localStorage.setItem('MOCK_API_SCENARIO', sanitizedScenario);
     window.location.reload();
   };
 
   const handleResetData = async () => {
+    // Rate limit reset operations
+    const rateLimiter = getRateLimiter();
+    const result = rateLimiter.check('MOCK_RESET', { maxAttempts: 3, windowMs: 300000 });
+    
+    if (!result.allowed) {
+      alert(`Too many reset attempts. Please wait ${result.waitTime} seconds.`);
+      return;
+    }
+
     if (confirm('This will reset all mock data to initial state. Continue?')) {
-      await resetMockApi();
-      window.location.reload();
+      setIsResetting(true);
+      try {
+        await resetMockApi();
+        window.location.reload();
+      } catch (error) {
+        console.error('Error resetting mock data:', error);
+        alert('Failed to reset mock data');
+      } finally {
+        setIsResetting(false);
+      }
     }
   };
 
   const handleClearData = async () => {
+    // Rate limit clear operations
+    const rateLimiter = getRateLimiter();
+    const result = rateLimiter.check('MOCK_CLEAR', { maxAttempts: 2, windowMs: 600000 });
+    
+    if (!result.allowed) {
+      alert(`Too many clear attempts. Please wait ${result.waitTime} seconds.`);
+      return;
+    }
+
     if (confirm('This will clear ALL mock data. Continue?')) {
-      await clearMockData();
-      window.location.reload();
+      setIsClearing(true);
+      try {
+        await clearMockData();
+        window.location.reload();
+      } catch (error) {
+        console.error('Error clearing mock data:', error);
+        alert('Failed to clear mock data');
+      } finally {
+        setIsClearing(false);
+      }
     }
   };
 
@@ -123,13 +191,18 @@ export function MockApiDevTools() {
                   >
                     {Object.entries(MOCK_SCENARIOS).map(([key, config]) => (
                       <option key={key} value={key}>
-                        {config.name}
+                        <SecureMessageDisplay 
+                          content={config.name}
+                          allowBasicFormatting={false}
+                        />
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-400">
-                    {MOCK_SCENARIOS[scenario]?.description || 'No description'}
-                  </p>
+                  <SecureMessageDisplay 
+                    content={MOCK_SCENARIOS[scenario]?.description || 'No description'}
+                    className="text-xs text-gray-400"
+                    allowBasicFormatting={false}
+                  />
                 </div>
 
                 {/* Current Scenario Info */}
@@ -156,7 +229,10 @@ export function MockApiDevTools() {
                             key={user}
                             className="text-xs bg-purple-600/20 text-purple-300 px-2 py-1 rounded"
                           >
-                            {user}
+                            <SecureMessageDisplay 
+                              content={user}
+                              allowBasicFormatting={false}
+                            />
                           </span>
                         ))}
                       </div>
@@ -169,7 +245,10 @@ export function MockApiDevTools() {
                             key={user}
                             className="text-xs bg-pink-600/20 text-pink-300 px-2 py-1 rounded"
                           >
-                            {user}
+                            <SecureMessageDisplay 
+                              content={user}
+                              allowBasicFormatting={false}
+                            />
                           </span>
                         ))}
                       </div>
@@ -182,7 +261,10 @@ export function MockApiDevTools() {
                             key={user}
                             className="text-xs bg-blue-600/20 text-blue-300 px-2 py-1 rounded"
                           >
-                            {user}
+                            <SecureMessageDisplay 
+                              content={user}
+                              allowBasicFormatting={false}
+                            />
                           </span>
                         ))}
                       </div>
@@ -201,17 +283,19 @@ export function MockApiDevTools() {
             <div className="p-4 border-t border-gray-800 space-y-2">
               <button
                 onClick={handleResetData}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
+                disabled={isResetting}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className="w-4 h-4" />
-                Reset Mock Data
+                <RefreshCw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
+                {isResetting ? 'Resetting...' : 'Reset Mock Data'}
               </button>
               <button
                 onClick={handleClearData}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
+                disabled={isClearing}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Trash2 className="w-4 h-4" />
-                Clear All Data
+                {isClearing ? 'Clearing...' : 'Clear All Data'}
               </button>
             </div>
           )}

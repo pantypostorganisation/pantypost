@@ -4,6 +4,13 @@
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+
+const VALID_ROLES = ['buyer', 'seller', 'admin'] as const;
+type ValidRole = typeof VALID_ROLES[number];
+
+// Admin usernames stored as constants to prevent tampering
+const ADMIN_USERNAMES = ['oakley', 'gerome'] as const;
 
 export default function RequireAuth({
   role,
@@ -20,43 +27,73 @@ export default function RequireAuth({
   useEffect(() => {
     // Skip if auth is not ready
     if (!isAuthReady) {
-      console.log('[RequireAuth] Waiting for auth to be ready...');
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[RequireAuth] Waiting for auth to be ready...');
+      }
       return;
     }
 
     // Only check once when auth becomes ready
     if (hasChecked) return;
 
-    console.log('[RequireAuth] Auth ready, checking access for role:', role);
-    console.log('[RequireAuth] Current user:', user ? { 
-      username: user.username, 
-      role: user.role 
-    } : 'No user');
+    // Validate the role parameter
+    if (!VALID_ROLES.includes(role as ValidRole)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[RequireAuth] Invalid role:', role);
+      }
+      router.push('/login');
+      setHasChecked(true);
+      return;
+    }
+
+    // Only log in development to prevent information leakage
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[RequireAuth] Auth ready, checking access for role:', role);
+      console.log('[RequireAuth] Current user:', user ? { 
+        username: '***', // Mask username in logs
+        role: user.role 
+      } : 'No user');
+    }
 
     const userRole = user?.role;
-    const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+    
+    // Sanitize username before comparison
+    const sanitizedUsername = user?.username ? sanitizeStrict(user.username).toLowerCase() : '';
+    const isAdmin = ADMIN_USERNAMES.includes(sanitizedUsername as typeof ADMIN_USERNAMES[number]);
 
     // Special handling for admin users
     if (role === 'admin') {
-      // Only oakley and gerome can access admin pages
+      // Only specific users can access admin pages
       const hasAccess = isAdmin;
       if (!hasAccess) {
-        console.log('[RequireAuth] Admin access denied, redirecting to login');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[RequireAuth] Admin access denied, redirecting to login');
+        }
         router.push('/login');
       } else {
-        console.log('[RequireAuth] Admin access granted');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[RequireAuth] Admin access granted');
+        }
         setAuthorized(true);
       }
     } else {
       // For buyer/seller pages
+      // Validate user role is one of the valid roles
+      const isValidUserRole = userRole && VALID_ROLES.includes(userRole as ValidRole);
+      
       // Allow access if role matches OR if user is admin
-      const hasAccess = user && (userRole === role || isAdmin);
+      const hasAccess = user && isValidUserRole && (userRole === role || isAdmin);
       
       if (!hasAccess) {
-        console.log('[RequireAuth] Access denied, redirecting to login');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[RequireAuth] Access denied, redirecting to login');
+        }
         router.push('/login');
       } else {
-        console.log('[RequireAuth] Access granted');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[RequireAuth] Access granted');
+        }
         setAuthorized(true);
       }
     }

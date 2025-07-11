@@ -4,6 +4,8 @@
 import Image from 'next/image';
 import { useState } from 'react';
 import { TierInfo, TierLevel, TIER_LEVELS } from '@/utils/sellerTiers';
+import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface TierBadgeProps {
   tier?: TierLevel | null;
@@ -11,6 +13,10 @@ interface TierBadgeProps {
   showTooltip?: boolean;
   className?: string;
 }
+
+// Valid tier levels for validation
+const VALID_TIER_LEVELS: TierLevel[] = ['None', 'Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
+const VALID_SIZES = ['sm', 'md', 'lg', 'xl', '2xl'] as const;
 
 // Helper functions defined outside the component
 // Get user-friendly tier number
@@ -23,12 +29,13 @@ const getTierNumber = (tierName: TierLevel): string => {
     Desire: "tier 4",
     Goddess: "tier 5"
   };
-  return tierMap[tierName];
+  return tierMap[tierName] || "tier 1";
 };
 
-// Get display name (capitalize first letter)
+// Get display name (capitalize first letter) with sanitization
 const getTierDisplayName = (tierName: TierLevel): string => {
-  return tierName.charAt(0).toUpperCase() + tierName.slice(1);
+  const sanitized = sanitizeStrict(tierName);
+  return sanitized.charAt(0).toUpperCase() + sanitized.slice(1);
 };
 
 // Get tier-specific colors for text
@@ -41,7 +48,7 @@ const getTierColor = (tierName: TierLevel): string => {
     Desire: "#541831",
     Goddess: "#fddc93"
   };
-  return tierColorMap[tierName];
+  return tierColorMap[tierName] || "#e37c89";
 };
 
 const TierBadge = ({
@@ -52,12 +59,18 @@ const TierBadge = ({
 }: TierBadgeProps) => {
   const [showDetails, setShowDetails] = useState(false);
   
+  // Validate tier level
+  const validatedTier = tier && VALID_TIER_LEVELS.includes(tier) ? tier : 'Tease';
+  
+  // Validate size
+  const validatedSize = VALID_SIZES.includes(size as typeof VALID_SIZES[number]) ? size : 'md';
+  
   // If no tier provided or "None", don't render anything
   if (!tier || tier === 'None') {
     return null;
   }
   
-  const tierInfo = TIER_LEVELS[tier] || TIER_LEVELS.Tease;
+  const tierInfo = TIER_LEVELS[validatedTier] || TIER_LEVELS.Tease;
   
   // Size mappings for the badge with expanded sizes
   const sizeClasses = {
@@ -84,11 +97,16 @@ const TierBadge = ({
   };
   
   // Get the image size based on the selected size
-  const imageSize = sizeClasses[size]?.image || 64;
+  const imageSize = sizeClasses[validatedSize]?.image || 64;
+  
+  // Sanitize numerical values
+  const sanitizedMinSales = sanitizeNumber(tierInfo.minSales, 0, 999999, 0);
+  const sanitizedMinAmount = sanitizeNumber(tierInfo.minAmount, 0, 9999999, 2);
+  const sanitizedCredit = sanitizeNumber(tierInfo.credit, 0, 1, 2);
   
   return (
     <div
-      className={`relative inline-block ${className}`}
+      className={`relative inline-block ${sanitizeStrict(className)}`}
       onMouseEnter={() => showTooltip && setShowDetails(true)}
       onMouseLeave={() => showTooltip && setShowDetails(false)}
     >
@@ -97,18 +115,22 @@ const TierBadge = ({
         <div className="flex items-center justify-center">
           <Image
             src={tierInfo.badgeImage}
-            alt={`${tier} Seller Badge`}
+            alt={`${getTierDisplayName(validatedTier)} Seller Badge`}
             width={imageSize}
             height={imageSize}
             className="object-contain drop-shadow-lg"
             quality={100}
             priority={size === 'xl' || size === '2xl'}
+            unoptimized={false}
           />
         </div>
       ) : (
         <div className="flex items-center justify-center">
           <span className="font-bold text-center text-xl">
-            {tier.charAt(0)}
+            <SecureMessageDisplay 
+              content={validatedTier.charAt(0)}
+              allowBasicFormatting={false}
+            />
           </span>
         </div>
       )}
@@ -116,18 +138,24 @@ const TierBadge = ({
       {/* Tooltip */}
       {showDetails && showTooltip && (
         <div
-          className={`absolute z-10 ${sizeClasses[size]?.tooltip || 'w-60'} bg-[#1a1a1a] rounded-md shadow-lg p-4 text-sm
+          className={`absolute z-10 ${sizeClasses[validatedSize]?.tooltip || 'w-60'} bg-[#1a1a1a] rounded-md shadow-lg p-4 text-sm
                    border border-gray-700 -translate-x-1/2 left-1/2 mt-1`}
+          role="tooltip"
         >
-          <div className="font-bold text-center mb-2" style={{ color: getTierColor(tier) }}>
-            {getTierDisplayName(tier)} {tier !== 'Goddess' ? 'Seller' : ''}
+          <div className="font-bold text-center mb-2" style={{ color: getTierColor(validatedTier) }}>
+            <SecureMessageDisplay 
+              content={`${getTierDisplayName(validatedTier)} ${validatedTier !== 'Goddess' ? 'Seller' : ''}`}
+              allowBasicFormatting={false}
+            />
           </div>
           
           <div className="text-gray-200 space-y-2">
-            <p>This seller is {getTierNumber(tier)} out of 5 as they have:</p>
-            <p>• {tierInfo.minSales}+ sales <span className="text-gray-400">OR</span></p>
-            <p>• ${tierInfo.minAmount.toLocaleString()}+ in total sales</p>
-            <p className="pt-1 text-[#ff950e] font-medium">This seller earns an extra {(tierInfo.credit * 100).toFixed(0)}% on all sales made</p>
+            <p>This seller is {getTierNumber(validatedTier)} out of 5 as they have:</p>
+            <p>• {sanitizedMinSales.toLocaleString()}+ sales <span className="text-gray-400">OR</span></p>
+            <p>• ${sanitizedMinAmount.toLocaleString()}+ in total sales</p>
+            <p className="pt-1 text-[#ff950e] font-medium">
+              This seller earns an extra {(sanitizedCredit * 100).toFixed(0)}% on all sales made
+            </p>
           </div>
         </div>
       )}
