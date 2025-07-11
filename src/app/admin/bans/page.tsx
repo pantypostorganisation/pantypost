@@ -34,6 +34,7 @@ export default function BanManagementPage() {
   const [showUnbanModal, setShowUnbanModal] = useState(false);
   const [showAppealModal, setShowAppealModal] = useState(false);
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const {
     user,
@@ -55,8 +56,23 @@ export default function BanManagementPage() {
     selectedEvidence,
     setSelectedEvidence,
     evidenceIndex,
-    setEvidenceIndex
+    setEvidenceIndex,
+    refreshBanData
   } = useBanManagement();
+
+  // Force refresh data
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      if (refreshBanData) {
+        await refreshBanData();
+      } else {
+        window.location.reload();
+      }
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   // Safe data retrieval
   const banStats: BanStats = (() => {
@@ -113,7 +129,9 @@ export default function BanManagementPage() {
 
   const activeBans = (() => {
     try {
-      return getActiveBans() || [];
+      const bans = getActiveBans() || [];
+      console.log('[BanManagementPage] Active bans:', bans.length);
+      return bans;
     } catch (error) {
       console.error('Error getting active bans:', error);
       return [];
@@ -180,6 +198,8 @@ export default function BanManagementPage() {
         alert(`Successfully unbanned ${sanitizeStrict(selectedBan.username)}`);
         setShowUnbanModal(false);
         setSelectedBan(null);
+        // Refresh data after unban
+        handleRefresh();
       } else {
         alert('Failed to unban user - they may not be banned or an error occurred');
       }
@@ -236,6 +256,8 @@ export default function BanManagementPage() {
         setShowAppealModal(false);
         setSelectedBan(null);
         setAppealReviewNotes('');
+        // Refresh data after appeal decision
+        handleRefresh();
       } else {
         alert('Failed to process appeal - please try again');
       }
@@ -392,10 +414,11 @@ export default function BanManagementPage() {
                 Export Data
               </button>
               <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] flex items-center gap-2 transition-colors"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] flex items-center gap-2 transition-colors disabled:opacity-50"
               >
-                <RefreshCw size={16} />
+                <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
                 Refresh
               </button>
             </div>

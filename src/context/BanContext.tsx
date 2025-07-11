@@ -108,6 +108,9 @@ type BanContextType = {
   
   // Validation
   validateBanInput: (username: string, hours: number | 'permanent', reason: BanReason) => { valid: boolean; error?: string };
+  
+  // Force refresh
+  refreshBanData: () => Promise<void>;
 };
 
 const BanContext = createContext<BanContextType | undefined>(undefined);
@@ -195,9 +198,9 @@ const generateMockBanData = (): { bans: UserBan[], history: BanHistory[] } => {
       banType: 'temporary',
       reason: 'harassment',
       customReason: 'Repeatedly sending inappropriate messages to multiple users',
-      startTime: oneDayAgo.toISOString(),
-      endTime: new Date(now.getTime() + 23 * 60 * 60 * 1000).toISOString(),
-      remainingHours: 23,
+      startTime: now.toISOString(),
+      endTime: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours from now
+      remainingHours: 24,
       bannedBy: 'admin',
       active: true,
       appealable: true,
@@ -222,10 +225,25 @@ const generateMockBanData = (): { bans: UserBan[], history: BanHistory[] } => {
       notes: 'Evidence of fraudulent activity confirmed',
       reportIds: ['report-200', 'report-201']
     },
+    // Another active temporary ban
+    {
+      id: 'ban-004',
+      username: 'spammer999',
+      banType: 'temporary',
+      reason: 'spam',
+      customReason: 'Sending promotional messages to users',
+      startTime: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      endTime: new Date(now.getTime() + 46 * 60 * 60 * 1000).toISOString(), // 46 hours from now
+      remainingHours: 46,
+      bannedBy: 'moderator1',
+      active: true,
+      appealable: true,
+      notes: 'First offense - 48 hour ban'
+    },
     // Expired ban
     {
       id: 'ban-003',
-      username: 'spammer789',
+      username: 'oldbanner789',
       banType: 'temporary',
       reason: 'spam',
       customReason: 'Mass messaging users with promotional content',
@@ -243,8 +261,8 @@ const generateMockBanData = (): { bans: UserBan[], history: BanHistory[] } => {
       id: 'history-001',
       username: 'troublemaker123',
       action: 'banned',
-      details: 'Banned for 48 hours for harassment: Repeatedly sending inappropriate messages to multiple users',
-      timestamp: oneDayAgo.toISOString(),
+      details: 'Banned for 24 hours for harassment: Repeatedly sending inappropriate messages to multiple users',
+      timestamp: now.toISOString(),
       adminUsername: 'admin'
     },
     {
@@ -265,15 +283,23 @@ const generateMockBanData = (): { bans: UserBan[], history: BanHistory[] } => {
     },
     {
       id: 'history-004',
-      username: 'spammer789',
+      username: 'spammer999',
+      action: 'banned',
+      details: 'Banned for 48 hours for spam: Sending promotional messages to users',
+      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      adminUsername: 'moderator1'
+    },
+    {
+      id: 'history-005',
+      username: 'oldbanner789',
       action: 'banned',
       details: 'Banned for 24 hours for spam: Mass messaging users with promotional content',
       timestamp: oneWeekAgo.toISOString(),
       adminUsername: 'moderator1'
     },
     {
-      id: 'history-005',
-      username: 'spammer789',
+      id: 'history-006',
+      username: 'oldbanner789',
       action: 'unbanned',
       details: 'Temporary ban expired automatically',
       timestamp: twoDaysAgo.toISOString(),
@@ -293,82 +319,141 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   // Track active timers to prevent memory leaks
   const activeTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  
+  // Use ref to prevent re-creation
+  const isSavingRef = useRef(false);
 
-  // Load data from localStorage on mount using service
-  useEffect(() => {
-    const loadData = async () => {
-      if (typeof window === 'undefined' || isInitialized) return;
-      
-      try {
-        const storedBans = await storageService.getItem<UserBan[]>('panty_user_bans', []);
-        const storedHistory = await storageService.getItem<BanHistory[]>('panty_ban_history', []);
-        const storedAppealReviews = await storageService.getItem<AppealReview[]>('panty_appeal_reviews', []);
-        const storedIPBans = await storageService.getItem<IPBan[]>('panty_ip_bans', []);
-        
-        // If no data exists and we're in development, create mock data
-        if (storedBans.length === 0 && storedHistory.length === 0 && process.env.NODE_ENV === 'development') {
-          console.log('[BanContext] No ban data found, creating mock data...');
-          const { bans: mockBans, history: mockHistory } = generateMockBanData();
-          
-          setBans(mockBans);
-          setBanHistory(mockHistory);
-          
-          // Save mock data to storage
-          await storageService.setItem('panty_user_bans', mockBans);
-          await storageService.setItem('panty_ban_history', mockHistory);
-          
-          // Schedule expiration for active temporary bans
-          mockBans.forEach((ban: UserBan) => {
-            if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-              scheduleExpiration(ban);
-            }
-          });
-        } else {
-          setBans(storedBans);
-          setBanHistory(storedHistory);
-          
-          // Schedule expiration for active temporary bans
-          storedBans.forEach((ban: UserBan) => {
-            if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-              scheduleExpiration(ban);
-            }
-          });
-        }
-        
-        setAppealReviews(storedAppealReviews);
-        setIPBans(storedIPBans);
-        
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Error loading ban data:', error);
-        setIsInitialized(true);
-      }
-    };
-
-    loadData();
+  // Force refresh function
+  const refreshBanData = useCallback(async () => {
+    console.log('[BanContext] Force refreshing ban data...');
+    setIsInitialized(false);
+    await loadData(true);
   }, []);
 
-  // Save to localStorage using service
+  // Load data from localStorage on mount using service
+  const loadData = useCallback(async (forceRefresh = false) => {
+    if (typeof window === 'undefined') return;
+    if (isInitialized && !forceRefresh) return;
+    
+    try {
+      console.log('[BanContext] Loading ban data...', { forceRefresh });
+      
+      const storedBans = await storageService.getItem<UserBan[]>('panty_user_bans', []);
+      const storedHistory = await storageService.getItem<BanHistory[]>('panty_ban_history', []);
+      const storedAppealReviews = await storageService.getItem<AppealReview[]>('panty_appeal_reviews', []);
+      const storedIPBans = await storageService.getItem<IPBan[]>('panty_ip_bans', []);
+      
+      console.log('[BanContext] Loaded from storage:', {
+        bans: storedBans.length,
+        history: storedHistory.length,
+        appealReviews: storedAppealReviews.length,
+        ipBans: storedIPBans.length
+      });
+      
+      // If no data exists and we're in development, create mock data
+      if (storedBans.length === 0 && storedHistory.length === 0 && (process.env.NODE_ENV === 'development' || forceRefresh)) {
+        console.log('[BanContext] No ban data found, creating mock data...');
+        const { bans: mockBans, history: mockHistory } = generateMockBanData();
+        
+        setBans(mockBans);
+        setBanHistory(mockHistory);
+        
+        // Save mock data to storage
+        isSavingRef.current = true;
+        await storageService.setItem('panty_user_bans', mockBans);
+        await storageService.setItem('panty_ban_history', mockHistory);
+        isSavingRef.current = false;
+        
+        console.log('[BanContext] Mock data created:', {
+          activeBans: mockBans.filter(b => b.active).length,
+          totalBans: mockBans.length
+        });
+        
+        // Schedule expiration for active temporary bans
+        mockBans.forEach((ban: UserBan) => {
+          if (ban.active && ban.banType === 'temporary' && ban.endTime) {
+            scheduleExpiration(ban);
+          }
+        });
+      } else {
+        // Update expired bans before setting
+        const now = new Date();
+        const updatedBans = storedBans.map(ban => {
+          if (ban.active && ban.banType === 'temporary' && ban.endTime) {
+            const endTime = new Date(ban.endTime);
+            if (now >= endTime) {
+              console.log(`[BanContext] Auto-expiring ban for ${ban.username}`);
+              return { ...ban, active: false };
+            }
+          }
+          return ban;
+        });
+        
+        setBans(updatedBans);
+        setBanHistory(storedHistory);
+        
+        console.log('[BanContext] Data loaded:', {
+          activeBans: updatedBans.filter(b => b.active).length,
+          totalBans: updatedBans.length
+        });
+        
+        // Save updated bans if any expired
+        if (updatedBans.some((ban, idx) => ban.active !== storedBans[idx]?.active)) {
+          isSavingRef.current = true;
+          await storageService.setItem('panty_user_bans', updatedBans);
+          isSavingRef.current = false;
+        }
+        
+        // Schedule expiration for active temporary bans
+        updatedBans.forEach((ban: UserBan) => {
+          if (ban.active && ban.banType === 'temporary' && ban.endTime) {
+            scheduleExpiration(ban);
+          }
+        });
+      }
+      
+      setAppealReviews(storedAppealReviews);
+      setIPBans(storedIPBans);
+      
+      setIsInitialized(true);
+    } catch (error) {
+      console.error('[BanContext] Error loading ban data:', error);
+      setIsInitialized(true);
+    }
+  }, [isInitialized]);
+
   useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
-      storageService.setItem('panty_user_bans', bans);
+    loadData();
+  }, [loadData]);
+
+  // Save to localStorage using service - with protection against loops
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
+      console.log('[BanContext] Saving bans to storage:', {
+        activeBans: bans.filter(b => b.active).length,
+        totalBans: bans.length
+      });
+      isSavingRef.current = true;
+      storageService.setItem('panty_user_bans', bans).then(() => {
+        isSavingRef.current = false;
+      });
     }
   }, [bans, isInitialized]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
+    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
       storageService.setItem('panty_ban_history', banHistory);
     }
   }, [banHistory, isInitialized]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
+    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
       storageService.setItem('panty_appeal_reviews', appealReviews);
     }
   }, [appealReviews, isInitialized]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
+    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
       storageService.setItem('panty_ip_bans', ipBans);
     }
   }, [ipBans, isInitialized]);
@@ -401,7 +486,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Add to ban history
-  const addBanHistory = (action: BanHistory['action'], username: string, details: string, adminUsername: string, metadata?: Record<string, any>) => {
+  const addBanHistory = useCallback((action: BanHistory['action'], username: string, details: string, adminUsername: string, metadata?: Record<string, any>) => {
     const historyEntry: BanHistory = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       username: sanitizeString(username),
@@ -412,7 +497,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       metadata
     };
     setBanHistory(prev => [...prev, historyEntry]);
-  };
+  }, []);
 
   // Schedule automatic expiration
   const scheduleExpiration = useCallback((ban: UserBan) => {
@@ -421,8 +506,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const timeUntilExpiry = new Date(ban.endTime).getTime() - Date.now();
     
     if (timeUntilExpiry > 0) {
+      console.log(`[BanContext] Scheduling expiration for ${ban.username} in ${Math.round(timeUntilExpiry / 1000 / 60)} minutes`);
+      
       const timer = setTimeout(() => {
-        console.log(`Auto-expiring ban for ${ban.username}`);
+        console.log(`[BanContext] Auto-expiring ban for ${ban.username}`);
         unbanUser(ban.username, 'system', 'Automatic expiration');
         
         // Dispatch event for UI updates
@@ -442,16 +529,16 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Clear expiration timer
-  const clearExpirationTimer = (banId: string) => {
+  const clearExpirationTimer = useCallback((banId: string) => {
     const timer = activeTimers.current.get(banId);
     if (timer) {
       clearTimeout(timer);
       activeTimers.current.delete(banId);
     }
-  };
+  }, []);
 
   // Enhanced ban user function with race condition protection
-  const banUser = async (
+  const banUser = useCallback(async (
     username: string, 
     hours: number | 'permanent', 
     reason: BanReason, 
@@ -460,10 +547,12 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     reportIds: string[] = [],
     notes?: string
   ): Promise<boolean> => {
+    console.log('[BanContext] Attempting to ban user:', { username, hours, reason });
+    
     // Validate input
     const validation = validateBanInput(username, hours, reason);
     if (!validation.valid) {
-      console.error('Ban validation failed:', validation.error);
+      console.error('[BanContext] Ban validation failed:', validation.error);
       return false;
     }
     
@@ -481,7 +570,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         const lockData = existingLock;
         if (Date.now() - lockData.timestamp < 30000) { // 30 second lock
-          console.warn(`Ban operation already in progress for ${cleanUsername}`);
+          console.warn(`[BanContext] Ban operation already in progress for ${cleanUsername}`);
           return false;
         }
       } catch (e) {
@@ -499,6 +588,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Check if user is already banned
       const existingBan = bans.find(ban => ban.username === cleanUsername && ban.active);
       if (existingBan) {
+        console.warn(`[BanContext] User ${cleanUsername} is already banned`);
         return false;
       }
 
@@ -519,10 +609,19 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         appealable: true,
         notes: cleanNotes,
         reportIds: reportIds,
-        appealStatus: 'pending'
+        appealStatus: undefined
       };
 
-      setBans(prev => [...prev, newBan]);
+      console.log('[BanContext] Creating new ban:', newBan);
+
+      setBans(prev => {
+        const updated = [...prev, newBan];
+        console.log('[BanContext] Updated bans list:', {
+          total: updated.length,
+          active: updated.filter(b => b.active).length
+        });
+        return updated;
+      });
       
       // Schedule expiration if temporary
       if (newBan.banType === 'temporary' && newBan.endTime) {
@@ -539,43 +638,53 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         { banId }
       );
       
+      console.log('[BanContext] Ban created successfully');
       return true;
     } catch (error) {
-      console.error('Error banning user:', error);
+      console.error('[BanContext] Error banning user:', error);
       return false;
     } finally {
       // Always release lock
       await storageService.removeItem(lockKey);
     }
-  };
+  }, [bans, addBanHistory, scheduleExpiration]);
 
   // Enhanced unban function
-  const unbanUser = (username: string, adminUsername: string = 'system', reason?: string): boolean => {
+  const unbanUser = useCallback((username: string, adminUsername: string = 'system', reason?: string): boolean => {
     try {
       const cleanUsername = sanitizeString(username);
       const cleanAdminUsername = sanitizeString(adminUsername);
       const cleanReason = reason ? sanitizeString(reason) : undefined;
       
+      console.log('[BanContext] Unbanning user:', { username: cleanUsername, admin: cleanAdminUsername });
+      
+      let unbanned = false;
       setBans(prev => prev.map(ban => {
         if (ban.username === cleanUsername && ban.active) {
           // Clear any active timer
           clearExpirationTimer(ban.id);
-          
+          unbanned = true;
           return { ...ban, active: false };
         }
         return ban;
       }));
       
-      addBanHistory('unbanned', cleanUsername, cleanReason || 'Ban lifted by admin', cleanAdminUsername);
-      return true;
+      if (unbanned) {
+        addBanHistory('unbanned', cleanUsername, cleanReason || 'Ban lifted by admin', cleanAdminUsername);
+        console.log('[BanContext] User unbanned successfully');
+      } else {
+        console.warn('[BanContext] No active ban found for user:', cleanUsername);
+      }
+      
+      return unbanned;
     } catch (error) {
-      console.error('Error unbanning user:', error);
+      console.error('[BanContext] Error unbanning user:', error);
       return false;
     }
-  };
+  }, [addBanHistory, clearExpirationTimer]);
 
   // Enhanced appeal submission with evidence
-  const submitAppeal = async (username: string, appealText: string, evidence?: File[]): Promise<boolean> => {
+  const submitAppeal = useCallback(async (username: string, appealText: string, evidence?: File[]): Promise<boolean> => {
     try {
       const cleanUsername = sanitizeString(username);
       const cleanAppealText = sanitizeString(appealText);
@@ -620,10 +729,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error submitting appeal:', error);
       return false;
     }
-  };
+  }, [addBanHistory]);
 
   // Enhanced appeal review system
-  const reviewAppeal = (banId: string, decision: 'approve' | 'reject' | 'escalate', reviewNotes: string, adminUsername: string): boolean => {
+  const reviewAppeal = useCallback((banId: string, decision: 'approve' | 'reject' | 'escalate', reviewNotes: string, adminUsername: string): boolean => {
     try {
       const cleanReviewNotes = sanitizeString(reviewNotes);
       const cleanAdminUsername = sanitizeString(adminUsername);
@@ -656,10 +765,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error reviewing appeal:', error);
       return false;
     }
-  };
+  }, [bans]);
 
   // Approve appeal
-  const approveAppeal = (banId: string, adminUsername: string): boolean => {
+  const approveAppeal = useCallback((banId: string, adminUsername: string): boolean => {
     try {
       const ban = bans.find(b => b.id === banId);
       if (!ban) return false;
@@ -677,10 +786,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error approving appeal:', error);
       return false;
     }
-  };
+  }, [bans, addBanHistory, clearExpirationTimer]);
 
   // Reject appeal
-  const rejectAppeal = (banId: string, adminUsername: string, reason?: string): boolean => {
+  const rejectAppeal = useCallback((banId: string, adminUsername: string, reason?: string): boolean => {
     try {
       const ban = bans.find(b => b.id === banId);
       if (!ban) return false;
@@ -703,10 +812,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error rejecting appeal:', error);
       return false;
     }
-  };
+  }, [bans, addBanHistory]);
 
   // Escalate appeal
-  const escalateAppeal = (banId: string, adminUsername: string, escalationReason: string): boolean => {
+  const escalateAppeal = useCallback((banId: string, adminUsername: string, escalationReason: string): boolean => {
     try {
       const ban = bans.find(b => b.id === banId);
       if (!ban) return false;
@@ -723,10 +832,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error escalating appeal:', error);
       return false;
     }
-  };
+  }, [bans, addBanHistory]);
 
   // IP ban functionality
-  const banUserIP = (username: string, ipAddress: string, reason: string): boolean => {
+  const banUserIP = useCallback((username: string, ipAddress: string, reason: string): boolean => {
     try {
       const cleanUsername = sanitizeString(username);
       const cleanIPAddress = sanitizeString(ipAddress);
@@ -757,19 +866,19 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Error banning IP:', error);
       return false;
     }
-  };
+  }, []);
 
   // Check if IP is banned
-  const isIPBanned = (ipAddress: string): boolean => {
+  const isIPBanned = useCallback((ipAddress: string): boolean => {
     const now = new Date();
     return ipBans.some(ban => 
       ban.ipAddress === ipAddress && 
       (!ban.expiryDate || new Date(ban.expiryDate) > now)
     );
-  };
+  }, [ipBans]);
 
   // Check if user is banned (with real-time expiration check)
-  const isUserBanned = (username: string): UserBan | null => {
+  const isUserBanned = useCallback((username: string): UserBan | null => {
     const activeBan = bans.find(ban => ban.username === username && ban.active);
     
     if (!activeBan) return null;
@@ -792,16 +901,16 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     return activeBan;
-  };
+  }, [bans, unbanUser]);
 
   // Get ban info (same as isUserBanned but clearer name)
-  const getBanInfo = (username: string): UserBan | null => {
+  const getBanInfo = useCallback((username: string): UserBan | null => {
     return isUserBanned(username);
-  };
+  }, [isUserBanned]);
 
   // Get active bans
-  const getActiveBans = (): UserBan[] => {
-    return bans.filter(ban => ban.active).map(ban => {
+  const getActiveBans = useCallback((): UserBan[] => {
+    const activeBans = bans.filter(ban => ban.active).map(ban => {
       // Update remaining hours for temporary bans
       if (ban.banType === 'temporary' && ban.endTime) {
         const now = new Date();
@@ -812,36 +921,51 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       return ban;
     });
-  };
+    
+    console.log('[BanContext] Getting active bans:', {
+      total: bans.length,
+      active: activeBans.length,
+      usernames: activeBans.map(b => b.username)
+    });
+    
+    return activeBans;
+  }, [bans]);
 
   // Get expired bans
-  const getExpiredBans = (): UserBan[] => {
+  const getExpiredBans = useCallback((): UserBan[] => {
     return bans.filter(ban => !ban.active);
-  };
+  }, [bans]);
 
   // Get user's ban history
-  const getUserBanHistory = (username: string): UserBan[] => {
+  const getUserBanHistory = useCallback((username: string): UserBan[] => {
     return bans.filter(ban => ban.username === username);
-  };
+  }, [bans]);
 
   // Update expired bans
-  const updateExpiredBans = () => {
+  const updateExpiredBans = useCallback(() => {
     const now = new Date();
+    let hasChanges = false;
+    
     setBans(prev => prev.map(ban => {
       if (ban.active && ban.banType === 'temporary' && ban.endTime) {
         const endTime = new Date(ban.endTime);
         if (now >= endTime) {
           clearExpirationTimer(ban.id);
+          hasChanges = true;
           addBanHistory('unbanned', ban.username, 'Temporary ban expired automatically', 'system');
           return { ...ban, active: false };
         }
       }
       return ban;
     }));
-  };
+    
+    if (hasChanges) {
+      console.log('[BanContext] Expired bans updated');
+    }
+  }, [addBanHistory, clearExpirationTimer]);
 
   // Get comprehensive ban statistics
-  const getBanStats = () => {
+  const getBanStats = useCallback(() => {
     const activeBans = getActiveBans();
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -870,7 +994,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       rejectedAppeals: banHistory.filter(entry => entry.action === 'appeal_rejected').length
     };
     
-    return {
+    const stats = {
       totalActiveBans: activeBans.length,
       temporaryBans: activeBans.filter(ban => ban.banType === 'temporary').length,
       permanentBans: activeBans.filter(ban => ban.banType === 'permanent').length,
@@ -879,7 +1003,11 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       bansByReason,
       appealStats
     };
-  };
+    
+    console.log('[BanContext] Ban stats:', stats);
+    
+    return stats;
+  }, [getActiveBans, bans, banHistory]);
 
   return (
     <BanContext.Provider value={{
@@ -905,7 +1033,8 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       scheduleExpiration,
       clearExpirationTimer,
       getBanStats,
-      validateBanInput
+      validateBanInput,
+      refreshBanData
     }}>
       {children}
     </BanContext.Provider>
