@@ -2,6 +2,7 @@
 'use client';
 
 import { CheckCircle, XCircle } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface WalletToastProps {
   message: string;
@@ -24,7 +25,13 @@ export default function WalletToast({ message, type, isVisible }: WalletToastPro
         ) : (
           <XCircle className="h-5 w-5" />
         )}
-        <p className="text-sm font-medium">{message}</p>
+        <p className="text-sm font-medium">
+          <SecureMessageDisplay 
+            content={message} 
+            allowBasicFormatting={false}
+            className="inline"
+          />
+        </p>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+// src/components/admin/bans/BanTabs.tsx
 'use client';
 
 import { Ban, Clock, MessageSquare, FileText, BarChart3 } from 'lucide-react';
@@ -20,29 +21,35 @@ export default function BanTabs({
   expiredCount,
   historyCount
 }: BanTabsProps) {
+  // Ensure counts are valid numbers
+  const safeCount = (value: any): number => {
+    const num = Number(value);
+    return Number.isFinite(num) && num >= 0 ? num : 0;
+  };
+
   const tabs = [
     { 
       key: 'active' as TabKey, 
       label: 'Active Bans', 
-      count: banStats.totalActiveBans, 
+      count: safeCount(banStats?.totalActiveBans), 
       icon: Ban 
     },
     { 
       key: 'expired' as TabKey, 
       label: 'Expired Bans', 
-      count: expiredCount, 
+      count: safeCount(expiredCount), 
       icon: Clock 
     },
     { 
       key: 'appeals' as TabKey, 
       label: 'Appeals', 
-      count: banStats.pendingAppeals, 
+      count: safeCount(banStats?.pendingAppeals), 
       icon: MessageSquare 
     },
     { 
       key: 'history' as TabKey, 
       label: 'History', 
-      count: historyCount, 
+      count: safeCount(historyCount), 
       icon: FileText 
     },
     { 

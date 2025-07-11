@@ -4,6 +4,7 @@
 import { AlertCircle, Shield } from 'lucide-react';
 import VerificationCard from './VerificationCard';
 import type { VerificationListProps } from '@/types/verification';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function VerificationList({
     users,
@@ -37,7 +38,13 @@ export default function VerificationList({
                         <>
                             <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                             <p className="text-gray-400">
-                                No pending verification requests found for "{searchTerm}"
+                                No pending verification requests found for "
+                                <SecureMessageDisplay 
+                                    content={searchTerm}
+                                    allowBasicFormatting={false}
+                                    className="inline"
+                                />
+                                "
                             </p>
                         </>
                     ) : (

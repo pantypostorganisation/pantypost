@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ReportCardProps } from './types';
 import ReportDetails from './ReportDetails';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function ReportCard({
   report,
@@ -95,6 +96,12 @@ export default function ReportCard({
   const severityInfo = getSeverityInfo(report.severity);
   const CategoryIcon = getCategoryIcon(report.category);
 
+  // Ensure stats are valid numbers
+  const safeStats = {
+    totalReports: Math.max(0, Number(userStats?.totalReports) || 0),
+    activeReports: Math.max(0, Number(userStats?.activeReports) || 0)
+  };
+
   return (
     <div 
       className={`bg-[#1a1a1a] border ${
@@ -114,7 +121,17 @@ export default function ReportCard({
               <div className="flex items-center gap-2">
                 <User size={16} className="text-gray-400" />
                 <span className="font-semibold text-white">
-                  {report.reporter} → {report.reportee}
+                  <SecureMessageDisplay 
+                    content={report.reporter}
+                    allowBasicFormatting={false}
+                    className="inline"
+                  />
+                  {' → '}
+                  <SecureMessageDisplay 
+                    content={report.reportee}
+                    allowBasicFormatting={false}
+                    className="inline"
+                  />
                 </span>
               </div>
               
@@ -129,11 +146,11 @@ export default function ReportCard({
               <div className="flex items-center gap-2">
                 <span className="px-2 py-1 bg-purple-900/20 text-purple-400 text-xs rounded font-medium flex items-center gap-1">
                   <Users size={12} />
-                  {userStats.totalReports} Total Reports
+                  {safeStats.totalReports} Total Reports
                 </span>
-                {userStats.activeReports > 0 && (
+                {safeStats.activeReports > 0 && (
                   <span className="px-2 py-1 bg-red-900/20 text-red-400 text-xs rounded font-medium">
-                    {userStats.activeReports} Active
+                    {safeStats.activeReports} Active
                   </span>
                 )}
               </div>
@@ -204,7 +221,7 @@ export default function ReportCard({
             {/* Expand/Collapse */}
             <div className="flex items-center gap-2 text-gray-400">
               <span className="text-sm">
-                {report.messages?.length || 0} messages
+                {Array.isArray(report.messages) ? report.messages.length : 0} messages
               </span>
               {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
             </div>

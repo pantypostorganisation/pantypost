@@ -2,6 +2,7 @@
 'use client';
 
 import { Clock, Download, Upload, Wallet, Activity, TrendingUp, Gavel, ShoppingBag } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface AdminRecentActivityProps {
   timeFilter: string;
@@ -142,7 +143,11 @@ export default function AdminRecentActivity({
                             💳 Deposit Received
                           </p>
                           <p className="text-sm text-gray-400 truncate">
-                            {deposit.username} via {deposit.method?.replace('_', ' ') || 'unknown'}
+                            <SecureMessageDisplay 
+                              content={deposit.username} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            /> via {deposit.method?.replace('_', ' ') || 'unknown'}
                           </p>
                         </div>
                       </div>
@@ -167,7 +172,11 @@ export default function AdminRecentActivity({
                             💸 Seller Withdrawal
                           </p>
                           <p className="text-sm text-gray-400 truncate">
-                            {withdrawal.seller} cashed out
+                            <SecureMessageDisplay 
+                              content={withdrawal.seller} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            /> cashed out
                           </p>
                         </div>
                       </div>
@@ -223,7 +232,15 @@ export default function AdminRecentActivity({
                             🎉 Subscription Revenue
                           </p>
                           <p className="text-sm text-gray-400 truncate">
-                            {buyer} → {seller} ({formatCurrency(fullAmount)}/mo)
+                            <SecureMessageDisplay 
+                              content={buyer} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            /> → <SecureMessageDisplay 
+                              content={seller} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            /> ({formatCurrency(fullAmount)}/mo)
                           </p>
                         </div>
                       </div>
@@ -250,7 +267,16 @@ export default function AdminRecentActivity({
                             🔨 Auction Completed
                           </p>
                           <p className="text-sm text-gray-400 truncate">
-                            {order.buyer} won "{order.title}" for {formatCurrency(order.finalBid || order.price)}
+                            <SecureMessageDisplay 
+                              content={order.buyer} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            /> won "<SecureMessageDisplay 
+                              content={order.title} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                              maxLength={50}
+                            />" for {formatCurrency(order.finalBid || order.price)}
                           </p>
                         </div>
                       </div>
@@ -277,7 +303,16 @@ export default function AdminRecentActivity({
                             🛍️ Regular Sale
                           </p>
                           <p className="text-sm text-gray-400 truncate">
-                            {order.buyer} bought "{order.title}" for {formatCurrency(order.price)}
+                            <SecureMessageDisplay 
+                              content={order.buyer} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            /> bought "<SecureMessageDisplay 
+                              content={order.title} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                              maxLength={50}
+                            />" for {formatCurrency(order.price)}
                           </p>
                         </div>
                       </div>

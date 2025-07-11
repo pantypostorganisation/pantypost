@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { DocumentCardProps } from '@/types/verification';
+import { sanitizeUrl } from '@/utils/security/sanitization';
 
 export default function DocumentCard({ 
   title, 
@@ -11,6 +12,10 @@ export default function DocumentCard({
   onViewFull 
 }: DocumentCardProps) {
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [imageError, setImageError] = useState<boolean>(false);
+  
+  // Sanitize the image URL
+  const safeImageSrc = imageSrc ? sanitizeUrl(imageSrc) : '';
   
   return (
     <div className="space-y-2">
@@ -18,7 +23,7 @@ export default function DocumentCard({
         {title}
       </h3>
       
-      {imageSrc ? (
+      {safeImageSrc && !imageError ? (
         <div 
           className="relative border border-[#222] rounded-lg overflow-hidden h-[200px] sm:h-[250px] bg-[#0a0a0a] transition-all duration-300"
           onMouseEnter={() => setIsHovered(true)}
@@ -26,12 +31,13 @@ export default function DocumentCard({
         >
           <div className="w-full h-full overflow-hidden flex items-center justify-center">
             <img
-              src={imageSrc}
-              alt={title}
+              src={safeImageSrc}
+              alt=""
               className="w-full h-full object-contain transition-transform duration-500"
               style={{ 
                 transform: isHovered ? 'scale(1.05)' : 'scale(1)' 
               }}
+              onError={() => setImageError(true)}
             />
           </div>
           
@@ -51,7 +57,9 @@ export default function DocumentCard({
         </div>
       ) : (
         <div className="h-[200px] sm:h-[250px] bg-[#0a0a0a] border border-[#222] rounded-lg flex items-center justify-center">
-          <span className="text-gray-500 text-sm">Not provided</span>
+          <span className="text-gray-500 text-sm">
+            {imageError ? 'Failed to load image' : 'Not provided'}
+          </span>
         </div>
       )}
     </div>

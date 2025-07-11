@@ -2,6 +2,7 @@
 'use client';
 
 import { AlertTriangle, XCircle, Info, Loader2 } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -37,9 +38,20 @@ export default function ConfirmationModal({
       <div className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 max-w-md w-full shadow-xl">
         <div className="flex items-center gap-3 mb-4">
           {getIcon()}
-          <h3 className="text-lg font-semibold text-white">{title}</h3>
+          <h3 className="text-lg font-semibold text-white">
+            <SecureMessageDisplay 
+              content={title} 
+              allowBasicFormatting={false}
+              className="inline"
+            />
+          </h3>
         </div>
-        <p className="text-gray-300 mb-6">{message}</p>
+        <div className="text-gray-300 mb-6">
+          <SecureMessageDisplay 
+            content={message} 
+            allowBasicFormatting={false}
+          />
+        </div>
         <div className="flex gap-3 justify-end">
           <button
             onClick={onClose}

@@ -1,9 +1,11 @@
+// src/components/admin/bans/BanCard.tsx
 'use client';
 
 import { useState } from 'react';
 import { Clock, AlertTriangle, MessageSquare, Eye, UserCheck, Infinity } from 'lucide-react';
 import { BanEntry } from '@/types/ban';
 import { getBanReasonDisplay } from '@/utils/banUtils';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface BanCardProps {
   ban: BanEntry;
@@ -53,7 +55,12 @@ export default function BanCard({
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-lg font-semibold text-white">{ban.username}</h3>
+            <h3 className="text-lg font-semibold text-white">
+              <SecureMessageDisplay 
+                content={ban.username}
+                allowBasicFormatting={false}
+              />
+            </h3>
             <span className={`px-2 py-1 text-xs rounded font-medium ${
               ban.banType === 'permanent' 
                 ? 'bg-red-900/20 text-red-400' 
@@ -117,7 +124,12 @@ export default function BanCard({
             </div>
             <div>
               <span className="text-gray-400">Banned By:</span>
-              <div className="text-gray-300">{ban.bannedBy ?? 'Unknown'}</div>
+              <div className="text-gray-300">
+                <SecureMessageDisplay 
+                  content={ban.bannedBy ?? 'Unknown'}
+                  allowBasicFormatting={false}
+                />
+              </div>
             </div>
             {ban.endTime && (
               <div>
@@ -128,7 +140,13 @@ export default function BanCard({
             {ban.notes && (
               <div className="col-span-2">
                 <span className="text-gray-400">Notes:</span>
-                <div className="text-gray-300 mt-1">{ban.notes}</div>
+                <div className="text-gray-300 mt-1">
+                  <SecureMessageDisplay 
+                    content={ban.notes}
+                    allowBasicFormatting={false}
+                    maxLength={500}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -147,7 +165,13 @@ export default function BanCard({
                   </button>
                 )}
               </div>
-              <div className="text-sm text-gray-300">{ban.appealText ?? 'No appeal text provided'}</div>
+              <div className="text-sm text-gray-300">
+                <SecureMessageDisplay 
+                  content={ban.appealText ?? 'No appeal text provided'}
+                  allowBasicFormatting={false}
+                  maxLength={500}
+                />
+              </div>
               <div className="text-xs text-gray-500 mt-1">
                 {ban.appealDate ? new Date(ban.appealDate).toLocaleString() : 'Unknown date'}
               </div>

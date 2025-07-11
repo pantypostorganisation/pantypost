@@ -1,7 +1,10 @@
+// src/components/admin/bans/HistoryContent.tsx
 'use client';
 
 import { FileText } from 'lucide-react';
 import { BanHistoryEntry, FilterOptions } from '@/types/ban';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface HistoryContentProps {
   banHistory: BanHistoryEntry[];
@@ -9,12 +12,15 @@ interface HistoryContentProps {
 }
 
 export default function HistoryContent({ banHistory, filters }: HistoryContentProps) {
+  // Sanitize search term
+  const sanitizedSearchTerm = filters.searchTerm ? sanitizeSearchQuery(filters.searchTerm).toLowerCase() : '';
+
   const filteredHistory = (banHistory || [])
     .filter(entry => {
       if (!entry || !entry.username) return false;
-      return filters.searchTerm ? 
-        entry.username.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        (entry.details && entry.details.toLowerCase().includes(filters.searchTerm.toLowerCase())) : true;
+      return sanitizedSearchTerm ? 
+        entry.username.toLowerCase().includes(sanitizedSearchTerm) ||
+        (entry.details && entry.details.toLowerCase().includes(sanitizedSearchTerm)) : true;
     })
     .sort((a, b) => {
       const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
@@ -44,7 +50,12 @@ export default function HistoryContent({ banHistory, filters }: HistoryContentPr
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="font-medium text-white">{entry.username || 'Unknown'}</span>
+                      <span className="font-medium text-white">
+                        <SecureMessageDisplay 
+                          content={entry.username || 'Unknown'}
+                          allowBasicFormatting={false}
+                        />
+                      </span>
                       <span className={`px-2 py-1 text-xs rounded font-medium ${
                         entry.action === 'banned' ? 'bg-red-900/20 text-red-400' :
                         entry.action === 'unbanned' ? 'bg-green-900/20 text-green-400' :
@@ -56,9 +67,20 @@ export default function HistoryContent({ banHistory, filters }: HistoryContentPr
                         {(entry.action || 'unknown').replace('_', ' ').toUpperCase()}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-300 mb-1">{entry.details || 'No details available'}</div>
+                    <div className="text-sm text-gray-300 mb-1">
+                      <SecureMessageDisplay 
+                        content={entry.details || 'No details available'}
+                        allowBasicFormatting={false}
+                        maxLength={200}
+                      />
+                    </div>
                     <div className="text-xs text-gray-500">
-                      {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown time'} by {entry.adminUsername || 'Unknown admin'}
+                      {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown time'} by{' '}
+                      <SecureMessageDisplay 
+                        content={entry.adminUsername || 'Unknown admin'}
+                        allowBasicFormatting={false}
+                        className="inline"
+                      />
                     </div>
                   </div>
                 </div>

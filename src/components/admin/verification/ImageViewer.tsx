@@ -3,6 +3,8 @@
 
 import { X } from 'lucide-react';
 import type { ImageViewerProps } from '@/types/verification';
+import { sanitizeUrl } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function ImageViewer({
   imageData,
@@ -11,6 +13,9 @@ export default function ImageViewer({
   onLoad
 }: ImageViewerProps) {
   if (!imageData) return null;
+
+  // Sanitize the image URL
+  const safeImageUrl = sanitizeUrl(imageData.url);
 
   return (
     <div
@@ -28,7 +33,12 @@ export default function ImageViewer({
 
         {/* Image Type Label */}
         <div className="absolute -top-12 left-0 text-white">
-          <h3 className="text-lg font-medium">{imageData.type}</h3>
+          <h3 className="text-lg font-medium">
+            <SecureMessageDisplay 
+              content={imageData.type}
+              allowBasicFormatting={false}
+            />
+          </h3>
         </div>
 
         {/* Loading indicator */}
@@ -40,11 +50,14 @@ export default function ImageViewer({
 
         {/* Image */}
         <img
-          src={imageData.url}
-          alt={imageData.type}
+          src={safeImageUrl}
+          alt=""
           className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
           onClick={(e) => e.stopPropagation()}
           onLoad={onLoad}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
           style={{ opacity: isLoading ? 0.2 : 1, transition: 'opacity 0.3s' }}
         />
       </div>

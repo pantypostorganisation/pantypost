@@ -1,7 +1,10 @@
+// src/components/admin/messages/UserDirectoryContent.tsx
 'use client';
 
 import { useMemo } from 'react';
 import { Users, User, BellRing, BadgeCheck, ChevronRight } from 'lucide-react';
+import { sanitizeSearchQuery, sanitizeUrl } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface UserInfo {
   username: string;
@@ -31,9 +34,12 @@ export default function UserDirectoryContent({
 
   // Filter users for directory
   const filteredDirectoryUsers = useMemo(() => {
+    // Sanitize search query
+    const sanitizedSearch = directorySearchQuery ? sanitizeSearchQuery(directorySearchQuery).toLowerCase() : '';
+    
     return allUsers.filter(userInfo => {
-      const matchesSearch = directorySearchQuery ? 
-        userInfo.username.toLowerCase().includes(directorySearchQuery.toLowerCase()) : true;
+      const matchesSearch = sanitizedSearch ? 
+        userInfo.username.toLowerCase().includes(sanitizedSearch) : true;
       
       if (!matchesSearch) return false;
       
@@ -54,7 +60,14 @@ export default function UserDirectoryContent({
       <div className="relative mr-3">
         <div className="w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md border-2 border-gray-700 group-hover:border-[#ff950e]/50 transition-colors">
           {userInfo.pic ? (
-            <img src={userInfo.pic} alt={userInfo.username} className="w-full h-full object-cover" />
+            <img 
+              src={sanitizeUrl(userInfo.pic)} 
+              alt="" 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
           ) : (
             <span className="text-lg">{getInitial(userInfo.username)}</span>
           )}
@@ -74,7 +87,10 @@ export default function UserDirectoryContent({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <h4 className="font-medium text-white truncate group-hover:text-[#ff950e] transition-colors">
-            {userInfo.username}
+            <SecureMessageDisplay 
+              content={userInfo.username}
+              allowBasicFormatting={false}
+            />
           </h4>
           {userInfo.verified && (
             <BadgeCheck size={14} className="text-[#ff950e] flex-shrink-0" />

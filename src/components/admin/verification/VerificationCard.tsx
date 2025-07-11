@@ -3,6 +3,7 @@
 
 import { ChevronRight, Clock, Shield, Upload } from 'lucide-react';
 import type { VerificationCardProps } from '@/types/verification';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function VerificationCard({ 
   user, 
@@ -26,7 +27,10 @@ export default function VerificationCard({
           </div>
           <div>
             <h3 className="font-bold text-white text-lg group-hover:text-[#ff950e] transition-colors">
-              {user.username}
+              <SecureMessageDisplay 
+                content={user.username}
+                allowBasicFormatting={false}
+              />
             </h3>
             <div className="flex items-center gap-2 mt-1">
               <Clock className="w-3 h-3 text-gray-500" />

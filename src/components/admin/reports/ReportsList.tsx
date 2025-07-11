@@ -21,7 +21,7 @@ export default function ReportsList({
   reportBanInfo
 }: ReportsListProps) {
   
-  if (reports.length === 0) {
+  if (!Array.isArray(reports) || reports.length === 0) {
     return (
       <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-8 text-center">
         <AlertTriangle size={48} className="mx-auto text-gray-600 mb-4" />
@@ -38,26 +38,31 @@ export default function ReportsList({
   return (
     <div className="space-y-4">
       {reports.map((report) => {
-        if (!report || !report.id || !report.reportee) {
+        // Validate report structure
+        if (!report || typeof report.id !== 'string' || !report.id || typeof report.reportee !== 'string' || !report.reportee) {
           return null;
         }
         
-        const userBanInfo = reportBanInfo[report.reportee];
-        const userStats = getUserReportStats(report.reportee);
-        const isExpanded = expandedReports.has(report.id);
+        // TypeScript now knows these are definitely strings
+        const reportId: string = report.id;
+        const reportee: string = report.reportee;
+        
+        const userBanInfo = reportBanInfo[reportee];
+        const userStats = getUserReportStats(reportee);
+        const isExpanded = expandedReports.has(reportId);
         
         return (
           <ReportCard
-            key={report.id}
+            key={reportId}
             report={report}
             isExpanded={isExpanded}
-            onToggle={() => toggleExpanded(report.id!)}
+            onToggle={() => toggleExpanded(reportId)}
             onBan={() => onBan(report)}
             onResolve={() => onResolve(report)}
-            onDelete={() => onDelete(report.id!)}
-            onUpdateSeverity={(severity) => onUpdateSeverity(report.id!, severity)}
-            onUpdateCategory={(category) => onUpdateCategory(report.id!, category)}
-            onUpdateAdminNotes={(notes) => onUpdateAdminNotes(report.id!, notes)}
+            onDelete={() => onDelete(reportId)}
+            onUpdateSeverity={(severity) => onUpdateSeverity(reportId, severity)}
+            onUpdateCategory={(category) => onUpdateCategory(reportId, category)}
+            onUpdateAdminNotes={(notes) => onUpdateAdminNotes(reportId, notes)}
             userStats={userStats}
             userBanInfo={userBanInfo}
             banContext={banContext}

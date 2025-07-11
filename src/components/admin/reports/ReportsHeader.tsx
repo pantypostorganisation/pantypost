@@ -3,6 +3,7 @@
 
 import { Shield, RefreshCw, AlertTriangle } from 'lucide-react';
 import { ReportsHeaderProps } from './types';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function ReportsHeader({ banContextError, lastRefresh, onRefresh }: ReportsHeaderProps) {
   return (
@@ -18,7 +19,11 @@ export default function ReportsHeader({ banContextError, lastRefresh, onRefresh 
         {banContextError && (
           <p className="text-red-400 text-sm mt-2 flex items-center">
             <AlertTriangle size={14} className="mr-1" />
-            {banContextError}
+            <SecureMessageDisplay 
+              content={banContextError}
+              allowBasicFormatting={false}
+              maxLength={200}
+            />
           </p>
         )}
       </div>

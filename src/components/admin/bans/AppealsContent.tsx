@@ -1,8 +1,10 @@
+// src/components/admin/bans/AppealsContent.tsx
 'use client';
 
 import { MessageSquare, Infinity } from 'lucide-react';
 import { BanEntry } from '@/types/ban';
 import { isValidBan, getBanReasonDisplay } from '@/utils/banUtils';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface AppealsContentProps {
   pendingAppeals: BanEntry[];
@@ -62,7 +64,12 @@ export default function AppealsContent({
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
-                      <h3 className="text-lg font-semibold text-white">{ban.username}</h3>
+                      <h3 className="text-lg font-semibold text-white">
+                        <SecureMessageDisplay 
+                          content={ban.username}
+                          allowBasicFormatting={false}
+                        />
+                      </h3>
                       <span className="px-2 py-1 bg-orange-900/20 text-orange-400 text-xs rounded font-medium">
                         Appeal {ban.appealStatus || 'Pending'}
                       </span>
@@ -81,7 +88,13 @@ export default function AppealsContent({
                           </button>
                         )}
                       </div>
-                      <div className="text-sm text-gray-300 mb-2">{ban.appealText || 'No appeal text provided'}</div>
+                      <div className="text-sm text-gray-300 mb-2">
+                        <SecureMessageDisplay 
+                          content={ban.appealText || 'No appeal text provided'}
+                          allowBasicFormatting={false}
+                          maxLength={500}
+                        />
+                      </div>
                       <div className="text-xs text-gray-500">
                         Submitted: {ban.appealDate ? new Date(ban.appealDate).toLocaleString() : 'Unknown'}
                       </div>

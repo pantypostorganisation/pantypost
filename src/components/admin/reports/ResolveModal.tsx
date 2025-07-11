@@ -3,6 +3,7 @@
 
 import { CheckCircle } from 'lucide-react';
 import { ResolveModalProps } from './types';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function ResolveModal({
   isOpen,
@@ -28,10 +29,20 @@ export default function ResolveModal({
         <div className="bg-[#222] rounded-lg p-3 mb-4">
           <p className="text-sm text-gray-400">Report Details:</p>
           <p className="text-white text-sm mt-1">
-            <span className="text-gray-400">Reporter:</span> {report.reporter}
+            <span className="text-gray-400">Reporter:</span>{' '}
+            <SecureMessageDisplay 
+              content={report.reporter}
+              allowBasicFormatting={false}
+              className="inline"
+            />
           </p>
           <p className="text-white text-sm">
-            <span className="text-gray-400">Reportee:</span> {report.reportee}
+            <span className="text-gray-400">Reportee:</span>{' '}
+            <SecureMessageDisplay 
+              content={report.reportee}
+              allowBasicFormatting={false}
+              className="inline"
+            />
           </p>
           <p className="text-white text-sm">
             <span className="text-gray-400">Category:</span> {report.category || 'uncategorized'}

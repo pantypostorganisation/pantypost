@@ -1,3 +1,4 @@
+// src/components/admin/messages/ConversationsContent.tsx
 'use client';
 
 import { useMemo } from 'react';
@@ -9,6 +10,8 @@ import {
   BadgeCheck 
 } from 'lucide-react';
 import { Message } from '@/types/message';
+import { sanitizeSearchQuery, sanitizeUrl } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface ConversationsContentProps {
   threads: { [user: string]: Message[] };
@@ -62,8 +65,11 @@ export default function ConversationsContent({
 
   // Filter threads by search query and role
   const filteredAndSortedThreads = useMemo(() => {
+    // Sanitize search query
+    const sanitizedSearch = searchQuery ? sanitizeSearchQuery(searchQuery).toLowerCase() : '';
+    
     const filteredThreads = Object.keys(threads).filter(userKey => {
-      const matchesSearch = searchQuery ? userKey.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+      const matchesSearch = sanitizedSearch ? userKey.toLowerCase().includes(sanitizedSearch) : true;
       
       if (!matchesSearch) return false;
       
@@ -107,6 +113,7 @@ export default function ConversationsContent({
         const lastMessage = lastMessages[userKey];
         const isActive = activeThread === userKey;
         const userProfile = userProfiles[userKey];
+        const unreadCount = unreadCounts[userKey] || 0;
         
         return (
           <div 
@@ -125,7 +132,14 @@ export default function ConversationsContent({
             <div className="relative mr-3">
               <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
                 {userProfile?.pic ? (
-                  <img src={userProfile.pic} alt={userKey} className="w-full h-full object-cover" />
+                  <img 
+                    src={sanitizeUrl(userProfile.pic)} 
+                    alt="" 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
                 ) : (
                   getInitial(userKey)
                 )}
@@ -137,9 +151,9 @@ export default function ConversationsContent({
               </div>
               
               {/* Unread indicator */}
-              {unreadCounts[userKey] > 0 && (
+              {unreadCount > 0 && (
                 <div className="absolute -top-1 -right-1 w-6 h-6 bg-[#ff950e] text-black text-xs rounded-full flex items-center justify-center font-bold border-2 border-[#121212] shadow-lg">
-                  {unreadCounts[userKey]}
+                  {Math.min(unreadCount, 99)}
                 </div>
               )}
             </div>
@@ -147,7 +161,12 @@ export default function ConversationsContent({
             {/* Message preview */}
             <div className="flex-1 min-w-0">
               <div className="flex justify-between">
-                <h3 className="font-bold text-white truncate">{userKey}</h3>
+                <h3 className="font-bold text-white truncate">
+                  <SecureMessageDisplay 
+                    content={userKey}
+                    allowBasicFormatting={false}
+                  />
+                </h3>
                 <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
                   <Clock size={12} className="mr-1" />
                   {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
@@ -159,7 +178,11 @@ export default function ConversationsContent({
                     ? '🛠️ Custom Request'
                     : lastMessage.type === 'image'
                       ? '📷 Image'
-                      : lastMessage.content
+                      : <SecureMessageDisplay 
+                          content={lastMessage.content}
+                          allowBasicFormatting={false}
+                          maxLength={50}
+                        />
                 ) : ''}
               </p>
             </div>

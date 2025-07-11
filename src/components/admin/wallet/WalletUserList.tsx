@@ -2,6 +2,7 @@
 'use client';
 
 import { Users, UserCheck, UserX, CheckCircle } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface User {
   username: string;
@@ -99,7 +100,13 @@ export default function WalletUserList({
                     
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-white">{user.username}</span>
+                        <span className="font-medium text-white">
+                          <SecureMessageDisplay 
+                            content={user.username} 
+                            allowBasicFormatting={false}
+                            className="inline"
+                          />
+                        </span>
                         <span className={`px-2 py-1 rounded text-xs border ${getRoleBadgeColor(user.role)}`}>
                           {formatRole(user.role)}
                         </span>

@@ -4,6 +4,7 @@
 import { Archive } from 'lucide-react';
 import ResolvedEntry from './ResolvedEntry';
 import type { ResolvedListProps } from '@/types/resolved';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
 
 export default function ResolvedList({
   reports,
@@ -15,14 +16,17 @@ export default function ResolvedList({
   onDelete,
   filters
 }: ResolvedListProps) {
+  // Sanitize search term
+  const sanitizedSearchTerm = filters.searchTerm ? sanitizeSearchQuery(filters.searchTerm).toLowerCase() : '';
+
   // Filter and sort reports
   const filteredAndSortedReports = (() => {
     let filtered = reports.filter(report => {
-      const matchesSearch = filters.searchTerm ?
-        report.reporter.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        report.reportee.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        (report.notes && report.notes.toLowerCase().includes(filters.searchTerm.toLowerCase())) ||
-        (report.resolvedReason && report.resolvedReason.toLowerCase().includes(filters.searchTerm.toLowerCase()))
+      const matchesSearch = sanitizedSearchTerm ?
+        report.reporter.toLowerCase().includes(sanitizedSearchTerm) ||
+        report.reportee.toLowerCase().includes(sanitizedSearchTerm) ||
+        (report.notes && report.notes.toLowerCase().includes(sanitizedSearchTerm)) ||
+        (report.resolvedReason && report.resolvedReason.toLowerCase().includes(sanitizedSearchTerm))
         : true;
 
       const matchesFilter = 

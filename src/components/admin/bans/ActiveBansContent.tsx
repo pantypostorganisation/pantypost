@@ -1,9 +1,12 @@
+// src/components/admin/bans/ActiveBansContent.tsx
 'use client';
 
 import { UserCheck } from 'lucide-react';
 import BanCard from './BanCard';
 import { BanEntry, FilterOptions } from '@/types/ban';
 import { isValidBan } from '@/utils/banUtils';
+import { sanitizeSearchQuery, sanitizeStrict } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface ActiveBansContentProps {
   activeBans: BanEntry[];
@@ -16,19 +19,35 @@ interface ActiveBansContentProps {
   onShowEvidence: (evidence: string[]) => void;
 }
 
+const VALID_SORT_OPTIONS = ['username', 'duration', 'date'] as const;
+const VALID_FILTER_OPTIONS = ['all', 'temporary', 'permanent'] as const;
+const VALID_SORT_ORDERS = ['asc', 'desc'] as const;
+
 const filterAndSortBans = (bans: any[], filters: FilterOptions) => {
   if (!Array.isArray(bans)) return [];
+  
+  // Sanitize and validate filter options
+  const sanitizedSearchTerm = filters.searchTerm ? sanitizeSearchQuery(filters.searchTerm) : '';
+  const validatedSortBy = VALID_SORT_OPTIONS.includes(filters.sortBy as any) ? filters.sortBy : 'date';
+  const validatedFilterBy = VALID_FILTER_OPTIONS.includes(filters.filterBy as any) ? filters.filterBy : 'all';
+  const validatedSortOrder = VALID_SORT_ORDERS.includes(filters.sortOrder as any) ? filters.sortOrder : 'desc';
   
   let filtered = bans.filter(ban => {
     if (!isValidBan(ban)) return false;
     
-    const matchesSearch = filters.searchTerm ? 
-      ban.username.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-      (ban.reason && ban.reason.toLowerCase().includes(filters.searchTerm.toLowerCase())) ||
-      (ban.customReason && ban.customReason.toLowerCase().includes(filters.searchTerm.toLowerCase())) : true;
+    // Sanitize ban data for safe comparison
+    const sanitizedUsername = sanitizeStrict(ban.username || '').toLowerCase();
+    const sanitizedReason = sanitizeStrict(ban.reason || '').toLowerCase();
+    const sanitizedCustomReason = sanitizeStrict(ban.customReason || '').toLowerCase();
+    const searchTermLower = sanitizedSearchTerm.toLowerCase();
     
-    const matchesFilter = filters.filterBy === 'all' ? true :
-      filters.filterBy === 'temporary' ? ban.banType === 'temporary' :
+    const matchesSearch = sanitizedSearchTerm ? 
+      sanitizedUsername.includes(searchTermLower) ||
+      sanitizedReason.includes(searchTermLower) ||
+      sanitizedCustomReason.includes(searchTermLower) : true;
+    
+    const matchesFilter = validatedFilterBy === 'all' ? true :
+      validatedFilterBy === 'temporary' ? ban.banType === 'temporary' :
       ban.banType === 'permanent';
     
     return matchesSearch && matchesFilter;
@@ -36,21 +55,25 @@ const filterAndSortBans = (bans: any[], filters: FilterOptions) => {
 
   filtered.sort((a, b) => {
     let comparison = 0;
-    switch (filters.sortBy) {
+    switch (validatedSortBy) {
       case 'username':
-        comparison = a.username.localeCompare(b.username);
+        const usernameA = sanitizeStrict(a.username || '');
+        const usernameB = sanitizeStrict(b.username || '');
+        comparison = usernameA.localeCompare(usernameB);
         break;
       case 'duration':
-        const aDuration = a.banType === 'permanent' ? Infinity : (a.remainingHours || 0);
-        const bDuration = b.banType === 'permanent' ? Infinity : (b.remainingHours || 0);
+        const aDuration = a.banType === 'permanent' ? Infinity : (Number(a.remainingHours) || 0);
+        const bDuration = b.banType === 'permanent' ? Infinity : (Number(b.remainingHours) || 0);
         comparison = aDuration - bDuration;
         break;
       case 'date':
       default:
-        comparison = new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime();
+        const dateA = new Date(a.startTime || 0).getTime();
+        const dateB = new Date(b.startTime || 0).getTime();
+        comparison = isNaN(dateA) || isNaN(dateB) ? 0 : dateA - dateB;
         break;
     }
-    return filters.sortOrder === 'asc' ? comparison : -comparison;
+    return validatedSortOrder === 'asc' ? comparison : -comparison;
   });
   
   return filtered;
@@ -66,13 +89,19 @@ export default function ActiveBansContent({
   onReviewAppeal,
   onShowEvidence
 }: ActiveBansContentProps) {
+  // Validate totalCount
+  const validatedTotalCount = Number.isInteger(totalCount) && totalCount >= 0 ? totalCount : 0;
+  
+  // Filter and sort bans with sanitized filters
   const filteredBans = filterAndSortBans(activeBans, filters);
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-white">Active Bans ({totalCount})</h2>
-        {totalCount > 0 && (
+        <h2 className="text-xl font-semibold text-white">
+          Active Bans ({validatedTotalCount})
+        </h2>
+        {validatedTotalCount > 0 && (
           <p className="text-sm text-gray-400">
             Click on a ban to expand details
           </p>
@@ -85,7 +114,10 @@ export default function ActiveBansContent({
           <p className="text-gray-400 text-lg">No active bans found</p>
           {filters.searchTerm && (
             <p className="text-gray-500 text-sm mt-2">
-              Try adjusting your search terms or filters
+              <SecureMessageDisplay 
+                content={`Try adjusting your search terms or filters`}
+                allowBasicFormatting={false}
+              />
             </p>
           )}
         </div>

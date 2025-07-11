@@ -1,8 +1,11 @@
+// src/components/admin/bans/ExpiredBansContent.tsx
 'use client';
 
 import { Clock } from 'lucide-react';
 import { BanEntry, FilterOptions } from '@/types/ban';
 import { isValidBan, getBanReasonDisplay } from '@/utils/banUtils';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface ExpiredBansContentProps {
   expiredBans: BanEntry[];
@@ -12,13 +15,16 @@ interface ExpiredBansContentProps {
 const filterAndSortBans = (bans: BanEntry[], filters: FilterOptions): BanEntry[] => {
   if (!Array.isArray(bans)) return [];
   
+  // Sanitize search term
+  const sanitizedSearchTerm = filters.searchTerm ? sanitizeSearchQuery(filters.searchTerm).toLowerCase() : '';
+  
   let filtered = bans.filter(ban => {
     if (!isValidBan(ban)) return false;
     
-    const matchesSearch = filters.searchTerm ? 
-      ban.username.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-      (ban.reason && ban.reason.toLowerCase().includes(filters.searchTerm.toLowerCase())) ||
-      (ban.customReason && ban.customReason.toLowerCase().includes(filters.searchTerm.toLowerCase())) : true;
+    const matchesSearch = sanitizedSearchTerm ? 
+      ban.username.toLowerCase().includes(sanitizedSearchTerm) ||
+      (ban.reason && ban.reason.toLowerCase().includes(sanitizedSearchTerm)) ||
+      (ban.customReason && ban.customReason.toLowerCase().includes(sanitizedSearchTerm)) : true;
     
     const matchesFilter = filters.filterBy === 'all' ? true :
       filters.filterBy === 'temporary' ? ban.banType === 'temporary' :
@@ -61,7 +67,12 @@ export default function ExpiredBansContent({ expiredBans, filters }: ExpiredBans
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-white">{ban.username}</h3>
+                      <h3 className="text-lg font-semibold text-white">
+                        <SecureMessageDisplay 
+                          content={ban.username}
+                          allowBasicFormatting={false}
+                        />
+                      </h3>
                       <span className="px-2 py-1 bg-gray-900/20 text-gray-400 text-xs rounded font-medium">
                         Expired/Lifted
                       </span>
