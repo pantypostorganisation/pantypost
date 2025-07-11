@@ -3,19 +3,20 @@
 
 import { UserCheck } from 'lucide-react';
 import BanCard from './BanCard';
-import { BanEntry, FilterOptions } from '@/types/ban';
+import { FilterOptions } from '@/types/ban';
+import { UserBan } from '@/context/BanContext';
 import { isValidBan } from '@/utils/banUtils';
 import { sanitizeSearchQuery, sanitizeStrict } from '@/utils/security/sanitization';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface ActiveBansContentProps {
-  activeBans: BanEntry[];
+  activeBans: UserBan[];
   filters: FilterOptions;
   totalCount: number;
   expandedBans: Set<string>;
   onToggleExpand: (banId: string) => void;
-  onUnban: (ban: BanEntry) => void;
-  onReviewAppeal: (ban: BanEntry) => void;
+  onUnban: (ban: UserBan) => void;
+  onReviewAppeal: (ban: UserBan) => void;
   onShowEvidence: (evidence: string[]) => void;
 }
 
@@ -94,6 +95,12 @@ export default function ActiveBansContent({
   
   // Filter and sort bans with sanitized filters
   const filteredBans = filterAndSortBans(activeBans, filters);
+
+  console.log('[ActiveBansContent] Rendering:', {
+    receivedBans: activeBans.length,
+    filteredBans: filteredBans.length,
+    totalCount: validatedTotalCount
+  });
 
   return (
     <div className="space-y-4">

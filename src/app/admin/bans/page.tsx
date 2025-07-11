@@ -16,6 +16,7 @@ import HistoryContent from '@/components/admin/bans/HistoryContent';
 import AnalyticsContent from '@/components/admin/bans/AnalyticsContent';
 import { Shield, AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import { FilterOptions, BanStats } from '@/types/ban';
+import { UserBan } from '@/context/BanContext';
 import { useBanManagement } from '@/hooks/useBanManagement';
 import { isValidBan } from '@/utils/banUtils';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
@@ -165,7 +166,7 @@ export default function BanManagementPage() {
     });
   };
 
-  const handleUnban = (ban: any) => {
+  const handleUnban = (ban: UserBan) => {
     if (!isValidBan(ban)) {
       alert('Invalid ban data - missing username');
       return;
@@ -211,7 +212,7 @@ export default function BanManagementPage() {
     }
   };
 
-  const handleAppealReview = (ban: any) => {
+  const handleAppealReview = (ban: UserBan) => {
     if (!isValidBan(ban)) {
       alert('Invalid ban data for appeal review');
       return;

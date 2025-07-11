@@ -44,5 +44,5 @@ export const isValidBan = (ban: any): ban is BanEntry => {
          ban.banType &&
          ban.reason &&
          ban.startTime &&
-         ban.bannedBy;
+         typeof ban.bannedBy === 'string'; // Changed to check type instead of truthiness
 };
