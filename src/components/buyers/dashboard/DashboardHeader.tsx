@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { Wallet, Plus } from 'lucide-react';
 import { DashboardHeaderProps } from '@/types/dashboard';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function DashboardHeader({ username, balance }: DashboardHeaderProps) {
   return (
@@ -11,7 +12,11 @@ export default function DashboardHeader({ username, balance }: DashboardHeaderPr
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div>
           <h1 className="text-4xl font-bold text-white mb-2">
-            Welcome back, <span className="text-[#ff950e]">{username}</span>!
+            Welcome back, <SecureMessageDisplay 
+              content={username}
+              allowBasicFormatting={false}
+              className="text-[#ff950e] inline"
+            />!
           </h1>
           <p className="text-gray-400 text-lg">
             Here's an overview of your account activity

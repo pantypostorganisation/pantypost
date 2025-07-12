@@ -1,9 +1,10 @@
-/// src/components/buyers/dashboard/FeaturedListings.tsx
+// src/components/buyers/dashboard/FeaturedListings.tsx
 'use client';
 
 import Link from 'next/link';
 import { ArrowRight, ShoppingBag, ChevronRight } from 'lucide-react';
 import { FeaturedListingsProps } from '@/types/dashboard';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 
 // This component is no longer used but kept for potential future use
 export default function FeaturedListings({ listings }: FeaturedListingsProps) {
@@ -32,10 +33,11 @@ export default function FeaturedListings({ listings }: FeaturedListingsProps) {
           >
             {listing.images && listing.images.length > 0 ? (
               <div className="aspect-[4/3] overflow-hidden bg-gray-900">
-                <img 
+                <SecureImage 
                   src={listing.images[0]} 
                   alt={listing.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  fallbackSrc="/placeholder-image.png"
                 />
               </div>
             ) : (
@@ -46,9 +48,19 @@ export default function FeaturedListings({ listings }: FeaturedListingsProps) {
             
             <div className="p-4">
               <h3 className="font-medium text-white mb-1 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
-                {listing.title}
+                <SecureMessageDisplay 
+                  content={listing.title}
+                  allowBasicFormatting={false}
+                  className="inline"
+                />
               </h3>
-              <p className="text-sm text-gray-500 mb-2">by {listing.seller}</p>
+              <p className="text-sm text-gray-500 mb-2">
+                by <SecureMessageDisplay 
+                  content={listing.seller}
+                  allowBasicFormatting={false}
+                  className="inline"
+                />
+              </p>
               <div className="flex items-center justify-between">
                 <p className="text-lg font-bold text-[#ff950e]">
                   ${(listing.price * 1.1).toFixed(2)}

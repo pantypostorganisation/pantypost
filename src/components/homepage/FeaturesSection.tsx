@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useState, useEffect, useCallback } from 'react';
 import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { PLATFORM_FEATURES } from '@/utils/homepage-constants';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 // Enhanced loading skeleton for feature cards
 const FeatureSkeleton = () => (
@@ -104,6 +105,10 @@ const FeatureCard = ({
       setIconError(true);
     }
 
+    // Sanitize text content
+    const sanitizedTitle = sanitizeStrict(feature.title);
+    const sanitizedDesc = sanitizeStrict(feature.desc);
+
     return (
       <motion.div
         className="group relative bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
@@ -133,10 +138,10 @@ const FeatureCard = ({
             id={`feature-title-${index}`}
             className="text-xl font-semibold text-white mb-3 group-hover:text-[#ff950e] transition-colors duration-300"
           >
-            {feature.title}
+            {sanitizedTitle}
           </h3>
           <p className="text-gray-400 text-sm leading-relaxed group-hover:text-gray-300 transition-colors duration-300">
-            {feature.desc}
+            {sanitizedDesc}
           </p>
         </div>
       </motion.div>
@@ -237,32 +242,46 @@ export default function FeaturesSection() {
     handleRetry();
   }, [handleRetry]);
 
+  // Create safe structured data
+  const getStructuredData = () => {
+    try {
+      return {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "PantyPost",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": validFeatures.map(feature => sanitizeStrict(feature.title || '')),
+        "description": "Premium marketplace platform with secure messaging, verified sellers, and subscription services",
+        "audience": {
+          "@type": "Audience",
+          "audienceType": "Adult"
+        }
+      };
+    } catch (error) {
+      console.warn('Failed to create structured data:', error);
+      return null;
+    }
+  };
+
+  const structuredData = getStructuredData();
+
   return (
     <div className="bg-gradient-to-b from-black to-[#101010] pt-16 pb-16 md:pt-20 md:pb-20 relative z-30 overflow-hidden">
-      {/* Enhanced SEO structured data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            "name": "PantyPost",
-            "applicationCategory": "BusinessApplication",
-            "operatingSystem": "Web",
-            "offers": {
-              "@type": "Offer",
-              "price": "0",
-              "priceCurrency": "USD"
-            },
-            "featureList": validFeatures.map(feature => feature.title),
-            "description": "Premium marketplace platform with secure messaging, verified sellers, and subscription services",
-            "audience": {
-              "@type": "Audience",
-              "audienceType": "Adult"
-            }
-          })
-        }}
-      />
+      {/* Enhanced SEO structured data - secured */}
+      {structuredData && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData)
+          }}
+        />
+      )}
 
       {/* Content container */}
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
@@ -288,7 +307,7 @@ export default function FeaturesSection() {
             </p>
             {process.env.NODE_ENV === 'development' && (
               <p className="text-gray-600 text-sm mb-6 font-mono bg-gray-900/50 p-4 rounded max-w-md mx-auto">
-                {sectionError}
+                {sanitizeStrict(sectionError)}
               </p>
             )}
             <button

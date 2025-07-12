@@ -10,6 +10,8 @@ import {
   Heart,
   User
 } from 'lucide-react';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeUsername } from '@/utils/security/sanitization';
 
 interface ChatHeaderProps {
   activeThread: string;
@@ -31,6 +33,7 @@ export default function ChatHeader({
   onSendTip
 }: ChatHeaderProps) {
   const [showDropdown, setShowDropdown] = React.useState(false);
+  const sanitizedUsername = sanitizeUsername(activeThread);
   
   return (
     <div className="bg-[#1a1a1a] border-b border-gray-800 px-4 py-3">
@@ -38,10 +41,11 @@ export default function ChatHeader({
         <div className="flex items-center gap-3">
           {/* Seller Avatar */}
           {sellerProfile.pic ? (
-            <img
+            <SecureImage
               src={sellerProfile.pic}
               alt={activeThread}
               className="w-10 h-10 rounded-full object-cover"
+              fallbackSrc="/placeholder-avatar.png"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
@@ -52,7 +56,11 @@ export default function ChatHeader({
           {/* Seller Info */}
           <div>
             <h3 className="font-semibold text-white flex items-center gap-2">
-              {activeThread}
+              <SecureMessageDisplay 
+                content={activeThread}
+                allowBasicFormatting={false}
+                className="inline"
+              />
               {sellerProfile.verified && (
                 <CheckCircle className="w-4 h-4 text-blue-500" />
               )}
@@ -81,7 +89,7 @@ export default function ChatHeader({
               <div className="absolute right-0 top-full mt-1 bg-[#222] border border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px] z-20">
                 <button
                   onClick={() => {
-                    window.open(`/sellers/${activeThread}`, '_blank');
+                    window.open(`/sellers/${sanitizedUsername}`, '_blank');
                     setShowDropdown(false);
                   }}
                   className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"

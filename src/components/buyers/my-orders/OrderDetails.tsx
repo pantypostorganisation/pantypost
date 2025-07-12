@@ -5,6 +5,7 @@ import React from 'react';
 import { Calendar, Tag, MapPin, CheckCircle, Eye, ChevronUp, Settings } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
 import { formatOrderDate, getShippingStatusBadge } from '@/utils/orderUtils';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface OrderDetailsProps {
   order: Order;
@@ -39,7 +40,16 @@ export default function OrderDetails({
           <div className="flex items-center gap-1">
             <Tag className="w-4 h-4 text-gray-400" />
             <span className="text-xs text-gray-400">
-              {order.tags.slice(0, 2).join(', ')}
+              {order.tags.slice(0, 2).map((tag, index) => (
+                <React.Fragment key={index}>
+                  {index > 0 && ', '}
+                  <SecureMessageDisplay 
+                    content={tag}
+                    allowBasicFormatting={false}
+                    className="inline"
+                  />
+                </React.Fragment>
+              ))}
               {order.tags.length > 2 && '...'}
             </span>
           </div>

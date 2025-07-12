@@ -3,6 +3,7 @@
 
 import { AlertCircle, Gavel, Clock, AlertTriangle } from 'lucide-react';
 import { AuctionEndedModalProps } from '@/types/browseDetail';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function AuctionEndedModal({
   isAuctionListing,
@@ -52,13 +53,25 @@ export default function AuctionEndedModal({
               ) : isSeller ? (
                 hasBids ? (
                   <p>
-                    Your auction for "<span className="text-[#ff950e]">{listing.title}</span>" has ended 
+                    Your auction for "<SecureMessageDisplay 
+                      content={listing.title}
+                      allowBasicFormatting={false}
+                      className="text-[#ff950e] inline"
+                    />" has ended 
                     with a final bid of <span className="font-bold text-green-400">${listing.auction.highestBid?.toFixed(2)}</span> 
-                    from <span className="font-bold">{listing.auction.highestBidder}</span>.
+                    from <SecureMessageDisplay 
+                      content={listing.auction.highestBidder || ''}
+                      allowBasicFormatting={false}
+                      className="font-bold inline"
+                    />.
                   </p>
                 ) : (
                   <p>
-                    Your auction for "<span className="text-[#ff950e]">{listing.title}</span>" has ended without 
+                    Your auction for "<SecureMessageDisplay 
+                      content={listing.title}
+                      allowBasicFormatting={false}
+                      className="text-[#ff950e] inline"
+                    />" has ended without 
                     receiving any bids.
                   </p>
                 )
@@ -107,9 +120,17 @@ export default function AuctionEndedModal({
               </p>
               
               <p>
-                The auction for "<span className="text-[#ff950e]">{listing.title}</span>" ended 
+                The auction for "<SecureMessageDisplay 
+                  content={listing.title}
+                  allowBasicFormatting={false}
+                  className="text-[#ff950e] inline"
+                />" ended 
                 with a final bid of <span className="font-bold text-green-400">${listing.auction.highestBid?.toFixed(2)}</span> 
-                from <span className="font-bold">{listing.auction.highestBidder}</span>.
+                from <SecureMessageDisplay 
+                  content={listing.auction.highestBidder || ''}
+                  allowBasicFormatting={false}
+                  className="font-bold inline"
+                />.
               </p>
             </div>
           </div>

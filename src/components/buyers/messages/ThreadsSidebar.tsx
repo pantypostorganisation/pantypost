@@ -13,6 +13,9 @@ import {
   User,
   CheckCircle
 } from 'lucide-react';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { SecureInput } from '@/components/ui/SecureInput';
+import { sanitizeSearchQuery } from '@/utils/security/sanitization';
 
 interface ThreadsSidebarProps {
   threads: { [seller: string]: any[] };
@@ -51,9 +54,10 @@ export default function ThreadsSidebar({
 }: ThreadsSidebarProps) {
   // Filter threads based on search and filter
   const filteredThreads = useMemo(() => {
+    const sanitizedSearchQuery = sanitizeSearchQuery(searchQuery);
     return Object.keys(threads)
       .filter(seller => {
-        if (searchQuery && !seller.toLowerCase().includes(searchQuery.toLowerCase())) {
+        if (sanitizedSearchQuery && !seller.toLowerCase().includes(sanitizedSearchQuery.toLowerCase())) {
           return false;
         }
         if (filterBy === 'unread' && uiUnreadCounts[seller] === 0) {
@@ -139,12 +143,14 @@ export default function ThreadsSidebar({
           <>
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
+              <SecureInput
                 type="text"
                 placeholder="Search sellers..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(value: string) => setSearchQuery(value)}
+                sanitizer={sanitizeSearchQuery}
                 className="w-full bg-[#222] text-white rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                maxLength={100}
               />
             </div>
             
@@ -205,10 +211,11 @@ export default function ThreadsSidebar({
                       {/* Avatar */}
                       <div className="relative flex-shrink-0">
                         {profile.pic ? (
-                          <img
+                          <SecureImage
                             src={profile.pic}
                             alt={seller}
                             className="w-12 h-12 rounded-full object-cover"
+                            fallbackSrc="/placeholder-avatar.png"
                           />
                         ) : (
                           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
@@ -224,7 +231,11 @@ export default function ThreadsSidebar({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <h3 className="font-semibold text-white truncate flex items-center gap-1">
-                            {seller}
+                            <SecureMessageDisplay 
+                              content={seller}
+                              allowBasicFormatting={false}
+                              className="inline"
+                            />
                             {profile.verified && (
                               <span className="text-xs text-blue-500">(Verified)</span>
                             )}
@@ -249,7 +260,11 @@ export default function ThreadsSidebar({
                             ) : lastMessage.type === 'image' ? (
                               <span className="italic">📷 Image</span>
                             ) : (
-                              lastMessage.content
+                              <SecureMessageDisplay 
+                                content={lastMessage.content || ''}
+                                allowBasicFormatting={false}
+                                maxLength={50}
+                              />
                             )}
                           </p>
                         )}
@@ -297,7 +312,12 @@ export default function ThreadsSidebar({
                     className="p-4 hover:bg-[#222] cursor-pointer transition-all"
                   >
                     <div className="flex items-start justify-between mb-1">
-                      <h4 className="font-medium text-white truncate">{request.title}</h4>
+                      <h4 className="font-medium text-white truncate">
+                        <SecureMessageDisplay 
+                          content={request.title}
+                          allowBasicFormatting={false}
+                        />
+                      </h4>
                       <span className={`text-xs px-2 py-1 rounded-full ${
                         request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
                         request.status === 'accepted' ? 'bg-green-500/20 text-green-400' :
@@ -308,7 +328,13 @@ export default function ThreadsSidebar({
                         {request.status}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400 mb-1">To: {request.seller}</p>
+                    <p className="text-sm text-gray-400 mb-1">
+                      To: <SecureMessageDisplay 
+                        content={request.seller}
+                        allowBasicFormatting={false}
+                        className="inline"
+                      />
+                    </p>
                     <p className="text-sm font-semibold text-[#ff950e]">${request.price.toFixed(2)}</p>
                   </div>
                 ))}

@@ -3,6 +3,7 @@
 
 import { Award, ShoppingBag } from 'lucide-react';
 import { PurchaseSuccessModalProps } from '@/types/browseDetail';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 export default function PurchaseSuccessModal({
   showPurchaseSuccess,
@@ -76,7 +77,11 @@ export default function PurchaseSuccessModal({
             <div className="bg-black/40 p-4 rounded-xl">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-400">Seller:</span>
-                <span className="font-bold text-white">{listing.seller}</span>
+                <SecureMessageDisplay 
+                  content={listing.seller}
+                  allowBasicFormatting={false}
+                  className="font-bold text-white"
+                />
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Total Paid:</span>

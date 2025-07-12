@@ -4,6 +4,8 @@
 import Link from 'next/link';
 import { Crown, CheckCircle, ExternalLink } from 'lucide-react';
 import { SubscribedSellersProps } from '@/types/dashboard';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeUsername } from '@/utils/security/sanitization';
 
 export default function SubscribedSellers({ subscriptions }: SubscribedSellersProps) {
   return (
@@ -32,64 +34,77 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
         </div>
       ) : (
         <div className="space-y-4">
-          {subscriptions.map((sub) => (
-            <div key={sub.seller} className="bg-[#111111] rounded-lg p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  {sub.pic ? (
-                    <img 
-                      src={sub.pic} 
-                      alt={sub.seller}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-700"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center">
-                      <Crown className="w-5 h-5 text-gray-600" />
-                    </div>
-                  )}
-                  
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Link 
-                        href={`/sellers/${sub.seller}`}
-                        className="font-medium text-white hover:text-[#ff950e] transition-colors"
-                      >
-                        {sub.seller}
-                      </Link>
-                      {sub.verified && (
-                        <span title="Verified">
-                          <CheckCircle className="w-4 h-4 text-blue-400" />
-                        </span>
-                      )}
-                      {sub.tier && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${getTierColor(sub.tier)}`}>
-                          {sub.tier}
-                        </span>
-                      )}
-                    </div>
+          {subscriptions.map((sub) => {
+            const sanitizedUsername = sanitizeUsername(sub.seller);
+            
+            return (
+              <div key={sub.seller} className="bg-[#111111] rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    {sub.pic ? (
+                      <SecureImage 
+                        src={sub.pic} 
+                        alt={sub.seller}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-gray-700"
+                        fallbackSrc="/placeholder-avatar.png"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center">
+                        <Crown className="w-5 h-5 text-gray-600" />
+                      </div>
+                    )}
                     
-                    <p className="text-sm text-gray-400 line-clamp-2 mb-2">
-                      {sub.bio}
-                    </p>
-                    
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>{sub.newListings} new listings</span>
-                      <span>•</span>
-                      <span>${sub.price}/month</span>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Link 
+                          href={`/sellers/${sanitizedUsername}`}
+                          className="font-medium text-white hover:text-[#ff950e] transition-colors"
+                        >
+                          <SecureMessageDisplay 
+                            content={sub.seller}
+                            allowBasicFormatting={false}
+                            className="inline"
+                          />
+                        </Link>
+                        {sub.verified && (
+                          <span title="Verified">
+                            <CheckCircle className="w-4 h-4 text-blue-400" />
+                          </span>
+                        )}
+                        {sub.tier && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${getTierColor(sub.tier)}`}>
+                            {sub.tier}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <p className="text-sm text-gray-400 line-clamp-2 mb-2">
+                        <SecureMessageDisplay 
+                          content={sub.bio}
+                          allowBasicFormatting={false}
+                          maxLength={200}
+                        />
+                      </p>
+                      
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>{sub.newListings} new listings</span>
+                        <span>•</span>
+                        <span>${sub.price}/month</span>
+                      </div>
                     </div>
                   </div>
+                  
+                  <Link
+                    href={`/sellers/${sanitizedUsername}`}
+                    className="text-gray-400 hover:text-[#ff950e] transition-colors"
+                    title="View Profile"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
                 </div>
-                
-                <Link
-                  href={`/sellers/${sub.seller}`}
-                  className="text-gray-400 hover:text-[#ff950e] transition-colors"
-                  title="View Profile"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </Link>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

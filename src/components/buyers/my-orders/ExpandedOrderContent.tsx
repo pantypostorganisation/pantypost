@@ -5,6 +5,8 @@ import React from 'react';
 import Link from 'next/link';
 import { MessageCircle, DollarSign, Tag, ExternalLink } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeUsername } from '@/utils/security/sanitization';
 
 interface ExpandedOrderContentProps {
   order: Order;
@@ -20,20 +22,22 @@ export default function ExpandedOrderContent({
   isSellerVerified,
 }: ExpandedOrderContentProps) {
   const isCustom = type === 'custom';
+  const sanitizedUsername = sanitizeUsername(order.seller);
 
   return (
     <div className="border-t border-gray-700 bg-black/20 p-6">
       {/* Seller Info */}
       <div className="flex items-center justify-between mb-6">
         <Link
-          href={`/sellers/${order.seller}`}
+          href={`/sellers/${sanitizedUsername}`}
           className="flex items-center gap-3 text-white hover:text-[#ff950e] group transition-colors"
         >
           {sellerProfilePic ? (
-            <img
+            <SecureImage
               src={sellerProfilePic}
               alt={order.seller}
               className="w-10 h-10 rounded-full object-cover border-2 border-gray-600 group-hover:border-[#ff950e] transition-colors"
+              fallbackSrc="/placeholder-avatar.png"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold border-2 border-gray-600 group-hover:border-[#ff950e] transition-colors">
@@ -41,7 +45,12 @@ export default function ExpandedOrderContent({
             </div>
           )}
           <div>
-            <p className="font-semibold">{order.seller}</p>
+            <p className="font-semibold">
+              <SecureMessageDisplay 
+                content={order.seller}
+                allowBasicFormatting={false}
+              />
+            </p>
             <p className="text-xs text-gray-400">View seller profile</p>
           </div>
           
@@ -55,7 +64,7 @@ export default function ExpandedOrderContent({
         </Link>
         
         <Link
-          href={`/buyers/messages?thread=${order.seller}`}
+          href={`/buyers/messages?thread=${sanitizedUsername}`}
           className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg transition-all shadow-lg"
         >
           <MessageCircle className="w-4 h-4" />
@@ -112,7 +121,10 @@ export default function ExpandedOrderContent({
                 key={idx}
                 className="bg-blue-900/30 text-blue-200 text-xs px-3 py-1 rounded-full border border-blue-700/50"
               >
-                {tag}
+                <SecureMessageDisplay 
+                  content={tag}
+                  allowBasicFormatting={false}
+                />
               </span>
             ))}
           </div>
