@@ -2,6 +2,7 @@
 'use client';
 
 import { Crown, Lock } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface SubscriptionSectionProps {
   hasAccess: boolean | undefined;

@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { LockIcon } from 'lucide-react';
 import { TipsCardProps } from '@/types/myListings';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export default function TipsCard({ 
   title, 
@@ -18,13 +19,13 @@ export default function TipsCard({
     <div className={`bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border ${borderColor}`}>
       <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
         <Icon className={`${iconColor} w-6 h-6`} />
-        {title}
+        {sanitizeStrict(title)}
       </h2>
       <ul className="space-y-4 text-gray-300 text-sm">
         {tips.map((tip, index) => (
           <li key={index} className="flex items-start gap-2">
             <span className={`${iconColor} font-bold text-lg leading-none`}>•</span>
-            <span>{tip}</span>
+            <span>{sanitizeStrict(tip)}</span>
           </li>
         ))}
       </ul>

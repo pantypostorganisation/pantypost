@@ -4,6 +4,7 @@
 import React, { useMemo } from 'react';
 import { MessageCircle, Filter, BellRing, Search } from 'lucide-react';
 import ThreadListItem from './ThreadListItem';
+import { SecureInput } from '@/components/ui/SecureInput';
 
 interface ThreadsSidebarProps {
   isAdmin: boolean;
@@ -122,14 +123,15 @@ export default function ThreadsSidebar({
       {/* Search Bar */}
       <div className="px-4 pb-3">
         <div className="relative">
-          <input
+          <SecureInput
             type="text"
             placeholder="Search Buyers..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={setSearchQuery}
             className="w-full py-2 px-4 pr-10 rounded-full bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:border-transparent"
+            maxLength={100}
           />
-          <div className="absolute right-3 top-2.5 text-gray-400">
+          <div className="absolute right-3 top-2.5 text-gray-400 pointer-events-none">
             <Search size={18} />
           </div>
         </div>

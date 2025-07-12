@@ -4,6 +4,7 @@
 import { motion } from 'framer-motion';
 import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { TRUST_SIGNALS } from '@/utils/homepage-constants';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export default function TrustSignalsSection() {
   return (
@@ -31,8 +32,8 @@ export default function TrustSignalsSection() {
           {TRUST_SIGNALS.map((item, index) => (
             <motion.div key={index} className="flex flex-col items-center" variants={itemVariants}>
               <item.icon className="h-7 w-7 text-[#ff950e] mb-3 transition-transform duration-300 hover:scale-110" />
-              <span className="text-white font-medium text-sm">{item.title}</span>
-              <p className="text-gray-400 text-xs mt-1">{item.desc}</p>
+              <span className="text-white font-medium text-sm">{sanitizeStrict(item.title)}</span>
+              <p className="text-gray-400 text-xs mt-1">{sanitizeStrict(item.desc)}</p>
             </motion.div>
           ))}
         </div>

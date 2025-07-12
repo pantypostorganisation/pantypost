@@ -4,6 +4,7 @@
 import React from 'react';
 import { Clock, BadgeCheck } from 'lucide-react';
 import { formatTimeAgo, getInitial } from '@/utils/messageUtils';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface ThreadListItemProps {
   buyer: string;
@@ -25,6 +26,8 @@ export default function ThreadListItem({
   unreadCount,
   onClick
 }: ThreadListItemProps) {
+  
+  const sanitizedBuyer = sanitizeStrict(buyer);
   
   // Debug click handler
   const handleClick = () => {
@@ -58,9 +61,9 @@ export default function ThreadListItem({
       <div className="relative mr-3 pointer-events-none">
         <div className="relative w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md">
           {buyerProfile?.pic ? (
-            <img src={buyerProfile.pic} alt={buyer} className="w-full h-full object-cover" />
+            <img src={buyerProfile.pic} alt={sanitizedBuyer} className="w-full h-full object-cover" />
           ) : (
-            getInitial(buyer)
+            getInitial(sanitizedBuyer)
           )}
           
           {/* Verified badge if applicable */}
@@ -82,7 +85,7 @@ export default function ThreadListItem({
       {/* Message preview */}
       <div className="flex-1 min-w-0 pointer-events-none">
         <div className="flex justify-between">
-          <h3 className="font-bold text-white truncate">{buyer}</h3>
+          <h3 className="font-bold text-white truncate">{sanitizedBuyer}</h3>
           <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
             <Clock size={12} className="mr-1" />
             {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
@@ -94,7 +97,7 @@ export default function ThreadListItem({
               ? '🛒 Custom Request'
               : lastMessage.type === 'image'
                 ? '📷 Image'
-                : lastMessage.content
+                : sanitizeStrict(lastMessage.content || '')
           ) : ''}
         </p>
       </div>

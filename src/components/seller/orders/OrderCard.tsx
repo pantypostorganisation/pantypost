@@ -20,6 +20,8 @@ import {
   MessageCircle,
   ShoppingBag
 } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface OrderCardProps {
   order: Order;
@@ -67,6 +69,9 @@ export default function OrderCard({
     );
   }
   
+  const sanitizedTitle = sanitizeStrict(order.title);
+  const sanitizedBuyer = sanitizeStrict(order.buyer);
+  
   return (
     <li
       key={order.id + order.date}
@@ -80,7 +85,7 @@ export default function OrderCard({
             <div className="relative">
               <img
                 src={order.imageUrl || '/default-image.jpg'}
-                alt={order.title}
+                alt={sanitizedTitle}
                 className="w-24 h-24 object-cover rounded-xl border-2 border-gray-600 shadow-lg"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/default-image.jpg';
@@ -101,7 +106,7 @@ export default function OrderCard({
           {/* Order Details */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3">
-              <h3 className="font-bold text-xl text-white truncate">{order.title}</h3>
+              <h3 className="font-bold text-xl text-white truncate">{sanitizedTitle}</h3>
               {isAuction && <Star className="w-5 h-5 text-purple-400 flex-shrink-0" />}
               {isCustom && <Settings className="w-5 h-5 text-blue-400 flex-shrink-0" />}
             </div>
@@ -110,7 +115,7 @@ export default function OrderCard({
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-300">Buyer:</span>
-                <span className="font-semibold text-white">{order.buyer}</span>
+                <span className="font-semibold text-white">{sanitizedBuyer}</span>
                 <Link
                   href={`/sellers/messages?thread=${order.buyer}`}
                   className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-lg hover:shadow-blue-500/25"
@@ -161,7 +166,12 @@ export default function OrderCard({
             {isCustom && order.originalRequestId && (
               <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-700/50">
                 <div className="text-blue-300 text-sm font-medium mb-1">Custom Request Details:</div>
-                <div className="text-blue-200 text-sm">{order.description}</div>
+                <div className="text-blue-200 text-sm">
+                  <SecureMessageDisplay 
+                    content={order.description || ''} 
+                    allowBasicFormatting={false}
+                  />
+                </div>
                 {order.tags && order.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {order.tags.map((tag: string, idx: number) => (
@@ -169,7 +179,7 @@ export default function OrderCard({
                         key={idx}
                         className="bg-blue-800/30 text-blue-200 text-xs px-2 py-0.5 rounded border border-blue-600/50"
                       >
-                        {tag}
+                        {sanitizeStrict(tag)}
                       </span>
                     ))}
                   </div>

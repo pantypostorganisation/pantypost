@@ -4,6 +4,7 @@
 import React from 'react';
 import { BadgeCheck, Sparkles, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { getInitial } from '@/utils/messageUtils';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface ChatHeaderProps {
   activeThread: string;
@@ -25,14 +26,16 @@ export default function ChatHeader({
   onReport,
   onBlockToggle
 }: ChatHeaderProps) {
+  const sanitizedActiveThread = sanitizeStrict(activeThread);
+  
   return (
     <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
       <div className="flex items-center">
         <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
           {buyerProfile?.pic ? (
-            <img src={buyerProfile.pic} alt={activeThread} className="w-full h-full object-cover" />
+            <img src={buyerProfile.pic} alt={sanitizedActiveThread} className="w-full h-full object-cover" />
           ) : (
-            getInitial(activeThread)
+            getInitial(sanitizedActiveThread)
           )}
           
           {/* Verified badge if applicable */}
@@ -43,7 +46,7 @@ export default function ChatHeader({
           )}
         </div>
         <div>
-          <h2 className="font-bold text-lg text-white">{activeThread}</h2>
+          <h2 className="font-bold text-lg text-white">{sanitizedActiveThread}</h2>
           <p className="text-xs text-[#ff950e] flex items-center">
             <Sparkles size={12} className="mr-1 text-[#ff950e]" />
             Active now

@@ -1,6 +1,8 @@
 // src/components/seller-profile/modals/UnsubscribeModal.tsx
 'use client';
 
+import { sanitizeStrict } from '@/utils/security/sanitization';
+
 interface UnsubscribeModalProps {
   show: boolean;
   username: string;
@@ -16,6 +18,8 @@ export default function UnsubscribeModal({
 }: UnsubscribeModalProps) {
   if (!show) return null;
 
+  const sanitizedUsername = sanitizeStrict(username);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
       <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
@@ -23,7 +27,7 @@ export default function UnsubscribeModal({
           Confirm Unsubscription
         </h2>
         <p className="mb-6 text-center text-white text-base">
-          Are you sure you want to unsubscribe from <strong className="text-red-400">{username}</strong>? 
+          Are you sure you want to unsubscribe from <strong className="text-red-400">{sanitizedUsername}</strong>? 
           This will remove your access to premium listings.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-end">

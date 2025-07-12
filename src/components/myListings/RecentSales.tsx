@@ -2,6 +2,7 @@
 'use client';
 
 import { RecentSalesProps } from '@/types/myListings';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export default function RecentSales({ orders }: RecentSalesProps) {
   return (
@@ -22,12 +23,12 @@ export default function RecentSales({ orders }: RecentSalesProps) {
                 {order.imageUrl && (
                   <img
                     src={order.imageUrl}
-                    alt={order.title}
+                    alt={sanitizeStrict(order.title)}
                     className="w-16 h-16 object-cover rounded-md border border-gray-600"
                   />
                 )}
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white text-base">{order.title}</h3>
+                  <h3 className="font-semibold text-white text-base">{sanitizeStrict(order.title)}</h3>
                   <p className="text-[#ff950e] font-bold text-lg mt-1">
                     ${order.markedUpPrice.toFixed(2)}
                   </p>

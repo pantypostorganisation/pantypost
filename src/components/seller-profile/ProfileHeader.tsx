@@ -4,6 +4,8 @@
 import Link from 'next/link';
 import { Lock, Mail, Gift, DollarSign, MessageCircle, Camera, Video, Users, Star, AlertTriangle } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface ProfileHeaderProps {
   username: string;
@@ -52,6 +54,8 @@ export default function ProfileHeader({
     user.username !== username &&
     hasAccess;
 
+  const sanitizedUsername = sanitizeStrict(username);
+
   return (
     <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
       {/* Profile section with centered profile pic and badge to the right */}
@@ -61,12 +65,12 @@ export default function ProfileHeader({
           {profilePic ? (
             <img
               src={profilePic}
-              alt={`${username}'s profile`}
+              alt={`${sanitizedUsername}'s profile`}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-6xl font-bold">
-              {username ? username.charAt(0).toUpperCase() : '?'}
+              {sanitizedUsername ? sanitizedUsername.charAt(0).toUpperCase() : '?'}
             </div>
           )}
         </div>
@@ -81,7 +85,7 @@ export default function ProfileHeader({
       
       <div className="flex flex-col items-center text-center mb-6">
         <div className="flex items-center justify-center gap-3 mb-2">
-          <span className="text-2xl sm:text-3xl font-bold text-white">{username}</span>
+          <span className="text-2xl sm:text-3xl font-bold text-white">{sanitizedUsername}</span>
           {isVerified ? (
             <div className="relative group">
               <img
@@ -104,9 +108,13 @@ export default function ProfileHeader({
           </span>
         </div>
         <div className="text-sm text-gray-400 mb-3">Location: Private</div>
-        <p className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
-          {bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
-        </p>
+        <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
+          <SecureMessageDisplay 
+            content={bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
+            allowBasicFormatting={false}
+            maxLength={500}
+          />
+        </div>
       </div>
       
       <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
