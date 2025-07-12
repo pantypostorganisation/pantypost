@@ -384,7 +384,7 @@ export class AuthService {
   }
 
   /**
-   * Get current authenticated user
+   * Get current authenticated user - FIXED VERSION
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
@@ -401,55 +401,71 @@ export class AuthService {
       const user = await storageService.getItem<User | null>('currentUser', null);
       
       if (user) {
-        // Check if user data in all_users_v2 has been updated
-        const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
-        const storedUserData = allUsers[user.username];
-        
-        if (storedUserData) {
-          // ✅ FIX: Selective merge - preserve critical auth fields
-          const mergedUser = {
-            // Core auth fields from current session (never override these)
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            email: user.email || storedUserData.email,
-            
-            // Profile fields from stored data (can be updated)
-            bio: storedUserData.bio !== undefined ? storedUserData.bio : user.bio,
-            profilePicture: storedUserData.profilePicture || user.profilePicture,
-            
-            // Verification fields
-            verificationStatus: storedUserData.verificationStatus || user.verificationStatus,
-            isVerified: storedUserData.verificationStatus === 'verified' || user.isVerified,
-            verificationRequestedAt: storedUserData.verificationRequestedAt || user.verificationRequestedAt,
-            verificationRejectionReason: storedUserData.verificationRejectionReason || user.verificationRejectionReason,
-            verificationDocs: storedUserData.verificationDocs || user.verificationDocs,
-            
-            // Seller-specific fields
-            tier: storedUserData.tier || user.tier,
-            subscriberCount: storedUserData.subscriberCount ?? user.subscriberCount,
-            totalSales: storedUserData.totalSales ?? user.totalSales,
-            rating: storedUserData.rating ?? user.rating,
-            reviewCount: storedUserData.reviewCount ?? user.reviewCount,
-            
-            // Ban status
-            isBanned: storedUserData.isBanned ?? user.isBanned,
-            banReason: storedUserData.banReason || user.banReason,
-            banExpiresAt: storedUserData.banExpiresAt || user.banExpiresAt,
-            
-            // Timestamps
-            createdAt: user.createdAt || storedUserData.createdAt,
-            lastActive: new Date().toISOString(),
-          };
+        try {
+          // Check if user data in all_users_v2 has been updated
+          const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
+          const storedUserData = allUsers[user.username];
           
-          // Only update if there are actual changes
-          if (JSON.stringify(user) !== JSON.stringify(mergedUser)) {
-            await storageService.setItem('currentUser', mergedUser);
+          if (storedUserData) {
+            // ✅ FIX: Safe merge with proper defaults and error handling
+            const now = new Date().toISOString();
+            
+            const mergedUser: User = {
+              // Core auth fields from current session (never override these)
+              id: user.id || `user_${Date.now()}`,
+              username: user.username,
+              role: user.role,
+              email: user.email || storedUserData.email || `${user.username}@example.com`,
+              
+              // Profile fields from stored data (can be updated)
+              bio: storedUserData.bio !== undefined ? storedUserData.bio : (user.bio || ''),
+              profilePicture: storedUserData.profilePicture || user.profilePicture,
+              
+              // Verification fields with safe defaults
+              verificationStatus: storedUserData.verificationStatus || user.verificationStatus || 'unverified',
+              isVerified: storedUserData.verificationStatus === 'verified' || user.isVerified || false,
+              verificationRequestedAt: storedUserData.verificationRequestedAt || user.verificationRequestedAt,
+              verificationRejectionReason: storedUserData.verificationRejectionReason || user.verificationRejectionReason,
+              verificationDocs: storedUserData.verificationDocs || user.verificationDocs,
+              
+              // Seller-specific fields with safe defaults
+              tier: storedUserData.tier || user.tier,
+              subscriberCount: typeof storedUserData.subscriberCount === 'number' ? storedUserData.subscriberCount : (user.subscriberCount || 0),
+              totalSales: typeof storedUserData.totalSales === 'number' ? storedUserData.totalSales : (user.totalSales || 0),
+              rating: typeof storedUserData.rating === 'number' ? storedUserData.rating : (user.rating || 0),
+              reviewCount: typeof storedUserData.reviewCount === 'number' ? storedUserData.reviewCount : (user.reviewCount || 0),
+              
+              // Ban status with safe defaults
+              isBanned: storedUserData.isBanned === true || user.isBanned === true || false,
+              banReason: storedUserData.banReason || user.banReason,
+              banExpiresAt: storedUserData.banExpiresAt || user.banExpiresAt,
+              
+              // Timestamps with safe defaults
+              createdAt: user.createdAt || storedUserData.createdAt || now,
+              lastActive: now, // Always update to current time
+            };
+            
+            // Only update storage if there are actual changes
+            try {
+              if (JSON.stringify(user) !== JSON.stringify(mergedUser)) {
+                await storageService.setItem('currentUser', mergedUser);
+              }
+            } catch (storageError) {
+              console.warn('[AuthService] Failed to update currentUser in storage:', storageError);
+              // Continue with the merged user data even if storage update fails
+            }
+            
+            return {
+              success: true,
+              data: mergedUser,
+            };
           }
-          
+        } catch (mergeError) {
+          console.error('[AuthService] Error during user data merge:', mergeError);
+          // Fall back to original user data if merge fails
           return {
             success: true,
-            data: mergedUser,
+            data: user,
           };
         }
       }
@@ -459,7 +475,7 @@ export class AuthService {
         data: user,
       };
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error('[AuthService] Get current user error:', error);
       return {
         success: false,
         error: { message: 'Failed to get current user' },

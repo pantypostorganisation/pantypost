@@ -95,6 +95,25 @@ export default function RoleSelectionStep({
           </>
         )}
       </button>
+
+      {/* Add timeout safety mechanism */}
+      {isLoading && (
+        <p className="text-xs text-gray-500 text-center mt-2">
+          Taking longer than expected? <button 
+            onClick={() => window.location.reload()} 
+            className="text-[#ff950e] hover:underline"
+          >
+            Refresh page
+          </button>
+        </p>
+      )}
+
+      {/* Error display */}
+      {error && (
+        <p className="text-xs text-red-400 text-center mt-2">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

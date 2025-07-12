@@ -58,20 +58,34 @@ export const useLogin = () => {
       // Simulate loading for better UX
       await new Promise(resolve => setTimeout(resolve, 800));
       
+      console.log('[Login] Attempting login with:', { username: username.trim(), role });
+      
       // Perform login
       const success = await login(username.trim(), role);
       
       if (success) {
-        // Add a small delay to ensure login context updates
-        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('[Login] Login successful, preparing redirect...');
         
-        // Force redirect to home page
-        router.push('/');
+        // Extended delay to ensure auth context is fully updated
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Use replace instead of push to prevent back button issues
+        console.log('[Login] Redirecting to home page...');
+        
+        // Use window.location.href as primary method for forced navigation
+        window.location.href = '/';
+        
+        // Backup redirect in case window.location doesn't work
+        setTimeout(() => {
+          router.replace('/');
+        }, 100);
+        
       } else {
-        updateState({ error: 'Login failed. Please try again.', isLoading: false });
+        console.error('[Login] Login failed - authService returned false');
+        updateState({ error: 'Login failed. Please check your credentials and try again.', isLoading: false });
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('[Login] Login error:', error);
       updateState({ error: 'Login failed. Please try again.', isLoading: false });
     }
   }, [state.username, state.role, login, router, updateState]);

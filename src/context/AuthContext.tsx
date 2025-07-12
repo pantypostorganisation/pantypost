@@ -188,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Validate and sanitize input
     const validationError = validateUsername(username);
     if (validationError) {
+      console.error('[AuthContext] Validation error:', validationError);
       setError(validationError);
       return false;
     }
@@ -195,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Sanitize username
     const sanitizedUsername = sanitizeUsername(username);
     if (!sanitizedUsername) {
+      console.error('[AuthContext] Username sanitization failed');
       setError('Invalid username format');
       return false;
     }
@@ -203,31 +205,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      console.log('[Auth] Attempting login:', { username: sanitizedUsername, role });
-      const result = await authService.login({ username: sanitizedUsername, role });
+      console.log('[AuthContext] Attempting login:', { username: sanitizedUsername, role });
+      
+      // Add error handling wrapper around authService call
+      let result;
+      try {
+        result = await authService.login({ username: sanitizedUsername, role });
+      } catch (authError) {
+        console.error('[AuthContext] AuthService error:', authError);
+        setError('Authentication service error. Please try again.');
+        setLoading(false);
+        return false;
+      }
       
       if (result.success && result.data) {
-        console.log('[Auth] Login successful:', { 
+        console.log('[AuthContext] Login successful, setting user:', { 
           username: result.data.user.username, 
           role: result.data.user.role 
         });
+        
         setUser(result.data.user);
+        setLoading(false); // Important: Clear loading state before return
         
         // Set up session monitoring for API mode
         setupSessionMonitoring();
         
+        console.log('[AuthContext] Login process completed successfully');
         return true;
       } else {
-        console.error('[Auth] Login failed:', result.error);
+        console.error('[AuthContext] Login failed:', result.error);
         setError(result.error?.message || 'Login failed');
+        setLoading(false);
         return false;
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('[AuthContext] Login error:', error);
       setError('Login failed. Please try again.');
-      return false;
-    } finally {
       setLoading(false);
+      return false;
     }
   }, [setupSessionMonitoring]);
 
