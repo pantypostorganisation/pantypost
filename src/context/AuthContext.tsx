@@ -3,6 +3,8 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { authService } from '@/services';
+import { sanitizeUsername } from '@/utils/security/sanitization';
+import { authSchemas } from '@/utils/validation/schemas';
 
 export interface User {
   id: string;
@@ -45,10 +47,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Input validation
 const validateUsername = (username: string): string | null => {
-  if (!username || typeof username !== 'string') return 'Username is required';
-  if (username.length < 2) return 'Username must be at least 2 characters';
-  if (username.length > 50) return 'Username must be less than 50 characters';
-  if (!/^[a-zA-Z0-9_-]+$/.test(username)) return 'Username can only contain letters, numbers, underscores, and hyphens';
+  const validation = authSchemas.username.safeParse(username);
+  if (!validation.success) {
+    return validation.error.errors[0]?.message || 'Invalid username';
+  }
   return null;
 };
 
@@ -183,10 +185,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Login function using auth service
   const login = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin' = 'buyer'): Promise<boolean> => {
-    // Validate input
+    // Validate and sanitize input
     const validationError = validateUsername(username);
     if (validationError) {
       setError(validationError);
+      return false;
+    }
+
+    // Sanitize username
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
+      setError('Invalid username format');
       return false;
     }
 
@@ -194,8 +203,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      console.log('[Auth] Attempting login:', { username, role });
-      const result = await authService.login({ username, role });
+      console.log('[Auth] Attempting login:', { username: sanitizedUsername, role });
+      const result = await authService.login({ username: sanitizedUsername, role });
       
       if (result.success && result.data) {
         console.log('[Auth] Login successful:', { 

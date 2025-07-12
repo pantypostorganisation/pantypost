@@ -3,6 +3,8 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { storageService } from '@/services';
+import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
+import { z } from 'zod';
 
 export type BanType = 'temporary' | 'permanent';
 export type BanReason = 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'underage' | 'payment_fraud' | 'other';
@@ -115,34 +117,13 @@ type BanContextType = {
 
 const BanContext = createContext<BanContextType | undefined>(undefined);
 
-// Security utilities
-const sanitizeString = (input: string): string => {
-  if (typeof input !== 'string') return '';
-  return input
-    .replace(/[<>]/g, '')
-    .replace(/javascript:/gi, '')
-    .replace(/data:/gi, '')
-    .replace(/\u0000/g, '')
-    .trim()
-    .slice(0, 1000); // Prevent extremely long inputs
-};
-
-const validateUsername = (username: string): boolean => {
-  if (!username || typeof username !== 'string') return false;
-  if (username.length > 50) return false;
-  return /^[a-zA-Z0-9_-]+$/.test(username);
-};
-
-const validateBanDuration = (hours: number | 'permanent'): boolean => {
-  if (hours === 'permanent') return true;
-  if (typeof hours !== 'number') return false;
-  return hours > 0 && hours <= 8760; // Max 1 year
-};
-
-const validateBanReason = (reason: string): boolean => {
-  const validReasons: BanReason[] = ['harassment', 'spam', 'inappropriate_content', 'scam', 'underage', 'payment_fraud', 'other'];
-  return validReasons.includes(reason as BanReason);
-};
+// Validation schemas
+const banReasonSchema = z.enum(['harassment', 'spam', 'inappropriate_content', 'scam', 'underage', 'payment_fraud', 'other']);
+const banDurationSchema = z.union([z.literal('permanent'), z.number().positive().max(8760)]);
+const appealTextSchema = z.string().min(10).max(1000);
+const customReasonSchema = z.string().min(5).max(500);
+const banNotesSchema = z.string().max(1000);
+const ipAddressSchema = z.string().regex(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/);
 
 // Compress images for appeal evidence
 const compressImage = (file: File): Promise<string> => {
@@ -470,15 +451,21 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Enhanced validation function
   const validateBanInput = (username: string, hours: number | 'permanent', reason: BanReason): { valid: boolean; error?: string } => {
-    if (!validateUsername(username)) {
+    // Validate username
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
       return { valid: false, error: 'Invalid username format' };
     }
     
-    if (!validateBanDuration(hours)) {
+    // Validate duration
+    const durationValidation = banDurationSchema.safeParse(hours);
+    if (!durationValidation.success) {
       return { valid: false, error: 'Invalid ban duration (max 1 year)' };
     }
     
-    if (!validateBanReason(reason)) {
+    // Validate reason
+    const reasonValidation = banReasonSchema.safeParse(reason);
+    if (!reasonValidation.success) {
       return { valid: false, error: 'Invalid ban reason' };
     }
     
@@ -489,11 +476,11 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addBanHistory = useCallback((action: BanHistory['action'], username: string, details: string, adminUsername: string, metadata?: Record<string, any>) => {
     const historyEntry: BanHistory = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      username: sanitizeString(username),
+      username: sanitizeUsername(username) || username,
       action,
-      details: sanitizeString(details),
+      details: sanitizeStrict(details),
       timestamp: new Date().toISOString(),
-      adminUsername: sanitizeString(adminUsername),
+      adminUsername: sanitizeUsername(adminUsername) || adminUsername,
       metadata
     };
     setBanHistory(prev => [...prev, historyEntry]);
@@ -557,10 +544,16 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     // Sanitize inputs
-    const cleanUsername = sanitizeString(username);
-    const cleanCustomReason = customReason ? sanitizeString(customReason) : undefined;
-    const cleanAdminUsername = sanitizeString(adminUsername);
-    const cleanNotes = notes ? sanitizeString(notes) : undefined;
+    const cleanUsername = sanitizeUsername(username) || username;
+    const cleanCustomReason = customReason ? sanitizeStrict(customReason) : undefined;
+    const cleanAdminUsername = sanitizeUsername(adminUsername) || adminUsername;
+    const cleanNotes = notes ? sanitizeStrict(notes) : undefined;
+    
+    // Validate optional fields
+    if (cleanCustomReason && cleanCustomReason.length < 5) {
+      console.error('[BanContext] Custom reason too short');
+      return false;
+    }
     
     // Race condition protection
     const lockKey = `ban_user_${cleanUsername}`;
@@ -652,9 +645,9 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Enhanced unban function
   const unbanUser = useCallback((username: string, adminUsername: string = 'system', reason?: string): boolean => {
     try {
-      const cleanUsername = sanitizeString(username);
-      const cleanAdminUsername = sanitizeString(adminUsername);
-      const cleanReason = reason ? sanitizeString(reason) : undefined;
+      const cleanUsername = sanitizeUsername(username) || username;
+      const cleanAdminUsername = sanitizeUsername(adminUsername) || adminUsername;
+      const cleanReason = reason ? sanitizeStrict(reason) : undefined;
       
       console.log('[BanContext] Unbanning user:', { username: cleanUsername, admin: cleanAdminUsername });
       
@@ -686,8 +679,15 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Enhanced appeal submission with evidence
   const submitAppeal = useCallback(async (username: string, appealText: string, evidence?: File[]): Promise<boolean> => {
     try {
-      const cleanUsername = sanitizeString(username);
-      const cleanAppealText = sanitizeString(appealText);
+      const cleanUsername = sanitizeUsername(username) || username;
+      const appealValidation = appealTextSchema.safeParse(appealText);
+      
+      if (!appealValidation.success) {
+        console.error('[BanContext] Invalid appeal text:', appealValidation.error);
+        return false;
+      }
+      
+      const cleanAppealText = sanitizeStrict(appealValidation.data);
       
       let appealEvidence: string[] = [];
       
@@ -734,8 +734,8 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Enhanced appeal review system
   const reviewAppeal = useCallback((banId: string, decision: 'approve' | 'reject' | 'escalate', reviewNotes: string, adminUsername: string): boolean => {
     try {
-      const cleanReviewNotes = sanitizeString(reviewNotes);
-      const cleanAdminUsername = sanitizeString(adminUsername);
+      const cleanReviewNotes = sanitizeStrict(reviewNotes);
+      const cleanAdminUsername = sanitizeUsername(adminUsername) || adminUsername;
       
       const review: AppealReview = {
         reviewId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -837,12 +837,18 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // IP ban functionality
   const banUserIP = useCallback((username: string, ipAddress: string, reason: string): boolean => {
     try {
-      const cleanUsername = sanitizeString(username);
-      const cleanIPAddress = sanitizeString(ipAddress);
-      const cleanReason = sanitizeString(reason);
+      const cleanUsername = sanitizeUsername(username) || username;
+      const ipValidation = ipAddressSchema.safeParse(ipAddress);
+      
+      if (!ipValidation.success) {
+        console.error('[BanContext] Invalid IP address format');
+        return false;
+      }
+      
+      const cleanReason = sanitizeStrict(reason);
       
       const ipBan: IPBan = {
-        ipAddress: cleanIPAddress,
+        ipAddress: ipValidation.data,
         bannedUsernames: [cleanUsername],
         banDate: new Date().toISOString(),
         expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
@@ -850,10 +856,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
       
       setIPBans(prev => {
-        const existing = prev.find(ban => ban.ipAddress === cleanIPAddress);
+        const existing = prev.find(ban => ban.ipAddress === ipValidation.data);
         if (existing) {
           return prev.map(ban => 
-            ban.ipAddress === cleanIPAddress 
+            ban.ipAddress === ipValidation.data 
               ? { ...ban, bannedUsernames: [...new Set([...ban.bannedUsernames, cleanUsername])] }
               : ban
           );
