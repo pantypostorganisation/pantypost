@@ -3,6 +3,9 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { storageService } from '@/services';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { messageSchemas } from '@/utils/validation/schemas';
+import { z } from 'zod';
 
 export type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'edited' | 'paid';
 
@@ -25,6 +28,16 @@ export type CustomRequest = {
   lastEditedBy?: string; // NEW: Track who last edited (buyer or seller)
   pendingWith?: string; // NEW: Track who needs to respond (buyer or seller)
 };
+
+// Validation schemas
+const requestSchema = z.object({
+  title: messageSchemas.customRequest.shape.title,
+  description: messageSchemas.customRequest.shape.description,
+  price: messageSchemas.customRequest.shape.price,
+  tags: z.array(z.string().max(30)).max(10).optional(),
+});
+
+const responseSchema = z.string().min(1).max(500);
 
 type RequestContextType = {
   requests: CustomRequest[];
@@ -65,9 +78,13 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
       try {
         const stored = await storageService.getItem<CustomRequest[]>('panty_custom_requests', []);
         
-        // Migrate old requests to include new fields if they don't exist
+        // Migrate and sanitize old requests
         const migratedRequests = stored.map((req: any) => ({
           ...req,
+          title: sanitizeStrict(req.title || ''),
+          description: sanitizeStrict(req.description || ''),
+          response: req.response ? sanitizeStrict(req.response) : undefined,
+          tags: Array.isArray(req.tags) ? req.tags.map((tag: string) => sanitizeStrict(tag).slice(0, 30)) : [],
           messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
           lastModifiedBy: req.lastModifiedBy || req.buyer,
           originalMessageId: req.originalMessageId || req.id,
@@ -94,8 +111,25 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
   }, [requests, isInitialized]);
 
   const addRequest = (req: CustomRequest) => {
+    // Validate request data
+    const validation = requestSchema.safeParse({
+      title: req.title,
+      description: req.description,
+      price: req.price,
+      tags: req.tags,
+    });
+
+    if (!validation.success) {
+      console.error('Invalid request data:', validation.error);
+      return;
+    }
+
     const requestWithDefaults = {
       ...req,
+      title: sanitizeStrict(validation.data.title),
+      description: sanitizeStrict(validation.data.description),
+      price: validation.data.price,
+      tags: validation.data.tags?.map(tag => sanitizeStrict(tag).slice(0, 30)) || [],
       messageThreadId: req.messageThreadId || `${req.buyer}-${req.seller}`,
       lastModifiedBy: req.lastModifiedBy || req.buyer,
       originalMessageId: req.originalMessageId || req.id,
@@ -121,6 +155,24 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
     updateFields?: Partial<Pick<CustomRequest, 'title' | 'price' | 'tags' | 'description'>>,
     modifiedBy?: string
   ) => {
+    // Validate response if provided
+    if (response) {
+      const responseValidation = responseSchema.safeParse(response);
+      if (!responseValidation.success) {
+        console.error('Invalid response:', responseValidation.error);
+        return;
+      }
+    }
+
+    // Validate update fields if provided
+    if (updateFields) {
+      const updateValidation = requestSchema.partial().safeParse(updateFields);
+      if (!updateValidation.success) {
+        console.error('Invalid update fields:', updateValidation.error);
+        return;
+      }
+    }
+
     setRequests((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
@@ -141,11 +193,16 @@ export const RequestProvider = ({ children }: { children: React.ReactNode }) => 
         return {
           ...r,
           status,
-          response,
+          response: response ? sanitizeStrict(response) : r.response,
           lastModifiedBy: modifiedBy || r.lastModifiedBy,
           lastEditedBy: status === 'edited' ? lastEditedBy : r.lastEditedBy,
           pendingWith,
-          ...(updateFields || {}),
+          ...(updateFields ? {
+            title: updateFields.title ? sanitizeStrict(updateFields.title) : r.title,
+            description: updateFields.description ? sanitizeStrict(updateFields.description) : r.description,
+            price: updateFields.price ?? r.price,
+            tags: updateFields.tags?.map(tag => sanitizeStrict(tag).slice(0, 30)) || r.tags,
+          } : {}),
         };
       })
     );

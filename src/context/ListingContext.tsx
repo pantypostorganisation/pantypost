@@ -16,6 +16,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { listingsService, usersService, storageService, ordersService } from '@/services';
 import { ListingDraft } from '@/types/myListings';
+import { securityService, sanitize } from '@/services/security.service';
+import { listingSchemas, financialSchemas, fileSchemas } from '@/utils/validation/schemas';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -156,12 +158,15 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (typeof item === 'string') {
       return {
         id: uuidv4(),
-        message: item,
+        message: sanitize.strict(item), // Sanitize message
         timestamp: new Date().toISOString(),
         cleared: false
       };
     }
-    return item;
+    return {
+      ...item,
+      message: sanitize.strict(item.message) // Sanitize message
+    };
   };
 
   // Helper function to save notification store
@@ -176,9 +181,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
     
+    // Sanitize the notification message
+    const sanitizedMessage = sanitize.strict(message);
+    
     const newNotification: Notification = {
       id: uuidv4(),
-      message,
+      message: sanitizedMessage,
       timestamp: new Date().toISOString(),
       cleared: false
     };
@@ -331,6 +339,35 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
+    // Validate and sanitize listing data
+    const validationResult = securityService.validateAndSanitize(
+      {
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        tags: listing.tags,
+        hoursWorn: listing.hoursWorn
+      },
+      listingSchemas.createListingSchema.pick({
+        title: true,
+        description: true,
+        price: true,
+        tags: true,
+        wearDuration: true
+      }),
+      {
+        title: sanitize.strict,
+        description: sanitize.strict,
+        tags: (tags: string[]) => tags?.map(tag => sanitize.strict(tag))
+      }
+    );
+
+    if (!validationResult.success) {
+      console.error('Validation failed:', validationResult.errors);
+      alert('Please check your listing details:\n' + Object.values(validationResult.errors || {}).join('\n'));
+      return;
+    }
+
     const myListings = listings.filter(l => l.seller === user.username);
     const isVerified = user.isVerified || user.verificationStatus === 'verified';
     const maxListings = isVerified ? 25 : 2;
@@ -352,11 +389,18 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
 
     try {
-      const result = await listingsService.createListing({
+      const sanitizedListing = {
         ...listing,
+        title: validationResult.data!.title,
+        description: validationResult.data!.description,
+        price: validationResult.data!.price,
+        tags: validationResult.data!.tags,
+        hoursWorn: validationResult.data!.wearDuration,
         seller: user.username,
         isVerified: isVerified,
-      });
+      };
+
+      const result = await listingsService.createListing(sanitizedListing);
 
       if (result.success && result.data) {
         setListings(prev => [...prev, result.data!]);
@@ -378,6 +422,58 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
+    // Validate and sanitize listing data
+    const listingValidation = securityService.validateAndSanitize(
+      {
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        tags: listing.tags,
+        hoursWorn: listing.hoursWorn
+      },
+      listingSchemas.createListingSchema.pick({
+        title: true,
+        description: true,
+        price: true,
+        tags: true,
+        wearDuration: true
+      }),
+      {
+        title: sanitize.strict,
+        description: sanitize.strict,
+        tags: (tags: string[]) => tags?.map(tag => sanitize.strict(tag))
+      }
+    );
+
+    if (!listingValidation.success) {
+      console.error('Listing validation failed:', listingValidation.errors);
+      alert('Please check your listing details:\n' + Object.values(listingValidation.errors || {}).join('\n'));
+      return;
+    }
+
+    // Validate auction settings
+    const amountValidation = securityService.validateAmount(auctionSettings.startingPrice, {
+      min: 0.01,
+      max: 10000
+    });
+
+    if (!amountValidation.valid) {
+      alert(amountValidation.error || 'Invalid starting price');
+      return;
+    }
+
+    if (auctionSettings.reservePrice) {
+      const reserveValidation = securityService.validateAmount(auctionSettings.reservePrice, {
+        min: auctionSettings.startingPrice,
+        max: 10000
+      });
+
+      if (!reserveValidation.valid) {
+        alert('Reserve price must be at least the starting price');
+        return;
+      }
+    }
+
     const myListings = listings.filter(l => l.seller === user.username);
     const isVerified = user.isVerified || user.verificationStatus === 'verified';
     const maxListings = isVerified ? 25 : 2;
@@ -392,19 +488,26 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
 
     try {
-      const result = await listingsService.createListing({
+      const sanitizedListing = {
         ...listing,
+        title: listingValidation.data!.title,
+        description: listingValidation.data!.description,
+        price: listingValidation.data!.price,
+        tags: listingValidation.data!.tags,
+        hoursWorn: listingValidation.data!.wearDuration,
         seller: user.username,
         isVerified: isVerified,
         auction: auctionSettings,
-      });
+      };
+
+      const result = await listingsService.createListing(sanitizedListing);
 
       if (result.success && result.data) {
         setListings(prev => [...prev, result.data!]);
         
         addSellerNotification(
           user.username,
-          `🔨 You've created a new auction: "${listing.title}" starting at $${auctionSettings.startingPrice.toFixed(2)}`
+          `🔨 You've created a new auction: "${sanitizedListing.title}" starting at $${auctionSettings.startingPrice.toFixed(2)}`
         );
       } else {
         alert(result.error?.message || 'Failed to create auction listing. Please try again.');
@@ -431,8 +534,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const purchaseListingAndRemove = async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
+      // Sanitize buyer username
+      const sanitizedBuyer = sanitize.username(buyerUsername);
+      
       // First, process the purchase through wallet
-      const success = await purchaseListing(listing, buyerUsername);
+      const success = await purchaseListing(listing, sanitizedBuyer);
       
       if (success) {
         // If purchase was successful, remove the listing
@@ -450,7 +556,20 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const updateListing = async (id: string, updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>): Promise<void> => {
     try {
-      const result = await listingsService.updateListing(id, updatedListing);
+      // Sanitize updated fields if they exist
+      const sanitizedUpdate: any = { ...updatedListing };
+      
+      if (updatedListing.title) {
+        sanitizedUpdate.title = sanitize.strict(updatedListing.title);
+      }
+      if (updatedListing.description) {
+        sanitizedUpdate.description = sanitize.strict(updatedListing.description);
+      }
+      if (updatedListing.tags) {
+        sanitizedUpdate.tags = updatedListing.tags.map(tag => sanitize.strict(tag));
+      }
+      
+      const result = await listingsService.updateListing(id, sanitizedUpdate);
       if (result.success && result.data) {
         setListings(prev => prev.map(listing => 
           listing.id === id ? result.data! : listing
@@ -466,6 +585,20 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // FIXED: Place a bid on an auction listing with incremental charging
   const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
+    // Validate bid amount
+    const amountValidation = securityService.validateAmount(amount, {
+      min: 0.01,
+      max: 10000
+    });
+
+    if (!amountValidation.valid) {
+      console.error('Invalid bid amount:', amountValidation.error);
+      return false;
+    }
+
+    // Sanitize bidder username
+    const sanitizedBidder = sanitize.username(bidder);
+
     const listing = listings.find(l => l.id === listingId);
     if (!listing || !listing.auction || listing.auction.status !== 'active') return false;
     
@@ -482,7 +615,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     try {
       // Store the previous highest bidder
       const previousHighestBidder = listing.auction.highestBidder;
-      const isCurrentHighestBidder = previousHighestBidder === bidder;
+      const isCurrentHighestBidder = previousHighestBidder === sanitizedBidder;
       
       if (isCurrentHighestBidder) {
         // User is raising their own bid - handle incrementally
@@ -490,7 +623,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         const incrementalFee = bidDifference * 0.1;
         const incrementalTotal = bidDifference + incrementalFee;
         
-        const bidderBalance = getBuyerBalance(bidder);
+        const bidderBalance = getBuyerBalance(sanitizedBidder);
         if (bidderBalance < incrementalTotal) {
           console.error('[PlaceBid] Insufficient balance for bid increase:', { 
             balance: bidderBalance, 
@@ -507,41 +640,41 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
         
         // Deduct only the incremental amount
-        await setBuyerBalance(bidder, bidderBalance - incrementalTotal);
+        await setBuyerBalance(sanitizedBidder, bidderBalance - incrementalTotal);
         
         // Place the bid update
-        const result = await listingsService.placeBid(listingId, bidder, amount);
+        const result = await listingsService.placeBid(listingId, sanitizedBidder, amount);
         
         if (result.success && result.data) {
           setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
           
           addSellerNotification(
             listing.seller,
-            `📈 ${bidder} increased their bid to ${amount.toFixed(2)} on "${listing.title}"`
+            `📈 ${sanitizedBidder} increased their bid to ${amount.toFixed(2)} on "${listing.title}"`
           );
           
           return true;
         } else {
           // Rollback on failure
-          await setBuyerBalance(bidder, bidderBalance);
+          await setBuyerBalance(sanitizedBidder, bidderBalance);
           return false;
         }
       } else {
         // New highest bidder - use the standard flow
-        const fundsHeld = await holdBidFunds(listingId, bidder, amount, listing.title);
+        const fundsHeld = await holdBidFunds(listingId, sanitizedBidder, amount, listing.title);
         if (!fundsHeld) {
           console.error('[PlaceBid] Failed to hold funds for bid');
           return false;
         }
         
         // Place the bid
-        const result = await listingsService.placeBid(listingId, bidder, amount);
+        const result = await listingsService.placeBid(listingId, sanitizedBidder, amount);
         
         if (result.success && result.data) {
           setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
           
           // Refund the previous highest bidder if different
-          if (previousHighestBidder && previousHighestBidder !== bidder) {
+          if (previousHighestBidder && previousHighestBidder !== sanitizedBidder) {
             console.log(`[PlaceBid] Refunding outbid user: ${previousHighestBidder}`);
             const refunded = await refundBidFunds(previousHighestBidder, listingId);
             if (refunded) {
@@ -554,7 +687,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           // Clean up any other stale pending orders
           const uniqueBidders = [...new Set(listing.auction.bids.map(b => b.bidder))];
           for (const otherBidder of uniqueBidders) {
-            if (otherBidder !== bidder && otherBidder !== previousHighestBidder) {
+            if (otherBidder !== sanitizedBidder && otherBidder !== previousHighestBidder) {
               refundBidFunds(otherBidder, listingId).catch(err => 
                 console.log(`[PlaceBid] Cleanup refund skipped for ${otherBidder}:`, err)
               );
@@ -563,13 +696,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           
           addSellerNotification(
             listing.seller,
-            `💰 New bid! ${bidder} bid ${amount.toFixed(2)} on "${listing.title}"`
+            `💰 New bid! ${sanitizedBidder} bid ${amount.toFixed(2)} on "${listing.title}"`
           );
           
           return true;
         } else {
           // Bid placement failed - refund
-          await refundBidFunds(bidder, listingId);
+          await refundBidFunds(sanitizedBidder, listingId);
           return false;
         }
       }
@@ -851,10 +984,19 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
 
     try {
-      const result = await listingsService.saveDraft({
+      // Sanitize draft fields - Access from formState
+      const sanitizedDraft = {
         ...draft,
+        formState: {
+          ...draft.formState,
+          title: draft.formState.title ? sanitize.strict(draft.formState.title) : '',
+          description: draft.formState.description ? sanitize.strict(draft.formState.description) : '',
+          tags: draft.formState.tags ? sanitize.strict(draft.formState.tags) : ''
+        },
         seller: user.username,
-      });
+      };
+
+      const result = await listingsService.saveDraft(sanitizedDraft);
       return result.success;
     } catch (error) {
       console.error('Error saving draft:', error);
@@ -888,6 +1030,18 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // Image management functions
   const uploadImage = async (file: File): Promise<string | null> => {
+    // Validate file before upload
+    const fileValidation = securityService.validateFileUpload(file, {
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+    });
+
+    if (!fileValidation.valid) {
+      alert(fileValidation.error || 'Invalid file');
+      return null;
+    }
+
     try {
       const result = await listingsService.uploadImage(file);
       return result.success && result.data ? result.data : null;
@@ -899,7 +1053,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const deleteImage = async (imageUrl: string): Promise<boolean> => {
     try {
-      const result = await listingsService.deleteImage(imageUrl);
+      // Validate URL before deletion
+      const sanitizedUrl = sanitize.url(imageUrl);
+      if (!sanitizedUrl) {
+        console.error('Invalid image URL');
+        return false;
+      }
+
+      const result = await listingsService.deleteImage(sanitizedUrl);
       return result.success;
     } catch (error) {
       console.error('Error deleting image:', error);
@@ -908,29 +1069,48 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const subscribeToSeller = async (buyer: string, seller: string, price: number): Promise<boolean> => {
-    const success = await subscribeToSellerWithPayment(buyer, seller, price);
+    // Validate subscription price
+    const priceValidation = securityService.validateAmount(price, {
+      min: 0.01,
+      max: 1000
+    });
+
+    if (!priceValidation.valid) {
+      console.error('Invalid subscription price:', priceValidation.error);
+      return false;
+    }
+
+    // Sanitize usernames
+    const sanitizedBuyer = sanitize.username(buyer);
+    const sanitizedSeller = sanitize.username(seller);
+
+    const success = await subscribeToSellerWithPayment(sanitizedBuyer, sanitizedSeller, price);
     if (success) {
       setSubscriptions((prev) => {
         const updated = {
           ...prev,
-          [buyer]: [...(prev[buyer] || []), seller],
+          [sanitizedBuyer]: [...(prev[sanitizedBuyer] || []), sanitizedSeller],
         };
         storageService.setItem('subscriptions', updated);
         return updated;
       });
       addSellerNotification(
-        seller,
-        `🎉 ${buyer} subscribed to you!`
+        sanitizedSeller,
+        `🎉 ${sanitizedBuyer} subscribed to you!`
       );
     }
     return success;
   };
 
   const unsubscribeFromSeller = async (buyer: string, seller: string): Promise<void> => {
+    // Sanitize usernames
+    const sanitizedBuyer = sanitize.username(buyer);
+    const sanitizedSeller = sanitize.username(seller);
+
     setSubscriptions((prev) => {
       const updated = {
         ...prev,
-        [buyer]: (prev[buyer] || []).filter((s) => s !== seller),
+        [sanitizedBuyer]: (prev[sanitizedBuyer] || []).filter((s) => s !== sanitizedSeller),
       };
       storageService.setItem('subscriptions', updated);
       return updated;
@@ -938,7 +1118,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const isSubscribed = (buyer: string, seller: string): boolean => {
-    return subscriptions[buyer]?.includes(seller) ?? false;
+    // Sanitize usernames
+    const sanitizedBuyer = sanitize.username(buyer);
+    const sanitizedSeller = sanitize.username(seller);
+    
+    return subscriptions[sanitizedBuyer]?.includes(sanitizedSeller) ?? false;
   };
 
   const getCurrentSellerNotifications = (): Notification[] => {
@@ -1081,13 +1265,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     status: VerificationStatus,
     rejectionReason?: string
   ): Promise<void> => {
-    const existingUser = users[username];
+    // Sanitize inputs
+    const sanitizedUsername = sanitize.username(username);
+    const sanitizedReason = rejectionReason ? sanitize.strict(rejectionReason) : undefined;
+
+    const existingUser = users[sanitizedUsername];
     if (!existingUser) return;
     
     try {
-      const result = await usersService.updateVerificationStatus(username, {
+      const result = await usersService.updateVerificationStatus(sanitizedUsername, {
         status,
-        rejectionReason,
+        rejectionReason: sanitizedReason,
         adminUsername: user?.username || 'admin',
       });
       
@@ -1097,26 +1285,26 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           verificationStatus: status,
           verified: status === 'verified',
           verificationReviewedAt: new Date().toISOString(),
-          verificationRejectionReason: rejectionReason,
+          verificationRejectionReason: sanitizedReason,
         };
         
         // Also update AuthContext if this is the current user
-        if (user?.username === username) {
+        if (user?.username === sanitizedUsername) {
           await updateUser({
             verificationStatus: status,
             isVerified: status === 'verified',
-            verificationRejectionReason: rejectionReason,
+            verificationRejectionReason: sanitizedReason,
           });
         }
         
         await persistUsers({
           ...users,
-          [username]: updatedUser,
+          [sanitizedUsername]: updatedUser,
         });
 
         setListings(prev => {
           return prev.map(listing => {
-            if (listing.seller === username) {
+            if (listing.seller === sanitizedUsername) {
               return { ...listing, isVerified: status === 'verified' };
             }
             return listing;

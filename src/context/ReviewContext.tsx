@@ -3,6 +3,8 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { storageService } from '@/services';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { z } from 'zod';
 
 export type Review = {
   reviewer: string;
@@ -10,6 +12,12 @@ export type Review = {
   comment: string;
   date: string;
 };
+
+// Validation schema for reviews
+const reviewSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().min(10, 'Review must be at least 10 characters').max(500, 'Review must be less than 500 characters'),
+});
 
 type ReviewContextType = {
   getReviewsForSeller: (sellerUsername: string) => Review[];
@@ -30,7 +38,17 @@ export const ReviewProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       
       try {
         const stored = await storageService.getItem<{ [seller: string]: Review[] }>('panty_reviews', {});
-        setAllReviews(stored);
+        
+        // Sanitize existing reviews
+        const sanitizedReviews: { [seller: string]: Review[] } = {};
+        Object.entries(stored).forEach(([seller, reviews]) => {
+          sanitizedReviews[seller] = reviews.map(review => ({
+            ...review,
+            comment: sanitizeStrict(review.comment || ''),
+          }));
+        });
+        
+        setAllReviews(sanitizedReviews);
         setIsInitialized(true);
       } catch (error) {
         console.error('Error loading reviews:', error);
@@ -53,10 +71,28 @@ export const ReviewProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const addReview = (sellerUsername: string, review: Review) => {
+    // Validate review data
+    const validation = reviewSchema.safeParse({
+      rating: review.rating,
+      comment: review.comment,
+    });
+
+    if (!validation.success) {
+      console.error('Invalid review data:', validation.error);
+      alert(validation.error.errors[0]?.message || 'Invalid review');
+      return;
+    }
+
+    const sanitizedReview: Review = {
+      ...review,
+      rating: validation.data.rating,
+      comment: sanitizeStrict(validation.data.comment),
+    };
+
     setAllReviews((prev) => {
       const updated = {
         ...prev,
-        [sellerUsername]: [...(prev[sellerUsername] || []), review],
+        [sellerUsername]: [...(prev[sellerUsername] || []), sanitizedReview],
       };
       return updated;
     });

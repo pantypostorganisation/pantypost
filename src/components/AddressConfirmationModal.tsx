@@ -6,14 +6,7 @@ import { X, MapPin, Home, Building, CheckCircle, AlertCircle } from 'lucide-reac
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 
-type AddressConfirmationModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: (address: DeliveryAddress) => void;
-  existingAddress?: DeliveryAddress | null;
-  orderId: string;
-};
-
+// Export the DeliveryAddress type
 export type DeliveryAddress = {
   fullName: string;
   addressLine1: string;
@@ -23,6 +16,14 @@ export type DeliveryAddress = {
   postalCode: string;
   country: string;
   specialInstructions?: string;
+};
+
+type AddressConfirmationModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (address: DeliveryAddress) => void;
+  existingAddress?: DeliveryAddress | null;
+  orderId: string;
 };
 
 // Validation function for postal codes
@@ -45,6 +46,7 @@ const isValidName = (name: string): boolean => {
   return validNamePattern.test(name);
 };
 
+// Export as default
 export default function AddressConfirmationModal({
   isOpen,
   onClose,
