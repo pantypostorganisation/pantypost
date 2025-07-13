@@ -1,5 +1,4 @@
-// src/hooks/useBuyerMessages.ts
-
+// src/hooks/useBuyerMessages.ts - COMPLETE FIXED VERSION
 // Declare global to prevent TypeScript errors
 declare global {
   interface Window {
@@ -16,7 +15,9 @@ import { useRequests } from '@/context/RequestContext';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { useLocalStorage } from './useLocalStorage';
-import { 
+import { uploadToCloudinary } from '@/utils/cloudinary';
+import { securityService } from '@/services';
+import {
   saveRecentEmojis,
   getRecentEmojis,
   validateImageSize,
@@ -44,7 +45,6 @@ export const useBuyerMessages = () => {
   
   // Use useContext directly to check if wallet context is available
   const walletContext = useContext(WalletContext);
-  
   const { getRequestsForUser, markRequestAsPaid, addRequest, respondToRequest, getRequestById } = useRequests();
   const { users, addSellerNotification } = useListings();
   
@@ -128,16 +128,17 @@ export const useBuyerMessages = () => {
   // FIXED: Memoize wallet object properly
   const wallet = useMemo(() => {
     if (!user || !walletContext) return {};
+    
     const balances: { [username: string]: number } = {};
     balances[user.username] = getBuyerBalance(user.username);
     return balances;
   }, [user, walletContext, getBuyerBalance]);
   
-  const buyerRequests = useMemo(() => 
+  const buyerRequests = useMemo(() =>
     getRequestsForUser(user?.username || '', 'buyer'),
     [user?.username, getRequestsForUser]
   );
-
+  
   // Mark messages as read and update UI
   const markMessageAsReadAndUpdateUI = useCallback((message: Message) => {
     if (message.id) {
@@ -148,11 +149,11 @@ export const useBuyerMessages = () => {
       });
     }
   }, []);
-
+  
   const handleMessageVisible = useCallback((message: Message) => {
     markMessageAsReadAndUpdateUI(message);
   }, [markMessageAsReadAndUpdateUI]);
-
+  
   // Memoize threads to avoid circular dependency
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
@@ -168,7 +169,7 @@ export const useBuyerMessages = () => {
           }
         });
       });
-
+      
       // Sort messages in each thread by date
       Object.values(result).forEach((thread) =>
         thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -177,7 +178,7 @@ export const useBuyerMessages = () => {
     
     return result;
   }, [messages, user]);
-
+  
   // Calculate other message data with async profile loading
   const [sellerProfiles, setSellerProfiles] = useState<{ [seller: string]: { pic: string | null, verified: boolean } }>({});
   
@@ -209,7 +210,7 @@ export const useBuyerMessages = () => {
     
     loadSellerProfiles();
   }, [threads, users]);
-
+  
   const { unreadCounts, lastMessages, totalUnreadCount } = useMemo(() => {
     const unreadCounts: { [seller: string]: number } = {};
     const lastMessages: { [seller: string]: Message } = {};
@@ -219,20 +220,21 @@ export const useBuyerMessages = () => {
       lastMessages[seller] = msgs[msgs.length - 1];
       
       // Count unread messages - use both isRead and read properties
-      const unread = msgs.filter(msg => 
+      const unread = msgs.filter(msg =>
         msg.receiver === user?.username && !msg.isRead && !msg.read
       ).length;
+      
       unreadCounts[seller] = unread;
       totalUnreadCount += unread;
     });
     
     return { unreadCounts, lastMessages, totalUnreadCount };
   }, [threads, user?.username]);
-
+  
   // Update UI unread counts based on actual unread counts
   useEffect(() => {
     if (!user) return;
-
+    
     const newUiUnreadCounts: { [key: string]: number } = {};
     
     Object.entries(threads).forEach(([seller, msgs]) => {
@@ -241,9 +243,9 @@ export const useBuyerMessages = () => {
         newUiUnreadCounts[seller] = 0;
       } else {
         // Otherwise, count unread messages
-        const unreadMessages = msgs.filter(msg => 
+        const unreadMessages = msgs.filter(msg =>
           msg.receiver === user.username &&
-          !msg.isRead && 
+          !msg.isRead &&
           !msg.read &&
           (!msg.id || !observerReadMessages.has(msg.id))
         );
@@ -253,14 +255,14 @@ export const useBuyerMessages = () => {
     
     // Only update state if the counts actually changed
     setUiUnreadCounts(prev => {
-      const hasChanged = Object.keys(newUiUnreadCounts).some(key => 
+      const hasChanged = Object.keys(newUiUnreadCounts).some(key =>
         prev[key] !== newUiUnreadCounts[key]
       ) || Object.keys(prev).length !== Object.keys(newUiUnreadCounts).length;
       
       return hasChanged ? newUiUnreadCounts : prev;
     });
   }, [user, threads, observerReadMessages, activeThread]);
-
+  
   // Mark all messages as read when opening a thread
   useEffect(() => {
     if (activeThread && user && hasMarkedReadRef.current !== activeThread) {
@@ -280,7 +282,7 @@ export const useBuyerMessages = () => {
       }));
     }
   }, [activeThread, user, markMessagesAsRead]);
-
+  
   // Handle thread initialization
   useEffect(() => {
     if (!mounted) return;
@@ -289,12 +291,12 @@ export const useBuyerMessages = () => {
       setActiveThread(threadParam);
     }
   }, [threadParam, user, mounted]);
-
+  
   // Set mounted state
   useEffect(() => {
     setMounted(true);
   }, []);
-
+  
   // Handle clicks outside the emoji picker to close it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -304,12 +306,11 @@ export const useBuyerMessages = () => {
     };
     
     document.addEventListener('mousedown', handleClickOutside);
-    
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
+  
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     const timeSinceManualScroll = Date.now() - lastManualScrollTime.current;
@@ -317,7 +318,7 @@ export const useBuyerMessages = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [activeThread, threads]);
-
+  
   // Listen for storage changes to update profiles in real-time
   useEffect(() => {
     const handleStorageChange = async (e: StorageEvent) => {
@@ -343,14 +344,20 @@ export const useBuyerMessages = () => {
         setSellerProfiles(profiles);
       }
     };
-
+    
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [threads, users, sellerProfiles]);
-
-  // Action handlers
+  
+  // FIXED: Handle sending reply with proper image URL
   const handleReply = useCallback(async () => {
     if (!activeThread || (!replyMessage.trim() && !selectedImage) || !user) return;
+    
+    console.log('Sending message:', {
+      text: replyMessage.trim(),
+      imageUrl: selectedImage,
+      receiver: activeThread
+    });
     
     await sendMessage(
       user.username,
@@ -365,10 +372,9 @@ export const useBuyerMessages = () => {
     setReplyMessage('');
     setSelectedImage(null);
     setImageError(null);
-    
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, replyMessage, selectedImage, user, sendMessage]);
-
+  
   const handleBlockToggle = useCallback(() => {
     if (!activeThread || !user) return;
     
@@ -379,12 +385,12 @@ export const useBuyerMessages = () => {
       blockUser(user.username, activeThread);
     }
   }, [activeThread, user, blockedUsers, unblockUser, blockUser]);
-
+  
   const handleReport = useCallback(() => {
     if (!activeThread || !user) return;
     reportUser(user.username, activeThread);
   }, [activeThread, user, reportUser]);
-
+  
   // FIXED: Handle accepting custom request (by buyer when seller edits)
   const handleAccept = useCallback(async (request: any) => {
     if (!user || !request || !walletContext) return;
@@ -439,7 +445,7 @@ export const useBuyerMessages = () => {
       );
     }
   }, [user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage, respondToRequest]);
-
+  
   const handleDecline = useCallback(async (request: any) => {
     if (!user || !request) return;
     
@@ -454,7 +460,7 @@ export const useBuyerMessages = () => {
       { type: 'normal' }
     );
   }, [user, sendMessage, respondToRequest]);
-
+  
   const handleEditRequest = useCallback((request: any) => {
     setEditRequestId(request.id);
     setEditPrice(request.price.toString());
@@ -462,7 +468,7 @@ export const useBuyerMessages = () => {
     setEditTags(request.tags?.join(', ') || '');
     setEditMessage(request.description || '');
   }, []);
-
+  
   // FIXED: Handle submitting edited request
   const handleEditSubmit = useCallback(async () => {
     if (!editRequestId || !user || !activeThread) return;
@@ -508,7 +514,7 @@ export const useBuyerMessages = () => {
     setEditTags('');
     setEditMessage('');
   }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
-
+  
   // FIXED: Handle pay now with better error handling and debugging
   const handlePayNow = useCallback(async (request: any) => {
     console.log('handlePayNow called with request:', request);
@@ -532,7 +538,6 @@ export const useBuyerMessages = () => {
       // Now show the modal
       console.log('Setting showPayModal to true');
       setShowPayModal(true);
-      
     } catch (error) {
       console.error('Error in handlePayNow:', error);
       // Even if there's an error, try to show the modal
@@ -540,7 +545,7 @@ export const useBuyerMessages = () => {
       setShowPayModal(true);
     }
   }, [walletContext]);
-
+  
   // FIXED: Complete the handleConfirmPay function
   const handleConfirmPay = useCallback(async () => {
     console.log('handleConfirmPay called');
@@ -640,48 +645,54 @@ export const useBuyerMessages = () => {
       setIsProcessingPayment(false);
     }
   }, [payingRequest, user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage, isProcessingPayment]);
-
+  
+  // FIXED: Handle image selection with Cloudinary upload
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const error = validateImageSize(file);
-    if (error) {
-      setImageError(error);
-      return;
-    }
-
+    
     setIsImageLoading(true);
     setImageError(null);
+    
+    try {
+      // Validate file first
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+      });
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64String = event.target?.result as string;
-      if (checkImageExists(base64String)) {
-        setSelectedImage(base64String);
-      } else {
-        setImageError('Failed to load image');
+      if (!validation.valid) {
+        throw new Error(validation.error || 'Invalid file');
       }
+      
+      // Upload to Cloudinary instead of just reading as base64
+      console.log('Uploading image to Cloudinary...');
+      const uploadResult = await uploadToCloudinary(file);
+      
+      // Set the Cloudinary URL, not base64 data
+      setSelectedImage(uploadResult.url);
+      console.log('Image uploaded successfully:', uploadResult.url);
+      
+    } catch (error) {
+      console.error('Image upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload image';
+      setImageError(errorMessage);
+      setSelectedImage(null);
+    } finally {
       setIsImageLoading(false);
-    };
-    reader.onerror = () => {
-      setImageError('Failed to read file');
-      setIsImageLoading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   }, []);
-
+  
   const handleEmojiClick = useCallback((emoji: string) => {
     setReplyMessage(prev => prev + emoji);
-    
     const newRecentEmojis = [emoji, ...recentEmojis.filter(e => e !== emoji)].slice(0, 8);
     setRecentEmojis(newRecentEmojis);
     saveRecentEmojis(newRecentEmojis);
-    
     setShowEmojiPicker(false);
     inputRef.current?.focus();
   }, [recentEmojis, setRecentEmojis]);
-
+  
   const handleSendTip = useCallback(async () => {
     if (!activeThread || !tipAmount || !user) return;
     
@@ -736,7 +747,7 @@ export const useBuyerMessages = () => {
       });
     }
   }, [activeThread, tipAmount, user, getBuyerBalance, sendTip, sendMessage]);
-
+  
   const validateCustomRequest = useCallback((): boolean => {
     const errors: Partial<CustomRequestForm> = {};
     
@@ -756,7 +767,7 @@ export const useBuyerMessages = () => {
     setCustomRequestErrors(errors);
     return Object.keys(errors).length === 0;
   }, [customRequestForm]);
-
+  
   const handleCustomRequestSubmit = useCallback(async () => {
     if (!validateCustomRequest() || !activeThread || !user) return;
     
@@ -798,7 +809,7 @@ export const useBuyerMessages = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     setIsSubmittingRequest(false);
   }, [validateCustomRequest, activeThread, user, customRequestForm, addRequest, sendMessage]);
-
+  
   const closeCustomRequestModal = useCallback(() => {
     setShowCustomRequestModal(false);
     setCustomRequestForm({
@@ -810,16 +821,16 @@ export const useBuyerMessages = () => {
     });
     setCustomRequestErrors({});
   }, []);
-
+  
   // Status checks
   const isUserBlocked = useCallback((username: string) => {
     return user ? blockedUsers[user.username]?.includes(username) || false : false;
   }, [user, blockedUsers]);
-
+  
   const isUserReported = useCallback((username: string) => {
     return user ? reportedUsers[user.username]?.includes(username) || false : false;
   }, [user, reportedUsers]);
-
+  
   return {
     // Auth & context
     user,

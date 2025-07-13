@@ -1,4 +1,4 @@
-// src/hooks/useSellerMessages.ts
+// src/hooks/useSellerMessages.ts - COMPLETE FIXED VERSION
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -6,6 +6,8 @@ import { useMessages } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useWallet } from '@/context/WalletContext';
 import { storageService } from '@/services';
+import { uploadToCloudinary } from '@/utils/cloudinary';
+import { securityService } from '@/services';
 import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
 
@@ -277,11 +279,20 @@ export function useSellerMessages() {
     });
   }, [user, markMessagesAsRead, messages]);
   
-  // Handle sending reply
+  // FIXED: Handle sending reply with proper image URL
   const handleReply = useCallback(() => {
     if (!activeThread || !user || (!replyMessage.trim() && !selectedImage)) return;
 
-    sendMessage(user.username, activeThread, replyMessage.trim(), {
+    console.log('Sending message:', {
+      text: replyMessage.trim(),
+      imageUrl: selectedImage,
+      receiver: activeThread
+    });
+
+    // For image messages, ensure we have content even if text is empty
+    const messageContent = replyMessage.trim() || (selectedImage ? '' : '');
+
+    sendMessage(user.username, activeThread, messageContent, {
       type: selectedImage ? 'image' : 'normal',
       meta: selectedImage ? { imageUrl: selectedImage } : undefined,
     });
@@ -443,7 +454,7 @@ export function useSellerMessages() {
     setShowEmojiPicker(false);
   }, []);
   
-  // Handle image selection
+  // FIXED: Handle image selection with Cloudinary upload
   const handleImageSelect = useCallback(async (file: File) => {
     if (!file) return;
     
@@ -451,28 +462,31 @@ export function useSellerMessages() {
     setImageError(null);
     
     try {
-      // Validate file
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Please select an image file');
+      // Validate file first
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+      });
+
+      if (!validation.valid) {
+        throw new Error(validation.error || 'Invalid file');
       }
       
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error('Image must be less than 5MB');
-      }
+      // Upload to Cloudinary instead of just reading as base64
+      console.log('Uploading image to Cloudinary...');
+      const uploadResult = await uploadToCloudinary(file);
       
-      // Read file as data URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setSelectedImage(e.target?.result as string);
-        setIsImageLoading(false);
-      };
-      reader.onerror = () => {
-        setImageError('Failed to read image');
-        setIsImageLoading(false);
-      };
-      reader.readAsDataURL(file);
+      // Set the Cloudinary URL, not base64 data
+      setSelectedImage(uploadResult.url);
+      console.log('Image uploaded successfully:', uploadResult.url);
+      
     } catch (error) {
-      setImageError(error instanceof Error ? error.message : 'Failed to load image');
+      console.error('Image upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload image';
+      setImageError(errorMessage);
+      setSelectedImage(null);
+    } finally {
       setIsImageLoading(false);
     }
   }, []);

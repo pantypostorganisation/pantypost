@@ -1,4 +1,4 @@
-// src/context/MessageContext.tsx
+// src/context/MessageContext.tsx - COMPLETE FIXED VERSION
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { v4 as uuidv4 } from 'uuid';
@@ -151,21 +151,21 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       try {
         setIsLoading(true);
-        
+
         // Load messages - using storageService since messagesService doesn't have a getAllMessages method
         const storedMessages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
-        
+
         // Ensure we have a valid object
         if (storedMessages && typeof storedMessages === 'object') {
           // Migrate old format if needed
           const needsMigration = Object.values(storedMessages).some(
             value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
           );
-          
+
           if (needsMigration) {
             console.log('Migrating message format...');
             const migrated: { [key: string]: Message[] } = {};
-            
+
             Object.entries(storedMessages).forEach(([key, msgs]) => {
               if (Array.isArray(msgs)) {
                 msgs.forEach((msg: any) => {
@@ -183,7 +183,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
                 });
               }
             });
-            
+
             setMessages(migrated);
             await storageService.setItem('panty_messages', migrated);
           } else {
@@ -214,7 +214,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         // Load message notifications
         const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>('panty_message_notifications', {});
         setMessageNotifications(notifications || {});
-        
+
       } catch (error) {
         console.error('Error loading message data:', error);
       } finally {
@@ -256,20 +256,40 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [messageNotifications, isLoading]);
 
+  // FIXED: Send message with proper image handling
   const sendMessage = async (
     sender: string,
     receiver: string,
     content: string,
     options?: MessageOptions
   ) => {
-    // Validate message content
-    const contentValidation = messageSchemas.messageContent.safeParse(content);
-    if (!contentValidation.success) {
-      console.error('Invalid message content:', contentValidation.error);
+    // Validate inputs
+    if (!sender || !receiver) {
+      console.error('Invalid sender or receiver');
       return;
     }
 
-    const sanitizedContent = contentValidation.data;
+    if (!content.trim() && !options?.meta?.imageUrl) {
+      console.error('Cannot send empty message without image');
+      return;
+    }
+
+    // For image messages, allow empty content or provide default
+    let sanitizedContent = content;
+    if (options?.type === 'image' && !content.trim() && options?.meta?.imageUrl) {
+      // If it's an image message with no text, use a default message
+      sanitizedContent = 'Image shared';
+    }
+
+    // Validate message content only if we have content to validate
+    if (sanitizedContent.trim()) {
+      const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
+      if (!contentValidation.success) {
+        console.error('Invalid message content:', contentValidation.error);
+        return;
+      }
+      sanitizedContent = contentValidation.data;
+    }
 
     // Validate and sanitize meta fields if present
     let sanitizedMeta = options?.meta;
@@ -304,7 +324,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           type: result.data.type,
           meta: result.data.meta,
         };
-        
+
+        // For image messages, ensure we have the image URL in meta
+        if (options?.type === 'image' && options?.meta?.imageUrl) {
+          console.log('Sending image message with URL:', options.meta.imageUrl);
+          newMessage.meta = {
+            ...newMessage.meta,
+            imageUrl: options.meta.imageUrl
+          };
+        }
+
         setMessages(prev => ({
           ...prev,
           [conversationKey]: [...(prev[conversationKey] || []), newMessage],
@@ -315,7 +344,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           setMessageNotifications(prev => {
             const sellerNotifs = prev[receiver] || [];
             const existingIndex = sellerNotifs.findIndex(n => n.buyer === sender);
-            
+
             if (existingIndex >= 0) {
               const updated = [...sellerNotifs];
               updated[existingIndex] = {
@@ -341,6 +370,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
           });
         }
+
+        console.log('Message sent successfully:', newMessage);
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -387,39 +418,37 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const getThreadsForUser = (username: string, role?: 'buyer' | 'seller'): MessageThread => {
     const threads: MessageThread = {};
-    
+
     Object.entries(messages).forEach(([key, msgs]) => {
       msgs.forEach(msg => {
         if (msg.sender === username || msg.receiver === username) {
           const otherParty = msg.sender === username ? msg.receiver : msg.sender;
-          
           if (!threads[otherParty]) {
             threads[otherParty] = [];
           }
-          
           threads[otherParty].push(msg);
         }
       });
     });
-    
+
     Object.values(threads).forEach(thread => {
       thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     });
-    
+
     return threads;
   };
 
   const getThreadInfo = (username: string, otherParty: string): ThreadInfo => {
     const conversationKey = getConversationKey(username, otherParty);
     const threadMessages = messages[conversationKey] || [];
-    
+
     const unreadCount = threadMessages.filter(
       msg => msg.receiver === username && !msg.read && !msg.isRead
     ).length;
-    
-    const lastMessage = threadMessages.length > 0 ? 
+
+    const lastMessage = threadMessages.length > 0 ?
       threadMessages[threadMessages.length - 1] : null;
-    
+
     return {
       unreadCount,
       lastMessage,
@@ -430,18 +459,17 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const getAllThreadsInfo = (username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
     const threads = getThreadsForUser(username, role);
     const threadInfos: { [otherParty: string]: ThreadInfo } = {};
-    
+
     Object.keys(threads).forEach(otherParty => {
       threadInfos[otherParty] = getThreadInfo(username, otherParty);
     });
-    
+
     return threadInfos;
   };
 
   const markMessagesAsRead = async (userA: string, userB: string) => {
     try {
       const result = await messagesService.markMessagesAsRead(userA, userB);
-      
       if (result.success) {
         const conversationKey = getConversationKey(userA, userB);
         setMessages(prev => {
@@ -469,11 +497,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     setMessageNotifications(prev => {
       const sellerNotifs = prev[seller] || [];
       const filtered = sellerNotifs.filter(n => n.buyer !== buyer);
-      
+
       if (filtered.length === sellerNotifs.length) {
         return prev;
       }
-      
+
       return {
         ...prev,
         [seller]: filtered
@@ -558,7 +586,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           processed: false,
           category: 'other'
         };
-        
+
         setReportLogs(prev => [...prev, newReport]);
       }
     } catch (error) {
@@ -620,16 +648,16 @@ export const useMessages = () => {
 export const getReportCount = async (): Promise<number> => {
   try {
     if (typeof window === 'undefined') return 0;
-    
+
     const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
     if (!Array.isArray(reports)) return 0;
-    
-    const pendingReports = reports.filter(report => 
-      report && 
-      typeof report === 'object' && 
+
+    const pendingReports = reports.filter(report =>
+      report &&
+      typeof report === 'object' &&
       !report.processed
     );
-    
+
     return pendingReports.length;
   } catch (error) {
     console.error('Error getting external report count:', error);
