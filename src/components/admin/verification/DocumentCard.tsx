@@ -1,67 +1,60 @@
 // src/components/admin/verification/DocumentCard.tsx
 'use client';
 
-import { useState } from 'react';
-import { ExternalLink } from 'lucide-react';
-import type { DocumentCardProps } from '@/types/verification';
-import { sanitizeUrl } from '@/utils/security/sanitization';
+import { ExternalLink, ImageIcon } from 'lucide-react';
 
-export default function DocumentCard({ 
-  title, 
-  imageSrc, 
-  onViewFull 
-}: DocumentCardProps) {
-  const [isHovered, setIsHovered] = useState<boolean>(false);
-  const [imageError, setImageError] = useState<boolean>(false);
-  
-  // Sanitize the image URL
-  const safeImageSrc = imageSrc ? sanitizeUrl(imageSrc) : '';
+interface DocumentCardProps {
+  title: string;
+  imageSrc?: string;
+  onViewFull?: () => void;
+}
+
+export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCardProps) {
+  const hasImage = imageSrc && imageSrc.trim() !== '';
   
   return (
     <div className="space-y-2">
-      <h3 className="text-sm uppercase text-gray-400 font-medium tracking-wider flex items-center">
+      <h4 className="text-sm uppercase text-gray-400 font-medium tracking-wider">
         {title}
-      </h3>
+      </h4>
       
-      {safeImageSrc && !imageError ? (
-        <div 
-          className="relative border border-[#222] rounded-lg overflow-hidden h-[200px] sm:h-[250px] bg-[#0a0a0a] transition-all duration-300"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          <div className="w-full h-full overflow-hidden flex items-center justify-center">
+      <div className="relative bg-[#1a1a1a] rounded-lg border border-gray-700 overflow-hidden aspect-[4/3]">
+        {hasImage ? (
+          <>
             <img
-              src={safeImageSrc}
-              alt=""
-              className="w-full h-full object-contain transition-transform duration-500"
-              style={{ 
-                transform: isHovered ? 'scale(1.05)' : 'scale(1)' 
-              }}
-              onError={() => setImageError(true)}
-            />
-          </div>
-          
-          {/* Gradient overlay on hover */}
-          <div 
-            className="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-0 transition-opacity duration-300 flex items-end justify-center p-4"
-            style={{ opacity: isHovered ? 0.8 : 0 }}
-          >
-            <button 
+              src={imageSrc}
+              alt={title}
+              className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
               onClick={onViewFull}
-              className="bg-[#ff950e] text-black font-medium py-1.5 px-3 rounded-lg transition-all transform hover:bg-[#ffaa2c] flex items-center gap-1.5"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>View Full</span>
-            </button>
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                target.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            
+            {/* Error fallback - hidden by default */}
+            <div className="hidden absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+              <ImageIcon className="w-8 h-8 mb-2" />
+              <span className="text-xs text-center px-2">
+                Failed to load image
+              </span>
+            </div>
+            
+            {/* Hover overlay */}
+            <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer">
+              <ExternalLink className="w-6 h-6 text-white" />
+            </div>
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+            <ImageIcon className="w-8 h-8 mb-2" />
+            <span className="text-xs text-center px-2">
+              Not provided
+            </span>
           </div>
-        </div>
-      ) : (
-        <div className="h-[200px] sm:h-[250px] bg-[#0a0a0a] border border-[#222] rounded-lg flex items-center justify-center">
-          <span className="text-gray-500 text-sm">
-            {imageError ? 'Failed to load image' : 'Not provided'}
-          </span>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

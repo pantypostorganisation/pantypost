@@ -89,7 +89,7 @@ export default function ReviewModal({
                             <h3 className="text-sm uppercase text-gray-400 font-medium mb-2 tracking-wider">
                                 Verification Code
                             </h3>
-                            <div className="inline-block px-4 py-1.5 bg-[#ff950e] bg-opacity-10 text-[#ff950e] font-mono text-lg border border-[#ff950e] border-opacity-20 rounded-full">
+                            <div className="inline-block px-4 py-2 bg-[#ff950e] text-black font-mono text-lg border border-[#ff950e] rounded-lg font-bold">
                                 {user.verificationDocs?.code || 'No code provided'}
                             </div>
                         </div>
@@ -99,25 +99,25 @@ export default function ReviewModal({
                             <DocumentCard
                                 title="Photo with Code"
                                 imageSrc={user.verificationDocs?.codePhoto}
-                                onViewFull={() => openFullImage('Photo with Verification Code', user.verificationDocs?.codePhoto || '')}
+                                onViewFull={() => user.verificationDocs?.codePhoto && openFullImage('Photo with Verification Code', user.verificationDocs.codePhoto)}
                             />
 
                             <DocumentCard
                                 title="ID Front"
                                 imageSrc={user.verificationDocs?.idFront}
-                                onViewFull={() => openFullImage('ID Front', user.verificationDocs?.idFront || '')}
+                                onViewFull={() => user.verificationDocs?.idFront && openFullImage('ID Front', user.verificationDocs.idFront)}
                             />
 
                             <DocumentCard
                                 title="ID Back"
                                 imageSrc={user.verificationDocs?.idBack}
-                                onViewFull={() => openFullImage('ID Back', user.verificationDocs?.idBack || '')}
+                                onViewFull={() => user.verificationDocs?.idBack && openFullImage('ID Back', user.verificationDocs.idBack)}
                             />
 
                             <DocumentCard
                                 title="Passport"
                                 imageSrc={user.verificationDocs?.passport}
-                                onViewFull={() => openFullImage('Passport', user.verificationDocs?.passport || '')}
+                                onViewFull={() => user.verificationDocs?.passport && openFullImage('Passport', user.verificationDocs.passport)}
                             />
                         </div>
                     </div>

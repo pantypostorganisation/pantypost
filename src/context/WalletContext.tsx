@@ -107,7 +107,9 @@ export type DepositLog = {
 
 // Validation schemas for wallet operations
 const walletOperationSchemas = {
-  amount: z.number().positive().min(0.01).max(100000),
+  // FIXED: Allow 0 for balance updates, but require positive for transactions
+  transactionAmount: z.number().positive().min(0.01).max(100000),
+  balanceAmount: z.number().min(0).max(100000), // Allow 0 for balance updates
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/),
   reason: z.string().min(1).max(500),
   withdrawalAmount: z.number().positive().min(10).max(10000),
@@ -247,11 +249,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAddSellerNotification(() => fn);
   };
 
-  // Helper function to validate and sanitize amount
-  const validateAmount = (amount: number, schema: z.ZodSchema = walletOperationSchemas.amount): number => {
-    const validation = schema.safeParse(amount);
+  // Helper function to validate and sanitize transaction amount (must be positive)
+  const validateTransactionAmount = (amount: number): number => {
+    const validation = walletOperationSchemas.transactionAmount.safeParse(amount);
     if (!validation.success) {
-      throw new Error('Invalid amount: ' + validation.error.errors[0]?.message);
+      throw new Error('Invalid transaction amount: ' + validation.error.errors[0]?.message);
+    }
+    return sanitizeCurrency(validation.data);
+  };
+
+  // Helper function to validate and sanitize balance amount (can be 0)
+  const validateBalanceAmount = (amount: number): number => {
+    const validation = walletOperationSchemas.balanceAmount.safeParse(amount);
+    if (!validation.success) {
+      throw new Error('Invalid balance amount: ' + validation.error.errors[0]?.message);
     }
     return sanitizeCurrency(validation.data);
   };
@@ -585,7 +596,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setBuyerBalance = useCallback(async (username: string, balance: number) => {
     const validatedUsername = validateUsername(username);
-    const validatedBalance = validateAmount(balance);
+    const validatedBalance = validateBalanceAmount(balance); // Use balance validation (allows 0)
     
     // Use transaction lock to prevent race conditions
     await transactionLock.current.acquireLock(`buyer_${validatedUsername}`, async () => {
@@ -607,7 +618,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setSellerBalance = useCallback(async (seller: string, balance: number) => {
     const validatedSeller = validateUsername(seller);
-    const validatedBalance = validateAmount(balance);
+    const validatedBalance = validateBalanceAmount(balance); // Use balance validation (allows 0)
     
     // Use transaction lock to prevent race conditions
     await transactionLock.current.acquireLock(`seller_${validatedSeller}`, async () => {
@@ -619,7 +630,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setAdminBalance = useCallback(async (balance: number) => {
-    const validatedBalance = validateAmount(balance);
+    const validatedBalance = validateBalanceAmount(balance); // Use balance validation (allows 0)
     
     // Use transaction lock to prevent race conditions
     await transactionLock.current.acquireLock('admin', async () => {
@@ -635,8 +646,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       description: sanitizeStrict(order.description),
       seller: validateUsername(order.seller),
       buyer: validateUsername(order.buyer),
-      price: validateAmount(order.price),
-      markedUpPrice: validateAmount(order.markedUpPrice),
+      price: validateTransactionAmount(order.price), // Use transaction validation for prices
+      markedUpPrice: validateTransactionAmount(order.markedUpPrice),
     };
 
     // Use ordersService to create the order
@@ -679,7 +690,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Validate inputs
       const validatedUsername = validateUsername(username);
-      const validatedAmount = validateAmount(amount);
+      const validatedAmount = validateTransactionAmount(amount); // Use transaction validation for deposits
       const validatedMethod = walletOperationSchemas.depositMethod.parse(method);
       const sanitizedNotes = notes ? sanitizeStrict(notes) : undefined;
       
@@ -841,7 +852,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Validate inputs
       const validatedWinner = validateUsername(winnerUsername);
       const validatedSeller = validateUsername(listing.seller);
-      const validatedBid = validateAmount(winningBid);
+      const validatedBid = validateTransactionAmount(winningBid);
       
       console.log('[FinalizeAuction] Starting finalization:', { 
         listing: listing.title, 
@@ -985,7 +996,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Validate inputs
       const validatedBidder = validateUsername(bidder);
-      const validatedAmount = validateAmount(amount);
+      const validatedAmount = validateTransactionAmount(amount);
       const sanitizedTitle = sanitizeStrict(auctionTitle);
       
       const buyerCurrentBalance = getBuyerBalance(validatedBidder);
@@ -1136,7 +1147,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Validate inputs
       const validatedBuyer = validateUsername(customRequest.buyer);
       const validatedSeller = validateUsername(customRequest.seller);
-      const validatedAmount = validateAmount(customRequest.amount);
+      const validatedAmount = validateTransactionAmount(customRequest.amount);
       const sanitizedDescription = sanitizeStrict(customRequest.description);
       
       const markedUpPrice = validatedAmount * 1.1;
@@ -1208,7 +1219,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Validate inputs
       const validatedBuyer = validateUsername(buyer);
       const validatedSeller = validateUsername(seller);
-      const validatedAmount = validateAmount(amount);
+      const validatedAmount = validateTransactionAmount(amount);
       
       const buyerBalance = getBuyerBalance(validatedBuyer);
       
@@ -1266,7 +1277,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Validate inputs
       const validatedBuyer = validateUsername(buyer);
       const validatedSeller = validateUsername(seller);
-      const validatedAmount = validateAmount(amount, walletOperationSchemas.tipAmount);
+      const validatedAmount = validateTransactionAmount(amount);
       
       const buyerBalance = getBuyerBalance(validatedBuyer);
       
@@ -1302,7 +1313,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Validate inputs
       const validatedUsername = validateUsername(username);
-      const validatedAmount = validateAmount(amount, walletOperationSchemas.withdrawalAmount);
+      const validatedAmount = validateTransactionAmount(amount);
       
       const currentBalance = getSellerBalance(validatedUsername);
       if (currentBalance < validatedAmount) {
@@ -1331,7 +1342,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       checkRateLimit('WITHDRAWAL', 'admin');
       
       // Validate inputs
-      const validatedAmount = validateAmount(amount, walletOperationSchemas.withdrawalAmount);
+      const validatedAmount = validateTransactionAmount(amount);
       
       if (adminBalance < validatedAmount) {
         throw new Error('Insufficient admin balance');
@@ -1367,7 +1378,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Validate inputs
       const validatedUsername = validateUsername(username);
-      const validatedAmount = validateAmount(amount);
+      const validatedAmount = validateTransactionAmount(amount);
       const sanitizedReason = sanitizeStrict(reason);
       
       // Validate reason
@@ -1429,7 +1440,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Validate inputs
       const validatedUsername = validateUsername(username);
-      const validatedAmount = validateAmount(amount);
+      const validatedAmount = validateTransactionAmount(amount);
       const sanitizedReason = sanitizeStrict(reason);
       
       // Validate reason
