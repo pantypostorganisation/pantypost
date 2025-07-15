@@ -16,6 +16,9 @@ import {
   extractSellerInfo 
 } from '@/utils/browseDetailUtils';
 import { DetailState, ListingWithDetails } from '@/types/browseDetail';
+import { securityService, sanitize } from '@/services/security.service';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { financialSchemas } from '@/utils/validation/schemas';
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -78,12 +81,15 @@ export const useBrowseDetail = () => {
     refreshListings
   } = useListings();
   
+  const rateLimiter = getRateLimiter();
+  
   // State
   const [state, setState] = useState<DetailState>(initialState);
   const [listing, setListing] = useState<ListingWithDetails | undefined>();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   
   // Refs
   const lastProcessedPaymentRef = useRef<string | null>(null);
@@ -98,8 +104,9 @@ export const useBrowseDetail = () => {
   const viewIncrementedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Core data
-  const listingId = params?.id as string;
+  // Core data - sanitize ID
+  const rawListingId = params?.id as string;
+  const listingId = rawListingId ? sanitize.strict(rawListingId) : '';
   const currentUsername = user?.username || null;
 
   // Load listing using the service
@@ -315,6 +322,20 @@ export const useBrowseDetail = () => {
       return;
     }
 
+    // Clear rate limit error
+    setRateLimitError(null);
+
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many requests. Please wait ${rateLimitResult.waitTime} seconds.`);
+      updateState({ 
+        purchaseStatus: `Please wait ${rateLimitResult.waitTime} seconds before trying again.`,
+        isProcessing: false 
+      });
+      return;
+    }
+
     updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
 
     try {
@@ -350,15 +371,50 @@ export const useBrowseDetail = () => {
         isProcessing: false 
       });
     }
-  }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState]);
+  }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState, rateLimiter]);
 
   const handleBidSubmit = useCallback(async () => {
     if (!listing || state.isBidding || !user || user.role !== 'buyer') return;
 
-    const bidValue = parseFloat(state.bidAmount);
-    if (isNaN(bidValue) || bidValue <= 0) {
+    // Clear errors
+    setRateLimitError(null);
+    updateState({ bidError: null, bidSuccess: null });
+
+    // Validate and sanitize bid amount
+    const bidValidation = securityService.validateAmount(state.bidAmount, {
+      min: 0.01,
+      max: 10000
+    });
+
+    if (!bidValidation.valid || !bidValidation.value) {
       updateState({ 
-        bidError: 'Please enter a valid bid amount',
+        bidError: bidValidation.error || 'Please enter a valid bid amount',
+        bidSuccess: null 
+      });
+      return;
+    }
+
+    const bidValue = bidValidation.value;
+
+    // Additional validation for auction rules
+    const currentBid = listing.auction?.highestBid || 0;
+    const startingBid = listing.auction?.startingPrice || 0;
+    const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
+
+    if (bidValue < minBidAmount) {
+      updateState({ 
+        bidError: `Minimum bid is $${minBidAmount.toFixed(2)}`,
+        bidSuccess: null 
+      });
+      return;
+    }
+
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many bids. Please wait ${rateLimitResult.waitTime} seconds.`);
+      updateState({ 
+        bidError: `Please wait ${rateLimitResult.waitTime} seconds before bidding again.`,
         bidSuccess: null 
       });
       return;
@@ -399,7 +455,7 @@ export const useBrowseDetail = () => {
         }, 3000);
       } else {
         updateState({ 
-          bidError: 'Failed to place bid. Please try again.',
+          bidError: 'Failed to place bid. Please check your balance and try again.',
           bidSuccess: null,
           isBidding: false 
         });
@@ -412,13 +468,21 @@ export const useBrowseDetail = () => {
         isBidding: false 
       });
     }
-  }, [listing, state.isBidding, state.bidAmount, user, listingsPlaceBid, updateState]);
+  }, [listing, state.isBidding, state.bidAmount, user, listingsPlaceBid, updateState, rateLimiter]);
 
   const handleImageNavigation = useCallback((newIndex: number) => {
-    if (newIndex >= 0 && newIndex < images.length) {
-      updateState({ currentImageIndex: newIndex });
+    // Validate index
+    const sanitizedIndex = Math.floor(newIndex);
+    if (sanitizedIndex >= 0 && sanitizedIndex < images.length) {
+      updateState({ currentImageIndex: sanitizedIndex });
     }
   }, [images.length, updateState]);
+
+  // Handle bid amount change with sanitization
+  const handleBidAmountChange = useCallback((value: string) => {
+    // Allow typing but sanitize for display
+    updateState({ bidAmount: value });
+  }, [updateState]);
 
   // Effects
   useEffect(() => {
@@ -429,7 +493,7 @@ export const useBrowseDetail = () => {
           if (profileData) {
             updateState({ 
               sellerProfile: { 
-                bio: profileData.bio,
+                bio: profileData.bio ? sanitize.strict(profileData.bio) : null,
                 pic: profileData.profilePic,
                 subscriptionPrice: profileData.subscriptionPrice
               } 
@@ -572,6 +636,7 @@ export const useBrowseDetail = () => {
       handlePurchase: () => {},
       handleBidSubmit: () => {},
       handleImageNavigation: () => {},
+      handleBidAmountChange: () => {},
       updateState: () => {},
       getTimerProgress: () => 0,
       formatTimeRemaining: () => '',
@@ -583,7 +648,8 @@ export const useBrowseDetail = () => {
       sellerAverageRating: null,
       sellerReviewCount: 0,
       isLoading: true,
-      error: null
+      error: null,
+      rateLimitError: null
     };
   }
 
@@ -633,6 +699,7 @@ export const useBrowseDetail = () => {
     handlePurchase,
     handleBidSubmit,
     handleImageNavigation,
+    handleBidAmountChange,
     updateState,
     getTimerProgress,
     formatTimeRemaining: (endTime: string) => formatTimeRemaining(endTime),
@@ -650,6 +717,7 @@ export const useBrowseDetail = () => {
     
     // Loading/error state
     isLoading: false,
-    error
+    error,
+    rateLimitError
   };
 };

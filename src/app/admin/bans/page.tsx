@@ -52,13 +52,15 @@ export default function BanManagementPage() {
     setIsLoading,
     expandedBans,
     setExpandedBans,
+    toggleBanExpansion,
     appealReviewNotes,
     setAppealReviewNotes,
     selectedEvidence,
     setSelectedEvidence,
     evidenceIndex,
     setEvidenceIndex,
-    refreshBanData
+    refreshBanData,
+    rateLimitError
   } = useBanManagement();
 
   // Force refresh data
@@ -154,18 +156,6 @@ export default function BanManagementPage() {
     ban.appealStatus === 'pending'
   );
 
-  const toggleExpanded = (banId: string) => {
-    setExpandedBans(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(banId)) {
-        newSet.delete(banId);
-      } else {
-        newSet.add(banId);
-      }
-      return newSet;
-    });
-  };
-
   const handleUnban = (ban: UserBan) => {
     if (!isValidBan(ban)) {
       alert('Invalid ban data - missing username');
@@ -181,6 +171,12 @@ export default function BanManagementPage() {
       return;
     }
     
+    // Show rate limit error if exists
+    if (rateLimitError) {
+      alert(rateLimitError);
+      return;
+    }
+    
     // Sanitize the reason
     const sanitizedReason = sanitizeStrict(reason || 'Manually unbanned by admin');
     
@@ -190,7 +186,8 @@ export default function BanManagementPage() {
         alert('Unban function not available');
         return;
       }
-      const success = unbanUser(
+      // Using the secure unban function from the hook
+      const success = await unbanUser(
         selectedBan.username, 
         user?.username || 'admin', 
         sanitizedReason
@@ -237,6 +234,12 @@ export default function BanManagementPage() {
       return;
     }
     
+    // Show rate limit error if exists
+    if (rateLimitError) {
+      alert(rateLimitError);
+      return;
+    }
+    
     // Sanitize the review notes
     const sanitizedNotes = sanitizeStrict(appealReviewNotes.trim());
     
@@ -246,7 +249,8 @@ export default function BanManagementPage() {
         alert('Review appeal function not available');
         return;
       }
-      const success = reviewAppeal(
+      // Using the secure review appeal function from the hook
+      const success = await reviewAppeal(
         selectedBan.id, 
         decision, 
         sanitizedNotes, 
@@ -425,6 +429,13 @@ export default function BanManagementPage() {
             </div>
           </div>
 
+          {/* Show rate limit error if exists */}
+          {rateLimitError && (
+            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-red-400">{rateLimitError}</p>
+            </div>
+          )}
+
           <BanStatsDashboard banStats={banStats} />
           
           <BanTabs
@@ -449,7 +460,7 @@ export default function BanManagementPage() {
               filters={filters}
               totalCount={banStats.totalActiveBans}
               expandedBans={expandedBans}
-              onToggleExpand={toggleExpanded}
+              onToggleExpand={toggleBanExpansion}
               onUnban={handleUnban}
               onReviewAppeal={handleAppealReview}
               onShowEvidence={showEvidence}
@@ -483,15 +494,17 @@ export default function BanManagementPage() {
           )}
 
           {/* Modals */}
-          <UnbanModal
-            ban={selectedBan}
-            isLoading={isLoading}
-            onClose={() => {
-              setShowUnbanModal(false);
-              setSelectedBan(null);
-            }}
-            onConfirm={confirmUnban}
-          />
+          {showUnbanModal && (
+            <UnbanModal
+              ban={selectedBan}
+              isLoading={isLoading}
+              onClose={() => {
+                setShowUnbanModal(false);
+                setSelectedBan(null);
+              }}
+              onConfirm={confirmUnban}
+            />
+          )}
 
           {showAppealModal && (
             <AppealReviewModal

@@ -5,6 +5,8 @@ import { useListings } from '@/context/ListingContext';
 import { useMessages } from '@/context/MessageContext';
 import { storageService } from '@/services';
 import { Message } from '@/types/message';
+import { sanitize } from '@/services/security.service';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export const useAdminMessages = () => {
   const { user } = useAuth();
@@ -32,8 +34,10 @@ export const useAdminMessages = () => {
   const [messageUpdate, setMessageUpdate] = useState(0);
   const [showUserDirectory, setShowUserDirectory] = useState(false);
   const [directorySearchQuery, setDirectorySearchQuery] = useState('');
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   
   const readThreadsRef = useRef<Set<string>>(new Set());
+  const rateLimiter = getRateLimiter();
   
   const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
   const username = user?.username || '';
@@ -227,44 +231,111 @@ export const useAdminMessages = () => {
       return;
     }
 
-    sendMessage(username, activeThread, content.trim(), {
+    // Clear rate limit error
+    setRateLimitError(null);
+
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('MESSAGE_SEND', RATE_LIMITS.MESSAGE_SEND);
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many messages sent. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return;
+    }
+
+    // Sanitize message content
+    const sanitizedContent = sanitize.strict(content.trim());
+
+    // Validate image URL if provided
+    if (selectedImage) {
+      const sanitizedImageUrl = sanitize.url(selectedImage);
+      if (!sanitizedImageUrl) {
+        alert('Invalid image URL');
+        return;
+      }
+    }
+
+    sendMessage(username, activeThread, sanitizedContent, {
       type: selectedImage ? 'image' : 'normal',
       meta: selectedImage ? { imageUrl: selectedImage } : undefined,
     });
     
     setContent('');
     setSelectedImage(null);
-  }, [activeThread, content, selectedImage, username, sendMessage]);
+  }, [activeThread, content, selectedImage, username, sendMessage, rateLimiter]);
 
   const handleBlockToggle = useCallback(() => {
     if (!activeThread) return;
+    
+    // Rate limit block/unblock actions
+    const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
+    if (!rateLimitResult.allowed) {
+      alert(`Please wait ${rateLimitResult.waitTime} seconds before performing this action.`);
+      return;
+    }
+
     if (isBlocked(username, activeThread)) {
       unblockUser(username, activeThread);
     } else {
       blockUser(username, activeThread);
     }
-  }, [activeThread, username, isBlocked, unblockUser, blockUser]);
+  }, [activeThread, username, isBlocked, unblockUser, blockUser, rateLimiter]);
 
   const handleReport = useCallback(() => {
     if (activeThread && !hasReported(username, activeThread)) {
+      // Rate limit report actions
+      const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
+      if (!rateLimitResult.allowed) {
+        alert(`Please wait ${rateLimitResult.waitTime} seconds before reporting.`);
+        return;
+      }
+      
       reportUser(username, activeThread);
     }
-  }, [activeThread, username, hasReported, reportUser]);
+  }, [activeThread, username, hasReported, reportUser, rateLimiter]);
 
   const handleThreadSelect = useCallback((userId: string) => {
-    if (activeThread === userId) return;
-    setActiveThread(userId);
+    // Sanitize username
+    const sanitizedUserId = sanitize.username(userId);
+    
+    if (activeThread === sanitizedUserId) return;
+    setActiveThread(sanitizedUserId);
     setShowUserDirectory(false);
   }, [activeThread]);
 
   const handleStartConversation = useCallback((targetUsername: string) => {
-    setActiveThread(targetUsername);
+    // Sanitize username
+    const sanitizedUsername = sanitize.username(targetUsername);
+    
+    setActiveThread(sanitizedUsername);
     setShowUserDirectory(false);
+  }, []);
+
+  // Create enhanced search setters that sanitize input
+  const setSearchQuerySafe = useCallback((value: string | ((prev: string) => string)) => {
+    if (typeof value === 'function') {
+      setSearchQuery(prev => {
+        const newValue = value(prev);
+        return sanitize.searchQuery(newValue);
+      });
+    } else {
+      setSearchQuery(sanitize.searchQuery(value));
+    }
+  }, []);
+
+  const setDirectorySearchQuerySafe = useCallback((value: string | ((prev: string) => string)) => {
+    if (typeof value === 'function') {
+      setDirectorySearchQuery(prev => {
+        const newValue = value(prev);
+        return sanitize.searchQuery(newValue);
+      });
+    } else {
+      setDirectorySearchQuery(sanitize.searchQuery(value));
+    }
   }, []);
 
   useEffect(() => {
     if (selectedUser && !activeThread) {
-      setActiveThread(selectedUser);
+      const sanitizedUser = sanitize.username(selectedUser);
+      setActiveThread(sanitizedUser);
     }
   }, [selectedUser, activeThread]);
 
@@ -290,11 +361,11 @@ export const useAdminMessages = () => {
     selectedUser,
     setSelectedUser,
     content,
-    setContent,
+    setContent, // Keep the original setter for compatibility
     activeThread,
     setActiveThread,
     searchQuery,
-    setSearchQuery,
+    setSearchQuery: setSearchQuerySafe, // Use the safe setter
     selectedImage,
     setSelectedImage,
     filterBy,
@@ -302,7 +373,7 @@ export const useAdminMessages = () => {
     showUserDirectory,
     setShowUserDirectory,
     directorySearchQuery,
-    setDirectorySearchQuery,
+    setDirectorySearchQuery: setDirectorySearchQuerySafe, // Use the safe setter
     
     // Computed
     isUserBlocked,
@@ -317,6 +388,7 @@ export const useAdminMessages = () => {
     
     // Other
     viewsData,
-    messageUpdate
+    messageUpdate,
+    rateLimitError
   };
 };

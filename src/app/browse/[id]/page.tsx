@@ -16,6 +16,7 @@ import PurchaseSuccessModal from '@/components/browse-detail/PurchaseSuccessModa
 import StickyPurchaseBar from '@/components/browse-detail/StickyPurchaseBar';
 import PremiumLockMessage from '@/components/browse-detail/PremiumLockMessage';
 import { useBrowseDetail } from '@/hooks/useBrowseDetail';
+import { AlertCircle } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const {
@@ -62,6 +63,7 @@ export default function ListingDetailPage() {
     handlePurchase,
     handleBidSubmit,
     handleImageNavigation,
+    handleBidAmountChange,
     updateState,
     getTimerProgress,
     formatTimeRemaining,
@@ -69,7 +71,10 @@ export default function ListingDetailPage() {
     calculateTotalPayable,
     
     // Navigation
-    router
+    router,
+    
+    // Error state
+    rateLimitError
   } = useBrowseDetail();
 
   // Local state for favorites (you might want to move this to a context or hook)
@@ -110,13 +115,23 @@ export default function ListingDetailPage() {
         <DetailHeader onBack={() => router.push('/browse')} />
 
         <div className="max-w-7xl mx-auto px-4 py-6">
+          {/* Rate Limit Error */}
+          {rateLimitError && (
+            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertCircle className="w-5 h-5" />
+                <span>{rateLimitError}</span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             {/* Left: Image Gallery */}
             <div ref={imageRef}>
               <ImageGallery
                 images={images}
                 currentIndex={currentImageIndex}
-                onIndexChange={(index) => updateState({ currentImageIndex: index })}
+                onIndexChange={(index) => handleImageNavigation(index)}
                 listing={listing}
                 isLockedPremium={isLockedPremium}
                 viewCount={viewCount}
@@ -141,7 +156,7 @@ export default function ListingDetailPage() {
                   currentTotalPayable={currentTotalPayable}
                   getTimerProgress={getTimerProgress}
                   bidAmount={bidAmount}
-                  onBidAmountChange={(amount) => updateState({ bidAmount: amount })}
+                  onBidAmountChange={handleBidAmountChange}
                   onBidSubmit={handleBidSubmit}
                   onBidKeyPress={(e) => e.key === 'Enter' && handleBidSubmit()}
                   isBidding={isBidding}
