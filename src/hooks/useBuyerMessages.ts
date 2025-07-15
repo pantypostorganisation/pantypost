@@ -1,4 +1,4 @@
-// src/hooks/useBuyerMessages.ts - COMPLETE FIXED VERSION
+// src/hooks/useBuyerMessages.ts
 // Declare global to prevent TypeScript errors
 declare global {
   interface Window {

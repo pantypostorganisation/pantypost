@@ -1,9 +1,10 @@
 // src/hooks/useNetworkStatus.tsx
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { useToast } from '@/context/ToastContext';
 import { Wifi, WifiOff, AlertCircle } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface NetworkStatus {
   isOnline: boolean;
@@ -20,6 +21,23 @@ interface NetworkStatusContextType extends NetworkStatus {
   retryFailedRequest: <T>(fn: () => Promise<T>, maxRetries?: number) => Promise<T>;
 }
 
+// TypeScript definition for Network Information API
+interface NetworkInformation {
+  type?: string;
+  effectiveType?: string;
+  downlink?: number;
+  rtt?: number;
+  saveData?: boolean;
+  addEventListener?: (type: string, listener: EventListener) => void;
+  removeEventListener?: (type: string, listener: EventListener) => void;
+}
+
+interface NavigatorWithConnection extends Navigator {
+  connection?: NetworkInformation;
+  mozConnection?: NetworkInformation;
+  webkitConnection?: NetworkInformation;
+}
+
 const NetworkStatusContext = createContext<NetworkStatusContextType | undefined>(undefined);
 
 // Network quality thresholds
@@ -29,8 +47,20 @@ const SLOW_CONNECTION_THRESHOLD = {
   effectiveType: ['slow-2g', '2g'],
 };
 
+// Rate limiting for connectivity checks
+const CONNECTIVITY_CHECK_COOLDOWN = 5000; // 5 seconds
+const MAX_RETRIES = 3;
+const MAX_RETRY_DELAY = 10000; // 10 seconds
+
+// Whitelisted URLs for connectivity checks
+const CONNECTIVITY_CHECK_URLS = {
+  primary: '/api/health',
+  fallback: 'https://www.google.com/favicon.ico'
+} as const;
+
 export function NetworkStatusProvider({ children }: { children: React.ReactNode }) {
   const toast = useToast();
+  const lastConnectivityCheck = useRef<number>(0);
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSlowConnection: false,
@@ -43,42 +73,41 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
   
   const [wasOffline, setWasOffline] = useState(false);
 
-  // Get connection info
-  const getConnectionInfo = useCallback(() => {
+  // Get connection info with type safety
+  const getConnectionInfo = useCallback((): NetworkInformation | null => {
     if (typeof navigator === 'undefined') return null;
     
-    // TypeScript doesn't know about NetworkInformation API yet
-    const connection = (navigator as any).connection || 
-                      (navigator as any).mozConnection || 
-                      (navigator as any).webkitConnection;
+    const nav = navigator as NavigatorWithConnection;
+    const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
     
     if (!connection) return null;
     
+    // Validate and sanitize connection data
     return {
-      type: connection.type || null,
-      effectiveType: connection.effectiveType || null,
-      downlink: connection.downlink || null,
-      rtt: connection.rtt || null,
-      saveData: connection.saveData || false,
+      type: connection.type ? sanitizeStrict(connection.type) : undefined,
+      effectiveType: connection.effectiveType ? sanitizeStrict(connection.effectiveType) : undefined,
+      downlink: typeof connection.downlink === 'number' && connection.downlink >= 0 ? connection.downlink : undefined,
+      rtt: typeof connection.rtt === 'number' && connection.rtt >= 0 ? connection.rtt : undefined,
+      saveData: Boolean(connection.saveData),
     };
   }, []);
 
-  // Check if connection is slow
-  const isSlowConnection = useCallback((info: ReturnType<typeof getConnectionInfo>) => {
+  // Check if connection is slow with validation
+  const isSlowConnection = useCallback((info: NetworkInformation | null): boolean => {
     if (!info) return false;
     
     const { rtt, downlink, effectiveType } = info;
     
     return (
-      (rtt !== null && rtt > SLOW_CONNECTION_THRESHOLD.rtt) ||
-      (downlink !== null && downlink < SLOW_CONNECTION_THRESHOLD.downlink) ||
-      (effectiveType !== null && SLOW_CONNECTION_THRESHOLD.effectiveType.includes(effectiveType))
+      (typeof rtt === 'number' && rtt > SLOW_CONNECTION_THRESHOLD.rtt) ||
+      (typeof downlink === 'number' && downlink < SLOW_CONNECTION_THRESHOLD.downlink) ||
+      (typeof effectiveType === 'string' && SLOW_CONNECTION_THRESHOLD.effectiveType.includes(effectiveType))
     );
   }, []);
 
   // Update network status
   const updateNetworkStatus = useCallback(() => {
-    const isOnline = navigator.onLine;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     const connectionInfo = getConnectionInfo();
     const slow = isSlowConnection(connectionInfo);
     
@@ -87,47 +116,75 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
       isSlowConnection: slow,
       connectionType: connectionInfo?.type || null,
       effectiveType: connectionInfo?.effectiveType || null,
-      downlink: connectionInfo?.downlink || null,
-      rtt: connectionInfo?.rtt || null,
+      downlink: typeof connectionInfo?.downlink === 'number' ? connectionInfo.downlink : null,
+      rtt: typeof connectionInfo?.rtt === 'number' ? connectionInfo.rtt : null,
       saveData: connectionInfo?.saveData || false,
     });
     
     return { isOnline, isSlowConnection: slow };
   }, [getConnectionInfo, isSlowConnection]);
 
-  // Check connectivity by making a request
+  // Check connectivity with rate limiting
   const checkConnectivity = useCallback(async (): Promise<boolean> => {
+    // Rate limit connectivity checks
+    const now = Date.now();
+    if (now - lastConnectivityCheck.current < CONNECTIVITY_CHECK_COOLDOWN) {
+      // Return current online status without making a new request
+      return networkStatus.isOnline;
+    }
+    lastConnectivityCheck.current = now;
+
     try {
-      // Try to fetch a small resource with cache bypass
-      const response = await fetch('/api/health', {
-        method: 'HEAD',
-        cache: 'no-cache',
-      }).catch(() => 
-        // Fallback to a public endpoint if our API is down
-        fetch('https://www.google.com/favicon.ico', {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      try {
+        // Try primary endpoint first
+        const response = await fetch(CONNECTIVITY_CHECK_URLS.primary, {
           method: 'HEAD',
-          mode: 'no-cors',
           cache: 'no-cache',
-        })
-      );
-      
-      return true;
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        return response.ok;
+      } catch (primaryError) {
+        // Try fallback endpoint
+        try {
+          const fallbackResponse = await fetch(CONNECTIVITY_CHECK_URLS.fallback, {
+            method: 'HEAD',
+            mode: 'no-cors',
+            cache: 'no-cache',
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          // no-cors mode doesn't give us response details, so we assume success
+          return true;
+        } catch {
+          clearTimeout(timeoutId);
+          return false;
+        }
+      }
     } catch {
       return false;
     }
-  }, []);
+  }, [networkStatus.isOnline]);
 
-  // Retry failed request with exponential backoff
+  // Retry failed request with exponential backoff and validation
   const retryFailedRequest = useCallback(async <T,>(
     fn: () => Promise<T>,
-    maxRetries = 3
+    maxRetries = MAX_RETRIES
   ): Promise<T> => {
+    // Validate maxRetries
+    const validatedMaxRetries = Math.min(Math.max(1, maxRetries), 5);
     let lastError: Error | null = null;
     
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    for (let attempt = 0; attempt < validatedMaxRetries; attempt++) {
       try {
         // Check if we're online before attempting
-        if (!navigator.onLine) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
           throw new Error('No internet connection');
         }
         
@@ -135,14 +192,19 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
       } catch (error) {
         lastError = error as Error;
         
+        // Sanitize error message
+        const errorMessage = error instanceof Error ? sanitizeStrict(error.message) : 'Unknown error';
+        
         // Don't retry if it's not a network error
-        if (error instanceof Error && !error.message.includes('network')) {
+        if (!errorMessage.toLowerCase().includes('network') && 
+            !errorMessage.toLowerCase().includes('fetch') &&
+            !errorMessage.toLowerCase().includes('connection')) {
           throw error;
         }
         
-        // Wait before retrying (exponential backoff)
-        if (attempt < maxRetries - 1) {
-          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+        // Wait before retrying (exponential backoff with cap)
+        if (attempt < validatedMaxRetries - 1) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), MAX_RETRY_DELAY);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
@@ -183,9 +245,11 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    // Connection change listener
-    const connection = (navigator as any).connection;
-    if (connection) {
+    // Connection change listener with type safety
+    const nav = navigator as NavigatorWithConnection;
+    const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
+    
+    if (connection && connection.addEventListener) {
       connection.addEventListener('change', handleConnectionChange);
     }
     
@@ -197,7 +261,7 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       
-      if (connection) {
+      if (connection && connection.removeEventListener) {
         connection.removeEventListener('change', handleConnectionChange);
       }
     };

@@ -1,15 +1,30 @@
 // src/hooks/useLogin.ts
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { User, ShoppingBag, Crown } from 'lucide-react';
 import { LoginState, RoleOption } from '@/types/login';
 import { validateUsername, validateAdminCredentials } from '@/utils/loginUtils';
+import { useRateLimit } from '@/utils/security/rate-limiter';
+import { authSchemas } from '@/utils/validation/schemas';
+import { sanitizeUsername } from '@/utils/security/sanitization';
+import { securityService } from '@/services';
+
+// Constants for security
+const MIN_LOGIN_DELAY = 800;
+const MAX_LOGIN_DELAY = 1200;
 
 export const useLogin = () => {
   const router = useRouter();
   const { login, isAuthReady, user } = useAuth();
+  
+  // Rate limiting for login attempts
+  const { checkLimit: checkLoginLimit } = useRateLimit('LOGIN');
+  
+  // Track failed attempts for this session
+  const failedAttemptsRef = useRef(0);
+  const lastAttemptTimeRef = useRef(0);
 
   const [state, setState] = useState<LoginState>({
     username: '',
@@ -33,38 +48,107 @@ export const useLogin = () => {
     }
   }, [isAuthReady, user, router]);
 
-  // Update state helper
+  // Update state helper with sanitization
   const updateState = useCallback((updates: Partial<LoginState>) => {
-    setState(prev => ({ ...prev, ...updates }));
+    setState(prev => {
+      const newState = { ...prev, ...updates };
+      
+      // Sanitize username if it's being updated
+      if (updates.username !== undefined) {
+        newState.username = sanitizeUsername(updates.username);
+      }
+      
+      return newState;
+    });
   }, []);
 
-  // Handle login
+  // Generate random delay to prevent timing attacks
+  const getRandomDelay = useCallback(() => {
+    return MIN_LOGIN_DELAY + Math.random() * (MAX_LOGIN_DELAY - MIN_LOGIN_DELAY);
+  }, []);
+
+  // Handle login with security enhancements
   const handleLogin = useCallback(async () => {
     const { username, role } = state;
     
-    if (!validateUsername(username) || !role) {
-      updateState({ error: 'Please complete all fields.' });
+    // Check rate limit
+    const rateLimitResult = checkLoginLimit();
+    if (!rateLimitResult.allowed) {
+      updateState({ 
+        error: `Too many login attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+        isLoading: false 
+      });
       return;
     }
-
-    if (!validateAdminCredentials(username, role)) {
-      updateState({ error: 'Invalid admin credentials.' });
+    
+    // Validate inputs using schema
+    const usernameValidation = authSchemas.username.safeParse(username);
+    if (!usernameValidation.success) {
+      updateState({ error: 'Invalid username format.' });
       return;
+    }
+    
+    if (!role) {
+      updateState({ error: 'Please select a role.' });
+      return;
+    }
+    
+    // Additional validation for admin role
+    if (role === 'admin') {
+      // Check failed attempts to prevent brute force
+      if (failedAttemptsRef.current >= 3) {
+        const timeSinceLastAttempt = Date.now() - lastAttemptTimeRef.current;
+        const waitTime = Math.max(0, 30000 - timeSinceLastAttempt); // 30 second lockout
+        
+        if (waitTime > 0) {
+          updateState({ 
+            error: `Too many failed admin attempts. Please wait ${Math.ceil(waitTime / 1000)} seconds.`,
+            isLoading: false 
+          });
+          return;
+        } else {
+          // Reset counter after lockout period
+          failedAttemptsRef.current = 0;
+        }
+      }
     }
     
     updateState({ error: '', isLoading: true });
     
     try {
-      // Simulate loading for better UX
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Random delay to prevent timing attacks
+      const delay = getRandomDelay();
+      await new Promise(resolve => setTimeout(resolve, delay));
       
-      console.log('[Login] Attempting login with:', { username: username.trim(), role });
+      // Sanitize username before login
+      const sanitizedUsername = usernameValidation.data;
+      
+      console.log('[Login] Attempting login with sanitized username');
+      
+      // Validate admin credentials if admin role
+      if (role === 'admin' && !validateAdminCredentials(sanitizedUsername, role)) {
+        failedAttemptsRef.current++;
+        lastAttemptTimeRef.current = Date.now();
+        
+        // Generic error message to prevent username enumeration
+        updateState({ 
+          error: 'Invalid credentials. Please try again.', 
+          isLoading: false 
+        });
+        return;
+      }
       
       // Perform login
-      const success = await login(username.trim(), role);
+      const success = await login(sanitizedUsername, role);
       
       if (success) {
         console.log('[Login] Login successful, preparing redirect...');
+        
+        // Reset failed attempts on success
+        failedAttemptsRef.current = 0;
+        
+        // Clear sensitive data from state
+        updateState({ username: '', role: null });
         
         // Extended delay to ensure auth context is fully updated
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -82,24 +166,43 @@ export const useLogin = () => {
         
       } else {
         console.error('[Login] Login failed - authService returned false');
-        updateState({ error: 'Login failed. Please check your credentials and try again.', isLoading: false });
+        
+        // Track failed attempts for non-admin roles too
+        if (role === 'admin') {
+          failedAttemptsRef.current++;
+          lastAttemptTimeRef.current = Date.now();
+        }
+        
+        // Generic error message
+        updateState({ 
+          error: 'Invalid credentials. Please try again.', 
+          isLoading: false 
+        });
       }
     } catch (error) {
       console.error('[Login] Login error:', error);
-      updateState({ error: 'Login failed. Please try again.', isLoading: false });
+      
+      // Generic error message
+      updateState({ 
+        error: 'An error occurred. Please try again.', 
+        isLoading: false 
+      });
     }
-  }, [state.username, state.role, login, router, updateState]);
+  }, [state.username, state.role, login, router, updateState, checkLoginLimit, getRandomDelay]);
 
-  // Handle username submission
+  // Handle username submission with validation
   const handleUsernameSubmit = useCallback(() => {
-    if (validateUsername(state.username)) {
+    // Validate username using schema
+    const validation = authSchemas.username.safeParse(state.username);
+    
+    if (validation.success) {
       updateState({ error: '', step: 2 });
     } else {
-      updateState({ error: 'Please enter a username.' });
+      updateState({ error: validation.error.errors[0]?.message || 'Invalid username.' });
     }
   }, [state.username, updateState]);
 
-  // Handle key press
+  // Handle key press with rate limit awareness
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !state.isLoading) {
       if (state.step === 1) {
@@ -115,13 +218,31 @@ export const useLogin = () => {
     updateState({ step: 1, error: '', role: null });
   }, [updateState]);
 
-  // Toggle admin mode
+  // Toggle admin mode with security considerations
   const handleCrownClick = useCallback(() => {
+    // Add a small delay to prevent rapid clicking
+    const now = Date.now();
+    if (now - lastAttemptTimeRef.current < 500) {
+      return;
+    }
+    lastAttemptTimeRef.current = now;
+    
     updateState({ 
       showAdminMode: !state.showAdminMode,
-      role: !state.showAdminMode ? null : state.role
+      role: !state.showAdminMode ? null : state.role,
+      error: '' // Clear any errors
     });
   }, [state.showAdminMode, state.role, updateState]);
+
+  // Handle username input with sanitization
+  const handleUsernameChange = useCallback((value: string) => {
+    // Apply basic length limit before sanitization
+    if (value.length > 30) {
+      return;
+    }
+    
+    updateState({ username: value, error: '' });
+  }, [updateState]);
 
   // Create role options
   const roleOptions: RoleOption[] = [
@@ -159,6 +280,7 @@ export const useLogin = () => {
     handleLogin,
     handleUsernameSubmit,
     handleKeyPress,
+    handleUsernameChange,
     goBack,
     handleCrownClick,
     

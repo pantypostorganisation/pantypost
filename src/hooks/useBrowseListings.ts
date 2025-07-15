@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { storageService, listingsService } from '@/services';
+import { storageService, listingsService, securityService } from '@/services';
 import type { ListingSearchParams } from '@/services';
 import { FilterOptions, CategoryCounts, SellerProfile, ListingWithProfile } from '@/types/browse';
 import { 
@@ -15,6 +15,9 @@ import {
   formatTimeRemaining as formatTimeRemainingUtil
 } from '@/utils/browseUtils';
 import { Listing } from '@/context/ListingContext';
+import { sanitizeSearchQuery, sanitizeNumber, sanitizeStrict } from '@/utils/security/sanitization';
+import { useRateLimit } from '@/utils/security/rate-limiter';
+import { searchSchemas } from '@/utils/validation/schemas';
 
 // Type definitions - matching what we actually have in storage
 interface Order {
@@ -55,14 +58,21 @@ const getCachedListings = () => {
     try {
       const cached = localStorage.getItem('browse_listings_cache');
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        // Check if cache is less than 2 minutes old
-        if (Date.now() - timestamp < 2 * 60 * 1000) {
-          return data;
+        const parsedCache = JSON.parse(cached);
+        // Validate cache structure
+        if (parsedCache && typeof parsedCache.data === 'object' && typeof parsedCache.timestamp === 'number') {
+          const { data, timestamp } = parsedCache;
+          // Check if cache is less than 2 minutes old
+          if (Date.now() - timestamp < 2 * 60 * 1000) {
+            return data;
+          }
         }
       }
     } catch (e) {
-      // Ignore cache errors
+      // Ignore cache errors and clear invalid cache
+      try {
+        localStorage.removeItem('browse_listings_cache');
+      } catch {}
     }
   }
   return null;
@@ -71,6 +81,7 @@ const getCachedListings = () => {
 export const useBrowseListings = () => {
   const { user } = useAuth();
   const router = useRouter();
+  const { checkLimit: checkSearchLimit } = useRateLimit('SEARCH');
 
   // State
   const [filter, setFilter] = useState<FilterOptions['filter']>('all');
@@ -86,6 +97,7 @@ export const useBrowseListings = () => {
   const [listingErrors, setListingErrors] = useState<{ [listingId: string]: string }>({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   
   // Initialize with cached data if available
   const cachedListings = getCachedListings();
@@ -107,8 +119,47 @@ export const useBrowseListings = () => {
 
   const MAX_CACHED_PROFILES = 100;
 
+  // Sanitized search term setter
+  const handleSearchTermChange = useCallback((value: string) => {
+    const sanitized = sanitizeSearchQuery(value);
+    setSearchTerm(sanitized);
+  }, []);
+
+  // Validated price setters
+  const handleMinPriceChange = useCallback((value: string) => {
+    if (value === '') {
+      setMinPrice('');
+      return;
+    }
+    
+    const validation = searchSchemas.priceRange.safeParse({ min: parseFloat(value) });
+    if (validation.success) {
+      setMinPrice(value);
+    }
+  }, []);
+
+  const handleMaxPriceChange = useCallback((value: string) => {
+    if (value === '') {
+      setMaxPrice('');
+      return;
+    }
+    
+    const validation = searchSchemas.priceRange.safeParse({ max: parseFloat(value) });
+    if (validation.success) {
+      setMaxPrice(value);
+    }
+  }, []);
+
   // Load data using listings service
   const loadListings = useCallback(async () => {
+    // Check rate limit
+    const rateLimitResult = checkSearchLimit();
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many searches. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return;
+    }
+    setRateLimitError(null);
+
     // Cancel any pending request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -121,7 +172,7 @@ export const useBrowseListings = () => {
     setError(null);
 
     try {
-      // Prepare search params
+      // Prepare search params with validation
       let sortByParam: 'date' | 'price' | 'views' | 'endingSoon' = 'date';
       if (sortBy === 'newest') {
         sortByParam = 'date';
@@ -131,18 +182,26 @@ export const useBrowseListings = () => {
         sortByParam = 'endingSoon';
       }
 
+      // Validate and sanitize search params
       const searchParams: ListingSearchParams = {
-        query: debouncedSearchTerm,
-        minPrice: minPrice ? parseFloat(minPrice) : undefined,
-        maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+        query: sanitizeSearchQuery(debouncedSearchTerm),
+        minPrice: minPrice ? sanitizeNumber(minPrice, 0, 10000) : undefined,
+        maxPrice: maxPrice ? sanitizeNumber(maxPrice, 0, 10000) : undefined,
         isPremium: filter === 'premium' ? true : filter === 'standard' ? false : undefined,
         isAuction: filter === 'auction' ? true : filter === 'standard' ? false : undefined,
         isActive: true,
         sortBy: sortByParam,
         sortOrder: sortBy === 'priceDesc' ? 'desc' : 'asc',
-        page: page,
+        page: Math.max(0, page),
         limit: PAGE_SIZE,
       };
+
+      // Validate price range
+      if (searchParams.minPrice !== undefined && searchParams.maxPrice !== undefined) {
+        if (searchParams.minPrice > searchParams.maxPrice) {
+          throw new Error('Minimum price cannot be greater than maximum price');
+        }
+      }
 
       // Load listings
       const listingsResponse = await listingsService.getListings(searchParams);
@@ -173,13 +232,14 @@ export const useBrowseListings = () => {
         setListings(filteredListings);
         setTotalListings(listingsResponse.meta?.totalItems || filteredListings.length);
 
-        // Cache the listings
+        // Cache the listings with sanitized data
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('browse_listings_cache', JSON.stringify({
+            const cacheData = {
               data: filteredListings,
               timestamp: Date.now()
-            }));
+            };
+            localStorage.setItem('browse_listings_cache', JSON.stringify(cacheData));
           } catch (e) {
             // Ignore cache errors (storage might be full)
           }
@@ -188,9 +248,19 @@ export const useBrowseListings = () => {
         throw new Error(listingsResponse.error?.message || 'Failed to load listings');
       }
 
-      // Load users
+      // Load users with sanitization
       const usersData = await storageService.getItem<Record<string, User>>('users', {});
-      setUsers(usersData);
+      const sanitizedUsers: Record<string, User> = {};
+      
+      Object.entries(usersData).forEach(([key, userData]) => {
+        sanitizedUsers[sanitizeStrict(key)] = {
+          username: sanitizeStrict(userData.username || ''),
+          verified: Boolean(userData.verified),
+          verificationStatus: userData.verificationStatus ? sanitizeStrict(userData.verificationStatus) : undefined
+        };
+      });
+      
+      setUsers(sanitizedUsers);
 
       // Load orders
       const ordersData = await storageService.getItem<Order[]>('orders', []);
@@ -200,10 +270,14 @@ export const useBrowseListings = () => {
       const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
       setSubscriptions(subsData);
 
-      // Load popular tags
+      // Load popular tags with sanitization
       const tagsResponse = await listingsService.getPopularTags(10);
       if (tagsResponse.success && tagsResponse.data) {
-        setPopularTags(tagsResponse.data);
+        const sanitizedTags = tagsResponse.data.map(tag => ({
+          tag: sanitizeStrict(tag.tag),
+          count: Math.max(0, parseInt(tag.count.toString()) || 0)
+        }));
+        setPopularTags(sanitizedTags);
       }
 
       setIsLoading(false);
@@ -216,17 +290,18 @@ export const useBrowseListings = () => {
       }
 
       console.error('Error loading data:', error);
-      setError(error.message || 'Failed to load listings');
+      const errorMessage = sanitizeStrict(error.message || 'Failed to load listings');
+      setError(errorMessage);
       setIsLoading(false);
     }
-  }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, page, selectedHourRange]);
+  }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, page, selectedHourRange, checkSearchLimit]);
 
   // Load data on mount and when filters change
   useEffect(() => {
     loadListings();
   }, [loadListings]);
 
-  // Load seller profiles
+  // Load seller profiles with sanitization
   useEffect(() => {
     const loadSellerProfiles = async () => {
       if (typeof window !== 'undefined' && !isLoading && listings.length > 0) {
@@ -240,10 +315,12 @@ export const useBrowseListings = () => {
         
         sellersArray.forEach(seller => {
           const profileData = userProfiles[seller];
-          profiles[seller] = { 
-            bio: profileData?.bio || null, 
-            pic: profileData?.profilePic || null 
-          };
+          if (profileData) {
+            profiles[sanitizeStrict(seller)] = { 
+              bio: profileData.bio ? sanitizeStrict(profileData.bio) : null, 
+              pic: profileData.profilePic || null 
+            };
+          }
         });
         
         setSellerProfiles(profiles);
@@ -422,6 +499,7 @@ export const useBrowseListings = () => {
 
   // Utility functions
   const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
+    if (!buyerUsername || !sellerUsername) return false;
     const buyerSubs = subscriptions[buyerUsername] || [];
     return buyerSubs.includes(sellerUsername);
   }, [subscriptions]);
@@ -466,9 +544,10 @@ export const useBrowseListings = () => {
 
   const handleListingError = useCallback((error: Error, listingId: string) => {
     console.error('Listing error:', error, 'for listing:', listingId);
+    const sanitizedError = sanitizeStrict(error.message);
     setListingErrors(prev => ({
       ...prev,
-      [listingId]: error.message
+      [listingId]: sanitizedError
     }));
   }, []);
 
@@ -501,6 +580,7 @@ export const useBrowseListings = () => {
     setMaxPrice('');
     setSelectedHourRange(HOUR_RANGE_OPTIONS[0]);
     setSortBy('newest');
+    setRateLimitError(null);
   }, []);
 
   const refreshListings = useCallback(() => {
@@ -515,17 +595,18 @@ export const useBrowseListings = () => {
     selectedHourRange,
     setSelectedHourRange,
     searchTerm,
-    setSearchTerm,
+    setSearchTerm: handleSearchTermChange,
     minPrice,
-    setMinPrice,
+    setMinPrice: handleMinPriceChange,
     maxPrice,
-    setMaxPrice,
+    setMaxPrice: handleMaxPriceChange,
     sortBy,
     setSortBy,
     page,
     hoveredListing,
     listingErrors,
     forceUpdateTimer,
+    rateLimitError,
     
     // Data
     filteredListings: paginatedListings,

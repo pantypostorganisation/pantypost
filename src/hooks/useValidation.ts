@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { z } from 'zod';
 import { debounce } from '@/utils/security/validation';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 interface ValidationState<T> {
   values: T;
@@ -19,6 +21,9 @@ interface UseValidationOptions<T> {
   validateOnBlur?: boolean;
   debounceMs?: number;
   onSubmit?: (values: T) => void | Promise<void>;
+  sanitizeErrors?: boolean;
+  maxValidationAttempts?: number;
+  enableSecurityChecks?: boolean;
 }
 
 interface UseValidationReturn<T> {
@@ -48,8 +53,14 @@ interface UseValidationReturn<T> {
   setErrors: (errors: Partial<Record<keyof T, string>>) => void;
 }
 
+// Constants for security
+const MAX_FIELD_NAME_LENGTH = 100;
+const MAX_ERROR_MESSAGE_LENGTH = 500;
+const MAX_VALIDATION_DEPTH = 5;
+const DEFAULT_MAX_VALIDATION_ATTEMPTS = 100;
+
 /**
- * Custom hook for form validation with Zod schemas
+ * Custom hook for form validation with Zod schemas and enhanced security
  */
 export function useValidation<T extends Record<string, any>>({
   initialValues,
@@ -58,6 +69,9 @@ export function useValidation<T extends Record<string, any>>({
   validateOnBlur = true,
   debounceMs = 300,
   onSubmit,
+  sanitizeErrors = true,
+  maxValidationAttempts = DEFAULT_MAX_VALIDATION_ATTEMPTS,
+  enableSecurityChecks = true,
 }: UseValidationOptions<T>): UseValidationReturn<T> {
   const [state, setState] = useState<ValidationState<T>>({
     values: initialValues,
@@ -68,13 +82,86 @@ export function useValidation<T extends Record<string, any>>({
   });
 
   const validationTimeouts = useRef<Map<keyof T, NodeJS.Timeout>>(new Map());
+  const validationAttempts = useRef<number>(0);
+  const lastValidationTime = useRef<number>(Date.now());
+
+  // Validate debounce ms is within reasonable bounds
+  const safeDebounceMs = Math.min(Math.max(debounceMs, 0), 5000);
 
   /**
-   * Validate a single field
+   * Sanitize field name to prevent injection
+   */
+  const sanitizeFieldName = useCallback((field: keyof T): string => {
+    const fieldStr = String(field);
+    
+    // Validate field name length
+    if (fieldStr.length > MAX_FIELD_NAME_LENGTH) {
+      console.warn(`Field name too long: ${fieldStr.substring(0, 50)}...`);
+      return '';
+    }
+    
+    // Sanitize field name
+    return sanitizeStrict(fieldStr);
+  }, []);
+
+  /**
+   * Sanitize error message
+   */
+  const sanitizeErrorMessage = useCallback((message: string): string => {
+    if (!sanitizeErrors) return message;
+    
+    // Limit length
+    const truncated = message.length > MAX_ERROR_MESSAGE_LENGTH 
+      ? message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + '...'
+      : message;
+    
+    // Sanitize content
+    return sanitizeStrict(truncated);
+  }, [sanitizeErrors]);
+
+  /**
+   * Check for validation abuse
+   */
+  const checkValidationRate = useCallback((): boolean => {
+    const now = Date.now();
+    const timeSinceLastValidation = now - lastValidationTime.current;
+    
+    // Reset counter if more than 1 minute has passed
+    if (timeSinceLastValidation > 60000) {
+      validationAttempts.current = 0;
+    }
+    
+    validationAttempts.current++;
+    lastValidationTime.current = now;
+    
+    // Check if exceeding rate limit
+    if (validationAttempts.current > maxValidationAttempts) {
+      console.warn('Validation rate limit exceeded');
+      return false;
+    }
+    
+    return true;
+  }, [maxValidationAttempts]);
+
+  /**
+   * Validate a single field with security checks
    */
   const validateField = useCallback(
     async (field: keyof T): Promise<boolean> => {
       if (!validationSchema) return true;
+      
+      // Rate limiting check
+      if (!checkValidationRate()) {
+        console.warn('Validation rate limit hit');
+        return false;
+      }
+
+      // Sanitize field name
+      const safeFieldName = sanitizeFieldName(field);
+      if (!safeFieldName) {
+        console.error('Invalid field name');
+        return false;
+      }
 
       setState(prev => ({ ...prev, isValidating: true }));
 
@@ -103,32 +190,59 @@ export function useValidation<T extends Record<string, any>>({
       } catch (error) {
         if (error instanceof z.ZodError) {
           const fieldError = error.errors.find(err => err.path[0] === field);
+          const errorMessage = fieldError?.message || 'Validation failed';
+          
           setState(prev => ({
             ...prev,
             errors: {
               ...prev.errors,
-              [field]: fieldError?.message || 'Validation failed',
+              [field]: sanitizeErrorMessage(errorMessage),
             },
             isValidating: false,
           }));
           return false;
         }
+        
+        // Log non-Zod errors for debugging
+        console.error('Validation error:', error);
         setState(prev => ({ ...prev, isValidating: false }));
         return false;
       }
     },
-    [validationSchema, state.values]
+    [validationSchema, state.values, checkValidationRate, sanitizeFieldName, sanitizeErrorMessage]
   );
 
   /**
-   * Validate entire form
+   * Validate entire form with security checks
    */
   const validateForm = useCallback(async (): Promise<boolean> => {
     if (!validationSchema) return true;
+    
+    // Rate limiting check
+    if (!checkValidationRate()) {
+      console.warn('Validation rate limit hit');
+      return false;
+    }
 
     setState(prev => ({ ...prev, isValidating: true }));
 
     try {
+      // Perform security checks if enabled
+      if (enableSecurityChecks) {
+        const valuesStr = JSON.stringify(state.values);
+        const securityCheck = securityService.checkContentSecurity(valuesStr);
+        
+        if (!securityCheck.safe) {
+          console.warn('Security check failed:', securityCheck.issues);
+          setState(prev => ({
+            ...prev,
+            errors: { form: 'Invalid input detected' } as any,
+            isValidating: false,
+          }));
+          return false;
+        }
+      }
+
       await validationSchema.parseAsync(state.values);
       setState(prev => ({
         ...prev,
@@ -139,12 +253,19 @@ export function useValidation<T extends Record<string, any>>({
     } catch (error) {
       if (error instanceof z.ZodError) {
         const errors: Partial<Record<keyof T, string>> = {};
+        
+        // Process errors with depth limit to prevent deeply nested attacks
+        let errorCount = 0;
         error.errors.forEach(err => {
+          if (errorCount >= MAX_VALIDATION_DEPTH) return;
+          
           const field = err.path[0] as keyof T;
           if (field && !errors[field]) {
-            errors[field] = err.message;
+            errors[field] = sanitizeErrorMessage(err.message);
+            errorCount++;
           }
         });
+        
         setState(prev => ({
           ...prev,
           errors,
@@ -152,13 +273,15 @@ export function useValidation<T extends Record<string, any>>({
         }));
         return false;
       }
+      
+      console.error('Form validation error:', error);
       setState(prev => ({ ...prev, isValidating: false }));
       return false;
     }
-  }, [validationSchema, state.values]);
+  }, [validationSchema, state.values, checkValidationRate, sanitizeErrorMessage, enableSecurityChecks]);
 
   /**
-   * Debounced validation
+   * Debounced validation with cleanup
    */
   const debouncedValidateField = useCallback(
     (field: keyof T) => {
@@ -168,20 +291,29 @@ export function useValidation<T extends Record<string, any>>({
       }
 
       const newTimeout = setTimeout(() => {
-        validateField(field);
+        validateField(field).catch(error => {
+          console.error('Field validation error:', error);
+        });
         validationTimeouts.current.delete(field);
-      }, debounceMs);
+      }, safeDebounceMs);
 
       validationTimeouts.current.set(field, newTimeout);
     },
-    [validateField, debounceMs]
+    [validateField, safeDebounceMs]
   );
 
   /**
-   * Handle field change
+   * Handle field change with validation
    */
   const handleChange = useCallback(
     <K extends keyof T>(field: K, value: T[K]) => {
+      // Validate field key
+      const safeField = sanitizeFieldName(field);
+      if (!safeField) {
+        console.error('Invalid field name in handleChange');
+        return;
+      }
+
       setState(prev => ({
         ...prev,
         values: { ...prev.values, [field]: value },
@@ -191,33 +323,48 @@ export function useValidation<T extends Record<string, any>>({
         debouncedValidateField(field);
       }
     },
-    [validateOnChange, state.touched, debouncedValidateField]
+    [validateOnChange, state.touched, debouncedValidateField, sanitizeFieldName]
   );
 
   /**
-   * Handle field blur
+   * Handle field blur with validation
    */
   const handleBlur = useCallback(
     (field: keyof T) => {
+      // Validate field key
+      const safeField = sanitizeFieldName(field);
+      if (!safeField) {
+        console.error('Invalid field name in handleBlur');
+        return;
+      }
+
       setState(prev => ({
         ...prev,
         touched: { ...prev.touched, [field]: true },
       }));
 
       if (validateOnBlur) {
-        validateField(field);
+        validateField(field).catch(error => {
+          console.error('Blur validation error:', error);
+        });
       }
     },
-    [validateOnBlur, validateField]
+    [validateOnBlur, validateField, sanitizeFieldName]
   );
 
   /**
-   * Handle form submission
+   * Handle form submission with security
    */
   const handleSubmit = useCallback(
     async (e?: React.FormEvent) => {
       if (e) {
         e.preventDefault();
+      }
+
+      // Prevent rapid submissions
+      if (state.isSubmitting) {
+        console.warn('Form is already submitting');
+        return;
       }
 
       // Mark all fields as touched
@@ -232,28 +379,35 @@ export function useValidation<T extends Record<string, any>>({
         isSubmitting: true,
       }));
 
-      // Validate form
-      const isValid = await validateForm();
+      try {
+        // Validate form
+        const isValid = await validateForm();
 
-      if (!isValid) {
-        setState(prev => ({ ...prev, isSubmitting: false }));
-        return;
-      }
-
-      // Call onSubmit if provided
-      if (onSubmit) {
-        try {
-          await onSubmit(state.values);
+        if (!isValid) {
           setState(prev => ({ ...prev, isSubmitting: false }));
-        } catch (error) {
-          setState(prev => ({ ...prev, isSubmitting: false }));
-          throw error;
+          return;
         }
-      } else {
+
+        // Call onSubmit if provided
+        if (onSubmit) {
+          await onSubmit(state.values);
+        }
+        
         setState(prev => ({ ...prev, isSubmitting: false }));
+      } catch (error) {
+        console.error('Form submission error:', error);
+        setState(prev => ({ 
+          ...prev, 
+          isSubmitting: false,
+          errors: { 
+            ...prev.errors, 
+            form: sanitizeErrorMessage('Submission failed. Please try again.') 
+          } as any
+        }));
+        throw error;
       }
     },
-    [state.values, validateForm, onSubmit]
+    [state.values, state.isSubmitting, validateForm, onSubmit, sanitizeErrorMessage]
   );
 
   /**
@@ -263,6 +417,9 @@ export function useValidation<T extends Record<string, any>>({
     // Clear all timeouts
     validationTimeouts.current.forEach(timeout => clearTimeout(timeout));
     validationTimeouts.current.clear();
+
+    // Reset validation attempts
+    validationAttempts.current = 0;
 
     setState({
       values: initialValues,
@@ -274,7 +431,7 @@ export function useValidation<T extends Record<string, any>>({
   }, [initialValues]);
 
   /**
-   * Set field value
+   * Set field value with validation
    */
   const setFieldValue = useCallback(
     <K extends keyof T>(field: K, value: T[K]) => {
@@ -284,31 +441,43 @@ export function useValidation<T extends Record<string, any>>({
   );
 
   /**
-   * Set field error
+   * Set field error with sanitization
    */
   const setFieldError = useCallback(
     (field: keyof T, error: string | undefined) => {
+      const safeField = sanitizeFieldName(field);
+      if (!safeField) {
+        console.error('Invalid field name in setFieldError');
+        return;
+      }
+
       setState(prev => ({
         ...prev,
         errors: error
-          ? { ...prev.errors, [field]: error }
+          ? { ...prev.errors, [field]: sanitizeErrorMessage(error) }
           : { ...prev.errors, [field]: undefined },
       }));
     },
-    []
+    [sanitizeFieldName, sanitizeErrorMessage]
   );
 
   /**
-   * Set field touched
+   * Set field touched status
    */
   const setFieldTouched = useCallback(
     (field: keyof T, touched: boolean = true) => {
+      const safeField = sanitizeFieldName(field);
+      if (!safeField) {
+        console.error('Invalid field name in setFieldTouched');
+        return;
+      }
+
       setState(prev => ({
         ...prev,
         touched: { ...prev.touched, [field]: touched },
       }));
     },
-    []
+    [sanitizeFieldName]
   );
 
   /**
@@ -319,9 +488,21 @@ export function useValidation<T extends Record<string, any>>({
   }, []);
 
   /**
-   * Set multiple values
+   * Set multiple values with validation
    */
   const setValues = useCallback((values: Partial<T>) => {
+    // Validate object depth to prevent deeply nested attacks
+    try {
+      const depth = getObjectDepth(values);
+      if (depth > MAX_VALIDATION_DEPTH) {
+        console.error('Values object too deeply nested');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking object depth:', error);
+      return;
+    }
+
     setState(prev => ({
       ...prev,
       values: { ...prev.values, ...values },
@@ -329,14 +510,23 @@ export function useValidation<T extends Record<string, any>>({
   }, []);
 
   /**
-   * Set multiple errors
+   * Set multiple errors with sanitization
    */
   const setErrors = useCallback((errors: Partial<Record<keyof T, string>>) => {
+    const sanitizedErrors: Partial<Record<keyof T, string>> = {};
+    
+    Object.entries(errors).forEach(([key, value]) => {
+      const safeKey = sanitizeFieldName(key as keyof T);
+      if (safeKey && value) {
+        sanitizedErrors[key as keyof T] = sanitizeErrorMessage(value);
+      }
+    });
+
     setState(prev => ({
       ...prev,
-      errors: { ...prev.errors, ...errors },
+      errors: { ...prev.errors, ...sanitizedErrors },
     }));
-  }, []);
+  }, [sanitizeFieldName, sanitizeErrorMessage]);
 
   /**
    * Cleanup timeouts on unmount
@@ -344,6 +534,7 @@ export function useValidation<T extends Record<string, any>>({
   useEffect(() => {
     return () => {
       validationTimeouts.current.forEach(timeout => clearTimeout(timeout));
+      validationTimeouts.current.clear();
     };
   }, []);
 
@@ -397,4 +588,28 @@ export function createValidationSchema<T extends Record<string, any>>(
   fields: Record<keyof T, z.ZodTypeAny>
 ): z.ZodObject<Record<keyof T, z.ZodTypeAny>> {
   return z.object(fields);
+}
+
+/**
+ * Helper function to check object depth
+ */
+function getObjectDepth(obj: any, currentDepth = 0): number {
+  if (currentDepth > MAX_VALIDATION_DEPTH) {
+    return currentDepth;
+  }
+
+  if (obj === null || typeof obj !== 'object') {
+    return currentDepth;
+  }
+
+  let maxDepth = currentDepth;
+  
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      const depth = getObjectDepth(obj[key], currentDepth + 1);
+      maxDepth = Math.max(maxDepth, depth);
+    }
+  }
+
+  return maxDepth;
 }

@@ -1,10 +1,42 @@
 // src/hooks/useLocalStorage.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { storageService } from '@/services';
+import { securityService } from '@/services';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+
+// Constants for storage limits
+const MAX_KEY_LENGTH = 100;
+const MAX_VALUE_SIZE = 1024 * 1024; // 1MB per value
+const VALID_KEY_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+/**
+ * Validates storage key to prevent injection attacks
+ */
+function validateStorageKey(key: string): boolean {
+  if (!key || typeof key !== 'string') {
+    return false;
+  }
+  if (key.length > MAX_KEY_LENGTH) {
+    return false;
+  }
+  return VALID_KEY_PATTERN.test(key);
+}
+
+/**
+ * Validates value size to prevent quota exhaustion
+ */
+function validateValueSize(value: any): boolean {
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized.length <= MAX_VALUE_SIZE;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Custom hook to integrate with localStorage while keeping React state in sync
- * Now handles async operations from DSAL
+ * Now handles async operations from DSAL with security enhancements
  * 
  * @param key Storage key to use
  * @param initialValue Default value if nothing exists in storage
@@ -14,6 +46,12 @@ export function useLocalStorage<T>(
   key: string,
   initialValue: T
 ): [T, (value: T | ((val: T) => T)) => void, () => void, boolean] {
+  // Validate key on initialization
+  if (!validateStorageKey(key)) {
+    console.error(`Invalid storage key: "${key}". Keys must be alphanumeric with underscores/hyphens only.`);
+    return [initialValue, () => {}, () => {}, false];
+  }
+
   // State to hold the current value
   const [storedValue, setStoredValue] = useState<T>(initialValue);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,13 +67,33 @@ export function useLocalStorage<T>(
       try {
         setIsLoading(true);
         const value = await storageService.getItem<T>(key, initialValue);
+        
+        // Validate loaded value
+        if (value !== null && value !== undefined) {
+          // For string values, sanitize them
+          if (typeof value === 'string') {
+            const sanitized = sanitizeStrict(value as string) as T;
+            if (isMounted.current) {
+              setStoredValue(sanitized);
+            }
+          } else {
+            if (isMounted.current) {
+              setStoredValue(value);
+            }
+          }
+        } else {
+          if (isMounted.current) {
+            setStoredValue(initialValue);
+          }
+        }
+        
         if (isMounted.current) {
-          setStoredValue(value);
           setIsLoading(false);
         }
       } catch (error) {
         console.error(`Error loading localStorage key "${key}":`, error);
         if (isMounted.current) {
+          setStoredValue(initialValue);
           setIsLoading(false);
         }
       }
@@ -46,7 +104,7 @@ export function useLocalStorage<T>(
     return () => {
       isMounted.current = false;
     };
-  }, [key]); // Only re-run if key changes
+  }, [key, initialValue]);
 
   // Return a wrapped version of useState's setter function that 
   // persists the new value to localStorage
@@ -55,22 +113,48 @@ export function useLocalStorage<T>(
       // Allow value to be a function to mirror useState behavior
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       
+      // Validate value size
+      if (!validateValueSize(valueToStore)) {
+        console.error(`Value too large for key "${key}". Maximum size is 1MB.`);
+        return;
+      }
+      
+      // Sanitize string values
+      let sanitizedValue = valueToStore;
+      if (typeof valueToStore === 'string') {
+        sanitizedValue = sanitizeStrict(valueToStore as string) as T;
+      }
+      
       // Save to React state immediately for responsive UI
-      setStoredValue(valueToStore);
+      setStoredValue(sanitizedValue);
       
       // Save to localStorage asynchronously
-      storageService.setItem(key, valueToStore).then(success => {
+      storageService.setItem(key, sanitizedValue).then(success => {
         if (!success) {
           console.error(`Failed to save "${key}" to storage`);
+          // Revert state on failure
+          if (isMounted.current) {
+            setStoredValue(storedValue);
+          }
+        }
+      }).catch(error => {
+        console.error(`Storage quota exceeded or error for key "${key}":`, error);
+        // Revert state on error
+        if (isMounted.current) {
+          setStoredValue(storedValue);
         }
       });
       
       // Dispatch custom event to sync across tabs
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: key,
-        newValue: JSON.stringify(valueToStore),
-        url: window.location.href
-      }));
+      try {
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: key,
+          newValue: JSON.stringify(sanitizedValue),
+          url: window.location.href
+        }));
+      } catch (error) {
+        console.error('Error dispatching storage event:', error);
+      }
     } catch (error) {
       console.error(`Error setting localStorage key "${key}":`, error);
     }
@@ -90,11 +174,15 @@ export function useLocalStorage<T>(
       });
       
       // Dispatch custom event to sync across tabs
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: key,
-        newValue: null,
-        url: window.location.href
-      }));
+      try {
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: key,
+          newValue: null,
+          url: window.location.href
+        }));
+      } catch (error) {
+        console.error('Error dispatching storage event:', error);
+      }
     } catch (error) {
       console.error(`Error removing localStorage key "${key}":`, error);
     }
@@ -105,10 +193,18 @@ export function useLocalStorage<T>(
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === key && event.newValue !== null) {
         try {
-          const newValue = JSON.parse(event.newValue);
-          setStoredValue(newValue);
+          const parsedValue = JSON.parse(event.newValue);
+          
+          // Sanitize string values from other tabs
+          let sanitizedValue = parsedValue;
+          if (typeof parsedValue === 'string') {
+            sanitizedValue = sanitizeStrict(parsedValue);
+          }
+          
+          setStoredValue(sanitizedValue);
         } catch (error) {
           console.error(`Error parsing localStorage value for key "${key}":`, error);
+          // Don't update state with malformed data
         }
       } else if (event.key === key && event.newValue === null) {
         setStoredValue(initialValue);
@@ -137,6 +233,15 @@ export function useLocalStorageWithExpiry<T>(
   initialValue: T,
   ttlMs: number = 24 * 60 * 60 * 1000
 ): [T, (value: T | ((val: T) => T)) => void, () => void, boolean] {
+  // Validate key
+  if (!validateStorageKey(key)) {
+    console.error(`Invalid storage key: "${key}". Keys must be alphanumeric with underscores/hyphens only.`);
+    return [initialValue, () => {}, () => {}, false];
+  }
+
+  // Validate TTL
+  const validatedTtl = Math.max(0, Math.min(ttlMs, 7 * 24 * 60 * 60 * 1000)); // Max 7 days
+
   // State to hold the current value
   const [storedValue, setStoredValue] = useState<T>(initialValue);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,7 +261,7 @@ export function useLocalStorageWithExpiry<T>(
         );
         
         if (isMounted.current) {
-          if (item === null || Date.now() > item.expiry) {
+          if (item === null || !item.expiry || Date.now() > item.expiry) {
             // Item doesn't exist or is expired
             if (item !== null) {
               // Clean up expired item
@@ -164,13 +269,19 @@ export function useLocalStorageWithExpiry<T>(
             }
             setStoredValue(initialValue);
           } else {
-            setStoredValue(item.value);
+            // Sanitize string values
+            let value = item.value;
+            if (typeof value === 'string') {
+              value = sanitizeStrict(value as string) as T;
+            }
+            setStoredValue(value);
           }
           setIsLoading(false);
         }
       } catch (error) {
         console.error(`Error loading localStorage key "expiry_${key}":`, error);
         if (isMounted.current) {
+          setStoredValue(initialValue);
           setIsLoading(false);
         }
       }
@@ -189,27 +300,48 @@ export function useLocalStorageWithExpiry<T>(
       // Allow value to be a function
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       
+      // Validate value size
+      if (!validateValueSize(valueToStore)) {
+        console.error(`Value too large for key "${key}". Maximum size is 1MB.`);
+        return;
+      }
+      
+      // Sanitize string values
+      let sanitizedValue = valueToStore;
+      if (typeof valueToStore === 'string') {
+        sanitizedValue = sanitizeStrict(valueToStore as string) as T;
+      }
+      
       // Save to React state immediately
-      setStoredValue(valueToStore);
+      setStoredValue(sanitizedValue);
       
       // Save to localStorage with expiry asynchronously
       const itemWithExpiry = {
-        value: valueToStore,
-        expiry: Date.now() + ttlMs
+        value: sanitizedValue,
+        expiry: Date.now() + validatedTtl
       };
       
-      storageService.setItem(`expiry_${key}`, itemWithExpiry);
+      storageService.setItem(`expiry_${key}`, itemWithExpiry).catch(error => {
+        console.error(`Failed to save expiry item "${key}":`, error);
+        if (isMounted.current) {
+          setStoredValue(storedValue);
+        }
+      });
       
       // Dispatch custom event
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: `expiry_${key}`,
-        newValue: JSON.stringify(itemWithExpiry),
-        url: window.location.href
-      }));
+      try {
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: `expiry_${key}`,
+          newValue: JSON.stringify(itemWithExpiry),
+          url: window.location.href
+        }));
+      } catch (error) {
+        console.error('Error dispatching storage event:', error);
+      }
     } catch (error) {
       console.error(`Error setting localStorage key "expiry_${key}":`, error);
     }
-  }, [key, storedValue, ttlMs]);
+  }, [key, storedValue, validatedTtl]);
 
   // Function to remove the item
   const removeValue = useCallback(() => {
@@ -218,11 +350,15 @@ export function useLocalStorageWithExpiry<T>(
       storageService.removeItem(`expiry_${key}`);
       
       // Dispatch event
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: `expiry_${key}`,
-        newValue: null,
-        url: window.location.href
-      }));
+      try {
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: `expiry_${key}`,
+          newValue: null,
+          url: window.location.href
+        }));
+      } catch (error) {
+        console.error('Error dispatching storage event:', error);
+      }
     } catch (error) {
       console.error(`Error removing localStorage key "expiry_${key}":`, error);
     }
@@ -233,8 +369,15 @@ export function useLocalStorageWithExpiry<T>(
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key === `expiry_${key}` && event.newValue !== null) {
         try {
-          const { value } = JSON.parse(event.newValue);
-          setStoredValue(value);
+          const parsed = JSON.parse(event.newValue);
+          if (parsed && parsed.value !== undefined) {
+            // Sanitize string values
+            let value = parsed.value;
+            if (typeof value === 'string') {
+              value = sanitizeStrict(value);
+            }
+            setStoredValue(value);
+          }
         } catch (error) {
           console.error(`Error parsing localStorage value for key "expiry_${key}":`, error);
         }
@@ -262,11 +405,20 @@ export function useLocalStorageObject<T extends object>(
   // Use the regular useLocalStorage hook for the base functionality
   const [storedValue, setStoredValue, removeValue, isLoading] = useLocalStorage<T>(key, initialValue);
 
-  // Function to perform partial updates
+  // Function to perform partial updates with sanitization
   const updateValue = useCallback((updates: Partial<T>) => {
+    // Sanitize string properties in updates
+    const sanitizedUpdates = { ...updates };
+    Object.keys(sanitizedUpdates).forEach(key => {
+      const value = sanitizedUpdates[key as keyof T];
+      if (typeof value === 'string') {
+        (sanitizedUpdates as any)[key] = sanitizeStrict(value);
+      }
+    });
+
     setStoredValue(current => ({
       ...current,
-      ...updates
+      ...sanitizedUpdates
     }));
   }, [setStoredValue]);
 
@@ -287,13 +439,21 @@ export function useStorageUsage() {
       setIsLoading(true);
       try {
         const info = await storageService.getStorageInfo();
+        
+        // Validate storage info
+        const validatedInfo = {
+          used: Math.max(0, Math.min(info.used, 10 * 1024 * 1024)), // Cap at 10MB
+          percentage: Math.max(0, Math.min(info.percentage, 100))
+        };
+        
         setUsage({
-          bytes: info.used,
-          percent: info.percentage / 100,
-          sizeKB: Math.round(info.used / 1024)
+          bytes: validatedInfo.used,
+          percent: validatedInfo.percentage / 100,
+          sizeKB: Math.round(validatedInfo.used / 1024)
         });
       } catch (error) {
         console.error('Error updating storage usage:', error);
+        setUsage({ bytes: 0, percent: 0, sizeKB: 0 });
       } finally {
         setIsLoading(false);
       }
@@ -327,7 +487,8 @@ export function useStorageUsage() {
     isNearCapacity,
     usageKB,
     usageMB: (usageKB / 1024).toFixed(2),
-    isLoading
+    isLoading,
+    warning: isNearCapacity ? 'Storage is almost full. Consider clearing old data.' : null
   };
 }
 
@@ -337,7 +498,7 @@ export function useStorageUsage() {
  */
 export function usePreloadedStorage<T extends Record<string, any>>(
   keys: { [K in keyof T]: { key: string; defaultValue: T[K] } }
-): { values: T; isLoading: boolean; refresh: () => Promise<void> } {
+): { values: T; isLoading: boolean; refresh: () => Promise<void>; errors: string[] } {
   const [values, setValues] = useState<T>(() => {
     // Initialize with default values
     const defaults = {} as T;
@@ -348,29 +509,61 @@ export function usePreloadedStorage<T extends Record<string, any>>(
   });
   
   const [isLoading, setIsLoading] = useState(true);
+  const [errors, setErrors] = useState<string[]>([]);
   const isMounted = useRef(true);
 
   const loadValues = useCallback(async () => {
     setIsLoading(true);
+    setErrors([]);
+    
     try {
       const loadedValues = {} as T;
+      const loadErrors: string[] = [];
+      
+      // Validate all keys first
+      Object.entries(keys).forEach(([prop, config]) => {
+        if (!validateStorageKey((config as any).key)) {
+          loadErrors.push(`Invalid key for ${prop}: ${(config as any).key}`);
+        }
+      });
+      
+      if (loadErrors.length > 0) {
+        setErrors(loadErrors);
+        return;
+      }
       
       // Load all values in parallel
       await Promise.all(
         Object.entries(keys).map(async ([prop, config]) => {
-          const value = await storageService.getItem(
-            (config as any).key,
-            (config as any).defaultValue
-          );
-          loadedValues[prop as keyof T] = value;
+          try {
+            const value = await storageService.getItem(
+              (config as any).key,
+              (config as any).defaultValue
+            );
+            
+            // Sanitize string values
+            let sanitizedValue = value;
+            if (typeof value === 'string') {
+              sanitizedValue = sanitizeStrict(value);
+            }
+            
+            loadedValues[prop as keyof T] = sanitizedValue;
+          } catch (error) {
+            loadErrors.push(`Failed to load ${prop}`);
+            loadedValues[prop as keyof T] = (config as any).defaultValue;
+          }
         })
       );
       
       if (isMounted.current) {
         setValues(loadedValues);
+        if (loadErrors.length > 0) {
+          setErrors(loadErrors);
+        }
       }
     } catch (error) {
       console.error('Error preloading storage values:', error);
+      setErrors(['Failed to preload storage values']);
     } finally {
       if (isMounted.current) {
         setIsLoading(false);
@@ -390,6 +583,7 @@ export function usePreloadedStorage<T extends Record<string, any>>(
   return {
     values,
     isLoading,
-    refresh: loadValues
+    refresh: loadValues,
+    errors
   };
 }

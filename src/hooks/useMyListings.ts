@@ -13,6 +13,38 @@ import {
 } from '@/utils/myListingsUtils';
 import { uploadMultipleToCloudinary } from '@/utils/cloudinary';
 import { v4 as uuidv4 } from 'uuid';
+import { listingSchemas, financialSchemas } from '@/utils/validation/schemas';
+import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
+import { securityService } from '@/services';
+import { z } from 'zod';
+
+// Validation schema for listing form
+const listingFormSchema = z.object({
+  title: listingSchemas.title,
+  description: listingSchemas.description,
+  price: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid price format'),
+  isPremium: z.boolean(),
+  tags: z.string(),
+  hoursWorn: z.union([z.string(), z.number()]),
+  isAuction: z.boolean(),
+  startingPrice: z.string().optional(),
+  reservePrice: z.string().optional(),
+  auctionDuration: z.string()
+});
+
+// Sanitize listing form data
+function sanitizeFormState(formState: ListingFormState): ListingFormState {
+  return {
+    ...formState,
+    title: sanitizeStrict(formState.title),
+    description: sanitizeStrict(formState.description),
+    tags: formState.tags.split(',').map(tag => sanitizeStrict(tag.trim())).join(', '),
+    price: formState.price, // Keep as string for form
+    startingPrice: formState.startingPrice,
+    reservePrice: formState.reservePrice,
+    auctionDuration: formState.auctionDuration
+  };
+}
 
 export const useMyListings = () => {
   const { user } = useAuth();
@@ -59,6 +91,7 @@ export const useMyListings = () => {
   
   // Error state
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   // Drag refs
   const dragItem = useRef<number | null>(null);
@@ -70,19 +103,24 @@ export const useMyListings = () => {
   const isVerified = user?.isVerified || user?.verificationStatus === 'verified';
   const myListings = listings?.filter((listing: Listing) => listing.seller === user?.username) ?? [];
   
-  // Calculate stats
+  // Calculate stats with validation
   const auctionCount = myListings.filter((listing: Listing) => !!listing.auction).length;
   const premiumCount = myListings.filter((listing: Listing) => listing.isPremium).length;
-  const standardCount = myListings.length - (premiumCount + auctionCount);
+  const standardCount = Math.max(0, myListings.length - (premiumCount + auctionCount));
   
   // Check listing limits
   const maxListings = isVerified ? 25 : 2;
   const atLimit = myListings.length >= maxListings;
   
-  // Get seller orders
+  // Get seller orders with sanitization
   const sellerOrders = orderHistory
     .filter(order => order.seller === user?.username)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .map(order => ({
+      ...order,
+      title: sanitizeStrict(order.title || ''),
+      buyer: sanitizeStrict(order.buyer || '')
+    }));
 
   // Load views data for all listings
   useEffect(() => {
@@ -99,7 +137,8 @@ export const useMyListings = () => {
       listingsService.getListingViews(listing.id)
         .then(result => {
           if (result.success && result.data !== undefined) {
-            setViewsData(prev => ({ ...prev, [listing.id]: result.data as number }));
+            const views = Math.max(0, parseInt(result.data.toString()) || 0);
+            setViewsData(prev => ({ ...prev, [listing.id]: views }));
           }
         })
         .catch(error => {
@@ -110,7 +149,7 @@ export const useMyListings = () => {
     });
   }, [myListings]);
 
-  // Load drafts
+  // Load drafts with sanitization
   useEffect(() => {
     const loadDrafts = async () => {
       if (!user || user.role !== 'seller') return;
@@ -118,9 +157,16 @@ export const useMyListings = () => {
       setIsDraftLoading(true);
       try {
         const userDrafts = await getListingDrafts();
-        setDrafts(userDrafts);
+        // Sanitize draft data
+        const sanitizedDrafts = userDrafts.map(draft => ({
+          ...draft,
+          name: sanitizeStrict(draft.name || 'Untitled Draft'),
+          formState: sanitizeFormState(draft.formState)
+        }));
+        setDrafts(sanitizedDrafts);
       } catch (error) {
         console.error('Error loading drafts:', error);
+        setError('Failed to load drafts');
       } finally {
         setIsDraftLoading(false);
       }
@@ -139,9 +185,14 @@ export const useMyListings = () => {
     return undefined;
   }, [error]);
 
-  // Update form state
+  // Update form state with sanitization
   const updateFormState = useCallback((updates: Partial<ListingFormState>) => {
-    setFormState(prev => ({ ...prev, ...updates }));
+    setFormState(prev => {
+      const updated = { ...prev, ...updates };
+      // Clear validation errors when fields change
+      setValidationErrors({});
+      return updated;
+    });
   }, []);
 
   // Reset form
@@ -153,14 +204,37 @@ export const useMyListings = () => {
     setUploadProgress(0);
     setCurrentDraftId(null);
     setError(null);
+    setValidationErrors({});
   }, []);
 
-  // Handle file selection
+  // Handle file selection with validation
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    
     const newFiles = Array.from(files);
-    setSelectedFiles(prev => [...prev, ...newFiles]);
+    const validFiles: File[] = [];
+    const errors: string[] = [];
+    
+    newFiles.forEach(file => {
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      });
+      
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        errors.push(`${file.name}: ${validation.error}`);
+      }
+    });
+    
+    if (errors.length > 0) {
+      setError(errors.join(', '));
+    }
+    
+    setSelectedFiles(prev => [...prev, ...validFiles]);
     e.target.value = '';
   }, []);
 
@@ -178,6 +252,14 @@ export const useMyListings = () => {
     setError(null);
     
     try {
+      // Validate all files before upload
+      for (const file of selectedFiles) {
+        const validation = securityService.validateFileUpload(file);
+        if (!validation.valid) {
+          throw new Error(validation.error);
+        }
+      }
+      
       // Upload to Cloudinary with progress tracking
       const uploadResults = await uploadMultipleToCloudinary(
         selectedFiles,
@@ -186,19 +268,27 @@ export const useMyListings = () => {
         }
       );
       
-      // Extract URLs from upload results
-      const newImageUrls = uploadResults.map(result => result.url);
+      // Extract and validate URLs
+      const newImageUrls = uploadResults.map(result => {
+        // Validate URL
+        try {
+          new URL(result.url);
+          return result.url;
+        } catch {
+          throw new Error('Invalid image URL received from upload');
+        }
+      });
       
       // Update form state with new URLs
       updateFormState({ imageUrls: [...formState.imageUrls, ...newImageUrls] });
       setSelectedFiles([]);
       setUploadProgress(0);
       
-      console.log('Images uploaded successfully:', uploadResults);
+      console.log('Images uploaded successfully');
     } catch (error) {
       console.error("Error uploading images:", error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setError(`Failed to upload images: ${errorMessage}`);
+      setError(sanitizeStrict(`Failed to upload images: ${errorMessage}`));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -212,6 +302,10 @@ export const useMyListings = () => {
 
   // Handle image reorder
   const handleImageReorder = useCallback((dragIndex: number, dropIndex: number) => {
+    if (dragIndex < 0 || dropIndex < 0 || dragIndex >= formState.imageUrls.length || dropIndex >= formState.imageUrls.length) {
+      return;
+    }
+    
     const _imageUrls = [...formState.imageUrls];
     const draggedItemContent = _imageUrls[dragIndex];
     _imageUrls.splice(dragIndex, 1);
@@ -219,20 +313,23 @@ export const useMyListings = () => {
     updateFormState({ imageUrls: _imageUrls });
   }, [formState.imageUrls, updateFormState]);
 
-  // Save as draft
+  // Save as draft with validation
   const handleSaveDraft = useCallback(async () => {
     if (!user || user.role !== 'seller') return;
     
     setError(null);
     
     try {
+      // Sanitize form state before saving
+      const sanitizedFormState = sanitizeFormState(formState);
+      
       const draft: ListingDraft = {
         id: currentDraftId || uuidv4(),
         seller: user.username,
-        formState: { ...formState },
+        formState: sanitizedFormState,
         createdAt: currentDraftId ? drafts.find(d => d.id === currentDraftId)?.createdAt || new Date().toISOString() : new Date().toISOString(),
         lastModified: new Date().toISOString(),
-        name: formState.title || 'Untitled Draft'
+        name: sanitizeStrict(formState.title || 'Untitled Draft')
       };
       
       const success = await saveListingDraft(draft);
@@ -263,10 +360,13 @@ export const useMyListings = () => {
 
   // Load draft
   const handleLoadDraft = useCallback((draft: ListingDraft) => {
-    setFormState(draft.formState);
+    // Sanitize draft data before loading
+    const sanitizedFormState = sanitizeFormState(draft.formState);
+    setFormState(sanitizedFormState);
     setCurrentDraftId(draft.id);
     setShowForm(true);
     setEditingState({ listingId: null, isEditing: false });
+    setValidationErrors({});
   }, []);
 
   // Delete draft
@@ -287,58 +387,106 @@ export const useMyListings = () => {
     }
   }, [currentDraftId, deleteListingDraft]);
 
-  // Save listing
+  // Validate form data
+  const validateFormData = useCallback((): boolean => {
+    const errors: Record<string, string> = {};
+    
+    // Validate basic fields
+    try {
+      listingSchemas.title.parse(formState.title);
+    } catch {
+      errors.title = 'Title must be 5-100 characters';
+    }
+    
+    try {
+      listingSchemas.description.parse(formState.description);
+    } catch {
+      errors.description = 'Description must be 20-2000 characters';
+    }
+    
+    if (formState.imageUrls.length === 0) {
+      errors.images = 'At least one image is required';
+    }
+    
+    // Validate price fields
+    if (formState.isAuction) {
+      const startingBid = parseFloat(formState.startingPrice);
+      if (isNaN(startingBid) || startingBid < 0.01 || startingBid > 10000) {
+        errors.startingPrice = 'Starting bid must be between $0.01 and $10,000';
+      }
+      
+      if (formState.reservePrice.trim() !== '') {
+        const reserveBid = parseFloat(formState.reservePrice);
+        if (isNaN(reserveBid) || reserveBid < startingBid) {
+          errors.reservePrice = 'Reserve price must be equal to or greater than starting bid';
+        }
+      }
+    } else {
+      const price = parseFloat(formState.price);
+      if (isNaN(price) || price < 0.01 || price > 10000) {
+        errors.price = 'Price must be between $0.01 and $10,000';
+      }
+    }
+    
+    // Validate hours worn
+    if (formState.hoursWorn !== '') {
+      const hours = parseInt(formState.hoursWorn.toString());
+      if (isNaN(hours) || hours < 0 || hours > 168) {
+        errors.hoursWorn = 'Hours worn must be between 0 and 168';
+      }
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formState]);
+
+  // Save listing with validation and sanitization
   const handleSaveListing = useCallback(async () => {
+    if (!validateFormData()) {
+      setError('Please fix the validation errors');
+      return;
+    }
+    
     const { title, description, imageUrls, isAuction, startingPrice, reservePrice, auctionDuration, price, tags, hoursWorn, isPremium } = formState;
     
     setError(null);
     
-    if (!title || !description || imageUrls.length === 0) {
-      setError('Please fill in all required fields (title, description) and add at least one image.');
-      return;
-    }
-
-    if (isAuction) {
-      if (!isVerified) {
-        setError('You must be a verified seller to create auction listings.');
-        return;
-      }
-
-      const startingBid = parseFloat(startingPrice);
-      if (isNaN(startingBid) || startingBid <= 0) {
-        setError('Please enter a valid starting bid for the auction.');
-        return;
-      }
-
-      let reserveBid: number | undefined = undefined;
-      if (reservePrice.trim() !== '') {
-        reserveBid = parseFloat(reservePrice);
-        if (isNaN(reserveBid) || reserveBid < startingBid) {
-          setError('Reserve price must be equal to or greater than the starting bid.');
+    try {
+      // Sanitize all inputs
+      const sanitizedTitle = sanitizeStrict(title);
+      const sanitizedDescription = sanitizeStrict(description);
+      const tagsList = tags.split(',').map(tag => sanitizeStrict(tag.trim())).filter(tag => tag);
+      
+      if (isAuction) {
+        if (!isVerified) {
+          setError('You must be a verified seller to create auction listings.');
           return;
         }
-      }
 
-      const tagsList = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        const startingBid = sanitizeNumber(startingPrice, 0.01, 10000);
+        let reserveBid: number | undefined = undefined;
+        
+        if (reservePrice.trim() !== '') {
+          reserveBid = sanitizeNumber(reservePrice, startingBid, 10000);
+        }
 
-      const listingData = {
-        title,
-        description,
-        price: startingBid,
-        imageUrls,
-        seller: user?.username || 'unknown',
-        isPremium,
-        tags: tagsList,
-        hoursWorn: hoursWorn === '' ? undefined : Number(hoursWorn),
-      };
+        const listingData = {
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          price: startingBid,
+          imageUrls,
+          seller: user?.username || 'unknown',
+          isPremium,
+          tags: tagsList,
+          hoursWorn: hoursWorn === '' ? undefined : sanitizeNumber(hoursWorn.toString(), 0, 168),
+        };
 
-      const auctionSettings = {
-        startingPrice: startingBid,
-        reservePrice: reserveBid,
-        endTime: calculateAuctionEndTime(auctionDuration)
-      };
+        const auctionSettings = {
+          startingPrice: startingBid,
+          reservePrice: reserveBid,
+          endTime: calculateAuctionEndTime(auctionDuration)
+        };
 
-      try {
         await addAuctionListing(listingData, auctionSettings);
         
         // Delete draft if it was loaded
@@ -348,31 +496,20 @@ export const useMyListings = () => {
         }
         
         resetForm();
-      } catch (error) {
-        console.error('Error creating auction:', error);
-        setError('Failed to create auction listing');
-      }
-    } else {
-      const numericPrice = parseFloat(price);
-      if (isNaN(numericPrice) || numericPrice <= 0) {
-        setError('Please enter a valid price.');
-        return;
-      }
+      } else {
+        const numericPrice = sanitizeNumber(price, 0.01, 10000);
 
-      const tagsList = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        const listingData = {
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          price: numericPrice,
+          imageUrls,
+          seller: user?.username || 'unknown',
+          isPremium,
+          tags: tagsList,
+          hoursWorn: hoursWorn === '' ? undefined : sanitizeNumber(hoursWorn.toString(), 0, 168),
+        };
 
-      const listingData = {
-        title,
-        description,
-        price: numericPrice,
-        imageUrls,
-        seller: user?.username || 'unknown',
-        isPremium,
-        tags: tagsList,
-        hoursWorn: hoursWorn === '' ? undefined : Number(hoursWorn),
-      };
-
-      try {
         if (editingState.isEditing && editingState.listingId) {
           if (updateListing) {
             await updateListing(editingState.listingId, listingData);
@@ -390,23 +527,23 @@ export const useMyListings = () => {
         }
         
         resetForm();
-      } catch (error) {
-        console.error('Error saving listing:', error);
-        setError('Failed to save listing');
       }
+    } catch (error) {
+      console.error('Error saving listing:', error);
+      setError('Failed to save listing. Please try again.');
     }
-  }, [formState, editingState, user, isVerified, addListing, addAuctionListing, updateListing, currentDraftId, deleteListingDraft, resetForm]);
+  }, [formState, editingState, user, isVerified, addListing, addAuctionListing, updateListing, currentDraftId, deleteListingDraft, resetForm, validateFormData]);
 
-  // Handle edit click
+  // Handle edit click with sanitization
   const handleEditClick = useCallback((listing: Listing) => {
     setEditingState({ listingId: listing.id, isEditing: true });
     setFormState({
-      title: listing.title,
-      description: listing.description,
+      title: sanitizeStrict(listing.title),
+      description: sanitizeStrict(listing.description),
       price: listing.price.toString(),
       imageUrls: listing.imageUrls || [],
       isPremium: listing.isPremium ?? false,
-      tags: listing.tags ? listing.tags.join(', ') : '',
+      tags: listing.tags ? listing.tags.map(tag => sanitizeStrict(tag)).join(', ') : '',
       hoursWorn: listing.hoursWorn !== undefined && listing.hoursWorn !== null ? listing.hoursWorn : '',
       isAuction: !!listing.auction,
       startingPrice: listing.auction?.startingPrice.toString() || '',
@@ -416,6 +553,7 @@ export const useMyListings = () => {
     setSelectedFiles([]);
     setShowForm(true);
     setCurrentDraftId(null);
+    setValidationErrors({});
     
     // Handle auction data if present
     if (listing.auction) {
@@ -423,7 +561,7 @@ export const useMyListings = () => {
       const endTime = new Date(listing.auction.endTime);
       const now = new Date();
       const daysRemaining = Math.ceil((endTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      updateFormState({ auctionDuration: Math.max(1, daysRemaining).toString() });
+      updateFormState({ auctionDuration: Math.max(1, Math.min(7, daysRemaining)).toString() });
     }
   }, [updateFormState]);
 
@@ -444,31 +582,43 @@ export const useMyListings = () => {
 
   // Handle delete listing
   const handleRemoveListing = useCallback(async (listingId: string) => {
-    try {
-      await removeListing(listingId);
-    } catch (error) {
-      console.error('Error removing listing:', error);
-      setError('Failed to remove listing');
+    if (confirm('Are you sure you want to remove this listing?')) {
+      try {
+        await removeListing(listingId);
+      } catch (error) {
+        console.error('Error removing listing:', error);
+        setError('Failed to remove listing');
+      }
     }
   }, [removeListing]);
 
   // Get listing analytics
   const getListingAnalytics = useCallback((listing: Listing): ListingAnalytics => {
-    const views = viewsData[listing.id] || 0;
+    const views = Math.max(0, viewsData[listing.id] || 0);
     return { views };
   }, [viewsData]);
 
   // Drag handlers for direct use
   const handleDragStart = useCallback((index: number) => {
-    dragItem.current = index;
-  }, []);
+    if (index >= 0 && index < formState.imageUrls.length) {
+      dragItem.current = index;
+    }
+  }, [formState.imageUrls.length]);
 
   const handleDragEnter = useCallback((index: number) => {
-    dragOverItem.current = index;
-  }, []);
+    if (index >= 0 && index < formState.imageUrls.length) {
+      dragOverItem.current = index;
+    }
+  }, [formState.imageUrls.length]);
 
   const handleDrop = useCallback(() => {
     if (dragItem.current === null || dragOverItem.current === null) return;
+    
+    if (dragItem.current < 0 || dragOverItem.current < 0 || 
+        dragItem.current >= formState.imageUrls.length || 
+        dragOverItem.current >= formState.imageUrls.length) {
+      return;
+    }
     
     const _imageUrls = [...formState.imageUrls];
     const draggedItemContent = _imageUrls[dragItem.current];
@@ -500,6 +650,7 @@ export const useMyListings = () => {
     isDraftLoading,
     currentDraftId,
     error,
+    validationErrors,
     isLoading: listingsLoading,
     
     // Actions

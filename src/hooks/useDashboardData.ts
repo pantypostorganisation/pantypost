@@ -6,6 +6,9 @@ import { storageService } from '@/services';
 import { listingsService } from '@/services/listings.service';
 import { DashboardStats, SubscriptionInfo, RecentActivity } from '@/types/dashboard';
 import { Package, MessageCircle, Crown, DollarSign } from 'lucide-react';
+import { sanitizeStrict, sanitizeNumber, sanitizeCurrency } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
+
 // Type definitions
 interface Listing {
   id: string;
@@ -63,6 +66,46 @@ interface Request {
   date: string;
 }
 
+// Helper function to validate and sanitize order data
+const sanitizeOrder = (order: Order): Order => {
+  return {
+    ...order,
+    id: sanitizeStrict(order.id),
+    title: sanitizeStrict(order.title),
+    price: sanitizeNumber(order.price, 0, 10000),
+    markedUpPrice: order.markedUpPrice ? sanitizeNumber(order.markedUpPrice, 0, 10000) : undefined,
+    seller: sanitizeStrict(order.seller),
+    buyer: sanitizeStrict(order.buyer),
+    date: order.date, // Keep date as is for parsing
+    shippingStatus: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : undefined
+  };
+};
+
+// Helper function to validate and sanitize request data
+const sanitizeRequest = (request: Request): Request => {
+  return {
+    ...request,
+    id: sanitizeStrict(request.id),
+    title: sanitizeStrict(request.title),
+    seller: sanitizeStrict(request.seller),
+    buyer: sanitizeStrict(request.buyer),
+    price: sanitizeNumber(request.price, 0, 1000),
+    status: request.status,
+    date: request.date
+  };
+};
+
+// Helper function to validate transaction amounts
+const validateTransactionAmount = (transaction: Transaction): boolean => {
+  if (typeof transaction.amount !== 'number' || isNaN(transaction.amount)) {
+    return false;
+  }
+  if (transaction.amount < 0 || transaction.amount > 100000) {
+    return false;
+  }
+  return true;
+};
+
 export const useDashboardData = () => {
   const { user } = useAuth();
   const [subscribedSellers, setSubscribedSellers] = useState<SubscriptionInfo[]>([]);
@@ -73,8 +116,9 @@ export const useDashboardData = () => {
   const [requests, setRequests] = useState<Request[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [errors, setErrors] = useState<string[]>([]);
 
-  // Load wallet data
+  // Load wallet data with validation
   useEffect(() => {
     const loadWalletData = async () => {
       if (!user?.username) return;
@@ -82,57 +126,81 @@ export const useDashboardData = () => {
       try {
         // Load transactions to calculate balance
         const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
-        const userTransactions = transactions.filter(
-          t => t.userId === user.username && t.walletType === 'buyer'
-        );
         
+        // Filter and validate transactions
+        const userTransactions = transactions
+          .filter(t => t.userId === user.username && t.walletType === 'buyer')
+          .filter(validateTransactionAmount);
+        
+        // Calculate balance with validation
         const calculatedBalance = userTransactions.reduce((sum, t) => {
-          return t.type === 'deposit' ? sum + t.amount : sum - t.amount;
+          const amount = sanitizeNumber(t.amount, 0, 100000);
+          return t.type === 'deposit' ? sum + amount : sum - amount;
         }, 0);
         
-        setBalance(calculatedBalance);
+        // Ensure balance is never negative
+        setBalance(Math.max(0, calculatedBalance));
 
-        // Load orders
+        // Load and sanitize orders
         const orders = await storageService.getItem<Order[]>('orders', []);
-        const buyerOrders = orders.filter(order => order.buyer === user.username);
+        const buyerOrders = orders
+          .filter(order => order.buyer === user.username)
+          .map(sanitizeOrder);
+        
         setOrderHistory(buyerOrders);
       } catch (error) {
         console.error('Error loading wallet data:', error);
+        setErrors(prev => [...prev, 'Failed to load wallet data']);
       }
     };
 
     loadWalletData();
   }, [user?.username]);
 
-  // Load messages
+  // Load messages with sanitization
   useEffect(() => {
     const loadMessages = async () => {
       if (!user?.username) return;
 
       try {
         const allMessages = await storageService.getItem<Record<string, Message[]>>('messages', {});
-        setMessages(allMessages);
+        
+        // Sanitize message content
+        const sanitizedMessages: Record<string, Message[]> = {};
+        Object.entries(allMessages).forEach(([key, messages]) => {
+          sanitizedMessages[key] = messages.map(msg => ({
+            ...msg,
+            content: sanitizeStrict(msg.content),
+            sender: sanitizeStrict(msg.sender),
+            receiver: sanitizeStrict(msg.receiver)
+          }));
+        });
+        
+        setMessages(sanitizedMessages);
       } catch (error) {
         console.error('Error loading messages:', error);
+        setErrors(prev => [...prev, 'Failed to load messages']);
       }
     };
 
     loadMessages();
   }, [user?.username]);
 
-  // Load requests
+  // Load requests with sanitization
   useEffect(() => {
     const loadRequests = async () => {
       if (!user?.username) return;
 
       try {
         const allRequests = await storageService.getItem<Request[]>('requests', []);
-        const userRequests = allRequests.filter(
-          r => r.buyer === user.username
-        );
+        const userRequests = allRequests
+          .filter(r => r.buyer === user.username)
+          .map(sanitizeRequest);
+        
         setRequests(userRequests);
       } catch (error) {
         console.error('Error loading requests:', error);
+        setErrors(prev => [...prev, 'Failed to load requests']);
       }
     };
 
@@ -145,17 +213,27 @@ export const useDashboardData = () => {
       try {
         const response = await listingsService.getListings();
         if (response.success && response.data) {
-          setListings(response.data);
+          // Sanitize listing data
+          const sanitizedListings = response.data.map((listing: Listing) => ({
+            ...listing,
+            title: sanitizeStrict(listing.title),
+            description: sanitizeStrict(listing.description),
+            seller: sanitizeStrict(listing.seller),
+            price: sanitizeNumber(listing.price, 0, 10000),
+            markedUpPrice: listing.markedUpPrice ? sanitizeNumber(listing.markedUpPrice, 0, 10000) : undefined
+          }));
+          setListings(sanitizedListings);
         }
       } catch (error) {
         console.error('Error loading listings:', error);
+        setErrors(prev => [...prev, 'Failed to load listings']);
       }
     };
 
     loadListings();
   }, []);
 
-  // Load subscriptions
+  // Load subscriptions with sanitization
   useEffect(() => {
     const loadSubscriptions = async () => {
       if (!user?.username) return;
@@ -167,26 +245,30 @@ export const useDashboardData = () => {
         
         const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
           try {
+            // Sanitize seller username
+            const sanitizedSeller = sanitizeStrict(seller);
+            
             // Load seller profile data
-            const profileKey = `profile_${seller}`;
+            const profileKey = `profile_${sanitizedSeller}`;
             const profileData = await storageService.getItem<any>(profileKey, null);
             
-            const sellerListings = listings.filter(l => l.seller === seller);
+            const sellerListings = listings.filter(l => l.seller === sanitizedSeller);
             
+            // Sanitize all profile data
             return {
-              seller,
-              price: profileData?.subscriptionPrice || '25.00',
-              bio: profileData?.bio || 'No bio available',
+              seller: sanitizedSeller,
+              price: profileData?.subscriptionPrice ? sanitizeCurrency(profileData.subscriptionPrice).toString() : '25.00',
+              bio: profileData?.bio ? sanitizeStrict(profileData.bio) : 'No bio available',
               pic: profileData?.profilePic || null,
               newListings: sellerListings.filter(l => l.isPremium).length,
               lastActive: new Date().toISOString(),
-              tier: profileData?.tier || 'Tease',
-              verified: profileData?.verificationStatus === 'verified'
+              tier: profileData?.tier ? sanitizeStrict(profileData.tier) : 'Tease',
+              verified: Boolean(profileData?.verificationStatus === 'verified')
             };
           } catch (error) {
             console.error(`Error loading profile for seller ${seller}:`, error);
             return {
-              seller,
+              seller: sanitizeStrict(seller),
               price: '25.00',
               bio: 'No bio available',
               pic: null,
@@ -202,6 +284,7 @@ export const useDashboardData = () => {
         setSubscribedSellers(subscriptionData);
       } catch (error) {
         console.error('Error loading subscriptions:', error);
+        setErrors(prev => [...prev, 'Failed to load subscriptions']);
       } finally {
         setIsLoading(false);
       }
@@ -210,7 +293,7 @@ export const useDashboardData = () => {
     loadSubscriptions();
   }, [user?.username, listings]);
 
-  // Calculate statistics
+  // Calculate statistics with validation
   const stats = useMemo<DashboardStats>(() => {
     if (!user?.username) {
       return {
@@ -228,120 +311,168 @@ export const useDashboardData = () => {
       };
     }
 
-    // Count unread messages
-    let unreadCount = 0;
-    Object.values(messages).forEach((threadMessages) => {
-      threadMessages.forEach((msg) => {
-        if (msg.receiver === user.username && !msg.read) {
-          unreadCount++;
-        }
+    try {
+      // Count unread messages safely
+      let unreadCount = 0;
+      Object.values(messages).forEach((threadMessages) => {
+        threadMessages.forEach((msg) => {
+          if (msg.receiver === user.username && !msg.read) {
+            unreadCount++;
+          }
+        });
       });
-    });
 
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-    const completedOrders = orderHistory.filter(order => 
-      order.shippingStatus === 'delivered'
-    ).length;
-    
-    const pendingShipments = orderHistory.filter(order => 
-      order.shippingStatus && order.shippingStatus !== 'delivered'
-    ).length;
+      const completedOrders = orderHistory.filter(order => 
+        order.shippingStatus === 'delivered'
+      ).length;
+      
+      const pendingShipments = orderHistory.filter(order => 
+        order.shippingStatus && order.shippingStatus !== 'delivered'
+      ).length;
 
-    const weekSpent = orderHistory
-      .filter(order => new Date(order.date) >= weekAgo)
-      .reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+      // Calculate week spent with validation
+      const weekSpent = orderHistory
+        .filter(order => {
+          try {
+            return new Date(order.date) >= weekAgo;
+          } catch {
+            return false;
+          }
+        })
+        .reduce((sum, order) => {
+          const price = order.markedUpPrice || order.price;
+          return sum + (typeof price === 'number' && price > 0 ? price : 0);
+        }, 0);
 
-    const monthOrders = orderHistory
-      .filter(order => new Date(order.date) >= monthAgo)
-      .length;
+      // Calculate month orders with validation
+      const monthOrders = orderHistory
+        .filter(order => {
+          try {
+            return new Date(order.date) >= monthAgo;
+          } catch {
+            return false;
+          }
+        })
+        .length;
 
-    const favoriteSellerCount = new Set(orderHistory.map(order => order.seller)).size;
-    const totalSpent = orderHistory.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
-    const pendingRequests = requests.filter(r => r.status === 'pending').length;
+      const favoriteSellerCount = new Set(orderHistory.map(order => order.seller)).size;
+      
+      // Calculate total spent with validation
+      const totalSpent = orderHistory.reduce((sum, order) => {
+        const price = order.markedUpPrice || order.price;
+        return sum + (typeof price === 'number' && price > 0 ? price : 0);
+      }, 0);
+      
+      const pendingRequests = requests.filter(r => r.status === 'pending').length;
 
-    return {
-      totalSpent,
-      totalOrders: orderHistory.length,
-      activeSubscriptions: subscribedSellers.length,
-      pendingRequests,
-      unreadMessages: unreadCount,
-      completedOrders,
-      favoriteSellerCount,
-      averageOrderValue: orderHistory.length > 0 ? totalSpent / orderHistory.length : 0,
-      thisWeekSpent: weekSpent,
-      thisMonthOrders: monthOrders,
-      pendingShipments
-    };
+      return {
+        totalSpent: Math.max(0, totalSpent),
+        totalOrders: Math.max(0, orderHistory.length),
+        activeSubscriptions: Math.max(0, subscribedSellers.length),
+        pendingRequests: Math.max(0, pendingRequests),
+        unreadMessages: Math.max(0, unreadCount),
+        completedOrders: Math.max(0, completedOrders),
+        favoriteSellerCount: Math.max(0, favoriteSellerCount),
+        averageOrderValue: orderHistory.length > 0 ? Math.max(0, totalSpent / orderHistory.length) : 0,
+        thisWeekSpent: Math.max(0, weekSpent),
+        thisMonthOrders: Math.max(0, monthOrders),
+        pendingShipments: Math.max(0, pendingShipments)
+      };
+    } catch (error) {
+      console.error('Error calculating stats:', error);
+      // Return safe defaults
+      return {
+        totalSpent: 0,
+        totalOrders: 0,
+        activeSubscriptions: 0,
+        pendingRequests: 0,
+        unreadMessages: 0,
+        completedOrders: 0,
+        favoriteSellerCount: 0,
+        averageOrderValue: 0,
+        thisWeekSpent: 0,
+        thisMonthOrders: 0,
+        pendingShipments: 0
+      };
+    }
   }, [user, orderHistory, subscribedSellers, requests, messages]);
 
-  // Generate recent activity
+  // Generate recent activity with sanitization
   useEffect(() => {
     if (!user?.username) return;
 
-    const activities: RecentActivity[] = [];
+    try {
+      const activities: RecentActivity[] = [];
 
-    // Add recent orders
-    orderHistory
-      .slice(0, 3)
-      .forEach(order => {
+      // Add recent orders
+      orderHistory
+        .slice(0, 3)
+        .forEach(order => {
+          activities.push({
+            id: `order-${order.id}`,
+            type: 'order',
+            title: sanitizeStrict(order.title),
+            subtitle: `From ${sanitizeStrict(order.seller)}`,
+            time: new Date(order.date).toLocaleDateString(),
+            amount: sanitizeNumber(order.markedUpPrice || order.price, 0, 10000),
+            status: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : 'pending',
+            href: '/buyers/my-orders',
+            icon: createElement(Package, { className: "w-4 h-4" })
+          });
+        });
+
+      // Add recent requests
+      requests
+        .slice(0, 2)
+        .forEach(request => {
+          activities.push({
+            id: `request-${request.id}`,
+            type: 'request',
+            title: sanitizeStrict(request.title),
+            subtitle: `To ${sanitizeStrict(request.seller)}`,
+            time: new Date(request.date).toLocaleDateString(),
+            amount: sanitizeNumber(request.price, 0, 1000),
+            status: request.status,
+            href: '/buyers/messages',
+            icon: createElement(MessageCircle, { className: "w-4 h-4" })
+          });
+        });
+
+      // Add subscription activities
+      subscribedSellers.slice(0, 1).forEach(sub => {
         activities.push({
-          id: `order-${order.id}`,
-          type: 'order',
-          title: order.title,
-          subtitle: `From ${order.seller}`,
-          time: new Date(order.date).toLocaleDateString(),
-          amount: order.markedUpPrice || order.price,
-          status: order.shippingStatus || 'pending',
-          href: '/buyers/my-orders',
-          icon: createElement(Package, { className: "w-4 h-4" })
+          id: `sub-${sub.seller}`,
+          type: 'subscription',
+          title: `Subscribed to ${sanitizeStrict(sub.seller)}`,
+          subtitle: `Premium content access`,
+          time: 'Active',
+          amount: parseFloat(sub.price) || 25,
+          href: `/sellers/${encodeURIComponent(sub.seller)}`,
+          icon: createElement(Crown, { className: "w-4 h-4" })
         });
       });
 
-    // Add recent requests
-    requests
-      .slice(0, 2)
-      .forEach(request => {
-        activities.push({
-          id: `request-${request.id}`,
-          type: 'request',
-          title: request.title,
-          subtitle: `To ${request.seller}`,
-          time: new Date(request.date).toLocaleDateString(),
-          amount: request.price,
-          status: request.status,
-          href: '/buyers/messages',
-          icon: createElement(MessageCircle, { className: "w-4 h-4" })
-        });
+      // Sort by time and limit
+      activities.sort((a, b) => {
+        if (a.time === 'Active') return -1;
+        if (b.time === 'Active') return 1;
+        try {
+          return new Date(b.time).getTime() - new Date(a.time).getTime();
+        } catch {
+          return 0;
+        }
       });
-
-    // Add subscription activities
-    subscribedSellers.slice(0, 1).forEach(sub => {
-      activities.push({
-        id: `sub-${sub.seller}`,
-        type: 'subscription',
-        title: `Subscribed to ${sub.seller}`,
-        subtitle: `Premium content access`,
-        time: 'Active',
-        amount: parseFloat(sub.price),
-        href: `/sellers/${sub.seller}`,
-        icon: createElement(Crown, { className: "w-4 h-4" })
-      });
-    });
-
-    // Sort by time and limit
-    activities.sort((a, b) => {
-      if (a.time === 'Active') return -1;
-      if (b.time === 'Active') return 1;
-      return new Date(b.time).getTime() - new Date(a.time).getTime();
-    });
-    
-    setRecentActivity(activities.slice(0, 6));
+      
+      setRecentActivity(activities.slice(0, 6));
+    } catch (error) {
+      console.error('Error generating recent activity:', error);
+      setErrors(prev => [...prev, 'Failed to generate recent activity']);
+    }
   }, [user, orderHistory, requests, subscribedSellers]);
-
-  // Get featured listings (removed to avoid complexity)
 
   return {
     user,
@@ -349,6 +480,7 @@ export const useDashboardData = () => {
     stats,
     subscribedSellers,
     recentActivity,
-    isLoading
+    isLoading,
+    errors
   };
 };
