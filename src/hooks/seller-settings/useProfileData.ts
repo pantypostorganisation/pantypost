@@ -1,10 +1,14 @@
-// src/hooks/seller-settings/useProfileData.enhanced.ts
+// src/hooks/seller-settings/useProfileData.ts
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { ProfileCompleteness, calculateProfileCompleteness } from '@/types/users';
+import { profileSchemas } from '@/utils/validation/schemas';
+import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 interface UseProfileDataReturn {
   // Profile data
@@ -48,6 +52,7 @@ interface UseProfileDataReturn {
 
 export function useProfileData(): UseProfileDataReturn {
   const { user, updateUser } = useAuth();
+  const rateLimiter = getRateLimiter();
   
   // Profile state
   const [bio, setBio] = useState('');
@@ -72,28 +77,41 @@ export function useProfileData(): UseProfileDataReturn {
   const hasUnsavedChanges = useRef(false);
   const originalData = useRef<any>({});
 
-  // Validate bio
+  // Validate bio with security
   const validateBio = useCallback((value: string) => {
-    if (value.length > 500) {
-      setErrors(prev => ({ ...prev, bio: 'Bio must be less than 500 characters' }));
+    try {
+      const sanitized = sanitizeStrict(value);
+      const result = profileSchemas.bio.safeParse(sanitized);
+      
+      if (!result.success) {
+        setErrors(prev => ({ ...prev, bio: result.error.errors[0].message }));
+        return false;
+      }
+      
+      setErrors(prev => ({ ...prev, bio: undefined }));
+      return true;
+    } catch {
+      setErrors(prev => ({ ...prev, bio: 'Invalid bio format' }));
       return false;
     }
-    setErrors(prev => ({ ...prev, bio: undefined }));
-    return true;
   }, []);
 
-  // Validate subscription price
+  // Validate subscription price with security
   const validatePrice = useCallback((value: string) => {
-    const pattern = /^\d+(\.\d{1,2})?$/;
-    const numValue = parseFloat(value);
+    const validation = securityService.validateAmount(value, {
+      min: 0,
+      max: 999.99,
+      allowDecimals: true
+    });
     
-    if (!pattern.test(value) || numValue < 0 || numValue > 999.99) {
+    if (!validation.valid) {
       setErrors(prev => ({ 
         ...prev, 
-        subscriptionPrice: 'Price must be between $0 and $999.99' 
+        subscriptionPrice: validation.error || 'Invalid price' 
       }));
       return false;
     }
+    
     setErrors(prev => ({ ...prev, subscriptionPrice: undefined }));
     return true;
   }, []);
@@ -109,17 +127,27 @@ export function useProfileData(): UseProfileDataReturn {
       
       if (profileResult.success && profileResult.data) {
         const profile = profileResult.data;
-        setBio(profile.bio);
-        setProfilePic(profile.profilePic);
+        
+        // Sanitize loaded data
+        const sanitizedBio = sanitizeStrict(profile.bio);
+        const sanitizedProfilePic = profile.profilePic ? sanitizeUrl(profile.profilePic) : null;
+        
+        setBio(sanitizedBio);
+        setProfilePic(sanitizedProfilePic);
         setSubscriptionPrice(profile.subscriptionPrice);
-        setGalleryImages(profile.galleryImages || []);
+        
+        // Sanitize gallery URLs
+        const sanitizedGallery = (profile.galleryImages || [])
+          .map(url => sanitizeUrl(url))
+          .filter((url): url is string => url !== '' && url !== null);
+        setGalleryImages(sanitizedGallery);
         
         // Store original data for change tracking
         originalData.current = {
-          bio: profile.bio,
-          profilePic: profile.profilePic,
+          bio: sanitizedBio,
+          profilePic: sanitizedProfilePic,
           subscriptionPrice: profile.subscriptionPrice,
-          galleryImages: profile.galleryImages || [],
+          galleryImages: sanitizedGallery,
         };
       }
 
@@ -163,19 +191,33 @@ export function useProfileData(): UseProfileDataReturn {
       JSON.stringify(galleryImages) !== JSON.stringify(originalData.current.galleryImages);
   }, [bio, profilePic, subscriptionPrice, galleryImages]);
 
-  // Handle profile picture change
+  // Handle profile picture change with security
   const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
+    // Check rate limit
+    if (user?.username) {
+      const rateLimitResult = rateLimiter.check('IMAGE_UPLOAD', {
+        ...RATE_LIMITS.IMAGE_UPLOAD,
+        identifier: user.username
+      });
+
+      if (!rateLimitResult.allowed) {
+        alert(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
+        return;
+      }
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
-      alert('Image size must be less than 10MB');
+    // Validate file with security service
+    const validation = securityService.validateFileUpload(file, {
+      maxSize: 10 * 1024 * 1024, // 10MB
+      allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+    });
+
+    if (!validation.valid) {
+      alert(validation.error);
       return;
     }
 
@@ -186,8 +228,14 @@ export function useProfileData(): UseProfileDataReturn {
       const result = await uploadToCloudinary(file);
       console.log('Profile pic uploaded successfully:', result);
       
+      // Validate uploaded URL
+      const sanitizedUrl = sanitizeUrl(result.url);
+      if (!sanitizedUrl) {
+        throw new Error('Invalid image URL returned');
+      }
+      
       // Set the preview
-      setPreview(result.url);
+      setPreview(sanitizedUrl);
       
       // Track upload activity
       await usersService.trackActivity({
@@ -210,7 +258,7 @@ export function useProfileData(): UseProfileDataReturn {
     setPreview(null);
   };
 
-  // Save profile with optimistic update
+  // Save profile with optimistic update and security
   const saveProfile = async (): Promise<boolean> => {
     if (!user?.username) return false;
 
@@ -222,14 +270,36 @@ export function useProfileData(): UseProfileDataReturn {
       return false;
     }
 
+    // Check rate limit for profile saves
+    const rateLimitResult = rateLimiter.check('PROFILE_UPDATE', {
+      maxAttempts: 10,
+      windowMs: 60 * 60 * 1000, // 1 hour
+      identifier: user.username
+    });
+
+    if (!rateLimitResult.allowed) {
+      alert(`Too many profile updates. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return false;
+    }
+
     setIsSaving(true);
     try {
+      // Sanitize all data before saving
+      const sanitizedBio = sanitizeStrict(bio);
+      const finalProfilePic = preview || profilePic;
+      const sanitizedProfilePic = finalProfilePic ? sanitizeUrl(finalProfilePic) : null;
+      
+      // Validate gallery images
+      const sanitizedGallery = galleryImages
+        .map(url => sanitizeUrl(url))
+        .filter((url): url is string => url !== '' && url !== null);
+
       // Prepare updates
       const updates = {
-        bio,
-        profilePic: preview || profilePic,
+        bio: sanitizedBio,
+        profilePic: sanitizedProfilePic,
         subscriptionPrice,
-        galleryImages,
+        galleryImages: sanitizedGallery,
       };
 
       // Update profile
@@ -237,8 +307,8 @@ export function useProfileData(): UseProfileDataReturn {
       
       if (result.success) {
         // Update auth context if profile pic changed
-        if (preview && preview !== user.profilePicture) {
-          await updateUser({ profilePicture: preview });
+        if (sanitizedProfilePic && sanitizedProfilePic !== user.profilePicture) {
+          await updateUser({ profilePicture: sanitizedProfilePic });
         }
 
         // Update original data
@@ -247,7 +317,7 @@ export function useProfileData(): UseProfileDataReturn {
         
         // Clear preview
         if (preview) {
-          setProfilePic(preview);
+          setProfilePic(sanitizedProfilePic);
           setPreview(null);
         }
 
@@ -282,12 +352,15 @@ export function useProfileData(): UseProfileDataReturn {
     }
   };
 
-  // Update preferences
+  // Update preferences with sanitization
   const updatePreferences = async (updates: any) => {
     if (!user?.username) return;
 
     try {
-      const result = await usersService.updateUserPreferences(user.username, updates);
+      // Sanitize preference updates
+      const sanitizedUpdates = securityService.sanitizeForAPI(updates);
+      
+      const result = await usersService.updateUserPreferences(user.username, sanitizedUpdates);
       if (result.success) {
         setPreferences(result.data);
       }
@@ -316,22 +389,40 @@ export function useProfileData(): UseProfileDataReturn {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  // Secure bio setter
+  const secureBioSetter = (value: string) => {
+    // Limit length to prevent DoS
+    const truncated = value.slice(0, 600);
+    setBio(truncated);
+    validateBio(truncated);
+  };
+
+  // Secure price setter
+  const securePriceSetter = (value: string) => {
+    // Remove non-numeric characters except decimal
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = cleaned.split('.');
+    if (parts.length > 2) return;
+    
+    // Limit to 2 decimal places
+    if (parts[1] && parts[1].length > 2) return;
+    
+    setSubscriptionPrice(cleaned);
+    validatePrice(cleaned);
+  };
+
   return {
     // Profile data
     bio,
-    setBio: (value: string) => {
-      setBio(value);
-      validateBio(value);
-    },
+    setBio: secureBioSetter,
     profilePic,
     setProfilePic,
     preview,
     setPreview,
     subscriptionPrice,
-    setSubscriptionPrice: (value: string) => {
-      setSubscriptionPrice(value);
-      validatePrice(value);
-    },
+    setSubscriptionPrice: securePriceSetter,
     
     // Gallery
     galleryImages,
