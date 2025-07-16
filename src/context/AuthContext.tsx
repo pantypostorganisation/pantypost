@@ -191,6 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string = '', // Default for backward compatibility
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
+    console.log('[AuthContext] Login called with:', { username, hasPassword: !!password, role });
+    
     // Check rate limit in context as well
     const rateLimitResult = rateLimiter.check('LOGIN_CONTEXT', {
       maxAttempts: 10,
@@ -227,10 +229,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Add error handling wrapper around authService call
       let result;
       try {
+        console.log('[AuthContext] Calling authService.login with:', { 
+          username: sanitizedUsername, 
+          hasPassword: !!password,
+          role 
+        });
+        
         result = await authService.login({ 
           username: sanitizedUsername, 
           password, // Include password for enhanced security
           role 
+        });
+        
+        console.log('[AuthContext] authService.login returned:', {
+          success: result?.success,
+          hasData: !!result?.data,
+          hasError: !!result?.error
         });
       } catch (authError) {
         console.error('[AuthContext] AuthService error:', authError);
@@ -254,7 +268,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[AuthContext] Login process completed successfully');
         return true;
       } else {
-        console.error('[AuthContext] Login failed:', result.error);
+        console.error('[AuthContext] Login failed:', {
+          result,
+          error: result.error,
+          success: result.success,
+          data: result.data,
+          errorMessage: result.error?.message,
+          errorCode: result.error?.code
+        });
         setError(sanitizeStrict(result.error?.message || 'Login failed'));
         setLoading(false);
         return false;

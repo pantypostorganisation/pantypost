@@ -17,10 +17,10 @@ const MAX_LOGIN_DELAY = 1200;
 
 export const useLogin = () => {
   const router = useRouter();
-  const { login, isAuthReady, user } = useAuth();
+  const { login, isAuthReady, user, error: authError } = useAuth();
   
   // Rate limiting for login attempts
-  const { checkLimit: checkLoginLimit } = useRateLimit('LOGIN');
+  const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK');
   
   // Track failed attempts for this session
   const failedAttemptsRef = useRef(0);
@@ -44,9 +44,17 @@ export const useLogin = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (isAuthReady && user) {
+      console.log('[useLogin] User already logged in, redirecting...');
       router.replace('/');
     }
   }, [isAuthReady, user, router]);
+
+  // Sync auth context errors
+  useEffect(() => {
+    if (authError && !state.isLoading) {
+      setState(prev => ({ ...prev, error: authError }));
+    }
+  }, [authError, state.isLoading]);
 
   // Update state helper with sanitization
   const updateState = useCallback((updates: Partial<LoginState>) => {
@@ -123,7 +131,11 @@ export const useLogin = () => {
       // Sanitize username before login
       const sanitizedUsername = usernameValidation.data;
       
-      console.log('[Login] Attempting login with sanitized username');
+      console.log('[useLogin] Attempting login with:', { 
+        username: sanitizedUsername, 
+        role,
+        hasPassword: false // We're not using passwords in this demo
+      });
       
       // Validate admin credentials if admin role
       if (role === 'admin' && !validateAdminCredentials(sanitizedUsername, role)) {
@@ -138,34 +150,28 @@ export const useLogin = () => {
         return;
       }
       
-      // Perform login
-      const success = await login(sanitizedUsername, role);
+      // Perform login - pass empty string for password (backward compatibility)
+      const success = await login(sanitizedUsername, '', role);
       
       if (success) {
-        console.log('[Login] Login successful, preparing redirect...');
+        console.log('[useLogin] Login successful, preparing redirect...');
         
         // Reset failed attempts on success
         failedAttemptsRef.current = 0;
+        resetLoginLimit(); // Reset rate limit on success
         
         // Clear sensitive data from state
-        updateState({ username: '', role: null });
+        updateState({ username: '', role: null, error: '' });
         
         // Extended delay to ensure auth context is fully updated
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Use replace instead of push to prevent back button issues
-        console.log('[Login] Redirecting to home page...');
-        
-        // Use window.location.href as primary method for forced navigation
-        window.location.href = '/';
-        
-        // Backup redirect in case window.location doesn't work
-        setTimeout(() => {
-          router.replace('/');
-        }, 100);
+        // Use replace to prevent back button issues
+        console.log('[useLogin] Redirecting to home page...');
+        router.replace('/');
         
       } else {
-        console.error('[Login] Login failed - authService returned false');
+        console.error('[useLogin] Login failed');
         
         // Track failed attempts for non-admin roles too
         if (role === 'admin') {
@@ -173,25 +179,34 @@ export const useLogin = () => {
           lastAttemptTimeRef.current = Date.now();
         }
         
-        // Generic error message
-        updateState({ 
-          error: 'Invalid credentials. Please try again.', 
-          isLoading: false 
-        });
+        // The error should already be set by auth context
+        if (!state.error) {
+          updateState({ 
+            error: 'Login failed. Please try again.', 
+            isLoading: false 
+          });
+        } else {
+          updateState({ isLoading: false });
+        }
       }
     } catch (error) {
-      console.error('[Login] Login error:', error);
+      console.error('[useLogin] Login error:', error);
       
-      // Generic error message
+      // Provide more specific error if available
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      
       updateState({ 
-        error: 'An error occurred. Please try again.', 
+        error: errorMessage.includes('Rate limit') ? errorMessage : 'An error occurred. Please try again.', 
         isLoading: false 
       });
     }
-  }, [state.username, state.role, login, router, updateState, checkLoginLimit, getRandomDelay]);
+  }, [state.username, state.role, state.error, login, router, updateState, checkLoginLimit, resetLoginLimit, getRandomDelay]);
 
   // Handle username submission with validation
   const handleUsernameSubmit = useCallback(() => {
+    // Clear any previous errors
+    updateState({ error: '' });
+    
     // Validate username using schema
     const validation = authSchemas.username.safeParse(state.username);
     
@@ -205,6 +220,7 @@ export const useLogin = () => {
   // Handle key press with rate limit awareness
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !state.isLoading) {
+      e.preventDefault(); // Prevent form submission
       if (state.step === 1) {
         handleUsernameSubmit();
       } else if (state.step === 2 && state.role) {
@@ -241,6 +257,7 @@ export const useLogin = () => {
       return;
     }
     
+    // Clear error when user types
     updateState({ username: value, error: '' });
   }, [updateState]);
 

@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 export interface LoginRequest {
   username: string;
-  password: string;
+  password?: string; // Made optional for backward compatibility
   role: 'buyer' | 'seller' | 'admin';
 }
 
@@ -327,22 +327,6 @@ export class AuthService {
    */
   async login(request: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
-      // Validate login request using the schema
-      const validation = authSchemas.loginSchema.safeParse({
-        username: request.username,
-        password: request.password,
-      });
-
-      if (!validation.success) {
-        return {
-          success: false,
-          error: {
-            message: validation.error.errors[0].message,
-            field: validation.error.errors[0].path[0] as string,
-          },
-        };
-      }
-
       // Check rate limit
       const rateLimitResult = this.rateLimiter.check('LOGIN', RATE_LIMITS.LOGIN);
       if (!rateLimitResult.allowed) {
@@ -355,11 +339,56 @@ export class AuthService {
         };
       }
 
+      // For localStorage implementation, we only need username validation
+      // For API implementation, we need full validation including password
+      const isApiMode = FEATURES.USE_API_AUTH;
+      
+      let validatedUsername: string;
+      let validatedPassword: string | undefined;
+      
+      if (isApiMode) {
+        // Full validation for API mode
+        const validation = authSchemas.loginSchema.safeParse({
+          username: request.username,
+          password: request.password || '',
+        });
+
+        if (!validation.success) {
+          return {
+            success: false,
+            error: {
+              message: validation.error.errors[0].message,
+              field: validation.error.errors[0].path[0] as string,
+            },
+          };
+        }
+        
+        validatedUsername = validation.data.username;
+        validatedPassword = validation.data.password;
+      } else {
+        // Simplified validation for localStorage mode (no password required)
+        const usernameValidation = authSchemas.username.safeParse(request.username);
+        
+        if (!usernameValidation.success) {
+          return {
+            success: false,
+            error: {
+              message: usernameValidation.error.errors[0].message,
+              field: 'username',
+            },
+          };
+        }
+        
+        validatedUsername = usernameValidation.data;
+        validatedPassword = request.password;
+      }
+
       if (FEATURES.USE_API_AUTH) {
         const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.LOGIN, {
           method: 'POST',
           body: JSON.stringify({
-            ...validation.data,
+            username: validatedUsername,
+            password: validatedPassword,
             role: request.role,
           }),
         });
@@ -390,20 +419,19 @@ export class AuthService {
       }
 
       // LocalStorage implementation
-      const { username, password } = validation.data;
       const { role } = request;
       
       // Check if user exists in all_users_v2
       const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
-      const existingUser = allUsers[username];
+      const existingUser = allUsers[validatedUsername];
 
-      // Verify password if user exists
-      if (existingUser) {
+      // Verify password if user exists and password is provided
+      if (existingUser && validatedPassword) {
         const credentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
-        const userCreds = credentials[username];
+        const userCreds = credentials[validatedUsername];
         
         if (userCreds && userCreds.password) {
-          const hashedInput = await this.hashPassword(password);
+          const hashedInput = await this.hashPassword(validatedPassword);
           if (hashedInput !== userCreds.password) {
             return {
               success: false,
@@ -416,14 +444,14 @@ export class AuthService {
         }
       }
 
-      const isAdmin = username === 'oakley' || username === 'gerome';
+      const isAdmin = validatedUsername === 'oakley' || validatedUsername === 'gerome';
       
       // Create or update user
       const user: User = {
         id: existingUser?.id || `user_${Date.now()}`,
-        username,
+        username: validatedUsername,
         role: isAdmin ? 'admin' : role,
-        email: existingUser?.email || `${username}@example.com`,
+        email: existingUser?.email || `${validatedUsername}@example.com`,
         isVerified: existingUser?.verificationStatus === 'verified' || isAdmin,
         tier: role === 'seller' && !isAdmin ? 'Tease' : undefined,
         subscriberCount: existingUser?.subscriberCount || 0,
@@ -444,7 +472,7 @@ export class AuthService {
       const sanitizedUser = this.sanitizeUserData(user);
 
       // Update all_users_v2
-      allUsers[username] = sanitizedUser;
+      allUsers[validatedUsername] = sanitizedUser;
       await storageService.setItem('all_users_v2', allUsers);
 
       // Set current user
