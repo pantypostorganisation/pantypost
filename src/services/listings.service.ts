@@ -485,7 +485,7 @@ export class ListingsService {
   }
 
   /**
-   * Delete listing
+   * Delete listing - Enhanced with event broadcasting
    */
   async deleteListing(id: string): Promise<ApiResponse<void>> {
     try {
@@ -506,14 +506,42 @@ export class ListingsService {
       
       console.log(`[ListingsService] Delete listing: ${beforeCount} -> ${afterCount} listings`);
       
+      if (beforeCount === afterCount) {
+        console.warn(`[ListingsService] Listing ${id} was not found in storage`);
+      }
+      
       await storageService.setItem('listings', filtered);
 
-      // Invalidate cache
+      // Invalidate all caches
       this.invalidateCache();
+      
+      // Clear browse cache specifically
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('browse_listings_cache');
+          console.log('[ListingsService] Cleared browse listings cache');
+        } catch (e) {
+          console.warn('Failed to clear browse cache:', e);
+        }
+      }
+      
+      // Trigger a custom event to notify other components
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('listingDeleted', { 
+          detail: { listingId: id } 
+        }));
+        
+        // Also trigger storage event manually for cross-tab sync
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'listings',
+          newValue: JSON.stringify(filtered),
+          url: window.location.href
+        }));
+      }
 
       return { success: true };
     } catch (error) {
-      console.error('Delete listing error:', error);
+      console.error('[ListingsService] Delete listing error:', error);
       return {
         success: false,
         error: { message: 'Failed to delete listing' },

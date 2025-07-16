@@ -154,6 +154,7 @@ export const useBrowseListings = () => {
   const loadListings = useCallback(async () => {
     // Debug: Log what's being loaded
     console.log('=== DEBUG: Loading Listings ===');
+    console.log('Timestamp:', new Date().toISOString());
     console.log('Filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
     
     // Check localStorage directly first
@@ -336,6 +337,51 @@ export const useBrowseListings = () => {
       setIsLoading(false);
     }
   }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, selectedHourRange, checkSearchLimit]);
+
+  // Add storage event listener to detect when listings change
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      // If listings were updated in storage, refresh our data
+      if (e.key === 'listings' && e.newValue !== e.oldValue) {
+        console.log('📦 Detected listings change in storage, refreshing...');
+        loadListings();
+      }
+      
+      // If browse cache was cleared, refresh
+      if (e.key === 'browse_listings_cache' && e.newValue === null) {
+        console.log('🧹 Browse cache cleared, refreshing...');
+        loadListings();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [loadListings]);
+
+  // Add custom event listener for deleted listings
+  useEffect(() => {
+    const handleListingDeleted = (event: CustomEvent) => {
+      const { listingId } = event.detail;
+      console.log('🗑️ Listing deleted event received:', listingId);
+      
+      // Remove the listing from our local state immediately
+      setListings(prev => prev.filter(l => l.id !== listingId));
+      
+      // Also refresh from storage to ensure consistency
+      setTimeout(() => {
+        loadListings();
+      }, 100);
+    };
+
+    window.addEventListener('listingDeleted', handleListingDeleted as EventListener);
+    
+    return () => {
+      window.removeEventListener('listingDeleted', handleListingDeleted as EventListener);
+    };
+  }, [loadListings]);
 
   // Load data on mount and when filters change
   useEffect(() => {
