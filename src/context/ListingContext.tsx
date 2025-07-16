@@ -405,6 +405,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (result.success && result.data) {
         setListings(prev => [...prev, result.data!]);
         console.log('✅ Created new listing:', result.data);
+        window.dispatchEvent(new CustomEvent('listingCreated', { detail: { listing: result.data } }));
       } else {
         console.error('Failed to create listing:', result.error);
         alert(result.error?.message || 'Failed to create listing. Please try again.');
@@ -509,6 +510,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           user.username,
           `🔨 You've created a new auction: "${sanitizedListing.title}" starting at $${auctionSettings.startingPrice.toFixed(2)}`
         );
+        window.dispatchEvent(new CustomEvent('listingCreated', { detail: { listing: result.data } }));
       } else {
         alert(result.error?.message || 'Failed to create auction listing. Please try again.');
       }

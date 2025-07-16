@@ -383,6 +383,20 @@ export const useBrowseListings = () => {
     };
   }, [loadListings]);
 
+  // Add custom event listener for created listings
+  useEffect(() => {
+    const handleListingCreated = (event: CustomEvent) => {
+      console.log('🆕 Detected new listing creation, refreshing...');
+      loadListings();
+    };
+
+    window.addEventListener('listingCreated', handleListingCreated as EventListener);
+    
+    return () => {
+      window.removeEventListener('listingCreated', handleListingCreated as EventListener);
+    };
+  }, [loadListings]);
+
   // Load data on mount and when filters change
   useEffect(() => {
     loadListings();
