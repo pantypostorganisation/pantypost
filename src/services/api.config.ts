@@ -8,6 +8,9 @@
 import { mockApiCall } from './mock/mock-api';
 import { getMockConfig } from './mock/mock.config';
 import { apiConfig, appConfig, securityConfig, isDevelopment } from '@/config/environment';
+import { securityService } from './security.service';
+import { sanitizeUrl } from '@/utils/security/sanitization';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 // Re-export from environment config for backward compatibility
 export { isDevelopment };
@@ -112,33 +115,52 @@ export const REQUEST_CONFIG = {
   TIMEOUT: apiConfig.timeout,
   RETRY_ATTEMPTS: apiConfig.retryAttempts,
   RETRY_DELAY: 1000, // 1 second
+  MAX_REQUEST_SIZE: 5 * 1024 * 1024, // 5MB
 };
 
 // Headers configuration with version from environment
-export const getDefaultHeaders = (): HeadersInit => ({
-  'Content-Type': 'application/json',
-  'X-Client-Version': appConfig.version,
-  'X-App-Name': appConfig.name,
-});
+export const getDefaultHeaders = (): HeadersInit => {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    'X-Client-Version': appConfig.version,
+    'X-App-Name': appConfig.name,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+  };
+
+  // Add CSRF token if available
+  const csrfToken = securityService.generateCSRFToken();
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+
+  return headers;
+};
 
 // Auth token management
 export const AUTH_TOKEN_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 
-// Helper to build full API URL
+// Helper to build full API URL with validation
 export const buildApiUrl = (endpoint: string, params?: Record<string, string>): string => {
   let url = endpoint;
   
-  // Replace path parameters
+  // Validate and sanitize path parameters
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
-      url = url.replace(`:${key}`, encodeURIComponent(value));
+      // Sanitize parameter value
+      const sanitizedValue = encodeURIComponent(String(value).trim());
+      url = url.replace(`:${key}`, sanitizedValue);
     });
   }
   
   // Only prepend base URL if we're using the API and not mocking
   if (API_BASE_URL && !FEATURES.USE_MOCK_API) {
-    return `${API_BASE_URL}${url}`;
+    const sanitizedUrl = sanitizeUrl(`${API_BASE_URL}${url}`);
+    if (!sanitizedUrl) {
+      throw new Error('Invalid API URL');
+    }
+    return sanitizedUrl;
   }
   
   return url;
@@ -164,12 +186,13 @@ export interface ApiResponse<T> {
   };
 }
 
-// Create a more robust API client
+// Create a more robust API client with security
 class ApiClient {
   private static instance: ApiClient;
   private abortControllers: Map<string, AbortController> = new Map();
   private requestCount: number = 0;
   private requestWindowStart: number = Date.now();
+  private rateLimiter = getRateLimiter();
 
   static getInstance(): ApiClient {
     if (!ApiClient.instance) {
@@ -200,24 +223,63 @@ class ApiClient {
   /**
    * Check rate limit
    */
-  private checkRateLimit(): boolean {
-    if (!securityConfig.enableRateLimiting) return true;
+  private checkRateLimit(): { allowed: boolean; waitTime?: number } {
+    if (!securityConfig.enableRateLimiting) return { allowed: true };
 
-    const now = Date.now();
-    const windowDuration = 60000; // 1 minute
-
-    // Reset window if expired
-    if (now - this.requestWindowStart > windowDuration) {
-      this.requestCount = 0;
-      this.requestWindowStart = now;
-    }
-
-    this.requestCount++;
-    return this.requestCount <= securityConfig.maxRequestsPerMinute;
+    // Use rate limiter service
+    const result = this.rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
+    return result;
   }
 
   /**
-   * Make an API call with abort capability
+   * Validate request options
+   */
+  private validateRequestOptions(options: RequestInit): void {
+    // Validate request body size
+    if (options.body) {
+      const bodySize = typeof options.body === 'string' 
+        ? new Blob([options.body]).size 
+        : 0;
+      
+      if (bodySize > REQUEST_CONFIG.MAX_REQUEST_SIZE) {
+        throw new Error('Request body too large');
+      }
+    }
+
+    // Validate headers
+    if (options.headers) {
+      const headers = options.headers as Record<string, string>;
+      Object.entries(headers).forEach(([key, value]) => {
+        // Prevent header injection
+        if (key.includes('\n') || key.includes('\r') || 
+            value.includes('\n') || value.includes('\r')) {
+          throw new Error('Invalid header format');
+        }
+      });
+    }
+  }
+
+  /**
+   * Sanitize response data
+   */
+  private sanitizeResponse<T>(data: any): T {
+    // Basic sanitization for common attack vectors
+    if (typeof data === 'string') {
+      // Check for potential XSS in string responses
+      const sanitized = securityService.sanitizeForDisplay(data);
+      return sanitized as unknown as T;
+    }
+    
+    if (typeof data === 'object' && data !== null) {
+      // Sanitize object responses
+      return securityService.sanitizeForAPI(data) as T;
+    }
+    
+    return data;
+  }
+
+  /**
+   * Make an API call with abort capability and security
    */
   async call<T>(
     endpoint: string,
@@ -225,12 +287,26 @@ class ApiClient {
     requestKey?: string
   ): Promise<ApiResponse<T>> {
     // Check rate limit
-    if (!this.checkRateLimit()) {
+    const rateLimitResult = this.checkRateLimit();
+    if (!rateLimitResult.allowed) {
       return {
         success: false,
         error: {
-          message: 'Rate limit exceeded. Please try again later.',
+          message: `Rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`,
           code: 'RATE_LIMIT_EXCEEDED',
+        },
+      };
+    }
+
+    // Validate request options
+    try {
+      this.validateRequestOptions(options);
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          message: error instanceof Error ? error.message : 'Invalid request',
+          code: 'VALIDATION_ERROR',
         },
       };
     }
@@ -267,6 +343,11 @@ class ApiClient {
       this.abortControllers.set(requestKey, abortController);
     }
 
+    // Set timeout
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, REQUEST_CONFIG.TIMEOUT);
+
     try {
       const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
       const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
@@ -284,11 +365,23 @@ class ApiClient {
         ...options,
         headers,
         signal: abortController.signal,
+        credentials: 'same-origin', // Prevent CSRF
       });
+      
+      clearTimeout(timeoutId);
       
       // Remove from active requests
       if (requestKey) {
         this.abortControllers.delete(requestKey);
+      }
+      
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        return {
+          success: false,
+          error: { message: 'Invalid response format' },
+        };
       }
       
       const data = await response.json();
@@ -300,12 +393,17 @@ class ApiClient {
         };
       }
       
+      // Sanitize response data
+      const sanitizedData = this.sanitizeResponse<T>(data.data || data);
+      
       return {
         success: true,
-        data: data.data || data,
+        data: sanitizedData,
         meta: data.meta,
       };
     } catch (error) {
+      clearTimeout(timeoutId);
+      
       // Remove from active requests
       if (requestKey) {
         this.abortControllers.delete(requestKey);
@@ -315,7 +413,7 @@ class ApiClient {
       if (error instanceof Error && error.name === 'AbortError') {
         return {
           success: false,
-          error: { message: 'Request was cancelled' },
+          error: { message: 'Request timeout or cancelled' },
         };
       }
 
@@ -333,7 +431,7 @@ class ApiClient {
 // Export singleton API client
 export const apiClient = ApiClient.getInstance();
 
-// Generic API call wrapper (backward compatible)
+// Generic API call wrapper with security
 export async function apiCall<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -341,7 +439,7 @@ export async function apiCall<T>(
   return apiClient.call<T>(endpoint, options);
 }
 
-// Retry utility for failed requests
+// Retry utility for failed requests with exponential backoff
 export async function apiCallWithRetry<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -358,8 +456,9 @@ export async function apiCallWithRetry<T>(
     
     lastError = result.error;
     
-    // Don't retry on client errors (4xx)
-    if (lastError?.code && lastError.code.startsWith('4')) {
+    // Don't retry on client errors (4xx) or rate limits
+    if (lastError?.code && 
+        (lastError.code.startsWith('4') || lastError.code === 'RATE_LIMIT_EXCEEDED')) {
       return result;
     }
     
@@ -368,9 +467,10 @@ export async function apiCallWithRetry<T>(
       return result;
     }
     
-    // Wait before retrying
+    // Exponential backoff
     if (i < maxRetries - 1) {
-      await new Promise(resolve => setTimeout(resolve, REQUEST_CONFIG.RETRY_DELAY * (i + 1)));
+      const delay = Math.min(REQUEST_CONFIG.RETRY_DELAY * Math.pow(2, i), 10000);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
   

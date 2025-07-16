@@ -5,6 +5,8 @@ import { runOrdersMigration } from '@/utils/ordersMigration';
 import { getMockConfig } from './mock/mock.config';
 import { mockInterceptor } from './mock/mock-interceptor';
 import { validateConfiguration, getAllConfig, isDevelopment } from '@/config/environment';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { securityService } from './security.service';
 
 export interface InitializationResult {
   success: boolean;
@@ -16,6 +18,8 @@ export class AppInitializer {
   private static instance: AppInitializer;
   private initialized = false;
   private initializationPromise: Promise<InitializationResult> | null = null;
+  private readonly MAX_INIT_ATTEMPTS = 3;
+  private initAttempts = 0;
 
   private constructor() {}
 
@@ -27,8 +31,7 @@ export class AppInitializer {
   }
 
   /**
-   * Initialize the application
-   * This should be called once when the app starts
+   * Initialize the application with security checks
    */
   async initialize(): Promise<InitializationResult> {
     // If already initializing, return the existing promise
@@ -40,6 +43,17 @@ export class AppInitializer {
     if (this.initialized) {
       return { success: true, errors: [], warnings: [] };
     }
+
+    // Check max attempts
+    if (this.initAttempts >= this.MAX_INIT_ATTEMPTS) {
+      return {
+        success: false,
+        errors: ['Maximum initialization attempts exceeded'],
+        warnings: []
+      };
+    }
+
+    this.initAttempts++;
 
     // Start initialization
     this.initializationPromise = this.performInitialization();
@@ -59,79 +73,86 @@ export class AppInitializer {
     try {
       console.log('[AppInitializer] Starting application initialization...');
 
-      // 0. Validate environment configuration
+      // 0. Security checks first
+      try {
+        await this.performSecurityChecks();
+      } catch (error) {
+        errors.push(`Security check failed: ${this.sanitizeError(error)}`);
+        return { success: false, errors, warnings }; // Critical - stop initialization
+      }
+
+      // 1. Validate environment configuration
       try {
         console.log('[AppInitializer] Validating environment configuration...');
         const validation = validateConfiguration();
         if (!validation.valid) {
-          validation.errors.forEach(error => warnings.push(`Configuration: ${error}`));
+          validation.errors.forEach(error => warnings.push(`Configuration: ${sanitizeStrict(error)}`));
         }
         
-        // Log configuration in development
+        // Log configuration in development (sanitized)
         if (isDevelopment()) {
-          console.log('[AppInitializer] Environment configuration:', getAllConfig());
+          const config = getAllConfig();
+          console.log('[AppInitializer] Environment configuration:', this.sanitizeConfig(config));
         }
       } catch (error) {
-        warnings.push(`Configuration validation warning: ${error}`);
+        warnings.push(`Configuration validation warning: ${this.sanitizeError(error)}`);
       }
 
-      // 1. Initialize storage service
+      // 2. Initialize storage service with security
       try {
         console.log('[AppInitializer] Initializing storage service...');
         await this.initializeStorage();
       } catch (error) {
-        errors.push(`Storage initialization failed: ${error}`);
+        errors.push(`Storage initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 2. Initialize mock API if enabled
+      // 3. Initialize mock API if enabled
       try {
         await this.initializeMockApi();
       } catch (error) {
-        warnings.push(`Mock API initialization warning: ${error}`);
-        // Don't treat mock API failure as critical error
+        warnings.push(`Mock API initialization warning: ${this.sanitizeError(error)}`);
       }
 
-      // 3. Initialize auth service
+      // 4. Initialize auth service
       try {
         console.log('[AppInitializer] Initializing auth service...');
-        // Auth service doesn't need explicit initialization
-        // It initializes on first use
+        // Auth service initializes on first use
       } catch (error) {
-        errors.push(`Auth initialization failed: ${error}`);
+        errors.push(`Auth initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 4. Initialize wallet service
+      // 5. Initialize wallet service
       try {
         console.log('[AppInitializer] Initializing wallet service...');
         if (typeof walletService?.initialize === 'function') {
           await walletService.initialize();
         }
       } catch (error) {
-        warnings.push(`Wallet initialization warning: ${error}`);
+        warnings.push(`Wallet initialization warning: ${this.sanitizeError(error)}`);
       }
 
-      // 5. Run orders migration
+      // 6. Run orders migration with validation
       try {
         console.log('[AppInitializer] Running orders migration...');
-        await runOrdersMigration();
+        await this.runSecureMigration();
       } catch (error) {
-        warnings.push(`Orders migration warning: ${error}`);
+        warnings.push(`Orders migration warning: ${this.sanitizeError(error)}`);
       }
 
-      // 6. Perform data integrity checks
+      // 7. Perform data integrity checks
       try {
         console.log('[AppInitializer] Checking data integrity...');
         await this.checkDataIntegrity();
       } catch (error) {
-        warnings.push(`Data integrity check warning: ${error}`);
+        warnings.push(`Data integrity check warning: ${this.sanitizeError(error)}`);
       }
 
-      // 7. Clean up old data
+      // 8. Clean up old data securely
       try {
         console.log('[AppInitializer] Cleaning up old data...');
         await this.cleanupOldData();
       } catch (error) {
-        warnings.push(`Cleanup warning: ${error}`);
+        warnings.push(`Cleanup warning: ${this.sanitizeError(error)}`);
       }
 
       // Log results
@@ -151,7 +172,7 @@ export class AppInitializer {
       };
     } catch (error) {
       console.error('[AppInitializer] Fatal initialization error:', error);
-      errors.push(`Fatal error: ${error}`);
+      errors.push(`Fatal error: ${this.sanitizeError(error)}`);
       return {
         success: false,
         errors,
@@ -160,38 +181,77 @@ export class AppInitializer {
     }
   }
 
+  /**
+   * Perform initial security checks
+   */
+  private async performSecurityChecks(): Promise<void> {
+    // Check for secure context (HTTPS in production)
+    if (typeof window !== 'undefined' && window.location.protocol === 'http:' && !isDevelopment()) {
+      throw new Error('Application must be served over HTTPS in production');
+    }
+
+    // Check for critical browser features
+    if (typeof window !== 'undefined') {
+      if (!window.crypto || !window.crypto.getRandomValues) {
+        throw new Error('Web Crypto API not available');
+      }
+    }
+  }
+
+  /**
+   * Initialize storage with security checks
+   */
   private async initializeStorage(): Promise<void> {
     // Check if localStorage is available
     if (typeof window === 'undefined' || !window.localStorage) {
       throw new Error('localStorage is not available');
     }
 
-    // Test storage access
+    // Test storage access with quota check
     const testKey = '__storage_test__';
+    const testValue = 'x'.repeat(1024); // 1KB test
+    
     try {
-      localStorage.setItem(testKey, 'test');
+      localStorage.setItem(testKey, testValue);
+      const retrieved = localStorage.getItem(testKey);
+      if (retrieved !== testValue) {
+        throw new Error('Storage integrity check failed');
+      }
       localStorage.removeItem(testKey);
     } catch (error) {
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        throw new Error('Storage quota exceeded');
+      }
       throw new Error('localStorage is not accessible');
     }
   }
 
+  /**
+   * Initialize mock API with validation
+   */
   private async initializeMockApi(): Promise<void> {
     const config = getMockConfig();
     
     if (config.enabled) {
       console.log('[AppInitializer] Mock API is enabled, initializing...');
-      console.log(`[AppInitializer] Mock scenario: ${config.scenario.name}`);
+      
+      // Validate mock scenario
+      const validScenarios = ['default', 'error-prone', 'slow-network', 'realistic'];
+      if (!validScenarios.includes(config.scenario.name)) {
+        throw new Error('Invalid mock scenario');
+      }
+      
+      console.log(`[AppInitializer] Mock scenario: ${sanitizeStrict(config.scenario.name)}`);
       
       try {
         await mockInterceptor.initialize();
         console.log('[AppInitializer] Mock API initialized successfully');
         
-        // Log mock configuration for debugging
-        if (process.env.NODE_ENV === 'development') {
+        // Log mock configuration for debugging (sanitized)
+        if (isDevelopment()) {
           console.log('[AppInitializer] Mock API Configuration:', {
             enabled: config.enabled,
-            scenario: config.scenario.name,
+            scenario: sanitizeStrict(config.scenario.name),
             errorRate: `${(config.scenario.errorRate * 100).toFixed(0)}%`,
             networkDelay: `${config.scenario.networkDelay.min}-${config.scenario.networkDelay.max}ms`,
             persistState: config.persistState,
@@ -207,6 +267,25 @@ export class AppInitializer {
     }
   }
 
+  /**
+   * Run migration with data validation
+   */
+  private async runSecureMigration(): Promise<void> {
+    // Validate migration data before running
+    const orderData = await storageService.getItem<any>('wallet_orders', null);
+    if (orderData) {
+      // Basic validation to ensure data structure is safe
+      if (typeof orderData !== 'object' || Array.isArray(orderData)) {
+        throw new Error('Invalid order data structure');
+      }
+    }
+    
+    await runOrdersMigration();
+  }
+
+  /**
+   * Check data integrity with security validation
+   */
   private async checkDataIntegrity(): Promise<void> {
     // Check for critical data
     const criticalKeys = [
@@ -226,27 +305,41 @@ export class AppInitializer {
     for (const key of criticalKeys) {
       const data = await storageService.getItem(key, null);
       if (data === null) {
-        console.warn(`[AppInitializer] Missing critical data: ${key}`);
+        console.warn(`[AppInitializer] Missing critical data: ${sanitizeStrict(key)}`);
+      } else {
+        // Validate data structure
+        if (typeof data !== 'object') {
+          console.error(`[AppInitializer] Invalid data structure for ${sanitizeStrict(key)}`);
+        }
       }
     }
   }
 
+  /**
+   * Clean up old data with secure deletion
+   */
   private async cleanupOldData(): Promise<void> {
     // Define keys that should be removed (deprecated)
     const deprecatedKeys = [
-      // Add any deprecated storage keys here
       'old_wallet_data',
       'temp_listings',
       '__test_data__',
     ];
 
+    // Validate each key before removal
+    const safeDeprecatedKeys = deprecatedKeys
+      .filter(key => typeof key === 'string' && key.length < 100)
+      .map(key => sanitizeStrict(key));
+
     // Don't clean up mock data
     const mockConfig = getMockConfig();
     if (mockConfig.enabled && mockConfig.persistState) {
-      deprecatedKeys.push(...deprecatedKeys.filter(key => !key.startsWith('mock_api_')));
+      const filteredKeys = safeDeprecatedKeys.filter(key => !key.startsWith('mock_api_'));
+      safeDeprecatedKeys.length = 0;
+      safeDeprecatedKeys.push(...filteredKeys);
     }
 
-    for (const key of deprecatedKeys) {
+    for (const key of safeDeprecatedKeys) {
       try {
         await storageService.removeItem(key);
       } catch (error) {
@@ -259,17 +352,20 @@ export class AppInitializer {
       const allKeys = await storageService.getKeys('session_');
       const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
-      for (const key of allKeys) {
+      for (const key of allKeys.slice(0, 100)) { // Limit to prevent DoS
         const sessionData = await storageService.getItem<any>(key, null);
-        if (sessionData && sessionData.timestamp && sessionData.timestamp < thirtyDaysAgo) {
-          await storageService.removeItem(key);
+        if (sessionData && typeof sessionData === 'object' && 
+            'timestamp' in sessionData && typeof sessionData.timestamp === 'number') {
+          if (sessionData.timestamp < thirtyDaysAgo) {
+            await storageService.removeItem(key);
+          }
         }
       }
     } catch (error) {
       console.warn('[AppInitializer] Session cleanup error:', error);
     }
 
-    // Clean up old auth tokens
+    // Clean up expired auth tokens
     try {
       interface AuthData {
         expiresAt: string | number;
@@ -279,7 +375,7 @@ export class AppInitializer {
       const authData = await storageService.getItem<AuthData | null>('auth_data', null);
       if (authData && authData.expiresAt) {
         const expiresAt = new Date(authData.expiresAt).getTime();
-        if (expiresAt < Date.now()) {
+        if (!isNaN(expiresAt) && expiresAt < Date.now()) {
           await storageService.removeItem('auth_data');
           await storageService.removeItem('auth_token');
           console.log('[AppInitializer] Cleaned up expired auth tokens');
@@ -291,12 +387,33 @@ export class AppInitializer {
   }
 
   /**
+   * Sanitize error messages for logging
+   */
+  private sanitizeError(error: unknown): string {
+    if (error instanceof Error) {
+      return sanitizeStrict(error.message);
+    }
+    return 'Unknown error';
+  }
+
+  /**
+   * Sanitize configuration object for logging
+   */
+  private sanitizeConfig(config: any): any {
+    return securityService.sanitizeForAPI(config);
+  }
+
+  /**
    * Reset the initialization state
    * Useful for testing or forcing re-initialization
    */
   reset(): void {
+    if (this.initialized && !isDevelopment()) {
+      console.warn('[AppInitializer] Reset called in production environment');
+    }
     this.initialized = false;
     this.initializationPromise = null;
+    this.initAttempts = 0;
   }
 
   /**
@@ -313,12 +430,14 @@ export class AppInitializer {
     initialized: boolean;
     mockApiEnabled: boolean;
     mockScenario?: string;
+    attempts: number;
   } {
     const mockConfig = getMockConfig();
     return {
       initialized: this.initialized,
       mockApiEnabled: mockConfig.enabled,
-      mockScenario: mockConfig.enabled ? mockConfig.scenario.name : undefined,
+      mockScenario: mockConfig.enabled ? sanitizeStrict(mockConfig.scenario.name) : undefined,
+      attempts: this.initAttempts,
     };
   }
 }

@@ -3,6 +3,11 @@
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, API_BASE_URL, buildApiUrl, apiCall, ApiResponse, AUTH_TOKEN_KEY, REFRESH_TOKEN_KEY } from './api.config';
+import { authSchemas } from '@/utils/validation/schemas';
+import { sanitizeUsername, sanitizeEmail, sanitizeStrict } from '@/utils/security/sanitization';
+import { securityService } from './security.service';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { z } from 'zod';
 
 export interface LoginRequest {
   username: string;
@@ -28,13 +33,15 @@ export interface UsernameCheckResponse {
 }
 
 /**
- * Authentication Service
- * Handles all auth-related operations with localStorage fallback
+ * Authentication Service with security enhancements
  */
 export class AuthService {
   private tokenRefreshTimer: NodeJS.Timeout | null = null;
   private isRefreshing = false;
   private refreshSubscribers: ((token: string) => void)[] = [];
+  private rateLimiter = getRateLimiter();
+  private readonly TOKEN_REFRESH_INTERVAL = 25 * 60 * 1000; // 25 minutes
+  private readonly MAX_TOKEN_AGE = 30 * 60 * 1000; // 30 minutes
 
   constructor() {
     // Initialize interceptor on service creation
@@ -54,7 +61,7 @@ export class AuthService {
     // Override fetch to add auth headers
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       // Get token from storage
-      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+      const token = await this.getValidToken();
       
       // Add auth header if token exists and this is an API call
       if (token && FEATURES.USE_API_AUTH && API_BASE_URL) {
@@ -82,9 +89,8 @@ export class AuthService {
             const refreshResult = await this.refreshToken();
             
             if (refreshResult.success && refreshResult.data) {
-              // Store new tokens
-              await storageService.setItem(AUTH_TOKEN_KEY, refreshResult.data.token);
-              await storageService.setItem(REFRESH_TOKEN_KEY, refreshResult.data.refreshToken);
+              // Store new tokens securely
+              await this.storeTokens(refreshResult.data.token, refreshResult.data.refreshToken);
 
               // Notify all subscribers
               this.refreshSubscribers.forEach(callback => callback(refreshResult.data!.token));
@@ -121,6 +127,42 @@ export class AuthService {
   }
 
   /**
+   * Get valid token with expiry check
+   */
+  private async getValidToken(): Promise<string | null> {
+    const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+    if (!token) return null;
+
+    // Check token age
+    const tokenData = await storageService.getItem<{ token: string; timestamp: number } | null>('auth_token_data', null);
+    if (tokenData && Date.now() - tokenData.timestamp > this.MAX_TOKEN_AGE) {
+      // Token expired, try to refresh
+      const refreshResult = await this.refreshToken();
+      if (refreshResult.success && refreshResult.data) {
+        return refreshResult.data.token;
+      }
+      return null;
+    }
+
+    return token;
+  }
+
+  /**
+   * Store tokens securely
+   */
+  private async storeTokens(token: string, refreshToken?: string): Promise<void> {
+    await storageService.setItem(AUTH_TOKEN_KEY, token);
+    await storageService.setItem('auth_token_data', {
+      token,
+      timestamp: Date.now()
+    });
+    
+    if (refreshToken) {
+      await storageService.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    }
+  }
+
+  /**
    * Initialize session persistence
    */
   private async initializeSessionPersistence() {
@@ -133,8 +175,9 @@ export class AuthService {
         const result = await apiCall<User>(API_ENDPOINTS.AUTH.ME);
         
         if (result.success && result.data) {
-          // Update user data with fresh data from server
-          await storageService.setItem('currentUser', result.data);
+          // Sanitize and update user data with fresh data from server
+          const sanitizedUser = this.sanitizeUserData(result.data);
+          await storageService.setItem('currentUser', sanitizedUser);
           
           // Set up token refresh timer
           this.setupTokenRefreshTimer();
@@ -145,6 +188,7 @@ export class AuthService {
       }
     } catch (error) {
       console.error('Session persistence error:', error);
+      await this.clearAuthState();
     }
   }
 
@@ -157,14 +201,13 @@ export class AuthService {
       clearTimeout(this.tokenRefreshTimer);
     }
 
-    // Refresh token 5 minutes before expiry
-    // For now, we'll refresh every 25 minutes (assuming 30 min tokens)
+    // Refresh token before expiry
     this.tokenRefreshTimer = setTimeout(async () => {
       const result = await this.refreshToken();
       if (result.success) {
         this.setupTokenRefreshTimer();
       }
-    }, 25 * 60 * 1000); // 25 minutes
+    }, this.TOKEN_REFRESH_INTERVAL);
   }
 
   /**
@@ -174,6 +217,7 @@ export class AuthService {
     await storageService.removeItem('currentUser');
     await storageService.removeItem(AUTH_TOKEN_KEY);
     await storageService.removeItem(REFRESH_TOKEN_KEY);
+    await storageService.removeItem('auth_token_data');
     
     if (this.tokenRefreshTimer) {
       clearTimeout(this.tokenRefreshTimer);
@@ -182,10 +226,53 @@ export class AuthService {
   }
 
   /**
-   * Login user
+   * Sanitize user data to prevent XSS
+   */
+  private sanitizeUserData(user: User): User {
+    return {
+      ...user,
+      username: user.username ? sanitizeUsername(user.username) : user.username,
+      email: user.email ? sanitizeEmail(user.email) : user.email,
+      bio: user.bio ? sanitizeStrict(user.bio) : '',
+      verificationRejectionReason: user.verificationRejectionReason ? sanitizeStrict(user.verificationRejectionReason) : undefined,
+      banReason: user.banReason ? sanitizeStrict(user.banReason) : undefined,
+    };
+  }
+
+  /**
+   * Login user with validation and rate limiting
    */
   async login(request: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
+      // For localStorage implementation, we need to validate the basic fields
+      // The role is part of the request, not the validation schema
+      const basicValidation = z.object({
+        username: z.string().min(1, 'Username is required').transform(val => val.toLowerCase()),
+        password: z.string().min(1, 'Password is required'),
+      }).safeParse(request);
+
+      if (!basicValidation.success) {
+        return {
+          success: false,
+          error: {
+            message: basicValidation.error.errors[0].message,
+            field: basicValidation.error.errors[0].path[0] as string,
+          },
+        };
+      }
+
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check('LOGIN', RATE_LIMITS.LOGIN);
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: {
+            message: `Too many login attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+            code: 'RATE_LIMIT_EXCEEDED',
+          },
+        };
+      }
+
       if (FEATURES.USE_API_AUTH) {
         const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.LOGIN, {
           method: 'POST',
@@ -193,26 +280,33 @@ export class AuthService {
         });
 
         if (response.success && response.data) {
-          // Store tokens
+          // Store tokens securely
           if (response.data.token) {
-            await storageService.setItem(AUTH_TOKEN_KEY, response.data.token);
-          }
-          if (response.data.refreshToken) {
-            await storageService.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+            await this.storeTokens(response.data.token, response.data.refreshToken);
           }
 
-          // Store user
-          await storageService.setItem('currentUser', response.data.user);
+          // Sanitize and store user
+          const sanitizedUser = this.sanitizeUserData(response.data.user);
+          await storageService.setItem('currentUser', sanitizedUser);
 
           // Set up token refresh
           this.setupTokenRefreshTimer();
+
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              user: sanitizedUser,
+            },
+          };
         }
 
         return response;
       }
 
       // LocalStorage implementation
-      const { username, role } = request;
+      const { username } = basicValidation.data;
+      const { role } = request; // Get role from original request
       
       // Check if user exists in all_users_v2
       const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
@@ -242,18 +336,21 @@ export class AuthService {
         verificationDocs: existingUser?.verificationDocs,
       };
 
+      // Sanitize user data
+      const sanitizedUser = this.sanitizeUserData(user);
+
       // Update all_users_v2
-      allUsers[username] = user;
+      allUsers[username] = sanitizedUser;
       await storageService.setItem('all_users_v2', allUsers);
 
       // Set current user
-      await storageService.setItem('currentUser', user);
+      await storageService.setItem('currentUser', sanitizedUser);
 
-      console.log('[Auth] Login successful, saved user:', { username: user.username, role: user.role });
+      console.log('[Auth] Login successful, saved user:', { username: sanitizedUser.username, role: sanitizedUser.role });
 
       return {
         success: true,
-        data: { user },
+        data: { user: sanitizedUser },
       };
     } catch (error) {
       console.error('Login error:', error);
@@ -267,37 +364,89 @@ export class AuthService {
   }
 
   /**
-   * Sign up new user
+   * Sign up new user with validation and security
    */
   async signup(request: SignupRequest): Promise<ApiResponse<AuthResponse>> {
     try {
+      // Validate request
+      const validation = authSchemas.signupSchema.safeParse({
+        ...request,
+        confirmPassword: request.password, // For validation only
+        termsAccepted: true,
+        ageVerified: true,
+      });
+
+      if (!validation.success) {
+        return {
+          success: false,
+          error: {
+            message: validation.error.errors[0].message,
+            field: validation.error.errors[0].path[0] as string,
+          },
+        };
+      }
+
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check('SIGNUP', RATE_LIMITS.SIGNUP);
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: {
+            message: `Too many signup attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+            code: 'RATE_LIMIT_EXCEEDED',
+          },
+        };
+      }
+
+      // Check password vulnerabilities
+      const passwordCheck = securityService.checkPasswordVulnerabilities(request.password, {
+        username: request.username,
+        email: request.email,
+      });
+
+      if (!passwordCheck.secure) {
+        return {
+          success: false,
+          error: {
+            message: passwordCheck.warnings[0],
+            field: 'password',
+          },
+        };
+      }
+
       if (FEATURES.USE_API_AUTH) {
         const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.SIGNUP, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(validation.data),
         });
 
         if (response.success && response.data) {
-          // Store tokens
+          // Store tokens securely
           if (response.data.token) {
-            await storageService.setItem(AUTH_TOKEN_KEY, response.data.token);
-          }
-          if (response.data.refreshToken) {
-            await storageService.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+            await this.storeTokens(response.data.token, response.data.refreshToken);
           }
 
-          // Store user
-          await storageService.setItem('currentUser', response.data.user);
+          // Sanitize and store user
+          const sanitizedUser = this.sanitizeUserData(response.data.user);
+          await storageService.setItem('currentUser', sanitizedUser);
 
           // Set up token refresh
           this.setupTokenRefreshTimer();
+
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              user: sanitizedUser,
+            },
+          };
         }
 
         return response;
       }
 
       // LocalStorage implementation
-      const { username, email, password, role } = request;
+      const { username, email, role } = validation.data;
       
       // Check if username exists
       const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
@@ -311,16 +460,22 @@ export class AuthService {
         };
       }
 
+      // Hash password (in production, this would be done server-side)
+      const hashedPassword = await this.hashPassword(request.password);
+
       // Store credentials separately (temporary - will be handled by backend)
       const credentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
-      credentials[username] = { email, password };
+      credentials[username] = { 
+        email: sanitizeEmail(email), 
+        password: hashedPassword 
+      };
       await storageService.setItem('userCredentials', credentials);
 
       // Create new user
       const user: User = {
         id: `user_${Date.now()}`,
         username,
-        role,
+        role: role as 'buyer' | 'seller', // Ensure proper type
         email,
         isVerified: false,
         tier: role === 'seller' ? 'Tease' : undefined,
@@ -335,16 +490,19 @@ export class AuthService {
         verificationStatus: 'unverified',
       };
 
+      // Sanitize user data
+      const sanitizedUser = this.sanitizeUserData(user);
+
       // Save to all_users_v2
-      allUsers[username] = user;
+      allUsers[username] = sanitizedUser;
       await storageService.setItem('all_users_v2', allUsers);
 
       // Set as current user
-      await storageService.setItem('currentUser', user);
+      await storageService.setItem('currentUser', sanitizedUser);
 
       return {
         success: true,
-        data: { user },
+        data: { user: sanitizedUser },
       };
     } catch (error) {
       console.error('Signup error:', error);
@@ -355,6 +513,21 @@ export class AuthService {
         },
       };
     }
+  }
+
+  /**
+   * Simple password hashing (for demo only - use bcrypt in production)
+   */
+  private async hashPassword(password: string): Promise<string> {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hash = await window.crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    return password; // Fallback (not secure)
   }
 
   /**
@@ -376,15 +549,12 @@ export class AuthService {
       console.error('Logout error:', error);
       // Clear local state even if API call fails
       await this.clearAuthState();
-      return {
-        success: false,
-        error: { message: 'Logout failed' },
-      };
+      return { success: true };
     }
   }
 
   /**
-   * Get current authenticated user - FIXED VERSION
+   * Get current authenticated user with security
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
@@ -394,7 +564,15 @@ export class AuthService {
           return { success: true, data: null };
         }
 
-        return await apiCall<User>(API_ENDPOINTS.AUTH.ME);
+        const response = await apiCall<User>(API_ENDPOINTS.AUTH.ME);
+        if (response.success && response.data) {
+          const sanitizedUser = this.sanitizeUserData(response.data);
+          return {
+            ...response,
+            data: sanitizedUser,
+          };
+        }
+        return response;
       }
 
       // LocalStorage implementation
@@ -407,72 +585,68 @@ export class AuthService {
           const storedUserData = allUsers[user.username];
           
           if (storedUserData) {
-            // ✅ FIX: Safe merge with proper defaults and error handling
             const now = new Date().toISOString();
             
             const mergedUser: User = {
-              // Core auth fields from current session (never override these)
+              // Core auth fields from current session
               id: user.id || `user_${Date.now()}`,
               username: user.username,
               role: user.role,
               email: user.email || storedUserData.email || `${user.username}@example.com`,
               
-              // Profile fields from stored data (can be updated)
+              // Profile fields from stored data
               bio: storedUserData.bio !== undefined ? storedUserData.bio : (user.bio || ''),
               profilePicture: storedUserData.profilePicture || user.profilePicture,
               
-              // Verification fields with safe defaults
+              // Verification fields
               verificationStatus: storedUserData.verificationStatus || user.verificationStatus || 'unverified',
               isVerified: storedUserData.verificationStatus === 'verified' || user.isVerified || false,
               verificationRequestedAt: storedUserData.verificationRequestedAt || user.verificationRequestedAt,
               verificationRejectionReason: storedUserData.verificationRejectionReason || user.verificationRejectionReason,
               verificationDocs: storedUserData.verificationDocs || user.verificationDocs,
               
-              // Seller-specific fields with safe defaults
+              // Seller-specific fields
               tier: storedUserData.tier || user.tier,
               subscriberCount: typeof storedUserData.subscriberCount === 'number' ? storedUserData.subscriberCount : (user.subscriberCount || 0),
               totalSales: typeof storedUserData.totalSales === 'number' ? storedUserData.totalSales : (user.totalSales || 0),
               rating: typeof storedUserData.rating === 'number' ? storedUserData.rating : (user.rating || 0),
               reviewCount: typeof storedUserData.reviewCount === 'number' ? storedUserData.reviewCount : (user.reviewCount || 0),
               
-              // Ban status with safe defaults
+              // Ban status
               isBanned: storedUserData.isBanned === true || user.isBanned === true || false,
               banReason: storedUserData.banReason || user.banReason,
               banExpiresAt: storedUserData.banExpiresAt || user.banExpiresAt,
               
-              // Timestamps with safe defaults
+              // Timestamps
               createdAt: user.createdAt || storedUserData.createdAt || now,
-              lastActive: now, // Always update to current time
+              lastActive: now,
             };
+            
+            // Sanitize merged user
+            const sanitizedUser = this.sanitizeUserData(mergedUser);
             
             // Only update storage if there are actual changes
             try {
-              if (JSON.stringify(user) !== JSON.stringify(mergedUser)) {
-                await storageService.setItem('currentUser', mergedUser);
+              if (JSON.stringify(user) !== JSON.stringify(sanitizedUser)) {
+                await storageService.setItem('currentUser', sanitizedUser);
               }
             } catch (storageError) {
               console.warn('[AuthService] Failed to update currentUser in storage:', storageError);
-              // Continue with the merged user data even if storage update fails
             }
             
             return {
               success: true,
-              data: mergedUser,
+              data: sanitizedUser,
             };
           }
         } catch (mergeError) {
           console.error('[AuthService] Error during user data merge:', mergeError);
-          // Fall back to original user data if merge fails
-          return {
-            success: true,
-            data: user,
-          };
         }
       }
 
       return {
         success: true,
-        data: user,
+        data: user ? this.sanitizeUserData(user) : null,
       };
     } catch (error) {
       console.error('[AuthService] Get current user error:', error);
@@ -484,7 +658,7 @@ export class AuthService {
   }
 
   /**
-   * Update current user
+   * Update current user with validation
    */
   async updateCurrentUser(updates: Partial<User>): Promise<ApiResponse<User>> {
     try {
@@ -497,34 +671,71 @@ export class AuthService {
       }
 
       const currentUser = currentUserResult.data;
+      
+      // Sanitize updates
+      const sanitizedUpdates: Partial<User> = {};
+      
+      if (updates.bio !== undefined) {
+        sanitizedUpdates.bio = sanitizeStrict(updates.bio);
+      }
+      if (updates.username !== undefined) {
+        sanitizedUpdates.username = sanitizeUsername(updates.username);
+      }
+      if (updates.email !== undefined) {
+        sanitizedUpdates.email = sanitizeEmail(updates.email);
+      }
+      
+      // Copy other safe fields
+      const safeFields = ['profilePicture', 'isVerified', 'tier', 'subscriberCount', 
+                         'totalSales', 'rating', 'reviewCount'] as const;
+      
+      for (const field of safeFields) {
+        if (field in updates) {
+          (sanitizedUpdates as any)[field] = updates[field];
+        }
+      }
+
       const updatedUser = {
         ...currentUser,
-        ...updates,
+        ...sanitizedUpdates,
         lastActive: new Date().toISOString(),
       };
 
       if (FEATURES.USE_API_AUTH) {
-        return await apiCall<User>(
+        const response = await apiCall<User>(
           buildApiUrl(API_ENDPOINTS.USERS.UPDATE_PROFILE, { username: currentUser.username }),
           {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            body: JSON.stringify(sanitizedUpdates),
           }
         );
+
+        if (response.success && response.data) {
+          const sanitizedUser = this.sanitizeUserData(response.data);
+          await storageService.setItem('currentUser', sanitizedUser);
+          return {
+            ...response,
+            data: sanitizedUser,
+          };
+        }
+
+        return response;
       }
 
       // LocalStorage implementation
+      const sanitizedUser = this.sanitizeUserData(updatedUser);
+      
       // Update currentUser
-      await storageService.setItem('currentUser', updatedUser);
+      await storageService.setItem('currentUser', sanitizedUser);
 
       // Also update in all_users_v2
       const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
-      allUsers[currentUser.username] = updatedUser;
+      allUsers[currentUser.username] = sanitizedUser;
       await storageService.setItem('all_users_v2', allUsers);
 
       return {
         success: true,
-        data: updatedUser,
+        data: sanitizedUser,
       };
     } catch (error) {
       console.error('Update user error:', error);
@@ -536,19 +747,31 @@ export class AuthService {
   }
 
   /**
-   * Check if username is available
+   * Check if username is available with validation
    */
   async checkUsername(username: string): Promise<ApiResponse<UsernameCheckResponse>> {
     try {
+      // Validate username
+      const validation = authSchemas.username.safeParse(username);
+      if (!validation.success) {
+        return {
+          success: true,
+          data: {
+            available: false,
+            message: validation.error.errors[0].message,
+          },
+        };
+      }
+
       if (FEATURES.USE_API_AUTH) {
         return await apiCall<UsernameCheckResponse>(
-          `${API_ENDPOINTS.AUTH.VERIFY_USERNAME}?username=${encodeURIComponent(username)}`
+          `${API_ENDPOINTS.AUTH.VERIFY_USERNAME}?username=${encodeURIComponent(validation.data)}`
         );
       }
 
       // LocalStorage implementation
       const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
-      const available = !allUsers[username.toLowerCase()];
+      const available = !allUsers[validation.data];
 
       return {
         success: true,
@@ -567,7 +790,7 @@ export class AuthService {
   }
 
   /**
-   * Refresh authentication token
+   * Refresh authentication token with security
    */
   async refreshToken(): Promise<ApiResponse<{ token: string; refreshToken: string }>> {
     try {
@@ -589,9 +812,8 @@ export class AuthService {
         );
 
         if (response.success && response.data) {
-          // Store new tokens
-          await storageService.setItem(AUTH_TOKEN_KEY, response.data.token);
-          await storageService.setItem(REFRESH_TOKEN_KEY, response.data.refreshToken);
+          // Store new tokens securely
+          await this.storeTokens(response.data.token, response.data.refreshToken);
         }
 
         return response;
@@ -616,7 +838,7 @@ export class AuthService {
    */
   async isAuthenticated(): Promise<boolean> {
     if (FEATURES.USE_API_AUTH) {
-      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+      const token = await this.getValidToken();
       return !!token;
     }
 
@@ -628,7 +850,7 @@ export class AuthService {
    * Get stored auth token
    */
   async getAuthToken(): Promise<string | null> {
-    return storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+    return this.getValidToken();
   }
 }
 
