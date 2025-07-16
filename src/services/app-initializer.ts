@@ -5,8 +5,9 @@ import { runOrdersMigration } from '@/utils/ordersMigration';
 import { getMockConfig } from './mock/mock.config';
 import { mockInterceptor } from './mock/mock-interceptor';
 import { validateConfiguration, getAllConfig, isDevelopment } from '@/config/environment';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from './security.service';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export interface InitializationResult {
   success: boolean;
@@ -20,6 +21,7 @@ export class AppInitializer {
   private initializationPromise: Promise<InitializationResult> | null = null;
   private readonly MAX_INIT_ATTEMPTS = 3;
   private initAttempts = 0;
+  private rateLimiter = getRateLimiter();
 
   private constructor() {}
 
@@ -34,6 +36,20 @@ export class AppInitializer {
    * Initialize the application with security checks
    */
   async initialize(): Promise<InitializationResult> {
+    // Check rate limit for initialization
+    const rateLimitCheck = this.rateLimiter.check('APP_INIT', {
+      maxAttempts: 5,
+      windowMs: 5 * 60 * 1000 // 5 minutes
+    });
+
+    if (!rateLimitCheck.allowed) {
+      return {
+        success: false,
+        errors: [`Initialization rate limit exceeded. Please wait ${rateLimitCheck.waitTime} seconds.`],
+        warnings: []
+      };
+    }
+
     // If already initializing, return the existing promise
     if (this.initializationPromise) {
       return this.initializationPromise;
@@ -81,7 +97,15 @@ export class AppInitializer {
         return { success: false, errors, warnings }; // Critical - stop initialization
       }
 
-      // 1. Validate environment configuration
+      // 1. Initialize CSRF protection
+      try {
+        console.log('[AppInitializer] Initializing CSRF protection...');
+        securityService.generateCSRFToken();
+      } catch (error) {
+        errors.push(`CSRF initialization failed: ${this.sanitizeError(error)}`);
+      }
+
+      // 2. Validate environment configuration
       try {
         console.log('[AppInitializer] Validating environment configuration...');
         const validation = validateConfiguration();
@@ -98,7 +122,7 @@ export class AppInitializer {
         warnings.push(`Configuration validation warning: ${this.sanitizeError(error)}`);
       }
 
-      // 2. Initialize storage service with security
+      // 3. Initialize storage service with security
       try {
         console.log('[AppInitializer] Initializing storage service...');
         await this.initializeStorage();
@@ -106,14 +130,14 @@ export class AppInitializer {
         errors.push(`Storage initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 3. Initialize mock API if enabled
+      // 4. Initialize mock API if enabled
       try {
         await this.initializeMockApi();
       } catch (error) {
         warnings.push(`Mock API initialization warning: ${this.sanitizeError(error)}`);
       }
 
-      // 4. Initialize auth service
+      // 5. Initialize auth service
       try {
         console.log('[AppInitializer] Initializing auth service...');
         // Auth service initializes on first use
@@ -121,7 +145,7 @@ export class AppInitializer {
         errors.push(`Auth initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 5. Initialize wallet service
+      // 6. Initialize wallet service
       try {
         console.log('[AppInitializer] Initializing wallet service...');
         if (typeof walletService?.initialize === 'function') {
@@ -131,7 +155,7 @@ export class AppInitializer {
         warnings.push(`Wallet initialization warning: ${this.sanitizeError(error)}`);
       }
 
-      // 6. Run orders migration with validation
+      // 7. Run orders migration with validation
       try {
         console.log('[AppInitializer] Running orders migration...');
         await this.runSecureMigration();
@@ -139,7 +163,7 @@ export class AppInitializer {
         warnings.push(`Orders migration warning: ${this.sanitizeError(error)}`);
       }
 
-      // 7. Perform data integrity checks
+      // 8. Perform data integrity checks
       try {
         console.log('[AppInitializer] Checking data integrity...');
         await this.checkDataIntegrity();
@@ -147,7 +171,7 @@ export class AppInitializer {
         warnings.push(`Data integrity check warning: ${this.sanitizeError(error)}`);
       }
 
-      // 8. Clean up old data securely
+      // 9. Clean up old data securely
       try {
         console.log('[AppInitializer] Cleaning up old data...');
         await this.cleanupOldData();
@@ -195,6 +219,17 @@ export class AppInitializer {
       if (!window.crypto || !window.crypto.getRandomValues) {
         throw new Error('Web Crypto API not available');
       }
+
+      // Check for Content Security Policy
+      const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+      if (!cspMeta && !isDevelopment()) {
+        console.warn('[AppInitializer] Content Security Policy not found');
+      }
+
+      // Check for secure cookies support
+      if (!navigator.cookieEnabled) {
+        console.warn('[AppInitializer] Cookies are disabled - some features may not work');
+      }
     }
   }
 
@@ -223,6 +258,28 @@ export class AppInitializer {
         throw new Error('Storage quota exceeded');
       }
       throw new Error('localStorage is not accessible');
+    }
+
+    // Check for storage tampering
+    try {
+      const integrityCheck = await storageService.getItem<string | null>('__integrity_check__', null);
+      if (integrityCheck && !this.validateIntegrityCheck(integrityCheck)) {
+        console.warn('[AppInitializer] Storage integrity check failed - possible tampering');
+      }
+    } catch (error) {
+      console.warn('[AppInitializer] Could not verify storage integrity');
+    }
+  }
+
+  /**
+   * Validate storage integrity check
+   */
+  private validateIntegrityCheck(check: string): boolean {
+    try {
+      // Simple validation - in production, use cryptographic signatures
+      return typeof check === 'string' && check.length === 64;
+    } catch {
+      return false;
     }
   }
 
@@ -274,9 +331,21 @@ export class AppInitializer {
     // Validate migration data before running
     const orderData = await storageService.getItem<any>('wallet_orders', null);
     if (orderData) {
-      // Basic validation to ensure data structure is safe
+      // Enhanced validation using security service
+      const contentCheck = securityService.checkContentSecurity(JSON.stringify(orderData));
+      if (!contentCheck.safe) {
+        throw new Error(`Unsafe order data detected: ${contentCheck.issues.join(', ')}`);
+      }
+
+      // Basic structure validation
       if (typeof orderData !== 'object' || Array.isArray(orderData)) {
         throw new Error('Invalid order data structure');
+      }
+
+      // Check data size to prevent DoS
+      const dataSize = JSON.stringify(orderData).length;
+      if (dataSize > 10 * 1024 * 1024) { // 10MB limit
+        throw new Error('Order data exceeds size limit');
       }
     }
     
@@ -303,14 +372,24 @@ export class AppInitializer {
     }
 
     for (const key of criticalKeys) {
-      const data = await storageService.getItem(key, null);
-      if (data === null) {
-        console.warn(`[AppInitializer] Missing critical data: ${sanitizeStrict(key)}`);
-      } else {
-        // Validate data structure
-        if (typeof data !== 'object') {
-          console.error(`[AppInitializer] Invalid data structure for ${sanitizeStrict(key)}`);
+      try {
+        const data = await storageService.getItem(key, null);
+        if (data === null) {
+          console.warn(`[AppInitializer] Missing critical data: ${sanitizeStrict(key)}`);
+        } else {
+          // Enhanced validation
+          if (typeof data !== 'object') {
+            console.error(`[AppInitializer] Invalid data structure for ${sanitizeStrict(key)}`);
+          } else {
+            // Check for data corruption using security service
+            const sanitized = securityService.sanitizeForAPI(data as Record<string, any>);
+            if (Object.keys(sanitized).length === 0 && Object.keys(data as any).length > 0) {
+              console.error(`[AppInitializer] Possible data corruption in ${sanitizeStrict(key)}`);
+            }
+          }
         }
+      } catch (error) {
+        console.error(`[AppInitializer] Error checking ${sanitizeStrict(key)}:`, this.sanitizeError(error));
       }
     }
   }
@@ -391,7 +470,7 @@ export class AppInitializer {
    */
   private sanitizeError(error: unknown): string {
     if (error instanceof Error) {
-      return sanitizeStrict(error.message);
+      return sanitizeStrict(error.message.substring(0, 200)); // Limit length
     }
     return 'Unknown error';
   }
@@ -410,6 +489,14 @@ export class AppInitializer {
   reset(): void {
     if (this.initialized && !isDevelopment()) {
       console.warn('[AppInitializer] Reset called in production environment');
+      // Rate limit resets in production
+      const resetCheck = this.rateLimiter.check('APP_RESET', {
+        maxAttempts: 3,
+        windowMs: 60 * 60 * 1000 // 1 hour
+      });
+      if (!resetCheck.allowed) {
+        throw new Error('Reset rate limit exceeded');
+      }
     }
     this.initialized = false;
     this.initializationPromise = null;

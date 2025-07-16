@@ -30,14 +30,14 @@ export { messagesService } from './messages.service';
 export { securityService, sanitize } from './security.service';
 
 // App initializer - application startup
-export { AppInitializer } from './app-initializer';
+export { appInitializer } from './app-initializer';
 
 // Re-export validation schemas for easy access
-export * as validationSchemas from '../utils/validation/schemas';
+export * as validationSchemas from '@/utils/validation/schemas';
 
 // Re-export security utilities
-export { getRateLimiter, RATE_LIMITS } from '../utils/security/rate-limiter';
-export { CSRFTokenManager } from '../utils/security/validation';
+export { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+export { CSRFTokenManager } from '@/utils/security/validation';
 
 // Re-export types that actually exist
 export type { 
@@ -92,7 +92,7 @@ export type {
 } from './messages.service';
 
 // Export order types from WalletContext
-export type { Order, CustomRequestPurchase, DepositLog } from '../context/WalletContext';
+export type { Order, CustomRequestPurchase, DepositLog } from '@/context/WalletContext';
 
 // Export feature flags for conditional logic
 export { FEATURES } from './api.config';

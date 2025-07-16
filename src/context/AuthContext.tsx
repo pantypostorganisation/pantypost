@@ -3,8 +3,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { authService } from '@/services';
-import { sanitizeUsername } from '@/utils/security/sanitization';
+import { sanitizeUsername, sanitizeStrict } from '@/utils/security/sanitization';
 import { authSchemas } from '@/utils/validation/schemas';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export interface User {
   id: string;
@@ -33,7 +34,7 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   isAuthReady: boolean;
-  login: (username: string, role?: 'buyer' | 'seller' | 'admin') => Promise<boolean>;
+  login: (username: string, password?: string, role?: 'buyer' | 'seller' | 'admin') => Promise<boolean>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   isLoggedIn: boolean;
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const initializingRef = useRef(false);
   const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const rateLimiter = getRateLimiter();
 
   // Clear error
   const clearError = useCallback(() => {
@@ -183,13 +185,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [setupSessionMonitoring, clearSessionMonitoring]);
 
-  // Login function using auth service
-  const login = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin' = 'buyer'): Promise<boolean> => {
+  // Login function using auth service with rate limiting
+  const login = useCallback(async (
+    username: string, 
+    password: string = '', // Default for backward compatibility
+    role: 'buyer' | 'seller' | 'admin' = 'buyer'
+  ): Promise<boolean> => {
+    // Check rate limit in context as well
+    const rateLimitResult = rateLimiter.check('LOGIN_CONTEXT', {
+      maxAttempts: 10,
+      windowMs: 15 * 60 * 1000 // 15 minutes
+    });
+
+    if (!rateLimitResult.allowed) {
+      setError(`Too many login attempts. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return false;
+    }
+
     // Validate and sanitize input
     const validationError = validateUsername(username);
     if (validationError) {
       console.error('[AuthContext] Validation error:', validationError);
-      setError(validationError);
+      setError(sanitizeStrict(validationError));
       return false;
     }
 
@@ -210,7 +227,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Add error handling wrapper around authService call
       let result;
       try {
-        result = await authService.login({ username: sanitizedUsername, role });
+        result = await authService.login({ 
+          username: sanitizedUsername, 
+          password, // Include password for enhanced security
+          role 
+        });
       } catch (authError) {
         console.error('[AuthContext] AuthService error:', authError);
         setError('Authentication service error. Please try again.');
@@ -234,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true;
       } else {
         console.error('[AuthContext] Login failed:', result.error);
-        setError(result.error?.message || 'Login failed');
+        setError(sanitizeStrict(result.error?.message || 'Login failed'));
         setLoading(false);
         return false;
       }
@@ -244,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return false;
     }
-  }, [setupSessionMonitoring]);
+  }, [setupSessionMonitoring, rateLimiter]);
 
   // Logout function using auth service
   const logout = useCallback(async () => {
@@ -268,16 +289,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clearSessionMonitoring]);
 
-  // Update user function using auth service
+  // Update user function using auth service with validation
   const updateUser = useCallback(async (updates: Partial<User>) => {
     if (!user) {
       setError('No user to update');
       return;
     }
 
+    // Validate updates
+    const sanitizedUpdates: Partial<User> = {};
+    
+    // Sanitize string fields
+    if (updates.bio !== undefined) {
+      sanitizedUpdates.bio = sanitizeStrict(updates.bio);
+    }
+    if (updates.username !== undefined) {
+      const usernameError = validateUsername(updates.username);
+      if (usernameError) {
+        setError(usernameError);
+        return;
+      }
+      sanitizedUpdates.username = sanitizeUsername(updates.username);
+    }
+    
+    // Copy safe fields directly
+    const safeFields = ['profilePicture', 'isVerified', 'tier', 'subscriberCount', 
+                       'totalSales', 'rating', 'reviewCount'] as const;
+    
+    for (const field of safeFields) {
+      if (field in updates) {
+        (sanitizedUpdates as any)[field] = updates[field];
+      }
+    }
+
     try {
-      console.log('[Auth] Updating user:', updates);
-      const result = await authService.updateCurrentUser(updates);
+      console.log('[Auth] Updating user:', sanitizedUpdates);
+      const result = await authService.updateCurrentUser(sanitizedUpdates);
       
       if (result.success && result.data) {
         console.log('[Auth] User updated successfully');
@@ -285,7 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(null);
       } else {
         console.error('[Auth] User update failed:', result.error);
-        setError(result.error?.message || 'Failed to update user');
+        setError(sanitizeStrict(result.error?.message || 'Failed to update user'));
       }
     } catch (error) {
       console.error('Update user error:', error);

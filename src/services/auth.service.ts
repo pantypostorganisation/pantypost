@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 export interface LoginRequest {
   username: string;
+  password: string;
   role: 'buyer' | 'seller' | 'admin';
 }
 
@@ -42,12 +43,15 @@ export class AuthService {
   private rateLimiter = getRateLimiter();
   private readonly TOKEN_REFRESH_INTERVAL = 25 * 60 * 1000; // 25 minutes
   private readonly MAX_TOKEN_AGE = 30 * 60 * 1000; // 30 minutes
+  private readonly SESSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  private sessionCheckTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     // Initialize interceptor on service creation
     if (typeof window !== 'undefined') {
       this.initializeInterceptor();
       this.initializeSessionPersistence();
+      this.startSessionValidation();
     }
   }
 
@@ -58,7 +62,7 @@ export class AuthService {
     // Store original fetch
     const originalFetch = window.fetch;
 
-    // Override fetch to add auth headers
+    // Override fetch to add auth headers and security headers
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       // Get token from storage
       const token = await this.getValidToken();
@@ -71,6 +75,8 @@ export class AuthService {
           init.headers = {
             ...init.headers,
             'Authorization': `Bearer ${token}`,
+            // Add security headers
+            ...securityService.getSecureHeaders(),
           };
         }
       }
@@ -127,6 +133,73 @@ export class AuthService {
   }
 
   /**
+   * Start periodic session validation
+   */
+  private startSessionValidation() {
+    this.sessionCheckTimer = setInterval(async () => {
+      const isValid = await this.validateSession();
+      if (!isValid) {
+        await this.logout();
+        window.location.href = '/login';
+      }
+    }, this.SESSION_CHECK_INTERVAL);
+  }
+
+  /**
+   * Validate current session
+   */
+  private async validateSession(): Promise<boolean> {
+    try {
+      const token = await this.getValidToken();
+      const user = await storageService.getItem<User | null>('currentUser', null);
+      
+      if (!token || !user) {
+        return false;
+      }
+
+      // Check for session hijacking by validating stored session fingerprint
+      const sessionFingerprint = await this.getSessionFingerprint();
+      const storedFingerprint = await storageService.getItem<string | null>('session_fingerprint', null);
+      
+      if (storedFingerprint && storedFingerprint !== sessionFingerprint) {
+        console.warn('Session fingerprint mismatch - possible session hijacking');
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Generate session fingerprint for security
+   */
+  private async getSessionFingerprint(): Promise<string> {
+    if (typeof window === 'undefined') return '';
+    
+    const components = [
+      navigator.userAgent,
+      navigator.language,
+      screen.width + 'x' + screen.height,
+      screen.colorDepth,
+      new Date().getTimezoneOffset(),
+    ].join('|');
+
+    // Hash the components
+    if (window.crypto && window.crypto.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(components);
+      const hash = await window.crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+
+    return components;
+  }
+
+  /**
    * Get valid token with expiry check
    */
   private async getValidToken(): Promise<string | null> {
@@ -160,6 +233,10 @@ export class AuthService {
     if (refreshToken) {
       await storageService.setItem(REFRESH_TOKEN_KEY, refreshToken);
     }
+
+    // Store session fingerprint
+    const fingerprint = await this.getSessionFingerprint();
+    await storageService.setItem('session_fingerprint', fingerprint);
   }
 
   /**
@@ -218,10 +295,16 @@ export class AuthService {
     await storageService.removeItem(AUTH_TOKEN_KEY);
     await storageService.removeItem(REFRESH_TOKEN_KEY);
     await storageService.removeItem('auth_token_data');
+    await storageService.removeItem('session_fingerprint');
     
     if (this.tokenRefreshTimer) {
       clearTimeout(this.tokenRefreshTimer);
       this.tokenRefreshTimer = null;
+    }
+
+    if (this.sessionCheckTimer) {
+      clearInterval(this.sessionCheckTimer);
+      this.sessionCheckTimer = null;
     }
   }
 
@@ -244,19 +327,18 @@ export class AuthService {
    */
   async login(request: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
-      // For localStorage implementation, we need to validate the basic fields
-      // The role is part of the request, not the validation schema
-      const basicValidation = z.object({
-        username: z.string().min(1, 'Username is required').transform(val => val.toLowerCase()),
-        password: z.string().min(1, 'Password is required'),
-      }).safeParse(request);
+      // Validate login request using the schema
+      const validation = authSchemas.loginSchema.safeParse({
+        username: request.username,
+        password: request.password,
+      });
 
-      if (!basicValidation.success) {
+      if (!validation.success) {
         return {
           success: false,
           error: {
-            message: basicValidation.error.errors[0].message,
-            field: basicValidation.error.errors[0].path[0] as string,
+            message: validation.error.errors[0].message,
+            field: validation.error.errors[0].path[0] as string,
           },
         };
       }
@@ -276,7 +358,10 @@ export class AuthService {
       if (FEATURES.USE_API_AUTH) {
         const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.LOGIN, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify({
+            ...validation.data,
+            role: request.role,
+          }),
         });
 
         if (response.success && response.data) {
@@ -305,12 +390,31 @@ export class AuthService {
       }
 
       // LocalStorage implementation
-      const { username } = basicValidation.data;
-      const { role } = request; // Get role from original request
+      const { username, password } = validation.data;
+      const { role } = request;
       
       // Check if user exists in all_users_v2
       const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
       const existingUser = allUsers[username];
+
+      // Verify password if user exists
+      if (existingUser) {
+        const credentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
+        const userCreds = credentials[username];
+        
+        if (userCreds && userCreds.password) {
+          const hashedInput = await this.hashPassword(password);
+          if (hashedInput !== userCreds.password) {
+            return {
+              success: false,
+              error: {
+                message: 'Invalid username or password',
+                field: 'password',
+              },
+            };
+          }
+        }
+      }
 
       const isAdmin = username === 'oakley' || username === 'gerome';
       
@@ -345,6 +449,10 @@ export class AuthService {
 
       // Set current user
       await storageService.setItem('currentUser', sanitizedUser);
+
+      // Store session fingerprint
+      const fingerprint = await this.getSessionFingerprint();
+      await storageService.setItem('session_fingerprint', fingerprint);
 
       console.log('[Auth] Login successful, saved user:', { username: sanitizedUser.username, role: sanitizedUser.role });
 
@@ -460,8 +568,8 @@ export class AuthService {
         };
       }
 
-      // Hash password (in production, this would be done server-side)
-      const hashedPassword = await this.hashPassword(request.password);
+      // Hash password with salt (enhanced security)
+      const hashedPassword = await this.hashPasswordWithSalt(request.password);
 
       // Store credentials separately (temporary - will be handled by backend)
       const credentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
@@ -475,7 +583,7 @@ export class AuthService {
       const user: User = {
         id: `user_${Date.now()}`,
         username,
-        role: role as 'buyer' | 'seller', // Ensure proper type
+        role: role as 'buyer' | 'seller',
         email,
         isVerified: false,
         tier: role === 'seller' ? 'Tease' : undefined,
@@ -499,6 +607,10 @@ export class AuthService {
 
       // Set as current user
       await storageService.setItem('currentUser', sanitizedUser);
+
+      // Store session fingerprint
+      const fingerprint = await this.getSessionFingerprint();
+      await storageService.setItem('session_fingerprint', fingerprint);
 
       return {
         success: true,
@@ -531,6 +643,29 @@ export class AuthService {
   }
 
   /**
+   * Enhanced password hashing with salt
+   */
+  private async hashPasswordWithSalt(password: string): Promise<string> {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+      // Generate salt
+      const salt = window.crypto.getRandomValues(new Uint8Array(16));
+      const saltStr = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      // Combine password with salt
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password + saltStr);
+      const hash = await window.crypto.subtle.digest('SHA-256', data);
+      const hashStr = Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
+      // Return salt + hash
+      return saltStr + ':' + hashStr;
+    }
+    return this.hashPassword(password); // Fallback
+  }
+
+  /**
    * Logout current user
    */
   async logout(): Promise<ApiResponse<void>> {
@@ -558,6 +693,13 @@ export class AuthService {
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
+      // Validate session first
+      const isValid = await this.validateSession();
+      if (!isValid) {
+        await this.clearAuthState();
+        return { success: true, data: null };
+      }
+
       if (FEATURES.USE_API_AUTH) {
         const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
         if (!token) {

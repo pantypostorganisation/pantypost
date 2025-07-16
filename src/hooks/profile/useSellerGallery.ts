@@ -1,7 +1,15 @@
 // src/hooks/profile/useSellerGallery.ts
+
 import { useState, useRef, useEffect } from 'react';
+import { sanitizeUrl } from '@/utils/security/sanitization';
 
 export function useSellerGallery(galleryImages: string[]) {
+  // Validate and sanitize gallery images
+  const validatedImages = galleryImages.filter(img => {
+    const sanitized = sanitizeUrl(img);
+    return sanitized && sanitized.length > 0;
+  });
+
   // Gallery modal state
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -15,9 +23,9 @@ export function useSellerGallery(galleryImages: string[]) {
 
   // Slideshow effect
   useEffect(() => {
-    if (galleryImages.length > 1 && !isPaused) {
+    if (validatedImages.length > 1 && !isPaused) {
       slideshowRef.current = setInterval(() => {
-        setSlideIndex(prevIndex => (prevIndex + 1) % galleryImages.length);
+        setSlideIndex(prevIndex => (prevIndex + 1) % validatedImages.length);
       }, slideshowInterval);
     }
     
@@ -26,13 +34,15 @@ export function useSellerGallery(galleryImages: string[]) {
         clearInterval(slideshowRef.current);
       }
     };
-  }, [galleryImages.length, isPaused]);
+  }, [validatedImages.length, isPaused]);
 
   // Handlers
   const handleImageClick = (image: string, index: number) => {
-    if (image) {
+    // Validate image URL before setting
+    const sanitizedImage = sanitizeUrl(image);
+    if (sanitizedImage) {
       setCurrentImageIndex(index);
-      setSelectedImage(image);
+      setSelectedImage(sanitizedImage);
       setShowGalleryModal(true);
       setIsPaused(true);
     }
@@ -46,23 +56,23 @@ export function useSellerGallery(galleryImages: string[]) {
 
   const handlePrevImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (galleryImages.length === 0) return;
-    const prevIndex = (currentImageIndex - 1 + galleryImages.length) % galleryImages.length;
+    if (validatedImages.length === 0) return;
+    const prevIndex = (currentImageIndex - 1 + validatedImages.length) % validatedImages.length;
     setCurrentImageIndex(prevIndex);
-    setSelectedImage(galleryImages[prevIndex]);
+    setSelectedImage(validatedImages[prevIndex]);
   };
 
   const handleNextImage = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (galleryImages.length === 0) return;
-    const nextIndex = (currentImageIndex + 1) % galleryImages.length;
+    if (validatedImages.length === 0) return;
+    const nextIndex = (currentImageIndex + 1) % validatedImages.length;
     setCurrentImageIndex(nextIndex);
-    setSelectedImage(galleryImages[nextIndex]);
+    setSelectedImage(validatedImages[nextIndex]);
   };
 
   const goToPrevSlide = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSlideIndex(prevIndex => (prevIndex - 1 + galleryImages.length) % galleryImages.length);
+    setSlideIndex(prevIndex => (prevIndex - 1 + validatedImages.length) % validatedImages.length);
     
     // Reset the timer and pause temporarily
     if (slideshowRef.current) {
@@ -74,7 +84,7 @@ export function useSellerGallery(galleryImages: string[]) {
   
   const goToNextSlide = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSlideIndex(prevIndex => (prevIndex + 1) % galleryImages.length);
+    setSlideIndex(prevIndex => (prevIndex + 1) % validatedImages.length);
     
     // Reset the timer and pause temporarily
     if (slideshowRef.current) {
@@ -90,6 +100,9 @@ export function useSellerGallery(galleryImages: string[]) {
   };
 
   return {
+    // Use validated images instead of raw input
+    galleryImages: validatedImages,
+    
     // Slideshow state
     slideIndex,
     setSlideIndex,
