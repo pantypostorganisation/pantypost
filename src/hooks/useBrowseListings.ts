@@ -152,6 +152,23 @@ export const useBrowseListings = () => {
 
   // Load data using listings service
   const loadListings = useCallback(async () => {
+    // Debug: Log what's being loaded
+    console.log('=== DEBUG: Loading Listings ===');
+    console.log('Filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
+    
+    // Check localStorage directly first
+    const rawListings = localStorage.getItem('listings');
+    console.log('Raw listings from localStorage:', rawListings);
+    if (rawListings) {
+      try {
+        const parsed = JSON.parse(rawListings);
+        console.log('Parsed listings count:', parsed.length);
+        console.log('First 3 listings:', parsed.slice(0, 3));
+      } catch (e) {
+        console.error('Failed to parse listings:', e);
+      }
+    }
+
     // Check rate limit
     const rateLimitResult = checkSearchLimit();
     if (!rateLimitResult.allowed) {
@@ -182,7 +199,7 @@ export const useBrowseListings = () => {
         sortByParam = 'endingSoon';
       }
 
-      // Validate and sanitize search params
+      // Validate and sanitize search params - IMPORTANT: Remove pagination for initial load
       const searchParams: ListingSearchParams = {
         query: sanitizeSearchQuery(debouncedSearchTerm),
         minPrice: minPrice ? sanitizeNumber(minPrice, 0, 10000) : undefined,
@@ -192,9 +209,12 @@ export const useBrowseListings = () => {
         isActive: true,
         sortBy: sortByParam,
         sortOrder: sortBy === 'priceDesc' ? 'desc' : 'asc',
-        page: Math.max(0, page),
-        limit: PAGE_SIZE,
+        // REMOVED pagination params to get ALL listings
+        // page: Math.max(0, page),
+        // limit: PAGE_SIZE,
       };
+
+      console.log('Search params being sent:', searchParams);
 
       // Validate price range
       if (searchParams.minPrice !== undefined && searchParams.maxPrice !== undefined) {
@@ -206,14 +226,22 @@ export const useBrowseListings = () => {
       // Load listings
       const listingsResponse = await listingsService.getListings(searchParams);
       
+      console.log('Listings service response:', listingsResponse);
+
       if (!mountedRef.current) return;
 
       if (listingsResponse.success && listingsResponse.data) {
+        console.log('Got listings from service:', listingsResponse.data.length);
+        
         // Apply hour range filter (not supported by service)
         let filteredListings = listingsResponse.data.filter((listing: Listing) => {
+          if (selectedHourRange.label === 'Any Hours') return true;
+          
           const hoursWorn = listing.hoursWorn ?? 0;
           return hoursWorn >= selectedHourRange.min && hoursWorn <= selectedHourRange.max;
         });
+
+        console.log('After hour range filter:', filteredListings.length);
 
         // Handle endingSoon sort (custom logic)
         if (sortBy === 'endingSoon') {
@@ -230,10 +258,10 @@ export const useBrowseListings = () => {
         }
 
         setListings(filteredListings);
-        setTotalListings(listingsResponse.meta?.totalItems || filteredListings.length);
+        setTotalListings(filteredListings.length);
 
         // Cache the listings with sanitized data
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && filteredListings.length > 0) {
           try {
             const cacheData = {
               data: filteredListings,
@@ -242,6 +270,7 @@ export const useBrowseListings = () => {
             localStorage.setItem('browse_listings_cache', JSON.stringify(cacheData));
           } catch (e) {
             // Ignore cache errors (storage might be full)
+            console.warn('Failed to cache listings:', e);
           }
         }
       } else {
@@ -249,17 +278,29 @@ export const useBrowseListings = () => {
       }
 
       // Load users with sanitization
-      const usersData = await storageService.getItem<Record<string, User>>('users', {});
+      const usersData = await storageService.getItem<User[]>('users', []);
       const sanitizedUsers: Record<string, User> = {};
       
-      Object.entries(usersData).forEach(([key, userData]) => {
-        sanitizedUsers[sanitizeStrict(key)] = {
-          username: sanitizeStrict(userData.username || ''),
-          verified: Boolean(userData.verified),
-          verificationStatus: userData.verificationStatus ? sanitizeStrict(userData.verificationStatus) : undefined
-        };
-      });
+      // Handle both array and object formats
+      if (Array.isArray(usersData)) {
+        usersData.forEach((userData) => {
+          sanitizedUsers[sanitizeStrict(userData.username)] = {
+            username: sanitizeStrict(userData.username || ''),
+            verified: Boolean(userData.verified),
+            verificationStatus: userData.verificationStatus ? sanitizeStrict(userData.verificationStatus) : undefined
+          };
+        });
+      } else {
+        Object.entries(usersData as any).forEach(([key, userData]: [string, any]) => {
+          sanitizedUsers[sanitizeStrict(key)] = {
+            username: sanitizeStrict(userData.username || key || ''),
+            verified: Boolean(userData.verified),
+            verificationStatus: userData.verificationStatus ? sanitizeStrict(userData.verificationStatus) : undefined
+          };
+        });
+      }
       
+      console.log('Loaded users:', Object.keys(sanitizedUsers).length);
       setUsers(sanitizedUsers);
 
       // Load orders
@@ -294,7 +335,7 @@ export const useBrowseListings = () => {
       setError(errorMessage);
       setIsLoading(false);
     }
-  }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, page, selectedHourRange, checkSearchLimit]);
+  }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, selectedHourRange, checkSearchLimit]);
 
   // Load data on mount and when filters change
   useEffect(() => {
@@ -467,9 +508,11 @@ export const useBrowseListings = () => {
     }
   }, [orderHistory]);
 
+  // FIXED: Paginate listings properly
   const paginatedListings = useMemo(() => {
     try {
-      return listings.map(listing => {
+      // First, create listings with profile data
+      const listingsWithProfiles = listings.map(listing => {
         const sellerUser = users?.[listing.seller];
         const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
         const sellerSalesCount = getSellerSalesCount(listing.seller);
@@ -482,11 +525,19 @@ export const useBrowseListings = () => {
           isSellerVerified
         } as ListingWithProfile;
       });
+
+      // Then paginate
+      const start = page * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      
+      console.log(`Paginating: page ${page}, showing items ${start}-${end} of ${listingsWithProfiles.length}`);
+      
+      return listingsWithProfiles.slice(start, end);
     } catch (error) {
       console.error('Error creating paginated listings:', error);
       return [];
     }
-  }, [listings, users, getSellerSalesCount, sellerProfiles]);
+  }, [listings, users, getSellerSalesCount, sellerProfiles, page]);
   
   const totalPages = useMemo(() => {
     try {
