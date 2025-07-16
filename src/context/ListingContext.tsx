@@ -525,6 +525,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await listingsService.deleteListing(id);
       if (result.success) {
         setListings(prev => prev.filter(listing => listing.id !== id));
+        window.dispatchEvent(new CustomEvent('listingDeleted', { detail: { listingId: id } }));
       } else {
         throw new Error(result.error?.message || 'Failed to delete listing');
       }

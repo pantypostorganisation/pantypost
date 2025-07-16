@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { storageService, listingsService, securityService } from '@/services';
-import type { ListingSearchParams } from '@/services';
+import { useListings } from '@/context/ListingContext';
+import { storageService, securityService } from '@/services';
 import { FilterOptions, CategoryCounts, SellerProfile, ListingWithProfile } from '@/types/browse';
 import { 
   HOUR_RANGE_OPTIONS, 
@@ -52,38 +52,23 @@ const getDisplayPrice = (listing: Listing) => {
   return getDisplayPriceUtil(normalizeListing(listing));
 };
 
-// Check if we have cached listings to determine initial loading state
-const getCachedListings = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      const cached = localStorage.getItem('browse_listings_cache');
-      if (cached) {
-        const parsedCache = JSON.parse(cached);
-        // Validate cache structure
-        if (parsedCache && typeof parsedCache.data === 'object' && typeof parsedCache.timestamp === 'number') {
-          const { data, timestamp } = parsedCache;
-          // Check if cache is less than 2 minutes old
-          if (Date.now() - timestamp < 2 * 60 * 1000) {
-            return data;
-          }
-        }
-      }
-    } catch (e) {
-      // Ignore cache errors and clear invalid cache
-      try {
-        localStorage.removeItem('browse_listings_cache');
-      } catch {}
-    }
-  }
-  return null;
-};
-
 export const useBrowseListings = () => {
   const { user } = useAuth();
   const router = useRouter();
   const { checkLimit: checkSearchLimit } = useRateLimit('SEARCH');
+  
+  // Get data from ListingContext
+  const { 
+    listings: contextListings,
+    users: contextUsers,
+    subscriptions: contextSubscriptions,
+    orderHistory: contextOrderHistory,
+    isLoading: contextLoading,
+    error: contextError,
+    refreshListings
+  } = useListings();
 
-  // State
+  // State for filters and UI
   const [filter, setFilter] = useState<FilterOptions['filter']>('all');
   const [selectedHourRange, setSelectedHourRange] = useState(HOUR_RANGE_OPTIONS[0]);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -96,18 +81,7 @@ export const useBrowseListings = () => {
   const [sellerProfiles, setSellerProfiles] = useState<{ [key: string]: SellerProfile }>({});
   const [listingErrors, setListingErrors] = useState<{ [listingId: string]: string }>({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
-  const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
-  
-  // Initialize with cached data if available
-  const cachedListings = getCachedListings();
-  const [listings, setListings] = useState<Listing[]>(cachedListings || []);
-  const [users, setUsers] = useState<Record<string, User>>({});
-  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
-  const [subscriptions, setSubscriptions] = useState<Record<string, string[]>>({});
-  const [isLoading, setIsLoading] = useState(!cachedListings); // Only show loading if no cache
-  const [error, setError] = useState<string | null>(null);
-  const [totalListings, setTotalListings] = useState(cachedListings?.length || 0);
 
   // Refs
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -115,7 +89,6 @@ export const useBrowseListings = () => {
   const mountedRef = useRef(true);
   const lastClickTime = useRef<number>(0);
   const lastQuickViewTime = useRef<number>(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   const MAX_CACHED_PROFILES = 100;
 
@@ -150,263 +123,112 @@ export const useBrowseListings = () => {
     }
   }, []);
 
-  // Load data using listings service
-  const loadListings = useCallback(async () => {
-    // Debug: Log what's being loaded
-    console.log('=== DEBUG: Loading Listings ===');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
+  // Apply filters to context listings
+  const filteredListings = useMemo(() => {
+    console.log('=== Filtering listings ===');
+    console.log('Context listings count:', contextListings.length);
+    console.log('Current filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
     
-    // Check localStorage directly first
-    const rawListings = localStorage.getItem('listings');
-    console.log('Raw listings from localStorage:', rawListings);
-    if (rawListings) {
-      try {
-        const parsed = JSON.parse(rawListings);
-        console.log('Parsed listings count:', parsed.length);
-        console.log('First 3 listings:', parsed.slice(0, 3));
-      } catch (e) {
-        console.error('Failed to parse listings:', e);
-      }
+    let filtered = [...contextListings];
+    
+    // Filter out ended auctions
+    filtered = filtered.filter(listing => {
+      if (!listing.auction) return true;
+      const now = new Date();
+      const endTime = new Date(listing.auction.endTime);
+      return endTime > now;
+    });
+    
+    console.log('After active filter:', filtered.length);
+    
+    // Apply category filter
+    if (filter !== 'all') {
+      filtered = filtered.filter(listing => {
+        if (filter === 'premium') return listing.isPremium && !listing.auction;
+        if (filter === 'standard') return !listing.isPremium && !listing.auction;
+        if (filter === 'auction') return !!listing.auction;
+        return true;
+      });
     }
-
-    // Check rate limit
-    const rateLimitResult = checkSearchLimit();
-    if (!rateLimitResult.allowed) {
-      setRateLimitError(`Too many searches. Please wait ${rateLimitResult.waitTime} seconds.`);
-      return;
+    
+    console.log('After category filter:', filtered.length);
+    
+    // Apply search filter
+    if (debouncedSearchTerm) {
+      const query = debouncedSearchTerm.toLowerCase();
+      filtered = filtered.filter(listing =>
+        listing.title.toLowerCase().includes(query) ||
+        listing.description.toLowerCase().includes(query) ||
+        listing.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        listing.seller.toLowerCase().includes(query)
+      );
     }
-    setRateLimitError(null);
-
-    // Cancel any pending request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Prepare search params with validation
-      let sortByParam: 'date' | 'price' | 'views' | 'endingSoon' = 'date';
-      if (sortBy === 'newest') {
-        sortByParam = 'date';
-      } else if (sortBy === 'priceAsc' || sortBy === 'priceDesc') {
-        sortByParam = 'price';
-      } else if (sortBy === 'endingSoon') {
-        sortByParam = 'endingSoon';
-      }
-
-      // Validate and sanitize search params - IMPORTANT: Remove pagination for initial load
-      const searchParams: ListingSearchParams = {
-        query: sanitizeSearchQuery(debouncedSearchTerm),
-        minPrice: minPrice ? sanitizeNumber(minPrice, 0, 10000) : undefined,
-        maxPrice: maxPrice ? sanitizeNumber(maxPrice, 0, 10000) : undefined,
-        isPremium: filter === 'premium' ? true : filter === 'standard' ? false : undefined,
-        isAuction: filter === 'auction' ? true : filter === 'standard' ? false : undefined,
-        isActive: true,
-        sortBy: sortByParam,
-        sortOrder: sortBy === 'priceDesc' ? 'desc' : 'asc',
-        // REMOVED pagination params to get ALL listings
-        // page: Math.max(0, page),
-        // limit: PAGE_SIZE,
-      };
-
-      console.log('Search params being sent:', searchParams);
-
-      // Validate price range
-      if (searchParams.minPrice !== undefined && searchParams.maxPrice !== undefined) {
-        if (searchParams.minPrice > searchParams.maxPrice) {
-          throw new Error('Minimum price cannot be greater than maximum price');
-        }
-      }
-
-      // Load listings
-      const listingsResponse = await listingsService.getListings(searchParams);
-      
-      console.log('Listings service response:', listingsResponse);
-
-      if (!mountedRef.current) return;
-
-      if (listingsResponse.success && listingsResponse.data) {
-        console.log('Got listings from service:', listingsResponse.data.length);
-        
-        // Apply hour range filter (not supported by service)
-        let filteredListings = listingsResponse.data.filter((listing: Listing) => {
-          if (selectedHourRange.label === 'Any Hours') return true;
-          
-          const hoursWorn = listing.hoursWorn ?? 0;
-          return hoursWorn >= selectedHourRange.min && hoursWorn <= selectedHourRange.max;
+    
+    console.log('After search filter:', filtered.length);
+    
+    // Apply price filters
+    if (minPrice) {
+      const min = parseFloat(minPrice);
+      if (!isNaN(min)) {
+        filtered = filtered.filter(listing => {
+          const price = listing.auction?.highestBid || listing.price;
+          return price >= min;
         });
-
-        console.log('After hour range filter:', filteredListings.length);
-
-        // Handle endingSoon sort (custom logic)
-        if (sortBy === 'endingSoon') {
-          filteredListings.sort((a: Listing, b: Listing) => {
-            if (a.auction && b.auction) {
-              return new Date(a.auction.endTime).getTime() - new Date(b.auction.endTime).getTime();
-            } else if (a.auction) {
-              return -1;
-            } else if (b.auction) {
-              return 1;
-            }
-            return 0;
-          });
-        }
-
-        setListings(filteredListings);
-        setTotalListings(filteredListings.length);
-
-        // Cache the listings with sanitized data
-        if (typeof window !== 'undefined' && filteredListings.length > 0) {
-          try {
-            const cacheData = {
-              data: filteredListings,
-              timestamp: Date.now()
-            };
-            localStorage.setItem('browse_listings_cache', JSON.stringify(cacheData));
-          } catch (e) {
-            // Ignore cache errors (storage might be full)
-            console.warn('Failed to cache listings:', e);
+      }
+    }
+    
+    if (maxPrice) {
+      const max = parseFloat(maxPrice);
+      if (!isNaN(max)) {
+        filtered = filtered.filter(listing => {
+          const price = listing.auction?.highestBid || listing.price;
+          return price <= max;
+        });
+      }
+    }
+    
+    console.log('After price filter:', filtered.length);
+    
+    // Apply hour range filter
+    filtered = filtered.filter(listing => {
+      const hoursWorn = listing.hoursWorn ?? 0;
+      return hoursWorn >= selectedHourRange.min && hoursWorn <= selectedHourRange.max;
+    });
+    
+    console.log('After hour range filter:', filtered.length);
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        case 'priceAsc':
+          const aPrice = a.auction?.highestBid || a.price;
+          const bPrice = b.auction?.highestBid || b.price;
+          return aPrice - bPrice;
+        case 'priceDesc':
+          const aPriceDesc = a.auction?.highestBid || a.price;
+          const bPriceDesc = b.auction?.highestBid || b.price;
+          return bPriceDesc - aPriceDesc;
+        case 'endingSoon':
+          if (a.auction && b.auction) {
+            return new Date(a.auction.endTime).getTime() - new Date(b.auction.endTime).getTime();
           }
-        }
-      } else {
-        throw new Error(listingsResponse.error?.message || 'Failed to load listings');
+          return a.auction ? -1 : b.auction ? 1 : 0;
+        default:
+          return 0;
       }
-
-      // Load users with sanitization
-      const usersData = await storageService.getItem<User[]>('users', []);
-      const sanitizedUsers: Record<string, User> = {};
-      
-      // Handle both array and object formats
-      if (Array.isArray(usersData)) {
-        usersData.forEach((userData) => {
-          sanitizedUsers[sanitizeStrict(userData.username)] = {
-            username: sanitizeStrict(userData.username || ''),
-            verified: Boolean(userData.verified),
-            verificationStatus: userData.verificationStatus ? sanitizeStrict(userData.verificationStatus) : undefined
-          };
-        });
-      } else {
-        Object.entries(usersData as any).forEach(([key, userData]: [string, any]) => {
-          sanitizedUsers[sanitizeStrict(key)] = {
-            username: sanitizeStrict(userData.username || key || ''),
-            verified: Boolean(userData.verified),
-            verificationStatus: userData.verificationStatus ? sanitizeStrict(userData.verificationStatus) : undefined
-          };
-        });
-      }
-      
-      console.log('Loaded users:', Object.keys(sanitizedUsers).length);
-      setUsers(sanitizedUsers);
-
-      // Load orders
-      const ordersData = await storageService.getItem<Order[]>('orders', []);
-      setOrderHistory(ordersData);
-
-      // Load subscriptions
-      const subsData = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
-      setSubscriptions(subsData);
-
-      // Load popular tags with sanitization
-      const tagsResponse = await listingsService.getPopularTags(10);
-      if (tagsResponse.success && tagsResponse.data) {
-        const sanitizedTags = tagsResponse.data.map(tag => ({
-          tag: sanitizeStrict(tag.tag),
-          count: Math.max(0, parseInt(tag.count.toString()) || 0)
-        }));
-        setPopularTags(sanitizedTags);
-      }
-
-      setIsLoading(false);
-    } catch (error: any) {
-      if (!mountedRef.current) return;
-      
-      if (error.name === 'AbortError') {
-        console.log('Request was cancelled');
-        return;
-      }
-
-      console.error('Error loading data:', error);
-      const errorMessage = sanitizeStrict(error.message || 'Failed to load listings');
-      setError(errorMessage);
-      setIsLoading(false);
-    }
-  }, [debouncedSearchTerm, minPrice, maxPrice, filter, sortBy, selectedHourRange, checkSearchLimit]);
-
-  // Add storage event listener to detect when listings change
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      // If listings were updated in storage, refresh our data
-      if (e.key === 'listings' && e.newValue !== e.oldValue) {
-        console.log('📦 Detected listings change in storage, refreshing...');
-        loadListings();
-      }
-      
-      // If browse cache was cleared, refresh
-      if (e.key === 'browse_listings_cache' && e.newValue === null) {
-        console.log('🧹 Browse cache cleared, refreshing...');
-        loadListings();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
+    });
     
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, [loadListings]);
+    console.log('Final filtered count:', filtered.length);
+    return filtered;
+  }, [contextListings, filter, debouncedSearchTerm, minPrice, maxPrice, selectedHourRange, sortBy]);
 
-  // Add custom event listener for deleted listings
-  useEffect(() => {
-    const handleListingDeleted = (event: CustomEvent) => {
-      const { listingId } = event.detail;
-      console.log('🗑️ Listing deleted event received:', listingId);
-      
-      // Remove the listing from our local state immediately
-      setListings(prev => prev.filter(l => l.id !== listingId));
-      
-      // Also refresh from storage to ensure consistency
-      setTimeout(() => {
-        loadListings();
-      }, 100);
-    };
-
-    window.addEventListener('listingDeleted', handleListingDeleted as EventListener);
-    
-    return () => {
-      window.removeEventListener('listingDeleted', handleListingDeleted as EventListener);
-    };
-  }, [loadListings]);
-
-  // Add custom event listener for created listings
-  useEffect(() => {
-    const handleListingCreated = (event: CustomEvent) => {
-      console.log('🆕 Detected new listing creation, refreshing...');
-      loadListings();
-    };
-
-    window.addEventListener('listingCreated', handleListingCreated as EventListener);
-    
-    return () => {
-      window.removeEventListener('listingCreated', handleListingCreated as EventListener);
-    };
-  }, [loadListings]);
-
-  // Load data on mount and when filters change
-  useEffect(() => {
-    loadListings();
-  }, [loadListings]);
-
-  // Load seller profiles with sanitization
+  // Load seller profiles
   useEffect(() => {
     const loadSellerProfiles = async () => {
-      if (typeof window !== 'undefined' && !isLoading && listings.length > 0) {
-        const currentSellers = new Set(listings.map(listing => listing.seller));
+      if (typeof window !== 'undefined' && !contextLoading && contextListings.length > 0) {
+        const currentSellers = new Set(contextListings.map(listing => listing.seller));
         const profiles: { [key: string]: SellerProfile } = {};
         
         const sellersArray = Array.from(currentSellers).slice(0, MAX_CACHED_PROFILES);
@@ -429,7 +251,7 @@ export const useBrowseListings = () => {
     };
     
     loadSellerProfiles();
-  }, [listings, isLoading]);
+  }, [contextListings, contextLoading]);
 
   // Debounced search
   useEffect(() => {
@@ -449,7 +271,7 @@ export const useBrowseListings = () => {
   const auctionTimers = useMemo(() => {
     try {
       const now = new Date();
-      const activeAuctions = listings.filter(listing => {
+      const activeAuctions = filteredListings.filter(listing => {
         if (!isAuctionListing(listing) || !isListingActive(listing)) return false;
         
         const endTime = listing.auction?.endTime ? new Date(listing.auction.endTime) : null;
@@ -483,7 +305,7 @@ export const useBrowseListings = () => {
       console.error('Error calculating auction timers:', error);
       return [];
     }
-  }, [listings, forceUpdateTimer]);
+  }, [filteredListings]);
 
   // Timer effect
   useEffect(() => {
@@ -536,44 +358,41 @@ export const useBrowseListings = () => {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
     };
   }, []);
 
   // Memoized calculations
   const categoryCounts = useMemo(() => {
     try {
-      const activeListings = listings.filter(isListingActive);
+      const activeListings = contextListings.filter(isListingActive);
       
       return {
-        all: totalListings,
+        all: activeListings.length,
         standard: activeListings.filter(l => !l.isPremium && !l.auction).length,
-        premium: activeListings.filter(l => l.isPremium).length,
+        premium: activeListings.filter(l => l.isPremium && !l.auction).length,
         auction: activeListings.filter(l => l.auction).length
       };
     } catch (error) {
       console.error('Error calculating category counts:', error);
       return { all: 0, standard: 0, premium: 0, auction: 0 };
     }
-  }, [listings, totalListings]);
+  }, [contextListings]);
 
   const getSellerSalesCount = useCallback((seller: string) => {
     try {
-      return orderHistory.filter(order => order.seller === seller).length;
+      return contextOrderHistory.filter(order => order.seller === seller).length;
     } catch (error) {
       console.error('Error getting seller sales count:', error);
       return 0;
     }
-  }, [orderHistory]);
+  }, [contextOrderHistory]);
 
-  // FIXED: Paginate listings properly
+  // Create paginated listings with profile data
   const paginatedListings = useMemo(() => {
     try {
       // First, create listings with profile data
-      const listingsWithProfiles = listings.map(listing => {
-        const sellerUser = users?.[listing.seller];
+      const listingsWithProfiles = filteredListings.map(listing => {
+        const sellerUser = contextUsers?.[listing.seller];
         const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
         const sellerSalesCount = getSellerSalesCount(listing.seller);
         const sellerProfile = sellerProfiles[listing.seller];
@@ -597,23 +416,23 @@ export const useBrowseListings = () => {
       console.error('Error creating paginated listings:', error);
       return [];
     }
-  }, [listings, users, getSellerSalesCount, sellerProfiles, page]);
+  }, [filteredListings, contextUsers, getSellerSalesCount, sellerProfiles, page]);
   
   const totalPages = useMemo(() => {
     try {
-      return Math.ceil(totalListings / PAGE_SIZE);
+      return Math.ceil(filteredListings.length / PAGE_SIZE);
     } catch (error) {
       console.error('Error calculating total pages:', error);
       return 1;
     }
-  }, [totalListings]);
+  }, [filteredListings]);
 
   // Utility functions
   const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
     if (!buyerUsername || !sellerUsername) return false;
-    const buyerSubs = subscriptions[buyerUsername] || [];
+    const buyerSubs = contextSubscriptions[buyerUsername] || [];
     return buyerSubs.includes(sellerUsername);
-  }, [subscriptions]);
+  }, [contextSubscriptions]);
 
   // Handlers
   const handleMouseEnter = useCallback((listingId: string) => {
@@ -694,9 +513,20 @@ export const useBrowseListings = () => {
     setRateLimitError(null);
   }, []);
 
-  const refreshListings = useCallback(() => {
-    loadListings();
-  }, [loadListings]);
+  const handleRateLimit = useCallback(() => {
+    const rateLimitResult = checkSearchLimit();
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many searches. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return false;
+    }
+    setRateLimitError(null);
+    return true;
+  }, [checkSearchLimit]);
+
+  // Trigger refresh when component mounts
+  useEffect(() => {
+    refreshListings();
+  }, []);
 
   return {
     // Auth & State
@@ -724,11 +554,10 @@ export const useBrowseListings = () => {
     paginatedListings,
     categoryCounts,
     totalPages,
-    popularTags,
     
     // Loading state
-    isLoading,
-    error,
+    isLoading: contextLoading,
+    error: contextError,
     
     // Handlers
     handleMouseEnter,
