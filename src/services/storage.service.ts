@@ -1,11 +1,9 @@
 // src/services/storage.service.ts
 
 import { FEATURES, ApiResponse } from './api.config';
-import { sanitizeStrict } from '@/utils/security/sanitization';
-import { z } from 'zod';
 
 /**
- * Enhanced Storage Service with security, transaction support and error recovery
+ * Enhanced Storage Service with transaction support and error recovery
  */
 
 interface StorageTransaction {
@@ -17,97 +15,10 @@ interface StorageTransaction {
   backup: Map<string, string | null>;
 }
 
-// Storage configuration
-const STORAGE_CONFIG = {
-  MAX_KEY_LENGTH: 100,
-  MAX_VALUE_SIZE: 1024 * 1024, // 1MB per value
-  MAX_TOTAL_SIZE: 5 * 1024 * 1024, // 5MB total
-  KEY_PREFIX: 'panty_', // Prefix for all keys
-};
-
-// Define allowed storage keys with their prefixes
-const ALLOWED_KEY_PREFIXES = [
-  'panty_users',
-  'panty_listings',
-  'panty_messages',
-  'panty_blocked',
-  'panty_reported',
-  'panty_report_logs',
-  'panty_message_notifications',
-  'panty_requests',
-  'panty_custom_request_data',
-  'panty_sold_listings',
-  'panty_listing_notifications',
-  'panty_ban_logs',
-  'panty_verification_requests',
-  'panty_tier_progress',
-  'panty_purchase_logs',
-  'panty_age_verified',
-  'panty_app_initialized',
-  'panty_current_user',
-  'panty_user_preferences',
-  'wallet_',
-  'wallet_balance',
-  'wallet_transactions',
-  'wallet_escrow',
-  'wallet_user_data',
-  'wallet_orders',
-  'wallet_earnings',
-  'wallet_transfer_history',
-  'processed_orders',
-  'thread_metadata',
-  'isFirstTime',
-  'hasSeenBanWarning',
-  'pendingAddresses',
-  'reviews',
-  'profileGallery',
-  'subscriptions',
-  'tips',
-  'customRequest',
-];
-
-// Validation schema for storage keys
-const storageKeySchema = z.string()
-  .max(STORAGE_CONFIG.MAX_KEY_LENGTH)
-  .refine((key) => {
-    // Check if key starts with any allowed prefix
-    return ALLOWED_KEY_PREFIXES.some(prefix => key.startsWith(prefix));
-  }, 'Invalid storage key prefix');
-
 export class StorageService {
   private static transactionInProgress = false;
   private static operationQueue: Array<() => Promise<void>> = [];
   private static isProcessingQueue = false;
-
-  /**
-   * Validate storage key
-   */
-  private validateKey(key: string): boolean {
-    try {
-      storageKeySchema.parse(key);
-      return true;
-    } catch (error) {
-      console.error(`Invalid storage key: ${key}`);
-      return false;
-    }
-  }
-
-  /**
-   * Validate value size
-   */
-  private validateValueSize(value: any): boolean {
-    try {
-      const serialized = JSON.stringify(value);
-      if (serialized.length > STORAGE_CONFIG.MAX_VALUE_SIZE) {
-        console.error(`Value too large: ${serialized.length} bytes (max: ${STORAGE_CONFIG.MAX_VALUE_SIZE})`);
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error('Error serializing value:', error);
-      return false;
-    }
-  }
 
   /**
    * Execute a function with retry logic
@@ -181,12 +92,6 @@ export class StorageService {
    */
   async getItem<T>(key: string, defaultValue: T): Promise<T> {
     try {
-      // Validate key
-      if (!this.validateKey(key)) {
-        console.error(`Invalid storage key: ${key}`);
-        return defaultValue;
-      }
-
       if (FEATURES.USE_MOCK_API) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -224,30 +129,13 @@ export class StorageService {
   }
 
   /**
-   * Set item in storage with validation and queuing
+   * Set item in storage with queuing
    */
   async setItem<T>(key: string, value: T): Promise<boolean> {
-    // Validate key
-    if (!this.validateKey(key)) {
-      console.error(`Invalid storage key: ${key}`);
-      return false;
-    }
-
-    // Validate value size
-    if (!this.validateValueSize(value)) {
-      return false;
-    }
-
     return this.queueOperation(async () => {
       try {
         if (FEATURES.USE_MOCK_API) {
           await new Promise(resolve => setTimeout(resolve, 50));
-        }
-
-        // Check storage quota before writing
-        const storageInfo = await this.getStorageInfo();
-        if (storageInfo.percentage > 90) {
-          console.warn('Storage quota nearly full:', storageInfo.percentage + '%');
         }
 
         const serialized = JSON.stringify(value);
@@ -271,15 +159,9 @@ export class StorageService {
   }
 
   /**
-   * Remove item from storage with validation
+   * Remove item from storage
    */
   async removeItem(key: string): Promise<boolean> {
-    // Validate key
-    if (!this.validateKey(key)) {
-      console.error(`Invalid storage key: ${key}`);
-      return false;
-    }
-
     return this.queueOperation(async () => {
       try {
         if (FEATURES.USE_MOCK_API) {
@@ -316,16 +198,6 @@ export class StorageService {
    */
   async commitTransaction(transaction: StorageTransaction): Promise<boolean> {
     try {
-      // Validate all keys in transaction
-      for (const op of transaction.operations) {
-        if (!this.validateKey(op.key)) {
-          throw new Error(`Invalid key in transaction: ${op.key}`);
-        }
-        if (op.type === 'set' && !this.validateValueSize(op.value)) {
-          throw new Error(`Value too large for key: ${op.key}`);
-        }
-      }
-
       // Backup current values
       for (const op of transaction.operations) {
         if (op.type === 'set' || op.type === 'remove') {
@@ -378,12 +250,6 @@ export class StorageService {
     key: string,
     updates: Partial<T>
   ): Promise<boolean> {
-    // Validate key
-    if (!this.validateKey(key)) {
-      console.error(`Invalid storage key: ${key}`);
-      return false;
-    }
-
     return this.queueOperation(async () => {
       try {
         const current = await this.getItem<T | null>(key, null);
@@ -402,7 +268,7 @@ export class StorageService {
   }
 
   /**
-   * Get all keys matching a pattern (with security restrictions)
+   * Get all keys matching a pattern
    */
   async getKeys(pattern?: string): Promise<string[]> {
     try {
@@ -410,16 +276,11 @@ export class StorageService {
         await new Promise(resolve => setTimeout(resolve, 20));
       }
 
-      // Sanitize pattern to prevent regex injection
-      const sanitizedPattern = pattern ? sanitizeStrict(pattern) : undefined;
-
       const keys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && this.validateKey(key)) {
-          if (!sanitizedPattern || key.includes(sanitizedPattern)) {
-            keys.push(key);
-          }
+        if (key && (!pattern || key.includes(pattern))) {
+          keys.push(key);
         }
       }
       return keys;
@@ -434,11 +295,6 @@ export class StorageService {
    */
   async hasKey(key: string): Promise<boolean> {
     try {
-      // Validate key
-      if (!this.validateKey(key)) {
-        return false;
-      }
-
       if (FEATURES.USE_MOCK_API) {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
@@ -451,7 +307,7 @@ export class StorageService {
   }
 
   /**
-   * Clear all storage (with security checks)
+   * Clear all storage
    */
   async clear(preserveKeys?: string[]): Promise<boolean> {
     return this.queueOperation(async () => {
@@ -460,37 +316,24 @@ export class StorageService {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // Validate preserved keys
-        const validPreserveKeys = preserveKeys?.filter(key => this.validateKey(key)) || [];
-
-        if (validPreserveKeys.length > 0) {
+        if (preserveKeys && preserveKeys.length > 0) {
           // Preserve specified keys
           const preserved: { [key: string]: any } = {};
-          for (const key of validPreserveKeys) {
+          for (const key of preserveKeys) {
             const value = localStorage.getItem(key);
             if (value !== null) {
               preserved[key] = value;
             }
           }
 
-          // Only clear keys with valid prefixes
-          const allKeys = await this.getKeys();
-          for (const key of allKeys) {
-            if (!validPreserveKeys.includes(key)) {
-              localStorage.removeItem(key);
-            }
-          }
+          localStorage.clear();
 
           // Restore preserved keys
           for (const [key, value] of Object.entries(preserved)) {
             localStorage.setItem(key, value);
           }
         } else {
-          // Clear only keys with valid prefixes
-          const allKeys = await this.getKeys();
-          for (const key of allKeys) {
-            localStorage.removeItem(key);
-          }
+          localStorage.clear();
         }
 
         return true;
@@ -521,15 +364,17 @@ export class StorageService {
 
       // Fallback calculation
       let totalSize = 0;
-      const allKeys = await this.getKeys();
-      for (const key of allKeys) {
-        totalSize += key.length + (localStorage.getItem(key) || '').length;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          totalSize += key.length + (localStorage.getItem(key) || '').length;
+        }
       }
 
       return {
         used: totalSize,
-        quota: STORAGE_CONFIG.MAX_TOTAL_SIZE,
-        percentage: (totalSize / STORAGE_CONFIG.MAX_TOTAL_SIZE) * 100,
+        quota: 5 * 1024 * 1024, // 5MB estimate
+        percentage: (totalSize / (5 * 1024 * 1024)) * 100,
       };
     } catch (error) {
       console.error('Error getting storage info:', error);
@@ -538,21 +383,9 @@ export class StorageService {
   }
 
   /**
-   * Batch set multiple items atomically with validation
+   * Batch set multiple items atomically
    */
   async batchSet(items: Array<{ key: string; value: any }>): Promise<boolean> {
-    // Validate all items first
-    for (const item of items) {
-      if (!this.validateKey(item.key)) {
-        console.error(`Invalid key in batch: ${item.key}`);
-        return false;
-      }
-      if (!this.validateValueSize(item.value)) {
-        console.error(`Value too large for key in batch: ${item.key}`);
-        return false;
-      }
-    }
-
     const transaction = this.beginTransaction();
     
     for (const item of items) {
@@ -608,20 +441,16 @@ export class StorageService {
   }
 
   /**
-   * Export wallet data for backup (with security restrictions)
+   * Export all wallet data for backup
    */
   async exportWalletData(): Promise<any> {
-    // Only export wallet-prefixed keys
     const walletKeys = await this.getKeys('wallet_');
     const data: any = {};
     
     for (const key of walletKeys) {
-      // Double-check the key is wallet-related
-      if (key.startsWith('wallet_')) {
-        const value = await this.getItem(key, null);
-        if (value !== null) {
-          data[key] = value;
-        }
+      const value = await this.getItem(key, null);
+      if (value !== null) {
+        data[key] = value;
       }
     }
     
@@ -629,20 +458,11 @@ export class StorageService {
   }
 
   /**
-   * Import wallet data from backup with validation
+   * Import wallet data from backup
    */
   async importWalletData(data: any): Promise<boolean> {
     try {
-      // Validate that all keys are wallet-related
-      const entries = Object.entries(data);
-      for (const [key] of entries) {
-        if (!key.startsWith('wallet_') || !this.validateKey(key)) {
-          console.error(`Invalid key in import data: ${key}`);
-          return false;
-        }
-      }
-
-      const items = entries.map(([key, value]) => ({
+      const items = Object.entries(data).map(([key, value]) => ({
         key,
         value
       }));

@@ -15,11 +15,6 @@ import {
   isValidBio,
   isValidSubscriptionPrice,
 } from '@/types/users';
-import { securityService } from './security.service';
-import { authSchemas, profileSchemas, adminSchemas } from '@/utils/validation/schemas';
-import { sanitizeStrict, sanitizeUrl, sanitizeNumber } from '@/utils/security/sanitization';
-import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { z } from 'zod';
 
 // Re-export types for backward compatibility
 export type VerificationStatus = 'pending' | 'verified' | 'rejected' | 'unverified';
@@ -68,67 +63,23 @@ export interface BanRequest {
   adminUsername: string;
 }
 
-// Validation schemas
-const userSearchSchema = z.object({
-  role: z.enum(['buyer', 'seller']).optional(),
-  verified: z.boolean().optional(),
-  query: z.string().max(100).transform(sanitizeStrict).optional(),
-  page: z.number().int().min(0).max(1000).optional(),
-  limit: z.number().int().min(1).max(100).optional(),
-});
-
-const updateProfileSchema = z.object({
-  bio: z.string().max(500).transform(sanitizeStrict).optional(),
-  profilePic: z.union([z.string().url().transform(sanitizeUrl), z.null()]).optional(),
-  subscriptionPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-  galleryImages: z.array(z.string().url().transform(sanitizeUrl)).max(20).optional(),
-});
-
-const verificationRequestSchema = z.object({
-  codePhoto: z.string().url().optional(),
-  idFront: z.string().url().optional(),
-  idBack: z.string().url().optional(),
-  passport: z.string().url().optional(),
-  code: z.string().max(20).transform(sanitizeStrict).optional(),
-});
-
-const verificationUpdateSchema = z.object({
-  status: z.enum(['pending', 'verified', 'rejected', 'unverified']),
-  rejectionReason: z.string().max(500).transform(sanitizeStrict).optional(),
-  adminUsername: z.string().max(50).transform(s => s.toLowerCase()).optional(),
-});
-
 /**
- * Users Service - Enhanced Version with Security and Backward Compatibility
+ * Users Service - Enhanced Version with Backward Compatibility
  * 
  * This service now uses the enhanced implementation while maintaining
- * the same API for backward compatibility with added security measures.
+ * the same API for backward compatibility.
  */
 export class UsersService {
   private enhanced = enhancedUsersService;
-  private rateLimiter = getRateLimiter();
 
   /**
-   * Get all users with validation
+   * Get all users
    */
   async getUsers(params?: UserSearchParams): Promise<ApiResponse<Record<string, User>>> {
     try {
-      // Validate search params
-      let validatedParams: UserSearchParams | undefined;
-      if (params) {
-        const validation = securityService.validateAndSanitize(params, userSearchSchema);
-        if (!validation.success) {
-          return {
-            success: false,
-            error: { message: 'Invalid search parameters', details: validation.errors },
-          };
-        }
-        validatedParams = validation.data;
-      }
-
       // Convert params to enhanced format
       const enhancedParams: EnhancedUserSearchParams = {
-        ...validatedParams,
+        ...params,
         sortBy: 'username',
         sortOrder: 'asc',
       };
@@ -161,36 +112,18 @@ export class UsersService {
   }
 
   /**
-   * Get user by username with validation
+   * Get user by username
    */
   async getUser(username: string): Promise<ApiResponse<User | null>> {
-    // Validate username
-    const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-    if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-      return {
-        success: false,
-        error: { message: 'Invalid username format' },
-      };
-    }
-
-    return this.enhanced.getUser(sanitizedUsername);
+    return this.enhanced.getUser(username);
   }
 
   /**
-   * Get user profile data with validation
+   * Get user profile data
    */
   async getUserProfile(username: string): Promise<ApiResponse<UserProfile | null>> {
     try {
-      // Validate username
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
-      }
-
-      const result = await this.enhanced.getUserProfile(sanitizedUsername);
+      const result = await this.enhanced.getUserProfile(username);
       
       if (!result.success) {
         return result as any;
@@ -220,63 +153,36 @@ export class UsersService {
   }
 
   /**
-   * Update user profile with validation and rate limiting
+   * Update user profile
    */
   async updateUserProfile(
     username: string,
     updates: UpdateProfileRequest
   ): Promise<ApiResponse<UserProfile>> {
     try {
-      // Validate username
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
+      // Validate inputs using enhanced validation
+      if (!isValidUsername(username)) {
         return {
           success: false,
           error: { message: 'Invalid username format' },
         };
       }
 
-      // Check rate limit
-      const rateLimitKey = `profile_update_${sanitizedUsername}`;
-      const rateLimitResult = this.rateLimiter.check(rateLimitKey, {
-        maxAttempts: 10,
-        windowMs: 60 * 60 * 1000, // 10 updates per hour
-      });
-      
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: `Too many profile updates. Please wait ${rateLimitResult.waitTime} seconds.` },
-        };
-      }
-
-      // Validate updates
-      const validation = securityService.validateAndSanitize(updates, updateProfileSchema);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid profile data', details: validation.errors },
-        };
-      }
-
-      const validatedUpdates = validation.data;
-
-      // Additional validation using enhanced validators
-      if (validatedUpdates.bio !== undefined && !isValidBio(validatedUpdates.bio)) {
+      if (updates.bio !== undefined && !isValidBio(updates.bio)) {
         return {
           success: false,
           error: { message: 'Bio is too long (max 500 characters)' },
         };
       }
 
-      if (validatedUpdates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(validatedUpdates.subscriptionPrice)) {
+      if (updates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(updates.subscriptionPrice)) {
         return {
           success: false,
           error: { message: 'Invalid subscription price' },
         };
       }
 
-      const result = await this.enhanced.updateUserProfile(sanitizedUsername, validatedUpdates);
+      const result = await this.enhanced.updateUserProfile(username, updates);
       
       if (!result.success) {
         return result as any;
@@ -302,99 +208,31 @@ export class UsersService {
   }
 
   /**
-   * Request verification with validation and rate limiting
+   * Request verification
    */
   async requestVerification(
     username: string,
     docs: VerificationRequest
   ): Promise<ApiResponse<void>> {
-    // Validate username
-    const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-    if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-      return {
-        success: false,
-        error: { message: 'Invalid username format' },
-      };
-    }
-
-    // Check rate limit
-    const rateLimitKey = `verification_request_${sanitizedUsername}`;
-    const rateLimitResult = this.rateLimiter.check(rateLimitKey, {
-      maxAttempts: 3,
-      windowMs: 24 * 60 * 60 * 1000, // 3 requests per day
-    });
-    
-    if (!rateLimitResult.allowed) {
-      return {
-        success: false,
-        error: { message: `Too many verification requests. Please wait ${rateLimitResult.waitTime} seconds.` },
-      };
-    }
-
-    // Validate documents
-    const validation = securityService.validateAndSanitize(docs, verificationRequestSchema);
-    if (!validation.success || !validation.data) {
-      return {
-        success: false,
-        error: { message: 'Invalid verification documents', details: validation.errors },
-      };
-    }
-
-    return this.enhanced.requestVerification(sanitizedUsername, validation.data);
+    return this.enhanced.requestVerification(username, docs);
   }
 
   /**
-   * Update verification status (admin only) with validation
+   * Update verification status (admin only)
    */
   async updateVerificationStatus(
     username: string,
     update: VerificationUpdateRequest
   ): Promise<ApiResponse<void>> {
     try {
-      // Validate username
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
-      }
-
-      // Validate update request
-      const validation = securityService.validateAndSanitize(update, verificationUpdateSchema);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid verification update', details: validation.errors },
-        };
-      }
-
-      const validatedUpdate = validation.data;
-
-      // Check rate limit for admin actions
-      if (validatedUpdate.adminUsername) {
-        const rateLimitKey = `admin_verification_${validatedUpdate.adminUsername}`;
-        const rateLimitResult = this.rateLimiter.check(rateLimitKey, {
-          maxAttempts: 50,
-          windowMs: 60 * 60 * 1000, // 50 verifications per hour
-        });
-        
-        if (!rateLimitResult.allowed) {
-          return {
-            success: false,
-            error: { message: `Too many verification updates. Please wait ${rateLimitResult.waitTime} seconds.` },
-          };
-        }
-      }
-
       const enhancedUpdate: EnhancedVerificationUpdateRequest = {
-        ...validatedUpdate,
+        ...update,
         reviewedAt: new Date().toISOString(),
       };
 
       if (FEATURES.USE_API_USERS) {
         return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username: sanitizedUsername }),
+          buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username }),
           {
             method: 'PATCH',
             body: JSON.stringify(enhancedUpdate),
@@ -404,19 +242,19 @@ export class UsersService {
 
       // LocalStorage implementation
       const allUsers = await storageService.getItem<Record<string, any>>(
-        'panty_users',
+        'all_users_v2',
         {}
       );
 
-      if (allUsers[sanitizedUsername]) {
-        allUsers[sanitizedUsername].verificationStatus = validatedUpdate.status;
-        allUsers[sanitizedUsername].isVerified = validatedUpdate.status === 'verified';
+      if (allUsers[username]) {
+        allUsers[username].verificationStatus = update.status;
+        allUsers[username].isVerified = update.status === 'verified';
         
-        if (validatedUpdate.status === 'rejected' && validatedUpdate.rejectionReason) {
-          allUsers[sanitizedUsername].verificationRejectionReason = validatedUpdate.rejectionReason;
+        if (update.status === 'rejected' && update.rejectionReason) {
+          allUsers[username].verificationRejectionReason = update.rejectionReason;
         }
         
-        await storageService.setItem('panty_users', allUsers);
+        await storageService.setItem('all_users_v2', allUsers);
         
         // Clear cache
         this.enhanced.clearCache();
@@ -428,24 +266,24 @@ export class UsersService {
         {}
       );
       
-      if (verificationRequests[sanitizedUsername]) {
-        verificationRequests[sanitizedUsername].status = validatedUpdate.status;
-        verificationRequests[sanitizedUsername].reviewedAt = new Date().toISOString();
-        verificationRequests[sanitizedUsername].reviewedBy = validatedUpdate.adminUsername;
-        if (validatedUpdate.rejectionReason) {
-          verificationRequests[sanitizedUsername].rejectionReason = validatedUpdate.rejectionReason;
+      if (verificationRequests[username]) {
+        verificationRequests[username].status = update.status;
+        verificationRequests[username].reviewedAt = new Date().toISOString();
+        verificationRequests[username].reviewedBy = update.adminUsername;
+        if (update.rejectionReason) {
+          verificationRequests[username].rejectionReason = update.rejectionReason;
         }
         await storageService.setItem('panty_verification_requests', verificationRequests);
       }
 
       // Track activity
       await this.enhanced.trackActivity({
-        userId: validatedUpdate.adminUsername || 'admin',
+        userId: update.adminUsername || 'admin',
         type: 'profile_update',
         details: {
           action: 'verification_status_updated',
-          targetUser: sanitizedUsername,
-          newStatus: validatedUpdate.status,
+          targetUser: username,
+          newStatus: update.status,
         },
       });
 
@@ -460,60 +298,17 @@ export class UsersService {
   }
 
   /**
-   * Ban user with validation and rate limiting
+   * Ban user
    */
   async banUser(request: BanRequest): Promise<ApiResponse<void>> {
     try {
-      // Extract adminUsername before validation since it's not in the schema
-      const adminUsername = request.adminUsername;
-      
-      // Prepare data for validation (matching the schema structure)
-      const dataForValidation = {
-        userId: request.username,
-        reason: request.reason,
-        duration: request.duration === undefined ? 'permanent' : 
-                  request.duration === 1 ? '1_day' :
-                  request.duration === 7 ? '7_days' : 
-                  request.duration === 30 ? '30_days' : 'permanent'
-      };
-      
-      // Validate ban request
-      const validation = securityService.validateAndSanitize(dataForValidation, adminSchemas.banUser);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid ban request', details: validation.errors },
-        };
-      }
-
-      const validatedRequest = validation.data;
-
-      // Check rate limit using the original adminUsername
-      const rateLimitKey = `ban_user_${adminUsername}`;
-      const rateLimitResult = this.rateLimiter.check(rateLimitKey, RATE_LIMITS.BAN_USER);
-      
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: `Too many ban actions. Please wait ${rateLimitResult.waitTime} seconds.` },
-        };
-      }
-
-      // Sanitize username
-      const sanitizedUsername = sanitizeStrict(validatedRequest.userId).toLowerCase();
-
       const enhancedRequest: EnhancedBanRequest = {
-        username: sanitizedUsername,
-        reason: validatedRequest.reason,
-        duration: validatedRequest.duration === 'permanent' ? undefined : 
-                  validatedRequest.duration === '1_day' ? 1 :
-                  validatedRequest.duration === '7_days' ? 7 : 30,
-        adminUsername: adminUsername || 'admin',
+        ...request,
         evidence: [],
       };
 
       if (FEATURES.USE_API_USERS) {
-        return await apiCall<void>(`${API_ENDPOINTS.USERS.LIST}/${sanitizedUsername}/ban`, {
+        return await apiCall<void>(`${API_ENDPOINTS.USERS.LIST}/${request.username}/ban`, {
           method: 'POST',
           body: JSON.stringify(enhancedRequest),
         });
@@ -521,46 +316,46 @@ export class UsersService {
 
       // LocalStorage implementation
       const allUsers = await storageService.getItem<Record<string, any>>(
-        'panty_users',
+        'all_users_v2',
         {}
       );
 
-      if (allUsers[sanitizedUsername]) {
-        allUsers[sanitizedUsername].isBanned = true;
-        allUsers[sanitizedUsername].banReason = enhancedRequest.reason;
+      if (allUsers[request.username]) {
+        allUsers[request.username].isBanned = true;
+        allUsers[request.username].banReason = request.reason;
         
-        if (enhancedRequest.duration) {
+        if (request.duration) {
           const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + enhancedRequest.duration);
-          allUsers[sanitizedUsername].banExpiresAt = expiresAt.toISOString();
+          expiresAt.setDate(expiresAt.getDate() + request.duration);
+          allUsers[request.username].banExpiresAt = expiresAt.toISOString();
         }
         
-        await storageService.setItem('panty_users', allUsers);
+        await storageService.setItem('all_users_v2', allUsers);
         
         // Clear cache
         this.enhanced.clearCache();
       }
 
       // Store ban log
-      const banLogs = await storageService.getItem<any[]>('panty_ban_logs', []);
+      const banLogs = await storageService.getItem<any[]>('ban_logs', []);
       banLogs.push({
-        username: sanitizedUsername,
-        reason: enhancedRequest.reason,
-        duration: enhancedRequest.duration,
-        bannedBy: enhancedRequest.adminUsername,
+        username: request.username,
+        reason: request.reason,
+        duration: request.duration,
+        bannedBy: request.adminUsername,
         bannedAt: new Date().toISOString(),
       });
-      await storageService.setItem('panty_ban_logs', banLogs);
+      await storageService.setItem('ban_logs', banLogs);
 
       // Track activity
       await this.enhanced.trackActivity({
-        userId: enhancedRequest.adminUsername,
+        userId: request.adminUsername,
         type: 'profile_update',
         details: {
           action: 'user_banned',
-          targetUser: sanitizedUsername,
-          reason: enhancedRequest.reason,
-          duration: enhancedRequest.duration,
+          targetUser: request.username,
+          reason: request.reason,
+          duration: request.duration,
         },
       });
 
@@ -575,68 +370,50 @@ export class UsersService {
   }
 
   /**
-   * Unban user with validation
+   * Unban user
    */
   async unbanUser(username: string, adminUsername: string): Promise<ApiResponse<void>> {
     try {
-      // Validate inputs
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      const sanitizedAdminUsername = sanitizeStrict(adminUsername).toLowerCase();
-      
-      if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
-      }
-
-      if (!sanitizedAdminUsername || !isValidUsername(sanitizedAdminUsername)) {
-        return {
-          success: false,
-          error: { message: 'Invalid admin username format' },
-        };
-      }
-
       if (FEATURES.USE_API_USERS) {
-        return await apiCall<void>(`${API_ENDPOINTS.USERS.LIST}/${sanitizedUsername}/unban`, {
+        return await apiCall<void>(`${API_ENDPOINTS.USERS.LIST}/${username}/unban`, {
           method: 'POST',
-          body: JSON.stringify({ adminUsername: sanitizedAdminUsername }),
+          body: JSON.stringify({ adminUsername }),
         });
       }
 
       // LocalStorage implementation
       const allUsers = await storageService.getItem<Record<string, any>>(
-        'panty_users',
+        'all_users_v2',
         {}
       );
 
-      if (allUsers[sanitizedUsername]) {
-        allUsers[sanitizedUsername].isBanned = false;
-        delete allUsers[sanitizedUsername].banReason;
-        delete allUsers[sanitizedUsername].banExpiresAt;
-        await storageService.setItem('panty_users', allUsers);
+      if (allUsers[username]) {
+        allUsers[username].isBanned = false;
+        delete allUsers[username].banReason;
+        delete allUsers[username].banExpiresAt;
+        await storageService.setItem('all_users_v2', allUsers);
         
         // Clear cache
         this.enhanced.clearCache();
       }
 
       // Update ban log
-      const banLogs = await storageService.getItem<any[]>('panty_ban_logs', []);
+      const banLogs = await storageService.getItem<any[]>('ban_logs', []);
       banLogs.push({
-        username: sanitizedUsername,
+        username,
         action: 'unban',
-        unbannedBy: sanitizedAdminUsername,
+        unbannedBy: adminUsername,
         unbannedAt: new Date().toISOString(),
       });
-      await storageService.setItem('panty_ban_logs', banLogs);
+      await storageService.setItem('ban_logs', banLogs);
 
       // Track activity
       await this.enhanced.trackActivity({
-        userId: sanitizedAdminUsername,
+        userId: adminUsername,
         type: 'profile_update',
         details: {
           action: 'user_unbanned',
-          targetUser: sanitizedUsername,
+          targetUser: username,
         },
       });
 
@@ -651,7 +428,7 @@ export class UsersService {
   }
 
   /**
-   * Get subscription info for a seller with validation
+   * Get subscription info for a seller
    */
   async getSubscriptionInfo(seller: string, buyer: string): Promise<ApiResponse<{
     isSubscribed: boolean;
@@ -659,25 +436,7 @@ export class UsersService {
     subscribedAt?: string;
   }>> {
     try {
-      // Validate inputs
-      const sanitizedSeller = sanitizeStrict(seller).toLowerCase();
-      const sanitizedBuyer = sanitizeStrict(buyer).toLowerCase();
-      
-      if (!sanitizedSeller || !isValidUsername(sanitizedSeller)) {
-        return {
-          success: false,
-          error: { message: 'Invalid seller username' },
-        };
-      }
-
-      if (!sanitizedBuyer || !isValidUsername(sanitizedBuyer)) {
-        return {
-          success: false,
-          error: { message: 'Invalid buyer username' },
-        };
-      }
-
-      const subResult = await this.enhanced.getSubscriptionStatus(sanitizedBuyer, sanitizedSeller);
+      const subResult = await this.enhanced.getSubscriptionStatus(buyer, seller);
       
       if (!subResult.success) {
         return subResult as any;
@@ -685,14 +444,14 @@ export class UsersService {
 
       // Get subscription price from profile if not subscribed
       if (!subResult.data) {
-        const profileResult = await this.getUserProfile(sanitizedSeller);
+        const profileResult = await this.getUserProfile(seller);
         const price = profileResult.data?.subscriptionPrice || '0';
         
         return {
           success: true,
           data: {
             isSubscribed: false,
-            price: sanitizeNumber(price, 0, 1000, 2).toString(),
+            price,
           },
         };
       }
@@ -701,7 +460,7 @@ export class UsersService {
         success: true,
         data: {
           isSubscribed: subResult.data.status === 'active',
-          price: sanitizeNumber(subResult.data.price, 0, 1000, 2).toString(),
+          price: subResult.data.price,
           subscribedAt: subResult.data.subscribedAt,
         },
       };
@@ -719,31 +478,17 @@ export class UsersService {
    */
   
   /**
-   * Get user preferences with validation
+   * Get user preferences
    */
   async getUserPreferences(username: string) {
-    const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-    if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-      return {
-        success: false,
-        error: { message: 'Invalid username format' },
-      };
-    }
-    return this.enhanced.getUserPreferences(sanitizedUsername);
+    return this.enhanced.getUserPreferences(username);
   }
 
   /**
-   * Update user preferences with validation
+   * Update user preferences
    */
   async updateUserPreferences(username: string, updates: any) {
-    const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-    if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-      return {
-        success: false,
-        error: { message: 'Invalid username format' },
-      };
-    }
-    return this.enhanced.updateUserPreferences(sanitizedUsername, updates);
+    return this.enhanced.updateUserPreferences(username, updates);
   }
 
   /**
@@ -754,32 +499,16 @@ export class UsersService {
   }
 
   /**
-   * Get user activity history with validation
+   * Get user activity history
    */
   async getUserActivity(username: string, limit?: number) {
-    const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-    if (!sanitizedUsername || !isValidUsername(sanitizedUsername)) {
-      return {
-        success: false,
-        error: { message: 'Invalid username format' },
-      };
-    }
-    
-    const sanitizedLimit = limit ? Math.min(Math.max(1, limit), 100) : undefined;
-    return this.enhanced.getUserActivity(sanitizedUsername, sanitizedLimit);
+    return this.enhanced.getUserActivity(username, limit);
   }
 
   /**
-   * Batch update users (admin only)
+   * Batch update users
    */
   async batchUpdateUsers(updates: any[]) {
-    // Limit batch size
-    if (updates.length > 50) {
-      return {
-        success: false,
-        error: { message: 'Batch size too large (max 50)' },
-      };
-    }
     return this.enhanced.batchUpdateUsers(updates);
   }
 

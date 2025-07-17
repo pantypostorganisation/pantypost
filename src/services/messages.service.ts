@@ -3,11 +3,6 @@
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { v4 as uuidv4 } from 'uuid';
-import { securityService } from './security.service';
-import { messageSchemas } from '@/utils/validation/schemas';
-import { sanitizeStrict, sanitizeHtml } from '@/utils/security/sanitization';
-import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { z } from 'zod';
 
 export interface Message {
   id?: string;
@@ -97,53 +92,15 @@ export interface CustomRequestData {
   paid?: boolean;
 }
 
-// Validation schemas for messages service
-const sendMessageSchema = z.object({
-  sender: z.string().min(1).max(50),
-  receiver: z.string().min(1).max(50),
-  content: messageSchemas.messageContent,
-  type: z.enum(['normal', 'customRequest', 'image', 'tip']).optional(),
-  meta: z.object({
-    id: z.string().optional(),
-    title: z.string().max(100).optional(),
-    price: z.number().positive().max(10000).optional(),
-    tags: z.array(z.string().max(30)).max(10).optional(),
-    message: z.string().max(500).optional(),
-    imageUrl: z.string().url().optional(),
-    tipAmount: z.number().positive().max(500).optional(),
-  }).optional(),
-  attachments: z.array(z.object({
-    id: z.string(),
-    type: z.enum(['image', 'file']),
-    url: z.string(),
-    name: z.string().optional(),
-    size: z.number().optional(),
-    mimeType: z.string().optional(),
-  })).optional(),
-});
-
-const blockUserSchema = z.object({
-  blocker: z.string().min(1).max(50),
-  blocked: z.string().min(1).max(50),
-});
-
-const reportUserSchema = z.object({
-  reporter: z.string().min(1).max(50),
-  reportee: z.string().min(1).max(50),
-  reason: z.string().max(500).optional(),
-  category: z.enum(['harassment', 'spam', 'inappropriate_content', 'scam', 'other']).optional(),
-});
-
 /**
  * Messages Service
- * Handles all messaging operations with security and validation
+ * Handles all messaging operations and prepares for real-time integration
  */
 export class MessagesService {
   private messageCache: Map<string, Message[]> = new Map();
   private threadCache: Map<string, MessageThread> = new Map();
   private wsReady: boolean = false;
   private messageListeners: Map<string, Set<(message: Message) => void>> = new Map();
-  private rateLimiter = getRateLimiter();
 
   /**
    * Initialize the service
@@ -165,23 +122,13 @@ export class MessagesService {
    */
   async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ApiResponse<MessageThread[]>> {
     try {
-      // Sanitize inputs
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      
-      if (!sanitizedUsername || sanitizedUsername.length > 50) {
-        return {
-          success: false,
-          error: { message: 'Invalid username' },
-        };
-      }
-
       if (FEATURES.USE_API_MESSAGES) {
-        const url = `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(sanitizedUsername)}${role ? `&role=${role}` : ''}`;
+        const url = `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(username)}${role ? `&role=${role}` : ''}`;
         return await apiCall<MessageThread[]>(url);
       }
 
       // LocalStorage implementation with caching
-      const cacheKey = `threads_${sanitizedUsername}_${role || 'all'}`;
+      const cacheKey = `threads_${username}_${role || 'all'}`;
       const cached = this.threadCache.get(cacheKey);
       
       if (cached && this.isCacheValid(cached.updatedAt)) {
@@ -193,13 +140,13 @@ export class MessagesService {
 
       // Group messages into threads
       for (const [conversationKey, messageList] of Object.entries(messages)) {
-        if (conversationKey.includes(sanitizedUsername)) {
+        if (conversationKey.includes(username)) {
           const participants = conversationKey.split('-') as [string, string];
-          const otherParty = participants.find(p => p !== sanitizedUsername) || '';
+          const otherParty = participants.find(p => p !== username) || '';
           
           // Filter by role if specified
           if (role && messageList.length > 0) {
-            const isRelevantThread = await this.isThreadRelevantForRole(sanitizedUsername, otherParty, role);
+            const isRelevantThread = await this.isThreadRelevantForRole(username, otherParty, role);
             if (!isRelevantThread) continue;
           }
           
@@ -213,7 +160,7 @@ export class MessagesService {
               messages: messageList,
               lastMessage: messageList[messageList.length - 1],
               unreadCount: messageList.filter(
-                m => m.receiver === sanitizedUsername && !m.isRead && !m.read
+                m => m.receiver === username && !m.isRead && !m.read
               ).length,
               updatedAt: messageList[messageList.length - 1].date,
               blockedBy,
@@ -251,19 +198,7 @@ export class MessagesService {
    */
   async getThread(userA: string, userB: string): Promise<ApiResponse<Message[]>> {
     try {
-      // Sanitize inputs
-      const sanitizedUserA = sanitizeStrict(userA).toLowerCase();
-      const sanitizedUserB = sanitizeStrict(userB).toLowerCase();
-      
-      if (!sanitizedUserA || !sanitizedUserB || 
-          sanitizedUserA.length > 50 || sanitizedUserB.length > 50) {
-        return {
-          success: false,
-          error: { message: 'Invalid usernames' },
-        };
-      }
-
-      const threadId = this.getConversationKey(sanitizedUserA, sanitizedUserB);
+      const threadId = this.getConversationKey(userA, userB);
       
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<Message[]>(
@@ -298,66 +233,32 @@ export class MessagesService {
   }
 
   /**
-   * Send a message with validation and rate limiting
+   * Send a message
    */
   async sendMessage(request: SendMessageRequest): Promise<ApiResponse<Message>> {
     try {
-      // Validate request
-      const validation = securityService.validateAndSanitize(request, sendMessageSchema);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid message data', details: validation.errors },
-        };
-      }
-
-      const validatedRequest = validation.data;
-
-      // Check rate limit
-      const rateLimitKey = `message_send_${validatedRequest.sender}`;
-      const rateLimitResult = this.rateLimiter.check(rateLimitKey, RATE_LIMITS.MESSAGE_SEND);
-      
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: `Too many messages. Please wait ${rateLimitResult.waitTime} seconds.` },
-        };
-      }
-
-      // Additional security checks
-      const contentCheck = securityService.checkContentSecurity(validatedRequest.content);
-      if (!contentCheck.safe) {
-        return {
-          success: false,
-          error: { message: 'Message contains inappropriate content' },
-        };
-      }
-
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<Message>(API_ENDPOINTS.MESSAGES.SEND, {
           method: 'POST',
-          body: JSON.stringify(validatedRequest),
+          body: JSON.stringify(request),
         });
       }
 
       // LocalStorage implementation
-      const conversationKey = this.getConversationKey(
-        validatedRequest.sender.toLowerCase(), 
-        validatedRequest.receiver.toLowerCase()
-      );
+      const conversationKey = this.getConversationKey(request.sender, request.receiver);
       const messages = await this.getAllMessages();
       
       const newMessage: Message = {
         id: uuidv4(),
-        sender: validatedRequest.sender.toLowerCase(),
-        receiver: validatedRequest.receiver.toLowerCase(),
-        content: validatedRequest.content, // Already sanitized by validation
+        sender: request.sender,
+        receiver: request.receiver,
+        content: request.content,
         date: new Date().toISOString(),
         isRead: false,
         read: false,
-        type: validatedRequest.type || 'normal',
-        meta: validatedRequest.meta,
-        attachments: validatedRequest.attachments,
+        type: request.type || 'normal',
+        meta: request.meta,
+        attachments: request.attachments,
       };
 
       if (!messages[conversationKey]) {
@@ -371,12 +272,8 @@ export class MessagesService {
       this.messageCache.set(conversationKey, [...(this.messageCache.get(conversationKey) || []), newMessage]);
 
       // Update notifications if needed
-      if (validatedRequest.type !== 'customRequest') {
-        await this.updateMessageNotifications(
-          validatedRequest.receiver.toLowerCase(), 
-          validatedRequest.sender.toLowerCase(), 
-          validatedRequest.content
-        );
+      if (request.type !== 'customRequest') {
+        await this.updateMessageNotifications(request.receiver, request.sender, request.content);
       }
 
       // Notify listeners (preparation for real-time)
@@ -396,35 +293,24 @@ export class MessagesService {
   }
 
   /**
-   * Send a custom request with validation
+   * Send a custom request
    */
   async sendCustomRequest(
     buyer: string,
     seller: string,
     requestData: Omit<CustomRequestData, 'id' | 'date' | 'status'>
   ): Promise<ApiResponse<Message>> {
-    // Validate custom request data
-    const validation = securityService.validateAndSanitize(requestData, messageSchemas.customRequest);
-    if (!validation.success || !validation.data) {
-      return {
-        success: false,
-        error: { message: 'Invalid custom request data', details: validation.errors },
-      };
-    }
-
-    const validatedData = validation.data;
-
     const request: SendMessageRequest = {
       sender: buyer,
       receiver: seller,
-      content: `📦 Custom Request: ${validatedData.title} - $${validatedData.price}`,
+      content: `📦 Custom Request: ${requestData.title} - $${requestData.price}`,
       type: 'customRequest',
       meta: {
         id: uuidv4(),
-        title: validatedData.title,
-        price: validatedData.price,
+        title: requestData.title,
+        price: requestData.price,
         tags: requestData.tags,
-        message: validatedData.description,
+        message: requestData.description,
       },
     };
 
@@ -439,32 +325,20 @@ export class MessagesService {
     otherParty: string
   ): Promise<ApiResponse<void>> {
     try {
-      // Sanitize inputs
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      const sanitizedOtherParty = sanitizeStrict(otherParty).toLowerCase();
-      
-      if (!sanitizedUsername || !sanitizedOtherParty ||
-          sanitizedUsername.length > 50 || sanitizedOtherParty.length > 50) {
-        return {
-          success: false,
-          error: { message: 'Invalid usernames' },
-        };
-      }
-
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.MARK_READ, {
           method: 'POST',
-          body: JSON.stringify({ username: sanitizedUsername, otherParty: sanitizedOtherParty }),
+          body: JSON.stringify({ username, otherParty }),
         });
       }
 
       // LocalStorage implementation
-      const conversationKey = this.getConversationKey(sanitizedUsername, sanitizedOtherParty);
+      const conversationKey = this.getConversationKey(username, otherParty);
       const messages = await this.getAllMessages();
       
       if (messages[conversationKey]) {
         messages[conversationKey] = messages[conversationKey].map(msg => {
-          if (msg.receiver === sanitizedUsername && msg.sender === sanitizedOtherParty) {
+          if (msg.receiver === username && msg.sender === otherParty) {
             return { ...msg, isRead: true, read: true };
           }
           return msg;
@@ -477,7 +351,7 @@ export class MessagesService {
       }
 
       // Clear notifications
-      await this.clearMessageNotifications(sanitizedUsername, sanitizedOtherParty);
+      await this.clearMessageNotifications(username, otherParty);
 
       return { success: true };
     } catch (error) {
@@ -490,54 +364,26 @@ export class MessagesService {
   }
 
   /**
-   * Block a user with validation
+   * Block a user
    */
   async blockUser(request: BlockUserRequest): Promise<ApiResponse<void>> {
     try {
-      // Validate request
-      const validation = securityService.validateAndSanitize(request, blockUserSchema);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid block request' },
-        };
-      }
-
-      const validatedRequest = validation.data;
-
-      // Check rate limit
-      const rateLimitKey = `block_user_${validatedRequest.blocker}`;
-      const rateLimitResult = this.rateLimiter.check(rateLimitKey, {
-        maxAttempts: 10,
-        windowMs: 60 * 60 * 1000, // 1 hour
-      });
-      
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: `Too many block attempts. Please wait ${rateLimitResult.waitTime} seconds.` },
-        };
-      }
-
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.BLOCK_USER, {
           method: 'POST',
-          body: JSON.stringify(validatedRequest),
+          body: JSON.stringify(request),
         });
       }
 
       // LocalStorage implementation
       const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
       
-      const blockerLower = validatedRequest.blocker.toLowerCase();
-      const blockedLower = validatedRequest.blocked.toLowerCase();
-      
-      if (!blocked[blockerLower]) {
-        blocked[blockerLower] = [];
+      if (!blocked[request.blocker]) {
+        blocked[request.blocker] = [];
       }
       
-      if (!blocked[blockerLower].includes(blockedLower)) {
-        blocked[blockerLower].push(blockedLower);
+      if (!blocked[request.blocker].includes(request.blocked)) {
+        blocked[request.blocker].push(request.blocked);
         await storageService.setItem('panty_blocked', blocked);
       }
 
@@ -552,36 +398,22 @@ export class MessagesService {
   }
 
   /**
-   * Unblock a user with validation
+   * Unblock a user
    */
   async unblockUser(request: BlockUserRequest): Promise<ApiResponse<void>> {
     try {
-      // Validate request
-      const validation = securityService.validateAndSanitize(request, blockUserSchema);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid unblock request' },
-        };
-      }
-
-      const validatedRequest = validation.data;
-
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.UNBLOCK_USER, {
           method: 'POST',
-          body: JSON.stringify(validatedRequest),
+          body: JSON.stringify(request),
         });
       }
 
       // LocalStorage implementation
       const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
       
-      const blockerLower = validatedRequest.blocker.toLowerCase();
-      const blockedLower = validatedRequest.blocked.toLowerCase();
-      
-      if (blocked[blockerLower]) {
-        blocked[blockerLower] = blocked[blockerLower].filter(u => u !== blockedLower);
+      if (blocked[request.blocker]) {
+        blocked[request.blocker] = blocked[request.blocker].filter(u => u !== request.blocked);
         await storageService.setItem('panty_blocked', blocked);
       }
 
@@ -600,15 +432,8 @@ export class MessagesService {
    */
   async isBlocked(blocker: string, blocked: string): Promise<boolean> {
     try {
-      const sanitizedBlocker = sanitizeStrict(blocker).toLowerCase();
-      const sanitizedBlocked = sanitizeStrict(blocked).toLowerCase();
-      
-      if (!sanitizedBlocker || !sanitizedBlocked) {
-        return false;
-      }
-
       const blocks = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
-      return blocks[sanitizedBlocker]?.includes(sanitizedBlocked) || false;
+      return blocks[blocker]?.includes(blocked) || false;
     } catch (error) {
       console.error('Check blocked error:', error);
       return false;
@@ -616,39 +441,14 @@ export class MessagesService {
   }
 
   /**
-   * Report a user with validation
+   * Report a user
    */
   async reportUser(request: ReportUserRequest): Promise<ApiResponse<void>> {
     try {
-      // Validate request
-      const validation = securityService.validateAndSanitize(request, reportUserSchema);
-      if (!validation.success || !validation.data) {
-        return {
-          success: false,
-          error: { message: 'Invalid report data' },
-        };
-      }
-
-      const validatedRequest = validation.data;
-
-      // Check rate limit
-      const rateLimitKey = `report_user_${validatedRequest.reporter}`;
-      const rateLimitResult = this.rateLimiter.check(rateLimitKey, {
-        maxAttempts: 5,
-        windowMs: 24 * 60 * 60 * 1000, // 24 hours
-      });
-      
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: `Too many reports. Please wait ${rateLimitResult.waitTime} seconds.` },
-        };
-      }
-
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.REPORT, {
           method: 'POST',
-          body: JSON.stringify(validatedRequest),
+          body: JSON.stringify(request),
         });
       }
 
@@ -657,13 +457,13 @@ export class MessagesService {
       
       const newReport = {
         id: uuidv4(),
-        reporter: validatedRequest.reporter.toLowerCase(),
-        reportee: validatedRequest.reportee.toLowerCase(),
-        reason: validatedRequest.reason,
+        reporter: request.reporter,
+        reportee: request.reportee,
+        reason: request.reason,
         messages: request.messages || [],
         date: new Date().toISOString(),
         processed: false,
-        category: validatedRequest.category || 'other',
+        category: request.category || 'other',
       };
       
       reports.push(newReport);
@@ -672,15 +472,12 @@ export class MessagesService {
       // Mark as reported
       const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
       
-      const reporterLower = validatedRequest.reporter.toLowerCase();
-      const reporteeLower = validatedRequest.reportee.toLowerCase();
-      
-      if (!reported[reporterLower]) {
-        reported[reporterLower] = [];
+      if (!reported[request.reporter]) {
+        reported[request.reporter] = [];
       }
       
-      if (!reported[reporterLower].includes(reporteeLower)) {
-        reported[reporterLower].push(reporteeLower);
+      if (!reported[request.reporter].includes(request.reportee)) {
+        reported[request.reporter].push(request.reportee);
         await storageService.setItem('panty_reported', reported);
       }
 
@@ -699,15 +496,8 @@ export class MessagesService {
    */
   async hasReported(reporter: string, reportee: string): Promise<boolean> {
     try {
-      const sanitizedReporter = sanitizeStrict(reporter).toLowerCase();
-      const sanitizedReportee = sanitizeStrict(reportee).toLowerCase();
-      
-      if (!sanitizedReporter || !sanitizedReportee) {
-        return false;
-      }
-
       const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
-      return reported[sanitizedReporter]?.includes(sanitizedReportee) || false;
+      return reported[reporter]?.includes(reportee) || false;
     } catch (error) {
       console.error('Check reported error:', error);
       return false;
@@ -719,10 +509,7 @@ export class MessagesService {
    */
   async getUnreadCount(username: string): Promise<number> {
     try {
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      if (!sanitizedUsername) return 0;
-
-      const threads = await this.getThreads(sanitizedUsername);
+      const threads = await this.getThreads(username);
       if (!threads.success || !threads.data) return 0;
       
       return threads.data.reduce((total, thread) => total + thread.unreadCount, 0);
@@ -737,14 +524,11 @@ export class MessagesService {
    */
   async getMessageNotifications(username: string): Promise<MessageNotification[]> {
     try {
-      const sanitizedUsername = sanitizeStrict(username).toLowerCase();
-      if (!sanitizedUsername) return [];
-
       const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>(
         'panty_message_notifications',
         {}
       );
-      return notifications[sanitizedUsername] || [];
+      return notifications[username] || [];
     } catch (error) {
       console.error('Get message notifications error:', error);
       return [];
@@ -756,21 +540,16 @@ export class MessagesService {
    */
   async clearMessageNotifications(seller: string, buyer: string): Promise<void> {
     try {
-      const sanitizedSeller = sanitizeStrict(seller).toLowerCase();
-      const sanitizedBuyer = sanitizeStrict(buyer).toLowerCase();
-      
-      if (!sanitizedSeller || !sanitizedBuyer) return;
-
       const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>(
         'panty_message_notifications',
         {}
       );
       
-      if (notifications[sanitizedSeller]) {
-        notifications[sanitizedSeller] = notifications[sanitizedSeller].filter(n => n.buyer !== sanitizedBuyer);
+      if (notifications[seller]) {
+        notifications[seller] = notifications[seller].filter(n => n.buyer !== buyer);
         
-        if (notifications[sanitizedSeller].length === 0) {
-          delete notifications[sanitizedSeller];
+        if (notifications[seller].length === 0) {
+          delete notifications[seller];
         }
         
         await storageService.setItem('panty_message_notifications', notifications);
@@ -784,61 +563,29 @@ export class MessagesService {
    * Subscribe to message updates (preparation for WebSocket)
    */
   subscribeToThread(threadId: string, callback: (message: Message) => void): () => void {
-    const sanitizedThreadId = sanitizeStrict(threadId);
-    if (!sanitizedThreadId) {
-      return () => {};
-    }
-
-    if (!this.messageListeners.has(sanitizedThreadId)) {
-      this.messageListeners.set(sanitizedThreadId, new Set());
+    if (!this.messageListeners.has(threadId)) {
+      this.messageListeners.set(threadId, new Set());
     }
     
-    this.messageListeners.get(sanitizedThreadId)!.add(callback);
+    this.messageListeners.get(threadId)!.add(callback);
     
     // Return unsubscribe function
     return () => {
-      const listeners = this.messageListeners.get(sanitizedThreadId);
+      const listeners = this.messageListeners.get(threadId);
       if (listeners) {
         listeners.delete(callback);
         if (listeners.size === 0) {
-          this.messageListeners.delete(sanitizedThreadId);
+          this.messageListeners.delete(threadId);
         }
       }
     };
   }
 
   /**
-   * Upload attachment with validation
+   * Upload attachment (preparation for file handling)
    */
   async uploadAttachment(file: File): Promise<ApiResponse<MessageAttachment>> {
     try {
-      // Validate file
-      const fileValidation = securityService.validateFileUpload(file, {
-        maxSize: 5 * 1024 * 1024, // 5MB
-        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'],
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-      });
-
-      if (!fileValidation.valid) {
-        return {
-          success: false,
-          error: { message: fileValidation.error || 'Invalid file' },
-        };
-      }
-
-      // Check rate limit
-      const rateLimitResult = this.rateLimiter.check('file_upload', {
-        maxAttempts: 20,
-        windowMs: 60 * 60 * 1000, // 1 hour
-      });
-      
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: `Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.` },
-        };
-      }
-
       // For now, convert to base64 for localStorage
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -847,7 +594,7 @@ export class MessagesService {
             id: uuidv4(),
             type: file.type.startsWith('image/') ? 'image' : 'file',
             url: e.target?.result as string,
-            name: sanitizeStrict(file.name),
+            name: file.name,
             size: file.size,
             mimeType: file.type,
           };
@@ -869,7 +616,7 @@ export class MessagesService {
 
   // Helper methods
   private getConversationKey(userA: string, userB: string): string {
-    return [userA.toLowerCase(), userB.toLowerCase()].sort().join('-');
+    return [userA, userB].sort().join('-');
   }
 
   private async getAllMessages(): Promise<{ [key: string]: Message[] }> {
@@ -882,33 +629,29 @@ export class MessagesService {
     content: string
   ): Promise<void> {
     try {
-      const sanitizedSeller = seller.toLowerCase();
-      const sanitizedBuyer = buyer.toLowerCase();
-      const sanitizedContent = sanitizeStrict(content);
-
       const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>(
         'panty_message_notifications',
         {}
       );
       
-      if (!notifications[sanitizedSeller]) {
-        notifications[sanitizedSeller] = [];
+      if (!notifications[seller]) {
+        notifications[seller] = [];
       }
       
-      const existingIndex = notifications[sanitizedSeller].findIndex(n => n.buyer === sanitizedBuyer);
+      const existingIndex = notifications[seller].findIndex(n => n.buyer === buyer);
       
       if (existingIndex >= 0) {
-        notifications[sanitizedSeller][existingIndex] = {
-          buyer: sanitizedBuyer,
-          messageCount: notifications[sanitizedSeller][existingIndex].messageCount + 1,
-          lastMessage: sanitizedContent.substring(0, 50) + (sanitizedContent.length > 50 ? '...' : ''),
+        notifications[seller][existingIndex] = {
+          buyer,
+          messageCount: notifications[seller][existingIndex].messageCount + 1,
+          lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
           timestamp: new Date().toISOString(),
         };
       } else {
-        notifications[sanitizedSeller].push({
-          buyer: sanitizedBuyer,
+        notifications[seller].push({
+          buyer,
           messageCount: 1,
-          lastMessage: sanitizedContent.substring(0, 50) + (sanitizedContent.length > 50 ? '...' : ''),
+          lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
           timestamp: new Date().toISOString(),
         });
       }
@@ -958,9 +701,8 @@ export class MessagesService {
 
   private async getThreadMetadata(threadId: string): Promise<{ [key: string]: any }> {
     try {
-      const sanitizedThreadId = sanitizeStrict(threadId);
       const metadata = await storageService.getItem<any>('thread_metadata', {});
-      return metadata[sanitizedThreadId] || {};
+      return metadata[threadId] || {};
     } catch (error) {
       return {};
     }
