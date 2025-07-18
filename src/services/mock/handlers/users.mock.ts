@@ -6,6 +6,10 @@ import { mockDataStore } from '../mock.config';
 import { User } from '@/context/AuthContext';
 import { UserProfile, UsersResponse, ProfileResponse, SubscriptionInfo } from '@/types/users';
 import { v4 as uuidv4 } from 'uuid';
+import { sanitizeStrict, sanitizeUsername, sanitizeEmail, sanitizeCurrency, sanitizeNumber } from '@/utils/security/sanitization';
+import { profileSchemas } from '@/utils/validation/schemas';
+import { securityService } from '@/services/security.service';
+import { z } from 'zod';
 
 interface MockUserProfile extends UserProfile {
   username: string;
@@ -17,6 +21,39 @@ interface MockSubscriptionInfo extends SubscriptionInfo {
   cancelledAt?: string;
   nextBillingDate?: string;
 }
+
+// Validation schemas
+const updateProfileSchema = z.object({
+  bio: z.string().max(500).optional(),
+  profilePic: z.string().url().optional(),
+  subscriptionPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  galleryImages: z.array(z.string().url()).max(20).optional()
+});
+
+const verificationRequestSchema = z.object({
+  codePhoto: z.string().url(),
+  idFront: z.string().url(),
+  idBack: z.string().url().optional(),
+  code: z.string().min(6).max(10)
+});
+
+const verificationUpdateSchema = z.object({
+  status: z.enum(['pending', 'verified', 'rejected']),
+  rejectionReason: z.string().max(500).optional(),
+  adminUsername: z.string().min(3).max(20)
+});
+
+const banUserSchema = z.object({
+  reason: z.string().min(10).max(500),
+  duration: z.number().min(1).max(365).optional(),
+  adminUsername: z.string().min(3).max(20)
+});
+
+const subscriptionSchema = z.object({
+  buyer: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_-]+$/),
+  seller: z.string().min(3).max(20).regex(/^[a-zA-Z0-9_-]+$/),
+  price: z.number().positive().max(1000)
+});
 
 export const mockUserHandlers = {
   // List users
@@ -31,8 +68,8 @@ export const mockUserHandlers = {
     const users = await mockDataStore.get<Record<string, User>>('users', {});
     let userList = Object.values(users);
     
-    // Apply filters
-    if (params?.role) {
+    // Apply filters with sanitization
+    if (params?.role && ['buyer', 'seller', 'admin'].includes(params.role)) {
       userList = userList.filter(u => u.role === params.role);
     }
     
@@ -41,16 +78,18 @@ export const mockUserHandlers = {
     }
     
     if (params?.query) {
-      const query = params.query.toLowerCase();
-      userList = userList.filter(u => 
-        u.username.toLowerCase().includes(query) ||
-        u.email?.toLowerCase().includes(query) ||
-        u.bio?.toLowerCase().includes(query)
-      );
+      const sanitizedQuery = sanitizeStrict(params.query.toLowerCase());
+      if (sanitizedQuery) {
+        userList = userList.filter(u => 
+          u.username.toLowerCase().includes(sanitizedQuery) ||
+          u.email?.toLowerCase().includes(sanitizedQuery) ||
+          u.bio?.toLowerCase().includes(sanitizedQuery)
+        );
+      }
     }
     
     // Sorting
-    if (params?.sortBy) {
+    if (params?.sortBy && ['username', 'joinDate', 'rating', 'sales'].includes(params.sortBy)) {
       userList.sort((a, b) => {
         switch (params.sortBy) {
           case 'username':
@@ -71,9 +110,9 @@ export const mockUserHandlers = {
       }
     }
     
-    // Pagination
-    const page = parseInt(params?.page || '1');
-    const limit = parseInt(params?.limit || '50');
+    // Pagination with validation
+    const page = Math.max(1, parseInt(params?.page || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(params?.limit || '50')));
     const startIndex = (page - 1) * limit;
     const endIndex = startIndex + limit;
     
@@ -101,8 +140,16 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const users = await mockDataStore.get<Record<string, User>>('users', {});
-    const user = users[username];
+    const user = users[sanitizedUsername];
     
     if (!user) {
       return {
@@ -112,10 +159,38 @@ export const mockUserHandlers = {
     }
     
     if (method === 'PATCH') {
-      // Update profile
-      Object.assign(user, data);
-      users[username] = user;
-      await mockDataStore.set('users', users);
+      try {
+        // Update profile with validation
+        const validatedData = updateProfileSchema.parse(data);
+        
+        if (validatedData.bio) {
+          const bioCheck = securityService.checkContentSecurity(validatedData.bio);
+          if (!bioCheck.safe) {
+            return {
+              success: false,
+              error: { code: 'VALIDATION_ERROR', message: 'Bio contains prohibited content' },
+            };
+          }
+          user.bio = sanitizeStrict(validatedData.bio) || '';
+        }
+        
+        users[sanitizedUsername] = user;
+        await mockDataStore.set('users', users);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return {
+            success: false,
+            error: { 
+              code: 'VALIDATION_ERROR', 
+              message: sanitizeStrict(error.errors[0].message) || 'Invalid profile data' 
+            },
+          };
+        }
+        return {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid profile data' },
+        };
+      }
     }
     
     return {
@@ -135,8 +210,16 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const users = await mockDataStore.get<Record<string, User>>('users', {});
-    const user = users[username];
+    const user = users[sanitizedUsername];
     
     if (!user) {
       return {
@@ -146,7 +229,7 @@ export const mockUserHandlers = {
     }
     
     const profiles = await mockDataStore.get<Record<string, MockUserProfile>>('userProfiles', {});
-    let profile = profiles[username];
+    let profile = profiles[sanitizedUsername];
     
     if (!profile) {
       // Create default profile with all required fields
@@ -155,9 +238,9 @@ export const mockUserHandlers = {
       missingFields.push('galleryImages'); // New profiles always need gallery images
       
       profile = {
-        username,
+        username: sanitizedUsername,
         bio: user.bio || '',
-        profilePic: `https://ui-avatars.com/api/?name=${username}&background=random`,
+        profilePic: `https://ui-avatars.com/api/?name=${sanitizedUsername}&background=random`,
         subscriptionPrice: '10',
         galleryImages: [],
         completeness: {
@@ -170,7 +253,7 @@ export const mockUserHandlers = {
           ],
         },
       };
-      profiles[username] = profile;
+      profiles[sanitizedUsername] = profile;
       await mockDataStore.set('userProfiles', profiles);
     }
     
@@ -194,8 +277,16 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const users = await mockDataStore.get<Record<string, User>>('users', {});
-    const user = users[username];
+    const user = users[sanitizedUsername];
     
     if (!user) {
       return {
@@ -205,48 +296,74 @@ export const mockUserHandlers = {
     }
     
     if (method === 'POST') {
-      // Request verification
-      const { codePhoto, idFront, code } = data;
-      
-      if (!codePhoto || !code || !idFront) {
+      try {
+        // Request verification
+        const validatedData = verificationRequestSchema.parse(data);
+        
+        user.verificationStatus = 'pending';
+        user.verificationRequestedAt = new Date().toISOString();
+        user.verificationDocs = validatedData;
+        
+        users[sanitizedUsername] = user;
+        await mockDataStore.set('users', users);
+        
+        // Store verification request
+        const verificationRequests = await mockDataStore.get<Record<string, any>>('verificationRequests', {});
+        verificationRequests[sanitizedUsername] = {
+          ...validatedData,
+          requestedAt: new Date().toISOString(),
+          status: 'pending',
+        };
+        await mockDataStore.set('verificationRequests', verificationRequests);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return {
+            success: false,
+            error: { 
+              code: 'VALIDATION_ERROR', 
+              message: 'Missing or invalid verification documents' 
+            },
+          };
+        }
         return {
           success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Missing required verification documents',
-          },
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid verification data' },
         };
       }
       
-      user.verificationStatus = 'pending';
-      user.verificationRequestedAt = new Date().toISOString();
-      user.verificationDocs = data;
-      
-      users[username] = user;
-      await mockDataStore.set('users', users);
-      
-      // Store verification request
-      const verificationRequests = await mockDataStore.get<Record<string, any>>('verificationRequests', {});
-      verificationRequests[username] = {
-        ...data,
-        requestedAt: new Date().toISOString(),
-        status: 'pending',
-      };
-      await mockDataStore.set('verificationRequests', verificationRequests);
-      
     } else if (method === 'PATCH') {
-      // Update verification status (admin)
-      const { status, rejectionReason, adminUsername } = data;
-      
-      user.verificationStatus = status;
-      user.isVerified = status === 'verified';
-      
-      if (status === 'rejected' && rejectionReason) {
-        user.verificationRejectionReason = rejectionReason;
+      try {
+        // Update verification status (admin)
+        const validatedData = verificationUpdateSchema.parse(data);
+        
+        user.verificationStatus = validatedData.status;
+        user.isVerified = validatedData.status === 'verified';
+        
+        if (validatedData.status === 'rejected' && validatedData.rejectionReason) {
+          const reasonCheck = securityService.checkContentSecurity(validatedData.rejectionReason);
+          if (!reasonCheck.safe) {
+            return {
+              success: false,
+              error: { code: 'VALIDATION_ERROR', message: 'Rejection reason contains prohibited content' },
+            };
+          }
+          user.verificationRejectionReason = sanitizeStrict(validatedData.rejectionReason) || '';
+        }
+        
+        users[sanitizedUsername] = user;
+        await mockDataStore.set('users', users);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return {
+            success: false,
+            error: { code: 'VALIDATION_ERROR', message: 'Invalid verification update' },
+          };
+        }
+        return {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid verification data' },
+        };
       }
-      
-      users[username] = user;
-      await mockDataStore.set('users', users);
     }
     
     return { success: true };
@@ -262,49 +379,91 @@ export const mockUserHandlers = {
     }
     
     const username = params?.username;
-    const { reason, duration, adminUsername } = data;
     
-    if (!username || !reason || !adminUsername) {
+    if (!username) {
       return {
         success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Missing required fields' },
+        error: { code: 'VALIDATION_ERROR', message: 'Username is required' },
       };
     }
     
-    const users = await mockDataStore.get<Record<string, User>>('users', {});
-    const user = users[username];
-    
-    if (!user) {
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
       return {
         success: false,
-        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
       };
     }
     
-    user.isBanned = true;
-    user.banReason = reason;
-    
-    if (duration) {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + duration);
-      user.banExpiresAt = expiresAt.toISOString();
+    try {
+      const validatedData = banUserSchema.parse(data);
+      
+      // Check ban reason content
+      const reasonCheck = securityService.checkContentSecurity(validatedData.reason);
+      if (!reasonCheck.safe) {
+        return {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Ban reason contains prohibited content' },
+        };
+      }
+      
+      const users = await mockDataStore.get<Record<string, User>>('users', {});
+      const user = users[sanitizedUsername];
+      
+      if (!user) {
+        return {
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        };
+      }
+      
+      // Prevent banning admins
+      if (user.role === 'admin') {
+        return {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Cannot ban admin users' },
+        };
+      }
+      
+      user.isBanned = true;
+      user.banReason = sanitizeStrict(validatedData.reason) || '';
+      
+      if (validatedData.duration) {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + validatedData.duration);
+        user.banExpiresAt = expiresAt.toISOString();
+      }
+      
+      users[sanitizedUsername] = user;
+      await mockDataStore.set('users', users);
+      
+      // Store ban log
+      const banLogs = await mockDataStore.get<any[]>('banLogs', []);
+      banLogs.push({
+        username: sanitizedUsername,
+        reason: sanitizeStrict(validatedData.reason) || '',
+        duration: validatedData.duration,
+        bannedBy: sanitizeUsername(validatedData.adminUsername) || '',
+        bannedAt: new Date().toISOString(),
+      });
+      await mockDataStore.set('banLogs', banLogs);
+      
+      return { success: true };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return {
+          success: false,
+          error: { 
+            code: 'VALIDATION_ERROR', 
+            message: sanitizeStrict(error.errors[0].message) || 'Invalid ban data' 
+          },
+        };
+      }
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid ban data' },
+      };
     }
-    
-    users[username] = user;
-    await mockDataStore.set('users', users);
-    
-    // Store ban log
-    const banLogs = await mockDataStore.get<any[]>('banLogs', []);
-    banLogs.push({
-      username,
-      reason,
-      duration,
-      bannedBy: adminUsername,
-      bannedAt: new Date().toISOString(),
-    });
-    await mockDataStore.set('banLogs', banLogs);
-    
-    return { success: true };
   },
   
   // Unban user
@@ -326,8 +485,18 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedUsername = sanitizeUsername(username);
+    const sanitizedAdminUsername = sanitizeUsername(adminUsername);
+    
+    if (!sanitizedUsername || !sanitizedAdminUsername) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const users = await mockDataStore.get<Record<string, User>>('users', {});
-    const user = users[username];
+    const user = users[sanitizedUsername];
     
     if (!user) {
       return {
@@ -340,15 +509,15 @@ export const mockUserHandlers = {
     delete user.banReason;
     delete user.banExpiresAt;
     
-    users[username] = user;
+    users[sanitizedUsername] = user;
     await mockDataStore.set('users', users);
     
     // Update ban log
     const banLogs = await mockDataStore.get<any[]>('banLogs', []);
     banLogs.push({
-      username,
+      username: sanitizedUsername,
       action: 'unban',
-      unbannedBy: adminUsername,
+      unbannedBy: sanitizedAdminUsername,
       unbannedAt: new Date().toISOString(),
     });
     await mockDataStore.set('banLogs', banLogs);
@@ -367,8 +536,16 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedUsername = sanitizeUsername(username);
+    if (!sanitizedUsername) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
-    const userSubs = subscriptions[username] || [];
+    const userSubs = subscriptions[sanitizedUsername] || [];
     
     // Remove internal properties before returning
     const cleanSubs: SubscriptionInfo[] = userSubs.map(({ id, cancelledAt, nextBillingDate, ...sub }) => sub);
@@ -388,58 +565,98 @@ export const mockUserHandlers = {
       };
     }
     
-    const { buyer, seller, price } = data;
-    
-    if (!buyer || !seller || !price) {
+    try {
+      const validatedData = subscriptionSchema.parse(data);
+      
+      const buyer = sanitizeUsername(validatedData.buyer);
+      const seller = sanitizeUsername(validatedData.seller);
+      
+      if (!buyer || !seller) {
+        return {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+        };
+      }
+      
+      // Prevent self-subscription
+      if (buyer === seller) {
+        return {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Cannot subscribe to yourself' },
+        };
+      }
+      
+      const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
+      
+      if (!subscriptions[buyer]) {
+        subscriptions[buyer] = [];
+      }
+      
+      // Check if already subscribed
+      const existing = subscriptions[buyer].find(sub => sub.seller === seller);
+      if (existing && existing.status === 'active') {
+        return {
+          success: false,
+          error: { code: 'ALREADY_SUBSCRIBED', message: 'Already subscribed to this seller' },
+        };
+      }
+      
+      // Limit subscriptions per user
+      const activeSubscriptions = subscriptions[buyer].filter(sub => sub.status === 'active');
+      if (activeSubscriptions.length >= 100) {
+        return {
+          success: false,
+          error: { code: 'LIMIT_EXCEEDED', message: 'Subscription limit reached' },
+        };
+      }
+      
+      // Convert price to string format
+      const priceResult = sanitizeCurrency(validatedData.price.toString());
+      const priceString = typeof priceResult === 'string' ? priceResult : priceResult.toString();
+      
+      const newSub: MockSubscriptionInfo = {
+        id: `sub_${uuidv4()}`,
+        buyer,
+        seller,
+        price: priceString,
+        status: 'active',
+        subscribedAt: new Date().toISOString(),
+        nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        autoRenew: true, // Default to auto-renew enabled
+      };
+      
+      subscriptions[buyer].push(newSub);
+      await mockDataStore.set('subscriptions', subscriptions);
+      
+      // Update subscriber count
+      const users = await mockDataStore.get<Record<string, User>>('users', {});
+      if (users[seller]) {
+        users[seller].subscriberCount = Math.min(1000000, (users[seller].subscriberCount || 0) + 1);
+        await mockDataStore.set('users', users);
+      }
+      
+      // Remove internal properties before returning
+      const { id, nextBillingDate, ...cleanSub } = newSub;
+      
+      return {
+        success: true,
+        data: cleanSub,
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return {
+          success: false,
+          error: { 
+            code: 'VALIDATION_ERROR', 
+            message: sanitizeStrict(error.errors[0].message) || 'Invalid subscription data' 
+          },
+        };
+      }
       return {
         success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Missing required fields' },
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid subscription data' },
       };
     }
-    
-    const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
-    
-    if (!subscriptions[buyer]) {
-      subscriptions[buyer] = [];
-    }
-    
-    // Check if already subscribed
-    const existing = subscriptions[buyer].find(sub => sub.seller === seller);
-    if (existing && existing.status === 'active') {
-      return {
-        success: false,
-        error: { code: 'ALREADY_SUBSCRIBED', message: 'Already subscribed to this seller' },
-      };
-    }
-    
-    const newSub: MockSubscriptionInfo = {
-      id: `sub_${uuidv4()}`,
-      buyer,
-      seller,
-      price: price.toString(),
-      status: 'active',
-      subscribedAt: new Date().toISOString(),
-      nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      autoRenew: true, // Default to auto-renew enabled
-    };
-    
-    subscriptions[buyer].push(newSub);
-    await mockDataStore.set('subscriptions', subscriptions);
-    
-    // Update subscriber count
-    const users = await mockDataStore.get<Record<string, User>>('users', {});
-    if (users[seller]) {
-      users[seller].subscriberCount = (users[seller].subscriberCount || 0) + 1;
-      await mockDataStore.set('users', users);
-    }
-    
-    // Remove internal properties before returning
-    const { id, nextBillingDate, ...cleanSub } = newSub;
-    
-    return {
-      success: true,
-      data: cleanSub,
-    };
   },
   
   // Unsubscribe
@@ -460,19 +677,29 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedBuyer = sanitizeUsername(buyer);
+    const sanitizedSeller = sanitizeUsername(seller);
+    
+    if (!sanitizedBuyer || !sanitizedSeller) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
     
-    if (subscriptions[buyer]) {
-      const subIndex = subscriptions[buyer].findIndex(sub => sub.seller === seller);
+    if (subscriptions[sanitizedBuyer]) {
+      const subIndex = subscriptions[sanitizedBuyer].findIndex(sub => sub.seller === sanitizedSeller);
       if (subIndex !== -1) {
-        subscriptions[buyer][subIndex].status = 'cancelled';
-        subscriptions[buyer][subIndex].cancelledAt = new Date().toISOString();
+        subscriptions[sanitizedBuyer][subIndex].status = 'cancelled';
+        subscriptions[sanitizedBuyer][subIndex].cancelledAt = new Date().toISOString();
         await mockDataStore.set('subscriptions', subscriptions);
         
         // Update subscriber count
         const users = await mockDataStore.get<Record<string, User>>('users', {});
-        if (users[seller] && users[seller].subscriberCount) {
-          users[seller].subscriberCount = Math.max(0, users[seller].subscriberCount - 1);
+        if (users[sanitizedSeller] && users[sanitizedSeller].subscriberCount) {
+          users[sanitizedSeller].subscriberCount = Math.max(0, users[sanitizedSeller].subscriberCount - 1);
           await mockDataStore.set('users', users);
         }
       }
@@ -493,9 +720,19 @@ export const mockUserHandlers = {
       };
     }
     
+    const sanitizedBuyer = sanitizeUsername(buyer);
+    const sanitizedSeller = sanitizeUsername(seller);
+    
+    if (!sanitizedBuyer || !sanitizedSeller) {
+      return {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid username format' },
+      };
+    }
+    
     const subscriptions = await mockDataStore.get<Record<string, MockSubscriptionInfo[]>>('subscriptions', {});
-    const buyerSubs = subscriptions[buyer] || [];
-    const subscription = buyerSubs.find(sub => sub.seller === seller && sub.status === 'active');
+    const buyerSubs = subscriptions[sanitizedBuyer] || [];
+    const subscription = buyerSubs.find(sub => sub.seller === sanitizedSeller && sub.status === 'active');
     
     if (!subscription) {
       return {
