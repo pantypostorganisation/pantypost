@@ -7,6 +7,7 @@ import {
   Info 
 } from 'lucide-react';
 import { BanEntry, BanReason } from '@/types/ban';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export const getBanReasonDisplay = (reason: string, customReason?: string) => {
   if (!reason || typeof reason !== 'string') {
@@ -26,11 +27,14 @@ export const getBanReasonDisplay = (reason: string, customReason?: string) => {
   const reasonInfo = reasonMap[reason.toLowerCase()] || { label: reason, icon: Info, color: 'text-gray-400' };
   const Icon = reasonInfo.icon;
 
+  // Sanitize customReason before display to prevent XSS
+  const sanitizedCustomReason = customReason ? sanitizeStrict(customReason) : undefined;
+
   return (
     <span className={`flex items-center gap-1 ${reasonInfo.color}`}>
       <Icon size={14} />
       {reasonInfo.label}
-      {customReason && <span className="text-gray-400 ml-1">- {customReason}</span>}
+      {sanitizedCustomReason && <span className="text-gray-400 ml-1">- {sanitizedCustomReason}</span>}
     </span>
   );
 };
