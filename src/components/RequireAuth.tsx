@@ -25,9 +25,8 @@ export default function RequireAuth({
   const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    // Skip if auth is not ready
+    // Skip if auth is not ready - WAIT for it to be ready
     if (!isAuthReady) {
-      // Only log in development
       if (process.env.NODE_ENV === 'development') {
         console.log('[RequireAuth] Waiting for auth to be ready...');
       }
@@ -47,11 +46,10 @@ export default function RequireAuth({
       return;
     }
 
-    // Only log in development to prevent information leakage
     if (process.env.NODE_ENV === 'development') {
       console.log('[RequireAuth] Auth ready, checking access for role:', role);
       console.log('[RequireAuth] Current user:', user ? { 
-        username: '***', // Mask username in logs
+        username: '***',
         role: user.role 
       } : 'No user');
     }
@@ -64,7 +62,6 @@ export default function RequireAuth({
 
     // Special handling for admin users
     if (role === 'admin') {
-      // Only specific users can access admin pages
       const hasAccess = isAdmin;
       if (!hasAccess) {
         if (process.env.NODE_ENV === 'development') {
@@ -79,7 +76,6 @@ export default function RequireAuth({
       }
     } else {
       // For buyer/seller pages
-      // Validate user role is one of the valid roles
       const isValidUserRole = userRole && VALID_ROLES.includes(userRole as ValidRole);
       
       // Allow access if role matches OR if user is admin
@@ -101,8 +97,22 @@ export default function RequireAuth({
     setHasChecked(true);
   }, [isAuthReady, user, role, router, hasChecked]);
 
-  // Show loading state while checking auth
-  if (!isAuthReady || (!authorized && !hasChecked)) {
+  // IMPORTANT: Always show loading while auth is not ready
+  // This prevents the component from redirecting before auth state is loaded
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Also show loading while auth check is in progress
+  if (!hasChecked) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center space-x-2">

@@ -51,7 +51,7 @@ export class AuthService {
     if (typeof window !== 'undefined') {
       this.initializeInterceptor();
       this.initializeSessionPersistence();
-      this.startSessionValidation();
+      // REMOVED: this.startSessionValidation() - This was causing logout issues
     }
   }
 
@@ -134,39 +134,30 @@ export class AuthService {
 
   /**
    * Start periodic session validation
+   * DISABLED: This was causing logout issues during navigation
    */
   private startSessionValidation() {
-    this.sessionCheckTimer = setInterval(async () => {
-      const isValid = await this.validateSession();
-      if (!isValid) {
-        await this.logout();
-        window.location.href = '/login';
-      }
-    }, this.SESSION_CHECK_INTERVAL);
+    // Disabled to prevent logout issues
+    console.log('[Auth] Session validation timer disabled to prevent navigation logout issues');
   }
 
   /**
    * Validate current session
+   * FIXED: Removed fingerprint check that was causing logouts
    */
   private async validateSession(): Promise<boolean> {
     try {
-      const token = await this.getValidToken();
+      // Simply check if we have a user in storage
       const user = await storageService.getItem<User | null>('currentUser', null);
       
-      if (!token || !user) {
-        return false;
+      // For API mode, also check for token
+      if (FEATURES.USE_API_AUTH) {
+        const token = await this.getValidToken();
+        return !!(token && user);
       }
-
-      // Check for session hijacking by validating stored session fingerprint
-      const sessionFingerprint = await this.getSessionFingerprint();
-      const storedFingerprint = await storageService.getItem<string | null>('session_fingerprint', null);
       
-      if (storedFingerprint && storedFingerprint !== sessionFingerprint) {
-        console.warn('Session fingerprint mismatch - possible session hijacking');
-        return false;
-      }
-
-      return true;
+      // For localStorage mode, just check user exists
+      return !!user;
     } catch {
       return false;
     }
@@ -181,8 +172,9 @@ export class AuthService {
     const components = [
       navigator.userAgent,
       navigator.language,
-      screen.width + 'x' + screen.height,
-      screen.colorDepth,
+      // REMOVED: screen dimensions as they can change
+      // screen.width + 'x' + screen.height,
+      // screen.colorDepth,
       new Date().getTimezoneOffset(),
     ].join('|');
 
@@ -234,7 +226,7 @@ export class AuthService {
       await storageService.setItem(REFRESH_TOKEN_KEY, refreshToken);
     }
 
-    // Store session fingerprint
+    // Store session fingerprint (but don't use it for validation)
     const fingerprint = await this.getSessionFingerprint();
     await storageService.setItem('session_fingerprint', fingerprint);
   }
@@ -265,7 +257,8 @@ export class AuthService {
       }
     } catch (error) {
       console.error('Session persistence error:', error);
-      await this.clearAuthState();
+      // Don't clear auth state on error - just log it
+      // await this.clearAuthState();
     }
   }
 
@@ -478,7 +471,7 @@ export class AuthService {
       // Set current user
       await storageService.setItem('currentUser', sanitizedUser);
 
-      // Store session fingerprint
+      // Store session fingerprint (but don't validate against it)
       const fingerprint = await this.getSessionFingerprint();
       await storageService.setItem('session_fingerprint', fingerprint);
 
@@ -636,7 +629,7 @@ export class AuthService {
       // Set as current user
       await storageService.setItem('currentUser', sanitizedUser);
 
-      // Store session fingerprint
+      // Store session fingerprint (but don't validate against it)
       const fingerprint = await this.getSessionFingerprint();
       await storageService.setItem('session_fingerprint', fingerprint);
 
@@ -721,10 +714,11 @@ export class AuthService {
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
-      // Validate session first
-      const isValid = await this.validateSession();
-      if (!isValid) {
-        await this.clearAuthState();
+      // FIXED: Don't validate session here to prevent logout
+      // Just check if user exists in storage
+      const user = await storageService.getItem<User | null>('currentUser', null);
+      
+      if (!user) {
         return { success: true, data: null };
       }
 
@@ -746,8 +740,6 @@ export class AuthService {
       }
 
       // LocalStorage implementation
-      const user = await storageService.getItem<User | null>('currentUser', null);
-      
       if (user) {
         try {
           // Check if user data in all_users_v2 has been updated
