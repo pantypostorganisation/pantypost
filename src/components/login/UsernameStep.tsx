@@ -3,8 +3,6 @@
 
 import { ArrowRight } from 'lucide-react';
 import { UsernameStepProps } from '@/types/login';
-import { SecureForm } from '@/components/ui/SecureForm';
-import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export default function UsernameStep({
   username,
@@ -30,11 +28,7 @@ export default function UsernameStep({
 
   return (
     <div className="transition-all duration-300">
-      <SecureForm
-        onSubmit={handleSubmit}
-        rateLimitKey="LOGIN"
-        rateLimitConfig={RATE_LIMITS.LOGIN}
-      >
+      <form onSubmit={handleSubmit}>
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Username
@@ -48,6 +42,12 @@ export default function UsernameStep({
             className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
             autoFocus
           />
+          {/* Error display */}
+          {error && (
+            <p className="mt-2 text-sm text-red-400">
+              {error}
+            </p>
+          )}
         </div>
         <button
           type="submit"
@@ -58,7 +58,7 @@ export default function UsernameStep({
           Continue
           <ArrowRight className="w-4 h-4" />
         </button>
-      </SecureForm>
+      </form>
     </div>
   );
 }

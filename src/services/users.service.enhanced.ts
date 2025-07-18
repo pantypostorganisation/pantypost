@@ -3,6 +3,11 @@
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient } from './api.config';
+import { securityService } from './security.service';
+import { sanitizeStrict, sanitizeUsername, sanitizeUrl, sanitizeEmail } from '@/utils/security/sanitization';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { z } from 'zod';
+import { authSchemas, profileSchemas, validateSchema } from '@/utils/validation/schemas';
 import { 
   UserProfile, 
   UserPreferences,
@@ -34,6 +39,78 @@ const CACHE_CONFIG = {
   LIST_TTL: 60 * 1000, // 1 minute
 };
 
+// Security limits
+const SECURITY_LIMITS = {
+  MAX_BATCH_SIZE: 100,
+  MAX_QUERY_LENGTH: 100,
+  MAX_PAGE_SIZE: 100,
+  MAX_ACTIVITY_HISTORY: 1000,
+  MAX_GALLERY_IMAGES: 20,
+  MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+};
+
+// Validation schemas
+const userSearchSchema = z.object({
+  query: z.string().max(SECURITY_LIMITS.MAX_QUERY_LENGTH).transform(sanitizeStrict).optional(),
+  role: z.enum(['buyer', 'seller', 'admin']).optional(),
+  verified: z.boolean().optional(),
+  tier: z.enum(['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess']).optional(),
+  minRating: z.number().min(0).max(5).optional(),
+  hasListings: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  sortBy: z.enum(['username', 'joinDate', 'rating', 'sales', 'lastActive']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+  page: z.number().int().min(1).optional(),
+  limit: z.number().int().min(1).max(SECURITY_LIMITS.MAX_PAGE_SIZE).optional(),
+});
+
+const userProfileUpdateSchema = z.object({
+  bio: z.string().max(500).transform(sanitizeStrict).optional(),
+  profilePic: z.string().url().nullable().optional(),
+  subscriptionPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
+  galleryImages: z.array(z.string().url()).max(SECURITY_LIMITS.MAX_GALLERY_IMAGES).optional(),
+  socialLinks: z.object({
+    twitter: z.string().url().transform(sanitizeUrl).optional(),
+    instagram: z.string().url().transform(sanitizeUrl).optional(),
+    tiktok: z.string().url().transform(sanitizeUrl).optional(),
+    website: z.string().url().transform(sanitizeUrl).optional(),
+  }).optional(),
+});
+
+const userPreferencesSchema = z.object({
+  notifications: z.object({
+    messages: z.boolean(),
+    orders: z.boolean(),
+    promotions: z.boolean(),
+    newsletters: z.boolean(),
+  }).partial(),
+  privacy: z.object({
+    showOnlineStatus: z.boolean(),
+    allowDirectMessages: z.boolean(),
+    profileVisibility: z.enum(['public', 'subscribers', 'private']),
+  }).partial(),
+  language: z.string().max(10),
+  currency: z.string().max(10),
+  timezone: z.string().max(50),
+}).partial();
+
+const verificationRequestSchema = z.object({
+  codePhoto: z.string().url().optional(),
+  idFront: z.string().url().optional(),
+  idBack: z.string().url().optional(),
+  passport: z.string().url().optional(),
+  code: z.string().max(20).transform(sanitizeStrict).optional(),
+  submittedAt: z.string().datetime().optional(),
+});
+
+const activitySchema = z.object({
+  userId: z.string().transform(sanitizeUsername),
+  type: z.enum(['login', 'profile_update', 'listing_created', 'order_placed', 'message_sent']),
+  details: z.record(z.any()).optional(),
+  ipAddress: z.string().optional(),
+  userAgent: z.string().optional(),
+});
+
 /**
  * Enhanced Users Service with caching, validation, and better error handling
  */
@@ -45,6 +122,9 @@ export class EnhancedUsersService {
   
   // Request deduplication
   private pendingRequests = new Map<string, Promise<any>>();
+  
+  // Rate limiter
+  private rateLimiter = getRateLimiter();
 
   // Clear cache methods
   private clearUserCache(username?: string) {
@@ -75,20 +155,23 @@ export class EnhancedUsersService {
         };
       }
 
+      // Sanitize username
+      const sanitizedUsername = sanitizeUsername(username);
+
       // Check cache first
-      const cached = this.userCache.get(username);
+      const cached = this.userCache.get(sanitizedUsername);
       if (cached && cached.expiresAt > Date.now()) {
         return { success: true, data: cached.data };
       }
 
       // Check for pending request
-      const pendingKey = `user:${username}`;
+      const pendingKey = `user:${sanitizedUsername}`;
       if (this.pendingRequests.has(pendingKey)) {
         return await this.pendingRequests.get(pendingKey);
       }
 
       // Create new request
-      const request = this._fetchUser(username);
+      const request = this._fetchUser(sanitizedUsername);
       this.pendingRequests.set(pendingKey, request);
 
       try {
@@ -118,12 +201,17 @@ export class EnhancedUsersService {
       );
       
       if (response.success && response.data) {
+        // Sanitize user data
+        const sanitizedUser = this.sanitizeUserData(response.data);
+        
         // Cache the result
         this.userCache.set(username, {
-          data: response.data,
+          data: sanitizedUser,
           timestamp: Date.now(),
           expiresAt: Date.now() + CACHE_CONFIG.USER_TTL,
         });
+        
+        return { ...response, data: sanitizedUser };
       }
       
       return response;
@@ -138,15 +226,20 @@ export class EnhancedUsersService {
     const user = allUsers[username] || null;
     
     if (user) {
+      // Sanitize user data
+      const sanitizedUser = this.sanitizeUserData(user);
+      
       // Cache the result
       this.userCache.set(username, {
-        data: user,
+        data: sanitizedUser,
         timestamp: Date.now(),
         expiresAt: Date.now() + CACHE_CONFIG.USER_TTL,
       });
+      
+      return { success: true, data: sanitizedUser };
     }
 
-    return { success: true, data: user };
+    return { success: true, data: null };
   }
 
   /**
@@ -154,8 +247,24 @@ export class EnhancedUsersService {
    */
   async getUsers(params?: UserSearchParams): Promise<ApiResponse<UsersResponse>> {
     try {
+      // Validate and sanitize params
+      let validatedParams: UserSearchParams | undefined;
+      if (params) {
+        const validation = validateSchema(userSearchSchema, params);
+        if (!validation.success) {
+          return {
+            success: false,
+            error: {
+              code: UserErrorCode.VALIDATION_ERROR,
+              message: 'Invalid search parameters',
+            },
+          };
+        }
+        validatedParams = validation.data;
+      }
+
       // Create cache key from params
-      const cacheKey = `users:${JSON.stringify(params || {})}`;
+      const cacheKey = `users:${JSON.stringify(validatedParams || {})}`;
       const cached = this.listCache.get(cacheKey);
       
       if (cached && cached.expiresAt > Date.now()) {
@@ -164,8 +273,8 @@ export class EnhancedUsersService {
 
       if (FEATURES.USE_API_USERS) {
         const queryParams = new URLSearchParams();
-        if (params) {
-          Object.entries(params).forEach(([key, value]) => {
+        if (validatedParams) {
+          Object.entries(validatedParams).forEach(([key, value]) => {
             if (value !== undefined) {
               queryParams.append(key, String(value));
             }
@@ -177,11 +286,17 @@ export class EnhancedUsersService {
         );
         
         if (response.success && response.data) {
+          // Sanitize all users
+          const sanitizedUsers = response.data.users.map(user => this.sanitizeUserData(user));
+          const sanitizedResponse = { ...response.data, users: sanitizedUsers };
+          
           // Cache the result
           this.listCache.set(cacheKey, {
-            data: response.data,
+            data: sanitizedResponse,
             expiresAt: Date.now() + CACHE_CONFIG.LIST_TTL,
           });
+          
+          return { ...response, data: sanitizedResponse };
         }
         
         return response;
@@ -196,9 +311,9 @@ export class EnhancedUsersService {
       let filteredUsers = Object.entries(allUsers);
 
       // Apply filters
-      if (params) {
-        if (params.query) {
-          const query = params.query.toLowerCase();
+      if (validatedParams) {
+        if (validatedParams.query) {
+          const query = validatedParams.query.toLowerCase();
           filteredUsers = filteredUsers.filter(([username, user]) =>
             username.toLowerCase().includes(query) ||
             user.bio?.toLowerCase().includes(query) ||
@@ -206,48 +321,48 @@ export class EnhancedUsersService {
           );
         }
 
-        if (params.role) {
-          filteredUsers = filteredUsers.filter(([_, user]) => user.role === params.role);
+        if (validatedParams.role) {
+          filteredUsers = filteredUsers.filter(([_, user]) => user.role === validatedParams.role);
         }
 
-        if (params.verified !== undefined) {
+        if (validatedParams.verified !== undefined) {
           filteredUsers = filteredUsers.filter(
-            ([_, user]) => (user.verificationStatus === 'verified') === params.verified
+            ([_, user]) => (user.verificationStatus === 'verified') === validatedParams.verified
           );
         }
 
-        if (params.tier) {
-          filteredUsers = filteredUsers.filter(([_, user]) => user.tier === params.tier);
+        if (validatedParams.tier) {
+          filteredUsers = filteredUsers.filter(([_, user]) => user.tier === validatedParams.tier);
         }
 
-        if (params.minRating !== undefined) {
+        if (validatedParams.minRating !== undefined) {
           filteredUsers = filteredUsers.filter(
-            ([_, user]) => (user.rating || 0) >= params.minRating!
+            ([_, user]) => (user.rating || 0) >= validatedParams.minRating!
           );
         }
 
-        if (params.hasListings !== undefined) {
+        if (validatedParams.hasListings !== undefined) {
           // This would need to check listings data
           // For now, we'll skip this filter in localStorage mode
         }
 
-        if (params.isActive !== undefined) {
+        if (validatedParams.isActive !== undefined) {
           const dayAgo = new Date();
           dayAgo.setDate(dayAgo.getDate() - 1);
           filteredUsers = filteredUsers.filter(
             ([_, user]) => {
               const lastActive = new Date(user.lastActive || user.createdAt);
-              return params.isActive ? lastActive > dayAgo : lastActive <= dayAgo;
+              return validatedParams.isActive ? lastActive > dayAgo : lastActive <= dayAgo;
             }
           );
         }
 
         // Apply sorting
-        if (params.sortBy) {
+        if (validatedParams.sortBy) {
           filteredUsers.sort(([aUsername, a], [bUsername, b]) => {
             let compareValue = 0;
             
-            switch (params.sortBy) {
+            switch (validatedParams.sortBy) {
               case 'username':
                 compareValue = aUsername.localeCompare(bUsername);
                 break;
@@ -266,19 +381,19 @@ export class EnhancedUsersService {
                 break;
             }
             
-            return params.sortOrder === 'desc' ? -compareValue : compareValue;
+            return validatedParams.sortOrder === 'desc' ? -compareValue : compareValue;
           });
         }
       }
 
       // Apply pagination
-      const page = params?.page || 1;
-      const limit = params?.limit || 50;
+      const page = validatedParams?.page || 1;
+      const limit = validatedParams?.limit || 50;
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
       
       const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
-      const users = paginatedUsers.map(([_, user]) => user);
+      const users = paginatedUsers.map(([_, user]) => this.sanitizeUserData(user));
 
       const result: UsersResponse = {
         users,
@@ -323,10 +438,13 @@ export class EnhancedUsersService {
         };
       }
 
+      // Sanitize username
+      const sanitizedUsername = sanitizeUsername(username);
+
       // Check cache
-      const cached = this.profileCache.get(username);
+      const cached = this.profileCache.get(sanitizedUsername);
       if (cached && cached.expiresAt > Date.now()) {
-        const userResult = await this.getUser(username);
+        const userResult = await this.getUser(sanitizedUsername);
         if (userResult.success && userResult.data) {
           return {
             success: true,
@@ -340,23 +458,34 @@ export class EnhancedUsersService {
 
       if (FEATURES.USE_API_USERS) {
         const response = await apiCall<ProfileResponse>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username })}/full`
+          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username: sanitizedUsername })}/full`
         );
         
         if (response.success && response.data) {
+          // Sanitize profile data
+          const sanitizedProfile = this.sanitizeProfileData(response.data.profile);
+          
           // Cache the profile
-          this.profileCache.set(username, {
-            data: response.data.profile,
+          this.profileCache.set(sanitizedUsername, {
+            data: sanitizedProfile,
             timestamp: Date.now(),
             expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
           });
+          
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              profile: sanitizedProfile,
+            },
+          };
         }
         
         return response;
       }
 
       // LocalStorage implementation
-      const userResult = await this.getUser(username);
+      const userResult = await this.getUser(sanitizedUsername);
       if (!userResult.success || !userResult.data) {
         return {
           success: false,
@@ -372,14 +501,14 @@ export class EnhancedUsersService {
         {}
       );
 
-      let profile = profilesData[username];
+      let profile = profilesData[sanitizedUsername];
       
       if (!profile) {
         // Try legacy storage
-        const bio = sessionStorage.getItem(`profile_bio_${username}`) || '';
-        const profilePic = sessionStorage.getItem(`profile_pic_${username}`) || null;
-        const subscriptionPrice = sessionStorage.getItem(`subscription_price_${username}`) || '0';
-        const galleryData = localStorage.getItem(`profile_gallery_${username}`);
+        const bio = sessionStorage.getItem(`profile_bio_${sanitizedUsername}`) || '';
+        const profilePic = sessionStorage.getItem(`profile_pic_${sanitizedUsername}`) || null;
+        const subscriptionPrice = sessionStorage.getItem(`subscription_price_${sanitizedUsername}`) || '0';
+        const galleryData = localStorage.getItem(`profile_gallery_${sanitizedUsername}`);
         const galleryImages = galleryData ? JSON.parse(galleryData) : [];
 
         profile = {
@@ -390,14 +519,17 @@ export class EnhancedUsersService {
         };
       }
 
+      // Sanitize profile data
+      const sanitizedProfile = this.sanitizeProfileData(profile);
+
       // Calculate profile completeness
-      const completeness = calculateProfileCompleteness(userResult.data, profile);
-      profile.completeness = completeness;
+      const completeness = calculateProfileCompleteness(userResult.data, sanitizedProfile);
+      sanitizedProfile.completeness = completeness;
 
       // Cache the profile
-      if (profile) {
-        this.profileCache.set(username, {
-          data: profile,
+      if (sanitizedProfile) {
+        this.profileCache.set(sanitizedUsername, {
+          data: sanitizedProfile,
           timestamp: Date.now(),
           expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
         });
@@ -406,7 +538,7 @@ export class EnhancedUsersService {
       return {
         success: true,
         data: {
-          profile,
+          profile: sanitizedProfile,
           user: userResult.data,
         },
       };
@@ -430,6 +562,21 @@ export class EnhancedUsersService {
     updates: Partial<UserProfile>
   ): Promise<ApiResponse<UserProfile>> {
     try {
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check(
+        `profile_update_${username}`,
+        { maxAttempts: 10, windowMs: 60 * 60 * 1000 } // 10 updates per hour
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: `Too many updates. Please wait ${rateLimitResult.waitTime} seconds.`,
+          },
+        };
+      }
+
       // Validate inputs
       if (!isValidUsername(username)) {
         return {
@@ -442,7 +589,24 @@ export class EnhancedUsersService {
         };
       }
 
-      if (updates.bio !== undefined && !isValidBio(updates.bio)) {
+      const sanitizedUsername = sanitizeUsername(username);
+
+      // Validate and sanitize updates
+      const validation = validateSchema(userProfileUpdateSchema, updates);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: Object.values(validation.errors || {})[0] || 'Invalid profile data',
+          },
+        };
+      }
+
+      const sanitizedUpdates = validation.data!;
+
+      // Additional validation for bio and subscription price
+      if (sanitizedUpdates.bio !== undefined && !isValidBio(sanitizedUpdates.bio)) {
         return {
           success: false,
           error: {
@@ -453,7 +617,7 @@ export class EnhancedUsersService {
         };
       }
 
-      if (updates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(updates.subscriptionPrice)) {
+      if (sanitizedUpdates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(sanitizedUpdates.subscriptionPrice)) {
         return {
           success: false,
           error: {
@@ -465,10 +629,10 @@ export class EnhancedUsersService {
       }
 
       // Optimistic update - update cache immediately
-      const currentProfile = this.profileCache.get(username);
+      const currentProfile = this.profileCache.get(sanitizedUsername);
       if (currentProfile) {
-        const optimisticProfile = { ...currentProfile.data, ...updates };
-        this.profileCache.set(username, {
+        const optimisticProfile = { ...currentProfile.data, ...sanitizedUpdates };
+        this.profileCache.set(sanitizedUsername, {
           data: optimisticProfile,
           timestamp: Date.now(),
           expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
@@ -477,27 +641,30 @@ export class EnhancedUsersService {
 
       if (FEATURES.USE_API_USERS) {
         const response = await apiCall<UserProfile>(
-          buildApiUrl(API_ENDPOINTS.USERS.UPDATE_PROFILE, { username }),
+          buildApiUrl(API_ENDPOINTS.USERS.UPDATE_PROFILE, { username: sanitizedUsername }),
           {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            body: JSON.stringify(sanitizedUpdates),
           }
         );
         
         if (!response.success) {
           // Revert optimistic update
           if (currentProfile) {
-            this.profileCache.set(username, currentProfile);
+            this.profileCache.set(sanitizedUsername, currentProfile);
           } else {
-            this.profileCache.delete(username);
+            this.profileCache.delete(sanitizedUsername);
           }
         } else if (response.data) {
           // Update cache with server response
-          this.profileCache.set(username, {
-            data: response.data,
+          const sanitizedProfile = this.sanitizeProfileData(response.data);
+          this.profileCache.set(sanitizedUsername, {
+            data: sanitizedProfile,
             timestamp: Date.now(),
             expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
           });
+          
+          return { ...response, data: sanitizedProfile };
         }
         
         return response;
@@ -509,7 +676,7 @@ export class EnhancedUsersService {
         {}
       );
 
-      const currentData = profilesData[username] || {
+      const currentData = profilesData[sanitizedUsername] || {
         bio: '',
         profilePic: null,
         subscriptionPrice: '0',
@@ -517,48 +684,48 @@ export class EnhancedUsersService {
 
       const updatedProfile: UserProfile = {
         ...currentData,
-        ...updates,
+        ...sanitizedUpdates,
         lastUpdated: new Date().toISOString(),
       };
 
-      profilesData[username] = updatedProfile;
+      profilesData[sanitizedUsername] = updatedProfile;
       const success = await storageService.setItem('user_profiles', profilesData);
 
       if (success) {
         // Update legacy storage for backward compatibility
-        if (updates.bio !== undefined) {
-          sessionStorage.setItem(`profile_bio_${username}`, updates.bio);
+        if (sanitizedUpdates.bio !== undefined) {
+          sessionStorage.setItem(`profile_bio_${sanitizedUsername}`, sanitizedUpdates.bio);
         }
-        if (updates.profilePic !== undefined) {
-          if (updates.profilePic) {
-            sessionStorage.setItem(`profile_pic_${username}`, updates.profilePic);
+        if (sanitizedUpdates.profilePic !== undefined) {
+          if (sanitizedUpdates.profilePic) {
+            sessionStorage.setItem(`profile_pic_${sanitizedUsername}`, sanitizedUpdates.profilePic);
           } else {
-            sessionStorage.removeItem(`profile_pic_${username}`);
+            sessionStorage.removeItem(`profile_pic_${sanitizedUsername}`);
           }
         }
-        if (updates.subscriptionPrice !== undefined) {
-          sessionStorage.setItem(`subscription_price_${username}`, updates.subscriptionPrice);
+        if (sanitizedUpdates.subscriptionPrice !== undefined) {
+          sessionStorage.setItem(`subscription_price_${sanitizedUsername}`, sanitizedUpdates.subscriptionPrice);
         }
-        if (updates.galleryImages !== undefined) {
-          localStorage.setItem(`profile_gallery_${username}`, JSON.stringify(updates.galleryImages));
+        if (sanitizedUpdates.galleryImages !== undefined) {
+          localStorage.setItem(`profile_gallery_${sanitizedUsername}`, JSON.stringify(sanitizedUpdates.galleryImages));
         }
 
         // Update user bio in all_users_v2 if needed
-        if (updates.bio !== undefined) {
+        if (sanitizedUpdates.bio !== undefined) {
           const allUsers = await storageService.getItem<Record<string, any>>(
             'all_users_v2',
             {}
           );
-          if (allUsers[username]) {
-            allUsers[username].bio = updates.bio;
+          if (allUsers[sanitizedUsername]) {
+            allUsers[sanitizedUsername].bio = sanitizedUpdates.bio;
             await storageService.setItem('all_users_v2', allUsers);
             // Clear user cache
-            this.userCache.delete(username);
+            this.userCache.delete(sanitizedUsername);
           }
         }
 
         // Update cache
-        this.profileCache.set(username, {
+        this.profileCache.set(sanitizedUsername, {
           data: updatedProfile,
           timestamp: Date.now(),
           expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
@@ -568,9 +735,9 @@ export class EnhancedUsersService {
       } else {
         // Revert optimistic update
         if (currentProfile) {
-          this.profileCache.set(username, currentProfile);
+          this.profileCache.set(sanitizedUsername, currentProfile);
         } else {
-          this.profileCache.delete(username);
+          this.profileCache.delete(sanitizedUsername);
         }
 
         return {
@@ -602,9 +769,22 @@ export class EnhancedUsersService {
    */
   async getUserPreferences(username: string): Promise<ApiResponse<UserPreferences>> {
     try {
+      // Validate username
+      if (!isValidUsername(username)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedUsername = sanitizeUsername(username);
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<UserPreferences>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.SETTINGS, { username })}/preferences`
+          `${buildApiUrl(API_ENDPOINTS.USERS.SETTINGS, { username: sanitizedUsername })}/preferences`
         );
       }
 
@@ -631,7 +811,7 @@ export class EnhancedUsersService {
         timezone: 'UTC',
       };
 
-      const preferences = preferencesData[username] || defaultPreferences;
+      const preferences = preferencesData[sanitizedUsername] || defaultPreferences;
 
       return { success: true, data: preferences };
     } catch (error) {
@@ -654,12 +834,39 @@ export class EnhancedUsersService {
     updates: Partial<UserPreferences>
   ): Promise<ApiResponse<UserPreferences>> {
     try {
+      // Validate username
+      if (!isValidUsername(username)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedUsername = sanitizeUsername(username);
+
+      // Validate preferences
+      const validation = validateSchema(userPreferencesSchema, updates);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: 'Invalid preferences data',
+          },
+        };
+      }
+
+      const sanitizedUpdates = validation.data!;
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<UserPreferences>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.SETTINGS, { username })}/preferences`,
+          `${buildApiUrl(API_ENDPOINTS.USERS.SETTINGS, { username: sanitizedUsername })}/preferences`,
           {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            body: JSON.stringify(sanitizedUpdates),
           }
         );
       }
@@ -670,7 +877,7 @@ export class EnhancedUsersService {
         {}
       );
 
-      const currentPreferences = preferencesData[username] || {
+      const currentPreferences = preferencesData[sanitizedUsername] || {
         notifications: {
           messages: true,
           orders: true,
@@ -689,18 +896,18 @@ export class EnhancedUsersService {
 
       const updatedPreferences: UserPreferences = {
         ...currentPreferences,
-        ...updates,
+        ...sanitizedUpdates,
         notifications: {
           ...currentPreferences.notifications,
-          ...(updates.notifications || {}),
+          ...(sanitizedUpdates.notifications || {}),
         },
         privacy: {
           ...currentPreferences.privacy,
-          ...(updates.privacy || {}),
+          ...(sanitizedUpdates.privacy || {}),
         },
       };
 
-      preferencesData[username] = updatedPreferences;
+      preferencesData[sanitizedUsername] = updatedPreferences;
       await storageService.setItem('user_preferences', preferencesData);
 
       return { success: true, data: updatedPreferences };
@@ -721,10 +928,18 @@ export class EnhancedUsersService {
    */
   async trackActivity(activity: Omit<UserActivity, 'id' | 'timestamp'>): Promise<ApiResponse<void>> {
     try {
+      // Validate activity data
+      const validation = validateSchema(activitySchema, activity);
+      if (!validation.success) {
+        return { success: true }; // Silently fail for activity tracking
+      }
+
+      const sanitizedActivity = validation.data!;
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<void>('/users/activity', {
           method: 'POST',
-          body: JSON.stringify(activity),
+          body: JSON.stringify(sanitizedActivity),
         });
       }
 
@@ -732,16 +947,16 @@ export class EnhancedUsersService {
       const activities = await storageService.getItem<UserActivity[]>('user_activities', []);
       
       const newActivity: UserActivity = {
-        ...activity,
+        ...sanitizedActivity,
         id: `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         timestamp: new Date().toISOString(),
       };
 
       activities.push(newActivity);
       
-      // Keep only last 1000 activities
-      if (activities.length > 1000) {
-        activities.splice(0, activities.length - 1000);
+      // Keep only last N activities
+      if (activities.length > SECURITY_LIMITS.MAX_ACTIVITY_HISTORY) {
+        activities.splice(0, activities.length - SECURITY_LIMITS.MAX_ACTIVITY_HISTORY);
       }
 
       await storageService.setItem('user_activities', activities);
@@ -762,9 +977,23 @@ export class EnhancedUsersService {
     limit: number = 50
   ): Promise<ApiResponse<UserActivity[]>> {
     try {
+      // Validate username
+      if (!isValidUsername(username)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedUsername = sanitizeUsername(username);
+      const sanitizedLimit = Math.min(Math.max(1, limit), SECURITY_LIMITS.MAX_PAGE_SIZE);
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<UserActivity[]>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username })}/activity?limit=${limit}`
+          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username: sanitizedUsername })}/activity?limit=${sanitizedLimit}`
         );
       }
 
@@ -772,9 +1001,9 @@ export class EnhancedUsersService {
       const activities = await storageService.getItem<UserActivity[]>('user_activities', []);
       
       const userActivities = activities
-        .filter(activity => activity.userId === username)
+        .filter(activity => activity.userId === sanitizedUsername)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, limit);
+        .slice(0, sanitizedLimit);
 
       return { success: true, data: userActivities };
     } catch (error) {
@@ -796,10 +1025,52 @@ export class EnhancedUsersService {
     updates: BatchUserUpdate[]
   ): Promise<ApiResponse<BatchOperationResult>> {
     try {
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check(
+        'batch_update',
+        { maxAttempts: 5, windowMs: 60 * 60 * 1000 } // 5 batch updates per hour
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: `Too many batch updates. Please wait ${rateLimitResult.waitTime} seconds.`,
+          },
+        };
+      }
+
+      // Limit batch size
+      if (updates.length > SECURITY_LIMITS.MAX_BATCH_SIZE) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: `Batch size exceeds limit of ${SECURITY_LIMITS.MAX_BATCH_SIZE}`,
+          },
+        };
+      }
+
+      // Validate all updates
+      const validatedUpdates: BatchUserUpdate[] = [];
+      for (const update of updates) {
+        if (!isValidUsername(update.username)) {
+          continue;
+        }
+        
+        const sanitizedUsername = sanitizeUsername(update.username);
+        const sanitizedUpdates = this.sanitizeUserData(update.updates as User);
+        
+        validatedUpdates.push({
+          username: sanitizedUsername,
+          updates: sanitizedUpdates,
+        });
+      }
+
       if (FEATURES.USE_API_USERS) {
         return await apiCall<BatchOperationResult>('/users/batch-update', {
           method: 'POST',
-          body: JSON.stringify({ updates }),
+          body: JSON.stringify({ updates: validatedUpdates }),
         });
       }
 
@@ -814,7 +1085,7 @@ export class EnhancedUsersService {
         failed: [],
       };
 
-      for (const update of updates) {
+      for (const update of validatedUpdates) {
         try {
           if (allUsers[update.username]) {
             allUsers[update.username] = {
@@ -863,8 +1134,50 @@ export class EnhancedUsersService {
     docs: VerificationRequest
   ): Promise<ApiResponse<void>> {
     try {
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check(
+        `verification_${username}`,
+        { maxAttempts: 3, windowMs: 24 * 60 * 60 * 1000 } // 3 requests per day
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: `Too many verification requests. Please wait ${rateLimitResult.waitTime} seconds.`,
+          },
+        };
+      }
+
+      // Validate username
+      if (!isValidUsername(username)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedUsername = sanitizeUsername(username);
+
+      // Validate verification request
+      const validation = validateSchema(verificationRequestSchema, docs);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.VALIDATION_ERROR,
+            message: 'Invalid verification data',
+          },
+        };
+      }
+
+      const sanitizedDocs = validation.data!;
+
       // Validate required documents
-      if (!docs.codePhoto || !docs.code) {
+      if (!sanitizedDocs.codePhoto || !sanitizedDocs.code) {
         return {
           success: false,
           error: {
@@ -874,7 +1187,7 @@ export class EnhancedUsersService {
         };
       }
 
-      if (!docs.idFront && !docs.passport) {
+      if (!sanitizedDocs.idFront && !sanitizedDocs.passport) {
         return {
           success: false,
           error: {
@@ -886,10 +1199,10 @@ export class EnhancedUsersService {
 
       if (FEATURES.USE_API_USERS) {
         return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username }),
+          buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username: sanitizedUsername }),
           {
             method: 'POST',
-            body: JSON.stringify(docs),
+            body: JSON.stringify(sanitizedDocs),
           }
         );
       }
@@ -900,14 +1213,14 @@ export class EnhancedUsersService {
         {}
       );
 
-      if (allUsers[username]) {
-        allUsers[username].verificationStatus = 'pending';
-        allUsers[username].verificationRequestedAt = new Date().toISOString();
-        allUsers[username].verificationDocs = docs;
+      if (allUsers[sanitizedUsername]) {
+        allUsers[sanitizedUsername].verificationStatus = 'pending';
+        allUsers[sanitizedUsername].verificationRequestedAt = new Date().toISOString();
+        allUsers[sanitizedUsername].verificationDocs = sanitizedDocs;
         await storageService.setItem('all_users_v2', allUsers);
         
         // Clear user cache
-        this.userCache.delete(username);
+        this.userCache.delete(sanitizedUsername);
       }
 
       // Store verification request
@@ -916,8 +1229,8 @@ export class EnhancedUsersService {
         {}
       );
       
-      verificationRequests[username] = {
-        ...docs,
+      verificationRequests[sanitizedUsername] = {
+        ...sanitizedDocs,
         requestedAt: new Date().toISOString(),
         status: 'pending',
       };
@@ -926,7 +1239,7 @@ export class EnhancedUsersService {
 
       // Track activity
       await this.trackActivity({
-        userId: username,
+        userId: sanitizedUsername,
         type: 'profile_update',
         details: { action: 'verification_requested' },
       });
@@ -952,7 +1265,21 @@ export class EnhancedUsersService {
     seller: string
   ): Promise<ApiResponse<SubscriptionInfo | null>> {
     try {
-      const cacheKey = `sub:${buyer}:${seller}`;
+      // Validate usernames
+      if (!isValidUsername(buyer) || !isValidUsername(seller)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedBuyer = sanitizeUsername(buyer);
+      const sanitizedSeller = sanitizeUsername(seller);
+      
+      const cacheKey = `sub:${sanitizedBuyer}:${sanitizedSeller}`;
       const cached = this.listCache.get(cacheKey);
       
       if (cached && cached.expiresAt > Date.now()) {
@@ -961,7 +1288,7 @@ export class EnhancedUsersService {
 
       if (FEATURES.USE_API_USERS) {
         const response = await apiCall<SubscriptionInfo>(
-          `${API_ENDPOINTS.SUBSCRIPTIONS.CHECK}?buyer=${buyer}&seller=${seller}`
+          `${API_ENDPOINTS.SUBSCRIPTIONS.CHECK}?buyer=${sanitizedBuyer}&seller=${sanitizedSeller}`
         );
         
         if (response.success && response.data) {
@@ -980,8 +1307,8 @@ export class EnhancedUsersService {
         {}
       );
 
-      const buyerSubs = subscriptions[buyer] || [];
-      const subscription = buyerSubs.find(sub => sub.seller === seller);
+      const buyerSubs = subscriptions[sanitizedBuyer] || [];
+      const subscription = buyerSubs.find(sub => sub.seller === sanitizedSeller);
 
       if (subscription) {
         this.listCache.set(cacheKey, {
@@ -1013,6 +1340,39 @@ export class EnhancedUsersService {
     this.userCache.clear();
     this.profileCache.clear();
     this.listCache.clear();
+  }
+
+  /**
+   * Sanitize user data
+   */
+  private sanitizeUserData(user: any): User {
+    return {
+      ...user,
+      username: user.username ? sanitizeUsername(user.username) : '',
+      email: user.email ? sanitizeEmail(user.email) : undefined,
+      bio: user.bio ? sanitizeStrict(user.bio) : undefined,
+      banReason: user.banReason ? sanitizeStrict(user.banReason) : undefined,
+      verificationRejectionReason: user.verificationRejectionReason ? sanitizeStrict(user.verificationRejectionReason) : undefined,
+    };
+  }
+
+  /**
+   * Sanitize profile data
+   */
+  private sanitizeProfileData(profile: UserProfile): UserProfile {
+    return {
+      ...profile,
+      bio: sanitizeStrict(profile.bio),
+      profilePic: profile.profilePic ? sanitizeUrl(profile.profilePic) : null,
+      subscriptionPrice: profile.subscriptionPrice,
+      galleryImages: profile.galleryImages?.map(url => sanitizeUrl(url)),
+      socialLinks: profile.socialLinks ? {
+        twitter: profile.socialLinks.twitter ? sanitizeUrl(profile.socialLinks.twitter) : undefined,
+        instagram: profile.socialLinks.instagram ? sanitizeUrl(profile.socialLinks.instagram) : undefined,
+        tiktok: profile.socialLinks.tiktok ? sanitizeUrl(profile.socialLinks.tiktok) : undefined,
+        website: profile.socialLinks.website ? sanitizeUrl(profile.socialLinks.website) : undefined,
+      } : undefined,
+    };
   }
 }
 

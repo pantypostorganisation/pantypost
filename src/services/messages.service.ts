@@ -3,6 +3,11 @@
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { v4 as uuidv4 } from 'uuid';
+import { securityService } from './security.service';
+import { sanitizeStrict, sanitizeEmail, sanitizeObject } from '@/utils/security/sanitization';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { messageSchemas, validateSchema } from '@/utils/validation/schemas';
+import { z } from 'zod';
 
 export interface Message {
   id?: string;
@@ -92,6 +97,44 @@ export interface CustomRequestData {
   paid?: boolean;
 }
 
+// Validation schemas
+const sendMessageSchema = z.object({
+  sender: z.string().min(1).max(30).transform(sanitizeStrict),
+  receiver: z.string().min(1).max(30).transform(sanitizeStrict),
+  content: messageSchemas.messageContent,
+  type: z.enum(['normal', 'customRequest', 'image', 'tip']).optional(),
+  meta: z.object({
+    id: z.string().optional(),
+    title: z.string().max(100).transform(sanitizeStrict).optional(),
+    price: z.number().positive().max(10000).optional(),
+    tags: z.array(z.string().max(30).transform(sanitizeStrict)).max(10).optional(),
+    message: z.string().max(500).transform(sanitizeStrict).optional(),
+    imageUrl: z.string().url().optional(),
+    tipAmount: z.number().positive().max(500).optional(),
+  }).optional(),
+  attachments: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['image', 'file']),
+    url: z.string(),
+    name: z.string().max(255).optional(),
+    size: z.number().positive().optional(),
+    mimeType: z.string().optional(),
+  })).max(10).optional(),
+});
+
+const blockUserSchema = z.object({
+  blocker: z.string().min(1).max(30).transform(sanitizeStrict),
+  blocked: z.string().min(1).max(30).transform(sanitizeStrict),
+});
+
+const reportUserSchema = z.object({
+  reporter: z.string().min(1).max(30).transform(sanitizeStrict),
+  reportee: z.string().min(1).max(30).transform(sanitizeStrict),
+  reason: z.string().max(500).transform(sanitizeStrict).optional(),
+  messages: z.array(z.any()).optional(),
+  category: z.enum(['harassment', 'spam', 'inappropriate_content', 'scam', 'other']).optional(),
+});
+
 /**
  * Messages Service
  * Handles all messaging operations and prepares for real-time integration
@@ -101,6 +144,7 @@ export class MessagesService {
   private threadCache: Map<string, MessageThread> = new Map();
   private wsReady: boolean = false;
   private messageListeners: Map<string, Set<(message: Message) => void>> = new Map();
+  private rateLimiter = getRateLimiter();
 
   /**
    * Initialize the service
@@ -122,13 +166,31 @@ export class MessagesService {
    */
   async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ApiResponse<MessageThread[]>> {
     try {
+      // Validate and sanitize username
+      const sanitizedUsername = sanitizeStrict(username);
+      if (!sanitizedUsername || sanitizedUsername.length > 30) {
+        return {
+          success: false,
+          error: { message: 'Invalid username' },
+        };
+      }
+
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: `Rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.` },
+        };
+      }
+
       if (FEATURES.USE_API_MESSAGES) {
-        const url = `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(username)}${role ? `&role=${role}` : ''}`;
+        const url = `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(sanitizedUsername)}${role ? `&role=${role}` : ''}`;
         return await apiCall<MessageThread[]>(url);
       }
 
       // LocalStorage implementation with caching
-      const cacheKey = `threads_${username}_${role || 'all'}`;
+      const cacheKey = `threads_${sanitizedUsername}_${role || 'all'}`;
       const cached = this.threadCache.get(cacheKey);
       
       if (cached && this.isCacheValid(cached.updatedAt)) {
@@ -140,13 +202,13 @@ export class MessagesService {
 
       // Group messages into threads
       for (const [conversationKey, messageList] of Object.entries(messages)) {
-        if (conversationKey.includes(username)) {
+        if (conversationKey.includes(sanitizedUsername)) {
           const participants = conversationKey.split('-') as [string, string];
-          const otherParty = participants.find(p => p !== username) || '';
+          const otherParty = participants.find(p => p !== sanitizedUsername) || '';
           
           // Filter by role if specified
           if (role && messageList.length > 0) {
-            const isRelevantThread = await this.isThreadRelevantForRole(username, otherParty, role);
+            const isRelevantThread = await this.isThreadRelevantForRole(sanitizedUsername, otherParty, role);
             if (!isRelevantThread) continue;
           }
           
@@ -160,7 +222,7 @@ export class MessagesService {
               messages: messageList,
               lastMessage: messageList[messageList.length - 1],
               unreadCount: messageList.filter(
-                m => m.receiver === username && !m.isRead && !m.read
+                m => m.receiver === sanitizedUsername && !m.isRead && !m.read
               ).length,
               updatedAt: messageList[messageList.length - 1].date,
               blockedBy,
@@ -198,7 +260,19 @@ export class MessagesService {
    */
   async getThread(userA: string, userB: string): Promise<ApiResponse<Message[]>> {
     try {
-      const threadId = this.getConversationKey(userA, userB);
+      // Validate and sanitize usernames
+      const sanitizedUserA = sanitizeStrict(userA);
+      const sanitizedUserB = sanitizeStrict(userB);
+      
+      if (!sanitizedUserA || !sanitizedUserB || 
+          sanitizedUserA.length > 30 || sanitizedUserB.length > 30) {
+        return {
+          success: false,
+          error: { message: 'Invalid usernames' },
+        };
+      }
+
+      const threadId = this.getConversationKey(sanitizedUserA, sanitizedUserB);
       
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<Message[]>(
@@ -237,28 +311,60 @@ export class MessagesService {
    */
   async sendMessage(request: SendMessageRequest): Promise<ApiResponse<Message>> {
     try {
+      // Validate and sanitize request
+      const validation = validateSchema(sendMessageSchema, request);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: Object.values(validation.errors || {})[0] || 'Invalid message data' },
+        };
+      }
+
+      const sanitizedRequest = validation.data!;
+
+      // Check rate limit for message sending
+      const rateLimitResult = this.rateLimiter.check(
+        `message_send_${sanitizedRequest.sender}`, 
+        RATE_LIMITS.MESSAGE_SEND
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: `Too many messages. Please wait ${rateLimitResult.waitTime} seconds.` },
+        };
+      }
+
+      // Additional content security check
+      const contentCheck = securityService.checkContentSecurity(sanitizedRequest.content);
+      if (!contentCheck.safe) {
+        return {
+          success: false,
+          error: { message: 'Message contains prohibited content' },
+        };
+      }
+
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<Message>(API_ENDPOINTS.MESSAGES.SEND, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(sanitizedRequest),
         });
       }
 
       // LocalStorage implementation
-      const conversationKey = this.getConversationKey(request.sender, request.receiver);
+      const conversationKey = this.getConversationKey(sanitizedRequest.sender, sanitizedRequest.receiver);
       const messages = await this.getAllMessages();
       
       const newMessage: Message = {
         id: uuidv4(),
-        sender: request.sender,
-        receiver: request.receiver,
-        content: request.content,
+        sender: sanitizedRequest.sender,
+        receiver: sanitizedRequest.receiver,
+        content: sanitizedRequest.content,
         date: new Date().toISOString(),
         isRead: false,
         read: false,
-        type: request.type || 'normal',
-        meta: request.meta,
-        attachments: request.attachments,
+        type: sanitizedRequest.type || 'normal',
+        meta: sanitizedRequest.meta,
+        attachments: sanitizedRequest.attachments,
       };
 
       if (!messages[conversationKey]) {
@@ -272,8 +378,12 @@ export class MessagesService {
       this.messageCache.set(conversationKey, [...(this.messageCache.get(conversationKey) || []), newMessage]);
 
       // Update notifications if needed
-      if (request.type !== 'customRequest') {
-        await this.updateMessageNotifications(request.receiver, request.sender, request.content);
+      if (sanitizedRequest.type !== 'customRequest') {
+        await this.updateMessageNotifications(
+          sanitizedRequest.receiver, 
+          sanitizedRequest.sender, 
+          sanitizedRequest.content
+        );
       }
 
       // Notify listeners (preparation for real-time)
@@ -300,17 +410,39 @@ export class MessagesService {
     seller: string,
     requestData: Omit<CustomRequestData, 'id' | 'date' | 'status'>
   ): Promise<ApiResponse<Message>> {
+    // Validate custom request data
+    const validation = validateSchema(messageSchemas.customRequest, {
+      title: requestData.title,
+      description: requestData.description,
+      price: requestData.price,
+    });
+
+    if (!validation.success) {
+      return {
+        success: false,
+        error: { message: Object.values(validation.errors || {})[0] || 'Invalid request data' },
+      };
+    }
+
+    const sanitizedData = validation.data!;
+
+    // Sanitize tags
+    const sanitizedTags = requestData.tags
+      .slice(0, 10)
+      .map(tag => sanitizeStrict(tag).substring(0, 30))
+      .filter(tag => tag.length > 0);
+
     const request: SendMessageRequest = {
       sender: buyer,
       receiver: seller,
-      content: `📦 Custom Request: ${requestData.title} - $${requestData.price}`,
+      content: `📦 Custom Request: ${sanitizedData.title} - $${sanitizedData.price}`,
       type: 'customRequest',
       meta: {
         id: uuidv4(),
-        title: requestData.title,
-        price: requestData.price,
-        tags: requestData.tags,
-        message: requestData.description,
+        title: sanitizedData.title,
+        price: sanitizedData.price,
+        tags: sanitizedTags,
+        message: sanitizedData.description,
       },
     };
 
@@ -325,20 +457,35 @@ export class MessagesService {
     otherParty: string
   ): Promise<ApiResponse<void>> {
     try {
+      // Validate and sanitize usernames
+      const sanitizedUsername = sanitizeStrict(username);
+      const sanitizedOtherParty = sanitizeStrict(otherParty);
+      
+      if (!sanitizedUsername || !sanitizedOtherParty || 
+          sanitizedUsername.length > 30 || sanitizedOtherParty.length > 30) {
+        return {
+          success: false,
+          error: { message: 'Invalid usernames' },
+        };
+      }
+
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.MARK_READ, {
           method: 'POST',
-          body: JSON.stringify({ username, otherParty }),
+          body: JSON.stringify({ 
+            username: sanitizedUsername, 
+            otherParty: sanitizedOtherParty 
+          }),
         });
       }
 
       // LocalStorage implementation
-      const conversationKey = this.getConversationKey(username, otherParty);
+      const conversationKey = this.getConversationKey(sanitizedUsername, sanitizedOtherParty);
       const messages = await this.getAllMessages();
       
       if (messages[conversationKey]) {
         messages[conversationKey] = messages[conversationKey].map(msg => {
-          if (msg.receiver === username && msg.sender === otherParty) {
+          if (msg.receiver === sanitizedUsername && msg.sender === sanitizedOtherParty) {
             return { ...msg, isRead: true, read: true };
           }
           return msg;
@@ -351,7 +498,7 @@ export class MessagesService {
       }
 
       // Clear notifications
-      await this.clearMessageNotifications(username, otherParty);
+      await this.clearMessageNotifications(sanitizedUsername, sanitizedOtherParty);
 
       return { success: true };
     } catch (error) {
@@ -368,22 +515,45 @@ export class MessagesService {
    */
   async blockUser(request: BlockUserRequest): Promise<ApiResponse<void>> {
     try {
+      // Validate and sanitize request
+      const validation = validateSchema(blockUserSchema, request);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: 'Invalid block request' },
+        };
+      }
+
+      const sanitizedRequest = validation.data!;
+
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check(
+        `block_user_${sanitizedRequest.blocker}`,
+        { maxAttempts: 10, windowMs: 60 * 60 * 1000 } // 10 blocks per hour
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: 'Too many block attempts. Please try again later.' },
+        };
+      }
+
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.BLOCK_USER, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(sanitizedRequest),
         });
       }
 
       // LocalStorage implementation
       const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
       
-      if (!blocked[request.blocker]) {
-        blocked[request.blocker] = [];
+      if (!blocked[sanitizedRequest.blocker]) {
+        blocked[sanitizedRequest.blocker] = [];
       }
       
-      if (!blocked[request.blocker].includes(request.blocked)) {
-        blocked[request.blocker].push(request.blocked);
+      if (!blocked[sanitizedRequest.blocker].includes(sanitizedRequest.blocked)) {
+        blocked[sanitizedRequest.blocker].push(sanitizedRequest.blocked);
         await storageService.setItem('panty_blocked', blocked);
       }
 
@@ -402,18 +572,31 @@ export class MessagesService {
    */
   async unblockUser(request: BlockUserRequest): Promise<ApiResponse<void>> {
     try {
+      // Validate and sanitize request
+      const validation = validateSchema(blockUserSchema, request);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: 'Invalid unblock request' },
+        };
+      }
+
+      const sanitizedRequest = validation.data!;
+
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.UNBLOCK_USER, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(sanitizedRequest),
         });
       }
 
       // LocalStorage implementation
       const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
       
-      if (blocked[request.blocker]) {
-        blocked[request.blocker] = blocked[request.blocker].filter(u => u !== request.blocked);
+      if (blocked[sanitizedRequest.blocker]) {
+        blocked[sanitizedRequest.blocker] = blocked[sanitizedRequest.blocker].filter(
+          u => u !== sanitizedRequest.blocked
+        );
         await storageService.setItem('panty_blocked', blocked);
       }
 
@@ -432,8 +615,16 @@ export class MessagesService {
    */
   async isBlocked(blocker: string, blocked: string): Promise<boolean> {
     try {
+      // Sanitize usernames
+      const sanitizedBlocker = sanitizeStrict(blocker);
+      const sanitizedBlocked = sanitizeStrict(blocked);
+      
+      if (!sanitizedBlocker || !sanitizedBlocked) {
+        return false;
+      }
+
       const blocks = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
-      return blocks[blocker]?.includes(blocked) || false;
+      return blocks[sanitizedBlocker]?.includes(sanitizedBlocked) || false;
     } catch (error) {
       console.error('Check blocked error:', error);
       return false;
@@ -445,10 +636,33 @@ export class MessagesService {
    */
   async reportUser(request: ReportUserRequest): Promise<ApiResponse<void>> {
     try {
+      // Validate and sanitize request
+      const validation = validateSchema(reportUserSchema, request);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: Object.values(validation.errors || {})[0] || 'Invalid report' },
+        };
+      }
+
+      const sanitizedRequest = validation.data!;
+
+      // Check rate limit for reporting
+      const rateLimitResult = this.rateLimiter.check(
+        `report_user_${sanitizedRequest.reporter}`,
+        { maxAttempts: 5, windowMs: 24 * 60 * 60 * 1000 } // 5 reports per day
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: 'Too many reports. Please try again tomorrow.' },
+        };
+      }
+
       if (FEATURES.USE_API_MESSAGES) {
         return await apiCall<void>(API_ENDPOINTS.MESSAGES.REPORT, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(sanitizedRequest),
         });
       }
 
@@ -457,13 +671,13 @@ export class MessagesService {
       
       const newReport = {
         id: uuidv4(),
-        reporter: request.reporter,
-        reportee: request.reportee,
-        reason: request.reason,
-        messages: request.messages || [],
+        reporter: sanitizedRequest.reporter,
+        reportee: sanitizedRequest.reportee,
+        reason: sanitizedRequest.reason,
+        messages: sanitizedRequest.messages || [],
         date: new Date().toISOString(),
         processed: false,
-        category: request.category || 'other',
+        category: sanitizedRequest.category || 'other',
       };
       
       reports.push(newReport);
@@ -472,12 +686,12 @@ export class MessagesService {
       // Mark as reported
       const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
       
-      if (!reported[request.reporter]) {
-        reported[request.reporter] = [];
+      if (!reported[sanitizedRequest.reporter]) {
+        reported[sanitizedRequest.reporter] = [];
       }
       
-      if (!reported[request.reporter].includes(request.reportee)) {
-        reported[request.reporter].push(request.reportee);
+      if (!reported[sanitizedRequest.reporter].includes(sanitizedRequest.reportee)) {
+        reported[sanitizedRequest.reporter].push(sanitizedRequest.reportee);
         await storageService.setItem('panty_reported', reported);
       }
 
@@ -496,8 +710,16 @@ export class MessagesService {
    */
   async hasReported(reporter: string, reportee: string): Promise<boolean> {
     try {
+      // Sanitize usernames
+      const sanitizedReporter = sanitizeStrict(reporter);
+      const sanitizedReportee = sanitizeStrict(reportee);
+      
+      if (!sanitizedReporter || !sanitizedReportee) {
+        return false;
+      }
+
       const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
-      return reported[reporter]?.includes(reportee) || false;
+      return reported[sanitizedReporter]?.includes(sanitizedReportee) || false;
     } catch (error) {
       console.error('Check reported error:', error);
       return false;
@@ -509,7 +731,13 @@ export class MessagesService {
    */
   async getUnreadCount(username: string): Promise<number> {
     try {
-      const threads = await this.getThreads(username);
+      // Sanitize username
+      const sanitizedUsername = sanitizeStrict(username);
+      if (!sanitizedUsername) {
+        return 0;
+      }
+
+      const threads = await this.getThreads(sanitizedUsername);
       if (!threads.success || !threads.data) return 0;
       
       return threads.data.reduce((total, thread) => total + thread.unreadCount, 0);
@@ -524,11 +752,17 @@ export class MessagesService {
    */
   async getMessageNotifications(username: string): Promise<MessageNotification[]> {
     try {
+      // Sanitize username
+      const sanitizedUsername = sanitizeStrict(username);
+      if (!sanitizedUsername) {
+        return [];
+      }
+
       const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>(
         'panty_message_notifications',
         {}
       );
-      return notifications[username] || [];
+      return notifications[sanitizedUsername] || [];
     } catch (error) {
       console.error('Get message notifications error:', error);
       return [];
@@ -540,16 +774,26 @@ export class MessagesService {
    */
   async clearMessageNotifications(seller: string, buyer: string): Promise<void> {
     try {
+      // Sanitize usernames
+      const sanitizedSeller = sanitizeStrict(seller);
+      const sanitizedBuyer = sanitizeStrict(buyer);
+      
+      if (!sanitizedSeller || !sanitizedBuyer) {
+        return;
+      }
+
       const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>(
         'panty_message_notifications',
         {}
       );
       
-      if (notifications[seller]) {
-        notifications[seller] = notifications[seller].filter(n => n.buyer !== buyer);
+      if (notifications[sanitizedSeller]) {
+        notifications[sanitizedSeller] = notifications[sanitizedSeller].filter(
+          n => n.buyer !== sanitizedBuyer
+        );
         
-        if (notifications[seller].length === 0) {
-          delete notifications[seller];
+        if (notifications[sanitizedSeller].length === 0) {
+          delete notifications[sanitizedSeller];
         }
         
         await storageService.setItem('panty_message_notifications', notifications);
@@ -563,19 +807,25 @@ export class MessagesService {
    * Subscribe to message updates (preparation for WebSocket)
    */
   subscribeToThread(threadId: string, callback: (message: Message) => void): () => void {
-    if (!this.messageListeners.has(threadId)) {
-      this.messageListeners.set(threadId, new Set());
+    // Sanitize thread ID
+    const sanitizedThreadId = sanitizeStrict(threadId);
+    if (!sanitizedThreadId) {
+      return () => {};
+    }
+
+    if (!this.messageListeners.has(sanitizedThreadId)) {
+      this.messageListeners.set(sanitizedThreadId, new Set());
     }
     
-    this.messageListeners.get(threadId)!.add(callback);
+    this.messageListeners.get(sanitizedThreadId)!.add(callback);
     
     // Return unsubscribe function
     return () => {
-      const listeners = this.messageListeners.get(threadId);
+      const listeners = this.messageListeners.get(sanitizedThreadId);
       if (listeners) {
         listeners.delete(callback);
         if (listeners.size === 0) {
-          this.messageListeners.delete(threadId);
+          this.messageListeners.delete(sanitizedThreadId);
         }
       }
     };
@@ -586,6 +836,32 @@ export class MessagesService {
    */
   async uploadAttachment(file: File): Promise<ApiResponse<MessageAttachment>> {
     try {
+      // Validate file
+      const fileValidation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      });
+
+      if (!fileValidation.valid) {
+        return {
+          success: false,
+          error: { message: fileValidation.error || 'Invalid file' },
+        };
+      }
+
+      // Check rate limit for uploads
+      const rateLimitResult = this.rateLimiter.check(
+        'IMAGE_UPLOAD',
+        RATE_LIMITS.IMAGE_UPLOAD
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: `Upload limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.` },
+        };
+      }
+
       // For now, convert to base64 for localStorage
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -594,7 +870,7 @@ export class MessagesService {
             id: uuidv4(),
             type: file.type.startsWith('image/') ? 'image' : 'file',
             url: e.target?.result as string,
-            name: file.name,
+            name: securityService.sanitizeForDisplay(file.name, { maxLength: 255 }),
             size: file.size,
             mimeType: file.type,
           };
@@ -616,11 +892,28 @@ export class MessagesService {
 
   // Helper methods
   private getConversationKey(userA: string, userB: string): string {
-    return [userA, userB].sort().join('-');
+    // Sanitize before creating key
+    const sanitizedUserA = sanitizeStrict(userA);
+    const sanitizedUserB = sanitizeStrict(userB);
+    return [sanitizedUserA, sanitizedUserB].sort().join('-');
   }
 
   private async getAllMessages(): Promise<{ [key: string]: Message[] }> {
-    return await storageService.getItem('panty_messages', {});
+    const messages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
+    
+    // Sanitize all messages when loading from storage
+    const sanitized: { [key: string]: Message[] } = {};
+    for (const [key, msgs] of Object.entries(messages)) {
+      sanitized[key] = msgs.map(msg => ({
+        ...msg,
+        content: securityService.sanitizeForDisplay(msg.content, { 
+          allowHtml: false,
+          maxLength: 1000 
+        }),
+      }));
+    }
+    
+    return sanitized;
   }
 
   private async updateMessageNotifications(
@@ -629,29 +922,36 @@ export class MessagesService {
     content: string
   ): Promise<void> {
     try {
+      const sanitizedSeller = sanitizeStrict(seller);
+      const sanitizedBuyer = sanitizeStrict(buyer);
+      const sanitizedContent = securityService.sanitizeForDisplay(content, {
+        allowHtml: false,
+        maxLength: 50,
+      });
+
       const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>(
         'panty_message_notifications',
         {}
       );
       
-      if (!notifications[seller]) {
-        notifications[seller] = [];
+      if (!notifications[sanitizedSeller]) {
+        notifications[sanitizedSeller] = [];
       }
       
-      const existingIndex = notifications[seller].findIndex(n => n.buyer === buyer);
+      const existingIndex = notifications[sanitizedSeller].findIndex(n => n.buyer === sanitizedBuyer);
       
       if (existingIndex >= 0) {
-        notifications[seller][existingIndex] = {
-          buyer,
-          messageCount: notifications[seller][existingIndex].messageCount + 1,
-          lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+        notifications[sanitizedSeller][existingIndex] = {
+          buyer: sanitizedBuyer,
+          messageCount: notifications[sanitizedSeller][existingIndex].messageCount + 1,
+          lastMessage: sanitizedContent + (content.length > 50 ? '...' : ''),
           timestamp: new Date().toISOString(),
         };
       } else {
-        notifications[seller].push({
-          buyer,
+        notifications[sanitizedSeller].push({
+          buyer: sanitizedBuyer,
           messageCount: 1,
-          lastMessage: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+          lastMessage: sanitizedContent + (content.length > 50 ? '...' : ''),
           timestamp: new Date().toISOString(),
         });
       }
@@ -702,7 +1002,7 @@ export class MessagesService {
   private async getThreadMetadata(threadId: string): Promise<{ [key: string]: any }> {
     try {
       const metadata = await storageService.getItem<any>('thread_metadata', {});
-      return metadata[threadId] || {};
+      return sanitizeObject(metadata[threadId] || {});
     } catch (error) {
       return {};
     }

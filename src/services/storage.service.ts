@@ -1,6 +1,9 @@
 // src/services/storage.service.ts
 
 import { FEATURES, ApiResponse } from './api.config';
+import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { z } from 'zod';
 
 /**
  * Enhanced Storage Service with transaction support and error recovery
@@ -15,10 +18,103 @@ interface StorageTransaction {
   backup: Map<string, string | null>;
 }
 
+// Constants for security limits
+const STORAGE_LIMITS = {
+  MAX_KEY_LENGTH: 100,
+  MAX_VALUE_SIZE: 1 * 1024 * 1024, // 1MB per value
+  MAX_TOTAL_SIZE: 5 * 1024 * 1024, // 5MB total
+  MAX_KEYS: 1000,
+  MAX_BATCH_SIZE: 50,
+  ALLOWED_KEY_PATTERN: /^[a-zA-Z0-9_-]+$/,
+  RESERVED_PREFIXES: ['system_', 'internal_'],
+  // Allow these specific system keys that the app uses
+  ALLOWED_SYSTEM_KEYS: ['__walletMockDataCleared__', '__lastSyncTime__', '__initialized__', 'currentUser', 'session_fingerprint', 'auth_token', 'refresh_token', 'auth_token_data', 'panty_custom_requests'],
+};
+
+// Validation schemas
+const storageKeySchema = z.string()
+  .min(1, 'Key cannot be empty')
+  .max(STORAGE_LIMITS.MAX_KEY_LENGTH, `Key cannot exceed ${STORAGE_LIMITS.MAX_KEY_LENGTH} characters`)
+  .regex(STORAGE_LIMITS.ALLOWED_KEY_PATTERN, 'Key contains invalid characters')
+  .refine(key => {
+    // Allow specific system keys
+    if (STORAGE_LIMITS.ALLOWED_SYSTEM_KEYS.includes(key)) {
+      return true;
+    }
+    // Otherwise check for reserved prefixes
+    return !STORAGE_LIMITS.RESERVED_PREFIXES.some(prefix => key.startsWith(prefix));
+  }, {
+    message: 'Key uses reserved prefix'
+  });
+
 export class StorageService {
   private static transactionInProgress = false;
   private static operationQueue: Array<() => Promise<void>> = [];
   private static isProcessingQueue = false;
+  private rateLimiter = getRateLimiter();
+  // Track auth-related operations separately with more lenient limits
+  private static authOperationCount = 0;
+  private static authOperationResetTime = 0;
+
+  /**
+   * Validate storage key
+   */
+  private validateKey(key: string): string {
+    const result = storageKeySchema.safeParse(key);
+    if (!result.success) {
+      throw new Error(`Invalid storage key: ${result.error.errors[0]?.message}`);
+    }
+    return sanitizeStrict(result.data);
+  }
+
+  /**
+   * Check if value size is within limits
+   */
+  private validateValueSize(value: any): void {
+    const serialized = JSON.stringify(value);
+    if (serialized.length > STORAGE_LIMITS.MAX_VALUE_SIZE) {
+      throw new Error(`Value size exceeds limit of ${STORAGE_LIMITS.MAX_VALUE_SIZE / 1024}KB`);
+    }
+  }
+
+  /**
+   * Check storage quota before writing
+   */
+  private async checkStorageQuota(): Promise<void> {
+    const info = await this.getStorageInfo();
+    if (info.percentage > 90) {
+      throw new Error('Storage quota exceeded (90% full)');
+    }
+  }
+
+  /**
+   * Check if this is an auth-related operation
+   */
+  private isAuthOperation(key: string): boolean {
+    const authKeys = ['currentUser', 'auth_token', 'refresh_token', 'auth_token_data', 'session_fingerprint'];
+    return authKeys.includes(key);
+  }
+
+  /**
+   * Check rate limit for auth operations (more lenient)
+   */
+  private checkAuthRateLimit(): boolean {
+    const now = Date.now();
+    
+    // Reset counter every minute
+    if (now - StorageService.authOperationResetTime > 60000) {
+      StorageService.authOperationCount = 0;
+      StorageService.authOperationResetTime = now;
+    }
+    
+    // Allow up to 50 auth operations per minute (very lenient)
+    if (StorageService.authOperationCount >= 50) {
+      return false;
+    }
+    
+    StorageService.authOperationCount++;
+    return true;
+  }
 
   /**
    * Execute a function with retry logic
@@ -71,7 +167,25 @@ export class StorageService {
   /**
    * Queue an operation to prevent race conditions
    */
-  private async queueOperation<T>(operation: () => Promise<T>): Promise<T> {
+  private async queueOperation<T>(operation: () => Promise<T>, key?: string): Promise<T> {
+    // For auth operations, use more lenient rate limiting
+    if (key && this.isAuthOperation(key)) {
+      if (!this.checkAuthRateLimit()) {
+        throw new Error('Auth operation rate limit exceeded. Please wait a moment.');
+      }
+    } else {
+      // Check rate limit for non-auth storage operations
+      const rateLimitResult = this.rateLimiter.check('API_CALL', {
+        ...RATE_LIMITS.API_CALL,
+        maxAttempts: 200, // More lenient for storage operations
+        windowMs: 60 * 1000 // 1 minute window
+      });
+      
+      if (!rateLimitResult.allowed) {
+        throw new Error(`Rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`);
+      }
+    }
+
     return new Promise((resolve, reject) => {
       StorageService.operationQueue.push(async () => {
         try {
@@ -92,11 +206,14 @@ export class StorageService {
    */
   async getItem<T>(key: string, defaultValue: T): Promise<T> {
     try {
+      // Validate key
+      const validatedKey = this.validateKey(key);
+
       if (FEATURES.USE_MOCK_API) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      const item = await this.withRetry(() => localStorage.getItem(key));
+      const item = await this.withRetry(() => localStorage.getItem(validatedKey));
       
       if (item === null) {
         return defaultValue;
@@ -105,15 +222,18 @@ export class StorageService {
       try {
         const parsed = JSON.parse(item);
         
+        // Sanitize the retrieved data
+        const sanitized = this.sanitizeStoredData(parsed);
+        
         // Validate the parsed data matches expected type structure
-        if (this.isValidData(parsed, defaultValue)) {
-          return parsed as T;
+        if (this.isValidData(sanitized, defaultValue)) {
+          return sanitized as T;
         } else {
-          console.warn(`Invalid data structure for key "${key}", using default`);
+          console.warn(`Invalid data structure for key "${validatedKey}", using default`);
           return defaultValue;
         }
       } catch (parseError) {
-        console.error(`Error parsing item "${key}":`, parseError);
+        console.error(`Error parsing item "${validatedKey}":`, parseError);
         
         // Try to parse as number for backward compatibility
         if (typeof defaultValue === 'number' && !isNaN(Number(item))) {
@@ -134,6 +254,15 @@ export class StorageService {
   async setItem<T>(key: string, value: T): Promise<boolean> {
     return this.queueOperation(async () => {
       try {
+        // Validate key
+        const validatedKey = this.validateKey(key);
+        
+        // Validate value size
+        this.validateValueSize(value);
+        
+        // Check storage quota
+        await this.checkStorageQuota();
+
         if (FEATURES.USE_MOCK_API) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
@@ -141,10 +270,10 @@ export class StorageService {
         const serialized = JSON.stringify(value);
         
         await this.withRetry(() => {
-          localStorage.setItem(key, serialized);
+          localStorage.setItem(validatedKey, serialized);
           
           // Verify write was successful
-          const verification = localStorage.getItem(key);
+          const verification = localStorage.getItem(validatedKey);
           if (verification !== serialized) {
             throw new Error('Storage write verification failed');
           }
@@ -155,7 +284,7 @@ export class StorageService {
         console.error(`Error setting item "${key}" in storage:`, error);
         return false;
       }
-    });
+    }, key);
   }
 
   /**
@@ -164,17 +293,20 @@ export class StorageService {
   async removeItem(key: string): Promise<boolean> {
     return this.queueOperation(async () => {
       try {
+        // Validate key
+        const validatedKey = this.validateKey(key);
+
         if (FEATURES.USE_MOCK_API) {
           await new Promise(resolve => setTimeout(resolve, 20));
         }
 
-        await this.withRetry(() => localStorage.removeItem(key));
+        await this.withRetry(() => localStorage.removeItem(validatedKey));
         return true;
       } catch (error) {
         console.error(`Error removing item "${key}" from storage:`, error);
         return false;
       }
-    });
+    }, key);
   }
 
   /**
@@ -198,6 +330,17 @@ export class StorageService {
    */
   async commitTransaction(transaction: StorageTransaction): Promise<boolean> {
     try {
+      // Validate all operations first
+      for (const op of transaction.operations) {
+        this.validateKey(op.key);
+        if (op.type === 'set' && op.value !== undefined) {
+          this.validateValueSize(op.value);
+        }
+      }
+
+      // Check storage quota
+      await this.checkStorageQuota();
+
       // Backup current values
       for (const op of transaction.operations) {
         if (op.type === 'set' || op.type === 'remove') {
@@ -252,19 +395,22 @@ export class StorageService {
   ): Promise<boolean> {
     return this.queueOperation(async () => {
       try {
-        const current = await this.getItem<T | null>(key, null);
+        // Validate key
+        const validatedKey = this.validateKey(key);
+        
+        const current = await this.getItem<T | null>(validatedKey, null);
         
         if (current === null) {
-          return await this.setItem(key, updates as T);
+          return await this.setItem(validatedKey, updates as T);
         }
 
         const updated = { ...current, ...updates };
-        return await this.setItem(key, updated);
+        return await this.setItem(validatedKey, updated);
       } catch (error) {
         console.error(`Error updating item "${key}" in storage:`, error);
         return false;
       }
-    });
+    }, key);
   }
 
   /**
@@ -272,15 +418,31 @@ export class StorageService {
    */
   async getKeys(pattern?: string): Promise<string[]> {
     try {
+      // Validate and sanitize pattern to prevent regex injection
+      const sanitizedPattern = pattern ? sanitizeStrict(pattern).substring(0, 50) : undefined;
+      
       if (FEATURES.USE_MOCK_API) {
         await new Promise(resolve => setTimeout(resolve, 20));
       }
 
       const keys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
+      const totalKeys = localStorage.length;
+      
+      // Limit the number of keys to prevent DoS
+      if (totalKeys > STORAGE_LIMITS.MAX_KEYS) {
+        console.warn(`Storage contains ${totalKeys} keys, limiting to ${STORAGE_LIMITS.MAX_KEYS}`);
+      }
+
+      for (let i = 0; i < Math.min(totalKeys, STORAGE_LIMITS.MAX_KEYS); i++) {
         const key = localStorage.key(i);
-        if (key && (!pattern || key.includes(pattern))) {
-          keys.push(key);
+        if (key && (!sanitizedPattern || key.includes(sanitizedPattern))) {
+          // Only return keys that pass validation
+          try {
+            this.validateKey(key);
+            keys.push(key);
+          } catch {
+            // Skip invalid keys
+          }
         }
       }
       return keys;
@@ -295,11 +457,14 @@ export class StorageService {
    */
   async hasKey(key: string): Promise<boolean> {
     try {
+      // Validate key
+      const validatedKey = this.validateKey(key);
+
       if (FEATURES.USE_MOCK_API) {
         await new Promise(resolve => setTimeout(resolve, 10));
       }
 
-      return localStorage.getItem(key) !== null;
+      return localStorage.getItem(validatedKey) !== null;
     } catch (error) {
       console.error(`Error checking if key "${key}" exists:`, error);
       return false;
@@ -312,14 +477,17 @@ export class StorageService {
   async clear(preserveKeys?: string[]): Promise<boolean> {
     return this.queueOperation(async () => {
       try {
+        // Validate preserve keys
+        const validatedPreserveKeys = preserveKeys?.map(key => this.validateKey(key));
+
         if (FEATURES.USE_MOCK_API) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        if (preserveKeys && preserveKeys.length > 0) {
+        if (validatedPreserveKeys && validatedPreserveKeys.length > 0) {
           // Preserve specified keys
           const preserved: { [key: string]: any } = {};
-          for (const key of preserveKeys) {
+          for (const key of validatedPreserveKeys) {
             const value = localStorage.getItem(key);
             if (value !== null) {
               preserved[key] = value;
@@ -364,17 +532,20 @@ export class StorageService {
 
       // Fallback calculation
       let totalSize = 0;
-      for (let i = 0; i < localStorage.length; i++) {
+      let keyCount = 0;
+      
+      for (let i = 0; i < localStorage.length && i < STORAGE_LIMITS.MAX_KEYS; i++) {
         const key = localStorage.key(i);
         if (key) {
           totalSize += key.length + (localStorage.getItem(key) || '').length;
+          keyCount++;
         }
       }
 
       return {
         used: totalSize,
-        quota: 5 * 1024 * 1024, // 5MB estimate
-        percentage: (totalSize / (5 * 1024 * 1024)) * 100,
+        quota: STORAGE_LIMITS.MAX_TOTAL_SIZE,
+        percentage: (totalSize / STORAGE_LIMITS.MAX_TOTAL_SIZE) * 100,
       };
     } catch (error) {
       console.error('Error getting storage info:', error);
@@ -386,6 +557,11 @@ export class StorageService {
    * Batch set multiple items atomically
    */
   async batchSet(items: Array<{ key: string; value: any }>): Promise<boolean> {
+    // Limit batch size to prevent DoS
+    if (items.length > STORAGE_LIMITS.MAX_BATCH_SIZE) {
+      throw new Error(`Batch size exceeds limit of ${STORAGE_LIMITS.MAX_BATCH_SIZE} items`);
+    }
+
     const transaction = this.beginTransaction();
     
     for (const item of items) {
@@ -441,15 +617,63 @@ export class StorageService {
   }
 
   /**
+   * Sanitize data retrieved from storage
+   */
+  private sanitizeStoredData(data: any): any {
+    if (data === null || data === undefined) {
+      return data;
+    }
+
+    if (typeof data === 'string') {
+      return sanitizeStrict(data);
+    }
+
+    if (typeof data === 'object') {
+      return sanitizeObject(data, {
+        maxDepth: 10,
+        keySanitizer: (key) => sanitizeStrict(key),
+        valueSanitizer: (value) => {
+          if (typeof value === 'string') {
+            return sanitizeStrict(value);
+          }
+          return value;
+        },
+      });
+    }
+
+    return data;
+  }
+
+  /**
    * Export all wallet data for backup
    */
   async exportWalletData(): Promise<any> {
+    // Check rate limit for export operations
+    const rateLimitResult = this.rateLimiter.check('API_CALL', {
+      maxAttempts: 5,
+      windowMs: 60 * 60 * 1000 // 5 exports per hour
+    });
+    if (!rateLimitResult.allowed) {
+      throw new Error(`Export rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`);
+    }
+
     const walletKeys = await this.getKeys('wallet_');
     const data: any = {};
+    
+    // Limit export size
+    let exportSize = 0;
+    const maxExportSize = 2 * 1024 * 1024; // 2MB limit for exports
     
     for (const key of walletKeys) {
       const value = await this.getItem(key, null);
       if (value !== null) {
+        const serialized = JSON.stringify(value);
+        exportSize += serialized.length;
+        
+        if (exportSize > maxExportSize) {
+          throw new Error('Export size exceeds 2MB limit');
+        }
+        
         data[key] = value;
       }
     }
@@ -462,10 +686,46 @@ export class StorageService {
    */
   async importWalletData(data: any): Promise<boolean> {
     try {
-      const items = Object.entries(data).map(([key, value]) => ({
-        key,
-        value
-      }));
+      // Validate import data structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid import data format');
+      }
+
+      // Check rate limit for import operations
+      const rateLimitResult = this.rateLimiter.check('API_CALL', {
+        maxAttempts: 3,
+        windowMs: 60 * 60 * 1000 // 3 imports per hour
+      });
+      if (!rateLimitResult.allowed) {
+        throw new Error(`Import rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`);
+      }
+
+      // Validate and sanitize all keys and values
+      const items: Array<{ key: string; value: any }> = [];
+      
+      for (const [key, value] of Object.entries(data)) {
+        // Only allow wallet_ prefixed keys
+        if (!key.startsWith('wallet_')) {
+          console.warn(`Skipping non-wallet key during import: ${key}`);
+          continue;
+        }
+        
+        try {
+          const validatedKey = this.validateKey(key);
+          const sanitizedValue = this.sanitizeStoredData(value);
+          
+          items.push({
+            key: validatedKey,
+            value: sanitizedValue
+          });
+        } catch (error) {
+          console.error(`Failed to import key "${key}":`, error);
+        }
+      }
+      
+      if (items.length === 0) {
+        throw new Error('No valid data to import');
+      }
       
       return await this.batchSet(items);
     } catch (error) {

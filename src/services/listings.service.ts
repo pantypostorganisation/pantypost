@@ -5,6 +5,10 @@ import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { v4 as uuidv4 } from 'uuid';
 import type { ListingDraft } from '@/types/myListings';
+import { securityService, sanitize } from './security.service';
+import { listingSchemas, financialSchemas } from '@/utils/validation/schemas';
+import { z } from 'zod';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export interface CreateListingRequest {
   title: string;
@@ -67,6 +71,49 @@ export interface PopularTag {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const VIEW_CACHE_DURATION = 30 * 1000; // 30 seconds
 
+// Validation schemas for the service
+const createListingRequestSchema = z.object({
+  title: listingSchemas.title,
+  description: listingSchemas.description,
+  price: z.number().positive().min(0.01).max(10000),
+  imageUrls: z.array(z.string().url()).min(1).max(10),
+  seller: z.string().min(1).max(30),
+  isVerified: z.boolean().optional(),
+  isPremium: z.boolean().optional(),
+  tags: z.array(z.string().max(30)).max(10).optional(),
+  hoursWorn: z.number().min(0).max(720).optional(), // Max 30 days
+  auction: z.object({
+    startingPrice: z.number().positive().min(0.01).max(10000),
+    reservePrice: z.number().positive().min(0.01).max(10000).optional(),
+    endTime: z.string().datetime(),
+  }).optional(),
+});
+
+const updateListingRequestSchema = z.object({
+  title: listingSchemas.title.optional(),
+  description: listingSchemas.description.optional(),
+  price: z.number().positive().min(0.01).max(10000).optional(),
+  imageUrls: z.array(z.string().url()).min(1).max(10).optional(),
+  isPremium: z.boolean().optional(),
+  tags: z.array(z.string().max(30)).max(10).optional(),
+  hoursWorn: z.number().min(0).max(720).optional(),
+});
+
+const searchParamsSchema = z.object({
+  query: z.string().max(100).optional(),
+  seller: z.string().max(30).optional(),
+  minPrice: z.number().min(0).optional(),
+  maxPrice: z.number().positive().max(100000).optional(),
+  tags: z.array(z.string().max(30)).optional(),
+  isPremium: z.boolean().optional(),
+  isAuction: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  sortBy: z.enum(['date', 'price', 'views', 'endingSoon']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+  page: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
 /**
  * Listings Service
  * Handles all listing-related operations with caching and error handling
@@ -83,12 +130,50 @@ export class ListingsService {
     timestamp: 0,
   };
 
+  private rateLimiter = getRateLimiter();
+
   /**
    * Get all listings with optional filtering
    */
   async getListings(params?: ListingSearchParams): Promise<ApiResponse<Listing[]>> {
     try {
       console.log('[ListingsService] Getting listings with params:', params);
+
+      // Validate and sanitize search parameters
+      if (params) {
+        const validation = securityService.validateAndSanitize(
+          params,
+          searchParamsSchema,
+          {
+            query: sanitize.searchQuery,
+            seller: sanitize.username,
+            tags: (tags: string[]) => tags?.map(tag => sanitize.strict(tag))
+          }
+        );
+
+        if (!validation.success) {
+          return {
+            success: false,
+            error: { message: 'Invalid search parameters', details: validation.errors }
+          };
+        }
+
+        params = validation.data as ListingSearchParams;
+      }
+
+      // Rate limiting for search operations
+      if (params?.query) {
+        const rateLimitResult = this.rateLimiter.check('SEARCH', RATE_LIMITS.SEARCH);
+        if (!rateLimitResult.allowed) {
+          return {
+            success: false,
+            error: { 
+              message: `Too many search requests. Please wait ${rateLimitResult.waitTime} seconds.`,
+              code: 'RATE_LIMIT_EXCEEDED'
+            }
+          };
+        }
+      }
 
       if (FEATURES.USE_API_LISTINGS) {
         const queryParams = new URLSearchParams();
@@ -169,61 +254,69 @@ export class ListingsService {
 
         if (params.seller) {
           const beforeSellerCount = filteredListings.length;
+          const sellerFilter = params.seller; // Store in const to fix TS issue
           filteredListings = filteredListings.filter(
-            listing => listing.seller === params.seller
+            listing => listing.seller === sellerFilter
           );
           console.log(`[ListingsService] Seller filter "${params.seller}": ${beforeSellerCount} -> ${filteredListings.length}`);
         }
 
         if (params.minPrice !== undefined) {
           const beforeMinPriceCount = filteredListings.length;
+          const minPrice = params.minPrice; // Store in const to fix TS issue
           filteredListings = filteredListings.filter(listing => {
             const price = listing.auction?.highestBid || listing.price;
-            return price >= params.minPrice!;
+            return price >= minPrice;
           });
           console.log(`[ListingsService] Min price filter ${params.minPrice}: ${beforeMinPriceCount} -> ${filteredListings.length}`);
         }
 
         if (params.maxPrice !== undefined) {
           const beforeMaxPriceCount = filteredListings.length;
+          const maxPrice = params.maxPrice; // Store in const to fix TS issue
           filteredListings = filteredListings.filter(listing => {
             const price = listing.auction?.highestBid || listing.price;
-            return price <= params.maxPrice!;
+            return price <= maxPrice;
           });
           console.log(`[ListingsService] Max price filter ${params.maxPrice}: ${beforeMaxPriceCount} -> ${filteredListings.length}`);
         }
 
         if (params.tags && params.tags.length > 0) {
           const beforeTagsCount = filteredListings.length;
+          const tagsFilter = params.tags; // Store in const to fix TS issue
           filteredListings = filteredListings.filter(listing =>
-            listing.tags?.some(tag => params.tags!.includes(tag))
+            listing.tags?.some(tag => tagsFilter.includes(tag))
           );
           console.log(`[ListingsService] Tags filter: ${beforeTagsCount} -> ${filteredListings.length}`);
         }
 
         if (params.isPremium !== undefined) {
           const beforePremiumCount = filteredListings.length;
+          const isPremiumFilter = params.isPremium; // Store in const to fix TS issue
           filteredListings = filteredListings.filter(
-            listing => listing.isPremium === params.isPremium
+            listing => listing.isPremium === isPremiumFilter
           );
           console.log(`[ListingsService] Premium filter ${params.isPremium}: ${beforePremiumCount} -> ${filteredListings.length}`);
         }
 
         if (params.isAuction !== undefined) {
           const beforeAuctionCount = filteredListings.length;
+          const isAuctionFilter = params.isAuction; // Store in const to fix TS issue
           filteredListings = filteredListings.filter(
-            listing => (params.isAuction ? !!listing.auction : !listing.auction)
+            listing => (isAuctionFilter ? !!listing.auction : !listing.auction)
           );
           console.log(`[ListingsService] Auction filter ${params.isAuction}: ${beforeAuctionCount} -> ${filteredListings.length}`);
         }
 
         // Sorting
         if (params.sortBy) {
-          console.log(`[ListingsService] Sorting by ${params.sortBy} ${params.sortOrder || 'asc'}`);
+          const sortBy = params.sortBy; // Store in const to fix TS issue
+          const sortOrder = params.sortOrder || 'asc'; // Store in const with default
+          console.log(`[ListingsService] Sorting by ${sortBy} ${sortOrder}`);
           filteredListings.sort((a, b) => {
             let compareValue = 0;
             
-            switch (params.sortBy) {
+            switch (sortBy) {
               case 'date':
                 compareValue = new Date(b.date).getTime() - new Date(a.date).getTime();
                 break;
@@ -248,7 +341,7 @@ export class ListingsService {
                 break;
             }
 
-            return params.sortOrder === 'desc' ? -compareValue : compareValue;
+            return sortOrder === 'desc' ? -compareValue : compareValue;
           });
         }
 
@@ -294,15 +387,24 @@ export class ListingsService {
    */
   async getListing(id: string): Promise<ApiResponse<Listing | null>> {
     try {
+      // Sanitize ID
+      const sanitizedId = sanitize.strict(id);
+      if (!sanitizedId || sanitizedId.length !== 36) { // UUID length
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id })
+          buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: sanitizedId })
         );
       }
 
       // Try cache first
       if (this.listingsCache.data) {
-        const cachedListing = this.listingsCache.data.find(l => l.id === id);
+        const cachedListing = this.listingsCache.data.find(l => l.id === sanitizedId);
         if (cachedListing) {
           return {
             success: true,
@@ -313,7 +415,7 @@ export class ListingsService {
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === id);
+      const listing = listings.find(l => l.id === sanitizedId);
 
       return {
         success: true,
@@ -333,14 +435,23 @@ export class ListingsService {
    */
   async getListingsBySeller(username: string): Promise<ApiResponse<Listing[]>> {
     try {
+      // Sanitize username
+      const sanitizedUsername = sanitize.username(username);
+      if (!sanitizedUsername) {
+        return {
+          success: false,
+          error: { message: 'Invalid username' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing[]>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.BY_SELLER, { username })
+          buildApiUrl(API_ENDPOINTS.LISTINGS.BY_SELLER, { username: sanitizedUsername })
         );
       }
 
       // LocalStorage implementation
-      return this.getListings({ seller: username });
+      return this.getListings({ seller: sanitizedUsername });
     } catch (error) {
       console.error('Get listings by seller error:', error);
       return {
@@ -357,10 +468,54 @@ export class ListingsService {
     try {
       console.log('[ListingsService] Creating listing:', request);
 
+      // Rate limiting for listing creation
+      const rateLimitResult = this.rateLimiter.check('LISTING_CREATE', RATE_LIMITS.LISTING_CREATE);
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { 
+            message: `Too many listing creation attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+            code: 'RATE_LIMIT_EXCEEDED'
+          }
+        };
+      }
+
+      // Validate and sanitize the request
+      const validation = securityService.validateAndSanitize(
+        request,
+        createListingRequestSchema,
+        {
+          title: sanitize.strict,
+          description: sanitize.strict,
+          seller: sanitize.username,
+          tags: (tags: string[]) => tags?.map(tag => sanitize.strict(tag))
+        }
+      );
+
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing data', details: validation.errors }
+        };
+      }
+
+      const sanitizedRequest = validation.data as CreateListingRequest;
+
+      // Validate image URLs
+      for (const imageUrl of sanitizedRequest.imageUrls) {
+        const sanitizedUrl = sanitize.url(imageUrl);
+        if (!sanitizedUrl) {
+          return {
+            success: false,
+            error: { message: 'Invalid image URL detected' }
+          };
+        }
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing>(API_ENDPOINTS.LISTINGS.CREATE, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(sanitizedRequest),
         });
       }
 
@@ -370,22 +525,22 @@ export class ListingsService {
       
       const newListing: Listing = {
         id: uuidv4(),
-        title: request.title,
-        description: request.description,
-        price: request.price,
-        markedUpPrice: Math.round(request.price * 1.1 * 100) / 100,
-        imageUrls: request.imageUrls || [],
+        title: sanitizedRequest.title,
+        description: sanitizedRequest.description,
+        price: sanitizedRequest.price,
+        markedUpPrice: Math.round(sanitizedRequest.price * 1.1 * 100) / 100,
+        imageUrls: sanitizedRequest.imageUrls || [],
         date: new Date().toISOString(),
-        seller: request.seller,
-        isVerified: request.isVerified || false,
-        isPremium: request.isPremium || false,
-        tags: request.tags || [],
-        hoursWorn: request.hoursWorn,
-        auction: request.auction ? {
+        seller: sanitizedRequest.seller,
+        isVerified: sanitizedRequest.isVerified || false,
+        isPremium: sanitizedRequest.isPremium || false,
+        tags: sanitizedRequest.tags || [],
+        hoursWorn: sanitizedRequest.hoursWorn,
+        auction: sanitizedRequest.auction ? {
           isAuction: true,
-          startingPrice: request.auction.startingPrice,
-          reservePrice: request.auction.reservePrice,
-          endTime: request.auction.endTime,
+          startingPrice: sanitizedRequest.auction.startingPrice,
+          reservePrice: sanitizedRequest.auction.reservePrice,
+          endTime: sanitizedRequest.auction.endTime,
           bids: [],
           highestBid: undefined,
           highestBidder: undefined,
@@ -436,19 +591,61 @@ export class ListingsService {
     updates: UpdateListingRequest
   ): Promise<ApiResponse<Listing>> {
     try {
+      // Sanitize ID
+      const sanitizedId = sanitize.strict(id);
+      if (!sanitizedId || sanitizedId.length !== 36) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
+      // Validate and sanitize updates
+      const validation = securityService.validateAndSanitize(
+        updates,
+        updateListingRequestSchema,
+        {
+          title: sanitize.strict,
+          description: sanitize.strict,
+          tags: (tags: string[]) => tags?.map(tag => sanitize.strict(tag))
+        }
+      );
+
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: 'Invalid update data', details: validation.errors }
+        };
+      }
+
+      const sanitizedUpdates = validation.data as UpdateListingRequest;
+
+      // Validate image URLs if provided
+      if (sanitizedUpdates.imageUrls) {
+        for (const imageUrl of sanitizedUpdates.imageUrls) {
+          const sanitizedUrl = sanitize.url(imageUrl);
+          if (!sanitizedUrl) {
+            return {
+              success: false,
+              error: { message: 'Invalid image URL detected' }
+            };
+          }
+        }
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.UPDATE, { id }),
+          buildApiUrl(API_ENDPOINTS.LISTINGS.UPDATE, { id: sanitizedId }),
           {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            body: JSON.stringify(sanitizedUpdates),
           }
         );
       }
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const index = listings.findIndex(l => l.id === id);
+      const index = listings.findIndex(l => l.id === sanitizedId);
 
       if (index === -1) {
         return {
@@ -459,9 +656,9 @@ export class ListingsService {
 
       const updatedListing = {
         ...listings[index],
-        ...updates,
-        markedUpPrice: updates.price
-          ? Math.round(updates.price * 1.1 * 100) / 100
+        ...sanitizedUpdates,
+        markedUpPrice: sanitizedUpdates.price
+          ? Math.round(sanitizedUpdates.price * 1.1 * 100) / 100
           : listings[index].markedUpPrice,
       };
 
@@ -491,9 +688,18 @@ export class ListingsService {
     try {
       console.log('[ListingsService] Deleting listing:', id);
 
+      // Sanitize ID
+      const sanitizedId = sanitize.strict(id);
+      if (!sanitizedId || sanitizedId.length !== 36) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.DELETE, { id }),
+          buildApiUrl(API_ENDPOINTS.LISTINGS.DELETE, { id: sanitizedId }),
           { method: 'DELETE' }
         );
       }
@@ -501,13 +707,13 @@ export class ListingsService {
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
       const beforeCount = listings.length;
-      const filtered = listings.filter(l => l.id !== id);
+      const filtered = listings.filter(l => l.id !== sanitizedId);
       const afterCount = filtered.length;
       
       console.log(`[ListingsService] Delete listing: ${beforeCount} -> ${afterCount} listings`);
       
       if (beforeCount === afterCount) {
-        console.warn(`[ListingsService] Listing ${id} was not found in storage`);
+        console.warn(`[ListingsService] Listing ${sanitizedId} was not found in storage`);
       }
       
       await storageService.setItem('listings', filtered);
@@ -528,7 +734,7 @@ export class ListingsService {
       // Trigger a custom event to notify other components
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('listingDeleted', { 
-          detail: { listingId: id } 
+          detail: { listingId: sanitizedId } 
         }));
         
         // Also trigger storage event manually for cross-tab sync
@@ -554,10 +760,44 @@ export class ListingsService {
    */
   async bulkUpdateListings(request: BulkUpdateRequest): Promise<ApiResponse<Listing[]>> {
     try {
+      // Validate listing IDs
+      for (const id of request.listingIds) {
+        const sanitizedId = sanitize.strict(id);
+        if (!sanitizedId || sanitizedId.length !== 36) {
+          return {
+            success: false,
+            error: { message: 'Invalid listing ID in bulk update' }
+          };
+        }
+      }
+
+      // Validate and sanitize updates
+      const validation = securityService.validateAndSanitize(
+        request.updates,
+        updateListingRequestSchema,
+        {
+          title: sanitize.strict,
+          description: sanitize.strict,
+          tags: (tags: string[]) => tags?.map(tag => sanitize.strict(tag))
+        }
+      );
+
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: 'Invalid update data', details: validation.errors }
+        };
+      }
+
+      const sanitizedUpdates = validation.data as UpdateListingRequest;
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing[]>(`${API_ENDPOINTS.LISTINGS.LIST}/bulk`, {
           method: 'PATCH',
-          body: JSON.stringify(request),
+          body: JSON.stringify({
+            listingIds: request.listingIds,
+            updates: sanitizedUpdates
+          }),
         });
       }
 
@@ -569,9 +809,9 @@ export class ListingsService {
         if (request.listingIds.includes(listing.id)) {
           const updatedListing = {
             ...listing,
-            ...request.updates,
-            markedUpPrice: request.updates.price
-              ? Math.round(request.updates.price * 1.1 * 100) / 100
+            ...sanitizedUpdates,
+            markedUpPrice: sanitizedUpdates.price
+              ? Math.round(sanitizedUpdates.price * 1.1 * 100) / 100
               : listing.markedUpPrice,
           };
           listings[index] = updatedListing;
@@ -606,19 +846,50 @@ export class ListingsService {
     amount: number
   ): Promise<ApiResponse<Listing>> {
     try {
+      // Sanitize inputs
+      const sanitizedId = sanitize.strict(listingId);
+      const sanitizedBidder = sanitize.username(bidder);
+      
+      if (!sanitizedId || sanitizedId.length !== 36) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
+      if (!sanitizedBidder) {
+        return {
+          success: false,
+          error: { message: 'Invalid bidder username' }
+        };
+      }
+
+      // Validate bid amount
+      const amountValidation = securityService.validateAmount(amount, {
+        min: 0.01,
+        max: 10000
+      });
+
+      if (!amountValidation.valid) {
+        return {
+          success: false,
+          error: { message: amountValidation.error || 'Invalid bid amount' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing>(
-          `${buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: listingId })}/bids`,
+          `${buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: sanitizedId })}/bids`,
           {
             method: 'POST',
-            body: JSON.stringify({ bidder, amount }),
+            body: JSON.stringify({ bidder: sanitizedBidder, amount: amountValidation.value }),
           }
         );
       }
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === listingId);
+      const listing = listings.find(l => l.id === sanitizedId);
 
       if (!listing || !listing.auction) {
         return {
@@ -653,14 +924,14 @@ export class ListingsService {
 
       const newBid: Bid = {
         id: uuidv4(),
-        bidder,
-        amount,
+        bidder: sanitizedBidder,
+        amount: amountValidation.value!,
         date: new Date().toISOString(),
       };
 
       listing.auction.bids.push(newBid);
-      listing.auction.highestBid = amount;
-      listing.auction.highestBidder = bidder;
+      listing.auction.highestBid = amountValidation.value;
+      listing.auction.highestBidder = sanitizedBidder;
 
       await storageService.setItem('listings', listings);
 
@@ -685,16 +956,25 @@ export class ListingsService {
    */
   async cancelAuction(listingId: string): Promise<ApiResponse<Listing>> {
     try {
+      // Sanitize ID
+      const sanitizedId = sanitize.strict(listingId);
+      if (!sanitizedId || sanitizedId.length !== 36) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing>(
-          `${buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: listingId })}/auction/cancel`,
+          `${buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: sanitizedId })}/auction/cancel`,
           { method: 'POST' }
         );
       }
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === listingId);
+      const listing = listings.find(l => l.id === sanitizedId);
 
       if (!listing || !listing.auction) {
         return {
@@ -727,12 +1007,23 @@ export class ListingsService {
    */
   async updateViews(update: ListingViewUpdate): Promise<ApiResponse<void>> {
     try {
+      // Sanitize inputs
+      const sanitizedId = sanitize.strict(update.listingId);
+      const sanitizedViewerId = update.viewerId ? sanitize.username(update.viewerId) : undefined;
+
+      if (!sanitizedId || sanitizedId.length !== 36) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.VIEWS, { id: update.listingId }),
+          buildApiUrl(API_ENDPOINTS.LISTINGS.VIEWS, { id: sanitizedId }),
           {
             method: 'POST',
-            body: JSON.stringify({ viewerId: update.viewerId }),
+            body: JSON.stringify({ viewerId: sanitizedViewerId }),
           }
         );
       }
@@ -743,11 +1034,11 @@ export class ListingsService {
         {}
       );
       
-      viewsData[update.listingId] = (viewsData[update.listingId] || 0) + 1;
+      viewsData[sanitizedId] = (viewsData[sanitizedId] || 0) + 1;
       await storageService.setItem('listing_views', viewsData);
 
       // Invalidate view cache for this listing
-      this.viewsCache.delete(update.listingId);
+      this.viewsCache.delete(sanitizedId);
 
       return { success: true };
     } catch (error) {
@@ -764,8 +1055,17 @@ export class ListingsService {
    */
   async getListingViews(listingId: string): Promise<ApiResponse<number>> {
     try {
+      // Sanitize ID
+      const sanitizedId = sanitize.strict(listingId);
+      if (!sanitizedId || sanitizedId.length !== 36) {
+        return {
+          success: false,
+          error: { message: 'Invalid listing ID' }
+        };
+      }
+
       // Check cache first
-      const cached = this.viewsCache.get(listingId);
+      const cached = this.viewsCache.get(sanitizedId);
       const now = Date.now();
       
       if (cached && now - cached.timestamp < VIEW_CACHE_DURATION) {
@@ -777,11 +1077,11 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         const response = await apiCall<number>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.VIEWS, { id: listingId })
+          buildApiUrl(API_ENDPOINTS.LISTINGS.VIEWS, { id: sanitizedId })
         );
         
         if (response.success && response.data !== undefined) {
-          this.viewsCache.set(listingId, { count: response.data, timestamp: now });
+          this.viewsCache.set(sanitizedId, { count: response.data, timestamp: now });
         }
         
         return response;
@@ -793,8 +1093,8 @@ export class ListingsService {
         {}
       );
 
-      const count = viewsData[listingId] || 0;
-      this.viewsCache.set(listingId, { count, timestamp: now });
+      const count = viewsData[sanitizedId] || 0;
+      this.viewsCache.set(sanitizedId, { count, timestamp: now });
 
       return {
         success: true,
@@ -814,6 +1114,9 @@ export class ListingsService {
    */
   async getPopularTags(limit: number = 20): Promise<ApiResponse<PopularTag[]>> {
     try {
+      // Validate limit
+      const safeLimit = Math.min(Math.max(1, limit), 100);
+
       // Check cache first
       const now = Date.now();
       if (
@@ -822,13 +1125,13 @@ export class ListingsService {
       ) {
         return {
           success: true,
-          data: this.popularTagsCache.data.slice(0, limit),
+          data: this.popularTagsCache.data.slice(0, safeLimit),
         };
       }
 
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<PopularTag[]>(
-          `${API_ENDPOINTS.LISTINGS.LIST}/tags/popular?limit=${limit}`
+          `${API_ENDPOINTS.LISTINGS.LIST}/tags/popular?limit=${safeLimit}`
         );
       }
 
@@ -845,7 +1148,7 @@ export class ListingsService {
       const popularTags = Array.from(tagCounts.entries())
         .map(([tag, count]) => ({ tag, count }))
         .sort((a, b) => b.count - a.count)
-        .slice(0, limit);
+        .slice(0, safeLimit);
 
       // Update cache
       this.popularTagsCache = { data: popularTags, timestamp: now };
@@ -872,21 +1175,49 @@ export class ListingsService {
    */
   async saveDraft(draft: ListingDraft): Promise<ApiResponse<ListingDraft>> {
     try {
+      // Sanitize draft data
+      const sanitizedDraft: ListingDraft = {
+        ...draft,
+        id: sanitize.strict(draft.id),
+        seller: sanitize.username(draft.seller),
+        name: draft.name ? sanitize.strict(draft.name) : undefined,
+        formState: {
+          ...draft.formState,
+          title: sanitize.strict(draft.formState.title),
+          description: sanitize.strict(draft.formState.description),
+          tags: sanitize.strict(draft.formState.tags),
+          price: draft.formState.price,
+          imageUrls: draft.formState.imageUrls.map(url => {
+            const sanitized = sanitize.url(url);
+            if (!sanitized) throw new Error('Invalid image URL in draft');
+            return sanitized;
+          }),
+          isPremium: draft.formState.isPremium,
+          hoursWorn: draft.formState.hoursWorn,
+          isAuction: draft.formState.isAuction,
+          startingPrice: draft.formState.startingPrice,
+          reservePrice: draft.formState.reservePrice,
+          auctionDuration: draft.formState.auctionDuration,
+        },
+        createdAt: draft.createdAt,
+        lastModified: new Date().toISOString(),
+      };
+
       const drafts = await storageService.getItem<ListingDraft[]>('listing_drafts', []);
       
-      const existingIndex = drafts.findIndex(d => d.id === draft.id);
+      const existingIndex = drafts.findIndex(d => d.id === sanitizedDraft.id);
       
       if (existingIndex >= 0) {
-        drafts[existingIndex] = { ...draft, lastModified: new Date().toISOString() };
+        drafts[existingIndex] = sanitizedDraft;
       } else {
-        drafts.push({ ...draft, lastModified: new Date().toISOString() });
+        drafts.push(sanitizedDraft);
       }
       
       await storageService.setItem('listing_drafts', drafts);
       
       return {
         success: true,
-        data: draft,
+        data: sanitizedDraft,
       };
     } catch (error) {
       console.error('Save draft error:', error);
@@ -902,8 +1233,17 @@ export class ListingsService {
    */
   async getDrafts(seller: string): Promise<ApiResponse<ListingDraft[]>> {
     try {
+      // Sanitize seller username
+      const sanitizedSeller = sanitize.username(seller);
+      if (!sanitizedSeller) {
+        return {
+          success: false,
+          error: { message: 'Invalid seller username' }
+        };
+      }
+
       const drafts = await storageService.getItem<ListingDraft[]>('listing_drafts', []);
-      const sellerDrafts = drafts.filter(d => d.seller === seller);
+      const sellerDrafts = drafts.filter(d => d.seller === sanitizedSeller);
       
       return {
         success: true,
@@ -923,8 +1263,17 @@ export class ListingsService {
    */
   async deleteDraft(draftId: string): Promise<ApiResponse<void>> {
     try {
+      // Sanitize draft ID
+      const sanitizedId = sanitize.strict(draftId);
+      if (!sanitizedId) {
+        return {
+          success: false,
+          error: { message: 'Invalid draft ID' }
+        };
+      }
+
       const drafts = await storageService.getItem<ListingDraft[]>('listing_drafts', []);
-      const filtered = drafts.filter(d => d.id !== draftId);
+      const filtered = drafts.filter(d => d.id !== sanitizedId);
       
       await storageService.setItem('listing_drafts', filtered);
       
@@ -943,6 +1292,32 @@ export class ListingsService {
    */
   async uploadImage(file: File): Promise<ApiResponse<string>> {
     try {
+      // Rate limiting for image uploads
+      const rateLimitResult = this.rateLimiter.check('IMAGE_UPLOAD', RATE_LIMITS.IMAGE_UPLOAD);
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { 
+            message: `Too many upload attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+            code: 'RATE_LIMIT_EXCEEDED'
+          }
+        };
+      }
+
+      // Validate file
+      const fileValidation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      });
+
+      if (!fileValidation.valid) {
+        return {
+          success: false,
+          error: { message: fileValidation.error || 'Invalid file' }
+        };
+      }
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '');
@@ -961,9 +1336,15 @@ export class ListingsService {
       
       const data = await response.json();
       
+      // Validate returned URL
+      const sanitizedUrl = sanitize.url(data.secure_url);
+      if (!sanitizedUrl) {
+        throw new Error('Invalid URL returned from upload');
+      }
+      
       return {
         success: true,
-        data: data.secure_url,
+        data: sanitizedUrl,
       };
     } catch (error) {
       console.error('Upload image error:', error);
@@ -979,10 +1360,19 @@ export class ListingsService {
    */
   async deleteImage(imageUrl: string): Promise<ApiResponse<void>> {
     try {
+      // Validate URL
+      const sanitizedUrl = sanitize.url(imageUrl);
+      if (!sanitizedUrl) {
+        return {
+          success: false,
+          error: { message: 'Invalid image URL' }
+        };
+      }
+
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<void>(`${API_ENDPOINTS.LISTINGS.LIST}/images/delete`, {
           method: 'DELETE',
-          body: JSON.stringify({ imageUrl }),
+          body: JSON.stringify({ imageUrl: sanitizedUrl }),
         });
       }
       

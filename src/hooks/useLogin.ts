@@ -17,7 +17,7 @@ const MAX_LOGIN_DELAY = 1200;
 
 export const useLogin = () => {
   const router = useRouter();
-  const { login, isAuthReady, user, error: authError } = useAuth();
+  const { login, isAuthReady, user, error: authError, clearError } = useAuth();
   
   // Rate limiting for login attempts
   const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK');
@@ -36,10 +36,14 @@ export const useLogin = () => {
     showAdminMode: false
   });
 
-  // Set mounted state
+  // Set mounted state and clear any lingering auth errors
   useEffect(() => {
     setState(prev => ({ ...prev, mounted: true }));
-  }, []);
+    // Clear any auth errors when component mounts
+    if (clearError) {
+      clearError();
+    }
+  }, [clearError]);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -49,12 +53,21 @@ export const useLogin = () => {
     }
   }, [isAuthReady, user, router]);
 
-  // Sync auth context errors
+  // Sync auth context errors - ONLY on step 2 and when relevant
   useEffect(() => {
-    if (authError && !state.isLoading) {
-      setState(prev => ({ ...prev, error: authError }));
+    // Only sync auth errors when we're on step 2 (role selection)
+    // This prevents rate limit errors from showing on the username step
+    if (authError && state.step === 2) {
+      setState(prev => ({ ...prev, error: authError, isLoading: false }));
     }
-  }, [authError, state.isLoading]);
+  }, [authError, state.step]);
+
+  // Clear auth error when moving between steps
+  useEffect(() => {
+    if (clearError) {
+      clearError();
+    }
+  }, [state.step, clearError]);
 
   // Update state helper with sanitization
   const updateState = useCallback((updates: Partial<LoginState>) => {
@@ -79,11 +92,20 @@ export const useLogin = () => {
   const handleLogin = useCallback(async () => {
     const { username, role } = state;
     
+    // Clear any previous auth errors
+    if (clearError) {
+      clearError();
+    }
+    
+    // Clear local error state
+    updateState({ error: '' });
+    
     // Check rate limit
     const rateLimitResult = checkLoginLimit();
     if (!rateLimitResult.allowed) {
+      const errorMsg = `Too many login attempts. Please wait ${rateLimitResult.waitTime} seconds.`;
       updateState({ 
-        error: `Too many login attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+        error: errorMsg,
         isLoading: false 
       });
       return;
@@ -92,12 +114,12 @@ export const useLogin = () => {
     // Validate inputs using schema
     const usernameValidation = authSchemas.username.safeParse(username);
     if (!usernameValidation.success) {
-      updateState({ error: 'Invalid username format.' });
+      updateState({ error: 'Invalid username format.', isLoading: false });
       return;
     }
     
     if (!role) {
-      updateState({ error: 'Please select a role.' });
+      updateState({ error: 'Please select a role.', isLoading: false });
       return;
     }
     
@@ -161,7 +183,7 @@ export const useLogin = () => {
         resetLoginLimit(); // Reset rate limit on success
         
         // Clear sensitive data from state
-        updateState({ username: '', role: null, error: '' });
+        updateState({ username: '', role: null, error: '', isLoading: false });
         
         // Extended delay to ensure auth context is fully updated
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -171,7 +193,7 @@ export const useLogin = () => {
         router.replace('/');
         
       } else {
-        console.error('[useLogin] Login failed');
+        console.error('[useLogin] Login failed, authError:', authError);
         
         // Track failed attempts for non-admin roles too
         if (role === 'admin') {
@@ -179,13 +201,15 @@ export const useLogin = () => {
           lastAttemptTimeRef.current = Date.now();
         }
         
-        // The error should already be set by auth context
-        if (!state.error) {
+        // The error should be set by the useEffect that watches authError
+        // But we'll also set it here as a fallback
+        if (!state.error && !authError) {
           updateState({ 
             error: 'Login failed. Please try again.', 
             isLoading: false 
           });
         } else {
+          // Just ensure loading is false
           updateState({ isLoading: false });
         }
       }
@@ -193,19 +217,28 @@ export const useLogin = () => {
       console.error('[useLogin] Login error:', error);
       
       // Provide more specific error if available
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      let errorMessage = 'An error occurred. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Rate limit') || error.message.includes('Too many')) {
+          errorMessage = error.message;
+        }
+      }
       
       updateState({ 
-        error: errorMessage.includes('Rate limit') ? errorMessage : 'An error occurred. Please try again.', 
+        error: errorMessage, 
         isLoading: false 
       });
     }
-  }, [state.username, state.role, state.error, login, router, updateState, checkLoginLimit, resetLoginLimit, getRandomDelay]);
+  }, [state, authError, clearError, login, router, updateState, checkLoginLimit, resetLoginLimit, getRandomDelay]);
 
   // Handle username submission with validation
   const handleUsernameSubmit = useCallback(() => {
-    // Clear any previous errors
+    // Clear any previous errors (including auth errors)
     updateState({ error: '' });
+    if (clearError) {
+      clearError();
+    }
     
     // Validate username using schema
     const validation = authSchemas.username.safeParse(state.username);
@@ -215,7 +248,7 @@ export const useLogin = () => {
     } else {
       updateState({ error: validation.error.errors[0]?.message || 'Invalid username.' });
     }
-  }, [state.username, updateState]);
+  }, [state.username, updateState, clearError]);
 
   // Handle key press with rate limit awareness
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
@@ -232,7 +265,11 @@ export const useLogin = () => {
   // Go back to username step
   const goBack = useCallback(() => {
     updateState({ step: 1, error: '', role: null });
-  }, [updateState]);
+    // Clear auth error when going back
+    if (clearError) {
+      clearError();
+    }
+  }, [updateState, clearError]);
 
   // Toggle admin mode with security considerations
   const handleCrownClick = useCallback(() => {
@@ -248,7 +285,12 @@ export const useLogin = () => {
       role: !state.showAdminMode ? null : state.role,
       error: '' // Clear any errors
     });
-  }, [state.showAdminMode, state.role, updateState]);
+    
+    // Clear auth error when toggling admin mode
+    if (clearError) {
+      clearError();
+    }
+  }, [state.showAdminMode, state.role, updateState, clearError]);
 
   // Handle username input with sanitization
   const handleUsernameChange = useCallback((value: string) => {
@@ -259,7 +301,12 @@ export const useLogin = () => {
     
     // Clear error when user types
     updateState({ username: value, error: '' });
-  }, [updateState]);
+    
+    // Clear auth error when user types
+    if (clearError) {
+      clearError();
+    }
+  }, [updateState, clearError]);
 
   // Create role options
   const roleOptions: RoleOption[] = [

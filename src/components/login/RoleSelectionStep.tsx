@@ -1,7 +1,7 @@
 // src/components/login/RoleSelectionStep.tsx
 'use client';
 
-import { Lock } from 'lucide-react';
+import { Lock, AlertCircle } from 'lucide-react';
 import { RoleSelectionStepProps } from '@/types/login';
 
 export default function RoleSelectionStep({
@@ -24,6 +24,16 @@ export default function RoleSelectionStep({
         ← Back to username
       </button>
 
+      {/* Error display at the top - MORE VISIBLE */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 text-sm text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-300 mb-3">
           Select your role
@@ -38,7 +48,10 @@ export default function RoleSelectionStep({
               <button
                 key={option.key}
                 onClick={() => onRoleSelect(option.key as 'buyer' | 'seller' | 'admin')}
+                disabled={isLoading}
                 className={`w-full p-3 rounded-lg border transition-all duration-200 text-left relative overflow-hidden group hover:scale-[1.02] active:scale-[0.98] ${
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                } ${
                   isSelected 
                     ? isAdminOption
                       ? 'bg-purple-900/20 border-purple-500/70 text-white'
@@ -108,12 +121,8 @@ export default function RoleSelectionStep({
         </p>
       )}
 
-      {/* Error display */}
-      {error && (
-        <p className="text-xs text-red-400 text-center mt-2">
-          {error}
-        </p>
-      )}
+
     </div>
+
   );
 }

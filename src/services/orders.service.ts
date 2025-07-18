@@ -4,6 +4,11 @@ import { Order } from '@/context/WalletContext';
 import { storageService } from './storage.service';
 import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse } from './api.config';
 import { v4 as uuidv4 } from 'uuid';
+import { securityService } from './security.service';
+import { sanitizeStrict, sanitizeCurrency, sanitizeUsername, sanitizeUrl } from '@/utils/security/sanitization';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { z } from 'zod';
+import { validateSchema } from '@/utils/validation/schemas';
 
 // Define DeliveryAddress type here since it's not exported from WalletContext
 export interface DeliveryAddress {
@@ -55,6 +60,63 @@ export interface OrderSearchParams {
   limit?: number;
 }
 
+// Custom delivery address schema that matches the interface
+const deliveryAddressSchema = z.object({
+  fullName: z.string().min(2).max(100).transform(sanitizeStrict),
+  addressLine1: z.string().min(5).max(200).transform(sanitizeStrict),
+  addressLine2: z.string().max(200).transform(sanitizeStrict).optional(),
+  city: z.string().min(2).max(100).transform(sanitizeStrict),
+  state: z.string().min(2).max(100).transform(sanitizeStrict),
+  postalCode: z.string().min(3).max(20).regex(/^[A-Z0-9\s-]+$/i).transform(sanitizeStrict),
+  country: z.string().min(2).max(100).transform(sanitizeStrict),
+  specialInstructions: z.string().max(500).transform(sanitizeStrict).optional(),
+});
+
+// Validation schemas
+const createOrderSchema = z.object({
+  title: z.string().min(1).max(200).transform(sanitizeStrict),
+  description: z.string().min(1).max(2000).transform(sanitizeStrict),
+  price: z.number().positive().min(0.01).max(100000),
+  markedUpPrice: z.number().positive().min(0.01).max(100000),
+  imageUrl: z.string().url().optional().or(z.literal('')).transform(url => url ? sanitizeUrl(url) : undefined),
+  seller: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).transform(sanitizeUsername),
+  buyer: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).transform(sanitizeUsername),
+  tags: z.array(z.string().max(30).transform(sanitizeStrict)).max(20).optional(),
+  wearTime: z.string().max(50).transform(sanitizeStrict).optional(),
+  wasAuction: z.boolean().optional(),
+  finalBid: z.number().positive().optional(),
+  deliveryAddress: deliveryAddressSchema.optional(),
+  tierCreditAmount: z.number().min(0).optional(),
+  isCustomRequest: z.boolean().optional(),
+  originalRequestId: z.string().uuid().optional(),
+  listingId: z.string().max(100).optional(),
+  listingTitle: z.string().max(200).transform(sanitizeStrict).optional(),
+  quantity: z.number().int().positive().max(100).optional(),
+  shippingStatus: z.enum(['pending', 'processing', 'shipped', 'pending-auction']).optional(),
+}).refine(data => {
+  // Ensure markedUpPrice is >= price
+  return data.markedUpPrice >= data.price;
+}, {
+  message: 'Marked up price must be greater than or equal to base price',
+  path: ['markedUpPrice'],
+});
+
+const updateOrderStatusSchema = z.object({
+  shippingStatus: z.enum(['pending', 'processing', 'shipped', 'pending-auction']),
+  trackingNumber: z.string().max(100).transform(sanitizeStrict).optional(),
+  shippedDate: z.string().datetime().optional(),
+});
+
+const orderSearchSchema = z.object({
+  buyer: z.string().min(3).max(30).transform(sanitizeUsername).optional(),
+  seller: z.string().min(3).max(30).transform(sanitizeUsername).optional(),
+  status: z.enum(['pending', 'processing', 'shipped']).optional(),
+  fromDate: z.string().datetime().optional(),
+  toDate: z.string().datetime().optional(),
+  page: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
 /**
  * Orders Service
  * Handles all order-related operations with caching and enhanced features
@@ -68,14 +130,28 @@ export class OrdersService {
     params: '',
   };
   private CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private rateLimiter = getRateLimiter();
 
   /**
    * Get all orders with caching
    */
   async getOrders(params?: OrderSearchParams): Promise<ApiResponse<Order[]>> {
     try {
+      // Validate search params
+      let validatedParams: OrderSearchParams | undefined;
+      if (params) {
+        const validation = validateSchema(orderSearchSchema, params);
+        if (!validation.success) {
+          return {
+            success: false,
+            error: { message: 'Invalid search parameters' },
+          };
+        }
+        validatedParams = validation.data;
+      }
+
       // Check cache first
-      const paramsString = JSON.stringify(params || {});
+      const paramsString = JSON.stringify(validatedParams || {});
       const now = Date.now();
       
       if (
@@ -91,8 +167,8 @@ export class OrdersService {
 
       if (FEATURES.USE_API_ORDERS) {
         const queryParams = new URLSearchParams();
-        if (params) {
-          Object.entries(params).forEach(([key, value]) => {
+        if (validatedParams) {
+          Object.entries(validatedParams).forEach(([key, value]) => {
             if (value !== undefined) {
               queryParams.append(key, String(value));
             }
@@ -104,11 +180,19 @@ export class OrdersService {
         );
 
         if (response.success && response.data) {
+          // Sanitize order data
+          const sanitizedOrders = response.data.map(order => this.sanitizeOrderData(order));
+          
           // Update cache
           this.ordersListCache = {
-            data: response.data,
+            data: sanitizedOrders,
             timestamp: now,
             params: paramsString,
+          };
+          
+          return {
+            ...response,
+            data: sanitizedOrders,
           };
         }
 
@@ -119,37 +203,37 @@ export class OrdersService {
       let orderHistory = await this.getOrderHistoryFromStorage();
       
       // Apply filters
-      if (params) {
-        if (params.buyer) {
-          orderHistory = orderHistory.filter(order => order.buyer === params.buyer);
+      if (validatedParams) {
+        if (validatedParams.buyer) {
+          orderHistory = orderHistory.filter(order => order.buyer === validatedParams.buyer);
         }
         
-        if (params.seller) {
-          orderHistory = orderHistory.filter(order => order.seller === params.seller);
+        if (validatedParams.seller) {
+          orderHistory = orderHistory.filter(order => order.seller === validatedParams.seller);
         }
         
-        if (params.status) {
+        if (validatedParams.status) {
           orderHistory = orderHistory.filter(
-            order => order.shippingStatus === params.status
+            order => order.shippingStatus === validatedParams.status
           );
         }
         
-        if (params.fromDate) {
+        if (validatedParams.fromDate) {
           orderHistory = orderHistory.filter(
-            order => new Date(order.date) >= new Date(params.fromDate!)
+            order => new Date(order.date) >= new Date(validatedParams.fromDate!)
           );
         }
         
-        if (params.toDate) {
+        if (validatedParams.toDate) {
           orderHistory = orderHistory.filter(
-            order => new Date(order.date) <= new Date(params.toDate!)
+            order => new Date(order.date) <= new Date(validatedParams.toDate!)
           );
         }
 
         // Pagination
-        if (params.page !== undefined && params.limit) {
-          const start = params.page * params.limit;
-          const end = start + params.limit;
+        if (validatedParams.page !== undefined && validatedParams.limit) {
+          const start = validatedParams.page * validatedParams.limit;
+          const end = start + validatedParams.limit;
           
           const paginatedData = orderHistory.slice(start, end);
           
@@ -157,8 +241,8 @@ export class OrdersService {
             success: true,
             data: paginatedData,
             meta: {
-              page: params.page,
-              totalPages: Math.ceil(orderHistory.length / params.limit),
+              page: validatedParams.page,
+              totalPages: Math.ceil(orderHistory.length / validatedParams.limit),
               totalItems: orderHistory.length,
             },
           };
@@ -190,6 +274,14 @@ export class OrdersService {
    */
   async getOrder(id: string): Promise<ApiResponse<Order | null>> {
     try {
+      // Validate ID
+      if (!id || typeof id !== 'string' || id.length > 100) {
+        return {
+          success: false,
+          error: { message: 'Invalid order ID' },
+        };
+      }
+
       // Check cache first
       const cached = this.orderCache.get(id);
       const now = Date.now();
@@ -207,8 +299,15 @@ export class OrdersService {
         );
 
         if (response.success && response.data) {
+          const sanitizedOrder = this.sanitizeOrderData(response.data);
+          
           // Update cache
-          this.orderCache.set(id, { order: response.data, timestamp: now });
+          this.orderCache.set(id, { order: sanitizedOrder, timestamp: now });
+          
+          return {
+            ...response,
+            data: sanitizedOrder,
+          };
         }
 
         return response;
@@ -219,13 +318,20 @@ export class OrdersService {
       const order = orderHistory.find(o => o.id === id);
 
       if (order) {
+        const sanitizedOrder = this.sanitizeOrderData(order);
+        
         // Update cache
-        this.orderCache.set(id, { order, timestamp: now });
+        this.orderCache.set(id, { order: sanitizedOrder, timestamp: now });
+        
+        return {
+          success: true,
+          data: sanitizedOrder,
+        };
       }
 
       return {
         success: true,
-        data: order || null,
+        data: null,
       };
     } catch (error) {
       console.error('Get order error:', error);
@@ -241,13 +347,22 @@ export class OrdersService {
    */
   async getOrdersByBuyer(username: string): Promise<ApiResponse<Order[]>> {
     try {
+      // Validate username
+      const validatedUsername = sanitizeUsername(username);
+      if (!validatedUsername || validatedUsername.length < 3 || validatedUsername.length > 30) {
+        return {
+          success: false,
+          error: { message: 'Invalid username' },
+        };
+      }
+
       if (FEATURES.USE_API_ORDERS) {
         return await apiCall<Order[]>(
-          buildApiUrl(API_ENDPOINTS.ORDERS.BY_BUYER, { username })
+          buildApiUrl(API_ENDPOINTS.ORDERS.BY_BUYER, { username: validatedUsername })
         );
       }
 
-      return this.getOrders({ buyer: username });
+      return this.getOrders({ buyer: validatedUsername });
     } catch (error) {
       console.error('Get orders by buyer error:', error);
       return {
@@ -262,13 +377,22 @@ export class OrdersService {
    */
   async getOrdersBySeller(username: string): Promise<ApiResponse<Order[]>> {
     try {
+      // Validate username
+      const validatedUsername = sanitizeUsername(username);
+      if (!validatedUsername || validatedUsername.length < 3 || validatedUsername.length > 30) {
+        return {
+          success: false,
+          error: { message: 'Invalid username' },
+        };
+      }
+
       if (FEATURES.USE_API_ORDERS) {
         return await apiCall<Order[]>(
-          buildApiUrl(API_ENDPOINTS.ORDERS.BY_SELLER, { username })
+          buildApiUrl(API_ENDPOINTS.ORDERS.BY_SELLER, { username: validatedUsername })
         );
       }
 
-      return this.getOrders({ seller: username });
+      return this.getOrders({ seller: validatedUsername });
     } catch (error) {
       console.error('Get orders by seller error:', error);
       return {
@@ -283,10 +407,44 @@ export class OrdersService {
    */
   async createOrder(request: CreateOrderRequest): Promise<ApiResponse<Order>> {
     try {
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check(
+        `order_create_${request.buyer}`,
+        { maxAttempts: 20, windowMs: 60 * 60 * 1000 } // 20 orders per hour
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: `Too many orders. Please wait ${rateLimitResult.waitTime} seconds.` },
+        };
+      }
+
+      // Validate and sanitize request
+      const validation = validateSchema(createOrderSchema, request);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: Object.values(validation.errors || {})[0] || 'Invalid order data' },
+        };
+      }
+
+      const sanitizedRequest = validation.data!;
+
+      // Additional content security check
+      const contentCheck = securityService.checkContentSecurity(
+        `${sanitizedRequest.title} ${sanitizedRequest.description}`
+      );
+      if (!contentCheck.safe) {
+        return {
+          success: false,
+          error: { message: 'Order contains prohibited content' },
+        };
+      }
+
       if (FEATURES.USE_API_ORDERS) {
         const response = await apiCall<Order>(API_ENDPOINTS.ORDERS.CREATE, {
           method: 'POST',
-          body: JSON.stringify(request),
+          body: JSON.stringify(sanitizedRequest),
         });
 
         if (response.success) {
@@ -301,26 +459,26 @@ export class OrdersService {
       
       const newOrder: Order = {
         id: uuidv4(),
-        title: request.title,
-        description: request.description,
-        price: request.price,
-        markedUpPrice: request.markedUpPrice,
-        imageUrl: request.imageUrl,
+        title: sanitizedRequest.title,
+        description: sanitizedRequest.description,
+        price: sanitizedRequest.price,
+        markedUpPrice: sanitizedRequest.markedUpPrice,
+        imageUrl: sanitizedRequest.imageUrl,
         date: new Date().toISOString(),
-        seller: request.seller,
-        buyer: request.buyer,
-        tags: request.tags,
-        wearTime: request.wearTime,
-        wasAuction: request.wasAuction,
-        finalBid: request.finalBid,
-        deliveryAddress: request.deliveryAddress,
-        shippingStatus: request.shippingStatus || 'pending',
-        tierCreditAmount: request.tierCreditAmount,
-        isCustomRequest: request.isCustomRequest,
-        originalRequestId: request.originalRequestId,
-        listingId: request.listingId,
-        listingTitle: request.listingTitle,
-        quantity: request.quantity,
+        seller: sanitizedRequest.seller,
+        buyer: sanitizedRequest.buyer,
+        tags: sanitizedRequest.tags,
+        wearTime: sanitizedRequest.wearTime,
+        wasAuction: sanitizedRequest.wasAuction,
+        finalBid: sanitizedRequest.finalBid,
+        deliveryAddress: sanitizedRequest.deliveryAddress,
+        shippingStatus: sanitizedRequest.shippingStatus || 'pending',
+        tierCreditAmount: sanitizedRequest.tierCreditAmount,
+        isCustomRequest: sanitizedRequest.isCustomRequest,
+        originalRequestId: sanitizedRequest.originalRequestId,
+        listingId: sanitizedRequest.listingId,
+        listingTitle: sanitizedRequest.listingTitle,
+        quantity: sanitizedRequest.quantity,
       };
 
       orderHistory.push(newOrder);
@@ -350,12 +508,31 @@ export class OrdersService {
     update: UpdateOrderStatusRequest
   ): Promise<ApiResponse<Order>> {
     try {
+      // Validate ID
+      if (!id || typeof id !== 'string' || id.length > 100) {
+        return {
+          success: false,
+          error: { message: 'Invalid order ID' },
+        };
+      }
+
+      // Validate and sanitize update
+      const validation = validateSchema(updateOrderStatusSchema, update);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: 'Invalid status update data' },
+        };
+      }
+
+      const sanitizedUpdate = validation.data!;
+
       if (FEATURES.USE_API_ORDERS) {
         const response = await apiCall<Order>(
           buildApiUrl(API_ENDPOINTS.ORDERS.UPDATE_STATUS, { id }),
           {
             method: 'PATCH',
-            body: JSON.stringify(update),
+            body: JSON.stringify(sanitizedUpdate),
           }
         );
 
@@ -379,7 +556,7 @@ export class OrdersService {
 
       orderHistory[orderIndex] = {
         ...orderHistory[orderIndex],
-        shippingStatus: update.shippingStatus,
+        shippingStatus: sanitizedUpdate.shippingStatus,
       };
 
       await this.saveOrderHistoryToStorage(orderHistory);
@@ -408,12 +585,31 @@ export class OrdersService {
     address: DeliveryAddress
   ): Promise<ApiResponse<Order>> {
     try {
+      // Validate ID
+      if (!id || typeof id !== 'string' || id.length > 100) {
+        return {
+          success: false,
+          error: { message: 'Invalid order ID' },
+        };
+      }
+
+      // Validate and sanitize address
+      const validation = validateSchema(deliveryAddressSchema, address);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: Object.values(validation.errors || {})[0] || 'Invalid address' },
+        };
+      }
+
+      const sanitizedAddress = validation.data!;
+
       if (FEATURES.USE_API_ORDERS) {
         const response = await apiCall<Order>(
           `${buildApiUrl(API_ENDPOINTS.ORDERS.GET, { id })}/address`,
           {
             method: 'PATCH',
-            body: JSON.stringify({ deliveryAddress: address }),
+            body: JSON.stringify({ deliveryAddress: sanitizedAddress }),
           }
         );
 
@@ -437,7 +633,7 @@ export class OrdersService {
 
       orderHistory[orderIndex] = {
         ...orderHistory[orderIndex],
-        deliveryAddress: address,
+        deliveryAddress: sanitizedAddress,
       };
 
       await this.saveOrderHistoryToStorage(orderHistory);
@@ -468,7 +664,19 @@ export class OrdersService {
     shippedOrders: number;
     averageOrderValue: number;
   }> {
-    const params = role === 'buyer' ? { buyer: username } : { seller: username };
+    // Validate username
+    const validatedUsername = sanitizeUsername(username);
+    if (!validatedUsername) {
+      return {
+        totalOrders: 0,
+        totalAmount: 0,
+        pendingOrders: 0,
+        shippedOrders: 0,
+        averageOrderValue: 0,
+      };
+    }
+
+    const params = role === 'buyer' ? { buyer: validatedUsername } : { seller: validatedUsername };
     const result = await this.getOrders(params);
     
     if (!result.success || !result.data) {
@@ -503,7 +711,12 @@ export class OrdersService {
     const successful: string[] = [];
     const failed: string[] = [];
 
-    for (const orderId of orderIds) {
+    // Validate order IDs
+    const validOrderIds = orderIds.filter(id => 
+      id && typeof id === 'string' && id.length <= 100
+    );
+
+    for (const orderId of validOrderIds) {
       const result = await this.updateOrderStatus(orderId, { shippingStatus: status });
       if (result.success) {
         successful.push(orderId);
@@ -516,7 +729,7 @@ export class OrdersService {
   }
 
   /**
-   * Export orders to CSV
+   * Export orders to CSV with security
    */
   async exportOrdersToCSV(params?: OrderSearchParams): Promise<string> {
     const result = await this.getOrders(params);
@@ -537,20 +750,31 @@ export class OrdersService {
       'Type',
     ];
 
+    // Sanitize data for CSV to prevent injection
+    const sanitizeForCSV = (value: any): string => {
+      const str = String(value);
+      // Remove any formula injection attempts
+      if (/^[=+\-@]/.test(str)) {
+        return `'${str}`;
+      }
+      // Escape quotes
+      return str.replace(/"/g, '""');
+    };
+
     const rows = orders.map(order => [
-      order.id,
-      new Date(order.date).toLocaleDateString(),
-      order.buyer,
-      order.seller,
-      order.title,
-      order.price.toFixed(2),
-      order.markedUpPrice.toFixed(2),
-      order.shippingStatus || 'pending',
-      order.wasAuction ? 'Auction' : order.isCustomRequest ? 'Custom' : 'Direct',
+      sanitizeForCSV(order.id),
+      sanitizeForCSV(new Date(order.date).toLocaleDateString()),
+      sanitizeForCSV(order.buyer),
+      sanitizeForCSV(order.seller),
+      sanitizeForCSV(order.title),
+      sanitizeForCSV(order.price.toFixed(2)),
+      sanitizeForCSV(order.markedUpPrice.toFixed(2)),
+      sanitizeForCSV(order.shippingStatus || 'pending'),
+      sanitizeForCSV(order.wasAuction ? 'Auction' : order.isCustomRequest ? 'Custom' : 'Direct'),
     ]);
 
     const csv = [
-      headers.join(','),
+      headers.map(h => `"${h}"`).join(','),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
     ].join('\n');
 
@@ -561,7 +785,10 @@ export class OrdersService {
    * Generate idempotency key for order
    */
   generateIdempotencyKey(buyer: string, seller: string, listingId: string): string {
-    return `order_${buyer}_${seller}_${listingId}_${Date.now()}`;
+    const sanitizedBuyer = sanitizeUsername(buyer);
+    const sanitizedSeller = sanitizeUsername(seller);
+    const sanitizedListingId = sanitizeStrict(listingId);
+    return `order_${sanitizedBuyer}_${sanitizedSeller}_${sanitizedListingId}_${Date.now()}`;
   }
 
   /**
@@ -615,15 +842,40 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Sanitize order data
+   */
+  private sanitizeOrderData(order: Order): Order {
+    return {
+      ...order,
+      title: sanitizeStrict(order.title),
+      description: sanitizeStrict(order.description),
+      seller: sanitizeUsername(order.seller),
+      buyer: sanitizeUsername(order.buyer),
+      price: sanitizeCurrency(order.price),
+      markedUpPrice: sanitizeCurrency(order.markedUpPrice),
+      imageUrl: order.imageUrl ? sanitizeUrl(order.imageUrl) : undefined,
+      tags: order.tags?.map(tag => sanitizeStrict(tag)),
+      wearTime: order.wearTime ? sanitizeStrict(order.wearTime) : undefined,
+      listingTitle: order.listingTitle ? sanitizeStrict(order.listingTitle) : undefined,
+      finalBid: order.finalBid ? sanitizeCurrency(order.finalBid) : undefined,
+      tierCreditAmount: order.tierCreditAmount ? sanitizeCurrency(order.tierCreditAmount) : undefined,
+    };
+  }
+
   // Helper methods for localStorage
   private async getOrderHistoryFromStorage(): Promise<Order[]> {
     // FIXED: Use the same key as WalletContext: 'wallet_orders'
-    return await storageService.getItem<Order[]>('wallet_orders', []);
+    const orders = await storageService.getItem<Order[]>('wallet_orders', []);
+    // Sanitize all orders when loading from storage
+    return orders.map(order => this.sanitizeOrderData(order));
   }
 
   private async saveOrderHistoryToStorage(orders: Order[]): Promise<void> {
+    // Sanitize before saving
+    const sanitizedOrders = orders.map(order => this.sanitizeOrderData(order));
     // FIXED: Use the same key as WalletContext: 'wallet_orders'
-    await storageService.setItem('wallet_orders', orders);
+    await storageService.setItem('wallet_orders', sanitizedOrders);
   }
 }
 
