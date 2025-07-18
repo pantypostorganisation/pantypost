@@ -240,7 +240,7 @@ export default function SignupPage() {
 
               {/* Submit Button */}
               <SecureSubmitButton
-                isSubmitting={isSubmitting || isCheckingUsername}
+                isLoading={isSubmitting || isCheckingUsername}
                 disabled={!validation.isValid || isCheckingUsername}
                 className="w-full mt-6"
                 loadingText="Creating Account..."

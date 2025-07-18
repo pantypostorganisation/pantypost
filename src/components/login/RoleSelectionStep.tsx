@@ -4,6 +4,11 @@
 import { Lock, AlertCircle } from 'lucide-react';
 import { RoleSelectionStepProps } from '@/types/login';
 
+interface ExtendedRoleSelectionStepProps extends RoleSelectionStepProps {
+  isRateLimited?: boolean;
+  rateLimitWaitTime?: number;
+}
+
 export default function RoleSelectionStep({
   role,
   error,
@@ -12,8 +17,21 @@ export default function RoleSelectionStep({
   onBack,
   onSubmit,
   isLoading,
-  hasUser
-}: RoleSelectionStepProps) {
+  hasUser,
+  isRateLimited = false,
+  rateLimitWaitTime = 0
+}: ExtendedRoleSelectionStepProps) {
+  
+  // Format wait time for display with minutes and seconds
+  const formatWaitTime = (totalSeconds: number): string => {
+    if (totalSeconds < 60) {
+      return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
+  };
+  
   return (
     <div className="transition-all duration-300">
       {/* Back Button */}
@@ -25,11 +43,21 @@ export default function RoleSelectionStep({
       </button>
 
       {/* Error display at the top - MORE VISIBLE */}
-      {error && (
+      {error && !error.includes('Too many') && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-sm text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Rate limit warning - only show this, not the error above */}
+      {((isRateLimited && rateLimitWaitTime > 0) || (error && error.includes('Too many'))) && (
+        <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-orange-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>Too many attempts. Please wait {formatWaitTime(rateLimitWaitTime || 0)} before trying again.</span>
           </div>
         </div>
       )}
@@ -48,9 +76,9 @@ export default function RoleSelectionStep({
               <button
                 key={option.key}
                 onClick={() => onRoleSelect(option.key as 'buyer' | 'seller' | 'admin')}
-                disabled={isLoading}
+                disabled={isLoading || isRateLimited}
                 className={`w-full p-3 rounded-lg border transition-all duration-200 text-left relative overflow-hidden group hover:scale-[1.02] active:scale-[0.98] ${
-                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  isLoading || isRateLimited ? 'opacity-50 cursor-not-allowed' : ''
                 } ${
                   isSelected 
                     ? isAdminOption
@@ -87,11 +115,16 @@ export default function RoleSelectionStep({
 
       <button
         onClick={onSubmit}
-        disabled={!role || isLoading || hasUser}
+        disabled={!role || isLoading || hasUser || isRateLimited}
         className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-        style={{ color: (!role || isLoading || hasUser) ? undefined : '#000' }}
+        style={{ color: (!role || isLoading || hasUser || isRateLimited) ? undefined : '#000' }}
       >
-        {isLoading ? (
+        {isRateLimited ? (
+          <>
+            <AlertCircle className="w-4 h-4" />
+            Too Many Attempts
+          </>
+        ) : isLoading ? (
           <>
             <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
             Signing in...
@@ -109,8 +142,8 @@ export default function RoleSelectionStep({
         )}
       </button>
 
-      {/* Add timeout safety mechanism */}
-      {isLoading && (
+      {/* Add timeout safety mechanism - but not when rate limited */}
+      {isLoading && !isRateLimited && (
         <p className="text-xs text-gray-500 text-center mt-2">
           Taking longer than expected? <button 
             onClick={() => window.location.reload()} 
@@ -120,9 +153,6 @@ export default function RoleSelectionStep({
           </button>
         </p>
       )}
-
-
     </div>
-
   );
 }

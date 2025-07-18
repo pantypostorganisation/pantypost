@@ -11,6 +11,8 @@ import TrustIndicators from '@/components/login/TrustIndicators';
 import { useLogin } from '@/hooks/useLogin';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { useState, useEffect } from 'react';
+import { getRateLimiter } from '@/utils/security/rate-limiter';
 
 export default function LoginPage() {
   const {
@@ -39,9 +41,69 @@ export default function LoginPage() {
     router
   } = useLogin();
 
-  // Wrap handleLogin with rate limiting
+  // Track rate limit state
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [rateLimitWaitTime, setRateLimitWaitTime] = useState(0);
+
+  // Check rate limit status on component mount and when username changes
+  useEffect(() => {
+    if (step === 2 && username) {
+      const limiter = getRateLimiter();
+      const result = limiter.check(`LOGIN:${username}`, RATE_LIMITS.LOGIN);
+      
+      if (!result.allowed && result.waitTime) {
+        setIsRateLimited(true);
+        setRateLimitWaitTime(result.waitTime);
+      } else {
+        setIsRateLimited(false);
+        setRateLimitWaitTime(0);
+      }
+    }
+  }, [step, username]);
+
+  // Update rate limit status when error changes
+  useEffect(() => {
+    if (error && error.includes('Too many login attempts')) {
+      setIsRateLimited(true);
+      // Extract wait time from error message
+      const match = error.match(/Please wait (\d+) seconds/);
+      if (match) {
+        setRateLimitWaitTime(parseInt(match[1]));
+      }
+    } else if (!error) {
+      // Clear rate limit when error is cleared
+      setIsRateLimited(false);
+      setRateLimitWaitTime(0);
+    }
+  }, [error]);
+
+  // Countdown timer for rate limit
+  useEffect(() => {
+    if (isRateLimited && rateLimitWaitTime > 0) {
+      const timer = setInterval(() => {
+        setRateLimitWaitTime((prev) => {
+          if (prev <= 1) {
+            setIsRateLimited(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+    return undefined;
+  }, [isRateLimited, rateLimitWaitTime]);
+
+  // Wrap handleLogin with rate limiting check
   const handleSecureLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    // Don't proceed if rate limited
+    if (isRateLimited) {
+      return;
+    }
+    
     await handleLogin();
   };
 
@@ -105,6 +167,8 @@ export default function LoginPage() {
                   onSubmit={handleSecureLogin}
                   rateLimitKey={`LOGIN:${username}`}
                   rateLimitConfig={RATE_LIMITS.LOGIN}
+                  isRateLimited={isRateLimited}
+                  rateLimitWaitTime={rateLimitWaitTime}
                 >
                   <RoleSelectionStep
                     role={role}
@@ -113,8 +177,10 @@ export default function LoginPage() {
                     onRoleSelect={(selectedRole) => updateState({ role: selectedRole })}
                     onBack={goBack}
                     onSubmit={handleSecureLogin}
-                    isLoading={isLoading}
+                    isLoading={isLoading || isRateLimited}
                     hasUser={!!user}
+                    isRateLimited={isRateLimited}
+                    rateLimitWaitTime={rateLimitWaitTime}
                   />
                 </SecureForm>
               )}
