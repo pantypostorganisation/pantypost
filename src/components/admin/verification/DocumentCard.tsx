@@ -41,8 +41,10 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
               </span>
             </div>
             
-            {/* Hover overlay */}
-            <div className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer">
+            {/* Hover overlay - Added pointer-events-none to prevent click interference */}
+            <div 
+              className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center opacity-0 hover:opacity-100 pointer-events-none"
+            >
               <ExternalLink className="w-6 h-6 text-white" />
             </div>
           </>

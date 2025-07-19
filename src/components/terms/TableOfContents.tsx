@@ -43,9 +43,9 @@ export default function TableOfContents({ activeSection, onSectionClick }: Table
           ))}
         </ul>
         <div className="mt-6 border-t border-gray-800 pt-4">
-          <p className="text-xs text-gray-400">
+          <div className="text-xs text-gray-400">
             Last Updated: <SecureMessageDisplay content={LAST_UPDATED} allowBasicFormatting={false} />
-          </p>
+          </div>
         </div>
       </div>
     </div>

@@ -718,7 +718,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getBuyerBalance, setBuyerBalance]);
 
-  // ENHANCED purchaseListing with proper tracking and security
+  // ENHANCED purchaseListing with proper tracking and security - FIXED TO HANDLE IMAGE URLs
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
       // Check rate limit for purchases
@@ -728,7 +728,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedBuyer = validateUsername(buyerUsername);
       const validatedSeller = validateUsername(listing.seller);
       
-      console.log('[Purchase] Starting purchase:', { listing: listing.title, buyer: validatedBuyer, price: listing.markedUpPrice });
+      console.log('[Purchase] Starting purchase:', { 
+        listing: listing.title, 
+        buyer: validatedBuyer, 
+        price: listing.markedUpPrice,
+        listingId: listing.id 
+      });
+      
+      // DEBUG: Log the full listing object to see what we're working with
+      console.log('[Purchase] Full listing object:', listing);
+      console.log('[Purchase] Listing imageUrls:', listing.imageUrls);
+      console.log('[Purchase] First image URL:', listing.imageUrls?.[0]);
       
       const sellerTierInfo = getSellerTierMemoized(validatedSeller, orderHistory);
       const tierCreditAmount = listing.price * sellerTierInfo.credit;
@@ -771,20 +781,46 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
         await setAdminBalance(adminBalance + platformFee);
         
-        // Create order using the service
-        const orderResult = await ordersService.createOrder({
+        // FIXED: Extract the first image URL properly
+        let imageUrl: string | undefined = undefined;
+        
+        if (listing.imageUrls && Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0) {
+          imageUrl = listing.imageUrls[0];
+          console.log('[Purchase] Using image URL from imageUrls array:', imageUrl);
+        } else if ((listing as any).images && Array.isArray((listing as any).images) && (listing as any).images.length > 0) {
+          // Fallback: Check if there's an 'images' property (legacy)
+          imageUrl = (listing as any).images[0];
+          console.log('[Purchase] Using image URL from legacy images array:', imageUrl);
+        } else if ((listing as any).imageUrl) {
+          // Fallback: Check if there's a single imageUrl property
+          imageUrl = (listing as any).imageUrl;
+          console.log('[Purchase] Using single imageUrl property:', imageUrl);
+        } else {
+          console.log('[Purchase] No image URL found in listing');
+        }
+        
+        // Create order data with proper image URL
+        const orderData = {
           title: sanitizeStrict(listing.title),
           description: sanitizeStrict(listing.description),
           price: listing.price,
           markedUpPrice: price,
           seller: validatedSeller,
           buyer: validatedBuyer,
-          imageUrl: listing.imageUrls?.[0],
+          imageUrl: imageUrl, // This will now have the correct value
           tierCreditAmount,
           // Preserve auction metadata
           wasAuction: (listing as any).wasAuction || false,
-          finalBid: (listing as any).finalBid
-        });
+          finalBid: (listing as any).finalBid,
+          // Add listing ID for tracking
+          listingId: listing.id,
+        };
+        
+        console.log('[Purchase] Order data being created:', orderData);
+        console.log('[Purchase] Order imageUrl:', orderData.imageUrl);
+        
+        // Create order using the service
+        const orderResult = await ordersService.createOrder(orderData);
 
         if (orderResult.success && orderResult.data) {
           // Update local state
@@ -793,7 +829,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // Mark order as processed
           await ordersService.markOrderProcessed(idempotencyKey);
           
-          console.log('[Purchase] Order created:', orderResult.data);
+          console.log('[Purchase] Order created successfully:', orderResult.data);
+          console.log('[Purchase] Order imageUrl in result:', orderResult.data.imageUrl);
           
           // Create admin action for platform fee tracking
           const platformFeeAction: AdminAction = {
@@ -910,13 +947,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Remove the pending auction order
         const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
         
+        // FIXED: Extract image URL properly for auction listings
+        let imageUrl: string | undefined = undefined;
+        
+        if (listing.imageUrls && Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0) {
+          imageUrl = listing.imageUrls[0];
+        } else if ((listing as any).images && Array.isArray((listing as any).images) && (listing as any).images.length > 0) {
+          imageUrl = (listing as any).images[0];
+        } else if ((listing as any).imageUrl) {
+          imageUrl = (listing as any).imageUrl;
+        }
+        
         // Create the final order using ordersService
         const finalOrderResult = await ordersService.createOrder({
           title: sanitizeStrict(listing.title),
           description: sanitizeStrict(listing.description),
           price: actualBidAmount,
           markedUpPrice: totalPaidByBuyer, // Keep the total paid including buyer fee
-          imageUrl: listing.imageUrls?.[0],
+          imageUrl: imageUrl, // Use the extracted image URL
           seller: validatedSeller,
           buyer: validatedWinner,
           tags: listing.tags,

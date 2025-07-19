@@ -58,33 +58,38 @@ export default function ReviewModal({
 
     return (
         <>
-            <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4">
-                <div
+            {/* Review Modal Overlay */}
+            <div className="fixed inset-0 bg-black bg-opacity-60 z-40" onClick={handleClose} />
+
+            {/* Review Modal Content */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+                <div 
                     ref={modalRef}
-                    className="bg-[#0e0e0e] rounded-none sm:rounded-xl shadow-2xl border border-[#2a2a2a] w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[90vh] mx-auto flex flex-col overflow-hidden"
+                    className="bg-[#121212] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-[#222] flex flex-col"
+                    onClick={e => e.stopPropagation()}
                 >
-                    {/* Modal Header */}
-                    <div className="bg-[#080808] border-b border-[#1a1a1a] p-3 sm:p-4 flex items-center sticky top-0 z-10">
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-[#1a1a1a] to-[#222] p-4 sm:p-6 rounded-t-2xl sticky top-0 z-10">
                         <button
                             onClick={handleClose}
-                            className="p-2 rounded-full hover:bg-[#1a1a1a] text-gray-400 mr-2 transition-colors"
+                            className="absolute left-4 top-4 text-gray-400 hover:text-white transition-colors"
                         >
-                            <ArrowLeft className="w-5 h-5" />
+                            <ArrowLeft className="w-6 h-6" />
                         </button>
-                        <div>
-                            <h2 className="text-lg font-bold text-white flex items-center">
-                                <span className="mr-1.5">Review:</span>
-                                <span className="text-[#ff950e]">{user.username}</span>
+                        
+                        <div className="text-center">
+                            <h2 className="text-2xl font-bold text-white">
+                                Review: {user.username}
                             </h2>
-                            <p className="text-xs text-gray-400">
+                            <p className="text-sm text-gray-400 mt-1">
                                 Requested {getTimeAgo(user.verificationRequestedAt)}
                             </p>
                         </div>
                     </div>
 
-                    {/* Scrollable Content Area */}
-                    <div className="p-4 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
-                        {/* Verification Code */}
+                    {/* Documents Section */}
+                    <div className="p-4 sm:p-6 flex-grow">
+                        {/* Verification code */}
                         <div className="mb-6">
                             <h3 className="text-sm uppercase text-gray-400 font-medium mb-2 tracking-wider">
                                 Verification Code

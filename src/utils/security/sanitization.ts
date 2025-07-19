@@ -73,7 +73,8 @@ export function sanitizeAttribute(value: string): string {
 }
 
 /**
- * Sanitizes URLs to prevent javascript: and data: URIs
+ * Sanitizes URLs to prevent javascript: and dangerous data: URIs
+ * But allows safe image data URLs for verification images
  */
 export function sanitizeUrl(url: string): string {
   if (!url || typeof url !== 'string') {
@@ -82,10 +83,19 @@ export function sanitizeUrl(url: string): string {
   
   const trimmedUrl = url.trim().toLowerCase();
   
-  // Block dangerous protocols
+  // Allow safe image data URLs
+  if (trimmedUrl.startsWith('data:')) {
+    // Only allow image data URLs with safe formats
+    const safeImageDataUrlPattern = /^data:image\/(jpeg|jpg|png|gif|webp|svg\+xml);base64,/i;
+    if (safeImageDataUrlPattern.test(url)) {
+      return url; // Return original URL to preserve base64 data
+    }
+    return ''; // Block other data URLs
+  }
+  
+  // Block other dangerous protocols
   const dangerousProtocols = [
     'javascript:',
-    'data:',
     'vbscript:',
     'file:',
     'about:',

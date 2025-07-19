@@ -64,18 +64,18 @@ export default function RoleSelector({ role, error, onChange }: RoleSelectorProp
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="text-center">
-                  <p className="font-medium text-sm">
+                  <div className="font-medium text-sm">
                     <SecureMessageDisplay 
                       content={option.label} 
                       allowBasicFormatting={false}
                     />
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
                     <SecureMessageDisplay 
                       content={option.description} 
                       allowBasicFormatting={false}
                     />
-                  </p>
+                  </div>
                 </div>
               </div>
               
@@ -93,21 +93,21 @@ export default function RoleSelector({ role, error, onChange }: RoleSelectorProp
       </div>
       
       {error && (
-        <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
+        <div className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
           <Shield className="w-3 h-3" />
           <SecureMessageDisplay 
             content={error} 
             allowBasicFormatting={false}
           />
-        </p>
+        </div>
       )}
       
       {/* Security note */}
       {role && (
-        <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+        <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
           <Shield className="w-3 h-3" />
           You can switch roles later in your account settings
-        </p>
+        </div>
       )}
     </div>
   );

@@ -18,7 +18,7 @@ const OrderSchema = z.object({
   seller: z.string(),
   buyer: z.string(),
   date: z.string(),
-  shippingStatus: z.enum(['pending', 'processing', 'shipped', 'delivered']).optional(),
+  shippingStatus: z.enum(['pending', 'processing', 'shipped', 'delivered', 'pending-auction']).optional(),
   wasAuction: z.boolean().optional(),
   isCustomRequest: z.boolean().optional(),
   deliveryAddress: z.any().optional(),
@@ -129,7 +129,15 @@ export function useMyOrders() {
     
     // Apply status filter
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(order => order.shippingStatus === filterStatus);
+      filtered = filtered.filter(order => {
+        if (filterStatus === 'pending') {
+          // Include both 'pending' and 'pending-auction' when filtering for pending
+          return order.shippingStatus === 'pending' || 
+                 order.shippingStatus === 'pending-auction' || 
+                 !order.shippingStatus;
+        }
+        return order.shippingStatus === filterStatus;
+      });
     }
     
     // Sort orders with validation
@@ -151,8 +159,15 @@ export function useMyOrders() {
           bValue = b.markedUpPrice || b.price;
           break;
         case 'status':
-          aValue = a.shippingStatus || 'pending';
-          bValue = b.shippingStatus || 'pending';
+          const statusOrder: Record<string, number> = { 
+            'pending': 0,
+            'pending-auction': 1,
+            'processing': 2,
+            'shipped': 3,
+            'delivered': 4
+          };
+          aValue = statusOrder[a.shippingStatus || 'pending'] || 0;
+          bValue = statusOrder[b.shippingStatus || 'pending'] || 0;
           break;
         default:
           return 0;
@@ -197,7 +212,11 @@ export function useMyOrders() {
 
     return {
       totalSpent: Math.max(0, totalSpent),
-      pendingOrders: Math.max(0, userOrders.filter(order => !order.shippingStatus || order.shippingStatus === 'pending').length),
+      pendingOrders: Math.max(0, userOrders.filter(order => 
+        !order.shippingStatus || 
+        order.shippingStatus === 'pending' || 
+        order.shippingStatus === 'pending-auction'
+      ).length),
       shippedOrders: Math.max(0, userOrders.filter(order => order.shippingStatus === 'shipped').length),
     };
   }, [userOrders]);

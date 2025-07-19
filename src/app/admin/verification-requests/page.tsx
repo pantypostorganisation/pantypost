@@ -47,54 +47,48 @@ export default function AdminVerificationRequestsPage() {
     setSelected(null);
   }, [users, sortBy]);
 
-  // Handle search term update with sanitization
-  const handleSearchTermChange = (newSearchTerm: string) => {
-    const sanitized = securityService.sanitizeSearchQuery(newSearchTerm);
-    setSearchTerm(sanitized);
+  // Handle search term change with sanitization
+  const handleSearchTermChange = (term: string) => {
+    // Sanitize search input
+    const sanitizedTerm = sanitizeStrict(term);
+    setSearchTerm(sanitizedTerm);
   };
 
   // Filter users based on search term
-  const filteredUsers = pending.filter(user => 
-    user.username.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredUsers = pending.filter((u) => 
+    u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Calculate stats
   const stats: StatsType = {
-    total: pending.length,
-    today: pending.filter(u => {
-      if (!u.verificationRequestedAt) return false;
-      const requestDate = new Date(u.verificationRequestedAt);
+    total: filteredUsers.length,
+    today: filteredUsers.filter(u => {
+      const requestDate = new Date(u.verificationRequestedAt || '');
       const today = new Date();
       return requestDate.toDateString() === today.toDateString();
     }).length,
-    thisWeek: pending.filter(u => {
-      if (!u.verificationRequestedAt) return false;
-      const requestDate = new Date(u.verificationRequestedAt);
+    thisWeek: filteredUsers.filter(u => {
+      const requestDate = new Date(u.verificationRequestedAt || '');
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       return requestDate >= weekAgo;
     }).length,
-    averageProcessingTime: 24 // This would be calculated from historical data
+    averageProcessingTime: 2.5 // hours (placeholder)
   };
 
-  // Calculate time since request
+  // Time ago helper function
   const getTimeAgo = (timestamp?: string): string => {
-    if (!timestamp) return 'Unknown date';
+    if (!timestamp) return 'Unknown';
     
-    const requestDate = new Date(timestamp);
+    const date = new Date(timestamp);
     const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - requestDate.getTime()) / 1000);
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     
-    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`;
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-    
-    return requestDate.toLocaleDateString('en-US', { 
-      day: 'numeric', 
-      month: 'short', 
-      year: 'numeric' 
-    });
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return `${Math.floor(seconds / 604800)}w ago`;
   };
 
   // Handle approval with sanitization
