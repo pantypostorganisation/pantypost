@@ -12,9 +12,10 @@ import { z } from 'zod';
 const OrderSchema = z.object({
   id: z.string(),
   title: z.string(),
-  description: z.string(), // Added to match WalletContext Order type
+  description: z.string(),
   price: z.number().positive(),
   markedUpPrice: z.number().positive().optional(),
+  imageUrl: z.string().optional(), // FIXED: Changed from imageUrls array to imageUrl string
   seller: z.string(),
   buyer: z.string(),
   date: z.string(),
@@ -22,11 +23,18 @@ const OrderSchema = z.object({
   wasAuction: z.boolean().optional(),
   isCustomRequest: z.boolean().optional(),
   deliveryAddress: z.any().optional(),
-  imageUrls: z.array(z.string()).optional(),
   listingId: z.string().optional(),
   trackingNumber: z.string().optional(),
   shippedDate: z.string().optional(),
-  deliveredDate: z.string().optional()
+  deliveredDate: z.string().optional(),
+  // Add any other fields that might be on the order
+  tags: z.array(z.string()).optional(),
+  wearTime: z.string().optional(),
+  finalBid: z.number().optional(),
+  tierCreditAmount: z.number().optional(),
+  originalRequestId: z.string().optional(),
+  listingTitle: z.string().optional(),
+  quantity: z.number().optional()
 });
 
 type ValidatedOrder = z.infer<typeof OrderSchema>;
@@ -58,7 +66,8 @@ function sanitizeOrder(order: any): ValidatedOrder | null {
       buyer: sanitizeStrict(validated.buyer),
       price: sanitizeNumber(validated.price, 0, 10000),
       markedUpPrice: validated.markedUpPrice ? sanitizeNumber(validated.markedUpPrice, 0, 10000) : undefined,
-      trackingNumber: validated.trackingNumber ? sanitizeStrict(validated.trackingNumber) : undefined
+      trackingNumber: validated.trackingNumber ? sanitizeStrict(validated.trackingNumber) : undefined,
+      imageUrl: validated.imageUrl // Preserve the imageUrl
     };
   } catch (error) {
     console.error('Invalid order data:', error);
