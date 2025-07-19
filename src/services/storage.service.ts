@@ -107,8 +107,8 @@ export class StorageService {
       StorageService.authOperationResetTime = now;
     }
     
-    // Allow up to 50 auth operations per minute (very lenient)
-    if (StorageService.authOperationCount >= 50) {
+    // Allow up to 500 auth operations per minute for testing
+    if (StorageService.authOperationCount >= 500) {
       return false;
     }
     
@@ -177,7 +177,7 @@ export class StorageService {
       // Check rate limit for non-auth storage operations
       const rateLimitResult = this.rateLimiter.check('API_CALL', {
         ...RATE_LIMITS.API_CALL,
-        maxAttempts: 200, // More lenient for storage operations
+        maxAttempts: 1000, // Increased for testing
         windowMs: 60 * 1000 // 1 minute window
       });
       

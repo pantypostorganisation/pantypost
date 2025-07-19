@@ -170,10 +170,10 @@ export class ActionRateLimiter {
  * Predefined rate limit configurations
  */
 export const RATE_LIMITS = {
-  // Authentication
+  // Authentication - INCREASED FOR TESTING
   LOGIN: {
-    maxAttempts: 5,
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    maxAttempts: 300, // Increased from 5 to 300 for testing
+    windowMs: 30 * 60 * 1000, // Changed to 30 minutes
   },
   SIGNUP: {
     maxAttempts: 3,

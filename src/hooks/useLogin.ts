@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { User, ShoppingBag, Crown } from 'lucide-react';
 import { LoginState, RoleOption } from '@/types/login';
 import { validateUsername, validateAdminCredentials } from '@/utils/loginUtils';
-import { useRateLimit } from '@/utils/security/rate-limiter';
+import { useRateLimit, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { authSchemas } from '@/utils/validation/schemas';
 import { sanitizeUsername } from '@/utils/security/sanitization';
 import { securityService } from '@/services';
@@ -19,8 +19,8 @@ export const useLogin = () => {
   const router = useRouter();
   const { login, isAuthReady, user, error: authError, clearError } = useAuth();
   
-  // Rate limiting for login attempts
-  const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK');
+  // Rate limiting for login attempts - UPDATED TO USE LOGIN CONFIG
+  const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK', RATE_LIMITS.LOGIN);
   
   // Track failed attempts for this session
   const failedAttemptsRef = useRef(0);

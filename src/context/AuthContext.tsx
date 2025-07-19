@@ -193,10 +193,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<boolean> => {
     console.log('[AuthContext] Login called with:', { username, hasPassword: !!password, role });
     
-    // Check rate limit in context as well
+    // Check rate limit in context as well - UPDATED TO 300/30min
     const rateLimitResult = rateLimiter.check('LOGIN_CONTEXT', {
-      maxAttempts: 10,
-      windowMs: 15 * 60 * 1000 // 15 minutes
+      maxAttempts: 300, // Increased from 10 to 300 for testing
+      windowMs: 30 * 60 * 1000 // Changed to 30 minutes
     });
 
     if (!rateLimitResult.allowed) {
