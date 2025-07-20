@@ -162,26 +162,21 @@ export default function ProfileInfoCard({
         <label className="block text-sm font-medium text-gray-300 mb-2">
           Subscription Price ($/month)
         </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
-            <span className="text-gray-400">$</span>
-          </div>
-          <SecureInput
-            id="subscriptionPrice"
-            name="subscriptionPrice"
-            type="number"
-            value={subscriptionPrice}
-            onChange={handlePriceChange}
-            onBlur={() => setTouched(prev => ({ ...prev, price: true }))}
-            className="w-full pl-8 p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-            placeholder="19.99"
-            min="0"
-            max="999.99"
-            step="0.01"
-            touched={touched.price}
-            helpText="This is what buyers will pay to access your premium content"
-          />
-        </div>
+        <SecureInput
+          id="subscriptionPrice"
+          name="subscriptionPrice"
+          type="number"
+          value={subscriptionPrice}
+          onChange={handlePriceChange}
+          onBlur={() => setTouched(prev => ({ ...prev, price: true }))}
+          className="w-full px-4 py-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          placeholder="19.99"
+          min="0"
+          max="999.99"
+          step="0.01"
+          touched={touched.price}
+          helpText="This is what buyers will pay to access your premium content"
+        />
       </div>
     </div>
   );
