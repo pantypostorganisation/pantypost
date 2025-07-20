@@ -72,25 +72,72 @@ export default function BuyerDashboardPage() {
 
                 {/* Recent Activity */}
                 {isLoading ? (
-                  <Skeleton className="h-64" />
+                  <Skeleton className="h-96" />
                 ) : (
                   <RecentActivity activities={recentActivity} />
                 )}
               </div>
 
               {/* Sidebar */}
-              <div className="space-y-8">
-                {/* Subscribed Sellers */}
+              <div className="xl:col-span-1 space-y-8">
+                {/* Subscriptions */}
                 {isLoading ? (
                   <Skeleton className="h-64" />
                 ) : (
                   <SubscribedSellers subscriptions={subscribedSellers} />
                 )}
 
-                {/* Featured Listings - commented out
-                {featuredListings && featuredListings.length > 0 && (
-                  <FeaturedListings listings={featuredListings} />
-                )} */}
+                {/* Order Status */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <div className="flex items-center gap-2 mb-5">
+                    <Truck className="w-5 h-5 text-blue-400" />
+                    <h2 className="text-xl font-bold text-white">Order Status</h2>
+                  </div>
+                  
+                  {isLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-16" />
+                      <Skeleton className="h-16" />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Clock className="w-4 h-4 text-yellow-400" />
+                          <span className="text-sm text-gray-300">Processing</span>
+                        </div>
+                        <span className="text-sm font-bold text-white">{stats.pendingShipments}</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-sm text-gray-300">Delivered</span>
+                        </div>
+                        <span className="text-sm font-bold text-white">{stats.completedOrders}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Stats */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <h2 className="text-lg font-bold text-white mb-4">Quick Stats</h2>
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">This Week Spent</span>
+                      <span className="text-white font-bold">${stats.thisWeekSpent.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Average Order</span>
+                      <span className="text-white font-bold">${stats.averageOrderValue.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Favorite Sellers</span>
+                      <span className="text-white font-bold">{stats.favoriteSellerCount}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -141,8 +141,8 @@ export const useDashboardData = () => {
         // Ensure balance is never negative
         setBalance(Math.max(0, calculatedBalance));
 
-        // Load and sanitize orders
-        const orders = await storageService.getItem<Order[]>('orders', []);
+        // FIXED: Load orders from the correct storage key 'wallet_orders' instead of 'orders'
+        const orders = await storageService.getItem<Order[]>('wallet_orders', []);
         const buyerOrders = orders
           .filter(order => order.buyer === user.username)
           .map(sanitizeOrder);
@@ -223,6 +223,8 @@ export const useDashboardData = () => {
             markedUpPrice: listing.markedUpPrice ? sanitizeNumber(listing.markedUpPrice, 0, 10000) : undefined
           }));
           setListings(sanitizedListings);
+        } else {
+          setErrors(prev => [...prev, 'Failed to load listings']);
         }
       } catch (error) {
         console.error('Error loading listings:', error);
@@ -233,30 +235,27 @@ export const useDashboardData = () => {
     loadListings();
   }, []);
 
-  // Load subscriptions with sanitization
+  // Load subscription info
   useEffect(() => {
     const loadSubscriptions = async () => {
       if (!user?.username) return;
 
       try {
-        const subsKey = 'subscriptions';
-        const allSubscriptions = await storageService.getItem<{ [key: string]: string[] }>(subsKey, {});
-        const userSubscriptions = allSubscriptions[user.username] || [];
+        const subscriptions = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
+        const userSubscriptions = subscriptions[user.username] || [];
         
-        const subscriptionDataPromises = userSubscriptions.map(async (seller: string) => {
+        // Load detailed info for each subscribed seller
+        const subscriptionDataPromises = userSubscriptions.map(async (seller) => {
           try {
-            // Sanitize seller username
-            const sanitizedSeller = sanitizeStrict(seller);
-            
-            // Load seller profile data
-            const profileKey = `profile_${sanitizedSeller}`;
+            // Load seller profile with validation
+            const profileKey = `seller_profile_${seller}`;
             const profileData = await storageService.getItem<any>(profileKey, null);
             
-            const sellerListings = listings.filter(l => l.seller === sanitizedSeller);
+            // Get seller listings for counting
+            const sellerListings = listings.filter(l => l.seller === seller);
             
-            // Sanitize all profile data
             return {
-              seller: sanitizedSeller,
+              seller: sanitizeStrict(seller),
               price: profileData?.subscriptionPrice ? sanitizeCurrency(profileData.subscriptionPrice).toString() : '25.00',
               bio: profileData?.bio ? sanitizeStrict(profileData.bio) : 'No bio available',
               pic: profileData?.profilePic || null,
@@ -420,59 +419,60 @@ export const useDashboardData = () => {
             time: new Date(order.date).toLocaleDateString(),
             amount: sanitizeNumber(order.markedUpPrice || order.price, 0, 10000),
             status: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : 'pending',
-            href: '/buyers/my-orders',
-            icon: createElement(Package, { className: "w-4 h-4" })
+            href: `/buyers/my-orders#${order.id}`,
+            icon: createElement(Package, { className: 'w-4 h-4' })
           });
         });
 
-      // Add recent requests
-      requests
-        .slice(0, 2)
-        .forEach(request => {
+      // Add recent messages
+      Object.entries(messages).forEach(([thread, threadMessages]) => {
+        const recentMsg = threadMessages
+          .filter(msg => msg.receiver === user.username)
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 1)[0];
+          
+        if (recentMsg) {
           activities.push({
-            id: `request-${request.id}`,
-            type: 'request',
-            title: sanitizeStrict(request.title),
-            subtitle: `To ${sanitizeStrict(request.seller)}`,
-            time: new Date(request.date).toLocaleDateString(),
-            amount: sanitizeNumber(request.price, 0, 1000),
-            status: request.status,
-            href: '/buyers/messages',
-            icon: createElement(MessageCircle, { className: "w-4 h-4" })
+            id: `msg-${recentMsg.id}`,
+            type: 'message',
+            title: `Message from ${sanitizeStrict(recentMsg.sender)}`,
+            subtitle: sanitizeStrict(recentMsg.content).substring(0, 50) + '...',
+            time: new Date(recentMsg.timestamp).toLocaleDateString(),
+            href: `/buyers/messages?thread=${thread}`,
+            icon: createElement(MessageCircle, { className: 'w-4 h-4' })
           });
-        });
+        }
+      });
 
-      // Add subscription activities
+      // Add subscription activity
       subscribedSellers.slice(0, 1).forEach(sub => {
         activities.push({
           id: `sub-${sub.seller}`,
           type: 'subscription',
-          title: `Subscribed to ${sanitizeStrict(sub.seller)}`,
-          subtitle: `Premium content access`,
+          title: `Subscribed to ${sub.seller}`,
+          subtitle: 'Premium content access',
           time: 'Active',
-          amount: parseFloat(sub.price) || 25,
-          href: `/sellers/${encodeURIComponent(sub.seller)}`,
-          icon: createElement(Crown, { className: "w-4 h-4" })
+          amount: parseFloat(sub.price),
+          href: `/sellers/${sub.seller}`,
+          icon: createElement(Crown, { className: 'w-4 h-4' })
         });
       });
 
-      // Sort by time and limit
-      activities.sort((a, b) => {
-        if (a.time === 'Active') return -1;
-        if (b.time === 'Active') return 1;
-        try {
+      // Sort by most recent and limit
+      const sortedActivities = activities
+        .sort((a, b) => {
+          if (a.time === 'Active') return -1;
+          if (b.time === 'Active') return 1;
           return new Date(b.time).getTime() - new Date(a.time).getTime();
-        } catch {
-          return 0;
-        }
-      });
-      
-      setRecentActivity(activities.slice(0, 6));
+        })
+        .slice(0, 5);
+
+      setRecentActivity(sortedActivities);
     } catch (error) {
-      console.error('Error generating recent activity:', error);
-      setErrors(prev => [...prev, 'Failed to generate recent activity']);
+      console.error('Error generating activity:', error);
+      setRecentActivity([]);
     }
-  }, [user, orderHistory, requests, subscribedSellers]);
+  }, [user?.username, orderHistory, messages, subscribedSellers]);
 
   return {
     user,
@@ -480,6 +480,10 @@ export const useDashboardData = () => {
     stats,
     subscribedSellers,
     recentActivity,
+    orderHistory,
+    messages,
+    requests,
+    listings,
     isLoading,
     errors
   };
