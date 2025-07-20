@@ -42,7 +42,7 @@ export interface RecentActivity {
 // Component Props
 export interface DashboardHeaderProps {
   username: string;
-  balance: number;
+  // Removed: balance: number;
 }
 
 export interface StatsGridProps {

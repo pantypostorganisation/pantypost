@@ -49,7 +49,7 @@ export default function BuyerDashboardPage() {
                 <Skeleton className="h-6 w-48" />
               </div>
             ) : (
-              <DashboardHeader username={user?.username || ''} balance={balance} />
+              <DashboardHeader username={user?.username || ''} />
             )}
 
             {/* Stats Grid */}
@@ -72,80 +72,27 @@ export default function BuyerDashboardPage() {
 
                 {/* Recent Activity */}
                 {isLoading ? (
-                  <Skeleton className="h-96" />
+                  <Skeleton className="h-64" />
                 ) : (
                   <RecentActivity activities={recentActivity} />
                 )}
               </div>
 
               {/* Sidebar */}
-              <div className="xl:col-span-1 space-y-8">
-                {/* Subscriptions */}
+              <div className="space-y-8">
+                {/* Subscribed Sellers */}
                 {isLoading ? (
                   <Skeleton className="h-64" />
                 ) : (
                   <SubscribedSellers subscriptions={subscribedSellers} />
                 )}
 
-                {/* Order Status */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-2 mb-5">
-                    <Truck className="w-5 h-5 text-blue-400" />
-                    <h2 className="text-xl font-bold text-white">Order Status</h2>
-                  </div>
-                  
-                  {isLoading ? (
-                    <div className="space-y-4">
-                      {[...Array(3)].map((_, i) => (
-                        <Skeleton key={i} className="h-8" />
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Clock className="w-5 h-5 text-orange-400" />
-                            <span className="text-gray-300">Pending</span>
-                          </div>
-                          <span className="text-white font-semibold">{stats.pendingShipments}</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <CheckCircle className="w-5 h-5 text-green-400" />
-                            <span className="text-gray-300">Completed</span>
-                          </div>
-                          <span className="text-white font-semibold">{stats.completedOrders}</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <MessageCircle className="w-5 h-5 text-purple-400" />
-                            <span className="text-gray-300">Requests</span>
-                          </div>
-                          <span className="text-white font-semibold">{stats.pendingRequests}</span>
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={() => window.location.href = '/buyers/my-orders'}
-                        className="w-full mt-6 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 rounded-lg transition-colors"
-                      >
-                        View All Orders
-                      </button>
-                    </>
-                  )}
-                </div>
+                {/* Featured Listings - commented out
+                {featuredListings && featuredListings.length > 0 && (
+                  <FeaturedListings listings={featuredListings} />
+                )} */}
               </div>
             </div>
-
-            {/* Featured Listings Section - Optional */}
-            {/* {featuredListings.length > 0 && (
-              <div className="mt-8">
-                <FeaturedListings listings={featuredListings} />
-              </div>
-            )} */}
           </div>
         </main>
       </RequireAuth>
