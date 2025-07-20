@@ -122,26 +122,21 @@ export default function AddFundsSection({
 
           <div className="space-y-6">
             <div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10" style={{ paddingTop: '28px' }}>
-                  <span className="text-gray-400 text-lg">$</span>
-                </div>
-                <SecureInput
-                  id="amount"
-                  type="text"
-                  label="Amount to add (USD)"
-                  value={amountToAdd}
-                  onChange={handleAmountChange}
-                  onKeyDown={onKeyPress}
-                  placeholder="0.00"
-                  error={amountError}
-                  touched={!!amountToAdd}
-                  disabled={isLoading}
-                  className="pl-10 text-lg"
-                  sanitize={false} // We handle sanitization in handleAmountChange
-                  helpText="Minimum $5.00, Maximum $5,000.00"
-                />
-              </div>
+              <SecureInput
+                id="amount"
+                type="text"
+                label="Amount to add (USD)"
+                value={amountToAdd}
+                onChange={handleAmountChange}
+                onKeyDown={onKeyPress}
+                placeholder="0.00"
+                error={amountError}
+                touched={!!amountToAdd}
+                disabled={isLoading}
+                className="text-lg"
+                sanitize={false} // We handle sanitization in handleAmountChange
+                helpText="Minimum $5.00, Maximum $5,000.00"
+              />
               
               {/* Quick amount buttons */}
               <div className="grid grid-cols-4 gap-3 mt-4">
