@@ -78,13 +78,14 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
                         )}
                       </div>
                       
-                      <p className="text-sm text-gray-400 line-clamp-2 mb-2">
+                      <div className="text-sm text-gray-400 line-clamp-2 mb-2">
                         <SecureMessageDisplay 
                           content={sub.bio}
                           allowBasicFormatting={false}
                           maxLength={200}
+                          className="inline"
                         />
-                      </p>
+                      </div>
                       
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span>{sub.newListings} new listings</span>

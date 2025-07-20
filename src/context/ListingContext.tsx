@@ -89,6 +89,13 @@ export type NotificationItem = string | Notification;
 
 type NotificationStore = Record<string, NotificationItem[]>;
 
+// Add subscription details interface
+interface SubscriptionData {
+  seller: string;
+  price: number;
+  subscribedAt: string;
+}
+
 type ListingContextType = {
   isAuthReady: boolean;
   listings: Listing[];
@@ -1097,6 +1104,24 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         storageService.setItem('subscriptions', updated);
         return updated;
       });
+      
+      // NEW: Store subscription details with the actual price paid
+      const subscriptionDetails = await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
+      const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
+      
+      // Remove any existing subscription to this seller
+      const filteredSubs = buyerSubs.filter(sub => sub.seller !== sanitizedSeller);
+      
+      // Add new subscription with price
+      filteredSubs.push({
+        seller: sanitizedSeller,
+        price: price,
+        subscribedAt: new Date().toISOString()
+      });
+      
+      subscriptionDetails[sanitizedBuyer] = filteredSubs;
+      await storageService.setItem('subscription_details', subscriptionDetails);
+      
       addSellerNotification(
         sanitizedSeller,
         `🎉 ${sanitizedBuyer} subscribed to you!`
@@ -1118,6 +1143,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       storageService.setItem('subscriptions', updated);
       return updated;
     });
+    
+    // NEW: Also remove from subscription details
+    const subscriptionDetails = await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
+    const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
+    const filteredSubs = buyerSubs.filter(sub => sub.seller !== sanitizedSeller);
+    subscriptionDetails[sanitizedBuyer] = filteredSubs;
+    await storageService.setItem('subscription_details', subscriptionDetails);
   };
 
   const isSubscribed = (buyer: string, seller: string): boolean => {

@@ -66,6 +66,13 @@ interface Request {
   date: string;
 }
 
+// Add new interface for subscription data with price
+interface SubscriptionData {
+  seller: string;
+  price: number;
+  subscribedAt: string;
+}
+
 // Helper function to validate and sanitize order data
 const sanitizeOrder = (order: Order): Order => {
   return {
@@ -241,13 +248,21 @@ export const useDashboardData = () => {
       if (!user?.username) return;
 
       try {
+        // Load basic subscription data (which sellers user is subscribed to)
         const subscriptions = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
         const userSubscriptions = subscriptions[user.username] || [];
+        
+        // NEW: Load detailed subscription data with prices
+        const subscriptionDetails = await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
+        const userSubscriptionDetails = subscriptionDetails[user.username] || [];
         
         // Load detailed info for each subscribed seller
         const subscriptionDataPromises = userSubscriptions.map(async (seller) => {
           try {
-            // Load seller profile with validation
+            // First, try to find the subscription details with the actual price paid
+            const subDetail = userSubscriptionDetails.find(sd => sd.seller === seller);
+            
+            // Load seller profile for additional info
             const profileKey = `seller_profile_${seller}`;
             const profileData = await storageService.getItem<any>(profileKey, null);
             
@@ -256,7 +271,8 @@ export const useDashboardData = () => {
             
             return {
               seller: sanitizeStrict(seller),
-              price: profileData?.subscriptionPrice ? sanitizeCurrency(profileData.subscriptionPrice).toString() : '25.00',
+              // Use the actual subscription price from subscription details, or fall back to profile price
+              price: subDetail?.price?.toString() || profileData?.subscriptionPrice || '25.00',
               bio: profileData?.bio ? sanitizeStrict(profileData.bio) : 'No bio available',
               pic: profileData?.profilePic || null,
               newListings: sellerListings.filter(l => l.isPremium).length,
@@ -266,9 +282,11 @@ export const useDashboardData = () => {
             };
           } catch (error) {
             console.error(`Error loading profile for seller ${seller}:`, error);
+            // Try to get from subscription details at least
+            const subDetail = userSubscriptionDetails.find(sd => sd.seller === seller);
             return {
               seller: sanitizeStrict(seller),
-              price: '25.00',
+              price: subDetail?.price?.toString() || '25.00',
               bio: 'No bio available',
               pic: null,
               newListings: 0,

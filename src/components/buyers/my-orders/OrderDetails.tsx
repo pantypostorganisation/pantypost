@@ -39,19 +39,20 @@ export default function OrderDetails({
         {order.tags && order.tags.length > 0 && (
           <div className="flex items-center gap-1">
             <Tag className="w-4 h-4 text-gray-400" />
-            <span className="text-xs text-gray-400">
+            <div className="text-xs text-gray-400">
               {order.tags.slice(0, 2).map((tag, index) => (
-                <React.Fragment key={index}>
+                <span key={index}>
                   {index > 0 && ', '}
                   <SecureMessageDisplay 
                     content={tag}
                     allowBasicFormatting={false}
+                    as="span"
                     className="inline"
                   />
-                </React.Fragment>
+                </span>
               ))}
               {order.tags.length > 2 && '...'}
-            </span>
+            </div>
           </div>
         )}
       </div>

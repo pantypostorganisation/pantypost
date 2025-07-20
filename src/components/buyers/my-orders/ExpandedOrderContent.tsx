@@ -45,13 +45,14 @@ export default function ExpandedOrderContent({
             </div>
           )}
           <div>
-            <p className="font-semibold">
+            <div className="font-semibold">
               <SecureMessageDisplay 
                 content={order.seller}
                 allowBasicFormatting={false}
+                as="span"
               />
-            </p>
-            <p className="text-xs text-gray-400">View seller profile</p>
+            </div>
+            <div className="text-xs text-gray-400">View seller profile</div>
           </div>
           
           {isSellerVerified && (
@@ -124,6 +125,7 @@ export default function ExpandedOrderContent({
                 <SecureMessageDisplay 
                   content={tag}
                   allowBasicFormatting={false}
+                  as="span"
                 />
               </span>
             ))}
