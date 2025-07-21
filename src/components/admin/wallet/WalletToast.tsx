@@ -25,13 +25,13 @@ export default function WalletToast({ message, type, isVisible }: WalletToastPro
         ) : (
           <XCircle className="h-5 w-5" />
         )}
-        <p className="text-sm font-medium">
+        <div className="text-sm font-medium">
           <SecureMessageDisplay 
             content={message} 
             allowBasicFormatting={false}
             className="inline"
           />
-        </p>
+        </div>
       </div>
     </div>
   );

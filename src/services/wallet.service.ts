@@ -344,61 +344,112 @@ export class WalletService {
     try {
       await this.initialize();
       
-      // Direct balance manipulation for admin actions
+      // For admin actions, we should handle them differently than regular transfers
+      // Admin credits should not check admin balance, and debits should not fail on insufficient funds
+      
       const userId = UserId(request.targetUser);
       const amount = Money.fromDollars(request.amount);
       
-      const result = await enhancedWalletService.transfer({
-        from: request.type === 'debit' ? userId : UserId('admin'),
-        to: request.type === 'credit' ? userId : UserId('admin'),
-        amount,
-        type: 'refund', // Use refund type for admin actions to avoid type conflicts
-        description: `Admin ${request.type}: ${request.reason}`,
-        metadata: {
-          adminUser: request.adminUser,
-          reason: request.reason,
-        },
-        idempotencyKey: `admin_${request.type}_${request.targetUser}_${Date.now()}`,
-        platformFeePercent: 0, // No fees on admin actions
-      });
-      
-      if (!result.success) {
-        throw new Error('Admin action failed');
+      if (request.type === 'credit') {
+        // For credits, use the deposit mechanism instead of transfer
+        const result = await enhancedWalletService.deposit({
+          userId,
+          amount,
+          method: 'admin_credit',
+          notes: `Admin credit by ${request.adminUser}: ${request.reason}`,
+          idempotencyKey: `admin_credit_${request.targetUser}_${Date.now()}`,
+        });
+        
+        if (!result.success) {
+          throw new Error('Admin credit failed');
+        }
+        
+        // Create legacy transaction
+        const transaction: Transaction = {
+          id: uuidv4(),
+          type: 'admin_action',
+          amount: request.amount,
+          from: request.adminUser,
+          to: request.targetUser,
+          description: `Admin credit: ${request.reason}`,
+          date: new Date().toISOString(),
+          status: 'completed',
+          metadata: {
+            adminUser: request.adminUser,
+            action: 'credit',
+            reason: request.reason,
+          },
+        };
+        
+        await this.saveTransaction(transaction);
+        
+        // Save admin action log
+        const adminActions = await storageService.getItem<any[]>('admin_actions', []);
+        adminActions.push({
+          ...request,
+          date: transaction.date,
+        });
+        await storageService.setItem('admin_actions', adminActions);
+        
+        return { success: true, data: transaction };
+        
+      } else {
+        // For debits, we need to check the user has sufficient balance first
+        const balanceResult = await this.getBalance(request.targetUser, request.role);
+        if (!balanceResult.success || !balanceResult.data) {
+          throw new Error('Failed to get user balance');
+        }
+        
+        if (balanceResult.data.balance < request.amount) {
+          throw new Error('Insufficient balance for debit');
+        }
+        
+        // Use the enhanced service's updateBalance method directly for debits
+        const result = await enhancedWalletService.updateBalance(
+          request.targetUser,
+          balanceResult.data.balance - request.amount,
+          request.role
+        );
+        
+        if (!result.success) {
+          throw new Error('Admin debit failed');
+        }
+        
+        // Create legacy transaction
+        const transaction: Transaction = {
+          id: uuidv4(),
+          type: 'admin_action',
+          amount: request.amount,
+          from: request.targetUser,
+          to: request.adminUser,
+          description: `Admin debit: ${request.reason}`,
+          date: new Date().toISOString(),
+          status: 'completed',
+          metadata: {
+            adminUser: request.adminUser,
+            action: 'debit',
+            reason: request.reason,
+          },
+        };
+        
+        await this.saveTransaction(transaction);
+        
+        // Save admin action log
+        const adminActions = await storageService.getItem<any[]>('admin_actions', []);
+        adminActions.push({
+          ...request,
+          date: transaction.date,
+        });
+        await storageService.setItem('admin_actions', adminActions);
+        
+        return { success: true, data: transaction };
       }
       
-      // Create legacy transaction
-      const transaction: Transaction = {
-        id: uuidv4(),
-        type: 'admin_action',
-        amount: request.amount,
-        from: request.type === 'debit' ? request.targetUser : request.adminUser,
-        to: request.type === 'credit' ? request.targetUser : request.adminUser,
-        description: `Admin ${request.type}: ${request.reason}`,
-        date: new Date().toISOString(),
-        status: 'completed',
-        metadata: {
-          adminUser: request.adminUser,
-          action: request.type,
-          reason: request.reason,
-        },
-      };
-      
-      await this.saveTransaction(transaction);
-      
-      // Save admin action log
-      const adminActions = await storageService.getItem<any[]>('admin_actions', []);
-      adminActions.push({
-        ...request,
-        date: transaction.date,
-      });
-      await storageService.setItem('admin_actions', adminActions);
-      
-      return { success: true, data: transaction };
     } catch (error) {
       console.error('Admin action error:', error);
       return {
         success: false,
-        error: { message: 'Failed to process admin action' },
+        error: { message: error instanceof Error ? error.message : 'Failed to process admin action' },
       };
     }
   }

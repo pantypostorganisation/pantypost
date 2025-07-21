@@ -1468,6 +1468,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         setAdminActions(prev => [...prev, action]);
         
+        // Force update balances in Header and other components
+        if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
+          setTimeout(() => {
+            (window as any).__pantypost_balance_context.forceUpdate();
+          }, 100);
+        }
+        
         return true;
       });
     } catch (error) {
@@ -1528,6 +1535,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         };
         
         setAdminActions(prev => [...prev, action]);
+        
+        // Force update balances in Header and other components
+        if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
+          setTimeout(() => {
+            (window as any).__pantypost_balance_context.forceUpdate();
+          }, 100);
+        }
         
         return true;
       });

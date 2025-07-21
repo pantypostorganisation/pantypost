@@ -234,6 +234,9 @@ export default function BuyerMessagesPage() {
               )}
             </div>
           </div>
+          
+          {/* Bottom Padding - ADDED */}
+          <div className="py-3 bg-black"></div>
         </div>
 
         {/* Modals */}

@@ -214,11 +214,13 @@ export default function Header() {
     }
   }, [user?.username, user?.role, sellerNotifications]);
 
-  // Memoized balances with safe function checking
+  // ✅ Enhanced balance memoization that also listens to WalletContext changes
   const buyerBalance = useMemo(() => {
     if (!username || typeof getBuyerBalance !== 'function') return 0;
     try {
-      return getBuyerBalance(username) || 0;
+      const balance = getBuyerBalance(username) || 0;
+      console.log('[Header] Buyer balance updated:', balance);
+      return balance;
     } catch (error) {
       console.error('Error getting buyer balance:', error);
       return 0;
@@ -228,12 +230,56 @@ export default function Header() {
   const sellerBalance = useMemo(() => {
     if (!username || typeof getSellerBalance !== 'function') return 0;
     try {
-      return getSellerBalance(username) || 0;
+      const balance = getSellerBalance(username) || 0;
+      console.log('[Header] Seller balance updated:', balance);
+      return balance;
     } catch (error) {
       console.error('Error getting seller balance:', error);
       return 0;
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
+
+  // ✅ Add effect to listen for balance changes in WalletContext
+  useEffect(() => {
+    if (!username) return;
+
+    // Check for balance changes on a short interval
+    const checkBalanceChanges = () => {
+      if (!isMountedRef.current) return;
+
+      let hasChanged = false;
+
+      if (role === 'buyer' && typeof getBuyerBalance === 'function') {
+        const currentBalance = getBuyerBalance(username);
+        const displayedBalance = buyerBalance;
+        if (Math.abs(currentBalance - displayedBalance) > 0.01) {
+          console.log('[Header] Buyer balance change detected:', { current: currentBalance, displayed: displayedBalance });
+          hasChanged = true;
+        }
+      }
+
+      if (role === 'seller' && typeof getSellerBalance === 'function') {
+        const currentBalance = getSellerBalance(username);
+        const displayedBalance = sellerBalance;
+        if (Math.abs(currentBalance - displayedBalance) > 0.01) {
+          console.log('[Header] Seller balance change detected:', { current: currentBalance, displayed: displayedBalance });
+          hasChanged = true;
+        }
+      }
+
+      if (hasChanged) {
+        setBalanceUpdateTrigger(prev => prev + 1);
+      }
+    };
+
+    // Check immediately
+    checkBalanceChanges();
+
+    // Then check every second for immediate updates
+    const interval = setInterval(checkBalanceChanges, 1000);
+
+    return () => clearInterval(interval);
+  }, [username, role, getBuyerBalance, getSellerBalance, buyerBalance, sellerBalance]);
 
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
@@ -272,9 +318,10 @@ export default function Header() {
     if (!isMountedRef.current) return;
     
     const now = Date.now();
-    if (now - lastBalanceUpdate.current < 2000) return; // Rate limit to 2 seconds
+    if (now - lastBalanceUpdate.current < 500) return; // Reduced rate limit to 500ms for faster updates
     
     lastBalanceUpdate.current = now;
+    console.log('[Header] Force updating balances');
     setBalanceUpdateTrigger(prev => prev + 1);
   }, []);
 
@@ -378,10 +425,10 @@ export default function Header() {
     }
   }, [user, sellerNotifications, deletingNotifications]);
 
-  // Setup intervals using custom hook
+  // Setup intervals using custom hook - reduced interval for faster updates
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
-  }, 15000);
+  }, 5000); // Reduced from 15000 to 5000 for more frequent updates
 
   const clearAuctionInterval = useInterval(() => {
     if (isMountedRef.current) checkAuctionsWithRateLimit();
@@ -430,8 +477,17 @@ export default function Header() {
       if (isMountedRef.current) forceUpdateBalances();
     };
     
+    // ✅ Custom event listener for wallet updates
+    const handleWalletUpdate = (event: CustomEvent) => {
+      console.log('[Header] Wallet update event received');
+      if (isMountedRef.current) {
+        forceUpdateBalances();
+      }
+    };
+    
     window.addEventListener('updateReports', handleUpdateReports);
     window.addEventListener('auctionEnded', handleAuctionEnd);
+    window.addEventListener('walletUpdated', handleWalletUpdate as EventListener);
     
     // ✅ Secure context-based balance updates instead of global window function
     const balanceUpdateContext = { forceUpdate: forceUpdateBalances };
@@ -450,6 +506,7 @@ export default function Header() {
       // Remove event listeners
       window.removeEventListener('updateReports', handleUpdateReports);
       window.removeEventListener('auctionEnd', handleAuctionEnd);
+      window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
       
       // Clean up context
       if (typeof window !== 'undefined') {

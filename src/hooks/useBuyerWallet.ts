@@ -113,14 +113,33 @@ export const useBuyerWallet = () => {
     if (!user?.username) return;
 
     try {
-      // Get detailed balance from enhanced service
-      const balance = await WalletIntegration.getBalanceInDollars(user.username, 'buyer');
-      console.log('Balance from WalletIntegration:', balance);
+      // Get balance directly from WalletContext first (this is always up-to-date)
+      const contextBalance = getBuyerBalance(user.username);
+      console.log('Balance from WalletContext:', contextBalance);
+      
+      // Update local state immediately with context balance
+      updateState({
+        balance: contextBalance,
+        availableBalance: contextBalance,
+        lastSyncTime: new Date(),
+      });
+      
+      // Then get detailed balance from enhanced service for additional info
+      const enhancedBalance = await WalletIntegration.getBalanceInDollars(user.username, 'buyer');
+      console.log('Balance from WalletIntegration:', enhancedBalance);
       
       // Validate balance is a valid number
-      if (typeof balance !== 'number' || isNaN(balance) || balance < 0) {
-        console.error('Invalid balance received:', balance);
+      if (typeof enhancedBalance !== 'number' || isNaN(enhancedBalance) || enhancedBalance < 0) {
+        console.error('Invalid balance received from integration:', enhancedBalance);
+        // Keep using the context balance which we know is valid
         return;
+      }
+      
+      // If there's a discrepancy, use the context balance as it's the source of truth
+      if (Math.abs(contextBalance - enhancedBalance) > 0.01) {
+        console.warn('Balance discrepancy detected, using WalletContext balance');
+        // Update the storage to match context
+        await setBuyerBalance(user.username, contextBalance);
       }
       
       // Get transaction history for pending calculations
@@ -145,53 +164,82 @@ export const useBuyerWallet = () => {
       const remainingLimit = Money.toDollars(WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT) - todaysDepositTotal;
       
       updateState({
-        balance,
-        availableBalance: balance, // Enhanced service handles pending
-        pendingBalance: 0, // Will be calculated by enhanced service
+        balance: contextBalance, // Always use context balance
+        availableBalance: contextBalance,
+        pendingBalance: 0,
         remainingDepositLimit: Math.max(0, remainingLimit),
         transactionHistory: history,
         lastSyncTime: new Date(),
       });
       
-      // Update WalletContext so header shows correct balance
-      console.log('Updating WalletContext balance:', { username: user.username, balance });
-      await setBuyerBalance(user.username, balance);
-      
-      // IMPORTANT: Also update the wallet_buyers storage that WalletContext reads from
-      const buyers = await storageService.getItem<Record<string, number>>("wallet_buyers", {});
-      buyers[user.username] = balance; // balance is already in dollars from WalletIntegration
-      await storageService.setItem("wallet_buyers", buyers);
-      
-      // Also update the individual key that enhanced service uses (in cents)
-      const balanceInCents = Math.round(balance * 100);
-      await storageService.setItem(`wallet_buyer_${user.username}`, balanceInCents);
-      
-      console.log('WalletContext balance updated successfully in both states:', {
-        username: user.username,
-        balanceInDollars: balance,
-        balanceInCents: balanceInCents,
-        buyers: buyers
-      });
     } catch (error) {
       console.error('Balance sync error:', error);
+      // Even on error, update with context balance
+      const contextBalance = getBuyerBalance(user.username);
       updateState({
-        message: 'Failed to sync wallet balance. Please refresh the page.',
+        balance: contextBalance,
+        availableBalance: contextBalance,
+        message: 'Failed to sync full wallet details. Balance shown is current.',
         messageType: 'error'
       });
     }
-  }, [user, getTransactionHistory, updateState, setBuyerBalance]);
+  }, [user, getBuyerBalance, setBuyerBalance, getTransactionHistory, updateState]);
 
   // Create a ref to always have the latest syncBalance function
   const syncBalanceRef = useRef(syncBalance);
   syncBalanceRef.current = syncBalance;
 
-  // Initial sync and periodic updates - FIXED: removed syncBalance from dependencies
+  // Listen for changes in buyer balance from WalletContext
   useEffect(() => {
     if (user?.username) {
-      // Call the ref version to avoid dependency issues
+      // Get the current balance from context
+      const contextBalance = getBuyerBalance(user.username);
+      // If it's different from our local state, sync
+      if (Math.abs(contextBalance - state.balance) > 0.01) {
+        console.log('Balance change detected in context, syncing...');
+        syncBalanceRef.current();
+      }
+    }
+  }, [getBuyerBalance, user?.username, state.balance]);
+
+  // Also listen for global balance update events (from Header component)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && user?.username) {
+      const handleBalanceUpdate = () => {
+        console.log('Global balance update event detected, syncing...');
+        syncBalanceRef.current();
+      };
+
+      // Set up listener for global balance updates
+      const originalContext = (window as any).__pantypost_balance_context;
+      if (originalContext && originalContext.forceUpdate) {
+        // Wrap the original forceUpdate to also trigger our sync
+        const originalForceUpdate = originalContext.forceUpdate;
+        originalContext.forceUpdate = () => {
+          originalForceUpdate();
+          handleBalanceUpdate();
+        };
+      }
+
+      // Return cleanup function
+      return () => {
+        if (originalContext && originalContext.forceUpdate) {
+          // Restore original function on cleanup
+          (window as any).__pantypost_balance_context = originalContext;
+        }
+      };
+    }
+    // Return undefined when no cleanup is needed
+    return undefined;
+  }, [user?.username]);
+
+  // Initial sync and periodic updates
+  useEffect(() => {
+    if (user?.username) {
+      // Initial sync
       syncBalanceRef.current();
       
-      // Sync every 30 seconds using ref
+      // Sync every 30 seconds
       syncIntervalRef.current = setInterval(() => {
         syncBalanceRef.current();
       }, 30000);
@@ -202,9 +250,8 @@ export const useBuyerWallet = () => {
         }
       };
     }
-    // Return undefined when user is not logged in
     return undefined;
-  }, [user?.username]); // Only depend on username changing
+  }, [user?.username]);
 
   // Enhanced add funds with validation and rate limiting
   const handleAddFunds = useCallback(async () => {
