@@ -235,6 +235,7 @@ export default function ThreadsSidebar({
                               content={seller}
                               allowBasicFormatting={false}
                               className="inline"
+                              as="span"
                             />
                             {profile.verified && (
                               <span className="text-xs text-blue-500">(Verified)</span>
@@ -251,7 +252,7 @@ export default function ThreadsSidebar({
                         </div>
                         
                         {lastMessage && (
-                          <p className="text-sm text-gray-400 truncate">
+                          <div className="text-sm text-gray-400 truncate">
                             {lastMessage.type === 'customRequest' ? (
                               <span className="flex items-center gap-1">
                                 <Package size={12} />
@@ -264,9 +265,10 @@ export default function ThreadsSidebar({
                                 content={lastMessage.content || ''}
                                 allowBasicFormatting={false}
                                 maxLength={50}
+                                as="span"
                               />
                             )}
-                          </p>
+                          </div>
                         )}
                         
                         {unreadCount > 0 && (
@@ -316,6 +318,7 @@ export default function ThreadsSidebar({
                         <SecureMessageDisplay 
                           content={request.title}
                           allowBasicFormatting={false}
+                          as="span"
                         />
                       </h4>
                       <span className={`text-xs px-2 py-1 rounded-full ${
@@ -333,6 +336,7 @@ export default function ThreadsSidebar({
                         content={request.seller}
                         allowBasicFormatting={false}
                         className="inline"
+                        as="span"
                       />
                     </p>
                     <p className="text-sm font-semibold text-[#ff950e]">${request.price.toFixed(2)}</p>

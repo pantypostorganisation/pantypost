@@ -401,7 +401,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                     <span className="font-medium">Moderator</span>
                   </div>
                   <p className="text-white">
-                    <SecureMessageDisplay content={banInfo.bannedBy} allowBasicFormatting={false} />
+                    <SecureMessageDisplay content={banInfo.bannedBy} allowBasicFormatting={false} as="span" />
                   </p>
                 </div>
               </div>
@@ -646,11 +646,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
             <p className="mb-2">
               For urgent matters or technical issues, you can contact our support team.
             </p>
-            <p>
+            <div>
               Please reference your username: <strong className="text-white">
-                <SecureMessageDisplay content={user?.username || ''} allowBasicFormatting={false} />
+                <SecureMessageDisplay content={user?.username || ''} allowBasicFormatting={false} as="span" />
               </strong>
-            </p>
+            </div>
           </div>
           
           {/* Last Status Check */}

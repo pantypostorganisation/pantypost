@@ -165,6 +165,7 @@ export default function ConversationsContent({
                   <SecureMessageDisplay 
                     content={userKey}
                     allowBasicFormatting={false}
+                    as="span"
                   />
                 </h3>
                 <span className="text-xs text-gray-400 whitespace-nowrap ml-1 flex items-center">
@@ -172,7 +173,7 @@ export default function ConversationsContent({
                   {lastMessage ? formatTimeAgo(lastMessage.date) : ''}
                 </span>
               </div>
-              <p className="text-sm text-gray-400 truncate">
+              <div className="text-sm text-gray-400 truncate">
                 {lastMessage ? (
                   lastMessage.type === 'customRequest' 
                     ? '🛠️ Custom Request'
@@ -182,9 +183,10 @@ export default function ConversationsContent({
                           content={lastMessage.content}
                           allowBasicFormatting={false}
                           maxLength={50}
+                          as="span"
                         />
                 ) : ''}
-              </p>
+              </div>
             </div>
           </div>
         );

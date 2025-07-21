@@ -3,6 +3,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { storageService } from '@/services';
+import { usersService } from '@/services/users.service';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { z } from 'zod';
 
@@ -61,6 +62,39 @@ export type IPBan = {
   reason: string;
 };
 
+// Admin usernames that cannot be banned
+const PROTECTED_USERNAMES = ['admin', 'administrator', 'moderator', 'mod', 'system'];
+
+// Specific admin accounts that cannot be banned
+const ADMIN_ACCOUNTS = ['oakley', 'gerome', 'admin'];
+
+// Helper function to check if a username is protected
+const isProtectedUsername = (username: string): boolean => {
+  const cleanUsername = (username || '').toLowerCase().trim();
+  
+  // Check if it's a specific admin account
+  if (ADMIN_ACCOUNTS.includes(cleanUsername)) {
+    return true;
+  }
+  
+  // Check if username contains protected terms
+  return PROTECTED_USERNAMES.some(protectedName => cleanUsername.includes(protectedName));
+};
+
+// Helper function to check if a user is an admin via the users service
+const checkUserRole = async (username: string): Promise<'buyer' | 'seller' | 'admin' | null> => {
+  try {
+    const result = await usersService.getUser(username);
+    if (result.success && result.data && result.data.role) {
+      return result.data.role;
+    }
+    return null;
+  } catch (error) {
+    console.error('[BanContext] Error checking user role:', error);
+    return null;
+  }
+};
+
 type BanContextType = {
   bans: UserBan[];
   banHistory: BanHistory[];
@@ -68,8 +102,8 @@ type BanContextType = {
   ipBans: IPBan[];
   
   // Enhanced ban management
-  banUser: (username: string, hours: number | 'permanent', reason: BanReason, customReason?: string, adminUsername?: string, reportIds?: string[], notes?: string) => Promise<boolean>;
-  unbanUser: (username: string, adminUsername?: string, reason?: string) => boolean;
+  banUser: (username: string, hours: number | 'permanent', reason: BanReason, customReason?: string, adminUsername?: string, reportIds?: string[], notes?: string, targetUserRole?: 'buyer' | 'seller' | 'admin') => Promise<boolean>;
+  unbanUser: (username: string, adminUsername?: string, reason?: string) => Promise<boolean>;
   isUserBanned: (username: string) => UserBan | null;
   getBanInfo: (username: string) => UserBan | null;
   
@@ -109,7 +143,7 @@ type BanContextType = {
   };
   
   // Validation
-  validateBanInput: (username: string, hours: number | 'permanent', reason: BanReason) => { valid: boolean; error?: string };
+  validateBanInput: (username: string, hours: number | 'permanent', reason: BanReason, targetUserRole?: 'buyer' | 'seller' | 'admin') => Promise<{ valid: boolean; error?: string }>;
   
   // Force refresh
   refreshBanData: () => Promise<void>;
@@ -449,12 +483,30 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
-  // Enhanced validation function
-  const validateBanInput = (username: string, hours: number | 'permanent', reason: BanReason): { valid: boolean; error?: string } => {
+  // Enhanced validation function - now async to check user role
+  const validateBanInput = useCallback(async (username: string, hours: number | 'permanent', reason: BanReason, targetUserRole?: 'buyer' | 'seller' | 'admin'): Promise<{ valid: boolean; error?: string }> => {
     // Validate username
     const sanitizedUsername = sanitizeUsername(username);
     if (!sanitizedUsername) {
       return { valid: false, error: 'Invalid username format' };
+    }
+    
+    // If role is provided, check it first (faster)
+    if (targetUserRole === 'admin') {
+      return { valid: false, error: 'Admin accounts cannot be banned' };
+    }
+    
+    // Check if username is in the protected list
+    if (isProtectedUsername(username)) {
+      return { valid: false, error: 'This account is protected and cannot be banned' };
+    }
+    
+    // If no role provided, check via user service
+    if (!targetUserRole) {
+      const userRole = await checkUserRole(username);
+      if (userRole === 'admin') {
+        return { valid: false, error: 'Admin accounts cannot be banned' };
+      }
     }
     
     // Validate duration
@@ -470,7 +522,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     return { valid: true };
-  };
+  }, []);
 
   // Add to ban history
   const addBanHistory = useCallback((action: BanHistory['action'], username: string, details: string, adminUsername: string, metadata?: Record<string, any>) => {
@@ -532,14 +584,21 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     customReason?: string, 
     adminUsername: string = 'system',
     reportIds: string[] = [],
-    notes?: string
+    notes?: string,
+    targetUserRole?: 'buyer' | 'seller' | 'admin'
   ): Promise<boolean> => {
-    console.log('[BanContext] Attempting to ban user:', { username, hours, reason });
+    console.log('[BanContext] Attempting to ban user:', { username, hours, reason, targetUserRole });
     
     // Validate input
-    const validation = validateBanInput(username, hours, reason);
+    const validation = await validateBanInput(username, hours, reason, targetUserRole);
     if (!validation.valid) {
       console.error('[BanContext] Ban validation failed:', validation.error);
+      if (validation.error === 'Admin accounts cannot be banned' || validation.error === 'This account is protected and cannot be banned') {
+        // Show user-friendly error
+        if (typeof window !== 'undefined') {
+          alert(validation.error);
+        }
+      }
       return false;
     }
     
@@ -640,10 +699,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Always release lock
       await storageService.removeItem(lockKey);
     }
-  }, [bans, addBanHistory, scheduleExpiration]);
+  }, [bans, addBanHistory, scheduleExpiration, validateBanInput]);
 
-  // Enhanced unban function
-  const unbanUser = useCallback((username: string, adminUsername: string = 'system', reason?: string): boolean => {
+  // Enhanced unban function - now async to ensure proper persistence
+  const unbanUser = useCallback(async (username: string, adminUsername: string = 'system', reason?: string): Promise<boolean> => {
     try {
       const cleanUsername = sanitizeUsername(username) || username;
       const cleanAdminUsername = sanitizeUsername(adminUsername) || adminUsername;
@@ -651,30 +710,64 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       console.log('[BanContext] Unbanning user:', { username: cleanUsername, admin: cleanAdminUsername });
       
-      let unbanned = false;
-      setBans(prev => prev.map(ban => {
-        if (ban.username === cleanUsername && ban.active) {
-          // Clear any active timer
-          clearExpirationTimer(ban.id);
-          unbanned = true;
+      // Find the ban to unban
+      const banToUnban = bans.find(ban => ban.username === cleanUsername && ban.active);
+      if (!banToUnban) {
+        console.warn('[BanContext] No active ban found for user:', cleanUsername);
+        return false;
+      }
+      
+      // Clear any active timer first
+      clearExpirationTimer(banToUnban.id);
+      
+      // Update the ban to set active to false
+      const updatedBans = bans.map(ban => {
+        if (ban.id === banToUnban.id) {
           return { ...ban, active: false };
         }
         return ban;
-      }));
+      });
       
-      if (unbanned) {
-        addBanHistory('unbanned', cleanUsername, cleanReason || 'Ban lifted by admin', cleanAdminUsername);
-        console.log('[BanContext] User unbanned successfully');
-      } else {
-        console.warn('[BanContext] No active ban found for user:', cleanUsername);
+      // Save to storage BEFORE updating state to ensure persistence
+      isSavingRef.current = true;
+      await storageService.setItem('panty_user_bans', updatedBans);
+      
+      // Now update state
+      setBans(updatedBans);
+      
+      // Add to history
+      addBanHistory('unbanned', cleanUsername, cleanReason || 'Ban lifted by admin', cleanAdminUsername);
+      
+      // Save history
+      const updatedHistory = [...banHistory, {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        username: cleanUsername,
+        action: 'unbanned' as const,
+        details: cleanReason || 'Ban lifted by admin',
+        timestamp: new Date().toISOString(),
+        adminUsername: cleanAdminUsername,
+        metadata: {}
+      }];
+      await storageService.setItem('panty_ban_history', updatedHistory);
+      
+      isSavingRef.current = false;
+      
+      console.log('[BanContext] User unbanned successfully');
+      
+      // Dispatch event for UI updates
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('banUpdated', { 
+          detail: { banId: banToUnban.id, username: cleanUsername, action: 'unbanned' } 
+        }));
       }
       
-      return unbanned;
+      return true;
     } catch (error) {
       console.error('[BanContext] Error unbanning user:', error);
+      isSavingRef.current = false;
       return false;
     }
-  }, [addBanHistory, clearExpirationTimer]);
+  }, [bans, banHistory, addBanHistory, clearExpirationTimer]);
 
   // Enhanced appeal submission with evidence
   const submitAppeal = useCallback(async (username: string, appealText: string, evidence?: File[]): Promise<boolean> => {

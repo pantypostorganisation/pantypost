@@ -6,7 +6,8 @@ import { BanModalProps } from './types';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { sanitizeNumber } from '@/utils/security/sanitization';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usersService } from '@/services/users.service';
 
 export default function BanModal({
   isOpen,
@@ -24,7 +25,51 @@ export default function BanModal({
     notes: false
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+  const [targetUserRole, setTargetUserRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
+  const [isCheckingUser, setIsCheckingUser] = useState(false);
+
+  // Check user role when username changes
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (!banForm.username.trim()) {
+        setTargetUserRole(null);
+        return;
+      }
+      
+      setIsCheckingUser(true);
+      try {
+        const result = await usersService.getUser(banForm.username);
+        if (result.success && result.data) {
+          setTargetUserRole(result.data.role);
+          
+          // If user is admin, set error immediately
+          if (result.data.role === 'admin') {
+            setErrors(prev => ({
+              ...prev,
+              username: 'Admin accounts cannot be banned'
+            }));
+          } else {
+            // Clear username error if not admin
+            setErrors(prev => {
+              const { username, ...rest } = prev;
+              return rest;
+            });
+          }
+        } else {
+          setTargetUserRole(null);
+        }
+      } catch (error) {
+        console.error('Failed to check user role:', error);
+        setTargetUserRole(null);
+      } finally {
+        setIsCheckingUser(false);
+      }
+    };
+    
+    const debounceTimer = setTimeout(checkUserRole, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [banForm.username]);
+
   if (!isOpen) return null;
 
   // Handle secure form submission
@@ -37,6 +82,11 @@ export default function BanModal({
     // Validate username
     if (!banForm.username.trim()) {
       validationErrors.username = 'Username is required';
+    }
+    
+    // Check if trying to ban an admin
+    if (targetUserRole === 'admin') {
+      validationErrors.username = 'Admin accounts cannot be banned';
     }
     
     // Validate hours for temporary ban
@@ -87,6 +137,7 @@ export default function BanModal({
       notes: false
     });
     setErrors({});
+    setTargetUserRole(null);
     onClose();
   };
 
@@ -119,6 +170,16 @@ export default function BanModal({
                 maxLength={50}
                 required
               />
+              {isCheckingUser && (
+                <p className="text-xs text-gray-400 mt-1">Checking user...</p>
+              )}
+              {targetUserRole && !errors.username && (
+                <p className="text-xs text-gray-400 mt-1">
+                  User role: <span className={targetUserRole === 'admin' ? 'text-red-400 font-bold' : 'text-gray-300'}>
+                    {targetUserRole}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Ban Type */}
@@ -128,6 +189,7 @@ export default function BanModal({
                 value={banForm.banType}
                 onChange={(e) => setBanForm(prev => ({ ...prev, banType: e.target.value as 'temporary' | 'permanent' }))}
                 className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                disabled={targetUserRole === 'admin'}
               >
                 <option value="temporary">Temporary</option>
                 <option value="permanent">Permanent</option>
@@ -151,6 +213,7 @@ export default function BanModal({
                   touched={touched.hours}
                   helpText="Maximum: 8760 hours (1 year)"
                   sanitize={false}
+                  disabled={targetUserRole === 'admin'}
                 />
               </div>
             )}
@@ -162,6 +225,7 @@ export default function BanModal({
                 value={banForm.reason}
                 onChange={(e) => setBanForm(prev => ({ ...prev, reason: e.target.value as any }))}
                 className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                disabled={targetUserRole === 'admin'}
               >
                 <option value="harassment">Harassment</option>
                 <option value="scam">Scam/Fraud</option>
@@ -187,6 +251,7 @@ export default function BanModal({
                   touched={touched.customReason}
                   maxLength={200}
                   required={banForm.reason === 'other'}
+                  disabled={targetUserRole === 'admin'}
                 />
               </div>
             )}
@@ -203,6 +268,7 @@ export default function BanModal({
                 placeholder="Additional details..."
                 touched={touched.details}
                 maxLength={300}
+                disabled={targetUserRole === 'admin'}
               />
             </div>
             
@@ -219,8 +285,22 @@ export default function BanModal({
                 touched={touched.notes}
                 maxLength={1000}
                 characterCount={true}
+                disabled={targetUserRole === 'admin'}
               />
             </div>
+
+            {/* Admin warning */}
+            {targetUserRole === 'admin' && (
+              <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg">
+                <div className="flex items-center text-red-400">
+                  <AlertCircle size={16} className="mr-2" />
+                  <span className="font-medium">Admin Account Protection</span>
+                </div>
+                <p className="text-sm text-red-300 mt-1">
+                  This is an admin account and cannot be banned for security reasons.
+                </p>
+              </div>
+            )}
           </div>
           
           <div className="flex gap-3 mt-6">
@@ -234,8 +314,8 @@ export default function BanModal({
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center transition-colors"
-              disabled={isProcessing}
+              className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center justify-center transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              disabled={isProcessing || targetUserRole === 'admin'}
             >
               {isProcessing ? (
                 <>

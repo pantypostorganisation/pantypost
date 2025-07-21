@@ -43,7 +43,7 @@ export const useBanManagement = () => {
         rejectedAppeals: 0
       }
     }), 
-    unbanUser = () => false, 
+    unbanUser = async () => false, 
     reviewAppeal = () => false,
     banHistory = [],
     updateExpiredBans = () => {},
@@ -76,7 +76,7 @@ export const useBanManagement = () => {
     return undefined;
   }, [updateExpiredBans]);
 
-  // Listen for ban expiration events
+  // Listen for ban expiration and update events
   useEffect(() => {
     const handleBanExpired = (event: CustomEvent) => {
       console.log('[useBanManagement] Ban expired event:', event.detail);
@@ -86,9 +86,20 @@ export const useBanManagement = () => {
       }
     };
 
+    const handleBanUpdated = (event: CustomEvent) => {
+      console.log('[useBanManagement] Ban updated event:', event.detail);
+      // Force refresh when a ban is updated
+      if (refreshBanData) {
+        refreshBanData();
+      }
+    };
+
     window.addEventListener('banExpired', handleBanExpired as EventListener);
+    window.addEventListener('banUpdated', handleBanUpdated as EventListener);
+    
     return () => {
       window.removeEventListener('banExpired', handleBanExpired as EventListener);
+      window.removeEventListener('banUpdated', handleBanUpdated as EventListener);
     };
   }, [refreshBanData]);
 
@@ -131,7 +142,7 @@ export const useBanManagement = () => {
     return getBanStats();
   }, [banContext, getBanStats]);
 
-  // Secure unban handler with rate limiting
+  // Secure unban handler with rate limiting - now properly async
   const secureUnbanUser = useCallback(async (username: string, adminUsername: string, reason?: string): Promise<boolean> => {
     // Clear previous error
     setRateLimitError(null);
@@ -155,7 +166,14 @@ export const useBanManagement = () => {
 
     setIsLoading(true);
     try {
+      // Call the async unbanUser function
       const result = await unbanUser(sanitizedUsername, sanitizedAdminUsername, sanitizedReason);
+      
+      if (result) {
+        console.log('[useBanManagement] User unbanned successfully');
+        // The BanContext will dispatch a banUpdated event, which will trigger a refresh
+      }
+      
       return result;
     } catch (error) {
       console.error('Error unbanning user:', error);
@@ -194,6 +212,12 @@ export const useBanManagement = () => {
     setIsLoading(true);
     try {
       const result = await reviewAppeal(appealId, decision, sanitizedNotes, sanitizedAdminUsername);
+      
+      if (result && refreshBanData) {
+        // Refresh data after successful review
+        await refreshBanData();
+      }
+      
       return result;
     } catch (error) {
       console.error('Error reviewing appeal:', error);
@@ -201,7 +225,7 @@ export const useBanManagement = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [reviewAppeal, rateLimiter]);
+  }, [reviewAppeal, rateLimiter, refreshBanData]);
 
   // Secure setter for appeal review notes
   const setAppealReviewNotesSafe = useCallback((notes: string) => {
