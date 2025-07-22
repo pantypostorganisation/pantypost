@@ -198,6 +198,44 @@ function AdminWalletContent() {
     setAllUsers(sortedUsers);
   }, [listingUsers, wallet, buyerBalances, sellerBalances, user]);
 
+  // Get user balance - Fixed to handle all possible data formats
+  const getUserBalance = (username: string) => {
+    // Check if user is a buyer or seller
+    const user = allUsers.find(u => u.username === username);
+    let balance = 0;
+    
+    if (user?.role === 'seller') {
+      const sellerBalance = sellerBalances[username];
+      // Handle case where balance might be an object
+      if (typeof sellerBalance === 'number') {
+        balance = sellerBalance;
+      } else if (sellerBalance && typeof sellerBalance === 'object' && 'balance' in sellerBalance) {
+        balance = (sellerBalance as any).balance;
+      } else {
+        balance = 0;
+      }
+    } else {
+      // Default to buyer balance
+      const buyerBalance = buyerBalances[username];
+      if (typeof buyerBalance === 'number') {
+        balance = buyerBalance;
+      } else if (buyerBalance && typeof buyerBalance === 'object' && 'balance' in buyerBalance) {
+        balance = (buyerBalance as any).balance;
+      } else {
+        // Fallback to wallet
+        const walletBalance = wallet[username];
+        if (typeof walletBalance === 'number') {
+          balance = walletBalance;
+        } else {
+          balance = 0;
+        }
+      }
+    }
+    
+    // Ensure we always return a valid number
+    return isNaN(balance) ? 0 : balance;
+  };
+
   // Filter users based on search term, role filter, and balance filter
   useEffect(() => {
     let filtered = allUsers;
@@ -398,17 +436,6 @@ function AdminWalletContent() {
     setAmount('');
     setReason('');
     setActionType('credit');
-  };
-
-  // Get user balance - now checks both buyerBalances and sellerBalances
-  const getUserBalance = (username: string) => {
-    // Check if user is a buyer or seller
-    const user = allUsers.find(u => u.username === username);
-    if (user?.role === 'seller') {
-      return sellerBalances[username] || 0;
-    }
-    // Default to buyer balance
-    return buyerBalances[username] || wallet[username] || 0;
   };
 
   // Get role badge color
