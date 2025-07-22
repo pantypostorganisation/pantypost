@@ -1,7 +1,7 @@
 // src/app/admin/wallet-management/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -14,11 +14,27 @@ import ConfirmationModal from '@/components/admin/wallet/ConfirmationModal';
 import WalletToast from '@/components/admin/wallet/WalletToast';
 import { Shield, Loader2 } from 'lucide-react';
 import { WalletProvider, useWallet } from '@/context/WalletContext';
+import { useWebSocket } from '@/context/WebSocketContext';
+import { subscribeToWalletUpdates, getWalletBalanceListener } from '@/utils/walletSync';
+import { WebSocketEvent } from '@/types/websocket';
 
 function AdminWalletContent() {
-  const { wallet, adminCreditUser, adminDebitUser, adminActions } = useWallet();
+  const { 
+    wallet, 
+    adminCreditUser, 
+    adminDebitUser, 
+    adminActions,
+    buyerBalances,
+    sellerBalances,
+    reloadData 
+  } = useWallet();
   const { user } = useAuth();
   const { users: listingUsers } = useListings();
+  const { subscribe, isConnected } = useWebSocket();
+  
+  // Force re-render hook
+  const [, forceUpdate] = useState({});
+  const forceRender = useCallback(() => forceUpdate({}), []);
   
   // Search and filtering
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,88 +72,131 @@ function AdminWalletContent() {
   // Check if user is admin
   const isAdmin = user && (user.username === 'oakley' || user.username === 'gerome');
 
-  // Load all users on component mount and when users object changes
+  // Subscribe to WebSocket balance updates
   useEffect(() => {
-    console.log('=== DEBUGGING USER LOADING ===');
-    console.log('ListingContext users:', listingUsers);
-    console.log('Wallet context keys:', Object.keys(wallet));
-    console.log('Current user from auth:', user);
+    if (!isConnected) return;
+
+    // Subscribe to wallet balance updates
+    const unsubBalance = subscribe(WebSocketEvent.WALLET_BALANCE_UPDATE, (data: any) => {
+      console.log('[AdminWallet] Received balance update:', data);
+      // Force component re-render when any balance updates
+      forceRender();
+    });
+
+    // Subscribe to wallet transactions
+    const unsubTransaction = subscribe(WebSocketEvent.WALLET_TRANSACTION, (data: any) => {
+      console.log('[AdminWallet] Received transaction:', data);
+      forceRender();
+    });
+
+    return () => {
+      unsubBalance();
+      unsubTransaction();
+    };
+  }, [isConnected, subscribe, forceRender]);
+
+  // Subscribe to custom wallet updates
+  useEffect(() => {
+    const unsubscribe = subscribeToWalletUpdates((data) => {
+      console.log('[AdminWallet] Custom wallet update:', data);
+      forceRender();
+    });
+
+    return unsubscribe;
+  }, [forceRender]);
+
+  // Subscribe to real-time balance updates for specific users
+  useEffect(() => {
+    const balanceListener = getWalletBalanceListener();
+    const subscriptions: (() => void)[] = [];
+
+    // Subscribe to balance updates for all displayed users
+    displayedUsers.forEach(user => {
+      const unsubscribe = balanceListener.subscribe(
+        user.username,
+        user.role as 'buyer' | 'seller',
+        (newBalance) => {
+          console.log(`[AdminWallet] Balance updated for ${user.username}: ${newBalance}`);
+          forceRender();
+        }
+      );
+      subscriptions.push(unsubscribe);
+    });
+
+    return () => {
+      subscriptions.forEach(unsub => unsub());
+    };
+  }, [displayedUsers, forceRender]);
+
+  // Load all users - now using combined wallet data
+  useEffect(() => {
+    console.log('=== LOADING USERS WITH REAL-TIME DATA ===');
+    console.log('Buyer balances:', buyerBalances);
+    console.log('Seller balances:', sellerBalances);
+    console.log('Wallet object:', wallet);
     
-    const walletUsernames = Object.keys(wallet);
-    console.log('Users found in wallet:', walletUsernames);
+    let allUsersMap: {[key: string]: any} = {};
     
-    let allUsers: {[key: string]: any} = {};
-    
+    // Add users from ListingContext
     if (listingUsers && Object.keys(listingUsers).length > 0) {
       Object.entries(listingUsers).forEach(([username, userData]) => {
-        allUsers[username] = userData;
+        allUsersMap[username] = userData;
       });
     }
     
-    walletUsernames.forEach(username => {
-      if (!allUsers[username]) {
-        allUsers[username] = {
+    // Add buyers from buyerBalances
+    Object.keys(buyerBalances).forEach(username => {
+      if (!allUsersMap[username]) {
+        allUsersMap[username] = {
           username: username,
           role: 'buyer',
         };
       }
     });
     
-    console.log('Combined users object:', allUsers);
+    // Add sellers from sellerBalances
+    Object.keys(sellerBalances).forEach(username => {
+      if (!allUsersMap[username] || allUsersMap[username].role !== 'seller') {
+        allUsersMap[username] = {
+          username: username,
+          role: 'seller',
+        };
+      }
+    });
     
-    if (allUsers && Object.keys(allUsers).length > 0) {
-      const allUserEntries = Object.entries(allUsers);
-      console.log('All user entries before filtering:', allUserEntries);
-      
-      allUserEntries.forEach(([username, userData]) => {
-        console.log(`USER: ${username}`, {
-          userData,
-          role: userData.role,
-          type: typeof userData.role,
-          hasRole: 'role' in userData
-        });
-      });
-      
-      const nonAdminUsers = allUserEntries
-        .filter(([username, userData]) => {
-          const isBuyer = userData.role === 'buyer';
-          const isSeller = userData.role === 'seller';
-          const isAdmin = userData.role === 'admin';
-          
-          console.log(`Filtering ${username}:`, {
-            role: userData.role,
-            isBuyer,
-            isSeller,
-            isAdmin,
-            willInclude: !isAdmin && (isBuyer || isSeller)
-          });
-          
-          return !isAdmin && (isBuyer || isSeller);
-        })
-        .map(([username, userData]) => ({
-          username,
-          role: userData.role
-        }));
-      
-      console.log('Final non-admin users after filtering:', nonAdminUsers);
-      console.log('Buyers found:', nonAdminUsers.filter(u => u.role === 'buyer'));
-      console.log('Sellers found:', nonAdminUsers.filter(u => u.role === 'seller'));
-      
-      const sortedUsers = nonAdminUsers.sort((a, b) => {
-        if (a.role !== b.role) {
-          if (a.role === 'buyer' && b.role === 'seller') return -1;
-          if (a.role === 'seller' && b.role === 'buyer') return 1;
-        }
-        return a.username.localeCompare(b.username);
-      });
-      
-      console.log('Final sorted users sent to state:', sortedUsers);
-      console.log('=== END DEBUGGING ===');
-      setAllUsers(sortedUsers);
-    } else {
-      console.log('No users found in any context');
-    }
-  }, [listingUsers, wallet, user]);
+    // Add any remaining users from wallet object
+    Object.keys(wallet).forEach(username => {
+      if (!allUsersMap[username] && username !== 'admin') {
+        allUsersMap[username] = {
+          username: username,
+          role: 'buyer', // Default to buyer if not specified
+        };
+      }
+    });
+    
+    // Filter out admin users and convert to array
+    const nonAdminUsers = Object.entries(allUsersMap)
+      .filter(([username, userData]) => {
+        return userData.role !== 'admin' && username !== 'admin';
+      })
+      .map(([username, userData]) => ({
+        username,
+        role: userData.role || 'buyer'
+      }));
+    
+    // Sort users
+    const sortedUsers = nonAdminUsers.sort((a, b) => {
+      if (a.role !== b.role) {
+        if (a.role === 'buyer' && b.role === 'seller') return -1;
+        if (a.role === 'seller' && b.role === 'buyer') return 1;
+      }
+      return a.username.localeCompare(b.username);
+    });
+    
+    console.log('Final users:', sortedUsers);
+    console.log('=== END LOADING ===');
+    setAllUsers(sortedUsers);
+  }, [listingUsers, wallet, buyerBalances, sellerBalances, user]);
 
   // Filter users based on search term, role filter, and balance filter
   useEffect(() => {
@@ -166,7 +225,7 @@ function AdminWalletContent() {
     }
     
     setDisplayedUsers(filtered);
-  }, [searchTerm, allUsers, roleFilter, balanceFilter, wallet]);
+  }, [searchTerm, allUsers, roleFilter, balanceFilter, wallet, buyerBalances, sellerBalances]);
 
   // Handle user selection
   const handleSelectUser = (username: string, role: string) => {
@@ -227,7 +286,8 @@ function AdminWalletContent() {
   const executeAction = async (numAmount: number) => {
     setIsLoading(true);
     
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Small delay for UI feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     const roleForWallet: 'buyer' | 'seller' = selectedUserRole === 'admin' ? 'buyer' : selectedUserRole as 'buyer' | 'seller';
 
@@ -242,6 +302,9 @@ function AdminWalletContent() {
       showMessageHelper(`Successfully ${actionType === 'credit' ? 'credited' : 'debited'} $${numAmount.toFixed(2)} to ${selectedUser}'s account`, 'success');
       setAmount('');
       setReason('');
+      
+      // Force a re-render to show updated balance immediately
+      forceRender();
     } else {
       showMessageHelper(`Failed to ${actionType} account. ${actionType === 'debit' ? 'Check if user has sufficient balance.' : ''}`, 'error');
     }
@@ -255,8 +318,6 @@ function AdminWalletContent() {
   const handleBulkAction = async (action: 'credit' | 'debit', amount: number, reason: string) => {
     setIsBulkLoading(true);
     
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
     let successCount = 0;
     let failCount = 0;
 
@@ -282,14 +343,26 @@ function AdminWalletContent() {
     setSelectedUsers([]);
     setShowBulkModal(false);
     setIsBulkLoading(false);
+    
+    // Force re-render to show updated balances
+    forceRender();
   };
 
   // Refresh data
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Call the reloadData function from WalletContext
+    if (reloadData) {
+      await reloadData();
+    }
+    
+    // Small delay for UI feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     setIsRefreshing(false);
     showMessageHelper('Data refreshed successfully');
+    forceRender();
   };
 
   // Export user data to CSV
@@ -327,9 +400,15 @@ function AdminWalletContent() {
     setActionType('credit');
   };
 
-  // Get user balance
+  // Get user balance - now checks both buyerBalances and sellerBalances
   const getUserBalance = (username: string) => {
-    return wallet[username] || 0;
+    // Check if user is a buyer or seller
+    const user = allUsers.find(u => u.username === username);
+    if (user?.role === 'seller') {
+      return sellerBalances[username] || 0;
+    }
+    // Default to buyer balance
+    return buyerBalances[username] || wallet[username] || 0;
   };
 
   // Get role badge color

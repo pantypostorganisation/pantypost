@@ -19,6 +19,9 @@ import { sanitizeStrict, sanitizeUsername, sanitizeCurrency } from '@/utils/secu
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
+import { useWebSocket } from '@/context/WebSocketContext';
+import { WebSocketEvent } from '@/types/websocket';
+import { forceSyncWalletBalance } from '@/utils/walletSync';
 
 // Constants for mock data detection
 const MOCK_SIGNATURES = {
@@ -238,6 +241,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   
+  // WebSocket integration
+  const { sendMessage, subscribe, isConnected } = useWebSocket();
+  
   // Refs to prevent multiple initializations and saves
   const initializingRef = useRef(false);
   const dataVersionRef = useRef(0);
@@ -248,6 +254,51 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
+
+  // Subscribe to WebSocket wallet updates
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const unsubBalance = subscribe(WebSocketEvent.WALLET_BALANCE_UPDATE, (data: any) => {
+      console.log('[WalletContext] Received balance update:', data);
+      
+      // Update local state based on the WebSocket data
+      if (data.username && data.role && typeof data.balance === 'number') {
+        if (data.role === 'buyer') {
+          setBuyerBalancesState(prev => ({
+            ...prev,
+            [data.username]: data.balance
+          }));
+        } else if (data.role === 'seller') {
+          setSellerBalancesState(prev => ({
+            ...prev,
+            [data.username]: data.balance
+          }));
+        }
+        
+        // Force update Header component
+        if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
+          (window as any).__pantypost_balance_context.forceUpdate();
+        }
+      }
+    });
+
+    return () => {
+      unsubBalance();
+    };
+  }, [isConnected, subscribe]);
+
+  // Helper to emit wallet balance updates
+  const emitBalanceUpdate = useCallback((username: string, role: 'buyer' | 'seller', balance: number) => {
+    if (isConnected) {
+      sendMessage(WebSocketEvent.WALLET_BALANCE_UPDATE, {
+        username,
+        role,
+        balance,
+        timestamp: Date.now()
+      });
+    }
+  }, [isConnected, sendMessage]);
 
   // Helper function to validate and sanitize transaction amount (must be positive)
   const validateTransactionAmount = (amount: number): number => {
@@ -604,8 +655,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...prev,
         [validatedUsername]: validatedBalance,
       }));
+      
+      // Also update individual key for consistency
+      const balanceInCents = Math.round(validatedBalance * 100);
+      await storageService.setItem(`wallet_buyer_${validatedUsername}`, balanceInCents);
+      
+      // Emit WebSocket update
+      emitBalanceUpdate(validatedUsername, 'buyer', validatedBalance);
+      
+      // Force sync
+      if (typeof window !== 'undefined') {
+        await forceSyncWalletBalance(validatedUsername);
+      }
     });
-  }, []);
+  }, [emitBalanceUpdate]);
 
   const getSellerBalance = useCallback((seller: string): number => {
     try {
@@ -626,8 +689,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         ...prev,
         [validatedSeller]: validatedBalance,
       }));
+      
+      // Also update individual key for consistency
+      const balanceInCents = Math.round(validatedBalance * 100);
+      await storageService.setItem(`wallet_seller_${validatedSeller}`, balanceInCents);
+      
+      // Emit WebSocket update
+      emitBalanceUpdate(validatedSeller, 'seller', validatedBalance);
     });
-  }, []);
+  }, [emitBalanceUpdate]);
 
   const setAdminBalance = useCallback(async (balance: number) => {
     const validatedBalance = validateBalanceAmount(balance); // Use balance validation (allows 0)
@@ -1468,6 +1538,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         setAdminActions(prev => [...prev, action]);
         
+        // Store admin action
+        await storageService.setItem('wallet_adminActions', [...adminActions, action]);
+        
+        // Emit transaction event
+        if (isConnected) {
+          sendMessage(WebSocketEvent.WALLET_TRANSACTION, {
+            type: 'admin_credit',
+            username: validatedUsername,
+            role,
+            amount: validatedAmount,
+            reason: sanitizedReason,
+            adminUser,
+            timestamp: Date.now()
+          });
+        }
+        
         // Force update balances in Header and other components
         if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
           setTimeout(() => {
@@ -1481,7 +1567,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin credit error:', error);
       return false;
     }
-  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, addDeposit]);
+  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, addDeposit, adminActions, isConnected, sendMessage]);
 
   const adminDebitUser = useCallback(async (
     username: string,
@@ -1536,6 +1622,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         setAdminActions(prev => [...prev, action]);
         
+        // Store admin action
+        await storageService.setItem('wallet_adminActions', [...adminActions, action]);
+        
+        // Emit transaction event
+        if (isConnected) {
+          sendMessage(WebSocketEvent.WALLET_TRANSACTION, {
+            type: 'admin_debit',
+            username: validatedUsername,
+            role,
+            amount: validatedAmount,
+            reason: sanitizedReason,
+            adminUser,
+            timestamp: Date.now()
+          });
+        }
+        
         // Force update balances in Header and other components
         if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
           setTimeout(() => {
@@ -1549,7 +1651,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin debit error:', error);
       return false;
     }
-  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance]);
+  }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, adminActions, isConnected, sendMessage]);
 
   const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
     // Sanitize address data based on the actual DeliveryAddress type from AddressConfirmationModal
@@ -1785,6 +1887,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [loadAllData, isLoading]);
+
+  // Global balance update context
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__pantypost_balance_context = {
+        forceUpdate: () => {
+          console.log('Force update triggered');
+          // Trigger re-render in Header and other components
+          setBuyerBalancesState(prev => ({ ...prev }));
+          setSellerBalancesState(prev => ({ ...prev }));
+        }
+      };
+    }
+  }, []);
+
+  // Listen for storage events to sync across tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'wallet_buyers' || e.key === 'wallet_sellers' || e.key === 'wallet_admin') {
+        console.log('Storage change detected, reloading wallet data');
+        loadAllData();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [loadAllData]);
 
   const contextValue: WalletContextType = {
     // Loading state
