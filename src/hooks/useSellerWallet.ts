@@ -108,16 +108,31 @@ export function useSellerWallet() {
     if (!user?.username) return [];
     
     return orderHistory.filter(order => 
-      order.seller === user.username
-      // Removed status check since Order type doesn't have status property
+      order.seller === user.username &&
+      // Exclude withdrawal entries and pending auction bids
+      order.buyer !== 'platform' &&
+      order.shippingStatus !== 'pending-auction'
     );
   }, [user?.username, orderHistory]);
   
-  // Calculate total earnings (including current balance)
+  // FIX: Calculate total earnings from actual sales history
   const totalEarnings = useMemo(() => {
-    const earnings = balance + totalWithdrawn;
-    return Math.round(earnings * 100) / 100; // Round to 2 decimals
-  }, [balance, totalWithdrawn]);
+    if (!user?.username) return 0;
+    
+    // Calculate total from all completed sales
+    const salesTotal = sellerSales.reduce((sum, sale) => {
+      // For regular sales, seller gets 90% of the price + tier credit
+      const basePrice = sale.wasAuction ? (sale.finalBid || sale.price) : sale.price;
+      const sellerCut = basePrice * 0.9;
+      const tierCredit = sale.tierCreditAmount || 0;
+      const totalForSale = sellerCut + tierCredit;
+      
+      return sum + Math.max(0, totalForSale);
+    }, 0);
+    
+    // Round to 2 decimals
+    return Math.round(salesTotal * 100) / 100;
+  }, [sellerSales, user?.username]);
 
   // Update balance with validation - FIXED to handle various data formats
   useEffect(() => {
@@ -321,7 +336,7 @@ export function useSellerWallet() {
     }
   }, [user, withdrawAmount, balance, todaysWithdrawals, checkWithdrawalLimit]);
 
-  const handleConfirmWithdraw = useCallback(() => {
+  const handleConfirmWithdraw = useCallback(async () => {
     if (!user?.username) return;
     
     setIsLoading(true);
@@ -338,47 +353,36 @@ export function useSellerWallet() {
         throw new Error('Insufficient balance');
       }
       
-      // Simulate processing delay for better UX
-      setTimeout(() => {
-        try {
-          // Add withdrawal
-          addSellerWithdrawal(user.username, sanitizedAmount);
-          
-          setMessage(`Successfully withdrew $${sanitizedAmount.toFixed(2)}.`);
-          setMessageType('success');
-          setWithdrawAmount('');
-          setShowConfirmation(false);
-          setValidationError(null);
-          
-          // Clear success message after 5 seconds
-          setTimeout(() => {
-            setMessage('');
-            setMessageType('');
-          }, 5000);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Withdrawal failed';
-          setMessage(`Error: ${errorMessage}`);
-          setMessageType('error');
-          
-          // Clear error message after 5 seconds
-          setTimeout(() => {
-            setMessage('');
-            setMessageType('');
-          }, 5000);
-        } finally {
-          setIsLoading(false);
-        }
-      }, 800);
-    } catch (error) {
-      setMessage(`Error: ${error instanceof Error ? error.message : 'Invalid withdrawal'}`);
-      setMessageType('error');
-      setIsLoading(false);
-      setShowConfirmation(false);
+      // Process withdrawal
+      await addSellerWithdrawal(user.username, sanitizedAmount);
       
+      // Update local balance immediately for better UX
+      setBalance(prev => prev - sanitizedAmount);
+      
+      setMessage(`Successfully withdrew $${sanitizedAmount.toFixed(2)}.`);
+      setMessageType('success');
+      setWithdrawAmount('');
+      setShowConfirmation(false);
+      setValidationError(null);
+      
+      // Clear success message after 5 seconds
       setTimeout(() => {
         setMessage('');
         setMessageType('');
       }, 5000);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Withdrawal failed';
+      setMessage(`Error: ${errorMessage}`);
+      setMessageType('error');
+      setShowConfirmation(false);
+      
+      // Clear error message after 5 seconds
+      setTimeout(() => {
+        setMessage('');
+        setMessageType('');
+      }, 5000);
+    } finally {
+      setIsLoading(false);
     }
   }, [user, withdrawAmount, balance, addSellerWithdrawal]);
 
