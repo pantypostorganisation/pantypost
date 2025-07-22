@@ -33,8 +33,7 @@ export function useSellerWallet() {
     getSellerBalance, 
     addSellerWithdrawal, 
     sellerWithdrawals, 
-    orderHistory,
-    sellerBalances 
+    orderHistory 
   } = useWallet();
 
   // Rate limiting for withdrawals
@@ -119,60 +118,20 @@ export function useSellerWallet() {
     return Math.round(earnings * 100) / 100; // Round to 2 decimals
   }, [balance, totalWithdrawn]);
 
-  // Update balance with validation - FIXED to handle various data formats
+  // Update balance with validation
   useEffect(() => {
     if (user?.username) {
-      // Try multiple methods to get the balance
-      let raw: any = null;
+      const raw = getSellerBalance(user.username);
       
-      // Method 1: Try getSellerBalance function
-      try {
-        raw = getSellerBalance(user.username);
-      } catch (error) {
-        console.error('Error calling getSellerBalance:', error);
-      }
-      
-      // Method 2: If that fails or returns invalid data, try sellerBalances directly
-      if (typeof raw !== 'number' || isNaN(raw)) {
-        raw = sellerBalances?.[user.username];
-      }
-      
-      // Now process the raw value
-      let numericBalance = 0;
-      
-      if (typeof raw === 'number' && !isNaN(raw)) {
-        // It's already a valid number
-        numericBalance = raw;
-      } else if (raw && typeof raw === 'object') {
-        // It might be an object with a balance property
-        if ('balance' in raw && typeof raw.balance === 'number' && !isNaN(raw.balance)) {
-          numericBalance = raw.balance;
-        } else if ('amount' in raw && typeof raw.amount === 'number' && !isNaN(raw.amount)) {
-          numericBalance = raw.amount;
-        } else {
-          // Try to find any numeric property
-          const numericValue = Object.values(raw).find(val => typeof val === 'number' && !isNaN(val as number));
-          if (numericValue !== undefined) {
-            numericBalance = numericValue as number;
-          }
-        }
-      }
-      
-      // Ensure the balance is valid and non-negative
-      if (numericBalance < 0) {
-        console.warn('Negative balance detected, setting to 0');
-        numericBalance = 0;
-      }
-      
-      // Round to 2 decimal places and set
-      const finalBalance = Math.round(numericBalance * 100) / 100;
-      setBalance(finalBalance);
-      
-      if (finalBalance === 0 && raw !== 0) {
-        console.warn('Balance defaulted to 0, raw value was:', raw);
+      // Validate balance
+      if (typeof raw === 'number' && !isNaN(raw) && raw >= 0) {
+        setBalance(Math.round(raw * 100) / 100);
+      } else {
+        setBalance(0);
+        console.error('Invalid balance received');
       }
     }
-  }, [user, getSellerBalance, sellerBalances, logs]);
+  }, [user, getSellerBalance, logs]);
 
   // Handle amount change with validation
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
