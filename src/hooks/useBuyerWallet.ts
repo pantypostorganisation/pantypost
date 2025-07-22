@@ -13,6 +13,7 @@ import { useRateLimit } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
 import { sanitizeCurrency, sanitizeStrict } from '@/utils/security/sanitization';
 import { securityService } from '@/services';
+import { forceSyncWalletBalance } from '@/utils/walletSync';
 
 interface EnhancedBuyerWalletState {
   balance: number;
@@ -42,6 +43,7 @@ export const useBuyerWallet = () => {
     getTransactionHistory,
     checkSuspiciousActivity,
     reconcileBalance,
+    buyerBalances,
   } = useWallet();
   const toast = useToast();
   
@@ -124,6 +126,9 @@ export const useBuyerWallet = () => {
         lastSyncTime: new Date(),
       });
       
+      // Force sync to ensure persistence
+      await forceSyncWalletBalance(user.username);
+      
       // Then get detailed balance from enhanced service for additional info
       const enhancedBalance = await WalletIntegration.getBalanceInDollars(user.username, 'buyer');
       console.log('Balance from WalletIntegration:', enhancedBalance);
@@ -200,7 +205,7 @@ export const useBuyerWallet = () => {
         syncBalanceRef.current();
       }
     }
-  }, [getBuyerBalance, user?.username, state.balance]);
+  }, [getBuyerBalance, user?.username, buyerBalances, state.balance]);
 
   // Also listen for global balance update events (from Header component)
   useEffect(() => {
@@ -221,8 +226,19 @@ export const useBuyerWallet = () => {
         };
       }
 
+      // Listen for custom wallet update events
+      const handleWalletUpdate = (event: CustomEvent) => {
+        if (event.detail.username === user.username && event.detail.role === 'buyer') {
+          console.log('Wallet update event for current user, syncing...');
+          syncBalanceRef.current();
+        }
+      };
+
+      window.addEventListener('wallet-balance-updated', handleWalletUpdate as EventListener);
+
       // Return cleanup function
       return () => {
+        window.removeEventListener('wallet-balance-updated', handleWalletUpdate as EventListener);
         if (originalContext && originalContext.forceUpdate) {
           // Restore original function on cleanup
           (window as any).__pantypost_balance_context = originalContext;
@@ -239,10 +255,10 @@ export const useBuyerWallet = () => {
       // Initial sync
       syncBalanceRef.current();
       
-      // Sync every 30 seconds
+      // Sync every 10 seconds (more frequent for buyer wallet)
       syncIntervalRef.current = setInterval(() => {
         syncBalanceRef.current();
-      }, 30000);
+      }, 10000);
       
       return () => {
         if (syncIntervalRef.current) {
@@ -341,6 +357,9 @@ export const useBuyerWallet = () => {
         if (!depositSuccess) {
           console.warn('Failed to log deposit to admin dashboard');
         }
+        
+        // Force sync immediately
+        await forceSyncWalletBalance(user.username!);
         
         // Small delay to ensure deposit is saved before syncing
         await new Promise(resolve => setTimeout(resolve, 100));
