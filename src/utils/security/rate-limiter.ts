@@ -9,6 +9,7 @@ interface RateLimitConfig {
   maxAttempts: number;
   windowMs: number;
   identifier?: string;
+  blockDuration?: number; // Add optional custom block duration
 }
 
 interface RateLimitEntry {
@@ -75,8 +76,8 @@ export class ActionRateLimiter {
 
     // Within window
     if (entry.attempts >= config.maxAttempts) {
-      // Block for extended period after hitting limit
-      const blockDuration = config.windowMs * 2; // Double the window as penalty
+      // Use custom block duration or default to a reasonable time
+      const blockDuration = config.blockDuration || Math.min(config.windowMs, 60 * 60 * 1000); // Max 1 hour default
       entry.blockedUntil = now + blockDuration;
       this.saveToStorage();
       
@@ -174,72 +175,87 @@ export const RATE_LIMITS = {
   LOGIN: {
     maxAttempts: 300, // Increased from 5 to 300 for testing
     windowMs: 30 * 60 * 1000, // Changed to 30 minutes
+    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
   },
   SIGNUP: {
     maxAttempts: 3,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour
   },
   PASSWORD_RESET: {
     maxAttempts: 3,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour
   },
 
   // User actions
   MESSAGE_SEND: {
     maxAttempts: 30,
     windowMs: 60 * 1000, // 1 minute
+    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
   },
   LISTING_CREATE: {
     maxAttempts: 10,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour
   },
   CUSTOM_REQUEST: {
     maxAttempts: 5,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour
   },
 
-  // Financial
+  // Financial - More reasonable block times
   WITHDRAWAL: {
-    maxAttempts: 3,
-    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+    maxAttempts: 5,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour if exceeded
   },
   DEPOSIT: {
     maxAttempts: 10,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
   },
   TIP: {
     maxAttempts: 20,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
   },
 
   // Search/Browse
   SEARCH: {
     maxAttempts: 60,
     windowMs: 60 * 1000, // 1 minute
+    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
   },
   API_CALL: {
     maxAttempts: 100,
     windowMs: 60 * 1000, // 1 minute
+    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
   },
 
   // File uploads
   IMAGE_UPLOAD: {
     maxAttempts: 20,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
   },
   DOCUMENT_UPLOAD: {
     maxAttempts: 5,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour
   },
 
   // Admin actions
   BAN_USER: {
     maxAttempts: 10,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 60 * 60 * 1000, // Block for 1 hour
   },
   REPORT_ACTION: {
     maxAttempts: 20,
     windowMs: 60 * 60 * 1000, // 1 hour
+    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
   },
 };
 
@@ -336,7 +352,12 @@ export function formatWaitTime(seconds: number): string {
   }
 
   const hours = Math.ceil(minutes / 60);
-  return `${hours} hour${hours === 1 ? '' : 's'}`;
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+
+  const days = Math.ceil(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'}`;
 }
 
 /**

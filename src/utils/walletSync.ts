@@ -65,14 +65,8 @@ export async function enhancedWalletSync(
     const collectiveKey = role === 'buyer' ? 'wallet_buyers' : 'wallet_sellers';
     const collectiveData = JSON.parse(localStorage.getItem(collectiveKey) || '{}');
     
-    if (role === 'buyer') {
-      collectiveData[username] = newBalance;
-    } else {
-      collectiveData[username] = {
-        ...(collectiveData[username] || {}),
-        balance: newBalance
-      };
-    }
+    // FIXED: Always store seller balance as a number, not an object
+    collectiveData[username] = newBalance;
     
     localStorage.setItem(collectiveKey, JSON.stringify(collectiveData));
     
@@ -133,13 +127,30 @@ export async function syncAllWalletData(): Promise<void> {
       await storageService.setItem(`wallet_buyer_${username}`, balanceInCents);
     }
     
-    // Sync seller balances
+    // Sync seller balances - FIXED to handle both number and object formats
     const sellerBalances = await storageService.getItem<Record<string, any>>('wallet_sellers', {});
     for (const [username, data] of Object.entries(sellerBalances)) {
-      const balance = data.balance || 0;
+      let balance = 0;
+      
+      // Handle both number and object formats
+      if (typeof data === 'number' && !isNaN(data)) {
+        balance = data;
+      } else if (data && typeof data === 'object' && 'balance' in data) {
+        const objBalance = data.balance;
+        if (typeof objBalance === 'number' && !isNaN(objBalance)) {
+          balance = objBalance;
+        }
+      }
+      
       const balanceInCents = Math.round(balance * 100);
       await storageService.setItem(`wallet_seller_${username}`, balanceInCents);
+      
+      // Also fix the collective storage to be a number
+      sellerBalances[username] = balance;
     }
+    
+    // Save the fixed seller balances back
+    await storageService.setItem('wallet_sellers', sellerBalances);
     
     console.log('[SyncAll] Full sync completed');
   } catch (error) {
@@ -202,10 +213,21 @@ export class WalletBalanceListener {
         }
       }
       
-      // Check seller balances
+      // Check seller balances - FIXED to handle both number and object formats
       const sellers = JSON.parse(localStorage.getItem('wallet_sellers') || '{}');
       for (const [username, data] of Object.entries(sellers)) {
-        const balance = (data as any).balance || 0;
+        let balance = 0;
+        
+        // Handle both number and object formats
+        if (typeof data === 'number' && !isNaN(data)) {
+          balance = data;
+        } else if (data && typeof data === 'object' && 'balance' in (data as any)) {
+          const objBalance = (data as any).balance;
+          if (typeof objBalance === 'number' && !isNaN(objBalance)) {
+            balance = objBalance;
+          }
+        }
+        
         const key = `seller_${username}`;
         const currentBalance = this.currentBalances.get(key);
         if (currentBalance !== balance) {
