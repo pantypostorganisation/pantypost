@@ -52,16 +52,18 @@ export default function PurchaseSection({
             {formatMoney(Money.fromDollars(listing.markedUpPrice))}
           </p>
         </div>
-        <button
-          onClick={toggleFavorite}
-          className={`p-2 rounded-full transition-colors ${
-            isFavorited
-              ? 'bg-red-500 text-white'
-              : 'bg-gray-800 text-gray-400 hover:text-red-500'
-          }`}
-        >
-          <Heart className={`w-5 h-5 ${isFavorited ? 'fill-current' : ''}`} />
-        </button>
+        {user?.role === 'buyer' && (
+          <button
+            onClick={toggleFavorite}
+            className="p-2 rounded-lg bg-[#222] hover:bg-[#333] transition-colors"
+            aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart 
+              size={20} 
+              className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400'} 
+            />
+          </button>
+        )}
       </div>
 
       {listing.isPremium && !isUserSubscribed && !isSeller && (

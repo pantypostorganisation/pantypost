@@ -2,6 +2,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
+import { useFavorites } from '@/context/FavoritesContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useDashboardData } from '@/hooks/useDashboardData';
@@ -10,21 +11,38 @@ import StatsGrid from '@/components/buyers/dashboard/StatsGrid';
 import QuickActions from '@/components/buyers/dashboard/QuickActions';
 import RecentActivity from '@/components/buyers/dashboard/RecentActivity';
 import SubscribedSellers from '@/components/buyers/dashboard/SubscribedSellers';
-// import FeaturedListings from '@/components/buyers/dashboard/FeaturedListings';
-import { Truck, Clock, CheckCircle, MessageCircle } from 'lucide-react';
+import { Truck, Clock, CheckCircle, Heart, Star, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import TierBadge from '@/components/TierBadge';
 
 export default function BuyerDashboardPage() {
   const { user: authUser } = useAuth();
+  const { favorites, favoriteCount, toggleFavorite, loadingFavorites } = useFavorites();
+  const router = useRouter();
   const {
     user,
     balance,
     stats,
     subscribedSellers,
     recentActivity,
-    // featuredListings,
     isLoading
   } = useDashboardData();
+
+  const handleRemoveFavorite = async (favorite: any) => {
+    await toggleFavorite({
+      id: favorite.sellerId,
+      username: favorite.sellerUsername,
+      profilePicture: favorite.profilePicture,
+      tier: favorite.tier,
+      isVerified: favorite.isVerified,
+    });
+  };
+
+  const handleViewSellerProfile = (username: string) => {
+    router.push(`/sellers/${username}`);
+  };
 
   if (!authUser || authUser.role !== 'buyer') {
     return (
@@ -69,6 +87,104 @@ export default function BuyerDashboardPage() {
               <div className="xl:col-span-2 space-y-8">
                 {/* Quick Actions */}
                 <QuickActions />
+
+                {/* Favorite Sellers Section */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-5 h-5 text-[#ff950e]" />
+                      <h2 className="text-xl font-bold text-white">Favorite Sellers</h2>
+                      <span className="text-sm text-gray-400">({favoriteCount})</span>
+                    </div>
+                    {favoriteCount > 3 && (
+                      <button
+                        onClick={() => router.push('/browse')}
+                        className="text-sm text-[#ff950e] hover:text-[#ff7a00] transition-colors"
+                      >
+                        Browse more →
+                      </button>
+                    )}
+                  </div>
+
+                  {loadingFavorites ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-24" />
+                      ))}
+                    </div>
+                  ) : favoriteCount === 0 ? (
+                    <div className="text-center py-8">
+                      <Heart className="mx-auto mb-3 text-gray-600" size={32} />
+                      <p className="text-gray-400 mb-4">No favorite sellers yet</p>
+                      <button
+                        onClick={() => router.push('/browse')}
+                        className="px-4 py-2 bg-[#ff950e] text-black rounded-lg text-sm font-medium hover:bg-[#ff7a00] transition-colors"
+                      >
+                        Browse Sellers
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {favorites.slice(0, 6).map((favorite) => (
+                        <div
+                          key={favorite.sellerId}
+                          className="bg-[#111] rounded-lg p-4 hover:bg-[#222] transition-colors group"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div 
+                                className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 cursor-pointer"
+                                onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                              >
+                                {favorite.profilePicture ? (
+                                  <Image
+                                    src={favorite.profilePicture}
+                                    alt={favorite.sellerUsername}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-gray-600">
+                                    <Heart size={16} />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <h3 
+                                  className="font-medium text-white hover:text-[#ff950e] cursor-pointer transition-colors"
+                                  onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                                >
+                                  {favorite.sellerUsername}
+                                </h3>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  {favorite.isVerified && (
+                                    <Star className="text-[#ff950e]" size={12} />
+                                  )}
+                                  {favorite.tier && (
+                                    <span className="text-xs text-gray-400">{favorite.tier}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveFavorite(favorite)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                              aria-label="Remove from favorites"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                            className="w-full px-3 py-1.5 bg-[#222] text-white rounded text-xs font-medium hover:bg-[#333] transition-colors"
+                          >
+                            View Profile
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Recent Activity */}
                 {isLoading ? (
@@ -134,7 +250,7 @@ export default function BuyerDashboardPage() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Favorite Sellers</span>
-                      <span className="text-white font-bold">{stats.favoriteSellerCount}</span>
+                      <span className="text-white font-bold">{favoriteCount}</span>
                     </div>
                   </div>
                 </div>

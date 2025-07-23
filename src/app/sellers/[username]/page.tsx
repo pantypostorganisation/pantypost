@@ -13,6 +13,8 @@ import UnsubscribeModal from '@/components/seller-profile/modals/UnsubscribeModa
 import TipModal from '@/components/seller-profile/modals/TipModal';
 import GalleryModal from '@/components/seller-profile/modals/GalleryModal';
 import { useSellerProfile } from '@/hooks/useSellerProfile';
+import { useFavorites } from '@/context/FavoritesContext';
+import { useToast } from '@/context/ToastContext';
 
 // Optional: Memoize components for better performance
 const MemoizedProfileHeader = React.memo(ProfileHeader);
@@ -22,6 +24,9 @@ const MemoizedReviewsSection = React.memo(ReviewsSection);
 
 export default function SellerProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
+  const { isFavorited: checkIsFavorited, toggleFavorite: toggleFav, error: favError } = useFavorites();
+  
   const {
     // User data
     user,
@@ -95,6 +100,31 @@ export default function SellerProfilePage() {
     goToNextSlide,
   } = useSellerProfile(username);
 
+  // Favorites functionality
+  // Generate consistent seller ID
+  const sellerId = `seller_${username}`;
+  const isFavorited = checkIsFavorited(sellerId);
+  
+  const toggleFavorite = async () => {
+    if (!sellerUser) return;
+    
+    const success = await toggleFav({
+      id: sellerId,
+      username: sellerUser.username,
+      profilePicture: profilePic || undefined,
+      tier: sellerTierInfo?.tier,
+      isVerified: isVerified,
+    });
+    
+    if (success) {
+      showSuccessToast(
+        isFavorited ? 'Removed from favorites' : 'Added to favorites'
+      );
+    } else if (favError) {
+      showErrorToast(favError);
+    }
+  };
+
   return (
     <BanCheck>
       <main className="min-h-screen bg-black text-white">
@@ -123,6 +153,8 @@ export default function SellerProfilePage() {
             followers={followers}
             averageRating={averageRating}
             reviewsCount={reviews.length}
+            isFavorited={isFavorited}
+            onToggleFavorite={toggleFavorite}
           />
 
           {/* Listings Grid */}

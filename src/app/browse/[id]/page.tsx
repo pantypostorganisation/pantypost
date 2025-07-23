@@ -1,7 +1,6 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
-import { useState } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -16,6 +15,8 @@ import PurchaseSuccessModal from '@/components/browse-detail/PurchaseSuccessModa
 import StickyPurchaseBar from '@/components/browse-detail/StickyPurchaseBar';
 import PremiumLockMessage from '@/components/browse-detail/PremiumLockMessage';
 import { useBrowseDetail } from '@/hooks/useBrowseDetail';
+import { useFavorites } from '@/context/FavoritesContext';
+import { useToast } from '@/context/ToastContext';
 import { AlertCircle } from 'lucide-react';
 
 export default function ListingDetailPage() {
@@ -77,12 +78,35 @@ export default function ListingDetailPage() {
     rateLimitError
   } = useBrowseDetail();
 
-  // Local state for favorites (you might want to move this to a context or hook)
-  const [isFavorited, setIsFavorited] = useState(false);
+  // Favorites functionality
+  const { isFavorited: checkIsFavorited, toggleFavorite: toggleFav, error: favError } = useFavorites();
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
 
-  const toggleFavorite = () => {
-    setIsFavorited(!isFavorited);
-    // TODO: Implement actual favorite saving logic
+  // Generate consistent seller ID
+  const sellerId = listing ? `seller_${listing.seller}` : null;
+  const isFavorited = sellerId ? checkIsFavorited(sellerId) : false;
+
+  const toggleFavorite = async () => {
+    if (!listing || !sellerId) return;
+    
+    // Get seller tier info from the listing
+    const sellerTier = listing.sellerTierInfo?.tier;
+    
+    const success = await toggleFav({
+      id: sellerId,
+      username: listing.seller,
+      profilePicture: sellerProfile?.pic || undefined,
+      tier: sellerTier,
+      isVerified: listing.isSellerVerified || false,
+    });
+    
+    if (success) {
+      showSuccessToast(
+        isFavorited ? 'Removed from favorites' : 'Added to favorites'
+      );
+    } else if (favError) {
+      showErrorToast(favError);
+    }
   };
 
   const handleSubscribeClick = () => {

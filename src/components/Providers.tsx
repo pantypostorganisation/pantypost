@@ -12,6 +12,7 @@ import { ReviewProvider } from '@/context/ReviewContext';
 import { RequestProvider } from '@/context/RequestContext';
 import { LoadingProvider } from '@/context/LoadingContext';
 import { WebSocketProvider } from '@/context/WebSocketContext';
+import { FavoritesProvider } from '@/context/FavoritesContext';
 import { AppInitializationProvider } from './AppInitializationProvider';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -208,8 +209,9 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
  * 4. Ban - Needs auth but used by many components
  * 5. WebSocket - Needs auth for connection but provides real-time features to others
  * 6. Wallet - Depends on auth and initialization
- * 7. Listing - Depends on auth and wallet
- * 8. Others - Depend on the above
+ * 7. Favorites - Depends on auth, placed after wallet for consistency
+ * 8. Listing - Depends on auth and wallet
+ * 9. Others - Depend on the above
  */
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -220,17 +222,19 @@ export function Providers({ children }: { children: ReactNode }) {
             <WebSocketProvider>
               <FinancialErrorBoundary>
                 <WalletProvider>
-                  <ListingProvider>
-                    <MessageProvider>
-                      <ReviewProvider>
-                        <RequestProvider>
-                          <LoadingProvider>
-                            {children}
-                          </LoadingProvider>
-                        </RequestProvider>
-                      </ReviewProvider>
-                    </MessageProvider>
-                  </ListingProvider>
+                  <FavoritesProvider>
+                    <ListingProvider>
+                      <MessageProvider>
+                        <ReviewProvider>
+                          <RequestProvider>
+                            <LoadingProvider>
+                              {children}
+                            </LoadingProvider>
+                          </RequestProvider>
+                        </ReviewProvider>
+                      </MessageProvider>
+                    </ListingProvider>
+                  </FavoritesProvider>
                 </WalletProvider>
               </FinancialErrorBoundary>
             </WebSocketProvider>

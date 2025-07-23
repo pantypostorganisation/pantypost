@@ -3,10 +3,12 @@
 
 import Link from 'next/link';
 import { 
-  Crown, Clock, Lock, CheckCircle, Gavel, ArrowUp, Eye, Package, User 
+  Crown, Clock, Lock, CheckCircle, Gavel, ArrowUp, Eye, Package, User, Heart 
 } from 'lucide-react';
 import { ListingCardProps } from '@/types/browse';
 import { isAuctionListing } from '@/utils/browseUtils';
+import { useFavorites } from '@/context/FavoritesContext';
+import { useToast } from '@/context/ToastContext';
 
 export default function ListingCard({
   listing,
@@ -23,6 +25,42 @@ export default function ListingCard({
 }: ListingCardProps) {
   const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed);
   const hasAuction = isAuctionListing(listing);
+  
+  // Favorites functionality
+  const { isFavorited, toggleFavorite } = useFavorites();
+  const { error: showErrorToast, success: showSuccessToast } = useToast();
+  
+  // Generate consistent seller ID
+  const sellerId = `seller_${listing.seller}`;
+  const isFav = user?.role === 'buyer' ? isFavorited(sellerId) : false;
+
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    e.preventDefault();
+    
+    if (user?.role !== 'buyer') {
+      showErrorToast('Only buyers can add favorites');
+      return;
+    }
+    
+    // Generate a consistent seller ID based on username
+    // This ensures the same seller has the same ID across all components
+    const sellerId = `seller_${listing.seller}`;
+    
+    const success = await toggleFavorite({
+      id: sellerId,
+      username: listing.seller,
+      profilePicture: listing.sellerProfile?.pic || undefined,
+      tier: undefined, // We don't have tier info at listing level
+      isVerified: listing.isSellerVerified || false,
+    });
+    
+    if (success) {
+      showSuccessToast(
+        isFav ? 'Removed from favorites' : 'Added to favorites'
+      );
+    }
+  };
 
   return (
     <div
@@ -35,22 +73,39 @@ export default function ListingCard({
       onMouseLeave={onMouseLeave}
       onClick={onClick}
     >
-      {/* Type Badge */}
-      {hasAuction && (
-        <div className="absolute top-4 right-4 z-10">
+      {/* Type Badge and Favorite Button */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {/* Favorite Button for Buyers */}
+        {user?.role === 'buyer' && !isLockedPremium && (
+          <button
+            onClick={handleFavoriteClick}
+            className="p-2 bg-black/70 backdrop-blur-sm rounded-lg hover:bg-black/90 transition-all group/fav"
+            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart 
+              size={16} 
+              className={`transition-all group-hover/fav:scale-110 ${
+                isFav 
+                  ? 'fill-[#ff950e] text-[#ff950e]' 
+                  : 'text-white hover:text-[#ff950e]'
+              }`} 
+            />
+          </button>
+        )}
+        
+        {/* Type Badges */}
+        {hasAuction && (
           <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
             <Gavel className="w-3.5 h-3.5 mr-1.5" /> AUCTION
           </span>
-        </div>
-      )}
-      
-      {!hasAuction && listing.isPremium && (
-        <div className="absolute top-4 right-4 z-10">
+        )}
+        
+        {!hasAuction && listing.isPremium && (
           <span className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-xs px-3 py-1.5 rounded-lg font-bold flex items-center shadow-lg">
             <Crown className="w-3.5 h-3.5 mr-1.5" /> PREMIUM
           </span>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-black">

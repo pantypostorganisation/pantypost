@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Lock, Mail, Gift, DollarSign, MessageCircle, Camera, Video, Users, Star, AlertTriangle } from 'lucide-react';
+import { Lock, Mail, Gift, DollarSign, MessageCircle, Camera, Video, Users, Star, AlertTriangle, Heart } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
@@ -24,6 +24,8 @@ interface ProfileHeaderProps {
   followers: number;
   averageRating: number | null;
   reviewsCount: number;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 export default function ProfileHeader({
@@ -43,6 +45,8 @@ export default function ProfileHeader({
   followers,
   averageRating,
   reviewsCount,
+  isFavorited = false,
+  onToggleFavorite,
 }: ProfileHeaderProps) {
   const showSubscribeButton =
     user?.role === 'buyer' &&
@@ -58,6 +62,20 @@ export default function ProfileHeader({
 
   return (
     <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
+      {/* Favorite button - top right corner */}
+      {user?.role === 'buyer' && user.username !== username && onToggleFavorite && (
+        <button
+          onClick={onToggleFavorite}
+          className="absolute top-6 right-6 p-2 rounded-lg bg-[#222] hover:bg-[#333] transition-colors"
+          aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          <Heart 
+            size={20} 
+            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400'} 
+          />
+        </button>
+      )}
+
       {/* Profile section with centered profile pic and badge to the right */}
       <div className="flex flex-col items-center relative mb-6 w-full">
         {/* Profile Picture - Centered */}
