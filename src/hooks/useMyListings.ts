@@ -11,7 +11,7 @@ import {
   INITIAL_FORM_STATE, 
   calculateAuctionEndTime 
 } from '@/utils/myListingsUtils';
-import { uploadMultipleToCloudinary } from '@/utils/cloudinary';
+import { uploadMultipleToCloudinary, checkCloudinaryConfig } from '@/utils/cloudinary';
 import { v4 as uuidv4 } from 'uuid';
 import { listingSchemas, financialSchemas } from '@/utils/validation/schemas';
 import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
@@ -247,9 +247,20 @@ export const useMyListings = () => {
   const handleUploadFiles = useCallback(async () => {
     if (selectedFiles.length === 0) return;
     
+    // Check Cloudinary configuration
+    const cloudinaryCheck = checkCloudinaryConfig();
+    if (!cloudinaryCheck.configured) {
+      console.warn(cloudinaryCheck.message);
+      // Show a user-friendly message
+      if (!error) {
+        setError('Using local image storage for development. Images will work but are stored in browser memory.');
+        // Clear the error after 3 seconds
+        setTimeout(() => setError(null), 3000);
+      }
+    }
+    
     setIsUploading(true);
     setUploadProgress(0);
-    setError(null);
     
     try {
       // Validate all files before upload
@@ -293,7 +304,7 @@ export const useMyListings = () => {
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [selectedFiles, formState.imageUrls, updateFormState]);
+  }, [selectedFiles, formState.imageUrls, updateFormState, error]);
 
   // Remove image URL
   const handleRemoveImageUrl = useCallback((urlToRemove: string) => {
