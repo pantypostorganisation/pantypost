@@ -1,17 +1,31 @@
 // src/utils/cloudinary.ts
 
-export const CLOUD_NAME = 'ddanxxkwz';
-export const UPLOAD_PRESET = 'pantypost_upload';
+// Cloudinary configuration
+const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '';
+const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
 
+// Types
 export interface CloudinaryUploadResult {
   url: string;
   publicId: string;
-  thumbnailUrl: string;
+  format: string;
+  width: number;
+  height: number;
+  bytes: number;
+  createdAt: string;
 }
 
-export interface CloudinaryError {
-  message: string;
-  code?: string;
+export interface CloudinaryDeleteResult {
+  result: 'ok' | 'not found' | 'error';
+  publicId: string;
+}
+
+export interface BatchDeleteResult {
+  successful: string[];
+  failed: Array<{
+    publicId: string;
+    error: string;
+  }>;
 }
 
 /**
@@ -19,15 +33,16 @@ export interface CloudinaryError {
  * @param file - The file to upload
  * @returns Promise with upload result
  */
-export const uploadToCloudinary = async (file: File): Promise<CloudinaryUploadResult> => {
+export const uploadToCloudinary = async (
+  file: File
+): Promise<CloudinaryUploadResult> => {
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
+    throw new Error('Cloudinary configuration is missing');
+  }
+  
   // Validate file before upload
   if (!isValidImageFile(file)) {
-    const fileSize = (file.size / (1024 * 1024)).toFixed(2);
-    throw new Error(
-      `Invalid file: ${file.name}. ` +
-      `Type: ${file.type || 'unknown'}, Size: ${fileSize}MB. ` +
-      `Must be JPEG, PNG, WebP, or GIF under 10MB.`
-    );
+    throw new Error(`Invalid file: ${file.name}. Must be JPEG, PNG, WebP, or GIF under 10MB.`);
   }
   
   const formData = new FormData();
@@ -44,26 +59,31 @@ export const uploadToCloudinary = async (file: File): Promise<CloudinaryUploadRe
     );
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Upload failed');
+      const error = await response.text();
+      throw new Error(`Upload failed: ${response.statusText || error}`);
     }
     
     const data = await response.json();
+    
     return {
       url: data.secure_url,
       publicId: data.public_id,
-      thumbnailUrl: data.secure_url.replace('/upload/', '/upload/w_300,h_300,c_fill,q_auto/')
+      format: data.format,
+      width: data.width,
+      height: data.height,
+      bytes: data.bytes,
+      createdAt: data.created_at,
     };
   } catch (error) {
-    console.error('Upload error:', error);
-    throw error;
+    console.error('Cloudinary upload error:', error);
+    throw error instanceof Error ? error : new Error('Upload failed');
   }
 };
 
 /**
- * Upload multiple files to Cloudinary
+ * Upload multiple files to Cloudinary with progress tracking
  * @param files - Array of files to upload
- * @param onProgress - Optional callback for progress updates
+ * @param onProgress - Progress callback
  * @returns Promise with array of upload results
  */
 export const uploadMultipleToCloudinary = async (
@@ -97,7 +117,8 @@ export const uploadMultipleToCloudinary = async (
       // Clean up any successful uploads if one fails
       if (results.length > 0) {
         console.log('Rolling back successful uploads:', results.map(r => r.publicId));
-        // In production, you'd delete these from Cloudinary via your backend
+        // Attempt to delete successfully uploaded images
+        await batchDeleteFromCloudinary(results.map(r => r.publicId));
       }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to upload file ${files[i].name}: ${errorMessage}`);
@@ -112,11 +133,79 @@ export const uploadMultipleToCloudinary = async (
  * @param publicId - The public ID of the image to delete
  * @returns Promise indicating success
  */
-export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
-  // Note: This requires server-side implementation with API credentials
-  // For now, we'll just log the intention
-  console.log('Delete requested for:', publicId);
-  // In production, this would make a call to your backend API
+export const deleteFromCloudinary = async (publicId: string): Promise<CloudinaryDeleteResult> => {
+  try {
+    // For now, make a request to the mock API endpoint
+    const response = await fetch('/api/cloudinary/delete', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ publicId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Delete failed' }));
+      throw new Error(error.message || `Delete failed: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Delete from Cloudinary error:', error);
+    throw error instanceof Error ? error : new Error('Delete failed');
+  }
+};
+
+/**
+ * Batch delete multiple images from Cloudinary
+ * @param publicIds - Array of public IDs to delete
+ * @returns Promise with batch delete results
+ */
+export const batchDeleteFromCloudinary = async (
+  publicIds: string[]
+): Promise<BatchDeleteResult> => {
+  const results: BatchDeleteResult = {
+    successful: [],
+    failed: [],
+  };
+
+  // Process deletions in parallel with error handling for each
+  const deletePromises = publicIds.map(async (publicId) => {
+    try {
+      const result = await deleteFromCloudinary(publicId);
+      if (result.result === 'ok') {
+        results.successful.push(publicId);
+      } else {
+        results.failed.push({
+          publicId,
+          error: result.result === 'not found' ? 'Image not found' : 'Delete failed',
+        });
+      }
+    } catch (error) {
+      results.failed.push({
+        publicId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  await Promise.allSettled(deletePromises);
+  return results;
+};
+
+/**
+ * Delete image by URL (extracts public ID and deletes)
+ * @param url - Cloudinary URL
+ * @returns Promise indicating success
+ */
+export const deleteImageByUrl = async (url: string): Promise<CloudinaryDeleteResult> => {
+  const publicId = extractPublicId(url);
+  if (!publicId) {
+    throw new Error('Invalid Cloudinary URL: Unable to extract public ID');
+  }
+  
+  return deleteFromCloudinary(publicId);
 };
 
 /**

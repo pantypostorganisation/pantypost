@@ -15,6 +15,7 @@ import { mockListingHandlers } from './handlers/listings.mock';
 import { mockOrderHandlers } from './handlers/orders.mock';
 import { mockMessageHandlers } from './handlers/messages.mock';
 import { mockWalletHandlers } from './handlers/wallet.mock';
+import { mockCloudinaryHandlers } from './handlers/cloudinary.mock';
 import { seedMockData } from './mock-data-seeder';
 
 // Mock handler type
@@ -80,19 +81,14 @@ const mockHandlers: RouteMatcher[] = [
   {
     pattern: /^\/listings\/seller\/([^\/]+)$/,
     handler: mockListingHandlers.getBySeller,
-    paramNames: ['username'],
+    paramNames: ['seller'],
   },
   {
-    pattern: /^\/listings\/([^\/]+)\/views$/,
-    handler: mockListingHandlers.views,
-    paramNames: ['id'],
-  },
-  {
-    pattern: /^\/listings\/([^\/]+)\/bids$/,
+    pattern: /^\/listings\/([^\/]+)\/bid$/,
     handler: mockListingHandlers.placeBid,
     paramNames: ['id'],
   },
-  { pattern: /^\/listings\/tags\/popular$/, handler: mockListingHandlers.popularTags },
+  { pattern: /^\/listings\/popular-tags$/, handler: mockListingHandlers.popularTags },
   
   // Order routes
   { pattern: /^\/orders$/, handler: mockOrderHandlers.list },
@@ -102,23 +98,8 @@ const mockHandlers: RouteMatcher[] = [
     paramNames: ['id'],
   },
   {
-    pattern: /^\/orders\/buyer\/([^\/]+)$/,
-    handler: mockOrderHandlers.getByBuyer,
-    paramNames: ['username'],
-  },
-  {
-    pattern: /^\/orders\/seller\/([^\/]+)$/,
-    handler: mockOrderHandlers.getBySeller,
-    paramNames: ['username'],
-  },
-  {
     pattern: /^\/orders\/([^\/]+)\/status$/,
     handler: mockOrderHandlers.updateStatus,
-    paramNames: ['id'],
-  },
-  {
-    pattern: /^\/orders\/([^\/]+)\/address$/,
-    handler: mockOrderHandlers.updateAddress,
     paramNames: ['id'],
   },
   
@@ -159,10 +140,24 @@ const mockHandlers: RouteMatcher[] = [
   { pattern: /^\/subscriptions\/subscribe$/, handler: mockUserHandlers.subscribe },
   { pattern: /^\/subscriptions\/unsubscribe$/, handler: mockUserHandlers.unsubscribe },
   { pattern: /^\/subscriptions\/check$/, handler: mockUserHandlers.checkSubscription },
+  
+  // Cloudinary routes
+  { pattern: /^\/api\/cloudinary\/delete$/, handler: mockCloudinaryHandlers.deleteImage },
+  { pattern: /^\/api\/cloudinary\/batch-delete$/, handler: mockCloudinaryHandlers.batchDelete },
+  {
+    pattern: /^\/api\/cloudinary\/check-deleted\/([^\/]+)$/,
+    handler: mockCloudinaryHandlers.checkDeleted,
+    paramNames: ['publicId'],
+  },
+  { pattern: /^\/api\/cloudinary\/clear-history$/, handler: mockCloudinaryHandlers.clearHistory },
 ];
 
 // Extract route parameters
-function extractParams(pattern: RegExp, pathname: string, paramNames?: string[]): Record<string, string> {
+function extractParams(
+  pattern: RegExp,
+  pathname: string,
+  paramNames?: string[]
+): Record<string, string> {
   if (!paramNames) return {};
   
   const match = pathname.match(pattern);
