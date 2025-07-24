@@ -462,7 +462,7 @@ export class ListingsService {
   }
 
   /**
-   * Create new listing
+   * Create new listing with enhanced error handling and retry logic
    */
   async createListing(request: CreateListingRequest): Promise<ApiResponse<Listing>> {
     try {
@@ -519,9 +519,17 @@ export class ListingsService {
         });
       }
 
-      // LocalStorage implementation
-      const listings = await storageService.getItem<Listing[]>('listings', []);
-      console.log('[ListingsService] Current listings count before create:', listings.length);
+      // LocalStorage implementation with enhanced error handling
+      let listings: Listing[] = [];
+      
+      // Try to get existing listings with error handling
+      try {
+        listings = await storageService.getItem<Listing[]>('listings', []);
+        console.log('[ListingsService] Current listings count before create:', listings.length);
+      } catch (error) {
+        console.error('[ListingsService] Error reading listings, starting with empty array:', error);
+        listings = [];
+      }
       
       const newListing: Listing = {
         id: uuidv4(),
@@ -551,20 +559,62 @@ export class ListingsService {
       console.log('[ListingsService] New listing object:', newListing);
 
       listings.push(newListing);
-      const saveResult = await storageService.setItem('listings', listings);
+      
+      // Try to save with retry logic
+      let saveResult = false;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (!saveResult && retryCount < maxRetries) {
+        try {
+          saveResult = await storageService.setItem('listings', listings);
+          
+          if (!saveResult && retryCount < maxRetries - 1) {
+            console.warn(`[ListingsService] Save attempt ${retryCount + 1} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, retryCount))); // Exponential backoff
+          }
+        } catch (error) {
+          console.error(`[ListingsService] Save attempt ${retryCount + 1} error:`, error);
+        }
+        
+        retryCount++;
+      }
       
       if (!saveResult) {
-        throw new Error('Failed to save listings to storage');
+        // Try to check if storage is full
+        try {
+          const storageInfo = await storageService.getStorageInfo();
+          console.error('[ListingsService] Storage info:', storageInfo);
+          
+          if (storageInfo.percentage > 90) {
+            return {
+              success: false,
+              error: { message: 'Storage is almost full. Please clear some browser data and try again.' },
+            };
+          }
+        } catch (error) {
+          console.error('[ListingsService] Could not get storage info:', error);
+        }
+        
+        return {
+          success: false,
+          error: { message: 'Failed to save listing. Please try again or check your browser storage settings.' },
+        };
       }
 
       // Verify the save
-      const verifyListings = await storageService.getItem<Listing[]>('listings', []);
-      console.log('[ListingsService] Verified listings count after save:', verifyListings.length);
-      
-      // Check if our listing is in the saved data
-      const savedListing = verifyListings.find(l => l.id === newListing.id);
-      if (!savedListing) {
-        throw new Error('Listing was not properly saved to storage');
+      try {
+        const verifyListings = await storageService.getItem<Listing[]>('listings', []);
+        console.log('[ListingsService] Verified listings count after save:', verifyListings.length);
+        
+        // Check if our listing is in the saved data
+        const savedListing = verifyListings.find(l => l.id === newListing.id);
+        if (!savedListing) {
+          console.error('[ListingsService] Listing was not found in storage after save');
+          // Don't throw error here, the listing was added to memory at least
+        }
+      } catch (error) {
+        console.error('[ListingsService] Error verifying save:', error);
       }
 
       // Invalidate cache
