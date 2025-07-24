@@ -52,7 +52,7 @@ export default function AuctionEndedModal({
                 <p>This auction was cancelled by the seller.</p>
               ) : isSeller ? (
                 hasBids ? (
-                  <p>
+                  <div>
                     Your auction for "<SecureMessageDisplay 
                       content={listing.title}
                       allowBasicFormatting={false}
@@ -64,16 +64,16 @@ export default function AuctionEndedModal({
                       allowBasicFormatting={false}
                       className="font-bold inline"
                     />.
-                  </p>
+                  </div>
                 ) : (
-                  <p>
+                  <div>
                     Your auction for "<SecureMessageDisplay 
                       content={listing.title}
                       allowBasicFormatting={false}
                       className="text-[#ff950e] inline"
                     />" has ended without 
                     receiving any bids.
-                  </p>
+                  </div>
                 )
               ) : (
                 hasBids ? (
@@ -119,7 +119,7 @@ export default function AuctionEndedModal({
                 </span> was not the highest bid.
               </p>
               
-              <p>
+              <div>
                 The auction for "<SecureMessageDisplay 
                   content={listing.title}
                   allowBasicFormatting={false}
@@ -131,7 +131,7 @@ export default function AuctionEndedModal({
                   allowBasicFormatting={false}
                   className="font-bold inline"
                 />.
-              </p>
+              </div>
             </div>
           </div>
           
