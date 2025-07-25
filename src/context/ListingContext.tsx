@@ -636,7 +636,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           listingId, 
           sanitizedBidder, 
           currentHighestBid, 
-          amount
+          amount,
+          listing.title
         );
         
         if (!incrementalChargeSuccess) {

@@ -187,7 +187,7 @@ type WalletContextType = {
   placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
   
   // NEW: Add auction tracking methods
-  chargeIncrementalBid: (listingId: string, bidder: string, previousBid: number, newBid: number) => Promise<boolean>;
+  chargeIncrementalBid: (listingId: string, bidder: string, previousBid: number, newBid: number, listingTitle: string) => Promise<boolean>;
   getAuctionBidders: (listingId: string) => Promise<string[]>;
   cleanupAuctionTracking: (listingId: string, winner?: string) => Promise<void>;
   
