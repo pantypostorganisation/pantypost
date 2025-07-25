@@ -108,6 +108,21 @@ export type DepositLog = {
   notes?: string;
 };
 
+// NEW: Auction bidder tracking types
+interface AuctionBidderRecord {
+  bidder: string;
+  totalBidAmount: number; // The current highest bid from this bidder
+  totalPaidAmount: number; // Total amount paid including all incremental bids and fees
+  hasPendingOrder: boolean; // Whether they have a pending order
+  lastUpdated: string; // ISO timestamp
+}
+
+interface AuctionBidderTracking {
+  [listingId: string]: {
+    [bidder: string]: AuctionBidderRecord;
+  };
+}
+
 // Validation schemas for wallet operations
 const walletOperationSchemas = {
   // FIXED: Allow 0 for balance updates, but require positive for transactions
@@ -171,6 +186,11 @@ type WalletContextType = {
   // FIXED: Add the missing placeBid function to the interface
   placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
   
+  // NEW: Add auction tracking methods
+  chargeIncrementalBid: (listingId: string, bidder: string, previousBid: number, newBid: number) => Promise<boolean>;
+  getAuctionBidders: (listingId: string) => Promise<string[]>;
+  cleanupAuctionTracking: (listingId: string, winner?: string) => Promise<void>;
+  
   // New enhanced features
   checkSuspiciousActivity: (username: string) => Promise<{ suspicious: boolean; reasons: string[] }>;
   reconcileBalance: (username: string, role: 'buyer' | 'seller' | 'admin') => Promise<any>;
@@ -193,6 +213,7 @@ const STORAGE_KEYS = {
   ADMIN_ACTIONS: 'wallet_adminActions',
   DEPOSIT_LOGS: 'wallet_depositLogs',
   INITIALIZATION_STATE: 'wallet_init_state',
+  AUCTION_BIDDER_TRACKING: 'auction_bidder_tracking', // NEW
 } as const;
 
 // Transaction lock manager for preventing race conditions
@@ -238,6 +259,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
   const [depositLogs, setDepositLogs] = useState<DepositLog[]>([]);
   const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
+  
+  // NEW: Add auction bidder tracking state
+  const [auctionBidderTracking, setAuctionBidderTracking] = useState<AuctionBidderTracking>({});
   
   // Loading and initialization state
   const [isLoading, setIsLoading] = useState(true);
@@ -340,6 +364,55 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // NEW: Load auction bidder tracking
+  const loadAuctionBidderTracking = useCallback(async () => {
+    try {
+      const tracking = await storageService.getItem<AuctionBidderTracking>(STORAGE_KEYS.AUCTION_BIDDER_TRACKING, {});
+      setAuctionBidderTracking(tracking);
+      return tracking;
+    } catch (error) {
+      console.error('[WalletContext] Failed to load auction bidder tracking:', error);
+      return {};
+    }
+  }, []);
+
+  // NEW: Save auction bidder tracking
+  const saveAuctionBidderTracking = useCallback(async (tracking: AuctionBidderTracking) => {
+    try {
+      await storageService.setItem(STORAGE_KEYS.AUCTION_BIDDER_TRACKING, tracking);
+      setAuctionBidderTracking(tracking);
+    } catch (error) {
+      console.error('[WalletContext] Failed to save auction bidder tracking:', error);
+    }
+  }, []);
+
+  // NEW: Update bidder tracking when a bid is placed
+  const updateBidderTracking = useCallback(async (
+    listingId: string,
+    bidder: string,
+    bidAmount: number,
+    paidAmount: number,
+    hasPendingOrder: boolean
+  ) => {
+    const tracking = await loadAuctionBidderTracking();
+    
+    if (!tracking[listingId]) {
+      tracking[listingId] = {};
+    }
+    
+    const existingRecord = tracking[listingId][bidder];
+    
+    tracking[listingId][bidder] = {
+      bidder,
+      totalBidAmount: bidAmount,
+      totalPaidAmount: existingRecord ? existingRecord.totalPaidAmount + paidAmount : paidAmount,
+      hasPendingOrder,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    await saveAuctionBidderTracking(tracking);
+  }, [loadAuctionBidderTracking, saveAuctionBidderTracking]);
+
   // Save all data without causing re-renders
   const saveAllData = useCallback(async () => {
     if (!isInitialized) {
@@ -360,6 +433,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         storageService.setItem(STORAGE_KEYS.ADMIN_WITHDRAWALS, adminWithdrawals),
         storageService.setItem(STORAGE_KEYS.ADMIN_ACTIONS, adminActions),
         storageService.setItem(STORAGE_KEYS.DEPOSIT_LOGS, depositLogs),
+        storageService.setItem(STORAGE_KEYS.AUCTION_BIDDER_TRACKING, auctionBidderTracking), // NEW
       ];
 
       // Save individual balance keys for enhanced compatibility
@@ -387,7 +461,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('[WalletContext] Error saving wallet data:', error);
     }
-  }, [isInitialized, buyerBalances, sellerBalances, adminBalance, orderHistory, sellerWithdrawals, adminWithdrawals, adminActions, depositLogs]);
+  }, [isInitialized, buyerBalances, sellerBalances, adminBalance, orderHistory, sellerWithdrawals, adminWithdrawals, adminActions, depositLogs, auctionBidderTracking]);
 
   // Load all data from storage
   const loadAllData = useCallback(async () => {
@@ -402,7 +476,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         storedSellerWithdrawals,
         storedAdminWithdrawals,
         storedAdminActions,
-        storedDepositLogs
+        storedDepositLogs,
+        storedAuctionTracking // NEW
       ] = await Promise.all([
         storageService.getItem<{ [username: string]: number }>(STORAGE_KEYS.BUYER_BALANCES, {}),
         storageService.getItem<{ [username: string]: number }>(STORAGE_KEYS.SELLER_BALANCES, {}),
@@ -410,7 +485,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         storageService.getItem<{ [username: string]: Withdrawal[] }>(STORAGE_KEYS.SELLER_WITHDRAWALS, {}),
         storageService.getItem<Withdrawal[]>(STORAGE_KEYS.ADMIN_WITHDRAWALS, []),
         storageService.getItem<AdminAction[]>(STORAGE_KEYS.ADMIN_ACTIONS, []),
-        storageService.getItem<DepositLog[]>(STORAGE_KEYS.DEPOSIT_LOGS, [])
+        storageService.getItem<DepositLog[]>(STORAGE_KEYS.DEPOSIT_LOGS, []),
+        loadAuctionBidderTracking() // NEW
       ]);
 
       // Load orders using the service
@@ -536,6 +612,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             setAdminWithdrawals([]);
             setAdminActions([]);
             setDepositLogs([]);
+            setAuctionBidderTracking({}); // NEW
             
             return true;
           }
@@ -558,6 +635,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAdminWithdrawals(storedAdminWithdrawals);
       setAdminActions(normalizedActions);
       setDepositLogs(storedDepositLogs);
+      setAuctionBidderTracking(storedAuctionTracking); // NEW
 
       console.log('[WalletContext] Data loaded successfully:', {
         buyers: Object.keys(mergedBuyers).length,
@@ -565,7 +643,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         admin: adminBalanceValue,
         orders: storedOrders.length,
         adminActions: normalizedActions.length,
-        deposits: storedDepositLogs.length
+        deposits: storedDepositLogs.length,
+        auctionListings: Object.keys(storedAuctionTracking).length // NEW
       });
 
       return true;
@@ -574,7 +653,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInitializationError('Failed to load wallet data');
       return false;
     }
-  }, []);
+  }, [loadAuctionBidderTracking]);
 
   // Initialize wallet service and load data
   useEffect(() => {
@@ -643,6 +722,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     adminWithdrawals,
     adminActions,
     depositLogs,
+    auctionBidderTracking, // NEW
     isInitialized,
     isLoading,
     saveAllData
@@ -817,7 +897,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getBuyerBalance, setBuyerBalance]);
 
-  // Hold funds for auction bid - FIXED to include buyer fee with security
+  // FIXED: Hold funds for auction bid with tracking
   const holdBidFunds = useCallback(async (
     listingId: string,
     bidder: string,
@@ -879,6 +959,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           // Update local state
           setOrderHistory(prev => [...prev, orderResult.data!]);
           
+          // NEW: Update bidder tracking
+          await updateBidderTracking(listingId, validatedBidder, validatedAmount, totalWithFee, true);
+          
           console.log('[HoldBid] Funds held for bid:', { 
             bidder: validatedBidder, 
             bidAmount: validatedAmount,
@@ -899,9 +982,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[HoldBid] Error holding bid funds:', error);
       return false;
     }
-  }, [getBuyerBalance, setBuyerBalance]);
+  }, [getBuyerBalance, setBuyerBalance, updateBidderTracking]);
 
-  // FIXED: Refund bid funds - handles missing orders gracefully with security
+  // FIXED: Refund bid funds with comprehensive tracking
   const refundBidFunds = useCallback(async (
     bidder: string,
     listingId: string
@@ -914,6 +997,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Use transaction lock
       return await transactionLock.current.acquireLock(`refund_${listingId}_${validatedBidder}`, async () => {
+        // NEW: Check bidder tracking first
+        const tracking = await loadAuctionBidderTracking();
+        const bidderRecord = tracking[listingId]?.[validatedBidder];
+        
+        if (!bidderRecord || bidderRecord.totalPaidAmount === 0) {
+          console.log('[RefundBid] No payment record found for bidder', { 
+            bidder: validatedBidder, 
+            listingId 
+          });
+          return true; // Nothing to refund
+        }
+        
         // Load fresh order data from storage to ensure we have the latest
         const ordersResult = await ordersService.getOrders();
         if (!ordersResult.success || !ordersResult.data) {
@@ -928,50 +1023,140 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           order.shippingStatus === 'pending-auction'
         );
         
-        if (!pendingOrder) {
-          // This is expected for users who raised their own bids with incremental charging
-          // They don't have pending orders because we charged them directly
-          console.log('[RefundBid] No pending order found - likely an incremental bid', { 
-            bidder: validatedBidder, 
-            listingId
+        let refundAmount = 0;
+        
+        if (pendingOrder) {
+          // Refund from pending order
+          refundAmount = pendingOrder.markedUpPrice; // This includes the buyer fee
+          
+          // Remove the pending order from storage
+          const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
+          
+          // Save the filtered orders back to storage
+          await storageService.setItem('wallet_orders', filteredOrders);
+          
+          // Update local state
+          setOrderHistory(filteredOrders);
+          
+          console.log('[RefundBid] Refunding from pending order:', { 
+            orderId: pendingOrder.id, 
+            amount: refundAmount 
           });
-          return true; // Return true because there's nothing to refund
+        } else if (bidderRecord.totalPaidAmount > 0) {
+          // NEW: Refund based on tracking record (for incremental bidders)
+          refundAmount = bidderRecord.totalPaidAmount;
+          
+          console.log('[RefundBid] Refunding from tracking record:', { 
+            bidder: validatedBidder,
+            amount: refundAmount 
+          });
         }
         
-        console.log('[RefundBid] Found pending order:', pendingOrder);
+        if (refundAmount > 0) {
+          // Refund to buyer's wallet
+          const currentBalance = getBuyerBalance(validatedBidder);
+          await setBuyerBalance(validatedBidder, currentBalance + refundAmount);
+          
+          // NEW: Clear the bidder's tracking record
+          if (tracking[listingId]) {
+            delete tracking[listingId][validatedBidder];
+            
+            // Clean up empty listing entries
+            if (Object.keys(tracking[listingId]).length === 0) {
+              delete tracking[listingId];
+            }
+            
+            await saveAuctionBidderTracking(tracking);
+          }
+          
+          // Clear the orders service cache
+          ordersService.clearCache();
+          
+          console.log('[RefundBid] Successfully refunded:', { 
+            bidder: validatedBidder, 
+            amount: refundAmount, 
+            listingId
+          });
+        }
         
-        // Refund the full amount including buyer fee
-        const refundAmount = pendingOrder.markedUpPrice; // This includes the buyer fee
-        
-        // Refund to buyer's wallet
-        const currentBalance = getBuyerBalance(validatedBidder);
-        await setBuyerBalance(validatedBidder, currentBalance + refundAmount);
-        
-        // Remove the pending order from storage
-        const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
-        
-        // Save the filtered orders back to storage
-        await storageService.setItem('wallet_orders', filteredOrders);
-        
-        // Update local state
-        setOrderHistory(filteredOrders);
-        
-        // Clear the orders service cache
-        ordersService.clearCache();
-        
-        console.log('[RefundBid] Refunded bid:', { 
-          bidder: validatedBidder, 
-          amount: refundAmount, 
-          listingId, 
-          orderId: pendingOrder.id 
-        });
         return true;
       });
     } catch (error) {
       console.error('[RefundBid] Error refunding bid:', error);
       return false;
     }
-  }, [getBuyerBalance, setBuyerBalance]);
+  }, [getBuyerBalance, setBuyerBalance, loadAuctionBidderTracking, saveAuctionBidderTracking]);
+
+  // NEW: Handle incremental bid charge with tracking
+  const chargeIncrementalBid = useCallback(async (
+    listingId: string,
+    bidder: string,
+    previousBid: number,
+    newBid: number
+  ): Promise<boolean> => {
+    try {
+      const validatedBidder = validateUsername(bidder);
+      const bidDifference = newBid - previousBid;
+      const incrementalFee = bidDifference * 0.1;
+      const incrementalTotal = bidDifference + incrementalFee;
+      
+      const bidderBalance = getBuyerBalance(validatedBidder);
+      if (bidderBalance < incrementalTotal) {
+        console.error('[IncrementalBid] Insufficient balance:', { 
+          balance: bidderBalance, 
+          required: incrementalTotal 
+        });
+        return false;
+      }
+      
+      return await transactionLock.current.acquireLock(`incremental_bid_${listingId}_${validatedBidder}`, async () => {
+        // Deduct the incremental amount
+        await setBuyerBalance(validatedBidder, bidderBalance - incrementalTotal);
+        
+        // Update bidder tracking
+        await updateBidderTracking(listingId, validatedBidder, newBid, incrementalTotal, false);
+        
+        console.log('[IncrementalBid] Charged incremental amount:', {
+          bidder: validatedBidder,
+          previousBid,
+          newBid,
+          charged: incrementalTotal,
+          listingId
+        });
+        
+        return true;
+      });
+    } catch (error) {
+      console.error('[IncrementalBid] Error charging incremental bid:', error);
+      return false;
+    }
+  }, [getBuyerBalance, setBuyerBalance, updateBidderTracking]);
+
+  // NEW: Get all bidders for a listing from tracking
+  const getAuctionBidders = useCallback(async (listingId: string): Promise<string[]> => {
+    const tracking = await loadAuctionBidderTracking();
+    const listingBidders = tracking[listingId] || {};
+    return Object.keys(listingBidders);
+  }, [loadAuctionBidderTracking]);
+
+  // NEW: Clean up auction tracking after auction ends
+  const cleanupAuctionTracking = useCallback(async (listingId: string, winner?: string) => {
+    const tracking = await loadAuctionBidderTracking();
+    
+    if (tracking[listingId]) {
+      // If there's a winner, remove only the winner from tracking (they've been processed)
+      if (winner && tracking[listingId][winner]) {
+        delete tracking[listingId][winner];
+      }
+      
+      // If no bidders left, remove the listing entry
+      if (Object.keys(tracking[listingId]).length === 0) {
+        delete tracking[listingId];
+      }
+      
+      await saveAuctionBidderTracking(tracking);
+    }
+  }, [loadAuctionBidderTracking, saveAuctionBidderTracking]);
 
   // ENHANCED purchaseListing with proper tracking and security - FIXED TO HANDLE IMAGE URLs
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
@@ -1428,6 +1613,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Clear cache
         ordersService.clearCache();
         
+        // NEW: Clean up the winner from auction tracking
+        await cleanupAuctionTracking(listing.id, validatedWinner);
+        
         // Create admin action for platform fee tracking
         const platformFeeAction: AdminAction = {
           id: uuidv4(),
@@ -1465,7 +1653,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[FinalizeAuction] Error:', error);
       return false;
     }
-  }, [orderHistory, addSellerNotification, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
+  }, [orderHistory, addSellerNotification, setSellerBalance, setAdminBalance, sellerBalances, adminBalance, cleanupAuctionTracking]);
 
   const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
     try {
@@ -2205,6 +2393,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     
     // FIXED: Add the placeBid function to the context value
     placeBid,
+    
+    // NEW: Add auction tracking methods
+    chargeIncrementalBid,
+    getAuctionBidders,
+    cleanupAuctionTracking,
     
     // Enhanced features
     checkSuspiciousActivity,

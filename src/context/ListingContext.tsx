@@ -219,7 +219,10 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     orderHistory, 
     holdBidFunds, 
     refundBidFunds, 
-    finalizeAuctionPurchase 
+    finalizeAuctionPurchase,
+    chargeIncrementalBid, // NEW: Import the new function
+    getAuctionBidders, // NEW: Import the new function
+    cleanupAuctionTracking // NEW: Import the new function
   } = useWallet();
 
   // On mount, set the notification callback in WalletContext
@@ -628,29 +631,24 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const isCurrentHighestBidder = previousHighestBidder === sanitizedBidder;
       
       if (isCurrentHighestBidder) {
-        // User is raising their own bid - handle incrementally
-        const bidDifference = amount - currentHighestBid;
-        const incrementalFee = bidDifference * 0.1;
-        const incrementalTotal = bidDifference + incrementalFee;
+        // User is raising their own bid - use the new chargeIncrementalBid function
+        const incrementalChargeSuccess = await chargeIncrementalBid(
+          listingId, 
+          sanitizedBidder, 
+          currentHighestBid, 
+          amount
+        );
         
-        const bidderBalance = getBuyerBalance(sanitizedBidder);
-        if (bidderBalance < incrementalTotal) {
-          console.error('[PlaceBid] Insufficient balance for bid increase:', { 
-            balance: bidderBalance, 
-            required: incrementalTotal 
-          });
+        if (!incrementalChargeSuccess) {
+          console.error('[PlaceBid] Failed to charge incremental bid');
           return false;
         }
         
         console.log('[PlaceBid] User raising their own bid:', {
           previousBid: currentHighestBid,
           newBid: amount,
-          difference: bidDifference,
-          incrementalCharge: incrementalTotal
+          bidder: sanitizedBidder
         });
-        
-        // Deduct only the incremental amount
-        await setBuyerBalance(sanitizedBidder, bidderBalance - incrementalTotal);
         
         // Place the bid update
         const result = await listingsService.placeBid(listingId, sanitizedBidder, amount);
@@ -665,8 +663,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           
           return true;
         } else {
-          // Rollback on failure
-          await setBuyerBalance(sanitizedBidder, bidderBalance);
+          // Rollback not needed as chargeIncrementalBid handles it
           return false;
         }
       } else {
@@ -847,22 +844,22 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const success = await finalizeAuctionPurchase(listing, winningBidder, winningBid);
                 
                 if (success) {
-                  // With incremental bidding, most losing bidders should already be refunded
-                  // But check for any remaining ones
-                  const losingBidders = listing.auction.bids
-                    .filter(bid => bid.bidder !== winningBidder)
-                    .map(bid => bid.bidder);
+                  // Get all bidders from tracking (includes incremental bidders)
+                  const allBidders = await getAuctionBidders(listing.id);
+                  const losingBidders = allBidders.filter(bidder => bidder !== winningBidder);
                   
-                  // Get unique bidders (in case someone bid multiple times)
-                  const uniqueLosingBidders = [...new Set(losingBidders)];
+                  console.log(`[Auction] Found ${losingBidders.length} losing bidders to refund`);
                   
-                  // Refund each losing bidder (if they haven't been refunded already)
-                  for (const loser of uniqueLosingBidders) {
+                  // Refund each losing bidder
+                  for (const loser of losingBidders) {
                     const refunded = await refundBidFunds(loser, listing.id);
                     if (refunded) {
                       console.log(`[Auction] Refunded losing bidder ${loser} for listing ${listing.id}`);
                     }
                   }
+                  
+                  // Clean up auction tracking
+                  await cleanupAuctionTracking(listing.id, winningBidder);
                   
                   removedListings.push(listing.id);
                   await storageService.removeItem(processingKey);
@@ -886,14 +883,19 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
                   );
                 }
                 
-                // Refund all bidders since no valid winner
-                const allBidders = [...new Set(listing.auction.bids.map(bid => bid.bidder))];
+                // When no valid winner is found, refund all bidders
+                const allBidders = await getAuctionBidders(listing.id);
+                console.log(`[Auction] No valid winner found. Refunding ${allBidders.length} bidders`);
+                
                 for (const bidder of allBidders) {
                   const refunded = await refundBidFunds(bidder, listing.id);
                   if (refunded) {
                     console.log(`[Auction] Refunded bidder ${bidder} for ended auction ${listing.id} with no valid winner`);
                   }
                 }
+                
+                // Clean up auction tracking for this listing
+                await cleanupAuctionTracking(listing.id);
               }
             } else {
               addSellerNotification(
@@ -957,14 +959,18 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // REFUND ALL BIDDERS when auction is cancelled
         if (listing.auction.bids.length > 0) {
-          const uniqueBidders = [...new Set(listing.auction.bids.map(bid => bid.bidder))];
+          // Get all bidders from tracking
+          const allBidders = await getAuctionBidders(listingId);
           
-          for (const bidder of uniqueBidders) {
+          for (const bidder of allBidders) {
             const refunded = await refundBidFunds(bidder, listingId);
             if (refunded) {
               console.log(`[CancelAuction] Refunded ${bidder} for cancelled auction ${listingId}`);
             }
           }
+          
+          // Clean up auction tracking
+          await cleanupAuctionTracking(listingId);
           
           addSellerNotification(
             listing.seller,
