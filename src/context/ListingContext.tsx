@@ -596,7 +596,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // NEW: Use AuctionContext for placing bids
+  // NEW: Use AuctionContext for placing bids - THIS IS THE ONLY placeBid FUNCTION NOW
   const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
     try {
       const listing = listings.find(l => l.id === listingId);
