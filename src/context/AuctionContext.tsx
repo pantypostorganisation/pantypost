@@ -26,7 +26,7 @@ interface AuctionState {
     currentHighestBidder: string | null;
     currentHighestBid: number;
     allBidders: Set<string>; // Track all unique bidders for this auction
-    refundedBidders: Set<string>; // Track who has been refunded
+    // REMOVED: refundedBidders - this was causing the issue
   };
 }
 
@@ -99,7 +99,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           restoredState[listingId] = {
             ...data,
             allBidders: new Set(Array.isArray((data as any).allBidders) ? (data as any).allBidders : []),
-            refundedBidders: new Set(Array.isArray((data as any).refundedBidders) ? (data as any).refundedBidders : [])
+            // Don't restore refundedBidders - we'll track this differently
           };
         });
         
@@ -121,8 +121,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       Object.entries(auctionState).forEach(([listingId, data]) => {
         stateToSave[listingId] = {
           ...data,
-          allBidders: Array.from(data.allBidders),
-          refundedBidders: Array.from(data.refundedBidders)
+          allBidders: Array.from(data.allBidders)
         };
       });
       
@@ -179,10 +178,19 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     await storageService.removeItem(`${STORAGE_KEYS.PROCESSING_LOCK}_${key}`);
   };
 
-  // Check if a bidder has been refunded
+  // Check if a bidder has been refunded for their CURRENT bid
   const hasBeenRefunded = useCallback((listingId: string, bidder: string): boolean => {
-    return refundTracker[listingId]?.[bidder]?.refunded || false;
-  }, [refundTracker]);
+    // A bidder is only considered "refunded" if they don't have an active bid
+    const state = auctionState[listingId];
+    if (!state) return true; // No state means no active bid
+    
+    // If they're the current highest bidder, they haven't been refunded
+    if (state.currentHighestBidder === bidder) return false;
+    
+    // Check if they have a pending order (meaning they have an active bid that hasn't been refunded)
+    // This check will be done in the refundBidFunds function
+    return false; // Let refundBidFunds handle the actual check
+  }, [auctionState]);
 
   // Track a refund
   const trackRefund = useCallback((listingId: string, bidder: string, amount: number) => {
@@ -197,15 +205,6 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }));
-    
-    // Also update auction state
-    setAuctionState(prev => {
-      const state = prev[listingId];
-      if (state) {
-        state.refundedBidders.add(bidder);
-      }
-      return { ...prev };
-    });
   }, []);
 
   // CORE: Place a bid with comprehensive refund logic
@@ -256,8 +255,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           bids: [],
           currentHighestBidder: listing.auction.highestBidder || null,
           currentHighestBid: listing.auction.highestBid || 0,
-          allBidders: new Set(),
-          refundedBidders: new Set()
+          allBidders: new Set()
         };
       }
 
@@ -277,8 +275,12 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         bidder: sanitizedBidder,
         amount: sanitizedAmount,
         currentHighest: currentState.currentHighestBid,
+        currentHighestBidder: currentState.currentHighestBidder,
         allBidders: Array.from(currentState.allBidders)
       });
+
+      // Store the previous highest bidder before updating
+      const previousHighestBidder = currentState.currentHighestBidder;
 
       // CRITICAL: First, hold the new bid funds
       const holdSuccess = await holdBidFunds(
@@ -300,22 +302,16 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         throw new Error(bidResult.error?.message || 'Failed to place bid');
       }
 
-      // CRITICAL: Now refund ALL other bidders (not just the previous highest)
-      const biddersToRefund = Array.from(currentState.allBidders).filter(
-        b => b !== sanitizedBidder && !currentState.refundedBidders.has(b)
-      );
-
-      console.log('[AuctionContext] Refunding other bidders:', biddersToRefund);
-
-      for (const bidderToRefund of biddersToRefund) {
-        if (!hasBeenRefunded(listingId, bidderToRefund)) {
-          console.log('[AuctionContext] Refunding bidder:', bidderToRefund);
-          const refundSuccess = await refundBidFunds(bidderToRefund, listingId);
-          if (refundSuccess) {
-            trackRefund(listingId, bidderToRefund, 0); // Amount tracked in WalletContext
-          } else {
-            console.error('[AuctionContext] Failed to refund bidder:', bidderToRefund);
-          }
+      // CRITICAL FIX: Only refund the PREVIOUS highest bidder, not all bidders
+      if (previousHighestBidder && previousHighestBidder !== sanitizedBidder) {
+        console.log('[AuctionContext] Refunding previous highest bidder:', previousHighestBidder);
+        
+        const refundSuccess = await refundBidFunds(previousHighestBidder, listingId);
+        if (refundSuccess) {
+          trackRefund(listingId, previousHighestBidder, 0); // Amount tracked in WalletContext
+          console.log('[AuctionContext] Successfully refunded previous bidder:', previousHighestBidder);
+        } else {
+          console.error('[AuctionContext] Failed to refund previous bidder:', previousHighestBidder);
         }
       }
 
@@ -330,6 +326,9 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         isWinner: false
       };
 
+      // Add bidder to all bidders set
+      currentState.allBidders.add(sanitizedBidder);
+
       // Update state
       const newState = {
         ...auctionState,
@@ -337,8 +336,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           bids: [...currentState.bids, newBidRecord],
           currentHighestBidder: sanitizedBidder,
           currentHighestBid: sanitizedAmount,
-          allBidders: new Set([...currentState.allBidders, sanitizedBidder]),
-          refundedBidders: new Set(biddersToRefund) // Track who we just refunded
+          allBidders: new Set(currentState.allBidders) // Copy the set
         }
       };
 
@@ -347,7 +345,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuctionContext] Bid placed successfully:', {
         bidder: sanitizedBidder,
         amount: sanitizedAmount,
-        refundedCount: biddersToRefund.length
+        refundedBidder: previousHighestBidder || 'none'
       });
 
       return true;
@@ -360,7 +358,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       setIsProcessing(false);
       await releaseLock(lockKey);
     }
-  }, [auctionState, getBuyerBalance, holdBidFunds, refundBidFunds, hasBeenRefunded, trackRefund]);
+  }, [auctionState, getBuyerBalance, holdBidFunds, refundBidFunds, trackRefund]);
 
   // Cancel an auction and refund all bidders
   const cancelAuction = useCallback(async (listingId: string): Promise<boolean> => {
@@ -386,12 +384,10 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
       // Refund all bidders
       for (const bidder of allBidders) {
-        if (!hasBeenRefunded(listingId, bidder)) {
-          const refundSuccess = await refundBidFunds(bidder, listingId);
-          if (refundSuccess) {
-            trackRefund(listingId, bidder, 0);
-            console.log('[AuctionContext] Refunded bidder on cancel:', bidder);
-          }
+        const refundSuccess = await refundBidFunds(bidder, listingId);
+        if (refundSuccess) {
+          trackRefund(listingId, bidder, 0);
+          console.log('[AuctionContext] Refunded bidder on cancel:', bidder);
         }
       }
 
@@ -416,7 +412,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       setIsProcessing(false);
       await releaseLock(lockKey);
     }
-  }, [auctionState, refundTracker, getAuctionBidders, refundBidFunds, cleanupAuctionTracking, hasBeenRefunded, trackRefund]);
+  }, [auctionState, refundTracker, getAuctionBidders, refundBidFunds, cleanupAuctionTracking, trackRefund]);
 
   // Process an ended auction
   const processEndedAuction = useCallback(async (listing: Listing): Promise<boolean> => {
@@ -473,12 +469,10 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           console.log('[AuctionContext] Refunding losing bidders:', losingBidders);
           
           for (const loser of losingBidders) {
-            if (!hasBeenRefunded(listing.id, loser)) {
-              const refundSuccess = await refundBidFunds(loser, listing.id);
-              if (refundSuccess) {
-                trackRefund(listing.id, loser, 0);
-                console.log('[AuctionContext] Refunded loser:', loser);
-              }
+            const refundSuccess = await refundBidFunds(loser, listing.id);
+            if (refundSuccess) {
+              trackRefund(listing.id, loser, 0);
+              console.log('[AuctionContext] Refunded loser:', loser);
             }
           }
           
@@ -492,12 +486,10 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         const allBidders = await getAuctionBidders(listing.id);
         
         for (const bidder of allBidders) {
-          if (!hasBeenRefunded(listing.id, bidder)) {
-            const refundSuccess = await refundBidFunds(bidder, listing.id);
-            if (refundSuccess) {
-              trackRefund(listing.id, bidder, 0);
-              console.log('[AuctionContext] Refunded bidder (no winner):', bidder);
-            }
+          const refundSuccess = await refundBidFunds(bidder, listing.id);
+          if (refundSuccess) {
+            trackRefund(listing.id, bidder, 0);
+            console.log('[AuctionContext] Refunded bidder (no winner):', bidder);
           }
         }
         
@@ -517,7 +509,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       await releaseLock(lockKey);
     }
-  }, [auctionState, getAuctionBidders, refundBidFunds, finalizeAuctionPurchase, cleanupAuctionTracking, hasBeenRefunded, trackRefund]);
+  }, [auctionState, getAuctionBidders, refundBidFunds, finalizeAuctionPurchase, cleanupAuctionTracking, trackRefund]);
 
   // Get auction state for a listing
   const getAuctionState = useCallback((listingId: string): AuctionState[string] | null => {

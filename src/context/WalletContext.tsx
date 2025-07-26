@@ -984,7 +984,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getBuyerBalance, setBuyerBalance, updateBidderTracking]);
 
-  // FIXED: Refund bid funds with comprehensive tracking
+  // FIXED: Refund bid funds with better order lookup
   const refundBidFunds = useCallback(async (
     bidder: string,
     listingId: string
@@ -993,91 +993,79 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // Validate inputs
       const validatedBidder = validateUsername(bidder);
       
-      console.log('[RefundBid] Starting refund check for:', { bidder: validatedBidder, listingId });
+      console.log('[RefundBid] Starting refund for:', { bidder: validatedBidder, listingId });
       
       // Use transaction lock
       return await transactionLock.current.acquireLock(`refund_${listingId}_${validatedBidder}`, async () => {
-        // NEW: Check bidder tracking first
-        const tracking = await loadAuctionBidderTracking();
-        const bidderRecord = tracking[listingId]?.[validatedBidder];
-        
-        if (!bidderRecord || bidderRecord.totalPaidAmount === 0) {
-          console.log('[RefundBid] No payment record found for bidder', { 
-            bidder: validatedBidder, 
-            listingId 
-          });
-          return true; // Nothing to refund
-        }
-        
-        // Load fresh order data from storage to ensure we have the latest
+        // IMPORTANT: Get the most recent order data from both state and storage
+        // This ensures we catch orders that were just created
         const ordersResult = await ordersService.getOrders();
         if (!ordersResult.success || !ordersResult.data) {
           console.error('[RefundBid] Failed to load orders for refund');
           return false;
         }
         
+        // Also check local state for very recent orders that might not be persisted yet
+        const allOrders = [...ordersResult.data, ...orderHistory];
+        
+        // Remove duplicates by ID
+        const uniqueOrders = allOrders.filter((order, index, self) =>
+          index === self.findIndex((o) => o.id === order.id)
+        );
+        
         // Find the specific pending auction order for this listing
-        const pendingOrder = ordersResult.data.find(order => 
+        const pendingOrder = uniqueOrders.find(order => 
           order.buyer === validatedBidder && 
           order.listingId === listingId && 
           order.shippingStatus === 'pending-auction'
         );
         
-        let refundAmount = 0;
-        
-        if (pendingOrder) {
-          // Refund from pending order
-          refundAmount = pendingOrder.markedUpPrice; // This includes the buyer fee
-          
-          // Remove the pending order from storage
-          const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
-          
-          // Save the filtered orders back to storage
-          await storageService.setItem('wallet_orders', filteredOrders);
-          
-          // Update local state
-          setOrderHistory(filteredOrders);
-          
-          console.log('[RefundBid] Refunding from pending order:', { 
-            orderId: pendingOrder.id, 
-            amount: refundAmount 
-          });
-        } else if (bidderRecord.totalPaidAmount > 0) {
-          // NEW: Refund based on tracking record (for incremental bidders)
-          refundAmount = bidderRecord.totalPaidAmount;
-          
-          console.log('[RefundBid] Refunding from tracking record:', { 
-            bidder: validatedBidder,
-            amount: refundAmount 
-          });
-        }
-        
-        if (refundAmount > 0) {
-          // Refund to buyer's wallet
-          const currentBalance = getBuyerBalance(validatedBidder);
-          await setBuyerBalance(validatedBidder, currentBalance + refundAmount);
-          
-          // NEW: Clear the bidder's tracking record
-          if (tracking[listingId]) {
-            delete tracking[listingId][validatedBidder];
-            
-            // Clean up empty listing entries
-            if (Object.keys(tracking[listingId]).length === 0) {
-              delete tracking[listingId];
-            }
-            
-            await saveAuctionBidderTracking(tracking);
-          }
-          
-          // Clear the orders service cache
-          ordersService.clearCache();
-          
-          console.log('[RefundBid] Successfully refunded:', { 
+        if (!pendingOrder) {
+          console.log('[RefundBid] No pending order found for bidder:', { 
             bidder: validatedBidder, 
-            amount: refundAmount, 
-            listingId
+            listingId,
+            ordersChecked: uniqueOrders.length
           });
+          return true; // Nothing to refund
         }
+        
+        console.log('[RefundBid] Found pending order to refund:', { 
+          orderId: pendingOrder.id, 
+          amount: pendingOrder.markedUpPrice 
+        });
+        
+        // Refund the full amount including fees
+        const refundAmount = pendingOrder.markedUpPrice;
+        const currentBalance = getBuyerBalance(validatedBidder);
+        await setBuyerBalance(validatedBidder, currentBalance + refundAmount);
+        
+        // Remove the pending order
+        const filteredOrders = uniqueOrders.filter(order => order.id !== pendingOrder.id);
+        
+        // Save the filtered orders back to storage
+        await storageService.setItem('wallet_orders', filteredOrders);
+        
+        // Update local state
+        setOrderHistory(filteredOrders);
+        
+        // Clear any auction tracking for this bidder
+        const tracking = await loadAuctionBidderTracking();
+        if (tracking[listingId] && tracking[listingId][validatedBidder]) {
+          delete tracking[listingId][validatedBidder];
+          if (Object.keys(tracking[listingId]).length === 0) {
+            delete tracking[listingId];
+          }
+          await saveAuctionBidderTracking(tracking);
+        }
+        
+        // Clear the orders service cache to ensure fresh data on next load
+        ordersService.clearCache();
+        
+        console.log('[RefundBid] Successfully refunded:', { 
+          bidder: validatedBidder, 
+          amount: refundAmount, 
+          listingId
+        });
         
         return true;
       });
@@ -1085,7 +1073,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[RefundBid] Error refunding bid:', error);
       return false;
     }
-  }, [getBuyerBalance, setBuyerBalance, loadAuctionBidderTracking, saveAuctionBidderTracking]);
+  }, [getBuyerBalance, setBuyerBalance, orderHistory, loadAuctionBidderTracking, saveAuctionBidderTracking]);
 
   // NEW: Handle incremental bid charge with tracking
   const chargeIncrementalBid = useCallback(async (
