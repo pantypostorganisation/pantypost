@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useWallet } from './WalletContext';
 import { useAuth } from './AuthContext';
+import { useAuction } from './AuctionContext';
 import { Order } from './WalletContext';
 import { v4 as uuidv4 } from 'uuid';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
@@ -49,6 +50,7 @@ export type AuctionSettings = {
   highestBid?: number;
   highestBidder?: string;
   status: AuctionStatus;
+  minimumIncrement?: number;
 };
 
 export type Listing = {
@@ -213,17 +215,15 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     subscribeToSellerWithPayment, 
     setAddSellerNotificationCallback, 
     purchaseListing, 
-    getBuyerBalance, 
-    setBuyerBalance,
-    addOrder, 
-    orderHistory, 
-    holdBidFunds, 
-    refundBidFunds, 
-    finalizeAuctionPurchase,
-    chargeIncrementalBid, // NEW: Import the new function
-    getAuctionBidders, // NEW: Import the new function
-    cleanupAuctionTracking // NEW: Import the new function
+    orderHistory
   } = useWallet();
+
+  // Get auction functions from AuctionContext
+  const {
+    placeBid: auctionPlaceBid,
+    cancelAuction: auctionCancelAuction,
+    processEndedAuction
+  } = useAuction();
 
   // On mount, set the notification callback in WalletContext
   useEffect(() => {
@@ -596,126 +596,32 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // FIXED: Place a bid on an auction listing with incremental charging
+  // NEW: Use AuctionContext for placing bids
   const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
-    // Validate bid amount
-    const amountValidation = securityService.validateAmount(amount, {
-      min: 0.01,
-      max: 10000
-    });
-
-    if (!amountValidation.valid) {
-      console.error('Invalid bid amount:', amountValidation.error);
-      return false;
-    }
-
-    // Sanitize bidder username
-    const sanitizedBidder = sanitize.username(bidder);
-
-    const listing = listings.find(l => l.id === listingId);
-    if (!listing || !listing.auction || listing.auction.status !== 'active') return false;
-    
-    if (new Date(listing.auction.endTime).getTime() <= new Date().getTime()) {
-      await checkEndedAuctions();
-      return false;
-    }
-    
-    if (amount < listing.auction.startingPrice) return false;
-    
-    const currentHighestBid = listing.auction.highestBid || 0;
-    if (amount <= currentHighestBid) return false;
-    
     try {
-      // Store the previous highest bidder
-      const previousHighestBidder = listing.auction.highestBidder;
-      const isCurrentHighestBidder = previousHighestBidder === sanitizedBidder;
-      
-      if (isCurrentHighestBidder) {
-        // User is raising their own bid - use the new chargeIncrementalBid function
-        const incrementalChargeSuccess = await chargeIncrementalBid(
-          listingId, 
-          sanitizedBidder, 
-          currentHighestBid, 
-          amount,
-          listing.title
-        );
-        
-        if (!incrementalChargeSuccess) {
-          console.error('[PlaceBid] Failed to charge incremental bid');
-          return false;
-        }
-        
-        console.log('[PlaceBid] User raising their own bid:', {
-          previousBid: currentHighestBid,
-          newBid: amount,
-          bidder: sanitizedBidder
-        });
-        
-        // Place the bid update
-        const result = await listingsService.placeBid(listingId, sanitizedBidder, amount);
-        
-        if (result.success && result.data) {
-          setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
-          
-          addSellerNotification(
-            listing.seller,
-            `📈 ${sanitizedBidder} increased their bid to ${amount.toFixed(2)} on "${listing.title}"`
-          );
-          
-          return true;
-        } else {
-          // Rollback not needed as chargeIncrementalBid handles it
-          return false;
-        }
-      } else {
-        // New highest bidder - use the standard flow
-        const fundsHeld = await holdBidFunds(listingId, sanitizedBidder, amount, listing.title);
-        if (!fundsHeld) {
-          console.error('[PlaceBid] Failed to hold funds for bid');
-          return false;
-        }
-        
-        // Place the bid
-        const result = await listingsService.placeBid(listingId, sanitizedBidder, amount);
-        
-        if (result.success && result.data) {
-          setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
-          
-          // Refund the previous highest bidder if different
-          if (previousHighestBidder && previousHighestBidder !== sanitizedBidder) {
-            console.log(`[PlaceBid] Refunding outbid user: ${previousHighestBidder}`);
-            const refunded = await refundBidFunds(previousHighestBidder, listingId);
-            if (refunded) {
-              console.log(`[PlaceBid] Successfully refunded ${previousHighestBidder}`);
-            } else {
-              console.error(`[PlaceBid] Failed to refund outbid user ${previousHighestBidder}`);
-            }
-          }
-          
-          // Clean up any other stale pending orders
-          const uniqueBidders = [...new Set(listing.auction.bids.map(b => b.bidder))];
-          for (const otherBidder of uniqueBidders) {
-            if (otherBidder !== sanitizedBidder && otherBidder !== previousHighestBidder) {
-              refundBidFunds(otherBidder, listingId).catch(err => 
-                console.log(`[PlaceBid] Cleanup refund skipped for ${otherBidder}:`, err)
-              );
-            }
-          }
-          
-          addSellerNotification(
-            listing.seller,
-            `💰 New bid! ${sanitizedBidder} bid ${amount.toFixed(2)} on "${listing.title}"`
-          );
-          
-          return true;
-        } else {
-          // Bid placement failed - refund
-          await refundBidFunds(sanitizedBidder, listingId);
-          return false;
-        }
+      const listing = listings.find(l => l.id === listingId);
+      if (!listing) {
+        console.error('[ListingContext] Listing not found:', listingId);
+        return false;
       }
+
+      // Delegate to AuctionContext
+      const success = await auctionPlaceBid(listingId, bidder, amount);
+      
+      if (success) {
+        // Refresh listings to get updated bid info
+        await refreshListings();
+        
+        // Add seller notification
+        addSellerNotification(
+          listing.seller,
+          `💰 New bid! ${bidder} bid $${amount.toFixed(2)} on "${listing.title}"`
+        );
+      }
+      
+      return success;
     } catch (error) {
-      console.error('[PlaceBid] Unexpected error:', error);
+      console.error('[ListingContext] Bid error:', error);
       return false;
     }
   };
@@ -738,211 +644,46 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   };
 
-  // FIXED: Check for pending orders instead of balance
-  const findValidWinner = async (bids: Bid[], reservePrice: number | undefined, listingId: string): Promise<Bid | null> => {
-    const sortedBids = [...bids].sort((a, b) => b.amount - a.amount);
-    const validBids = reservePrice 
-      ? sortedBids.filter(bid => bid.amount >= reservePrice)
-      : sortedBids;
-      
-    if (validBids.length === 0) return null;
-    
-    // Get all orders to check for pending auction orders
-    const ordersResult = await ordersService.getOrders();
-    if (!ordersResult.success || !ordersResult.data) {
-      console.error('[findValidWinner] Failed to load orders');
-      return null;
-    }
-    
-    // Check each bid in order to find one with a valid pending order
-    for (const bid of validBids) {
-      // Check if this bidder has a pending auction order for this listing
-      const hasPendingOrder = ordersResult.data.some(order => 
-        order.buyer === bid.bidder && 
-        order.listingId === listingId && 
-        order.shippingStatus === 'pending-auction'
-      );
-      
-      if (hasPendingOrder) {
-        console.log(`[findValidWinner] Found valid winner with pending order: ${bid.bidder}`);
-        return bid; // This bidder has funds already held
-      }
-    }
-    
-    console.log('[findValidWinner] No valid winner found with pending orders');
-    return null;
-  };
-
+  // NEW: Use AuctionContext for processing ended auctions
   const checkEndedAuctions = async (): Promise<void> => {
-    const lockKey = 'auction_check_lock';
-    const lockExpiry = 5000;
-    const instanceId = uuidv4();
+    const activeAuctions = getActiveAuctions();
+    const now = new Date();
     
-    try {
-      const now = Date.now();
-      const existingLock = await storageService.getItem<any>(lockKey, null);
-      
-      if (existingLock) {
-        if (existingLock.expiry > now) {
-          console.log(`[Auction Check ${instanceId}] Another instance is processing auctions`);
-          return;
-        }
-      }
-      
-      const lockData = {
-        expiry: now + lockExpiry,
-        instanceId: instanceId,
-        timestamp: now
-      };
-      await storageService.setItem(lockKey, lockData);
-      
-      const verifyLock = await storageService.getItem<any>(lockKey, null);
-      if (verifyLock && verifyLock.instanceId !== instanceId) {
-        console.log(`[Auction Check ${instanceId}] Lost lock race to ${verifyLock.instanceId}`);
-        return;
-      }
-      
-      console.log(`[Auction Check ${instanceId}] Acquired lock, processing auctions...`);
-      
-      let updated = false;
-      let removedListings: string[] = [];
-      
-      const updatedListings = await Promise.all(listings.map(async (listing) => {
-        if (!listing.auction || listing.auction.status !== 'active') {
-          return listing;
-        }
+    for (const listing of activeAuctions) {
+      if (listing.auction && new Date(listing.auction.endTime) <= now) {
+        const processed = await processEndedAuction(listing);
         
-        if (new Date(listing.auction.endTime).getTime() <= now) {
-          updated = true;
+        if (processed) {
+          // Update listing status locally
+          setListings(prev => prev.map(l => 
+            l.id === listing.id 
+              ? { ...l, auction: { ...l.auction!, status: 'ended' as AuctionStatus } }
+              : l
+          ));
           
-          const processingKey = `auction_processing_${listing.id}`;
-          const existingProcessing = await storageService.getItem<any>(processingKey, null);
-          
-          if (existingProcessing) {
-            console.log(`[Auction Check ${instanceId}] Auction ${listing.id} already being processed`);
-            return listing;
+          // Remove the listing if it was sold
+          if (listing.auction.highestBidder) {
+            setListings(prev => prev.filter(l => l.id !== listing.id));
           }
           
-          await storageService.setItem(processingKey, {
-            instanceId: instanceId,
-            expiry: now + 30000
-          });
-          
-          try {
-            if (listing.auction.bids.length > 0) {
-              // FIXED: Pass listingId to findValidWinner
-              const validWinner = await findValidWinner(
-                listing.auction.bids, 
-                listing.auction.reservePrice,
-                listing.id
-              );
-              
-              if (validWinner) {
-                const winningBidder = validWinner.bidder;
-                const winningBid = validWinner.amount;
-                
-                // FIXED: Use finalizeAuctionPurchase which properly handles the already-held funds
-                const success = await finalizeAuctionPurchase(listing, winningBidder, winningBid);
-                
-                if (success) {
-                  // Get all bidders from tracking (includes incremental bidders)
-                  const allBidders = await getAuctionBidders(listing.id);
-                  const losingBidders = allBidders.filter(bidder => bidder !== winningBidder);
-                  
-                  console.log(`[Auction] Found ${losingBidders.length} losing bidders to refund`);
-                  
-                  // Refund each losing bidder
-                  for (const loser of losingBidders) {
-                    const refunded = await refundBidFunds(loser, listing.id);
-                    if (refunded) {
-                      console.log(`[Auction] Refunded losing bidder ${loser} for listing ${listing.id}`);
-                    }
-                  }
-                  
-                  // Clean up auction tracking
-                  await cleanupAuctionTracking(listing.id, winningBidder);
-                  
-                  removedListings.push(listing.id);
-                  await storageService.removeItem(processingKey);
-                  return null;
-                } else {
-                  addSellerNotification(
-                    listing.seller,
-                    `⚠️ Auction payment error: Couldn't process payment for "${listing.title}"`
-                  );
-                }
-              } else {
-                if (listing.auction.reservePrice && listing.auction.highestBid && listing.auction.highestBid < listing.auction.reservePrice) {
-                  addSellerNotification(
-                    listing.seller,
-                    `🔨 Auction ended: Reserve price not met for "${listing.title}"`
-                  );
-                } else if (listing.auction.highestBidder) {
-                  addSellerNotification(
-                    listing.seller,
-                    `⚠️ Auction ended: No valid winner found for "${listing.title}". All bidders have been refunded.`
-                  );
-                }
-                
-                // When no valid winner is found, refund all bidders
-                const allBidders = await getAuctionBidders(listing.id);
-                console.log(`[Auction] No valid winner found. Refunding ${allBidders.length} bidders`);
-                
-                for (const bidder of allBidders) {
-                  const refunded = await refundBidFunds(bidder, listing.id);
-                  if (refunded) {
-                    console.log(`[Auction] Refunded bidder ${bidder} for ended auction ${listing.id} with no valid winner`);
-                  }
-                }
-                
-                // Clean up auction tracking for this listing
-                await cleanupAuctionTracking(listing.id);
-              }
-            } else {
-              addSellerNotification(
-                listing.seller,
-                `🔨 Auction ended: No bids were placed on "${listing.title}"`
-              );
-            }
-            
-            await storageService.removeItem(processingKey);
-            
-            return {
-              ...listing,
-              auction: {
-                ...listing.auction,
-                status: 'ended' as AuctionStatus
-              }
-            };
-          } catch (error) {
-            console.error(`[Auction Check ${instanceId}] Error processing auction ${listing.id}:`, error);
-            await storageService.removeItem(processingKey);
-            return listing;
+          // Notify seller
+          if (listing.auction.highestBidder) {
+            addSellerNotification(
+              listing.seller,
+              `🏆 Auction ended: "${listing.title}" sold to ${listing.auction.highestBidder} for $${listing.auction.highestBid?.toFixed(2)}`
+            );
+          } else {
+            addSellerNotification(
+              listing.seller,
+              `🔨 Auction ended: No valid bids for "${listing.title}"`
+            );
           }
         }
-        
-        return listing;
-      }));
-      
-      // Filter out null values after all promises resolve
-      const filteredListings = updatedListings.filter((listing): listing is Listing => listing !== null);
-      const finalListings = filteredListings.filter(listing => !removedListings.includes(listing.id));
-      
-      if (updated || removedListings.length > 0) {
-        setListings(finalListings);
-        await storageService.setItem('listings', finalListings);
-        console.log(`[Auction Check ${instanceId}] Processed ${removedListings.length} auctions`);
-      }
-      
-    } finally {
-      const currentLock = await storageService.getItem<any>(lockKey, null);
-      if (currentLock && currentLock.instanceId === instanceId) {
-        await storageService.removeItem(lockKey);
-        console.log(`[Auction Check ${instanceId}] Released lock`);
       }
     }
   };
 
+  // NEW: Use AuctionContext for cancelling auctions
   const cancelAuction = async (listingId: string): Promise<boolean> => {
     if (!user) return false;
     
@@ -951,46 +692,23 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     if (user.role !== 'admin' && user.username !== listing.seller) return false;
     
-    if (!listing.auction || listing.auction.status !== 'active') return false;
+    const success = await auctionCancelAuction(listingId);
     
-    try {
-      const result = await listingsService.cancelAuction(listingId);
-      if (result.success && result.data) {
-        setListings(prev => prev.map(l => l.id === listingId ? result.data! : l));
-        
-        // REFUND ALL BIDDERS when auction is cancelled
-        if (listing.auction.bids.length > 0) {
-          // Get all bidders from tracking
-          const allBidders = await getAuctionBidders(listingId);
-          
-          for (const bidder of allBidders) {
-            const refunded = await refundBidFunds(bidder, listingId);
-            if (refunded) {
-              console.log(`[CancelAuction] Refunded ${bidder} for cancelled auction ${listingId}`);
-            }
-          }
-          
-          // Clean up auction tracking
-          await cleanupAuctionTracking(listingId);
-          
-          addSellerNotification(
-            listing.seller,
-            `🛑 You cancelled your auction: "${listing.title}" with ${listing.auction.bids.length} bids. All bidders have been refunded.`
-          );
-        } else {
-          addSellerNotification(
-            listing.seller,
-            `🛑 You cancelled your auction: "${listing.title}" (no bids received)`
-          );
-        }
-        
-        return true;
-      }
-    } catch (error) {
-      console.error('Error cancelling auction:', error);
+    if (success) {
+      // Update listing locally
+      setListings(prev => prev.map(l => 
+        l.id === listingId 
+          ? { ...l, auction: { ...l.auction!, status: 'cancelled' as AuctionStatus } }
+          : l
+      ));
+      
+      addSellerNotification(
+        listing.seller,
+        `🛑 You cancelled your auction: "${listing.title}". All bidders have been refunded.`
+      );
     }
     
-    return false;
+    return success;
   };
 
   // Draft management functions

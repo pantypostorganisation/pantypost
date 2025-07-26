@@ -6,6 +6,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { BanProvider } from '@/context/BanContext';
 import { WalletProvider } from '@/context/WalletContext';
+import { AuctionProvider } from '@/context/AuctionContext';
 import { ListingProvider } from '@/context/ListingContext';
 import { MessageProvider } from '@/context/MessageContext';
 import { ReviewProvider } from '@/context/ReviewContext';
@@ -48,7 +49,9 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
       sanitizedMessage.toLowerCase().includes('wallet') ||
       sanitizedMessage.toLowerCase().includes('balance') ||
       sanitizedMessage.toLowerCase().includes('payment') ||
-      sanitizedMessage.toLowerCase().includes('transaction');
+      sanitizedMessage.toLowerCase().includes('transaction') ||
+      sanitizedMessage.toLowerCase().includes('auction') ||
+      sanitizedMessage.toLowerCase().includes('bid');
 
     // Create sanitized error object
     const sanitizedError = new Error(sanitizedMessage);
@@ -119,7 +122,7 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
                 Financial System Error
               </h1>
               <p className="text-gray-400 mb-6">
-                We encountered an error with the wallet system. Your funds are safe, but we need to refresh the page.
+                We encountered an error with the wallet or auction system. Your funds are safe, but we need to refresh the page.
               </p>
               
               <div className="space-y-3">
@@ -209,9 +212,10 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
  * 4. Ban - Needs auth but used by many components
  * 5. WebSocket - Needs auth for connection but provides real-time features to others
  * 6. Wallet - Depends on auth and initialization
- * 7. Favorites - Depends on auth, placed after wallet for consistency
- * 8. Listing - Depends on auth and wallet
- * 9. Others - Depend on the above
+ * 7. Auction - NEW: Depends on wallet for bid/refund operations
+ * 8. Favorites - Depends on auth, placed after wallet for consistency
+ * 9. Listing - Depends on auth, wallet, and auction
+ * 10. Others - Depend on the above
  */
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -222,19 +226,21 @@ export function Providers({ children }: { children: ReactNode }) {
             <WebSocketProvider>
               <FinancialErrorBoundary>
                 <WalletProvider>
-                  <FavoritesProvider>
-                    <ListingProvider>
-                      <MessageProvider>
-                        <ReviewProvider>
-                          <RequestProvider>
-                            <LoadingProvider>
-                              {children}
-                            </LoadingProvider>
-                          </RequestProvider>
-                        </ReviewProvider>
-                      </MessageProvider>
-                    </ListingProvider>
-                  </FavoritesProvider>
+                  <AuctionProvider>
+                    <FavoritesProvider>
+                      <ListingProvider>
+                        <MessageProvider>
+                          <ReviewProvider>
+                            <RequestProvider>
+                              <LoadingProvider>
+                                {children}
+                              </LoadingProvider>
+                            </RequestProvider>
+                          </ReviewProvider>
+                        </MessageProvider>
+                      </ListingProvider>
+                    </FavoritesProvider>
+                  </AuctionProvider>
                 </WalletProvider>
               </FinancialErrorBoundary>
             </WebSocketProvider>
