@@ -237,10 +237,54 @@ export function sanitizeNumber(
 
 /**
  * Sanitizes currency amounts
- * Ensures proper decimal precision for money
+ * Ensures proper decimal precision for money and avoids floating point issues
  */
 export function sanitizeCurrency(amount: string | number): number {
-  return sanitizeNumber(amount, 0, 1000000, 2);
+  let num: number;
+  
+  if (typeof amount === 'string') {
+    // Remove non-numeric characters except . and -
+    const cleaned = amount.replace(/[^0-9.-]/g, '');
+    num = parseFloat(cleaned);
+  } else {
+    num = amount;
+  }
+  
+  // Check if valid number
+  if (isNaN(num) || !isFinite(num)) {
+    return 0;
+  }
+  
+  // Apply bounds
+  if (num < 0) return 0;
+  if (num > 1000000) return 1000000;
+  
+  // FIXED: Round to 2 decimal places using proper technique to avoid floating point issues
+  return Math.round(num * 100) / 100;
+}
+
+/**
+ * Helper function to add currency values safely
+ * Avoids floating point precision issues
+ */
+export function addCurrency(a: number, b: number): number {
+  return Math.round((a + b) * 100) / 100;
+}
+
+/**
+ * Helper function to subtract currency values safely
+ * Avoids floating point precision issues
+ */
+export function subtractCurrency(a: number, b: number): number {
+  return Math.round((a - b) * 100) / 100;
+}
+
+/**
+ * Helper function to multiply currency values safely
+ * Avoids floating point precision issues
+ */
+export function multiplyCurrency(amount: number, multiplier: number): number {
+  return Math.round(amount * multiplier * 100) / 100;
 }
 
 /**

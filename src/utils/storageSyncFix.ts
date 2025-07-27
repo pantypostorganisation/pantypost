@@ -29,8 +29,16 @@ export async function forceWalletStorageSync(): Promise<void> {
 }
 
 /**
+ * Helper to round currency values to 2 decimal places
+ * Avoids floating point precision issues
+ */
+function roundCurrency(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}
+
+/**
  * Atomic refund operation with proper synchronization
- * FIXED: Now properly handles the refund amount
+ * FIXED: Now properly handles the refund amount and avoids precision issues
  */
 export async function atomicRefundOperation(
   bidder: string,
@@ -66,6 +74,9 @@ export async function atomicRefundOperation(
       }
     }
     
+    // Round the refund amount to avoid floating point issues
+    actualRefundAmount = roundCurrency(actualRefundAmount);
+    
     // Only proceed if we have a valid refund amount
     if (actualRefundAmount <= 0) {
       console.error('[AtomicRefund] Invalid refund amount:', actualRefundAmount);
@@ -77,8 +88,8 @@ export async function atomicRefundOperation(
     const orders = await storageService.getItem<any[]>('wallet_orders', []);
     
     // 2. Update buyer balance - ONLY for the specific bidder
-    const currentBalance = buyers[bidder] || 0;
-    const newBalance = currentBalance + actualRefundAmount;
+    const currentBalance = roundCurrency(buyers[bidder] || 0);
+    const newBalance = roundCurrency(currentBalance + actualRefundAmount);
     
     // CRITICAL: Create a new buyers object to avoid reference issues
     const updatedBuyers = { ...buyers };
