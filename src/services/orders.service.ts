@@ -133,7 +133,7 @@ export class OrdersService {
   private rateLimiter = getRateLimiter();
 
   /**
-   * Get all orders with caching
+   * Get all orders with caching - accepts OrderSearchParams instead of boolean
    */
   async getOrders(params?: OrderSearchParams): Promise<ApiResponse<Order[]>> {
     try {
@@ -514,7 +514,7 @@ export class OrdersService {
    */
   async updateOrderStatus(
     id: string,
-    update: UpdateOrderStatusRequest
+    update: UpdateOrderStatusRequest | { shippingStatus?: 'pending' | 'processing' | 'shipped' | 'pending-auction'; [key: string]: any }
   ): Promise<ApiResponse<Order>> {
     try {
       // Validate ID
@@ -525,8 +525,11 @@ export class OrdersService {
         };
       }
 
+      // For backward compatibility, accept both forms
+      const statusUpdate = update.shippingStatus ? { shippingStatus: update.shippingStatus } : update;
+
       // Validate and sanitize update
-      const validation = validateSchema(updateOrderStatusSchema, update);
+      const validation = validateSchema(updateOrderStatusSchema, statusUpdate);
       if (!validation.success) {
         return {
           success: false,
@@ -563,9 +566,10 @@ export class OrdersService {
         };
       }
 
+      // Update the order with all properties from update
       orderHistory[orderIndex] = {
         ...orderHistory[orderIndex],
-        shippingStatus: sanitizedUpdate.shippingStatus,
+        ...update,
       };
 
       await this.saveOrderHistoryToStorage(orderHistory);
@@ -681,211 +685,226 @@ export class OrdersService {
         totalAmount: 0,
         pendingOrders: 0,
         shippedOrders: 0,
-averageOrderValue: 0,
-     };
-   }
+        averageOrderValue: 0,
+      };
+    }
 
-   const params = role === 'buyer' ? { buyer: validatedUsername } : { seller: validatedUsername };
-   const result = await this.getOrders(params);
-   
-   if (!result.success || !result.data) {
-     return {
-       totalOrders: 0,
-       totalAmount: 0,
-       pendingOrders: 0,
-       shippedOrders: 0,
-       averageOrderValue: 0,
-     };
-   }
+    const params = role === 'buyer' ? { buyer: validatedUsername } : { seller: validatedUsername };
+    const result = await this.getOrders(params);
+    
+    if (!result.success || !result.data) {
+      return {
+        totalOrders: 0,
+        totalAmount: 0,
+        pendingOrders: 0,
+        shippedOrders: 0,
+        averageOrderValue: 0,
+      };
+    }
 
-   const orders = result.data;
-   const totalAmount = orders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+    const orders = result.data;
+    const totalAmount = orders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
 
-   return {
-     totalOrders: orders.length,
-     totalAmount,
-     pendingOrders: orders.filter(o => !o.shippingStatus || o.shippingStatus === 'pending').length,
-     shippedOrders: orders.filter(o => o.shippingStatus === 'shipped').length,
-     averageOrderValue: orders.length > 0 ? totalAmount / orders.length : 0,
-   };
- }
+    return {
+      totalOrders: orders.length,
+      totalAmount,
+      pendingOrders: orders.filter(o => !o.shippingStatus || o.shippingStatus === 'pending').length,
+      shippedOrders: orders.filter(o => o.shippingStatus === 'shipped').length,
+      averageOrderValue: orders.length > 0 ? totalAmount / orders.length : 0,
+    };
+  }
 
- /**
-  * Batch update order statuses
-  */
- async batchUpdateOrderStatuses(
-   orderIds: string[],
-   status: 'pending' | 'processing' | 'shipped'
- ): Promise<{ successful: string[]; failed: string[] }> {
-   const successful: string[] = [];
-   const failed: string[] = [];
+  /**
+   * Batch update order statuses
+   */
+  async batchUpdateOrderStatuses(
+    orderIds: string[],
+    status: 'pending' | 'processing' | 'shipped'
+  ): Promise<{ successful: string[]; failed: string[] }> {
+    const successful: string[] = [];
+    const failed: string[] = [];
 
-   // Validate order IDs
-   const validOrderIds = orderIds.filter(id => 
-     id && typeof id === 'string' && id.length <= 100
-   );
+    // Validate order IDs
+    const validOrderIds = orderIds.filter(id => 
+      id && typeof id === 'string' && id.length <= 100
+    );
 
-   for (const orderId of validOrderIds) {
-     const result = await this.updateOrderStatus(orderId, { shippingStatus: status });
-     if (result.success) {
-       successful.push(orderId);
-     } else {
-       failed.push(orderId);
-     }
-   }
+    for (const orderId of validOrderIds) {
+      const result = await this.updateOrderStatus(orderId, { shippingStatus: status });
+      if (result.success) {
+        successful.push(orderId);
+      } else {
+        failed.push(orderId);
+      }
+    }
 
-   return { successful, failed };
- }
+    return { successful, failed };
+  }
 
- /**
-  * Export orders to CSV with security
-  */
- async exportOrdersToCSV(params?: OrderSearchParams): Promise<string> {
-   const result = await this.getOrders(params);
-   if (!result.success || !result.data) {
-     throw new Error('Failed to fetch orders for export');
-   }
+  /**
+   * Export orders to CSV with security
+   */
+  async exportOrdersToCSV(params?: OrderSearchParams): Promise<string> {
+    const result = await this.getOrders(params);
+    if (!result.success || !result.data) {
+      throw new Error('Failed to fetch orders for export');
+    }
 
-   const orders = result.data;
-   const headers = [
-     'Order ID',
-     'Date',
-     'Buyer',
-     'Seller',
-     'Title',
-     'Price',
-     'Marked Up Price',
-     'Status',
-     'Type',
-   ];
+    const orders = result.data;
+    const headers = [
+      'Order ID',
+      'Date',
+      'Buyer',
+      'Seller',
+      'Title',
+      'Price',
+      'Marked Up Price',
+      'Status',
+      'Type',
+    ];
 
-   // Sanitize data for CSV to prevent injection
-   const sanitizeForCSV = (value: any): string => {
-     const str = String(value);
-     // Remove any formula injection attempts
-     if (/^[=+\-@]/.test(str)) {
-       return `'${str}`;
-     }
-     // Escape quotes
-     return str.replace(/"/g, '""');
-   };
+    // Sanitize data for CSV to prevent injection
+    const sanitizeForCSV = (value: any): string => {
+      const str = String(value);
+      // Remove any formula injection attempts
+      if (/^[=+\-@]/.test(str)) {
+        return `'${str}`;
+      }
+      // Escape quotes
+      return str.replace(/"/g, '""');
+    };
 
-   const rows = orders.map(order => [
-     sanitizeForCSV(order.id),
-     sanitizeForCSV(new Date(order.date).toLocaleDateString()),
-     sanitizeForCSV(order.buyer),
-     sanitizeForCSV(order.seller),
-     sanitizeForCSV(order.title),
-     sanitizeForCSV(order.price.toFixed(2)),
-     sanitizeForCSV(order.markedUpPrice.toFixed(2)),
-     sanitizeForCSV(order.shippingStatus || 'pending'),
-     sanitizeForCSV(order.wasAuction ? 'Auction' : order.isCustomRequest ? 'Custom' : 'Direct'),
-   ]);
+    const rows = orders.map(order => [
+      sanitizeForCSV(order.id),
+      sanitizeForCSV(new Date(order.date).toLocaleDateString()),
+      sanitizeForCSV(order.buyer),
+      sanitizeForCSV(order.seller),
+      sanitizeForCSV(order.title),
+      sanitizeForCSV(order.price.toFixed(2)),
+      sanitizeForCSV(order.markedUpPrice.toFixed(2)),
+      sanitizeForCSV(order.shippingStatus || 'pending'),
+      sanitizeForCSV(order.wasAuction ? 'Auction' : order.isCustomRequest ? 'Custom' : 'Direct'),
+    ]);
 
-   const csv = [
-     headers.map(h => `"${h}"`).join(','),
-     ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
-   ].join('\n');
+    const csv = [
+      headers.map(h => `"${h}"`).join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
+    ].join('\n');
 
-   return csv;
- }
+    return csv;
+  }
 
- /**
-  * Generate idempotency key for order
-  */
- generateIdempotencyKey(buyer: string, seller: string, listingId: string): string {
-   const sanitizedBuyer = sanitizeUsername(buyer);
-   const sanitizedSeller = sanitizeUsername(seller);
-   const sanitizedListingId = sanitizeStrict(listingId);
-   return `order_${sanitizedBuyer}_${sanitizedSeller}_${sanitizedListingId}_${Date.now()}`;
- }
+  /**
+   * Generate idempotency key for order
+   */
+  generateIdempotencyKey(buyer: string, seller: string, listingId: string): string {
+    const sanitizedBuyer = sanitizeUsername(buyer);
+    const sanitizedSeller = sanitizeUsername(seller);
+    const sanitizedListingId = sanitizeStrict(listingId);
+    return `order_${sanitizedBuyer}_${sanitizedSeller}_${sanitizedListingId}_${Date.now()}`;
+  }
 
- /**
-  * Check if order exists (for idempotency)
-  */
- async checkOrderExists(idempotencyKey: string): Promise<boolean> {
-   try {
-     const processedOrders = await storageService.getItem<string[]>(
-       'processed_orders',
-       []
-     );
-     return processedOrders.includes(idempotencyKey);
-   } catch (error) {
-     console.error('Check order exists error:', error);
-     return false;
-   }
- }
+  /**
+   * Check if order exists (for idempotency)
+   */
+  async checkOrderExists(idempotencyKey: string): Promise<boolean> {
+    try {
+      const processedOrders = await storageService.getItem<string[]>(
+        'processed_orders',
+        []
+      );
+      return processedOrders.includes(idempotencyKey);
+    } catch (error) {
+      console.error('Check order exists error:', error);
+      return false;
+    }
+  }
 
- /**
-  * Mark order as processed (for idempotency)
-  */
- async markOrderProcessed(idempotencyKey: string): Promise<void> {
-   try {
-     const processedOrders = await storageService.getItem<string[]>(
-       'processed_orders',
-       []
-     );
-     processedOrders.push(idempotencyKey);
-     await storageService.setItem('processed_orders', processedOrders);
-   } catch (error) {
-     console.error('Mark order processed error:', error);
-   }
- }
+  /**
+   * Mark order as processed (for idempotency)
+   */
+  async markOrderProcessed(idempotencyKey: string): Promise<void> {
+    try {
+      const processedOrders = await storageService.getItem<string[]>(
+        'processed_orders',
+        []
+      );
+      processedOrders.push(idempotencyKey);
+      await storageService.setItem('processed_orders', processedOrders);
+    } catch (error) {
+      console.error('Mark order processed error:', error);
+    }
+  }
 
- /**
-  * Clear cache
-  */
- clearCache(): void {
-   this.orderCache.clear();
-   this.invalidateCache();
- }
+  /**
+   * Clear cache
+   */
+  clearCache(): void {
+    this.orderCache.clear();
+    this.invalidateCache();
+  }
 
- /**
-  * Invalidate list cache
-  */
- private invalidateCache(): void {
-   this.ordersListCache = {
-     data: null,
-     timestamp: 0,
-     params: '',
-   };
- }
+  /**
+   * Add this method to force clear cache and sync
+   */
+  public async forceSync(): Promise<void> {
+    this.clearCache();
+    
+    // Force a storage event to trigger updates in other contexts
+    const orders = await this.getOrderHistoryFromStorage();
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'wallet_orders',
+      newValue: JSON.stringify(orders),
+      url: window.location.href
+    }));
+  }
 
- /**
-  * Sanitize order data
-  */
- private sanitizeOrderData(order: Order): Order {
-   return {
-     ...order,
-     title: sanitizeStrict(order.title),
-     description: sanitizeStrict(order.description),
-     seller: sanitizeUsername(order.seller),
-     buyer: sanitizeUsername(order.buyer),
-     price: sanitizeCurrency(order.price),
-     markedUpPrice: sanitizeCurrency(order.markedUpPrice),
-     imageUrl: order.imageUrl ? sanitizeUrl(order.imageUrl) : undefined,
-     tags: order.tags?.map(tag => sanitizeStrict(tag)),
-     wearTime: order.wearTime ? sanitizeStrict(order.wearTime) : undefined,
-     listingTitle: order.listingTitle ? sanitizeStrict(order.listingTitle) : undefined,
-     finalBid: order.finalBid ? sanitizeCurrency(order.finalBid) : undefined,
-     tierCreditAmount: order.tierCreditAmount ? sanitizeCurrency(order.tierCreditAmount) : undefined,
-   };
- }
+  /**
+   * Invalidate list cache
+   */
+  private invalidateCache(): void {
+    this.ordersListCache = {
+      data: null,
+      timestamp: 0,
+      params: '',
+    };
+  }
 
- // Helper methods for localStorage
- private async getOrderHistoryFromStorage(): Promise<Order[]> {
-   // FIXED: Use the same key as WalletContext: 'wallet_orders'
-   const orders = await storageService.getItem<Order[]>('wallet_orders', []);
-   // Sanitize all orders when loading from storage
-   return orders.map(order => this.sanitizeOrderData(order));
- }
+  /**
+   * Sanitize order data
+   */
+  private sanitizeOrderData(order: Order): Order {
+    return {
+      ...order,
+      title: sanitizeStrict(order.title),
+      description: sanitizeStrict(order.description),
+      seller: sanitizeUsername(order.seller),
+      buyer: sanitizeUsername(order.buyer),
+      price: sanitizeCurrency(order.price),
+      markedUpPrice: sanitizeCurrency(order.markedUpPrice),
+      imageUrl: order.imageUrl ? sanitizeUrl(order.imageUrl) : undefined,
+      tags: order.tags?.map(tag => sanitizeStrict(tag)),
+      wearTime: order.wearTime ? sanitizeStrict(order.wearTime) : undefined,
+      listingTitle: order.listingTitle ? sanitizeStrict(order.listingTitle) : undefined,
+      finalBid: order.finalBid ? sanitizeCurrency(order.finalBid) : undefined,
+      tierCreditAmount: order.tierCreditAmount ? sanitizeCurrency(order.tierCreditAmount) : undefined,
+    };
+  }
 
- private async saveOrderHistoryToStorage(orders: Order[]): Promise<void> {
-   // Sanitize before saving
-   const sanitizedOrders = orders.map(order => this.sanitizeOrderData(order));
-   // FIXED: Use the same key as WalletContext: 'wallet_orders'
-   await storageService.setItem('wallet_orders', sanitizedOrders);
- }
+  // Helper methods for localStorage
+  private async getOrderHistoryFromStorage(): Promise<Order[]> {
+    // FIXED: Use the same key as WalletContext: 'wallet_orders'
+    const orders = await storageService.getItem<Order[]>('wallet_orders', []);
+    // Sanitize all orders when loading from storage
+    return orders.map(order => this.sanitizeOrderData(order));
+  }
+
+  private async saveOrderHistoryToStorage(orders: Order[]): Promise<void> {
+    // Sanitize before saving
+    const sanitizedOrders = orders.map(order => this.sanitizeOrderData(order));
+    // FIXED: Use the same key as WalletContext: 'wallet_orders'
+    await storageService.setItem('wallet_orders', sanitizedOrders);
+  }
 }
 
 // Export singleton instance

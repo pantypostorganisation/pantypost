@@ -26,7 +26,7 @@ interface AuctionState {
     currentHighestBidder: string | null;
     currentHighestBid: number;
     allBidders: Set<string>; // Track all unique bidders for this auction
-    activeBidders: Map<string, number>; // Track active bid amounts by bidder
+    activeBidders: Map<string, { bidAmount: number; totalPaid: number }>; // Track bid amounts AND total paid
   };
 }
 
@@ -60,7 +60,7 @@ interface AuctionContextValue {
 const AuctionContext = createContext<AuctionContextValue | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  AUCTION_STATE: 'auction_state_v5', // Increment version to force clean state
+  AUCTION_STATE: 'auction_state_v6', // Increment version to force clean state
   REFUND_TRACKER: 'auction_refund_tracker_v3',
   PROCESSING_LOCK: 'auction_processing_lock',
 } as const;
@@ -96,10 +96,30 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         // Convert Set and Map data back from arrays if needed
         const restoredState: AuctionState = {};
         Object.entries(savedState).forEach(([listingId, data]) => {
+          // Handle the new Map structure for activeBidders
+          let activeBiddersMap = new Map<string, { bidAmount: number; totalPaid: number }>();
+          
+          if ((data as any).activeBidders) {
+            if (Array.isArray((data as any).activeBidders)) {
+              // Convert from array format
+              (data as any).activeBidders.forEach(([bidder, value]: [string, any]) => {
+                if (typeof value === 'number') {
+                  // Legacy format - just bid amount
+                  activeBiddersMap.set(bidder, { bidAmount: value, totalPaid: value * 1.1 });
+                } else if (value && typeof value === 'object') {
+                  // New format with bidAmount and totalPaid
+                  activeBiddersMap.set(bidder, value);
+                }
+              });
+            } else if ((data as any).activeBidders instanceof Map) {
+              activeBiddersMap = (data as any).activeBidders;
+            }
+          }
+          
           restoredState[listingId] = {
             ...data,
             allBidders: new Set(Array.isArray((data as any).allBidders) ? (data as any).allBidders : []),
-            activeBidders: new Map(Array.isArray((data as any).activeBidders) ? (data as any).activeBidders : [])
+            activeBidders: activeBiddersMap
           };
         });
         
@@ -284,26 +304,112 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         activeBidders: currentState.activeBidders ? Array.from(currentState.activeBidders.entries()) : []
       });
 
-      // Store the previous highest bidder BEFORE updating
-      const previousHighestBidder = currentState.currentHighestBidder;
+      // Store the bidders to refund
+      const biddersToRefund = currentState.activeBidders ? Array.from(currentState.activeBidders.keys()).filter(b => b !== sanitizedBidder) : [];
 
-      // CRITICAL FIX: Refund the previous highest bidder FIRST, before holding new funds
-      if (previousHighestBidder && previousHighestBidder !== sanitizedBidder) {
-        console.log('[AuctionContext] Refunding previous highest bidder FIRST:', previousHighestBidder);
+      // Refund ALL other bidders FIRST
+      console.log('[AuctionContext] Refunding all other bidders:', biddersToRefund);
+
+      for (const bidderToRefund of biddersToRefund) {
+        console.log(`[AuctionContext] Refunding bidder: ${bidderToRefund}`);
         
-        const refundSuccess = await refundBidFunds(previousHighestBidder, listingId);
-        if (!refundSuccess) {
-          console.error('[AuctionContext] Failed to refund previous bidder:', previousHighestBidder);
-          throw new Error('Failed to refund previous bidder');
+        // CRITICAL FIX: Get the total paid amount from our tracking
+        const bidderData = currentState.activeBidders.get(bidderToRefund);
+        let refundAmount = 0;
+        
+        if (bidderData && typeof bidderData === 'object' && 'totalPaid' in bidderData) {
+          refundAmount = bidderData.totalPaid;
+        } else if (bidderData && typeof bidderData === 'number') {
+          // Legacy format - calculate with fee
+          refundAmount = bidderData * 1.1;
+        }
+        
+        if (refundAmount > 0) {
+          console.log(`[AuctionContext] Found bid data for ${bidderToRefund}, refunding $${refundAmount}`);
+          
+          // Use the atomic refund from storage sync with the correct amount
+          const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+          const refundSuccess = await atomicRefundOperation(
+            bidderToRefund,
+            listingId,
+            refundAmount // Pass the actual amount instead of 0
+          );
+          
+          if (!refundSuccess) {
+            console.error(`[AuctionContext] Failed to refund bidder: ${bidderToRefund}`);
+          } else {
+            currentState.activeBidders.delete(bidderToRefund);
+            trackRefund(listingId, bidderToRefund, refundAmount);
+          }
+        } else {
+          // Fallback: let atomicRefundOperation find the amount from orders
+          console.log(`[AuctionContext] No bid data found for ${bidderToRefund}, letting atomicRefundOperation find amount`);
+          
+          const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+          const refundSuccess = await atomicRefundOperation(
+            bidderToRefund,
+            listingId,
+            0 // Let it find the amount from orders
+          );
+          
+          if (!refundSuccess) {
+            console.error(`[AuctionContext] Failed to refund bidder: ${bidderToRefund}`);
+          } else {
+            currentState.activeBidders.delete(bidderToRefund);
+          }
+        }
+        
+        // Force sync after each refund
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      // If this bidder had a previous bid, refund it first
+      if (currentState.activeBidders.has(sanitizedBidder)) {
+        console.log('[AuctionContext] Refunding bidder\'s previous bid before placing new one');
+        
+        // Get the bidder's previous total paid
+        const previousBidData = currentState.activeBidders.get(sanitizedBidder);
+        let previousRefundAmount = 0;
+        
+        if (previousBidData && typeof previousBidData === 'object' && 'totalPaid' in previousBidData) {
+          previousRefundAmount = previousBidData.totalPaid;
+        } else if (previousBidData && typeof previousBidData === 'number') {
+          // Legacy format
+          previousRefundAmount = previousBidData * 1.1;
+        }
+        
+        if (previousRefundAmount > 0) {
+          const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+          const refundSuccess = await atomicRefundOperation(
+            sanitizedBidder,
+            listingId,
+            previousRefundAmount
+          );
+          
+          if (!refundSuccess) {
+            console.error('[AuctionContext] Failed to refund previous bid');
+            throw new Error('Failed to refund previous bid');
+          }
+        } else {
+          // Fallback
+          const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+          const refundSuccess = await atomicRefundOperation(
+            sanitizedBidder,
+            listingId,
+            0
+          );
+          
+          if (!refundSuccess) {
+            console.error('[AuctionContext] Failed to refund previous bid');
+            throw new Error('Failed to refund previous bid');
+          }
         }
         
         // Remove from active bidders after successful refund
-        currentState.activeBidders.delete(previousHighestBidder);
-        trackRefund(listingId, previousHighestBidder, 0);
-        console.log('[AuctionContext] Successfully refunded previous bidder:', previousHighestBidder);
+        currentState.activeBidders.delete(sanitizedBidder);
         
-        // Force a small delay to ensure refund is processed
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Force a delay to ensure refund is processed
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       // NOW hold the new bid funds
@@ -337,9 +443,12 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         isWinner: false
       };
 
-      // Update tracking
+      // Update tracking with both bid amount and total paid
       currentState.allBidders.add(sanitizedBidder);
-      currentState.activeBidders.set(sanitizedBidder, sanitizedAmount);
+      currentState.activeBidders.set(sanitizedBidder, {
+        bidAmount: sanitizedAmount,
+        totalPaid: totalWithFee
+      });
 
       // Update state with new data
       const newState = {
@@ -361,7 +470,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       console.log('[AuctionContext] Bid placed successfully:', {
         bidder: sanitizedBidder,
         amount: sanitizedAmount,
-        refundedBidder: previousHighestBidder || 'none',
+        refundedBidders: biddersToRefund,
         activeBidders: Array.from(currentState.activeBidders.entries())
       });
 
@@ -398,11 +507,22 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       const state = auctionState[listingId];
       if (state && state.activeBidders) {
         // Refund all active bidders
-        for (const [bidder, bidAmount] of state.activeBidders.entries()) {
-          const refundSuccess = await refundBidFunds(bidder, listingId);
-          if (refundSuccess) {
-            trackRefund(listingId, bidder, bidAmount + (bidAmount * 0.1));
-            console.log('[AuctionContext] Refunded bidder on cancel:', bidder);
+        for (const [bidder, bidData] of state.activeBidders.entries()) {
+          let refundAmount = 0;
+          
+          if (bidData && typeof bidData === 'object' && 'totalPaid' in bidData) {
+            refundAmount = bidData.totalPaid;
+          } else if (typeof bidData === 'number') {
+            refundAmount = bidData * 1.1;
+          }
+          
+          if (refundAmount > 0) {
+            const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+            const refundSuccess = await atomicRefundOperation(bidder, listingId, refundAmount);
+            if (refundSuccess) {
+              trackRefund(listingId, bidder, refundAmount);
+              console.log('[AuctionContext] Refunded bidder on cancel:', bidder);
+            }
           }
         }
       }
@@ -428,7 +548,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       setIsProcessing(false);
       await releaseLock(lockKey);
     }
-  }, [auctionState, refundTracker, refundBidFunds, cleanupAuctionTracking, trackRefund]);
+  }, [auctionState, refundTracker, cleanupAuctionTracking, trackRefund]);
 
   // Process an ended auction
   const processEndedAuction = useCallback(async (listing: Listing): Promise<boolean> => {
@@ -481,12 +601,23 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         
         if (success && state.activeBidders) {
           // Refund all other active bidders
-          for (const [bidder, bidAmount] of state.activeBidders.entries()) {
+          for (const [bidder, bidData] of state.activeBidders.entries()) {
             if (bidder !== winnerUsername) {
-              const refundSuccess = await refundBidFunds(bidder, listing.id);
-              if (refundSuccess) {
-                trackRefund(listing.id, bidder, bidAmount + (bidAmount * 0.1));
-                console.log('[AuctionContext] Refunded loser:', bidder);
+              let refundAmount = 0;
+              
+              if (bidData && typeof bidData === 'object' && 'totalPaid' in bidData) {
+                refundAmount = bidData.totalPaid;
+              } else if (typeof bidData === 'number') {
+                refundAmount = bidData * 1.1;
+              }
+              
+              if (refundAmount > 0) {
+                const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+                const refundSuccess = await atomicRefundOperation(bidder, listing.id, refundAmount);
+                if (refundSuccess) {
+                  trackRefund(listing.id, bidder, refundAmount);
+                  console.log('[AuctionContext] Refunded loser:', bidder);
+                }
               }
             }
           }
@@ -498,11 +629,22 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         // No valid winner - refund everyone
         console.log('[AuctionContext] No valid winner, refunding all bidders');
         
-        for (const [bidder, bidAmount] of state.activeBidders.entries()) {
-          const refundSuccess = await refundBidFunds(bidder, listing.id);
-          if (refundSuccess) {
-            trackRefund(listing.id, bidder, bidAmount + (bidAmount * 0.1));
-            console.log('[AuctionContext] Refunded bidder (no winner):', bidder);
+        for (const [bidder, bidData] of state.activeBidders.entries()) {
+          let refundAmount = 0;
+          
+          if (bidData && typeof bidData === 'object' && 'totalPaid' in bidData) {
+            refundAmount = bidData.totalPaid;
+          } else if (typeof bidData === 'number') {
+            refundAmount = bidData * 1.1;
+          }
+          
+          if (refundAmount > 0) {
+            const { atomicRefundOperation } = await import('@/utils/storageSyncFix');
+            const refundSuccess = await atomicRefundOperation(bidder, listing.id, refundAmount);
+            if (refundSuccess) {
+              trackRefund(listing.id, bidder, refundAmount);
+              console.log('[AuctionContext] Refunded bidder (no winner):', bidder);
+            }
           }
         }
         
@@ -522,7 +664,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       await releaseLock(lockKey);
     }
-  }, [auctionState, refundBidFunds, finalizeAuctionPurchase, cleanupAuctionTracking, trackRefund]);
+  }, [auctionState, finalizeAuctionPurchase, cleanupAuctionTracking, trackRefund]);
 
   // Get auction state for a listing
   const getAuctionState = useCallback((listingId: string): AuctionState[string] | null => {

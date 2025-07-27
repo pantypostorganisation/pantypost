@@ -278,6 +278,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const rateLimiter = useRef(getRateLimiter());
   const transactionLock = useRef(new TransactionLockManager());
 
+  // DEBUG: Check for multiple WalletContext instances
+  useEffect(() => {
+    const instanceId = Math.random();
+    console.log('[WalletContext] Provider mounted:', {
+      instanceId,
+      timestamp: new Date().toISOString()
+    });
+    
+    return () => {
+      console.log('[WalletContext] Provider unmounted:', { instanceId });
+    };
+  }, []);
+
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
@@ -555,6 +568,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           mergedSellers[username] = balanceInDollars;
         }
       }
+
+      // DEBUG: Log loaded buyer data
+      console.log('[WalletContext] LoadAllData - Buyers loaded:', {
+        buyers: mergedBuyers,
+        timestamp: new Date().toISOString(),
+        source: 'loadAllData'
+      });
 
       // MOCK DATA DETECTION AND CLEANUP
       const isMockDisabled = process.env.NEXT_PUBLIC_USE_MOCK_API !== 'true';
@@ -992,150 +1012,118 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [getBuyerBalance, setBuyerBalance, updateBidderTracking]);
 
-  // FIXED: Refund bid funds with better order lookup
+  // FIXED: Refund bid funds with complete refresh and debugging
   const refundBidFunds = useCallback(async (
-  bidder: string,
-  listingId: string
-): Promise<boolean> => {
-  try {
-    // Validate inputs
-    const validatedBidder = validateUsername(bidder);
-    
-    console.log('[RefundBid] ========== REFUND ATTEMPT ==========');
-    console.log('[RefundBid] Called with:', { 
-      bidder: validatedBidder, 
-      listingId: listingId,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`refund_${listingId}_${validatedBidder}`, async () => {
-      // CRITICAL FIX: Clear the orders cache to ensure we get fresh data
-      ordersService.clearCache();
+    bidder: string,
+    listingId: string
+  ): Promise<boolean> => {
+    try {
+      // Validate inputs
+      const validatedBidder = validateUsername(bidder);
       
-      // Add a small delay to ensure storage writes are complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('[RefundBid] ========== REFUND ATTEMPT ==========');
+      console.log('[RefundBid] Refunding:', { bidder: validatedBidder, listingId });
       
-      // Get the most recent order data from the service
-      const ordersResult = await ordersService.getOrders();
-      if (!ordersResult.success || !ordersResult.data) {
-        console.error('[RefundBid] Failed to load orders for refund');
-        return false;
-      }
-      
-      console.log('[RefundBid] Orders from service:', ordersResult.data.length);
-      
-      // ALSO check the local orderHistory state which should have the most recent order
-      const allOrders = [...(ordersResult.data || []), ...orderHistory];
-      
-      // Remove duplicates by ID
-      const uniqueOrders = allOrders.filter((order, index, self) =>
-        index === self.findIndex((o) => o.id === order.id)
-      );
-      
-      console.log('[RefundBid] Order analysis:', {
-        totalOrders: uniqueOrders.length,
-        ordersFromService: ordersResult.data.length,
-        ordersFromState: orderHistory.length,
-        ordersForThisListing: uniqueOrders.filter(o => o.listingId === listingId).map(o => ({
-          id: o.id,
-          buyer: o.buyer,
-          listingId: o.listingId,
-          shippingStatus: o.shippingStatus,
-          amount: o.markedUpPrice
-        })),
-        ordersForThisBidder: uniqueOrders.filter(o => o.buyer === validatedBidder).map(o => ({
-          id: o.id,
-          listingId: o.listingId,
-          shippingStatus: o.shippingStatus,
-          amount: o.markedUpPrice
-        }))
-      });
-      
-      // Find ALL pending auction orders for this bidder and listing
-      const pendingOrders = uniqueOrders.filter(order => 
-        order.buyer === validatedBidder && 
-        order.listingId === listingId && 
-        order.shippingStatus === 'pending-auction'
-      );
-      
-      console.log('[RefundBid] Pending orders found:', pendingOrders.map(o => ({
-        id: o.id,
-        amount: o.markedUpPrice,
-        created: o.date
-      })));
-      
-      if (pendingOrders.length === 0) {
-        console.log('[RefundBid] ❌ No pending orders found for bidder:', { 
-          bidder: validatedBidder, 
-          listingId,
-          ordersChecked: uniqueOrders.length
-        });
-        return true; // Nothing to refund
-      }
-      
-      // Calculate total refund amount (sum of all pending orders for this auction)
-      let totalRefundAmount = 0;
-      const orderIdsToRemove: string[] = [];
-      
-      for (const pendingOrder of pendingOrders) {
-        console.log('[RefundBid] Processing order for refund:', { 
-          orderId: pendingOrder.id, 
-          amount: pendingOrder.markedUpPrice 
-        });
-        totalRefundAmount += pendingOrder.markedUpPrice;
-        orderIdsToRemove.push(pendingOrder.id);
-      }
-      
-      // Filter out the orders we're refunding
-      const filteredOrders = uniqueOrders.filter(order => !orderIdsToRemove.includes(order.id));
-      
-      // Save the filtered orders back to storage
-      await storageService.setItem('wallet_orders', filteredOrders);
-      
-      // Update local state
-      setOrderHistory(filteredOrders);
-      
-      // Clear the orders service cache to ensure fresh data on next load
-      ordersService.clearCache();
-      
-      // NOW refund the full amount including fees
-      const currentBalance = getBuyerBalance(validatedBidder);
-      const newBalance = currentBalance + totalRefundAmount;
-      
-      console.log('[RefundBid] Balance update:', {
-        currentBalance,
-        refundAmount: totalRefundAmount,
-        newBalance
-      });
-      
-      await setBuyerBalance(validatedBidder, newBalance);
-      
-      // Clear any auction tracking for this bidder
-      const tracking = await loadAuctionBidderTracking();
-      if (tracking[listingId] && tracking[listingId][validatedBidder]) {
-        delete tracking[listingId][validatedBidder];
-        if (Object.keys(tracking[listingId]).length === 0) {
-          delete tracking[listingId];
+      // Use transaction lock
+      return await transactionLock.current.acquireLock(`refund_${listingId}_${validatedBidder}`, async () => {
+        // Clear ALL caches first
+        ordersService.clearCache();
+        
+        // Add a delay to ensure any pending writes complete
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Force read fresh data directly from localStorage
+        const ordersData = localStorage.getItem('wallet_orders');
+        const orders = ordersData ? JSON.parse(ordersData) : [];
+        
+        // Find pending auction orders for this bidder and listing
+        const pendingOrders = orders.filter((order: any) => 
+          order.buyer === validatedBidder && 
+          order.listingId === listingId && 
+          order.shippingStatus === 'pending-auction'
+        );
+        
+        if (pendingOrders.length === 0) {
+          console.log('[RefundBid] No pending orders to refund');
+          return true;
         }
-        await saveAuctionBidderTracking(tracking);
-      }
-      
-      console.log('[RefundBid] ✅ Successfully refunded:', { 
-        bidder: validatedBidder, 
-        totalAmount: totalRefundAmount, 
-        listingId,
-        ordersRefunded: orderIdsToRemove.length
+        
+        // Calculate total refund
+        const totalRefundAmount = pendingOrders.reduce((sum: number, order: any) => 
+          sum + (order.markedUpPrice || 0), 0
+        );
+        
+        // Get current buyer balance directly from localStorage
+        const buyersData = localStorage.getItem('wallet_buyers');
+        const buyers = buyersData ? JSON.parse(buyersData) : {};
+        const currentBalance = buyers[validatedBidder] || 0;
+        
+        console.log('[RefundBid] Current state:', {
+          currentBalance,
+          refundAmount: totalRefundAmount,
+          ordersToRemove: pendingOrders.length
+        });
+        
+        // Update balance
+        buyers[validatedBidder] = currentBalance + totalRefundAmount;
+        
+        // Remove refunded orders
+        const remainingOrders = orders.filter((order: any) => 
+          !(order.buyer === validatedBidder && 
+            order.listingId === listingId && 
+            order.shippingStatus === 'pending-auction')
+        );
+        
+        // Save directly to localStorage
+        localStorage.setItem('wallet_buyers', JSON.stringify(buyers));
+        localStorage.setItem('wallet_orders', JSON.stringify(remainingOrders));
+        
+        // Force multiple storage events to ensure all listeners update
+        for (let i = 0; i < 3; i++) {
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: 'wallet_buyers',
+            newValue: JSON.stringify(buyers),
+            oldValue: JSON.stringify({ ...buyers, [validatedBidder]: currentBalance }),
+            url: window.location.href,
+            storageArea: localStorage
+          }));
+          
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        
+        // IMPORTANT: Force update the React state directly
+        setBuyerBalancesState(prev => {
+          console.log('[RefundBid] Forcing state update:', {
+            oldBalance: prev[validatedBidder],
+            newBalance: buyers[validatedBidder]
+          });
+          return { ...buyers };
+        });
+        
+        setOrderHistory(remainingOrders);
+        
+        // Clear all caches again
+        ordersService.clearCache();
+        
+        // Force a complete reload of all data after a delay
+        setTimeout(() => {
+          console.log('[RefundBid] Forcing complete data reload');
+          loadAllData();
+        }, 100);
+        
+        console.log('[RefundBid] ✅ Refund successful:', {
+          bidder: validatedBidder,
+          amount: totalRefundAmount,
+          newBalance: buyers[validatedBidder]
+        });
+        
+        return true;
       });
-      console.log('[RefundBid] ========== REFUND COMPLETE ==========');
-      
-      return true;
-    });
-  } catch (error) {
-    console.error('[RefundBid] ❌ Error refunding bid:', error);
-    return false;
-  }
-}, [getBuyerBalance, setBuyerBalance, orderHistory, loadAuctionBidderTracking, saveAuctionBidderTracking]);
+    } catch (error) {
+      console.error('[RefundBid] ❌ Error:', error);
+      return false;
+    }
+  }, [loadAllData]);
 
   // NEW: Handle incremental bid charge with tracking
   const chargeIncrementalBid = useCallback(async (
@@ -1171,7 +1159,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return false;
         }
         
-        const existingOrder = ordersResult.data.find(order => 
+        const existingOrder = ordersResult.data.find((order: Order) => 
           order.buyer === validatedBidder && 
           order.listingId === listingId && 
           order.shippingStatus === 'pending-auction'
@@ -1443,7 +1431,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           }
 
           // Find all pending auction orders for this listing
-          const pendingAuctionOrders = ordersResult.data.filter(order => 
+          const pendingAuctionOrders = ordersResult.data.filter((order: Order) => 
             order.listingId === validatedListingId && 
             order.shippingStatus === 'pending-auction'
           );
@@ -1451,7 +1439,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           console.log('[PlaceBid] Found pending auction orders:', pendingAuctionOrders.length);
 
           // Check if the bidder already has a pending bid
-          const currentBidderOrder = pendingAuctionOrders.find(order => order.buyer === validatedBidder);
+          const currentBidderOrder = pendingAuctionOrders.find((order: Order) => order.buyer === validatedBidder);
           
           // Find the current highest bid
           let currentHighestBid = 0;
@@ -1478,1049 +1466,1090 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           }
 
           // If bidder is already the highest bidder, handle incremental bid
-          if (currentBidderOrder && currentHighestBidder === validatedBidder)
-         {
-           console.log('[PlaceBid] Bidder is raising their own bid');
-           
-           // For incremental bidding, charge only the difference
-           const previousBid = currentBidderOrder.price;
-           const bidDifference = validatedAmount - previousBid;
-           const incrementalFee = bidDifference * 0.1;
-          const incrementalTotal = bidDifference + incrementalFee;
-          
-          // Check if user has enough for the additional amount
-          if (buyerCurrentBalance < incrementalTotal) {
-            console.error('[PlaceBid] Insufficient balance for incremental bid');
-            return false;
-          }
-          
-          // Use the chargeIncrementalBid function
-          const chargeSuccess = await chargeIncrementalBid(
-            validatedListingId,
-            validatedBidder,
-            previousBid,
-            validatedAmount,
-            currentBidderOrder.listingTitle || `Auction ${validatedListingId}`
-          );
-          
-          if (!chargeSuccess) {
-            console.error('[PlaceBid] Failed to charge incremental bid');
-            return false;
-          }
-          
-          console.log('[PlaceBid] Incremental bid placed successfully');
-          return true;
-        }
+          if (currentBidderOrder && currentHighestBidder === validatedBidder) {
+            console.log('[PlaceBid] Bidder is raising their own bid');
+            
+            // For incremental bidding, charge only the difference
+            const previousBid = currentBidderOrder.price;
+            const bidDifference = validatedAmount - previousBid;
+            const incrementalFee = bidDifference * 0.1;
+            const incrementalTotal = bidDifference + incrementalFee;
+            
+            // Check if user has enough for the additional amount
+            if (buyerCurrentBalance < incrementalTotal) {
+              console.error('[PlaceBid] Insufficient balance for incremental bid');
+              return false;
+            }
+            
+            // Use the chargeIncrementalBid function
+            const chargeSuccess = await chargeIncrementalBid(
+              validatedListingId,
+              validatedBidder,
+              previousBid,
+              validatedAmount,
+              currentBidderOrder.listingTitle || `Auction ${validatedListingId}`
+            );
+            
+            if (!chargeSuccess) {
+              console.error('[PlaceBid] Failed to charge incremental bid');
+              return false;
+            }
+            
+            console.log('[PlaceBid] Incremental bid placed successfully');
+           return true;
+         }
 
-        // CRITICAL FIX: Refund ALL other bidders when a new bid is placed
-        console.log('[PlaceBid] Processing refunds for outbid users...');
-        
-        // Get all bidders who need refunds (everyone except the current bidder)
-        const biddersToRefund = pendingAuctionOrders
-          .filter(order => order.buyer !== validatedBidder)
-          .map(order => order.buyer);
-        
-        // Remove duplicates
-        const uniqueBiddersToRefund = [...new Set(biddersToRefund)];
-        
-        console.log('[PlaceBid] Bidders to refund:', uniqueBiddersToRefund);
-        
-        // Refund each outbid user
-        for (const outbidUser of uniqueBiddersToRefund) {
-          console.log(`[PlaceBid] Refunding ${outbidUser}...`);
-          const refundSuccess = await refundBidFunds(outbidUser, validatedListingId);
-          if (!refundSuccess) {
-            console.error(`[PlaceBid] Failed to refund ${outbidUser}`);
-            // Continue with other refunds even if one fails
-          }
-        }
-        
-        // If this bidder had a previous bid, refund it first
-        if (currentBidderOrder) {
-          console.log('[PlaceBid] Refunding bidder\'s previous bid before placing new one');
-          const refundSuccess = await refundBidFunds(validatedBidder, validatedListingId);
-          if (!refundSuccess) {
-            console.error('[PlaceBid] Failed to refund previous bid');
-            return false;
-          }
-        }
+         // CRITICAL FIX: Refund ALL other bidders when a new bid is placed
+         console.log('[PlaceBid] Processing refunds for outbid users...');
+         
+         // Get all bidders who need refunds (everyone except the current bidder)
+         const biddersToRefund = pendingAuctionOrders
+           .filter((order: Order) => order.buyer !== validatedBidder)
+           .map((order: Order) => order.buyer);
+         
+         // Remove duplicates
+         const uniqueBiddersToRefund = [...new Set(biddersToRefund)];
+         
+         console.log('[PlaceBid] Bidders to refund:', uniqueBiddersToRefund);
+         
+         // Refund each outbid user
+         for (const outbidUser of uniqueBiddersToRefund) {
+           console.log(`[PlaceBid] Refunding ${outbidUser}...`);
+           const refundSuccess = await refundBidFunds(outbidUser as string, validatedListingId);
+           if (!refundSuccess) {
+             console.error(`[PlaceBid] Failed to refund ${outbidUser}`);
+             // Continue with other refunds even if one fails
+           }
+         }
+         
+         // If this bidder had a previous bid, refund it first
+         if (currentBidderOrder) {
+           console.log('[PlaceBid] Refunding bidder\'s previous bid before placing new one');
+           const refundSuccess = await refundBidFunds(validatedBidder, validatedListingId);
+           if (!refundSuccess) {
+             console.error('[PlaceBid] Failed to refund previous bid');
+             return false;
+           }
+         }
 
-        // Hold the new bid funds
-        const holdSuccess = await holdBidFunds(
-          validatedListingId,
-          validatedBidder,
-          validatedAmount,
-          `Auction ${validatedListingId}` // You should pass the actual listing title here
-        );
+         // Hold the new bid funds
+         const holdSuccess = await holdBidFunds(
+           validatedListingId,
+           validatedBidder,
+           validatedAmount,
+           `Auction ${validatedListingId}` // You should pass the actual listing title here
+         );
 
-        if (!holdSuccess) {
-          console.error('[PlaceBid] Failed to hold bid funds');
-          return false;
-        }
+         if (!holdSuccess) {
+           console.error('[PlaceBid] Failed to hold bid funds');
+           return false;
+         }
 
-        console.log('[PlaceBid] Bid placed successfully:', {
-          listingId: validatedListingId,
-          bidder: validatedBidder,
-          amount: validatedAmount,
-          refundedUsers: uniqueBiddersToRefund.length
-        });
+         console.log('[PlaceBid] Bid placed successfully:', {
+           listingId: validatedListingId,
+           bidder: validatedBidder,
+           amount: validatedAmount,
+           refundedUsers: uniqueBiddersToRefund.length
+         });
 
-        return true;
-      } catch (error) {
-        console.error('[PlaceBid] Error in transaction lock:', error);
-        return false;
-      }
-    });
-  } catch (error) {
-    console.error('[PlaceBid] Error placing bid:', error);
-    return false;
-  }
-}, [getBuyerBalance, holdBidFunds, refundBidFunds, chargeIncrementalBid]);
+         return true;
+       } catch (error) {
+         console.error('[PlaceBid] Error in transaction lock:', error);
+         return false;
+       }
+     });
+   } catch (error) {
+     console.error('[PlaceBid] Error placing bid:', error);
+     return false;
+   }
+ }, [getBuyerBalance, holdBidFunds, refundBidFunds, chargeIncrementalBid]);
 
-// Finalize auction purchase (money already held) with security
-const finalizeAuctionPurchase = useCallback(async (
-  listing: Listing,
-  winnerUsername: string,
-  winningBid: number
-): Promise<boolean> => {
-  try {
-    // Validate inputs
-    const validatedWinner = validateUsername(winnerUsername);
-    const validatedSeller = validateUsername(listing.seller);
-    const validatedBid = validateTransactionAmount(winningBid);
-    
-    console.log('[FinalizeAuction] Starting finalization:', { 
-      listing: listing.title, 
-      winner: validatedWinner, 
-      price: validatedBid 
-    });
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`auction_${listing.id}`, async () => {
-      // Find the winner's pending order
-      const ordersResult = await ordersService.getOrders();
-      if (!ordersResult.success || !ordersResult.data) {
-        console.error('[FinalizeAuction] Failed to load orders');
-        return false;
-      }
-      
-      const pendingOrder = ordersResult.data.find(order => 
-        order.buyer === validatedWinner && 
-        order.listingId === listing.id && 
-        order.shippingStatus === 'pending-auction'
-      );
-      
-      if (!pendingOrder) {
-        console.error('[FinalizeAuction] No pending order found for winner');
-        return false;
-      }
-      
-      const sellerTierInfo = getSellerTierMemoized(validatedSeller, orderHistory);
-      const tierCreditAmount = validatedBid * sellerTierInfo.credit;
-      
-      // FIXED: Calculate amounts properly recognizing buyer fee was already paid
-      // The pending order has the full amount including buyer fee
-      const totalPaidByBuyer = pendingOrder.markedUpPrice; // This includes the 10% buyer fee
-      const actualBidAmount = validatedBid; // The base bid amount
-      const buyerFee = totalPaidByBuyer - actualBidAmount; // Should be 10% of bid
-      const sellerFee = actualBidAmount * 0.1; // 10% seller fee
-      const sellerCut = actualBidAmount - sellerFee + tierCreditAmount; // What seller receives
-      const totalPlatformFee = buyerFee + sellerFee; // Total platform revenue (20%)
-      
-      console.log('[FinalizeAuction] Calculated amounts:', {
-        winningBid: actualBidAmount,
-        totalPaidByBuyer,
-        buyerFee,
-        sellerFee,
-        sellerCut,
-        totalPlatformFee,
-        tierCreditAmount
-      });
-      
-      // Money was already deducted when bid was placed
-      // Just distribute to seller and admin
-      await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
-      await setAdminBalance(adminBalance + totalPlatformFee);
-      
-      // Remove the pending auction order
-      const filteredOrders = ordersResult.data.filter(order => order.id !== pendingOrder.id);
-      
-      // FIXED: Extract image URL properly for auction listings
-      let imageUrl: string | undefined = undefined;
-      
-      if (listing.imageUrls && Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0) {
-        imageUrl = listing.imageUrls[0];
-      } else if ((listing as any).images && Array.isArray((listing as any).images) && (listing as any).images.length > 0) {
-        imageUrl = (listing as any).images[0];
-      } else if ((listing as any).imageUrl) {
-        imageUrl = (listing as any).imageUrl;
-      }
-      
-      // Create the final order using ordersService
-      const finalOrderResult = await ordersService.createOrder({
-        title: sanitizeStrict(listing.title),
-        description: sanitizeStrict(listing.description),
-        price: actualBidAmount,
-        markedUpPrice: totalPaidByBuyer, // Keep the total paid including buyer fee
-        imageUrl: imageUrl, // Use the extracted image URL
-        seller: validatedSeller,
-        buyer: validatedWinner,
-        tags: listing.tags,
-        wasAuction: true,
-        finalBid: actualBidAmount,
-        shippingStatus: 'pending',
-        tierCreditAmount,
-        listingId: listing.id,
-      });
-      
-      if (!finalOrderResult.success || !finalOrderResult.data) {
-        console.error('[FinalizeAuction] Failed to create final order');
-        // Rollback seller and admin balances
-        await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) - sellerCut);
-        await setAdminBalance(adminBalance - totalPlatformFee);
-        return false;
-      }
-      
-      // Update the filtered orders (without the pending order) in storage
-      await storageService.setItem('wallet_orders', filteredOrders);
-      
-      // Update local state with the new final order
-      setOrderHistory(prev => [...prev.filter(o => o.id !== pendingOrder.id), finalOrderResult.data!]);
-      
-      // Clear cache
-      ordersService.clearCache();
-      
-      // NEW: Clean up the winner from auction tracking
-      await cleanupAuctionTracking(listing.id, validatedWinner);
-      
-      // CRITICAL: Refund all losing bidders
-      console.log('[FinalizeAuction] Processing refunds for losing bidders...');
-      
-      // Find all other bidders who need refunds
-      const losingBidders = ordersResult.data
-        .filter(order => 
-          order.listingId === listing.id && 
-          order.shippingStatus === 'pending-auction' &&
-          order.buyer !== validatedWinner
-        )
-        .map(order => order.buyer);
-      
-      // Remove duplicates
-      const uniqueLosingBidders = [...new Set(losingBidders)];
-      
-      console.log('[FinalizeAuction] Losing bidders to refund:', uniqueLosingBidders);
-      
-      // Refund each losing bidder
-      for (const loser of uniqueLosingBidders) {
-        console.log(`[FinalizeAuction] Refunding losing bidder ${loser}...`);
-        const refundSuccess = await refundBidFunds(loser, listing.id);
-        if (!refundSuccess) {
-          console.error(`[FinalizeAuction] Failed to refund ${loser}`);
-          // Continue with other refunds even if one fails
-        }
-      }
-      
-      // Create admin action for platform fee tracking
-      const platformFeeAction: AdminAction = {
-        id: uuidv4(),
-        type: 'credit' as const,
-        amount: totalPlatformFee,
-        targetUser: 'admin',
-        username: 'admin',
-        adminUser: 'system',
-        reason: sanitizeStrict(`Platform fee from auction sale of "${listing.title}" by ${validatedSeller} (buyer fee: ${buyerFee.toFixed(2)}, seller fee: ${sellerFee.toFixed(2)})`),
-        date: new Date().toISOString(),
-        role: 'buyer' as const
-      };
-      
-      setAdminActions(prev => [...prev, platformFeeAction]);
-      
-      // Add notification
-      if (addSellerNotification) {
-        if (tierCreditAmount > 0) {
-          addSellerNotification(
-            validatedSeller,
-            `🏆 Auction ended: "${sanitizeStrict(listing.title)}" sold to ${validatedWinner} for ${actualBidAmount.toFixed(2)} (you receive ${sellerCut.toFixed(2)} including ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
-          );
-        } else {
-          addSellerNotification(
-            validatedSeller,
-            `🏆 Auction ended: "${sanitizeStrict(listing.title)}" sold to ${validatedWinner} for ${actualBidAmount.toFixed(2)} (you receive ${sellerCut.toFixed(2)})`
-          );
-        }
-      }
-      
-      console.log('[FinalizeAuction] Auction finalized successfully, refunded', uniqueLosingBidders.length, 'losing bidders');
-      return true;
-    });
-  } catch (error) {
-    console.error('[FinalizeAuction] Error:', error);
-    return false;
-  }
-}, [orderHistory, addSellerNotification, setSellerBalance, setAdminBalance, sellerBalances, adminBalance, cleanupAuctionTracking, refundBidFunds]);
+ // Finalize auction purchase (money already held) with security
+ const finalizeAuctionPurchase = useCallback(async (
+   listing: Listing,
+   winnerUsername: string,
+   winningBid: number
+ ): Promise<boolean> => {
+   try {
+     // Validate inputs
+     const validatedWinner = validateUsername(winnerUsername);
+     const validatedSeller = validateUsername(listing.seller);
+     const validatedBid = validateTransactionAmount(winningBid);
+     
+     console.log('[FinalizeAuction] Starting finalization:', { 
+       listing: listing.title, 
+       winner: validatedWinner, 
+       price: validatedBid 
+     });
+     
+     // Use transaction lock
+     return await transactionLock.current.acquireLock(`auction_${listing.id}`, async () => {
+       // Find the winner's pending order
+       const ordersResult = await ordersService.getOrders();
+       if (!ordersResult.success || !ordersResult.data) {
+         console.error('[FinalizeAuction] Failed to load orders');
+         return false;
+       }
+       
+       const pendingOrder = ordersResult.data.find((order: Order) => 
+         order.buyer === validatedWinner && 
+         order.listingId === listing.id && 
+         order.shippingStatus === 'pending-auction'
+       );
+       
+       if (!pendingOrder) {
+         console.error('[FinalizeAuction] No pending order found for winner');
+         return false;
+       }
+       
+       const sellerTierInfo = getSellerTierMemoized(validatedSeller, orderHistory);
+       const tierCreditAmount = validatedBid * sellerTierInfo.credit;
+       
+       // FIXED: Calculate amounts properly recognizing buyer fee was already paid
+       // The pending order has the full amount including buyer fee
+       const totalPaidByBuyer = pendingOrder.markedUpPrice; // This includes the 10% buyer fee
+       const actualBidAmount = validatedBid; // The base bid amount
+       const buyerFee = totalPaidByBuyer - actualBidAmount; // Should be 10% of bid
+       const sellerFee = actualBidAmount * 0.1; // 10% seller fee
+       const sellerCut = actualBidAmount - sellerFee + tierCreditAmount; // What seller receives
+       const totalPlatformFee = buyerFee + sellerFee; // Total platform revenue (20%)
+       
+       console.log('[FinalizeAuction] Calculated amounts:', {
+         winningBid: actualBidAmount,
+         totalPaidByBuyer,
+         buyerFee,
+         sellerFee,
+         sellerCut,
+         totalPlatformFee,
+         tierCreditAmount
+       });
+       
+       // Money was already deducted when bid was placed
+       // Just distribute to seller and admin
+       await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
+       await setAdminBalance(adminBalance + totalPlatformFee);
+       
+       // Remove the pending auction order
+       const filteredOrders = ordersResult.data.filter((order: Order) => order.id !== pendingOrder.id);
+       
+       // FIXED: Extract image URL properly for auction listings
+       let imageUrl: string | undefined = undefined;
+       
+       if (listing.imageUrls && Array.isArray(listing.imageUrls) && listing.imageUrls.length > 0) {
+         imageUrl = listing.imageUrls[0];
+       } else if ((listing as any).images && Array.isArray((listing as any).images) && (listing as any).images.length > 0) {
+         imageUrl = (listing as any).images[0];
+       } else if ((listing as any).imageUrl) {
+         imageUrl = (listing as any).imageUrl;
+       }
+       
+       // Create the final order using ordersService
+       const finalOrderResult = await ordersService.createOrder({
+         title: sanitizeStrict(listing.title),
+         description: sanitizeStrict(listing.description),
+         price: actualBidAmount,
+         markedUpPrice: totalPaidByBuyer, // Keep the total paid including buyer fee
+         imageUrl: imageUrl, // Use the extracted image URL
+         seller: validatedSeller,
+         buyer: validatedWinner,
+         tags: listing.tags,
+         wasAuction: true,
+         finalBid: actualBidAmount,
+         shippingStatus: 'pending',
+         tierCreditAmount,
+         listingId: listing.id,
+       });
+       
+       if (!finalOrderResult.success || !finalOrderResult.data) {
+         console.error('[FinalizeAuction] Failed to create final order');
+         // Rollback seller and admin balances
+         await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) - sellerCut);
+         await setAdminBalance(adminBalance - totalPlatformFee);
+         return false;
+       }
+       
+       // Update the filtered orders (without the pending order) in storage
+       await storageService.setItem('wallet_orders', filteredOrders);
+       
+       // Update local state with the new final order
+       setOrderHistory(prev => [...prev.filter(o => o.id !== pendingOrder.id), finalOrderResult.data!]);
+       
+       // Clear cache
+       ordersService.clearCache();
+       
+       // NEW: Clean up the winner from auction tracking
+       await cleanupAuctionTracking(listing.id, validatedWinner);
+       
+       // CRITICAL: Refund all losing bidders
+       console.log('[FinalizeAuction] Processing refunds for losing bidders...');
+       
+       // Find all other bidders who need refunds
+       const losingBidders = ordersResult.data
+         .filter((order: Order) => 
+           order.listingId === listing.id && 
+           order.shippingStatus === 'pending-auction' &&
+           order.buyer !== validatedWinner
+         )
+         .map((order: Order) => order.buyer);
+       
+       // Remove duplicates
+       const uniqueLosingBidders = [...new Set(losingBidders)];
+       
+       console.log('[FinalizeAuction] Losing bidders to refund:', uniqueLosingBidders);
+       
+       // Refund each losing bidder
+       for (const loser of uniqueLosingBidders) {
+         console.log(`[FinalizeAuction] Refunding losing bidder ${loser}...`);
+         const refundSuccess = await refundBidFunds(loser as string, listing.id);
+         if (!refundSuccess) {
+           console.error(`[FinalizeAuction] Failed to refund ${loser}`);
+           // Continue with other refunds even if one fails
+         }
+       }
+       
+       // Create admin action for platform fee tracking
+       const platformFeeAction: AdminAction = {
+         id: uuidv4(),
+         type: 'credit' as const,
+         amount: totalPlatformFee,
+         targetUser: 'admin',
+         username: 'admin',
+         adminUser: 'system',
+         reason: sanitizeStrict(`Platform fee from auction sale of "${listing.title}" by ${validatedSeller} (buyer fee: ${buyerFee.toFixed(2)}, seller fee: ${sellerFee.toFixed(2)})`),
+         date: new Date().toISOString(),
+         role: 'buyer' as const
+       };
+       
+       setAdminActions(prev => [...prev, platformFeeAction]);
+       
+       // Add notification
+       if (addSellerNotification) {
+         if (tierCreditAmount > 0) {
+           addSellerNotification(
+             validatedSeller,
+             `🏆 Auction ended: "${sanitizeStrict(listing.title)}" sold to ${validatedWinner} for ${actualBidAmount.toFixed(2)} (you receive ${sellerCut.toFixed(2)} including ${tierCreditAmount.toFixed(2)} ${sellerTierInfo.tier} tier credit)`
+           );
+         } else {
+           addSellerNotification(
+             validatedSeller,
+             `🏆 Auction ended: "${sanitizeStrict(listing.title)}" sold to ${validatedWinner} for ${actualBidAmount.toFixed(2)} (you receive ${sellerCut.toFixed(2)})`
+           );
+         }
+       }
+       
+       console.log('[FinalizeAuction] Auction finalized successfully, refunded', uniqueLosingBidders.length, 'losing bidders');
+       return true;
+     });
+   } catch (error) {
+     console.error('[FinalizeAuction] Error:', error);
+     return false;
+   }
+ }, [orderHistory, addSellerNotification, setSellerBalance, setAdminBalance, sellerBalances, adminBalance, cleanupAuctionTracking, refundBidFunds]);
 
-const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
-  try {
-    // Check rate limit
-    checkRateLimit('CUSTOM_REQUEST', customRequest.buyer);
-    
-    // Validate inputs
-    const validatedBuyer = validateUsername(customRequest.buyer);
-    const validatedSeller = validateUsername(customRequest.seller);
-    const validatedAmount = validateTransactionAmount(customRequest.amount);
-    const sanitizedDescription = sanitizeStrict(customRequest.description);
-    
-    const markedUpPrice = validatedAmount * 1.1;
-    const buyerCurrentBalance = getBuyerBalance(validatedBuyer);
-    
-    if (buyerCurrentBalance < markedUpPrice) {
-      return false;
-    }
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`custom_${customRequest.requestId}`, async () => {
-      // Calculate amounts
-      const sellerCut = validatedAmount * 0.9;
-      const platformFee = markedUpPrice - sellerCut;
-      
-      // Update balances
-      await setBuyerBalance(validatedBuyer, buyerCurrentBalance - markedUpPrice);
-      await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
-      await setAdminBalance(adminBalance + platformFee);
-      
-      // Create order using the service
-      const orderResult = await ordersService.createOrder({
-        title: sanitizedDescription,
-        description: sanitizedDescription,
-        price: validatedAmount,
-        markedUpPrice,
-        seller: validatedSeller,
-        buyer: validatedBuyer,
-        isCustomRequest: true,
-        originalRequestId: customRequest.requestId,
-      });
+ const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
+   try {
+     // Check rate limit
+     checkRateLimit('CUSTOM_REQUEST', customRequest.buyer);
+     
+     // Validate inputs
+     const validatedBuyer = validateUsername(customRequest.buyer);
+     const validatedSeller = validateUsername(customRequest.seller);
+     const validatedAmount = validateTransactionAmount(customRequest.amount);
+     const sanitizedDescription = sanitizeStrict(customRequest.description);
+     
+     const markedUpPrice = validatedAmount * 1.1;
+     const buyerCurrentBalance = getBuyerBalance(validatedBuyer);
+     
+     if (buyerCurrentBalance < markedUpPrice) {
+       return false;
+     }
+     
+     // Use transaction lock
+     return await transactionLock.current.acquireLock(`custom_${customRequest.requestId}`, async () => {
+       // Calculate amounts
+       const sellerCut = validatedAmount * 0.9;
+       const platformFee = markedUpPrice - sellerCut;
+       
+       // Update balances
+       await setBuyerBalance(validatedBuyer, buyerCurrentBalance - markedUpPrice);
+       await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
+       await setAdminBalance(adminBalance + platformFee);
+       
+       // Create order using the service
+       const orderResult = await ordersService.createOrder({
+         title: sanitizedDescription,
+         description: sanitizedDescription,
+         price: validatedAmount,
+         markedUpPrice,
+         seller: validatedSeller,
+         buyer: validatedBuyer,
+         isCustomRequest: true,
+         originalRequestId: customRequest.requestId,
+       });
 
-      if (orderResult.success && orderResult.data) {
-        // Update local state
-        setOrderHistory(prev => [...prev, orderResult.data!]);
-        
-        if (addSellerNotification) {
-          addSellerNotification(
-            validatedSeller,
-            `Custom request purchased by ${validatedBuyer} for ${validatedAmount.toFixed(2)}`
-          );
-        }
-        
-        return true;
-      } else {
-        // Rollback balance changes
-        await setBuyerBalance(validatedBuyer, buyerCurrentBalance);
-        await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0));
-        await setAdminBalance(adminBalance);
-        
-        return false;
-      }
-    });
-  } catch (error) {
-    console.error('Custom request purchase error:', error);
-    return false;
-  }
-}, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
+       if (orderResult.success && orderResult.data) {
+         // Update local state
+         setOrderHistory(prev => [...prev, orderResult.data!]);
+         
+         if (addSellerNotification) {
+           addSellerNotification(
+             validatedSeller,
+             `Custom request purchased by ${validatedBuyer} for ${validatedAmount.toFixed(2)}`
+           );
+         }
+         
+         return true;
+       } else {
+         // Rollback balance changes
+         await setBuyerBalance(validatedBuyer, buyerCurrentBalance);
+         await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0));
+         await setAdminBalance(adminBalance);
+         
+         return false;
+       }
+     });
+   } catch (error) {
+     console.error('Custom request purchase error:', error);
+     return false;
+   }
+ }, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
-const subscribeToSellerWithPayment = useCallback(async (
-  buyer: string,
-  seller: string,
-  amount: number
-): Promise<boolean> => {
-  try {
-    // Check rate limit
-    checkRateLimit('API_CALL', buyer);
-    
-    // Validate inputs
-    const validatedBuyer = validateUsername(buyer);
-    const validatedSeller = validateUsername(seller);
-    const validatedAmount = validateTransactionAmount(amount);
-    
-    const buyerBalance = getBuyerBalance(validatedBuyer);
-    
-    if (buyerBalance < validatedAmount) {
-      return false;
-    }
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`subscribe_${validatedBuyer}_${validatedSeller}`, async () => {
-      // Calculate amounts
-      const sellerCut = validatedAmount * 0.75;
-      const adminCut = validatedAmount * 0.25;
-      
-      // Update balances
-      await setBuyerBalance(validatedBuyer, buyerBalance - validatedAmount);
-      await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
-      await setAdminBalance(adminBalance + adminCut);
-      
-      // Create admin action for subscription tracking
-      const action: AdminAction = {
-        id: uuidv4(),
-        type: 'credit',
-        amount: adminCut,
-        targetUser: 'admin',
-        username: 'admin',
-        adminUser: 'system',
-        reason: sanitizeStrict(`Subscription revenue from ${validatedBuyer} to ${validatedSeller} - ${validatedAmount}/month`),
-        date: new Date().toISOString(),
-        role: 'seller'
-      };
-      
-      // Update admin actions
-      setAdminActions(prev => [...prev, action]);
-      
-      if (addSellerNotification) {
-        addSellerNotification(
-          validatedSeller,
-          `New subscriber: ${validatedBuyer} paid ${validatedAmount.toFixed(2)}/month`
-        );
-      }
-      
-      return true;
-    });
-  } catch (error) {
-    console.error('Subscription payment error:', error);
-    return false;
-  }
-}, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
+ const subscribeToSellerWithPayment = useCallback(async (
+   buyer: string,
+   seller: string,
+   amount: number
+ ): Promise<boolean> => {
+   try {
+     // Check rate limit
+     checkRateLimit('API_CALL', buyer);
+     
+     // Validate inputs
+     const validatedBuyer = validateUsername(buyer);
+     const validatedSeller = validateUsername(seller);
+     const validatedAmount = validateTransactionAmount(amount);
+     
+     const buyerBalance = getBuyerBalance(validatedBuyer);
+     
+     if (buyerBalance < validatedAmount) {
+       return false;
+     }
+     
+     // Use transaction lock
+     return await transactionLock.current.acquireLock(`subscribe_${validatedBuyer}_${validatedSeller}`, async () => {
+       // Calculate amounts
+       const sellerCut = validatedAmount * 0.75;
+       const adminCut = validatedAmount * 0.25;
+       
+       // Update balances
+       await setBuyerBalance(validatedBuyer, buyerBalance - validatedAmount);
+       await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + sellerCut);
+       await setAdminBalance(adminBalance + adminCut);
+       
+       // Create admin action for subscription tracking
+       const action: AdminAction = {
+         id: uuidv4(),
+         type: 'credit',
+         amount: adminCut,
+         targetUser: 'admin',
+         username: 'admin',
+         adminUser: 'system',
+         reason: sanitizeStrict(`Subscription revenue from ${validatedBuyer} to ${validatedSeller} - ${validatedAmount}/month`),
+         date: new Date().toISOString(),
+         role: 'seller'
+       };
+       
+       // Update admin actions
+       setAdminActions(prev => [...prev, action]);
+       
+       if (addSellerNotification) {
+         addSellerNotification(
+           validatedSeller,
+           `New subscriber: ${validatedBuyer} paid ${validatedAmount.toFixed(2)}/month`
+         );
+       }
+       
+       return true;
+     });
+   } catch (error) {
+     console.error('Subscription payment error:', error);
+     return false;
+   }
+ }, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, setAdminBalance, sellerBalances, adminBalance]);
 
-const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
-  try {
-    // Check rate limit
-    checkRateLimit('TIP', buyer);
-    
-    // Validate inputs
-    const validatedBuyer = validateUsername(buyer);
-    const validatedSeller = validateUsername(seller);
-    const validatedAmount = validateTransactionAmount(amount);
-    
-    const buyerBalance = getBuyerBalance(validatedBuyer);
-    
-    if (buyerBalance < validatedAmount) {
-      return false;
-    }
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`tip_${validatedBuyer}_${validatedSeller}`, async () => {
-      // Update balances
-      await setBuyerBalance(validatedBuyer, buyerBalance - validatedAmount);
-      await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + validatedAmount);
-      
-      if (addSellerNotification) {
-        addSellerNotification(
-          validatedSeller,
-          `💰 Tip received from ${validatedBuyer} - ${validatedAmount.toFixed(2)}`
-        );
-      }
-      
-      return true;
-    });
-  } catch (error) {
-    console.error('Error sending tip:', error);
-    return false;
-  }
-}, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, sellerBalances]);
+ const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
+   try {
+     // Check rate limit
+     checkRateLimit('TIP', buyer);
+     
+     // Validate inputs
+     const validatedBuyer = validateUsername(buyer);
+     const validatedSeller = validateUsername(seller);
+     const validatedAmount = validateTransactionAmount(amount);
+     
+     const buyerBalance = getBuyerBalance(validatedBuyer);
+     
+     if (buyerBalance < validatedAmount) {
+       return false;
+     }
+     
+     // Use transaction lock
+     return await transactionLock.current.acquireLock(`tip_${validatedBuyer}_${validatedSeller}`, async () => {
+       // Update balances
+       await setBuyerBalance(validatedBuyer, buyerBalance - validatedAmount);
+       await setSellerBalance(validatedSeller, (sellerBalances[validatedSeller] || 0) + validatedAmount);
+       
+       if (addSellerNotification) {
+         addSellerNotification(
+           validatedSeller,
+           `💰 Tip received from ${validatedBuyer} - ${validatedAmount.toFixed(2)}`
+         );
+       }
+       
+       return true;
+     });
+   } catch (error) {
+     console.error('Error sending tip:', error);
+     return false;
+   }
+ }, [addSellerNotification, getBuyerBalance, setBuyerBalance, setSellerBalance, sellerBalances]);
 
-const addSellerWithdrawal = useCallback(async (username: string, amount: number) => {
-  try {
-    // Check rate limit
-    checkRateLimit('WITHDRAWAL', username);
-    
-    // Validate inputs
-    const validatedUsername = validateUsername(username);
-    const validatedAmount = validateTransactionAmount(amount);
-    
-    const currentBalance = getSellerBalance(validatedUsername);
-    if (currentBalance < validatedAmount) {
-      throw new Error('Insufficient balance');
-    }
-    
-    // Use transaction lock
-    await transactionLock.current.acquireLock(`withdrawal_${validatedUsername}`, async () => {
-      // Update balance first
-      await setSellerBalance(validatedUsername, currentBalance - validatedAmount);
-      
-      const date = new Date().toISOString();
-      const newWithdrawal: Withdrawal = { amount: validatedAmount, date, status: 'completed' };
-      
-      // Update state and persist immediately
-      setSellerWithdrawals((prev) => {
-        const updated = {
-          ...prev,
-          [validatedUsername]: [...(prev[validatedUsername] || []), newWithdrawal],
-        };
-        
-        // Persist to storage immediately
-        storageService.setItem(STORAGE_KEYS.SELLER_WITHDRAWALS, updated)
-          .catch(error => console.error('Failed to persist withdrawals:', error));
-        
-        return updated;
-      });
-      
-      // Force save all data to ensure persistence
-      setTimeout(() => {
-        saveAllData();
-      }, 100);
-    });
-  } catch (error) {
-    throw error;
-  }
-}, [getSellerBalance, setSellerBalance, saveAllData]);
+ const addSellerWithdrawal = useCallback(async (username: string, amount: number) => {
+   try {
+     // Check rate limit
+     checkRateLimit('WITHDRAWAL', username);
+     
+     // Validate inputs
+     const validatedUsername = validateUsername(username);
+     const validatedAmount = validateTransactionAmount(amount);
+     
+     const currentBalance = getSellerBalance(validatedUsername);
+     if (currentBalance < validatedAmount) {
+       throw new Error('Insufficient balance');
+     }
+     
+     // Use transaction lock
+     await transactionLock.current.acquireLock(`withdrawal_${validatedUsername}`, async () => {
+       // Update balance first
+       await setSellerBalance(validatedUsername, currentBalance - validatedAmount);
+       
+       const date = new Date().toISOString();
+       const newWithdrawal: Withdrawal = { amount: validatedAmount, date, status: 'completed' };
+       
+       // Update state and persist immediately
+       setSellerWithdrawals((prev) => {
+         const updated = {
+           ...prev,
+           [validatedUsername]: [...(prev[validatedUsername] || []), newWithdrawal],
+         };
+         
+         // Persist to storage immediately
+         storageService.setItem(STORAGE_KEYS.SELLER_WITHDRAWALS, updated)
+           .catch(error => console.error('Failed to persist withdrawals:', error));
+         
+         return updated;
+       });
+       
+       // Force save all data to ensure persistence
+       setTimeout(() => {
+         saveAllData();
+       }, 100);
+     });
+   } catch (error) {
+     throw error;
+   }
+ }, [getSellerBalance, setSellerBalance, saveAllData]);
 
-const addAdminWithdrawal = useCallback(async (amount: number) => {
-  try {
-    // Check rate limit
-    checkRateLimit('WITHDRAWAL', 'admin');
-    
-    // Validate inputs
-    const validatedAmount = validateTransactionAmount(amount);
-    
-    if (adminBalance < validatedAmount) {
-      throw new Error('Insufficient admin balance');
-    }
-    
-    // Use transaction lock
-    await transactionLock.current.acquireLock('admin_withdrawal', async () => {
-      await setAdminBalance(adminBalance - validatedAmount);
-      
-      const date = new Date().toISOString();
-      const newWithdrawal: Withdrawal = { amount: validatedAmount, date, status: 'pending' };
-      setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
-    });
-  } catch (error) {
-    throw error;
-  }
-}, [adminBalance, setAdminBalance]);
+ const addAdminWithdrawal = useCallback(async (amount: number) => {
+   try {
+     // Check rate limit
+     checkRateLimit('WITHDRAWAL', 'admin');
+     
+     // Validate inputs
+     const validatedAmount = validateTransactionAmount(amount);
+     
+     if (adminBalance < validatedAmount) {
+       throw new Error('Insufficient admin balance');
+     }
+     
+     // Use transaction lock
+     await transactionLock.current.acquireLock('admin_withdrawal', async () => {
+       await setAdminBalance(adminBalance - validatedAmount);
+       
+       const date = new Date().toISOString();
+       const newWithdrawal: Withdrawal = { amount: validatedAmount, date, status: 'pending' };
+       setAdminWithdrawals((prev) => [...prev, newWithdrawal]);
+     });
+   } catch (error) {
+     throw error;
+   }
+ }, [adminBalance, setAdminBalance]);
 
-const updateWallet = useCallback((username: string, amount: number, orderToFulfil?: Order) => {
-  // This is a legacy method, now handled through transactions
-  console.warn('updateWallet is deprecated, use transaction-based methods');
-}, []);
+ const updateWallet = useCallback((username: string, amount: number, orderToFulfil?: Order) => {
+   // This is a legacy method, now handled through transactions
+   console.warn('updateWallet is deprecated, use transaction-based methods');
+ }, []);
 
-const adminCreditUser = useCallback(async (
-  username: string,
-  role: 'buyer' | 'seller',
-  amount: number,
-  reason: string
-): Promise<boolean> => {
-  try {
-    // Check rate limit
-    checkRateLimit('REPORT_ACTION', 'admin');
-    
-    // Validate inputs
-    const validatedUsername = validateUsername(username);
-    const validatedAmount = validateTransactionAmount(amount);
-    const sanitizedReason = sanitizeStrict(reason);
-    
-    // Validate reason
-    const reasonValidation = walletOperationSchemas.reason.safeParse(sanitizedReason);
-    if (!reasonValidation.success) {
-      throw new Error('Invalid reason');
-    }
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`admin_credit_${validatedUsername}`, async () => {
-      if (role === 'buyer') {
-        const currentBalance = getBuyerBalance(validatedUsername);
-        await setBuyerBalance(validatedUsername, currentBalance + validatedAmount);
-        
-        // FIXED: Only add deposit log, don't double-update the balance
-        const depositLog: DepositLog = {
-          id: uuidv4(),
-          username: validatedUsername,
-          amount: validatedAmount,
-          method: 'admin_credit',
-          date: new Date().toISOString(),
-          status: 'completed',
-          transactionId: uuidv4(),
-          notes: `Admin credit: ${sanitizedReason}`
-        };
-        setDepositLogs(prev => [...prev, depositLog]);
-      } else {
-        const currentBalance = getSellerBalance(validatedUsername);
-        await setSellerBalance(validatedUsername, currentBalance + validatedAmount);
-      }
-      
-      const currentUser = typeof window !== 'undefined' ? 
-        localStorage.getItem('currentUser') : null;
-      const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
-      
-      const action: AdminAction = {
-        id: uuidv4(),
-        type: 'credit',
-        amount: validatedAmount,
-        targetUser: validatedUsername,
-        username: validatedUsername,
-        adminUser: sanitizeUsername(adminUser),
-        reason: sanitizedReason,
-        date: new Date().toISOString(),
-        role,
-      };
-      
-      setAdminActions(prev => [...prev, action]);
-      
-      // Store admin action
-      await storageService.setItem('wallet_adminActions', [...adminActions, action]);
-      
-      // Emit transaction event
-      if (isConnected) {
-        sendMessage(WebSocketEvent.WALLET_TRANSACTION, {
-          type: 'admin_credit',
-          username: validatedUsername,
-          role,
-          amount: validatedAmount,
-          reason: sanitizedReason,
-          adminUser,
-          timestamp: Date.now()
-        });
-      }
-      
-      // Force sync the balance
-      if (role === 'buyer') {
-        await forceSyncWalletBalance(validatedUsername);
-      }
-      
-      // Force update balances in Header and other components
-      if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
-        setTimeout(() => {
-          (window as any).__pantypost_balance_context.forceUpdate();
-        }, 100);
-      }
-      
-      return true;
-    });
-  } catch (error) {
-    console.error('Admin credit error:', error);
-    return false;
-  }
-}, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, adminActions, isConnected, sendMessage]);
+ const adminCreditUser = useCallback(async (
+   username: string,
+   role: 'buyer' | 'seller',
+   amount: number,
+   reason: string
+ ): Promise<boolean> => {
+   try {
+     // Check rate limit
+     checkRateLimit('REPORT_ACTION', 'admin');
+     
+     // Validate inputs
+     const validatedUsername = validateUsername(username);
+     const validatedAmount = validateTransactionAmount(amount);
+     const sanitizedReason = sanitizeStrict(reason);
+     
+     // Validate reason
+     const reasonValidation = walletOperationSchemas.reason.safeParse(sanitizedReason);
+     if (!reasonValidation.success) {
+       throw new Error('Invalid reason');
+     }
+     
+     // Use transaction lock
+     return await transactionLock.current.acquireLock(`admin_credit_${validatedUsername}`, async () => {
+       if (role === 'buyer') {
+         const currentBalance = getBuyerBalance(validatedUsername);
+         await setBuyerBalance(validatedUsername, currentBalance + validatedAmount);
+         
+         // FIXED: Only add deposit log, don't double-update the balance
+         const depositLog: DepositLog = {
+           id: uuidv4(),
+           username: validatedUsername,
+           amount: validatedAmount,
+           method: 'admin_credit',
+           date: new Date().toISOString(),
+           status: 'completed',
+           transactionId: uuidv4(),
+           notes: `Admin credit: ${sanitizedReason}`
+         };
+         setDepositLogs(prev => [...prev, depositLog]);
+       } else {
+         const currentBalance = getSellerBalance(validatedUsername);
+         await setSellerBalance(validatedUsername, currentBalance + validatedAmount);
+       }
+       
+       const currentUser = typeof window !== 'undefined' ? 
+         localStorage.getItem('currentUser') : null;
+       const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
+       
+       const action: AdminAction = {
+         id: uuidv4(),
+         type: 'credit',
+         amount: validatedAmount,
+         targetUser: validatedUsername,
+         username: validatedUsername,
+         adminUser: sanitizeUsername(adminUser),
+         reason: sanitizedReason,
+         date: new Date().toISOString(),
+         role,
+       };
+       
+       setAdminActions(prev => [...prev, action]);
+       
+       // Store admin action
+       await storageService.setItem('wallet_adminActions', [...adminActions, action]);
+       
+       // Emit transaction event
+       if (isConnected) {
+         sendMessage(WebSocketEvent.WALLET_TRANSACTION, {
+           type: 'admin_credit',
+           username: validatedUsername,
+           role,
+           amount: validatedAmount,
+           reason: sanitizedReason,
+           adminUser,
+           timestamp: Date.now()
+         });
+       }
+       
+       // Force sync the balance
+       if (role === 'buyer') {
+         await forceSyncWalletBalance(validatedUsername);
+       }
+       
+       // Force update balances in Header and other components
+       if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
+         setTimeout(() => {
+           (window as any).__pantypost_balance_context.forceUpdate();
+         }, 100);
+       }
+       
+       return true;
+     });
+   } catch (error) {
+     console.error('Admin credit error:', error);
+     return false;
+   }
+ }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, adminActions, isConnected, sendMessage]);
 
-const adminDebitUser = useCallback(async (
-  username: string,
-  role: 'buyer' | 'seller',
-  amount: number,
-  reason: string
-): Promise<boolean> => {
-  try {
-    // Check rate limit
-    checkRateLimit('REPORT_ACTION', 'admin');
-    
-    // Validate inputs
-    const validatedUsername = validateUsername(username);
-    const validatedAmount = validateTransactionAmount(amount);
-    const sanitizedReason = sanitizeStrict(reason);
-    
-    // Validate reason
-    const reasonValidation = walletOperationSchemas.reason.safeParse(sanitizedReason);
-    if (!reasonValidation.success) {
-      throw new Error('Invalid reason');
-    }
-    
-    const currentBalance = role === 'buyer' ? getBuyerBalance(validatedUsername) : getSellerBalance(validatedUsername);
-    
-    if (currentBalance < validatedAmount) {
-      return false;
-    }
-    
-    // Use transaction lock
-    return await transactionLock.current.acquireLock(`admin_debit_${validatedUsername}`, async () => {
-      if (role === 'buyer') {
-        await setBuyerBalance(validatedUsername, currentBalance - validatedAmount);
-      } else {
-        await setSellerBalance(validatedUsername, currentBalance - validatedAmount);
-      }
-      
-      const currentUser = typeof window !== 'undefined' ? 
-        localStorage.getItem('currentUser') : null;
-      const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
-      
-      const action: AdminAction = {
-        id: uuidv4(),
-        type: 'debit',
-        amount: validatedAmount,
-        targetUser: validatedUsername,
-        username: validatedUsername,
-        adminUser: sanitizeUsername(adminUser),
-        reason: sanitizedReason,
-        date: new Date().toISOString(),
-        role,
-      };
-      
-      setAdminActions(prev => [...prev, action]);
-      
-      // Store admin action
-      await storageService.setItem('wallet_adminActions', [...adminActions, action]);
-      
-      // Emit transaction event
-      if (isConnected) {
-        sendMessage(WebSocketEvent.WALLET_TRANSACTION, {
-          type: 'admin_debit',
-          username: validatedUsername,
-          role,
-          amount: validatedAmount,
-          reason: sanitizedReason,
-          adminUser,
-          timestamp: Date.now()
-        });
-      }
-      
-      // Force sync the balance
-      if (role === 'buyer') {
-        await forceSyncWalletBalance(validatedUsername);
-      }
-      
-      // Force update balances in Header and other components
-      if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
-        setTimeout(() => {
-          (window as any).__pantypost_balance_context.forceUpdate();
-        }, 100);
-      }
-      
-      return true;
-    });
-  } catch (error) {
-    console.error('Admin debit error:', error);
-    return false;
-  }
-}, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, adminActions, isConnected, sendMessage]);
+ const adminDebitUser = useCallback(async (
+   username: string,
+   role: 'buyer' | 'seller',
+   amount: number,
+   reason: string
+ ): Promise<boolean> => {
+   try {
+     // Check rate limit
+     checkRateLimit('REPORT_ACTION', 'admin');
+     
+     // Validate inputs
+     const validatedUsername = validateUsername(username);
+     const validatedAmount = validateTransactionAmount(amount);
+     const sanitizedReason = sanitizeStrict(reason);
+     
+     // Validate reason
+     const reasonValidation = walletOperationSchemas.reason.safeParse(sanitizedReason);
+     if (!reasonValidation.success) {
+       throw new Error('Invalid reason');
+     }
+     
+     const currentBalance = role === 'buyer' ? getBuyerBalance(validatedUsername) : getSellerBalance(validatedUsername);
+     
+     if (currentBalance < validatedAmount) {
+       return false;
+     }
+     
+     // Use transaction lock
+     return await transactionLock.current.acquireLock(`admin_debit_${validatedUsername}`, async () => {
+       if (role === 'buyer') {
+         await setBuyerBalance(validatedUsername, currentBalance - validatedAmount);
+       } else {
+         await setSellerBalance(validatedUsername, currentBalance - validatedAmount);
+       }
+       
+       const currentUser = typeof window !== 'undefined' ? 
+         localStorage.getItem('currentUser') : null;
+       const adminUser = currentUser ? JSON.parse(currentUser).username : 'Unknown Admin';
+       
+       const action: AdminAction = {
+         id: uuidv4(),
+         type: 'debit',
+         amount: validatedAmount,
+         targetUser: validatedUsername,
+         username: validatedUsername,
+         adminUser: sanitizeUsername(adminUser),
+         reason: sanitizedReason,
+         date: new Date().toISOString(),
+         role,
+       };
+       
+       setAdminActions(prev => [...prev, action]);
+       
+       // Store admin action
+       await storageService.setItem('wallet_adminActions', [...adminActions, action]);
+       
+       // Emit transaction event
+       if (isConnected) {
+         sendMessage(WebSocketEvent.WALLET_TRANSACTION, {
+           type: 'admin_debit',
+           username: validatedUsername,
+           role,
+           amount: validatedAmount,
+           reason: sanitizedReason,
+           adminUser,
+           timestamp: Date.now()
+         });
+       }
+       
+       // Force sync the balance
+       if (role === 'buyer') {
+         await forceSyncWalletBalance(validatedUsername);
+       }
+       
+       // Force update balances in Header and other components
+       if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
+         setTimeout(() => {
+           (window as any).__pantypost_balance_context.forceUpdate();
+         }, 100);
+       }
+       
+       return true;
+     });
+   } catch (error) {
+     console.error('Admin debit error:', error);
+     return false;
+   }
+ }, [getBuyerBalance, setBuyerBalance, getSellerBalance, setSellerBalance, adminActions, isConnected, sendMessage]);
 
-const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
-  // Sanitize address data based on the actual DeliveryAddress type from AddressConfirmationModal
-  const sanitizedAddress: DeliveryAddress = {
-    fullName: sanitizeStrict(address.fullName),
-    addressLine1: sanitizeStrict(address.addressLine1),
-    addressLine2: address.addressLine2 ? sanitizeStrict(address.addressLine2) : undefined,
-    city: sanitizeStrict(address.city),
-    state: sanitizeStrict(address.state),
-    postalCode: sanitizeStrict(address.postalCode),
-    country: sanitizeStrict(address.country),
-    specialInstructions: address.specialInstructions ? sanitizeStrict(address.specialInstructions) : undefined,
-  };
+ const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
+   // Sanitize address data based on the actual DeliveryAddress type from AddressConfirmationModal
+   const sanitizedAddress: DeliveryAddress = {
+     fullName: sanitizeStrict(address.fullName),
+     addressLine1: sanitizeStrict(address.addressLine1),
+     addressLine2: address.addressLine2 ? sanitizeStrict(address.addressLine2) : undefined,
+     city: sanitizeStrict(address.city),
+     state: sanitizeStrict(address.state),
+     postalCode: sanitizeStrict(address.postalCode),
+     country: sanitizeStrict(address.country),
+     specialInstructions: address.specialInstructions ? sanitizeStrict(address.specialInstructions) : undefined,
+   };
 
-  // Use ordersService to update the address
-  const result = await ordersService.updateOrderAddress(orderId, sanitizedAddress);
-  
-  if (result.success && result.data) {
-    // Update local state to maintain consistency
-    setOrderHistory(prev => prev.map(order =>
-      order.id === orderId ? { ...order, deliveryAddress: sanitizedAddress } : order
-    ));
-  } else {
-    console.error('[WalletContext] Failed to update order address:', result.error);
-    throw new Error(result.error?.message || 'Failed to update order address');
-  }
-}, []);
+   // Use ordersService to update the address
+   const result = await ordersService.updateOrderAddress(orderId, sanitizedAddress);
+   
+   if (result.success && result.data) {
+     // Update local state to maintain consistency
+     setOrderHistory(prev => prev.map(order =>
+       order.id === orderId ? { ...order, deliveryAddress: sanitizedAddress } : order
+     ));
+   } else {
+     console.error('[WalletContext] Failed to update order address:', result.error);
+     throw new Error(result.error?.message || 'Failed to update order address');
+   }
+ }, []);
 
-const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
-  // Use ordersService to update the status
-  const result = await ordersService.updateOrderStatus(orderId, { shippingStatus: status });
-  
-  if (result.success && result.data) {
-    // Update local state to maintain consistency
-    setOrderHistory(prev => prev.map(order =>
-      order.id === orderId ? { ...order, shippingStatus: status } : order
-    ));
-  } else {
-    console.error('[WalletContext] Failed to update shipping status:', result.error);
-    throw new Error(result.error?.message || 'Failed to update shipping status');
-  }
-}, []);
+ const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+   // Use ordersService to update the status
+   const result = await ordersService.updateOrderStatus(orderId, { shippingStatus: status });
+   
+   if (result.success && result.data) {
+     // Update local state to maintain consistency
+     setOrderHistory(prev => prev.map(order =>
+       order.id === orderId ? { ...order, shippingStatus: status } : order
+     ));
+   } else {
+     console.error('[WalletContext] Failed to update shipping status:', result.error);
+     throw new Error(result.error?.message || 'Failed to update shipping status');
+   }
+ }, []);
 
-const getDepositsForUser = useCallback((username: string): DepositLog[] => {
-  try {
-    const validatedUsername = validateUsername(username);
-    return depositLogs.filter(log => log.username === validatedUsername);
-  } catch {
-    return [];
-  }
-}, [depositLogs]);
+ const getDepositsForUser = useCallback((username: string): DepositLog[] => {
+   try {
+     const validatedUsername = validateUsername(username);
+     return depositLogs.filter(log => log.username === validatedUsername);
+   } catch {
+     return [];
+   }
+ }, [depositLogs]);
 
-const getTotalDeposits = useCallback((): number => {
-  return depositLogs
-    .filter(log => log.status === 'completed')
-    .reduce((sum, log) => sum + log.amount, 0);
-}, [depositLogs]);
+ const getTotalDeposits = useCallback((): number => {
+   return depositLogs
+     .filter(log => log.status === 'completed')
+     .reduce((sum, log) => sum + log.amount, 0);
+ }, [depositLogs]);
 
-const getDepositsByTimeframe = useCallback((timeframe: 'today' | 'week' | 'month' | 'year' | 'all'): DepositLog[] => {
-  const now = new Date();
-  const startDate = new Date();
-  
-  switch (timeframe) {
-    case 'today':
-      startDate.setHours(0, 0, 0, 0);
-      break;
-    case 'week':
-      startDate.setDate(now.getDate() - 7);
-      break;
-    case 'month':
-      startDate.setMonth(now.getMonth() - 1);
-      break;
-    case 'year':
-      startDate.setFullYear(now.getFullYear() - 1);
-      break;
-    case 'all':
-      return depositLogs.filter(log => log.status === 'completed');
-  }
-  
-  return depositLogs.filter(log => 
-    log.status === 'completed' && 
-    new Date(log.date) >= startDate
-  );
-}, [depositLogs]);
+ const getDepositsByTimeframe = useCallback((timeframe: 'today' | 'week' | 'month' | 'year' | 'all'): DepositLog[] => {
+   const now = new Date();
+   const startDate = new Date();
+   
+   switch (timeframe) {
+     case 'today':
+       startDate.setHours(0, 0, 0, 0);
+       break;
+     case 'week':
+       startDate.setDate(now.getDate() - 7);
+       break;
+     case 'month':
+       startDate.setMonth(now.getMonth() - 1);
+       break;
+     case 'year':
+       startDate.setFullYear(now.getFullYear() - 1);
+       break;
+     case 'all':
+       return depositLogs.filter(log => log.status === 'completed');
+   }
+   
+   return depositLogs.filter(log => 
+     log.status === 'completed' && 
+     new Date(log.date) >= startDate
+   );
+ }, [depositLogs]);
 
-// New enhanced features with security
-const checkSuspiciousActivity = useCallback(async (username: string) => {
-  try {
-    const validatedUsername = validateUsername(username);
-    
-    // Check for suspicious patterns
-    const suspiciousPatterns: string[] = [];
-    
-    // Check for rapid transactions
-    const recentOrders = orderHistory.filter(order => 
-      (order.buyer === validatedUsername || order.seller === validatedUsername) &&
-      new Date(order.date).getTime() > Date.now() - 3600000 // Last hour
-    );
-    
-    if (recentOrders.length > 10) {
-      suspiciousPatterns.push('High transaction volume in short period');
-    }
-    
-    // Check for unusual amounts
-    const userOrders = orderHistory.filter(order => 
-      order.buyer === validatedUsername || order.seller === validatedUsername
-    );
-    
-    const avgAmount = userOrders.reduce((sum, order) => sum + order.markedUpPrice, 0) / userOrders.length;
-    const hasUnusualAmounts = userOrders.some(order => 
-      order.markedUpPrice > avgAmount * 5 || order.markedUpPrice < avgAmount * 0.1
-    );
-    
-    if (hasUnusualAmounts) {
-      suspiciousPatterns.push('Unusual transaction amounts detected');
-    }
-    
-    // Check wallet service if available
-    if (walletService?.checkSuspiciousActivity) {
-      const serviceResult = await walletService.checkSuspiciousActivity(validatedUsername);
-      if (serviceResult.suspicious) {
-        suspiciousPatterns.push(...serviceResult.reasons);
-      }
-    }
-    
-    return {
-      suspicious: suspiciousPatterns.length > 0,
-      reasons: suspiciousPatterns,
-    };
-  } catch (error) {
-    console.error('Error checking suspicious activity:', error);
-    return { suspicious: false, reasons: [] };
-  }
-}, [orderHistory]);
+ // New enhanced features with security
+ const checkSuspiciousActivity = useCallback(async (username: string) => {
+   try {
+     const validatedUsername = validateUsername(username);
+     
+     // Check for suspicious patterns
+     const suspiciousPatterns: string[] = [];
+     
+     // Check for rapid transactions
+     const recentOrders = orderHistory.filter(order => 
+       (order.buyer === validatedUsername || order.seller === validatedUsername) &&
+       new Date(order.date).getTime() > Date.now() - 3600000 // Last hour
+     );
+     
+     if (recentOrders.length > 10) {
+       suspiciousPatterns.push('High transaction volume in short period');
+     }
+     
+     // Check for unusual amounts
+     const userOrders = orderHistory.filter(order => 
+       order.buyer === validatedUsername || order.seller === validatedUsername
+     );
+     
+     const avgAmount = userOrders.reduce((sum, order) => sum + order.markedUpPrice, 0) / userOrders.length;
+     const hasUnusualAmounts = userOrders.some(order => 
+       order.markedUpPrice > avgAmount * 5 || order.markedUpPrice < avgAmount * 0.1
+     );
+     
+     if (hasUnusualAmounts) {
+       suspiciousPatterns.push('Unusual transaction amounts detected');
+     }
+     
+     // Check wallet service if available
+     if (walletService?.checkSuspiciousActivity) {
+       const serviceResult = await walletService.checkSuspiciousActivity(validatedUsername);
+       if (serviceResult.suspicious) {
+         suspiciousPatterns.push(...serviceResult.reasons);
+       }
+     }
+     
+     return {
+       suspicious: suspiciousPatterns.length > 0,
+       reasons: suspiciousPatterns,
+     };
+   } catch (error) {
+     console.error('Error checking suspicious activity:', error);
+     return { suspicious: false, reasons: [] };
+   }
+ }, [orderHistory]);
 
-const reconcileBalance = useCallback(async (
-  username: string, 
-  role: 'buyer' | 'seller' | 'admin'
-) => {
-  try {
-    const validatedUsername = role === 'admin' ? 'admin' : validateUsername(username);
-    
-    if (typeof WalletIntegration?.reconcileBalance === 'function') {
-      return await WalletIntegration.reconcileBalance(validatedUsername, role);
-    }
-    
-    // Manual reconciliation if integration not available
-    const transactions = orderHistory.filter(order => {
-      if (role === 'buyer') return order.buyer === validatedUsername;
-      if (role === 'seller') return order.seller === validatedUsername;
-      return false;
-    });
-    
-    const deposits = role === 'buyer' ? getDepositsForUser(validatedUsername) : [];
-    const withdrawals = role === 'seller' ? (sellerWithdrawals[validatedUsername] || []) : 
-                       role === 'admin' ? adminWithdrawals : [];
-    
-    return {
-      username: validatedUsername,
-      role,
-      currentBalance: role === 'buyer' ? getBuyerBalance(validatedUsername) :
-                     role === 'seller' ? getSellerBalance(validatedUsername) :
-                     adminBalance,
-      transactions: transactions.length,
-      deposits: deposits.length,
-      withdrawals: withdrawals.length,
-      reconciled: true,
-    };
-  } catch (error) {
-    console.error('Error reconciling balance:', error);
-    return null;
-  }
-}, [orderHistory, getDepositsForUser, sellerWithdrawals, adminWithdrawals, getBuyerBalance, getSellerBalance, adminBalance]);
+ const reconcileBalance = useCallback(async (
+   username: string, 
+   role: 'buyer' | 'seller' | 'admin'
+ ) => {
+   try {
+     const validatedUsername = role === 'admin' ? 'admin' : validateUsername(username);
+     
+     if (typeof WalletIntegration?.reconcileBalance === 'function') {
+       return await WalletIntegration.reconcileBalance(validatedUsername, role);
+     }
+     
+     // Manual reconciliation if integration not available
+     const transactions = orderHistory.filter(order => {
+       if (role === 'buyer') return order.buyer === validatedUsername;
+       if (role === 'seller') return order.seller === validatedUsername;
+       return false;
+     });
+     
+     const deposits = role === 'buyer' ? getDepositsForUser(validatedUsername) : [];
+     const withdrawals = role === 'seller' ? (sellerWithdrawals[validatedUsername] || []) : 
+                        role === 'admin' ? adminWithdrawals : [];
+     
+     return {
+       username: validatedUsername,
+       role,
+       currentBalance: role === 'buyer' ? getBuyerBalance(validatedUsername) :
+                      role === 'seller' ? getSellerBalance(validatedUsername) :
+                      adminBalance,
+       transactions: transactions.length,
+       deposits: deposits.length,
+       withdrawals: withdrawals.length,
+       reconciled: true,
+     };
+   } catch (error) {
+     console.error('Error reconciling balance:', error);
+     return null;
+   }
+ }, [orderHistory, getDepositsForUser, sellerWithdrawals, adminWithdrawals, getBuyerBalance, getSellerBalance, adminBalance]);
 
-const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
-  try {
-    const validatedUsername = username ? validateUsername(username) : undefined;
-    
-    if (typeof WalletIntegration?.getFormattedTransactionHistory === 'function') {
-      return await WalletIntegration.getFormattedTransactionHistory(validatedUsername, { limit });
-    }
-    
-    // Manual transaction history
-    let transactions = orderHistory;
-    
-    if (validatedUsername) {
-      transactions = transactions.filter(order => 
-        order.buyer === validatedUsername || order.seller === validatedUsername
-      );
-    }
-    
-    // Sort by date descending
-    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Apply limit
-    if (limit && limit > 0) {
-      transactions = transactions.slice(0, limit);
-    }
-    
-    return transactions.map(order => ({
-      id: order.id,
-      type: order.buyer === validatedUsername ? 'purchase' : 'sale',
-      amount: order.markedUpPrice,
-      date: order.date,
-      description: order.title,
-      counterparty: order.buyer === validatedUsername ? order.seller : order.buyer,
-    }));
-  } catch (error) {
-    console.error('Error getting transaction history:', error);
-    return [];
-  }
-}, [orderHistory]);
+ const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
+   try {
+     const validatedUsername = username ? validateUsername(username) : undefined;
+     
+     if (typeof WalletIntegration?.getFormattedTransactionHistory === 'function') {
+       return await WalletIntegration.getFormattedTransactionHistory(validatedUsername, { limit });
+     }
+     
+     // Manual transaction history
+     let transactions = orderHistory;
+     
+     if (validatedUsername) {
+       transactions = transactions.filter(order => 
+         order.buyer === validatedUsername || order.seller === validatedUsername
+       );
+     }
+     
+     // Sort by date descending
+     transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+     
+     // Apply limit
+     if (limit && limit > 0) {
+       transactions = transactions.slice(0, limit);
+     }
+     
+     return transactions.map(order => ({
+       id: order.id,
+       type: order.buyer === validatedUsername ? 'purchase' : 'sale',
+       amount: order.markedUpPrice,
+       date: order.date,
+       description: order.title,
+       counterparty: order.buyer === validatedUsername ? order.seller : order.buyer,
+     }));
+   } catch (error) {
+     console.error('Error getting transaction history:', error);
+     return [];
+   }
+ }, [orderHistory]);
 
-// Reload data function with security
-const reloadData = useCallback(async () => {
-  if (isLoading) {
-    console.log('[WalletContext] Already loading, skipping reload');
-    return;
-  }
-  
-  // Check rate limit for data reload
-  try {
-    checkRateLimit('API_CALL', 'system_reload');
-  } catch (error) {
-    console.error('[WalletContext] Rate limit exceeded for reload');
-    return;
-  }
-  
-  setIsLoading(true);
-  try {
-    await loadAllData();
-  } finally {
-    setIsLoading(false);
-  }
-}, [loadAllData, isLoading]);
+ // Reload data function with security
+ const reloadData = useCallback(async () => {
+   if (isLoading) {
+     console.log('[WalletContext] Already loading, skipping reload');
+     return;
+   }
+   
+   // Check rate limit for data reload
+   try {
+     checkRateLimit('API_CALL', 'system_reload');
+   } catch (error) {
+     console.error('[WalletContext] Rate limit exceeded for reload');
+     return;
+   }
+   
+   setIsLoading(true);
+   try {
+     await loadAllData();
+   } finally {
+     setIsLoading(false);
+   }
+ }, [loadAllData, isLoading]);
 
-// Global balance update context
-useEffect(() => {
-  if (typeof window !== 'undefined') {
-    (window as any).__pantypost_balance_context = {
-      forceUpdate: () => {
-        console.log('Force update triggered');
-        // Trigger re-render in Header and other components
-        setBuyerBalancesState(prev => ({ ...prev }));
-        setSellerBalancesState(prev => ({ ...prev }));
-      }
-    };
-  }
-}, []);
+ // Global balance update context
+ useEffect(() => {
+   if (typeof window !== 'undefined') {
+     (window as any).__pantypost_balance_context = {
+       forceUpdate: () => {
+         console.log('Force update triggered');
+         // Trigger re-render in Header and other components
+         setBuyerBalancesState(prev => ({ ...prev }));
+         setSellerBalancesState(prev => ({ ...prev }));
+       }
+     };
+   }
+ }, []);
 
-// Listen for storage events to sync across tabs
-useEffect(() => {
-  const handleStorageChange = (e: StorageEvent) => {
-    if (e.key === 'wallet_buyers' || e.key === 'wallet_sellers' || e.key === 'wallet_admin') {
-      console.log('Storage change detected, reloading wallet data');
-      loadAllData();
-    }
-  };
+ // Updated storage event listener with enhanced handling and debugging
+ useEffect(() => {
+   const handleStorageChange = (e: StorageEvent) => {
+     console.log('[WalletContext] Storage Event Detected:', {
+       key: e.key,
+       oldValue: e.oldValue ? JSON.parse(e.oldValue) : null,
+       newValue: e.newValue ? JSON.parse(e.newValue) : null,
+       url: e.url,
+       timestamp: new Date().toISOString()
+     });
+     
+     // Handle standard storage events
+     if (e.key === 'wallet_buyers' || e.key === 'wallet_orders') {
+       console.log('[WalletContext] Storage changed:', e.key);
+       
+       // Immediately parse and update state
+       if (e.key === 'wallet_buyers' && e.newValue) {
+         try {
+           const newBuyers = JSON.parse(e.newValue);
+           console.log('[WalletContext] Updating buyer balances from storage event:', newBuyers);
+           setBuyerBalancesState(newBuyers);
+         } catch (err) {
+           console.error('Error parsing buyers:', err);
+         }
+       }
+       
+       if (e.key === 'wallet_orders' && e.newValue) {
+         try {
+           const newOrders = JSON.parse(e.newValue);
+           console.log('[WalletContext] Updating orders from storage event:', newOrders.length);
+           setOrderHistory(newOrders);
+           // Also clear the orders service cache
+           ordersService.clearCache();
+         } catch (err) {
+           console.error('Error parsing orders:', err);
+         }
+       }
+     }
+   };
+   
+   // Handle custom sync events
+   const handleForceSync = (e: CustomEvent) => {
+     console.log('[WalletContext] Force sync event received');
+     loadAllData(); // Reload all data
+   };
 
-  window.addEventListener('storage', handleStorageChange);
-  return () => window.removeEventListener('storage', handleStorageChange);
-}, [loadAllData]);
+   window.addEventListener('storage', handleStorageChange);
+   window.addEventListener('wallet-force-sync', handleForceSync as EventListener);
+   
+   return () => {
+     window.removeEventListener('storage', handleStorageChange);
+     window.removeEventListener('wallet-force-sync', handleForceSync as EventListener);
+   };
+ }, [loadAllData]);
 
-const contextValue: WalletContextType = {
-  // Loading state
-  isLoading,
-  isInitialized,
-  initializationError,
-  
-  // Core functionality
-  buyerBalances,
-  adminBalance,
-  sellerBalances,
-  setBuyerBalance,
-  getBuyerBalance,
-  setAdminBalance,
-  setSellerBalance,
-  getSellerBalance,
-  purchaseListing,
-  purchaseCustomRequest,
-  subscribeToSellerWithPayment,
-  orderHistory,
-  addOrder,
-  sellerWithdrawals,
-  adminWithdrawals,
-  addSellerWithdrawal,
-  addAdminWithdrawal,
-  wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
-  updateWallet,
-  sendTip,
-  setAddSellerNotificationCallback,
-  adminCreditUser,
-  adminDebitUser,
-  adminActions,
-  updateOrderAddress,
-  updateShippingStatus,
-  depositLogs,
-  addDeposit,
-  getDepositsForUser,
-  getTotalDeposits,
-  getDepositsByTimeframe,
-  
-  // Auction bid methods
-  holdBidFunds,
-  refundBidFunds,
-  finalizeAuctionPurchase,
-  
-  // FIXED: Add the placeBid function to the context value
-  placeBid,
-  
-  // NEW: Add auction tracking methods
-  chargeIncrementalBid,
-  getAuctionBidders,
-  cleanupAuctionTracking,
-  
-  // Enhanced features
-  checkSuspiciousActivity,
-  reconcileBalance,
-  getTransactionHistory,
-  reloadData,
-};
+ const contextValue: WalletContextType = {
+   // Loading state
+   isLoading,
+   isInitialized,
+   initializationError,
+   
+   // Core functionality
+   buyerBalances,
+   adminBalance,
+   sellerBalances,
+   setBuyerBalance,
+   getBuyerBalance,
+   setAdminBalance,
+   setSellerBalance,
+   getSellerBalance,
+   purchaseListing,
+   purchaseCustomRequest,
+   subscribeToSellerWithPayment,
+   orderHistory,
+   addOrder,
+   sellerWithdrawals,
+   adminWithdrawals,
+   addSellerWithdrawal,
+   addAdminWithdrawal,
+   wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
+   updateWallet,
+   sendTip,
+   setAddSellerNotificationCallback,
+   adminCreditUser,
+   adminDebitUser,
+   adminActions,
+   updateOrderAddress,
+   updateShippingStatus,
+   depositLogs,
+   addDeposit,
+   getDepositsForUser,
+   getTotalDeposits,
+   getDepositsByTimeframe,
+   
+   // Auction bid methods
+   holdBidFunds,
+   refundBidFunds,
+   finalizeAuctionPurchase,
+   
+   // FIXED: Add the placeBid function to the context value
+   placeBid,
+   
+   // NEW: Add auction tracking methods
+   chargeIncrementalBid,
+   getAuctionBidders,
+   cleanupAuctionTracking,
+   
+   // Enhanced features
+   checkSuspiciousActivity,
+   reconcileBalance,
+   getTransactionHistory,
+   reloadData,
+ };
 
-return (
-  <WalletContext.Provider value={contextValue}>
-    {children}
-  </WalletContext.Provider>
-);
+ return (
+   <WalletContext.Provider value={contextValue}>
+     {children}
+   </WalletContext.Provider>
+ );
 }
 
 export const useWallet = () => {
-const context = useContext(WalletContext);
-if (!context) {
-  throw new Error("useWallet must be used within a WalletProvider");
-}
-return context;
+ const context = useContext(WalletContext);
+ if (!context) {
+   throw new Error("useWallet must be used within a WalletProvider");
+ }
+ return context;
 };
