@@ -73,7 +73,7 @@ export const apiConfig = {
     useMessages: getEnvBool('NEXT_PUBLIC_USE_API_MESSAGES'),
     useWallet: getEnvBool('NEXT_PUBLIC_USE_API_WALLET'),
     useUsers: getEnvBool('NEXT_PUBLIC_USE_API_USERS'),
-    useMockApi: getEnvBool('NEXT_PUBLIC_USE_MOCK_API', isDevelopment()),
+    useMockApi: getEnvBool('NEXT_PUBLIC_USE_MOCK_API', false),
   },
 } as const;
 
