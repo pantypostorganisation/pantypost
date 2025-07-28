@@ -26,6 +26,34 @@ export default function ImageGallery({
 
   const isLocked = isLockedPremium ?? false;
 
+  // Enhanced error handler for main images
+  const handleMainImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.target as HTMLImageElement;
+    if (target.src.includes('placeholder-panty.png')) {
+      // Placeholder failed, use a data URL instead
+      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect width="400" height="300" fill="%23333"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="sans-serif" font-size="16"%3EImage Not Available%3C/text%3E%3C/svg%3E';
+    } else {
+      // Try placeholder first
+      target.src = '/placeholder-panty.png';
+    }
+    target.onerror = null; // Prevent infinite loop
+    console.warn('Image failed to load:', images[currentIndex]);
+  };
+
+  // Enhanced error handler for thumbnail images
+  const handleThumbnailError = (e: React.SyntheticEvent<HTMLImageElement>, originalUrl: string) => {
+    const target = e.target as HTMLImageElement;
+    if (target.src.includes('placeholder-panty.png')) {
+      // Placeholder failed, use a smaller data URL for thumbnails
+      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23333"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="sans-serif" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
+    } else {
+      // Try placeholder first
+      target.src = '/placeholder-panty.png';
+    }
+    target.onerror = null; // Prevent infinite loop
+    console.warn('Thumbnail failed to load:', originalUrl);
+  };
+
   return (
     <div className="space-y-4">
       {/* Main Image Container */}
@@ -37,13 +65,7 @@ export default function ImageGallery({
                 src={images[currentIndex]}
                 alt={`${listing.title} - Image ${currentIndex + 1}`}
                 className="w-full h-full object-cover transition-transform duration-300"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  // Use a placeholder image - you'll need to add this image to your public folder
-                  target.src = '/placeholder-panty.png';
-                  target.onerror = null; // Prevent infinite loop if placeholder also fails
-                  console.warn('Image failed to load:', images[currentIndex]);
-                }}
+                onError={handleMainImageError}
               />
               
               {/* Image Navigation */}
@@ -141,12 +163,7 @@ export default function ImageGallery({
                 src={url} 
                 alt={`Thumbnail ${index + 1}`} 
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  // Use same placeholder for thumbnails
-                  target.src = '/placeholder-panty.png';
-                  target.onerror = null;
-                }}
+                onError={(e) => handleThumbnailError(e, url)}
               />
             </div>
           ))}
