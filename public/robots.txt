@@ -1,0 +1,31 @@
+User-agent: *
+Allow: /
+
+# Disallow admin and private routes
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /auth/
+Disallow: /_next/
+Disallow: /static/
+
+# Allow search engines to index public pages
+Allow: /browse
+Allow: /sellers/
+Allow: /product/
+
+# Sitemap location
+Sitemap: https://pantypost.com/sitemap.xml
+
+# Crawl delay for respectful crawling
+Crawl-delay: 1
+
+# Block bad bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /

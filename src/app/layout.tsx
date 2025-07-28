@@ -12,6 +12,11 @@ import MessageNotifications from '@/components/MessageNotifications';
 import { MockApiDevTools } from '@/components/MockApiDevTools';
 import { Suspense, useState, useEffect } from 'react';
 
+// Run environment validation (only in development and on server side)
+if (process.env.NODE_ENV === 'development' && typeof window === 'undefined') {
+  import('../lib/validateEnv');
+}
+
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
