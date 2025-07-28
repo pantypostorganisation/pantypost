@@ -52,6 +52,9 @@ export function useLocalStorage<T>(
     return [initialValue, () => {}, () => {}, false];
   }
 
+  // Use a ref to store the initial value to prevent infinite loops
+  const initialValueRef = useRef(initialValue);
+  
   // State to hold the current value
   const [storedValue, setStoredValue] = useState<T>(initialValue);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +69,7 @@ export function useLocalStorage<T>(
     const loadInitialValue = async () => {
       try {
         setIsLoading(true);
-        const value = await storageService.getItem<T>(key, initialValue);
+        const value = await storageService.getItem<T>(key, initialValueRef.current);
         
         // Validate loaded value
         if (value !== null && value !== undefined) {
@@ -83,7 +86,7 @@ export function useLocalStorage<T>(
           }
         } else {
           if (isMounted.current) {
-            setStoredValue(initialValue);
+            setStoredValue(initialValueRef.current);
           }
         }
         
@@ -93,7 +96,7 @@ export function useLocalStorage<T>(
       } catch (error) {
         console.error(`Error loading localStorage key "${key}":`, error);
         if (isMounted.current) {
-          setStoredValue(initialValue);
+          setStoredValue(initialValueRef.current);
           setIsLoading(false);
         }
       }
@@ -104,7 +107,7 @@ export function useLocalStorage<T>(
     return () => {
       isMounted.current = false;
     };
-  }, [key, initialValue]);
+  }, [key]); // Remove initialValue from dependencies
 
   // Return a wrapped version of useState's setter function that 
   // persists the new value to localStorage
@@ -164,7 +167,7 @@ export function useLocalStorage<T>(
   const removeValue = useCallback(() => {
     try {
       // Reset state to initial value immediately
-      setStoredValue(initialValue);
+      setStoredValue(initialValueRef.current);
       
       // Remove from localStorage asynchronously
       storageService.removeItem(key).then(success => {
@@ -186,7 +189,7 @@ export function useLocalStorage<T>(
     } catch (error) {
       console.error(`Error removing localStorage key "${key}":`, error);
     }
-  }, [key, initialValue]);
+  }, [key]);
 
   // Listen for changes in localStorage to sync across tabs
   useEffect(() => {
@@ -207,7 +210,7 @@ export function useLocalStorage<T>(
           // Don't update state with malformed data
         }
       } else if (event.key === key && event.newValue === null) {
-        setStoredValue(initialValue);
+        setStoredValue(initialValueRef.current);
       }
     };
 
@@ -217,7 +220,7 @@ export function useLocalStorage<T>(
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [key, initialValue]);
+  }, [key]); // Remove initialValue from dependencies
 
   return [storedValue, setValue, removeValue, isLoading];
 }
@@ -241,6 +244,9 @@ export function useLocalStorageWithExpiry<T>(
 
   // Validate TTL
   const validatedTtl = Math.max(0, Math.min(ttlMs, 7 * 24 * 60 * 60 * 1000)); // Max 7 days
+
+  // Use a ref to store the initial value
+  const initialValueRef = useRef(initialValue);
 
   // State to hold the current value
   const [storedValue, setStoredValue] = useState<T>(initialValue);
@@ -267,7 +273,7 @@ export function useLocalStorageWithExpiry<T>(
               // Clean up expired item
               await storageService.removeItem(`expiry_${key}`);
             }
-            setStoredValue(initialValue);
+            setStoredValue(initialValueRef.current);
           } else {
             // Sanitize string values
             let value = item.value;
@@ -281,7 +287,7 @@ export function useLocalStorageWithExpiry<T>(
       } catch (error) {
         console.error(`Error loading localStorage key "expiry_${key}":`, error);
         if (isMounted.current) {
-          setStoredValue(initialValue);
+          setStoredValue(initialValueRef.current);
           setIsLoading(false);
         }
       }
@@ -292,7 +298,7 @@ export function useLocalStorageWithExpiry<T>(
     return () => {
       isMounted.current = false;
     };
-  }, [key, initialValue]);
+  }, [key]); // Remove initialValue from dependencies
 
   // Function to update value with expiration
   const setValue = useCallback((value: T | ((val: T) => T)) => {
@@ -346,7 +352,7 @@ export function useLocalStorageWithExpiry<T>(
   // Function to remove the item
   const removeValue = useCallback(() => {
     try {
-      setStoredValue(initialValue);
+      setStoredValue(initialValueRef.current);
       storageService.removeItem(`expiry_${key}`);
       
       // Dispatch event
@@ -362,7 +368,7 @@ export function useLocalStorageWithExpiry<T>(
     } catch (error) {
       console.error(`Error removing localStorage key "expiry_${key}":`, error);
     }
-  }, [key, initialValue]);
+  }, [key]);
 
   // Listen for changes
   useEffect(() => {
@@ -382,13 +388,13 @@ export function useLocalStorageWithExpiry<T>(
           console.error(`Error parsing localStorage value for key "expiry_${key}":`, error);
         }
       } else if (event.key === `expiry_${key}` && event.newValue === null) {
-        setStoredValue(initialValue);
+        setStoredValue(initialValueRef.current);
       }
     };
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [key, initialValue]);
+  }, [key]);
 
   return [storedValue, setValue, removeValue, isLoading];
 }

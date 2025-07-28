@@ -4,6 +4,7 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
 import ClientLayout from './ClientLayout';
+import type { Metadata, Viewport } from 'next';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -11,12 +12,18 @@ const inter = Inter({
   preload: true
 });
 
-export const metadata = {
+// Metadata without viewport and themeColor
+export const metadata: Metadata = {
   title: 'PantyPost - Premium Adult Marketplace | Verified Sellers',
   description: 'The premier marketplace for adult content and personalized experiences. Connect with verified sellers in a secure, private environment. 21+ only.',
-  viewport: 'width=device-width, initial-scale=1',
-  themeColor: '#ff950e',
   robots: 'noindex, nofollow',
+};
+
+// Separate viewport export (fixes the warning)
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#ff950e',
 };
 
 export default function RootLayout({

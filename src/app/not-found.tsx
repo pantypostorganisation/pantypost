@@ -1,4 +1,5 @@
 // src/app/not-found.tsx
+'use client'; // Add this to fix the onClick error
 
 import Link from 'next/link';
 import { Home, Search, ArrowLeft } from 'lucide-react';
