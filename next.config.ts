@@ -69,6 +69,21 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Bundle analyzer configuration
+  webpack: (config, { isServer }) => {
+    if (process.env.ANALYZE === 'true') {
+      const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+      config.plugins.push(
+        new BundleAnalyzerPlugin({
+          analyzerMode: 'static',
+          reportFilename: isServer
+            ? '../analyze/server.html'
+            : './analyze/client.html',
+        })
+      );
+    }
+    return config;
+  },
 };
 
 export default nextConfig;
