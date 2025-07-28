@@ -1,3 +1,13 @@
 {
-    "CodeGPT.apiKey": "CodeGPT Plus Beta"
+    "CodeGPT.apiKey": "CodeGPT Plus Beta",
+    "yaml.validate": false,
+    "yaml.customTags": [
+        "!secret scalar"
+    ],
+    "files.associations": {
+        "**/.github/workflows/*.yml": "github-actions-workflow"
+    },
+    "problems.exclude": {
+        "**/.github/workflows/**": true
+    }
 }
