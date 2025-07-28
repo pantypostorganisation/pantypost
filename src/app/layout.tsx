@@ -11,6 +11,9 @@ import BanCheck from '@/components/BanCheck';
 import MessageNotifications from '@/components/MessageNotifications';
 import { MockApiDevTools } from '@/components/MockApiDevTools';
 import { PWAInstall } from '@/components/PWAInstall';
+import { GoogleAnalytics } from '@/components/GoogleAnalytics';
+import { errorTracker } from '@/lib/errorTracking';
+import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
 import { Suspense, useState, useEffect } from 'react';
 
 // Run environment validation (only in development and on server side)
@@ -58,6 +61,14 @@ export default function RootLayout({
     }
   }, []);
 
+  // Initialize error tracking
+  useEffect(() => {
+    errorTracker.initialize();
+  }, []);
+
+  // Initialize performance monitoring
+  usePerformanceMonitoring();
+
   // Prevent SSR/hydration issues by only rendering after mount
   if (!mounted) {
     return (
@@ -83,6 +94,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className={inter.className}>
+        {/* Google Analytics */}
+        <GoogleAnalytics />
+        
         <Providers>
           <Suspense fallback={<LoadingFallback />}>
             <div className="min-h-screen bg-black text-white">
