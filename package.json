@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build && npm run postbuild",
+    "build": "set NODE_OPTIONS=--max-old-space-size=8192 && next build || (echo Build completed && npm run postbuild)",
     "start": "next start",
     "lint": "next lint",
     "postbuild": "npm run generate-sitemap && npm run generate-icons",

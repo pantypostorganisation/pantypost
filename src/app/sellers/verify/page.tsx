@@ -1,12 +1,17 @@
 // src/app/sellers/verify/page.tsx
 'use client';
 
+// Add these exports to force dynamic rendering
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 import { useState, useEffect } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { useAuth } from '@/context/AuthContext';
 import { useListings, VerificationDocs } from '@/context/ListingContext';
 import { useRouter } from 'next/navigation';
 import { Shield } from 'lucide-react';
+import Link from 'next/link';
 
 // Import verification components
 import ImageViewerModal from '@/components/seller-verification/ImageViewerModal';
@@ -17,10 +22,22 @@ import UnverifiedState from '@/components/seller-verification/states/UnverifiedS
 import { ImageViewData } from '@/components/seller-verification/utils/types';
 import { generateVerificationCode, getTimeAgo } from '@/components/seller-verification/utils/verificationHelpers';
 
+// Client component for the login button to avoid SSR issues
+const LoginButton = () => {
+  const router = useRouter();
+  return (
+    <button
+      onClick={() => router.push('/login')}
+      className="mt-6 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition w-full"
+    >
+      Log In
+    </button>
+  );
+};
+
 export default function SellerVerifyPage() {
   const { user } = useAuth();
   const { requestVerification, users } = useListings();
-  const router = useRouter();
 
   const [code, setCode] = useState('');
   const [codePhoto, setCodePhoto] = useState<string | null>(null);
@@ -77,12 +94,7 @@ export default function SellerVerifyPage() {
             <Shield className="w-12 h-12 text-[#ff950e] mb-4" />
             <h1 className="text-2xl font-bold mb-4">Seller Verification</h1>
             <p className="text-gray-400">You must be logged in as a seller to access this page.</p>
-            <button
-              onClick={() => router.push('/login')}
-              className="mt-6 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition w-full"
-            >
-              Log In
-            </button>
+            <LoginButton />
           </div>
         </div>
       </BanCheck>

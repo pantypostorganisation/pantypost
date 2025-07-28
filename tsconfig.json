@@ -38,7 +38,7 @@
     "noImplicitThis": true,
     "alwaysStrict": true,
     
-    // Additional checks (relaxed)
+    // Additional checks (relaxed for production)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitReturns": true,
@@ -53,11 +53,47 @@
     // Module resolution
     "forceConsistentCasingInFileNames": true,
     "preserveConstEnums": true,
+    "allowSyntheticDefaultImports": true,
     
     // Emit
     "removeComments": false,
-    "sourceMap": true
+    "sourceMap": true,
+    "declaration": false,
+    "declarationMap": false,
+    
+    // Interop constraints
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    
+    // Advanced
+    "skipDefaultLibCheck": true,
+    "preserveWatchOutput": true,
+    
+    // Next.js specific
+    "downlevelIteration": true,
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": false
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "scripts/**/*.js"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "out",
+    "build",
+    "dist",
+    "coverage",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  }
 }

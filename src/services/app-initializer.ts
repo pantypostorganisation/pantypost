@@ -155,7 +155,15 @@ export class AppInitializer {
         warnings.push(`Wallet initialization warning: ${this.sanitizeError(error)}`);
       }
 
-      // 7. Run orders migration with validation
+      // 7. Clean up corrupted data before migration
+      try {
+        console.log('[AppInitializer] Cleaning up corrupted data...');
+        await this.cleanupCorruptedData();
+      } catch (error) {
+        warnings.push(`Data cleanup warning: ${this.sanitizeError(error)}`);
+      }
+
+      // 8. Run orders migration with validation
       try {
         console.log('[AppInitializer] Running orders migration...');
         await this.runSecureMigration();
@@ -163,7 +171,7 @@ export class AppInitializer {
         warnings.push(`Orders migration warning: ${this.sanitizeError(error)}`);
       }
 
-      // 8. Perform data integrity checks
+      // 9. Perform data integrity checks
       try {
         console.log('[AppInitializer] Checking data integrity...');
         await this.checkDataIntegrity();
@@ -171,7 +179,7 @@ export class AppInitializer {
         warnings.push(`Data integrity check warning: ${this.sanitizeError(error)}`);
       }
 
-      // 9. Clean up old data securely
+      // 10. Clean up old data securely
       try {
         console.log('[AppInitializer] Cleaning up old data...');
         await this.cleanupOldData();
@@ -210,19 +218,25 @@ export class AppInitializer {
    */
   private async performSecurityChecks(): Promise<void> {
     // Check for secure context (HTTPS in production)
-    if (typeof window !== 'undefined' && window.location.protocol === 'http:' && !isDevelopment()) {
-      throw new Error('Application must be served over HTTPS in production');
-    }
-
-    // Check for critical browser features
     if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                         window.location.hostname === '127.0.0.1' ||
+                         window.location.hostname.startsWith('192.168.') ||
+                         window.location.hostname.startsWith('10.');
+      
+      // Only enforce HTTPS if not in development AND not on localhost
+      if (window.location.protocol === 'http:' && !isDevelopment() && !isLocalhost) {
+        throw new Error('Application must be served over HTTPS in production');
+      }
+
+      // Check for critical browser features
       if (!window.crypto || !window.crypto.getRandomValues) {
         throw new Error('Web Crypto API not available');
       }
 
       // Check for Content Security Policy
       const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
-      if (!cspMeta && !isDevelopment()) {
+      if (!cspMeta && !isDevelopment() && !isLocalhost) {
         console.warn('[AppInitializer] Content Security Policy not found');
       }
 
@@ -325,6 +339,65 @@ export class AppInitializer {
   }
 
   /**
+   * Clean up corrupted wallet data
+   */
+  private async cleanupCorruptedData(): Promise<void> {
+    const keysToCheck = [
+      'wallet_buyers',
+      'wallet_sellers',
+      'wallet_admin',
+      'wallet_orders',
+    ];
+
+    for (const key of keysToCheck) {
+      try {
+        const rawValue = localStorage.getItem(key);
+        
+        // Check for corrupted data patterns
+        if (rawValue && (rawValue.includes('xxxxxxxxxx') || rawValue === 'undefined')) {
+          console.warn(`[AppInitializer] Removing corrupted data for ${key}`);
+          
+          // Set to appropriate default based on key type
+          if (key === 'wallet_admin') {
+            await storageService.setItem(key, '0');
+          } else if (key === 'wallet_orders') {
+            await storageService.setItem(key, []);
+          } else {
+            await storageService.setItem(key, {});
+          }
+        }
+      } catch (error) {
+        console.error(`[AppInitializer] Error cleaning ${key}:`, error);
+      }
+    }
+
+    // Fix wallet_admin format specifically
+    try {
+      const adminBalance = await storageService.getItem('wallet_admin', null);
+      
+      // If it's already a valid number string, we're good
+      if (adminBalance !== null && !isNaN(parseFloat(adminBalance))) {
+        return;
+      }
+      
+      // Check enhanced format
+      const enhancedBalance = await storageService.getItem('wallet_admin_enhanced', null);
+      if (enhancedBalance !== null && !isNaN(parseInt(enhancedBalance))) {
+        // Convert from cents to dollars and save as string
+        const balanceInDollars = parseInt(enhancedBalance) / 100;
+        await storageService.setItem('wallet_admin', balanceInDollars.toString());
+        return;
+      }
+      
+      // Default to 0 if no valid balance found
+      console.warn('[AppInitializer] Setting admin balance to default 0');
+      await storageService.setItem('wallet_admin', '0');
+    } catch (error) {
+      console.error('[AppInitializer] Error fixing admin balance:', error);
+    }
+  }
+
+  /**
    * Run migration with data validation
    */
   private async runSecureMigration(): Promise<void> {
@@ -377,8 +450,14 @@ export class AppInitializer {
         if (data === null) {
           console.warn(`[AppInitializer] Missing critical data: ${sanitizeStrict(key)}`);
         } else {
-          // Enhanced validation
-          if (typeof data !== 'object') {
+          // Special handling for wallet_admin which can be a string (legacy) or number
+          if (key === 'wallet_admin') {
+            // Accept string, number, or enhanced format
+            if (typeof data !== 'string' && typeof data !== 'number') {
+              console.error(`[AppInitializer] Invalid data structure for ${sanitizeStrict(key)}`);
+            }
+          } else if (typeof data !== 'object') {
+            // Other keys should be objects
             console.error(`[AppInitializer] Invalid data structure for ${sanitizeStrict(key)}`);
           } else {
             // Check for data corruption using security service

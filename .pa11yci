@@ -1,0 +1,41 @@
+{
+  "defaults": {
+    "timeout": 30000,
+    "viewport": {
+      "width": 1280,
+      "height": 1024
+    },
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox"]
+    },
+    "headers": {
+      "Accept-Language": "en-US"
+    }
+  },
+  "urls": [
+    {
+      "url": "http://localhost:3000",
+      "actions": [
+        "wait for element .hero-section to be visible"
+      ]
+    },
+    {
+      "url": "http://localhost:3000/browse",
+      "actions": [
+        "wait for element .listing-grid to be visible"
+      ]
+    },
+    {
+      "url": "http://localhost:3000/login",
+      "actions": [
+        "wait for element form to be visible"
+      ]
+    },
+    {
+      "url": "http://localhost:3000/signup",
+      "actions": [
+        "wait for element form to be visible"
+      ]
+    }
+  ]
+}
