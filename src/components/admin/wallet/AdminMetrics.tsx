@@ -170,8 +170,13 @@ export default function AdminMetrics(props: AdminMetricsProps) {
       const periodTotalRevenue = periodSalesRevenue + periodSubscriptionRevenue;
       const allTimeTotalRevenue = allTimeSalesRevenue + allTimeSubscriptionRevenue;
 
-      const periodAverageOrderValue = filteredOrders.length > 0 ? (periodSalesRevenue / filteredOrders.length) : 0;
-      const allTimeAverageOrderValue = orderHistory.length > 0 ? (allTimeSalesRevenue / orderHistory.length) : 0;
+      // Enhanced safety checks for average order value calculations
+      const periodAverageOrderValue = filteredOrders.length > 0 && Number.isFinite(periodSalesRevenue) && periodSalesRevenue > 0 
+        ? (periodSalesRevenue / filteredOrders.length) 
+        : 0;
+      const allTimeAverageOrderValue = orderHistory.length > 0 && Number.isFinite(allTimeSalesRevenue) && allTimeSalesRevenue > 0 
+        ? (allTimeSalesRevenue / orderHistory.length) 
+        : 0;
 
       const displayPlatformProfit = timeFilter === 'all' ? allTimeSalesProfit : periodSalesProfit;
       const displaySubscriptionProfit = timeFilter === 'all' ? allTimeSubscriptionProfit : periodSubscriptionProfit;
