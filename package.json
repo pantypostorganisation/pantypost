@@ -11,7 +11,13 @@
     "build:production": "copy .env.production .env.production.local && next build",
     "deploy:staging": "npm run build:staging && echo Ready for staging deployment",
     "deploy:production": "npm run build:production && echo Ready for production deployment",
-    "env:validate": "node scripts/validate-env.js"
+    "env:validate": "node scripts/validate-env.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "test:errors": "jest tests/error-scenarios.test.tsx --verbose",
+    "test:errors:watch": "jest tests/error-scenarios.test.tsx --watch"
   },
   "dependencies": {
     "@types/crypto-js": "^4.2.2",
@@ -29,7 +35,11 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/dompurify": "^3.0.5",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -37,7 +47,13 @@
     "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
+    "jest-watch-typeahead": "^3.0.1",
+    "msw": "^2.10.4",
     "tailwindcss": "^4",
+    "ts-jest": "^29.4.0",
     "typescript": "^5"
   }
 }
