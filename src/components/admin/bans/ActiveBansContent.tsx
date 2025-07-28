@@ -140,7 +140,7 @@ export default function ActiveBansContent({
               onReviewAppeal={onReviewAppeal}
               onShowEvidence={onShowEvidence}
             />
-          ))}
+          )).filter(Boolean)}
         </div>
       )}
     </div>
