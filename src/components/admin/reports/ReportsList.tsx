@@ -68,7 +68,7 @@ export default function ReportsList({
             banContext={banContext}
           />
         );
-      })}
+      }).filter(Boolean)}
     </div>
   );
 }
