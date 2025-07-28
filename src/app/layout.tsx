@@ -10,6 +10,7 @@ import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';
 import MessageNotifications from '@/components/MessageNotifications';
 import { MockApiDevTools } from '@/components/MockApiDevTools';
+import { PWAInstall } from '@/components/PWAInstall';
 import { Suspense, useState, useEffect } from 'react';
 
 // Run environment validation (only in development and on server side)
@@ -46,6 +47,17 @@ export default function RootLayout({
     setMounted(true);
   }, []);
 
+  // Register service worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('SW registered:', registration))
+          .catch(error => console.log('SW registration failed:', error));
+      });
+    }
+  }, []);
+
   // Prevent SSR/hydration issues by only rendering after mount
   if (!mounted) {
     return (
@@ -65,6 +77,10 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#ff950e" />
         <meta name="robots" content="noindex, nofollow" />
+        
+        {/* PWA Manifest and Icons */}
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>
       <body className={inter.className}>
         <Providers>
@@ -80,6 +96,8 @@ export default function RootLayout({
               </BanCheck>
             </div>
           </Suspense>
+          {/* PWA Install Prompt */}
+          <PWAInstall />
           {/* Mock API Dev Tools - Outside BanCheck so it's always accessible during development */}
           <MockApiDevTools />
         </Providers>
