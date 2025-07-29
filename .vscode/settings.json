@@ -1,13 +1,26 @@
 {
     "CodeGPT.apiKey": "CodeGPT Plus Beta",
     "yaml.validate": false,
-    "yaml.customTags": [
-        "!secret scalar"
-    ],
-    "files.associations": {
-        "**/.github/workflows/*.yml": "github-actions-workflow"
-    },
     "problems.exclude": {
+        "**/.github/**": true,
+        "**/*.yml": true,
+        "**/*.yaml": true,
+        "**/production-deployment.yml": true,
+        "**/.github/workflows/**": true
+    },
+    "files.associations": {
+        "**/.github/workflows/*.yml": "yaml",
+        "**/.github/workflows/*.yaml": "yaml"
+    },
+    "yaml.schemas": {},
+    "yaml.completion": false,
+    "yaml.hover": false,
+    "yaml.format.enable": false,
+    "files.exclude": {},
+    "search.exclude": {
+        "**/.github/workflows": true
+    },
+    "files.watcherExclude": {
         "**/.github/workflows/**": true
     }
 }

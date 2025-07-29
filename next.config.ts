@@ -1,25 +1,27 @@
 // next.config.ts
-
+import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from "next";
 
-// Content Security Policy
+// Content Security Policy - Enhanced for production
 const ContentSecurityPolicy = `
   default-src 'self';
-  script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.googletagmanager.com;
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' blob: data: https:;
+  script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.googletagmanager.com *.sentry.io *.sentry-cdn.com https://www.googletagmanager.com https://www.google-analytics.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  img-src 'self' blob: data: https: *.cloudinary.com;
   media-src 'self' https://res.cloudinary.com;
-  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com;
-  font-src 'self';
+  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com;
+  font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
   form-action 'self';
   frame-ancestors 'none';
   block-all-mixed-content;
-`;
-// Commented out for local testing - uncomment for production deployment
-// upgrade-insecure-requests;
+  worker-src 'self' blob:;
+  manifest-src 'self';
+  ${process.env.NODE_ENV === 'production' ? 'upgrade-insecure-requests;' : ''}
+`.replace(/\s{2,}/g, ' ').trim();
 
+// Enhanced security headers
 const securityHeaders = [
   {
     key: 'X-DNS-Prefetch-Control',
@@ -46,14 +48,46 @@ const securityHeaders = [
     value: 'strict-origin-when-cross-origin'
   },
   {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), payment=()'
+  },
+  {
+    key: 'X-Permitted-Cross-Domain-Policies',
+    value: 'none'
+  },
+  {
+    key: 'Cross-Origin-Opener-Policy',
+    value: 'same-origin'
+  },
+  {
+    key: 'Cross-Origin-Resource-Policy',
+    value: 'cross-origin'
+  },
+  {
+    key: 'Cross-Origin-Embedder-Policy',
+    value: 'unsafe-none'
+  },
+  {
     key: 'Content-Security-Policy',
-    value: ContentSecurityPolicy.replace(/\s{2,}/g, ' ').trim()
+    value: ContentSecurityPolicy
+  }
+];
+
+// Performance optimization headers
+const performanceHeaders = [
+  {
+    key: 'Cache-Control',
+    value: 'public, max-age=31536000, immutable'
   }
 ];
 
 const nextConfig: NextConfig = {
-  // Build output configuration - this skips SSG/SSR
+  // Build output configuration
   output: 'standalone',
+  
+  // Performance optimizations
+  poweredByHeader: false,
+  compress: true,
   
   // ESLint configuration
   eslint: {
@@ -65,7 +99,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   
-  // Image configuration
+  // Enhanced image configuration
   images: {
     remotePatterns: [
       {
@@ -74,22 +108,115 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: '*.cloudinary.com',
+        port: '',
+        pathname: '/**',
+      }
     ],
-    unoptimized: true, // Required for static export
+    formats: ['image/webp', 'image/avif'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
+    dangerouslyAllowSVG: false,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   
-  // Security headers
+  // Turbopack configuration (moved from experimental)
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
+      },
+    },
+  },
+  
+  // Experimental features for performance
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ['lucide-react', 'framer-motion', 'react-icons'],
+  },
+  
+  // Security and performance headers
   async headers() {
     return [
+      // Apply security headers to all routes
       {
         source: '/:path*',
         headers: securityHeaders,
       },
+      // Apply performance headers to static assets
+      {
+        source: '/_next/static/:path*',
+        headers: performanceHeaders,
+      },
+      {
+        source: '/images/:path*',
+        headers: performanceHeaders,
+      },
+      {
+        source: '/icons/:path*',
+        headers: performanceHeaders,
+      },
+      // Service Worker headers
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate'
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/'
+          }
+        ]
+      },
+      // Manifest headers
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400'
+          }
+        ]
+      }
     ];
   },
   
-  // Bundle analyzer configuration
-  webpack: (config, { isServer }) => {
+  // Enhanced redirects for SEO
+  async redirects() {
+    return [
+      {
+        source: '/home',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/shop',
+        destination: '/browse',
+        permanent: true,
+      }
+    ];
+  },
+  
+  // Enhanced rewrites for clean URLs
+  async rewrites() {
+    return [
+      {
+        source: '/sitemap.xml',
+        destination: '/api/sitemap',
+      },
+    ];
+  },
+  
+  // Bundle analyzer and webpack optimizations
+  webpack: (config, { isServer, dev }) => {
+    // Bundle analyzer
     if (process.env.ANALYZE === 'true') {
       const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
       config.plugins.push(
@@ -98,11 +225,50 @@ const nextConfig: NextConfig = {
           reportFilename: isServer
             ? '../analyze/server.html'
             : './analyze/client.html',
+          openAnalyzer: false,
         })
       );
     }
+    
+    // Performance optimizations
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          ...config.optimization.splitChunks,
+          cacheGroups: {
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              chunks: 'all',
+              maxSize: 200000,
+            },
+          },
+        },
+      };
+    }
+    
     return config;
+  },
+  
+  // Environment variables for build optimization
+  env: {
+    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
 };
 
-export default nextConfig;
+// Sentry configuration - enable in production when ready
+const sentryOptions = {
+  silent: true,
+  hideSourceMaps: true,
+  widenClientFileUpload: true,
+  transpileClientSDK: true,
+  tunnelRoute: "/monitoring",
+  disableLogger: true,
+  automaticVercelMonitors: true,
+};
+
+// Export configuration based on environment
+export default process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_ENABLE_ERROR_TRACKING === 'true'
+  ? withSentryConfig(nextConfig, sentryOptions)
+  : nextConfig;

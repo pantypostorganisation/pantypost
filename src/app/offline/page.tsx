@@ -1,4 +1,5 @@
 // src/app/offline/page.tsx
+'use client';
 
 import { WifiOff, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
