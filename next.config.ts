@@ -9,7 +9,7 @@ const ContentSecurityPolicy = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   img-src 'self' blob: data: https: *.cloudinary.com;
   media-src 'self' https://res.cloudinary.com;
-  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com;
+  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:5000 ws://localhost:5000' : ''};
   font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
