@@ -1,19 +1,8 @@
 // src/app/admin/bans/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import RequireAuth from '@/components/RequireAuth';
-import BanStatsDashboard from '@/components/admin/bans/BanStatsDashboard';
-import BanTabs from '@/components/admin/bans/BanTabs';
-import BanFilters from '@/components/admin/bans/BanFilters';
-import UnbanModal from '@/components/admin/bans/UnbanModal';
-import AppealReviewModal from '@/components/admin/bans/AppealReviewModal';
-import EvidenceModal from '@/components/admin/bans/EvidenceModal';
-import ActiveBansContent from '@/components/admin/bans/ActiveBansContent';
-import ExpiredBansContent from '@/components/admin/bans/ExpiredBansContent';
-import AppealsContent from '@/components/admin/bans/AppealsContent';
-import HistoryContent from '@/components/admin/bans/HistoryContent';
-import AnalyticsContent from '@/components/admin/bans/AnalyticsContent';
 import { Shield, AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import { FilterOptions, BanStats } from '@/types/ban';
 import { UserBan } from '@/context/BanContext';
@@ -21,8 +10,45 @@ import { useBanManagement } from '@/hooks/useBanManagement';
 import { isValidBan } from '@/utils/banUtils';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
+import { 
+  BanListSkeleton, 
+  AdminStatsSkeleton 
+} from '@/components/skeletons/AdminSkeletons';
+
+// Lazy load heavy components
+const BanStatsDashboard = lazy(() => import('@/components/admin/bans/BanStatsDashboard'));
+const BanTabs = lazy(() => import('@/components/admin/bans/BanTabs'));
+const BanFilters = lazy(() => import('@/components/admin/bans/BanFilters'));
+const UnbanModal = lazy(() => import('@/components/admin/bans/UnbanModal'));
+const AppealReviewModal = lazy(() => import('@/components/admin/bans/AppealReviewModal'));
+const EvidenceModal = lazy(() => import('@/components/admin/bans/EvidenceModal'));
+const ActiveBansContent = lazy(() => import('@/components/admin/bans/ActiveBansContent'));
+const ExpiredBansContent = lazy(() => import('@/components/admin/bans/ExpiredBansContent'));
+const AppealsContent = lazy(() => import('@/components/admin/bans/AppealsContent'));
+const HistoryContent = lazy(() => import('@/components/admin/bans/HistoryContent'));
+const AnalyticsContent = lazy(() => import('@/components/admin/bans/AnalyticsContent'));
 
 type TabKey = 'active' | 'expired' | 'appeals' | 'history' | 'analytics';
+
+// Tab content loading skeleton
+function TabContentSkeleton() {
+  return <BanListSkeleton count={5} />;
+}
+
+// Modal loading skeleton
+function ModalSkeleton() {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+      <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md">
+        <div className="h-6 bg-gray-800 rounded w-32 mb-4 animate-pulse" />
+        <div className="space-y-3">
+          <div className="h-4 bg-gray-800 rounded animate-pulse" />
+          <div className="h-4 bg-gray-800 rounded w-3/4 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function BanManagementPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('active');
@@ -171,13 +197,11 @@ export default function BanManagementPage() {
       return;
     }
     
-    // Show rate limit error if exists
     if (rateLimitError) {
       alert(rateLimitError);
       return;
     }
     
-    // Sanitize the reason
     const sanitizedReason = sanitizeStrict(reason || 'Manually unbanned by admin');
     
     setIsLoading(true);
@@ -186,7 +210,6 @@ export default function BanManagementPage() {
         alert('Unban function not available');
         return;
       }
-      // Using the secure unban function from the hook
       const success = await unbanUser(
         selectedBan.username, 
         user?.username || 'admin', 
@@ -196,7 +219,6 @@ export default function BanManagementPage() {
         alert(`Successfully unbanned ${sanitizeStrict(selectedBan.username)}`);
         setShowUnbanModal(false);
         setSelectedBan(null);
-        // Refresh data after unban
         handleRefresh();
       } else {
         alert('Failed to unban user - they may not be banned or an error occurred');
@@ -234,13 +256,11 @@ export default function BanManagementPage() {
       return;
     }
     
-    // Show rate limit error if exists
     if (rateLimitError) {
       alert(rateLimitError);
       return;
     }
     
-    // Sanitize the review notes
     const sanitizedNotes = sanitizeStrict(appealReviewNotes.trim());
     
     setIsLoading(true);
@@ -249,7 +269,6 @@ export default function BanManagementPage() {
         alert('Review appeal function not available');
         return;
       }
-      // Using the secure review appeal function from the hook
       const success = await reviewAppeal(
         selectedBan.id, 
         decision, 
@@ -261,7 +280,6 @@ export default function BanManagementPage() {
         setShowAppealModal(false);
         setSelectedBan(null);
         setAppealReviewNotes('');
-        // Refresh data after appeal decision
         handleRefresh();
       } else {
         alert('Failed to process appeal - please try again');
@@ -296,7 +314,6 @@ export default function BanManagementPage() {
 
   const exportBanData = () => {
     try {
-      // Sanitize data before export
       const sanitizedData = {
         activeBans: activeBans.map(ban => sanitizeObject(ban, {
           maxDepth: 3,
@@ -358,11 +375,9 @@ export default function BanManagementPage() {
     }
   };
 
-  // Update filters with sanitization
   const handleFiltersChange = (newFilters: Partial<FilterOptions>) => {
     const sanitizedFilters = { ...newFilters };
     
-    // Sanitize search term if it exists
     if ('searchTerm' in sanitizedFilters && sanitizedFilters.searchTerm) {
       sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(sanitizedFilters.searchTerm);
     }
@@ -436,103 +451,120 @@ export default function BanManagementPage() {
             </div>
           )}
 
-          <BanStatsDashboard banStats={banStats} />
+          {/* Lazy loaded stats dashboard */}
+          <Suspense fallback={<AdminStatsSkeleton />}>
+            <BanStatsDashboard banStats={banStats} />
+          </Suspense>
           
-          <BanTabs
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            banStats={banStats}
-            expiredCount={expiredBans.length}
-            historyCount={banHistory.length}
-          />
+          {/* Lazy loaded tabs */}
+          <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
+            <BanTabs
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              banStats={banStats}
+              expiredCount={expiredBans.length}
+              historyCount={banHistory.length}
+            />
+          </Suspense>
 
-          <BanFilters
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            showTypeFilter={['active', 'expired'].includes(activeTab)}
-            isVisible={['active', 'expired', 'appeals'].includes(activeTab)}
-          />
-
-          {/* Tab Content - Now just clean component calls */}
-          {activeTab === 'active' && (
-            <ActiveBansContent
-              activeBans={activeBans}
+          {/* Lazy loaded filters */}
+          <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
+            <BanFilters
               filters={filters}
-              totalCount={banStats.totalActiveBans}
-              expandedBans={expandedBans}
-              onToggleExpand={toggleBanExpansion}
-              onUnban={handleUnban}
-              onReviewAppeal={handleAppealReview}
-              onShowEvidence={showEvidence}
+              onFiltersChange={handleFiltersChange}
+              showTypeFilter={['active', 'expired'].includes(activeTab)}
+              isVisible={['active', 'expired', 'appeals'].includes(activeTab)}
             />
-          )}
+          </Suspense>
 
-          {activeTab === 'expired' && (
-            <ExpiredBansContent
-              expiredBans={expiredBans}
-              filters={filters}
-            />
-          )}
+          {/* Tab Content with lazy loading */}
+          <Suspense fallback={<TabContentSkeleton />}>
+            {activeTab === 'active' && (
+              <ActiveBansContent
+                activeBans={activeBans}
+                filters={filters}
+                totalCount={banStats.totalActiveBans}
+                expandedBans={expandedBans}
+                onToggleExpand={toggleBanExpansion}
+                onUnban={handleUnban}
+                onReviewAppeal={handleAppealReview}
+                onShowEvidence={showEvidence}
+              />
+            )}
 
-          {activeTab === 'appeals' && (
-            <AppealsContent
-              pendingAppeals={pendingAppeals}
-              onReviewAppeal={handleAppealReview}
-              onShowEvidence={showEvidence}
-            />
-          )}
+            {activeTab === 'expired' && (
+              <ExpiredBansContent
+                expiredBans={expiredBans}
+                filters={filters}
+              />
+            )}
 
-          {activeTab === 'history' && (
-            <HistoryContent
-              banHistory={banHistory}
-              filters={filters}
-            />
-          )}
+            {activeTab === 'appeals' && (
+              <AppealsContent
+                pendingAppeals={pendingAppeals}
+                onReviewAppeal={handleAppealReview}
+                onShowEvidence={showEvidence}
+              />
+            )}
 
-          {activeTab === 'analytics' && (
-            <AnalyticsContent banStats={banStats} />
-          )}
+            {activeTab === 'history' && (
+              <HistoryContent
+                banHistory={banHistory}
+                filters={filters}
+              />
+            )}
 
-          {/* Modals */}
+            {activeTab === 'analytics' && (
+              <AnalyticsContent banStats={banStats} />
+            )}
+          </Suspense>
+
+          {/* Modals with lazy loading */}
           {showUnbanModal && (
-            <UnbanModal
-              ban={selectedBan}
-              isLoading={isLoading}
-              onClose={() => {
-                setShowUnbanModal(false);
-                setSelectedBan(null);
-              }}
-              onConfirm={confirmUnban}
-            />
+            <Suspense fallback={<ModalSkeleton />}>
+              <UnbanModal
+                ban={selectedBan}
+                isLoading={isLoading}
+                onClose={() => {
+                  setShowUnbanModal(false);
+                  setSelectedBan(null);
+                }}
+                onConfirm={confirmUnban}
+              />
+            </Suspense>
           )}
 
           {showAppealModal && (
-            <AppealReviewModal
-              ban={selectedBan}
-              appealReviewNotes={appealReviewNotes}
-              setAppealReviewNotes={setAppealReviewNotes}
-              isLoading={isLoading}
-              onClose={() => {
-                setShowAppealModal(false);
-                setSelectedBan(null);
-                setAppealReviewNotes('');
-              }}
-              onConfirm={confirmAppealDecision}
-              onShowEvidence={showEvidence}
-            />
+            <Suspense fallback={<ModalSkeleton />}>
+              <AppealReviewModal
+                ban={selectedBan}
+                appealReviewNotes={appealReviewNotes}
+                setAppealReviewNotes={setAppealReviewNotes}
+                isLoading={isLoading}
+                onClose={() => {
+                  setShowAppealModal(false);
+                  setSelectedBan(null);
+                  setAppealReviewNotes('');
+                }}
+                onConfirm={confirmAppealDecision}
+                onShowEvidence={showEvidence}
+              />
+            </Suspense>
           )}
 
           {showEvidenceModal && (
-            <EvidenceModal
-              evidence={selectedEvidence}
-              evidenceIndex={evidenceIndex}
-              setEvidenceIndex={setEvidenceIndex}
-              onClose={() => {
-                setShowEvidenceModal(false);
-                setSelectedEvidence([]);
-                setEvidenceIndex(0);
-              }}
-            />
+            <Suspense fallback={<ModalSkeleton />}>
+              <EvidenceModal
+                evidence={selectedEvidence}
+                evidenceIndex={evidenceIndex}
+                setEvidenceIndex={setEvidenceIndex}
+                onClose={() => {
+                  setShowEvidenceModal(false);
+                  setSelectedEvidence([]);
+                  setEvidenceIndex(0);
+                }}
+              />
+            </Suspense>
           )}
         </main>
       </div>

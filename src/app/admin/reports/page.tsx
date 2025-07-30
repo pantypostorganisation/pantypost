@@ -1,20 +1,54 @@
 // src/app/admin/reports/page.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useBans } from '@/context/BanContext';
 import RequireAuth from '@/components/RequireAuth';
-import ReportsHeader from '@/components/admin/reports/ReportsHeader';
-import ReportsStats from '@/components/admin/reports/ReportsStats';
-import ReportsFilters from '@/components/admin/reports/ReportsFilters';
-import ReportsList from '@/components/admin/reports/ReportsList';
-import BanModal from '@/components/admin/reports/BanModal';
-import ResolveModal from '@/components/admin/reports/ResolveModal';
 import { storageService } from '@/services';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import type { ReportLog, BanFormData, ReportStats, UserReportStats } from '@/components/admin/reports/types';
+import { 
+  ReportListSkeleton, 
+  AdminStatsSkeleton 
+} from '@/components/skeletons/AdminSkeletons';
+
+// Lazy load heavy components
+const ReportsHeader = lazy(() => import('@/components/admin/reports/ReportsHeader'));
+const ReportsStats = lazy(() => import('@/components/admin/reports/ReportsStats'));
+const ReportsFilters = lazy(() => import('@/components/admin/reports/ReportsFilters'));
+const ReportsList = lazy(() => import('@/components/admin/reports/ReportsList'));
+const BanModal = lazy(() => import('@/components/admin/reports/BanModal'));
+const ResolveModal = lazy(() => import('@/components/admin/reports/ResolveModal'));
+
+// Loading skeleton for filters
+function FiltersSkeletons() {
+  return (
+    <div className="bg-[#1a1a1a] rounded-lg border border-gray-800 p-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-10 bg-gray-800 rounded animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Loading skeleton for modals
+function ModalSkeleton() {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+      <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md">
+        <div className="h-6 bg-gray-800 rounded w-32 mb-4 animate-pulse" />
+        <div className="space-y-3">
+          <div className="h-4 bg-gray-800 rounded animate-pulse" />
+          <div className="h-4 bg-gray-800 rounded w-3/4 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminReportsPage() {
   const { user } = useAuth();
@@ -68,6 +102,7 @@ export default function AdminReportsPage() {
   const [isProcessingBan, setIsProcessingBan] = useState(false);
   const [reportBanInfo, setReportBanInfo] = useState<{[key: string]: any}>({});
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isLoadingReports, setIsLoadingReports] = useState(true);
 
   // Load reports
   useEffect(() => {
@@ -75,6 +110,7 @@ export default function AdminReportsPage() {
   }, []);
 
   const loadReports = async () => {
+    setIsLoadingReports(true);
     if (typeof window !== 'undefined') {
       try {
         const stored = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
@@ -97,6 +133,8 @@ export default function AdminReportsPage() {
       } catch (error) {
         console.error('Error loading reports:', error);
         setReports([]);
+      } finally {
+        setIsLoadingReports(false);
       }
     }
   };
@@ -300,7 +338,7 @@ export default function AdminReportsPage() {
     }
   };
 
-  // Update ban form with sanitization - CORRECTED VERSION
+  // Update ban form with sanitization
   const updateBanForm = (form: BanFormData | ((prev: BanFormData) => BanFormData)) => {
     setBanForm(prev => {
       const newForm = typeof form === 'function' ? form(prev) : form;
@@ -436,66 +474,86 @@ export default function AdminReportsPage() {
   return (
     <RequireAuth role="admin">
       <main className="p-8 max-w-7xl mx-auto">
-        <ReportsHeader 
-          banContextError={banContextError}
-          lastRefresh={lastRefresh}
-          onRefresh={loadReports}
-        />
+        <Suspense fallback={<div className="h-20 bg-gray-800 rounded mb-6 animate-pulse" />}>
+          <ReportsHeader 
+            banContextError={banContextError}
+            lastRefresh={lastRefresh}
+            onRefresh={loadReports}
+          />
+        </Suspense>
 
-        <ReportsStats reportStats={reportStats} />
+        <Suspense fallback={<AdminStatsSkeleton />}>
+          <ReportsStats reportStats={reportStats} />
+        </Suspense>
 
-        <ReportsFilters
-          searchTerm={searchTerm}
-          setSearchTerm={handleSearchTermChange}
-          filterBy={filterBy}
-          setFilterBy={setFilterBy}
-          severityFilter={severityFilter}
-          setSeverityFilter={setSeverityFilter}
-          categoryFilter={categoryFilter}
-          setCategoryFilter={setCategoryFilter}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-        />
+        <Suspense fallback={<FiltersSkeletons />}>
+          <ReportsFilters
+            searchTerm={searchTerm}
+            setSearchTerm={handleSearchTermChange}
+            filterBy={filterBy}
+            setFilterBy={setFilterBy}
+            severityFilter={severityFilter}
+            setSeverityFilter={setSeverityFilter}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+          />
+        </Suspense>
 
-        <ReportsList
-          reports={filteredAndSortedReports}
-          searchTerm={searchTerm}
-          expandedReports={expandedReports}
-          toggleExpanded={toggleExpanded}
-          onBan={handleBanFromReport}
-          onResolve={handleMarkResolved}
-          onDelete={handleDeleteReport}
-          onUpdateSeverity={updateReportSeverity}
-          onUpdateCategory={updateReportCategory}
-          onUpdateAdminNotes={updateAdminNotes}
-          getUserReportStats={getUserReportStats}
-          banContext={banContext}
-          reportBanInfo={reportBanInfo}
-        />
+        {isLoadingReports ? (
+          <ReportListSkeleton count={5} />
+        ) : (
+          <Suspense fallback={<ReportListSkeleton count={5} />}>
+            <ReportsList
+              reports={filteredAndSortedReports}
+              searchTerm={searchTerm}
+              expandedReports={expandedReports}
+              toggleExpanded={toggleExpanded}
+              onBan={handleBanFromReport}
+              onResolve={handleMarkResolved}
+              onDelete={handleDeleteReport}
+              onUpdateSeverity={updateReportSeverity}
+              onUpdateCategory={updateReportCategory}
+              onUpdateAdminNotes={updateAdminNotes}
+              getUserReportStats={getUserReportStats}
+              banContext={banContext}
+              reportBanInfo={reportBanInfo}
+            />
+          </Suspense>
+        )}
 
-        <BanModal
-          isOpen={showBanModal}
-          banForm={banForm}
-          setBanForm={updateBanForm}
-          isProcessing={isProcessingBan}
-          onClose={() => {
-            setShowBanModal(false);
-            resetBanForm();
-          }}
-          onConfirm={handleManualBan}
-        />
+        {showBanModal && (
+          <Suspense fallback={<ModalSkeleton />}>
+            <BanModal
+              isOpen={showBanModal}
+              banForm={banForm}
+              setBanForm={updateBanForm}
+              isProcessing={isProcessingBan}
+              onClose={() => {
+                setShowBanModal(false);
+                resetBanForm();
+              }}
+              onConfirm={handleManualBan}
+            />
+          </Suspense>
+        )}
 
-        <ResolveModal
-          isOpen={showResolveModal}
-          report={selectedReport}
-          onClose={() => {
-            setShowResolveModal(false);
-            setSelectedReport(null);
-          }}
-          onConfirm={confirmResolve}
-        />
+        {showResolveModal && (
+          <Suspense fallback={<ModalSkeleton />}>
+            <ResolveModal
+              isOpen={showResolveModal}
+              report={selectedReport}
+              onClose={() => {
+                setShowResolveModal(false);
+                setSelectedReport(null);
+              }}
+              onConfirm={confirmResolve}
+            />
+          </Suspense>
+        )}
       </main>
     </RequireAuth>
   );

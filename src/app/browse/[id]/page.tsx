@@ -1,6 +1,7 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
+import { useEffect } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -17,9 +18,12 @@ import PremiumLockMessage from '@/components/browse-detail/PremiumLockMessage';
 import { useBrowseDetail } from '@/hooks/useBrowseDetail';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import { AlertCircle } from 'lucide-react';
 
 export default function ListingDetailPage() {
+  const { trackEvent, trackPurchase } = useAnalytics();
+  
   const {
     // Data
     user,
@@ -86,6 +90,59 @@ export default function ListingDetailPage() {
   const sellerId = listing ? `seller_${listing.seller}` : null;
   const isFavorited = sellerId ? checkIsFavorited(sellerId) : false;
 
+  // Track product view when listing loads
+  useEffect(() => {
+    if (listing && listingId) {
+      trackEvent({
+        action: 'view_item',
+        category: 'browse',
+        label: listingId,
+        value: listing.price,
+        customData: {
+          item_name: listing.title,
+          seller_name: listing.seller,
+          seller_verified: listing.isSellerVerified,
+          is_premium: listing.isPremium,
+          is_auction: isAuctionListing
+        }
+      });
+    }
+  }, [listing, listingId, isAuctionListing, trackEvent]);
+
+  // Track purchase success
+  useEffect(() => {
+    if (showPurchaseSuccess && listing) {
+      trackPurchase({
+        transactionId: `${listingId}_${Date.now()}`,
+        value: listing.price,
+        currency: 'USD',
+        items: [{
+          id: listingId,
+          name: listing.title,
+          category: listing.isPremium ? 'premium' : (listing.auction ? 'auction' : 'standard'),
+          price: listing.price,
+          quantity: 1
+        }]
+      });
+    }
+  }, [showPurchaseSuccess, listing, listingId, trackPurchase]);
+
+  // Track auction bid success
+  useEffect(() => {
+    if (bidSuccess && listing) {
+      trackEvent({
+        action: 'add_to_cart',
+        category: 'auction',
+        label: listingId,
+        value: parseFloat(bidAmount) || 0,
+        customData: {
+          item_name: listing.title,
+          seller_name: listing.seller
+        }
+      });
+    }
+  }, [bidSuccess, listing, listingId, bidAmount, trackEvent]);
+
   const toggleFavorite = async () => {
     if (!listing || !sellerId) return;
     
@@ -101,6 +158,16 @@ export default function ListingDetailPage() {
     });
     
     if (success) {
+      // Track favorite toggle
+      trackEvent({
+        action: isFavorited ? 'remove_from_favorites' : 'add_to_favorites',
+        category: 'engagement',
+        label: listing.seller,
+        customData: {
+          seller_id: sellerId
+        }
+      });
+      
       showSuccessToast(
         isFavorited ? 'Removed from favorites' : 'Added to favorites'
       );
@@ -111,8 +178,46 @@ export default function ListingDetailPage() {
 
   const handleSubscribeClick = () => {
     if (listing?.seller) {
+      // Track subscription click
+      trackEvent({
+        action: 'subscription_click',
+        category: 'engagement',
+        label: listing.seller
+      });
       router.push(`/sellers/${listing.seller}`);
     }
+  };
+
+  // Enhanced purchase handler with analytics
+  const handlePurchaseWithAnalytics = async () => {
+    if (listing) {
+      // Track purchase attempt
+      trackEvent({
+        action: 'begin_checkout',
+        category: 'ecommerce',
+        label: listingId,
+        value: listing.price
+      });
+    }
+    
+    // Call original purchase handler
+    await handlePurchase();
+  };
+
+  // Enhanced bid handler with analytics
+  const handleBidSubmitWithAnalytics = async () => {
+    if (listing && bidAmount) {
+      // Track bid attempt
+      trackEvent({
+        action: 'place_bid',
+        category: 'auction',
+        label: listingId,
+        value: parseFloat(bidAmount)
+      });
+    }
+    
+    // Call original bid handler
+    await handleBidSubmit();
   };
 
   if (!listingId) {
@@ -181,8 +286,8 @@ export default function ListingDetailPage() {
                   getTimerProgress={getTimerProgress}
                   bidAmount={bidAmount}
                   onBidAmountChange={handleBidAmountChange}
-                  onBidSubmit={handleBidSubmit}
-                  onBidKeyPress={(e) => e.key === 'Enter' && handleBidSubmit()}
+                  onBidSubmit={handleBidSubmitWithAnalytics}
+                  onBidKeyPress={(e) => e.key === 'Enter' && handleBidSubmitWithAnalytics()}
                   isBidding={isBidding}
                   biddingEnabled={biddingEnabled}
                   bidError={bidError}
@@ -203,7 +308,7 @@ export default function ListingDetailPage() {
                 <PurchaseSection
                   listing={listing}
                   user={user}
-                  handlePurchase={handlePurchase}
+                  handlePurchase={handlePurchaseWithAnalytics}
                   isProcessing={isProcessing}
                   isFavorited={isFavorited}
                   toggleFavorite={toggleFavorite}
@@ -285,7 +390,7 @@ export default function ListingDetailPage() {
             needsSubscription={needsSubscription}
             isAuctionListing={isAuctionListing}
             userRole={user?.role}
-            onPurchase={handlePurchase}
+            onPurchase={handlePurchaseWithAnalytics}
           />
         </div>
       </main>

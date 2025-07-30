@@ -1,8 +1,9 @@
 // src/components/seller/messages/MessagesList.tsx
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import MessageItem from './MessageItem';
+import { VirtualList } from '@/components/VirtualList';
 
 interface MessagesListProps {
   threadMessages: any[];
@@ -46,7 +47,7 @@ export default function MessagesList({
   setPreviewImage
 }: MessagesListProps) {
   // Create status badge
-  const createStatusBadge = (status: string) => {
+  const createStatusBadge = useCallback((status: string) => {
     const badgeClasses: { [key: string]: string } = {
       pending: "bg-yellow-500 text-black",
       accepted: "bg-green-500 text-white",
@@ -61,73 +62,121 @@ export default function MessagesList({
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
-  };
+  }, []);
 
   // Find the latest custom request message
-  let latestCustomRequestIndex = -1;
-  for (let i = threadMessages.length - 1; i >= 0; i--) {
-    if (threadMessages[i].type === 'customRequest' && threadMessages[i].meta?.id) {
-      latestCustomRequestIndex = i;
-      break;
+  const latestCustomRequestIndex = useMemo(() => {
+    for (let i = threadMessages.length - 1; i >= 0; i--) {
+      if (threadMessages[i].type === 'customRequest' && threadMessages[i].meta?.id) {
+        return i;
+      }
     }
-  }
+    return -1;
+  }, [threadMessages]);
+
+  // Prepare message data with all necessary props
+  const messageData = useMemo(() => {
+    return threadMessages.map((msg, index) => {
+      const isFromMe = msg.sender === user?.username;
+      
+      // Find the custom request if this is a custom request message
+      const customReq = msg.type === 'customRequest' && msg.meta && msg.meta.id
+        ? sellerRequests.find(req => req.id === msg.meta.id)
+        : null;
+
+      // Check if this is the latest custom request message
+      const isLatestCustom = index === latestCustomRequestIndex;
+
+      const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
+
+      // Show action buttons if:
+      // 1. This is a custom request
+      // 2. This is the latest custom request message
+      // 3. The request is pending or edited
+      // 4. The request is pending with the current user (seller)
+      const showActionButtons = !!customReq &&
+        isLatestCustom &&
+        !isPaid &&
+        (customReq.status === 'pending' || customReq.status === 'edited') &&
+        customReq.pendingWith === user?.username;
+      
+      return {
+        msg,
+        index,
+        isFromMe,
+        customReq,
+        isLatestCustom,
+        isPaid,
+        showActionButtons,
+        key: `${msg.id || index}-${msg.date || index}`
+      };
+    });
+  }, [threadMessages, user, sellerRequests, latestCustomRequestIndex]);
+
+  // Render function for virtual list
+  const renderMessage = useCallback((item: typeof messageData[0]) => {
+    return (
+      <MessageItem
+        key={item.key}
+        msg={item.msg}
+        index={item.index}
+        isFromMe={item.isFromMe}
+        user={user}
+        activeThread={activeThread}
+        onMessageVisible={handleMessageVisible}
+        customReq={item.customReq}
+        isLatestCustom={item.isLatestCustom}
+        isPaid={item.isPaid}
+        showActionButtons={item.showActionButtons}
+        handleAccept={() => item.customReq && handleAccept(item.customReq.id)}
+        handleDecline={() => item.customReq && handleDecline(item.customReq.id)}
+        handleEditRequest={() => item.customReq && handleEditRequest(
+          item.customReq.id, 
+          item.customReq.title, 
+          item.customReq.price, 
+          item.customReq.description || ''
+        )}
+        editRequestId={editRequestId}
+        editTitle={editTitle}
+        setEditTitle={setEditTitle}
+        editPrice={editPrice}
+        setEditPrice={setEditPrice}
+        editMessage={editMessage}
+        setEditMessage={setEditMessage}
+        handleEditSubmit={handleEditSubmit}
+        setEditRequestId={setEditRequestId}
+        statusBadge={createStatusBadge}
+        setPreviewImage={setPreviewImage}
+      />
+    );
+  }, [
+    user,
+    activeThread,
+    handleMessageVisible,
+    handleAccept,
+    handleDecline,
+    handleEditRequest,
+    editRequestId,
+    editTitle,
+    setEditTitle,
+    editPrice,
+    setEditPrice,
+    editMessage,
+    setEditMessage,
+    handleEditSubmit,
+    setEditRequestId,
+    createStatusBadge,
+    setPreviewImage
+  ]);
 
   return (
-    <>
-      {threadMessages.map((msg, index) => {
-        const isFromMe = msg.sender === user?.username;
-        
-        // Find the custom request if this is a custom request message
-        const customReq = msg.type === 'customRequest' && msg.meta && msg.meta.id
-          ? sellerRequests.find(req => req.id === msg.meta.id)
-          : null;
-
-        // Check if this is the latest custom request message
-        const isLatestCustom = index === latestCustomRequestIndex;
-
-        const isPaid = customReq && (customReq.paid || customReq.status === 'paid');
-
-        // Show action buttons if:
-        // 1. This is a custom request
-        // 2. This is the latest custom request message
-        // 3. The request is pending or edited
-        // 4. The request is pending with the current user (seller)
-        const showActionButtons = !!customReq &&
-          isLatestCustom &&
-          !isPaid &&
-          (customReq.status === 'pending' || customReq.status === 'edited') &&
-          customReq.pendingWith === user?.username;
-        
-        return (
-          <MessageItem
-            key={index}
-            msg={msg}
-            index={index}
-            isFromMe={isFromMe}
-            user={user}
-            activeThread={activeThread}
-            onMessageVisible={handleMessageVisible}
-            customReq={customReq}
-            isLatestCustom={isLatestCustom}
-            isPaid={isPaid}
-            showActionButtons={showActionButtons}
-            handleAccept={() => customReq && handleAccept(customReq.id)}
-            handleDecline={() => customReq && handleDecline(customReq.id)}
-            handleEditRequest={() => customReq && handleEditRequest(customReq.id, customReq.title, customReq.price, customReq.description || '')}
-            editRequestId={editRequestId}
-            editTitle={editTitle}
-            setEditTitle={setEditTitle}
-            editPrice={editPrice}
-            setEditPrice={setEditPrice}
-            editMessage={editMessage}
-            setEditMessage={setEditMessage}
-            handleEditSubmit={handleEditSubmit}
-            setEditRequestId={setEditRequestId}
-            statusBadge={createStatusBadge}
-            setPreviewImage={setPreviewImage}
-          />
-        );
-      })}
-    </>
+    <div className="flex-1 overflow-hidden">
+      <VirtualList
+        items={messageData}
+        itemHeight={100} // Adjust based on average message height
+        renderItem={renderMessage}
+        className="p-4 h-full overflow-y-auto"
+      />
+    </div>
   );
 }
