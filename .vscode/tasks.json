@@ -1,0 +1,75 @@
+// .vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "✅ Production Build",
+      "type": "npm",
+      "script": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$tsc",
+      "detail": "Build for production with all optimizations"
+    },
+    {
+      "label": "📊 Analyze Bundle",
+      "type": "shell",
+      "command": "npm run analyze",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "detail": "Analyze bundle size and composition"
+    },
+    {
+      "label": "🔍 Run Lighthouse",
+      "type": "npm",
+      "script": "lighthouse",
+      "group": "test",
+      "detail": "Run Lighthouse performance audit"
+    },
+    {
+      "label": "♿ Test Accessibility",
+      "type": "npm",
+      "script": "test:a11y",
+      "group": "test",
+      "detail": "Run accessibility tests with pa11y"
+    },
+    {
+      "label": "🗺️ Generate Sitemap",
+      "type": "npm",
+      "script": "generate-sitemap",
+      "group": "build",
+      "detail": "Generate sitemap.xml for SEO"
+    },
+    {
+      "label": "🎨 Generate Icons",
+      "type": "npm",
+      "script": "generate-icons",
+      "group": "build",
+      "detail": "Generate all PWA icons from source"
+    },
+    {
+      "label": "🚀 Full Production Check",
+      "type": "shell",
+      "command": "npm run lint && npm run build && npm run lighthouse && npm run test:a11y",
+      "group": "test",
+      "dependsOrder": "sequence",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "detail": "Run all production checks in sequence"
+    },
+    {
+      "label": "🔐 Check Environment",
+      "type": "npm",
+      "script": "check-env",
+      "group": "none",
+      "detail": "Validate environment variables"
+    }
+  ]
+}
