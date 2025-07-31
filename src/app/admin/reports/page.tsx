@@ -53,7 +53,7 @@ function ModalSkeleton() {
 export default function AdminReportsPage() {
   const { user } = useAuth();
   
-  // Safely handle the ban context
+  // Safely handle the ban context with try-catch
   let banContext: any = null;
   let banContextError: string | null = null;
   
@@ -62,6 +62,7 @@ export default function AdminReportsPage() {
   } catch (error) {
     console.error('Error initializing ban context:', error);
     banContextError = 'Ban management system not available';
+    // Provide fallback methods to prevent crashes
     banContext = {
       banUser: () => Promise.resolve(false),
       getActiveBans: () => [],
