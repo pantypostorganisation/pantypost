@@ -13,21 +13,44 @@ export default function PurchaseSuccessPage() {
   const { orderHistory } = useWallet();
   const { addSellerNotification } = useListings();
   const hasNotified = useRef(false);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    if (orderHistory.length > 0 && !hasNotified.current) {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (orderHistory.length > 0 && !hasNotified.current && isMounted.current) {
       const latest = orderHistory[orderHistory.length - 1];
+      
+      // Validate order data before processing
+      if (!latest || !latest.seller || !latest.title) {
+        console.error('Invalid order data in purchase success');
+        return;
+      }
       
       // Sanitize seller name and title before adding to notification
       const sanitizedSeller = sanitizeStrict(latest.seller);
       const sanitizedTitle = sanitizeStrict(latest.title);
       
+      // Additional validation for XSS prevention
+      if (sanitizedSeller.length > 50 || sanitizedTitle.length > 200) {
+        console.error('Order data exceeds maximum length');
+        return;
+      }
+      
       // Add seller name to notification message to make it easier to filter
-      addSellerNotification(
-        sanitizedSeller, 
-        `💌 [For ${sanitizedSeller}] A buyer purchased: ${sanitizedTitle}`
-      );
-      hasNotified.current = true;
+      try {
+        addSellerNotification(
+          sanitizedSeller, 
+          `💌 [For ${sanitizedSeller}] A buyer purchased: ${sanitizedTitle}`
+        );
+        hasNotified.current = true;
+      } catch (error) {
+        console.error('Error adding seller notification:', error);
+      }
     }
   }, [orderHistory, addSellerNotification]);
 

@@ -1,7 +1,7 @@
 // src/app/browse/page.tsx
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import BrowseHeader from '@/components/browse/BrowseHeader';
@@ -16,6 +16,7 @@ export default function BrowsePage() {
   const { trackEvent, trackSearch } = useAnalytics();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
   
   const {
     user,
@@ -58,18 +59,29 @@ export default function BrowsePage() {
 
   const hasActiveFilters = !!(searchTerm || minPrice || maxPrice || selectedHourRange.label !== 'Any Hours' || sortBy !== 'newest');
 
+  // Track component mount status
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Track page view
   useEffect(() => {
-    trackEvent({
-      action: 'page_view',
-      category: 'navigation',
-      label: 'browse_page'
-    });
+    if (isMountedRef.current) {
+      trackEvent({
+        action: 'page_view',
+        category: 'navigation',
+        label: 'browse_page'
+      });
+    }
   }, [trackEvent]);
 
   // Track search with debouncing
   useEffect(() => {
-    if (searchTerm) {
+    if (searchTerm && isMountedRef.current) {
       // Clear existing timeout
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -77,14 +89,23 @@ export default function BrowsePage() {
       
       // Set new timeout to track search after user stops typing
       searchTimeoutRef.current = setTimeout(() => {
-        trackSearch(searchTerm, filteredListings.length);
+        if (isMountedRef.current) {
+          trackSearch(searchTerm, filteredListings.length);
+        }
       }, 1000); // Wait 1 second after user stops typing
     }
+    
+    // Cleanup function
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [searchTerm, filteredListings.length, trackSearch]);
 
   // Track filter changes with debouncing
   useEffect(() => {
-    if (hasActiveFilters) {
+    if (hasActiveFilters && isMountedRef.current) {
       // Clear existing timeout
       if (filterTimeoutRef.current) {
         clearTimeout(filterTimeoutRef.current);
@@ -92,28 +113,37 @@ export default function BrowsePage() {
       
       // Set new timeout to track filters after changes settle
       filterTimeoutRef.current = setTimeout(() => {
-        trackEvent({
-          action: 'apply_filters',
-          category: 'browse',
-          label: filter,
-          value: filteredListings.length,
-          customData: {
-            has_search: !!searchTerm,
-            has_price_filter: !!(minPrice || maxPrice),
-            price_min: minPrice || 0,
-            price_max: maxPrice || 0,
-            hour_range: selectedHourRange.label,
-            sort_by: sortBy
-          }
-        });
+        if (isMountedRef.current) {
+          trackEvent({
+            action: 'apply_filters',
+            category: 'browse',
+            label: filter,
+            value: filteredListings.length,
+            customData: {
+              has_search: !!searchTerm,
+              has_price_filter: !!(minPrice || maxPrice),
+              price_min: minPrice || 0,
+              price_max: maxPrice || 0,
+              hour_range: selectedHourRange.label,
+              sort_by: sortBy
+            }
+          });
+        }
       }, 1500); // Wait 1.5 seconds after filter changes
     }
+    
+    // Cleanup function
+    return () => {
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current);
+      }
+    };
   }, [filter, searchTerm, minPrice, maxPrice, selectedHourRange, sortBy, filteredListings.length, hasActiveFilters, trackEvent]);
 
   // Enhanced click handler with analytics
-  const handleListingClickWithAnalytics = (listingId: string) => {
+  const handleListingClickWithAnalytics = useCallback((listingId: string) => {
     const listing = filteredListings.find(l => l.id === listingId);
-    if (listing) {
+    if (listing && isMountedRef.current) {
       trackEvent({
         action: 'select_item',
         category: 'browse',
@@ -129,20 +159,22 @@ export default function BrowsePage() {
     }
     // Pass false for isLocked parameter since we're allowing the click
     handleListingClick(listingId, false);
-  };
+  }, [filteredListings, paginatedListings, trackEvent, handleListingClick]);
 
   // Track page navigation
-  const handlePageChangeWithAnalytics = (newPage: number, direction: 'previous' | 'next' | 'direct') => {
-    trackEvent({
-      action: 'navigate_page',
-      category: 'browse',
-      label: direction,
-      value: newPage,
-      customData: {
-        from_page: page,
-        to_page: newPage
-      }
-    });
+  const handlePageChangeWithAnalytics = useCallback((newPage: number, direction: 'previous' | 'next' | 'direct') => {
+    if (isMountedRef.current) {
+      trackEvent({
+        action: 'navigate_page',
+        category: 'browse',
+        label: direction,
+        value: newPage,
+        customData: {
+          from_page: page,
+          to_page: newPage
+        }
+      });
+    }
     
     if (direction === 'previous') {
       handlePreviousPage();
@@ -151,26 +183,30 @@ export default function BrowsePage() {
     } else {
       handlePageClick(newPage);
     }
-  };
+  }, [page, trackEvent, handlePreviousPage, handleNextPage, handlePageClick]);
 
   // Track filter reset
-  const resetFiltersWithAnalytics = () => {
-    trackEvent({
-      action: 'reset_filters',
-      category: 'browse',
-      label: 'all_filters'
-    });
+  const resetFiltersWithAnalytics = useCallback(() => {
+    if (isMountedRef.current) {
+      trackEvent({
+        action: 'reset_filters',
+        category: 'browse',
+        label: 'all_filters'
+      });
+    }
     resetFilters();
-  };
+  }, [trackEvent, resetFilters]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
       }
       if (filterTimeoutRef.current) {
         clearTimeout(filterTimeoutRef.current);
+        filterTimeoutRef.current = null;
       }
     };
   }, []);
