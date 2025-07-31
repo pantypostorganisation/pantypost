@@ -1,7 +1,7 @@
 // src/app/admin/wallet-management/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -17,6 +17,8 @@ import { WalletProvider, useWallet } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { subscribeToWalletUpdates, getWalletBalanceListener } from '@/utils/walletSync';
 import { WebSocketEvent } from '@/types/websocket';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
 
 function AdminWalletContent() {
   const { 
@@ -35,6 +37,9 @@ function AdminWalletContent() {
   // Force re-render hook
   const [, forceUpdate] = useState({});
   const forceRender = useCallback(() => forceUpdate({}), []);
+  
+  // Track component mount status
+  const isMountedRef = useRef(true);
   
   // Search and filtering
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,21 +77,32 @@ function AdminWalletContent() {
   // Check if user is admin
   const isAdmin = user && (user.username === 'oakley' || user.username === 'gerome');
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Subscribe to WebSocket balance updates
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !isMountedRef.current) return;
 
     // Subscribe to wallet balance updates
     const unsubBalance = subscribe(WebSocketEvent.WALLET_BALANCE_UPDATE, (data: any) => {
       console.log('[AdminWallet] Received balance update:', data);
       // Force component re-render when any balance updates
-      forceRender();
+      if (isMountedRef.current) {
+        forceRender();
+      }
     });
 
     // Subscribe to wallet transactions
     const unsubTransaction = subscribe(WebSocketEvent.WALLET_TRANSACTION, (data: any) => {
       console.log('[AdminWallet] Received transaction:', data);
-      forceRender();
+      if (isMountedRef.current) {
+        forceRender();
+      }
     });
 
     return () => {
@@ -99,7 +115,9 @@ function AdminWalletContent() {
   useEffect(() => {
     const unsubscribe = subscribeToWalletUpdates((data) => {
       console.log('[AdminWallet] Custom wallet update:', data);
-      forceRender();
+      if (isMountedRef.current) {
+        forceRender();
+      }
     });
 
     return unsubscribe;
@@ -117,7 +135,9 @@ function AdminWalletContent() {
         user.role as 'buyer' | 'seller',
         (newBalance) => {
           console.log(`[AdminWallet] Balance updated for ${user.username}: ${newBalance}`);
-          forceRender();
+          if (isMountedRef.current) {
+            forceRender();
+          }
         }
       );
       subscriptions.push(unsubscribe);
@@ -130,6 +150,8 @@ function AdminWalletContent() {
 
   // Load all users - now using combined wallet data
   useEffect(() => {
+    if (!isMountedRef.current) return;
+    
     console.log('=== LOADING USERS WITH REAL-TIME DATA ===');
     console.log('Buyer balances:', buyerBalances);
     console.log('Seller balances:', sellerBalances);
@@ -180,7 +202,7 @@ function AdminWalletContent() {
         return userData.role !== 'admin' && username !== 'admin';
       })
       .map(([username, userData]) => ({
-        username,
+        username: sanitizeStrict(username),
         role: userData.role || 'buyer'
       }));
     
@@ -195,11 +217,17 @@ function AdminWalletContent() {
     
     console.log('Final users:', sortedUsers);
     console.log('=== END LOADING ===');
-    setAllUsers(sortedUsers);
+    
+    if (isMountedRef.current) {
+      setAllUsers(sortedUsers);
+    }
   }, [listingUsers, wallet, buyerBalances, sellerBalances, user]);
 
   // Get user balance - Fixed to handle all possible data formats
   const getUserBalance = (username: string) => {
+    // Validate username
+    if (!username || typeof username !== 'string') return 0;
+    
     // Check if user is a buyer or seller
     const user = allUsers.find(u => u.username === username);
     let balance = 0;
@@ -236,8 +264,18 @@ function AdminWalletContent() {
     return isNaN(balance) ? 0 : balance;
   };
 
+  // Handle search term change with sanitization
+  const handleSearchTermChange = (term: string) => {
+    const sanitized = securityService.sanitizeSearchQuery(term);
+    if (isMountedRef.current) {
+      setSearchTerm(sanitized);
+    }
+  };
+
   // Filter users based on search term, role filter, and balance filter
   useEffect(() => {
+    if (!isMountedRef.current) return;
+    
     let filtered = allUsers;
     
     if (roleFilter !== 'all') {
@@ -245,8 +283,9 @@ function AdminWalletContent() {
     }
     
     if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(user => 
-        user.username.toLowerCase().includes(searchTerm.toLowerCase())
+        user.username.toLowerCase().includes(searchLower)
       );
     }
 
@@ -262,28 +301,38 @@ function AdminWalletContent() {
       });
     }
     
-    setDisplayedUsers(filtered);
+    if (isMountedRef.current) {
+      setDisplayedUsers(filtered);
+    }
   }, [searchTerm, allUsers, roleFilter, balanceFilter, wallet, buyerBalances, sellerBalances]);
 
   // Handle user selection
   const handleSelectUser = (username: string, role: string) => {
-    setSelectedUser(username);
+    if (!isMountedRef.current) return;
+    
+    const sanitizedUsername = sanitizeStrict(username);
+    setSelectedUser(sanitizedUsername);
     setSelectedUserRole(role as 'buyer' | 'seller' | 'admin');
     setSelectedUsers([]);
   };
 
   // Handle bulk user selection
   const handleBulkSelect = (username: string) => {
+    if (!isMountedRef.current) return;
+    
+    const sanitizedUsername = sanitizeStrict(username);
     setSelectedUsers(prev => 
-      prev.includes(username) 
-        ? prev.filter(u => u !== username)
-        : [...prev, username]
+      prev.includes(sanitizedUsername) 
+        ? prev.filter(u => u !== sanitizedUsername)
+        : [...prev, sanitizedUsername]
     );
     setSelectedUser(null);
   };
 
   // Select all filtered users
   const handleSelectAll = () => {
+    if (!isMountedRef.current) return;
+    
     if (selectedUsers.length === displayedUsers.length) {
       setSelectedUsers([]);
     } else {
@@ -293,10 +342,39 @@ function AdminWalletContent() {
 
   // Show message helper
   const showMessageHelper = (msg: string, type: 'success' | 'error' = 'success') => {
+    if (!isMountedRef.current) return;
+    
     setMessage(msg);
     setMessageType(type);
     setShowMessage(true);
-    setTimeout(() => setShowMessage(false), 4000);
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        setShowMessage(false);
+      }
+    }, 4000);
+  };
+
+  // Validate amount and reason
+  const validateAction = (amount: string, reason: string): { valid: boolean; error?: string } => {
+    const numAmount = parseFloat(amount);
+    
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
+      return { valid: false, error: 'Please enter a valid amount greater than 0' };
+    }
+    
+    if (numAmount > 10000) {
+      return { valid: false, error: 'Amount cannot exceed $10,000' };
+    }
+    
+    if (!reason || reason.trim().length < 3) {
+      return { valid: false, error: 'Please provide a reason (minimum 3 characters)' };
+    }
+    
+    if (reason.length > 200) {
+      return { valid: false, error: 'Reason cannot exceed 200 characters' };
+    }
+    
+    return { valid: true };
   };
 
   // Handle the wallet action (credit or debit) with confirmation
@@ -306,12 +384,13 @@ function AdminWalletContent() {
       return;
     }
 
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      showMessageHelper('Please enter a valid amount', 'error');
+    const validation = validateAction(amount, reason);
+    if (!validation.valid) {
+      showMessageHelper(validation.error || 'Invalid input', 'error');
       return;
     }
 
+    const numAmount = parseFloat(amount);
     if (actionType === 'debit' || numAmount > 100) {
       setPendingAction(() => () => executeAction(numAmount));
       setShowConfirmModal(true);
@@ -322,72 +401,91 @@ function AdminWalletContent() {
 
   // Execute the wallet action
   const executeAction = async (numAmount: number) => {
+    if (!isMountedRef.current) return;
+    
     setIsLoading(true);
     
     // Small delay for UI feedback
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const roleForWallet: 'buyer' | 'seller' = selectedUserRole === 'admin' ? 'buyer' : selectedUserRole as 'buyer' | 'seller';
+    const sanitizedReason = sanitizeStrict(reason);
 
     let success = false;
     if (actionType === 'credit') {
-      success = await adminCreditUser(selectedUser!, roleForWallet, numAmount, reason);
+      success = await adminCreditUser(selectedUser!, roleForWallet, numAmount, sanitizedReason);
     } else {
-      success = await adminDebitUser(selectedUser!, roleForWallet, numAmount, reason);
+      success = await adminDebitUser(selectedUser!, roleForWallet, numAmount, sanitizedReason);
     }
 
-    if (success) {
-      showMessageHelper(`Successfully ${actionType === 'credit' ? 'credited' : 'debited'} $${numAmount.toFixed(2)} to ${selectedUser}'s account`, 'success');
-      setAmount('');
-      setReason('');
-      
-      // Force a re-render to show updated balance immediately
-      forceRender();
-    } else {
-      showMessageHelper(`Failed to ${actionType} account. ${actionType === 'debit' ? 'Check if user has sufficient balance.' : ''}`, 'error');
-    }
+    if (isMountedRef.current) {
+      if (success) {
+        showMessageHelper(`Successfully ${actionType === 'credit' ? 'credited' : 'debited'} $${numAmount.toFixed(2)} to ${selectedUser}'s account`, 'success');
+        setAmount('');
+        setReason('');
+        
+        // Force a re-render to show updated balance immediately
+        forceRender();
+      } else {
+        showMessageHelper(`Failed to ${actionType} account. ${actionType === 'debit' ? 'Check if user has sufficient balance.' : ''}`, 'error');
+      }
 
-    setIsLoading(false);
-    setShowConfirmModal(false);
-    setPendingAction(null);
+      setIsLoading(false);
+      setShowConfirmModal(false);
+      setPendingAction(null);
+    }
   };
 
-  // Handle bulk actions
+  // Handle bulk actions with validation
   const handleBulkAction = async (action: 'credit' | 'debit', amount: number, reason: string) => {
+    if (!isMountedRef.current) return;
+    
+    // Validate bulk action
+    const validation = validateAction(amount.toString(), reason);
+    if (!validation.valid) {
+      showMessageHelper(validation.error || 'Invalid input', 'error');
+      return;
+    }
+    
     setIsBulkLoading(true);
     
     let successCount = 0;
     let failCount = 0;
+    const sanitizedReason = sanitizeStrict(reason);
 
     for (const username of selectedUsers) {
       const userRole = allUsers.find(u => u.username === username)?.role as 'buyer' | 'seller';
       let success = false;
       
       if (action === 'credit') {
-        success = await adminCreditUser(username, userRole, amount, reason);
+        success = await adminCreditUser(username, userRole, amount, sanitizedReason);
       } else {
-        success = await adminDebitUser(username, userRole, amount, reason);
+        success = await adminDebitUser(username, userRole, amount, sanitizedReason);
       }
 
       if (success) successCount++;
       else failCount++;
     }
 
-    showMessageHelper(
-      `Bulk action completed: ${successCount} successful, ${failCount} failed`, 
-      failCount > 0 ? 'error' : 'success'
-    );
+    if (isMountedRef.current) {
+      showMessageHelper(
+        `Bulk action completed: ${successCount} successful, ${failCount} failed`, 
+        failCount > 0 ? 'error' : 'success'
+      );
 
-    setSelectedUsers([]);
-    setShowBulkModal(false);
-    setIsBulkLoading(false);
-    
-    // Force re-render to show updated balances
-    forceRender();
+      setSelectedUsers([]);
+      setShowBulkModal(false);
+      setIsBulkLoading(false);
+      
+      // Force re-render to show updated balances
+      forceRender();
+    }
   };
 
   // Refresh data
   const handleRefresh = async () => {
+    if (!isMountedRef.current) return;
+    
     setIsRefreshing(true);
     
     // Call the reloadData function from WalletContext
@@ -398,15 +496,17 @@ function AdminWalletContent() {
     // Small delay for UI feedback
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    setIsRefreshing(false);
-    showMessageHelper('Data refreshed successfully');
-    forceRender();
+    if (isMountedRef.current) {
+      setIsRefreshing(false);
+      showMessageHelper('Data refreshed successfully');
+      forceRender();
+    }
   };
 
   // Export user data to CSV
   const exportUserData = () => {
     const csvData = displayedUsers.map(user => ({
-      Username: user.username,
+      Username: sanitizeStrict(user.username),
       Role: user.role,
       Balance: getUserBalance(user.username).toFixed(2),
       'Last Activity': 'N/A'
@@ -430,6 +530,8 @@ function AdminWalletContent() {
 
   // Clear selection
   const clearSelection = () => {
+    if (!isMountedRef.current) return;
+    
     setSelectedUser(null);
     setSelectedUsers([]);
     setSearchTerm('');
@@ -485,7 +587,7 @@ function AdminWalletContent() {
 
         <WalletFilters
           searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
+          setSearchTerm={handleSearchTermChange}
           roleFilter={roleFilter}
           setRoleFilter={setRoleFilter}
           balanceFilter={balanceFilter}
