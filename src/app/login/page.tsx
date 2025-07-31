@@ -11,7 +11,7 @@ import TrustIndicators from '@/components/login/TrustIndicators';
 import { useLogin } from '@/hooks/useLogin';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 
 export default function LoginPage() {
@@ -44,6 +44,9 @@ export default function LoginPage() {
   // Track rate limit state
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [rateLimitWaitTime, setRateLimitWaitTime] = useState(0);
+  
+  // Use ref to store interval ID for cleanup
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check rate limit status on component mount and when username changes
   useEffect(() => {
@@ -77,23 +80,49 @@ export default function LoginPage() {
     }
   }, [error]);
 
-  // Countdown timer for rate limit
+  // Countdown timer for rate limit with proper cleanup
   useEffect(() => {
+    // Clear any existing interval
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
     if (isRateLimited && rateLimitWaitTime > 0) {
-      const timer = setInterval(() => {
+      countdownIntervalRef.current = setInterval(() => {
         setRateLimitWaitTime((prev) => {
           if (prev <= 1) {
             setIsRateLimited(false);
+            // Clear interval when countdown reaches 0
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-
-      return () => clearInterval(timer);
     }
-    return undefined;
+
+    // Cleanup function
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
   }, [isRateLimited, rateLimitWaitTime]);
+
+  // Additional cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   // Wrap handleLogin with rate limiting check
   const handleSecureLogin = async (e?: React.FormEvent) => {
