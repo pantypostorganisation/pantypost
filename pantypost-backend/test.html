@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PantyPost Backend Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #userList {
+            margin-top: 20px;
+        }
+        .user-item {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 PantyPost Backend Test</h1>
+        
+        <h2>Create a Test User</h2>
+        <input type="text" id="username" placeholder="Username (e.g., alice123)">
+        <input type="email" id="email" placeholder="Email (e.g., alice@example.com)">
+        <button onclick="createUser()">Create User</button>
+        
+        <div id="result"></div>
+        
+        <h2>Current Users in Database</h2>
+        <button onclick="loadUsers()">Refresh User List</button>
+        <div id="userList"></div>
+    </div>
+
+    <script>
+        // Function to create a user
+        async function createUser() {
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const resultDiv = document.getElementById('result');
+            
+            if (!username || !email) {
+                showResult('Please fill in both username and email!', false);
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/test/create-user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(`✅ User created successfully! Username: ${data.user.username}`, true);
+                    document.getElementById('username').value = '';
+                    document.getElementById('email').value = '';
+                    loadUsers(); // Refresh the list
+                } else {
+                    showResult(`❌ Error: ${data.error}`, false);
+                }
+            } catch (error) {
+                showResult(`❌ Error: ${error.message}`, false);
+            }
+        }
+        
+        // Function to load all users
+        async function loadUsers() {
+            try {
+                const response = await fetch('http://localhost:5000/api/test/users');
+                const data = await response.json();
+                
+                const userListDiv = document.getElementById('userList');
+                
+                if (data.users.length === 0) {
+                    userListDiv.innerHTML = '<p>No users yet. Create one above!</p>';
+                } else {
+                    userListDiv.innerHTML = data.users.map(user => `
+                        <div class="user-item">
+                            <strong>Username:</strong> ${user.username}<br>
+                            <strong>Email:</strong> ${user.email}<br>
+                            <strong>Role:</strong> ${user.role}<br>
+                            <strong>Created:</strong> ${new Date(user.createdAt).toLocaleString()}
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+        
+        // Helper function to show results
+        function showResult(message, isSuccess) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = isSuccess ? 'success' : 'error';
+            resultDiv.style.display = 'block';
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Load users when page loads
+        window.onload = loadUsers;
+    </script>
+</body>
+</html>
