@@ -17,6 +17,7 @@ export default function BrowsePage() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const previousFiltersRef = useRef<string>('');
   
   const {
     user,
@@ -65,17 +66,30 @@ export default function BrowsePage() {
     
     return () => {
       isMountedRef.current = false;
+      // Clean up any pending timeouts
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+      if (filterTimeoutRef.current) {
+        clearTimeout(filterTimeoutRef.current);
+        filterTimeoutRef.current = null;
+      }
     };
   }, []);
 
   // Track page view
   useEffect(() => {
     if (isMountedRef.current) {
-      trackEvent({
-        action: 'page_view',
-        category: 'navigation',
-        label: 'browse_page'
-      });
+      try {
+        trackEvent({
+          action: 'page_view',
+          category: 'navigation',
+          label: 'browse_page'
+        });
+      } catch (error) {
+        console.error('Failed to track page view:', error);
+      }
     }
   }, [trackEvent]);
 
@@ -85,12 +99,17 @@ export default function BrowsePage() {
       // Clear existing timeout
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
       }
       
       // Set new timeout to track search after user stops typing
       searchTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {
-          trackSearch(searchTerm, filteredListings.length);
+          try {
+            trackSearch(searchTerm, filteredListings.length);
+          } catch (error) {
+            console.error('Failed to track search:', error);
+          }
         }
       }, 1000); // Wait 1 second after user stops typing
     }
@@ -99,35 +118,54 @@ export default function BrowsePage() {
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
       }
     };
   }, [searchTerm, filteredListings.length, trackSearch]);
 
   // Track filter changes with debouncing
   useEffect(() => {
-    if (hasActiveFilters && isMountedRef.current) {
+    // Create a unique filter signature to detect changes
+    const currentFilterSignature = JSON.stringify({
+      filter,
+      searchTerm,
+      minPrice,
+      maxPrice,
+      selectedHourRange: selectedHourRange.label,
+      sortBy
+    });
+    
+    // Only track if filters actually changed and there are active filters
+    if (hasActiveFilters && currentFilterSignature !== previousFiltersRef.current && isMountedRef.current) {
+      previousFiltersRef.current = currentFilterSignature;
+      
       // Clear existing timeout
       if (filterTimeoutRef.current) {
         clearTimeout(filterTimeoutRef.current);
+        filterTimeoutRef.current = null;
       }
       
       // Set new timeout to track filters after changes settle
       filterTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {
-          trackEvent({
-            action: 'apply_filters',
-            category: 'browse',
-            label: filter,
-            value: filteredListings.length,
-            customData: {
-              has_search: !!searchTerm,
-              has_price_filter: !!(minPrice || maxPrice),
-              price_min: minPrice || 0,
-              price_max: maxPrice || 0,
-              hour_range: selectedHourRange.label,
-              sort_by: sortBy
-            }
-          });
+          try {
+            trackEvent({
+              action: 'apply_filters',
+              category: 'browse',
+              label: filter,
+              value: filteredListings.length,
+              customData: {
+                has_search: !!searchTerm,
+                has_price_filter: !!(minPrice || maxPrice),
+                price_min: minPrice || 0,
+                price_max: maxPrice || 0,
+                hour_range: selectedHourRange.label,
+                sort_by: sortBy
+              }
+            });
+          } catch (error) {
+            console.error('Failed to track filter change:', error);
+          }
         }
       }, 1500); // Wait 1.5 seconds after filter changes
     }
@@ -136,26 +174,33 @@ export default function BrowsePage() {
     return () => {
       if (filterTimeoutRef.current) {
         clearTimeout(filterTimeoutRef.current);
+        filterTimeoutRef.current = null;
       }
     };
   }, [filter, searchTerm, minPrice, maxPrice, selectedHourRange, sortBy, filteredListings.length, hasActiveFilters, trackEvent]);
 
   // Enhanced click handler with analytics
   const handleListingClickWithAnalytics = useCallback((listingId: string) => {
+    if (!isMountedRef.current) return;
+    
     const listing = filteredListings.find(l => l.id === listingId);
-    if (listing && isMountedRef.current) {
-      trackEvent({
-        action: 'select_item',
-        category: 'browse',
-        label: listingId,
-        value: listing.price,
-        customData: {
-          item_name: listing.title,
-          item_category: listing.isPremium ? 'premium' : (listing.auction ? 'auction' : 'standard'),
-          seller_name: listing.seller,
-          position: paginatedListings.findIndex(l => l.id === listingId) + 1
-        }
-      });
+    if (listing) {
+      try {
+        trackEvent({
+          action: 'select_item',
+          category: 'browse',
+          label: listingId,
+          value: listing.price || 0,
+          customData: {
+            item_name: listing.title || 'Unknown',
+            item_category: listing.isPremium ? 'premium' : (listing.auction ? 'auction' : 'standard'),
+            seller_name: listing.seller || 'Unknown',
+            position: paginatedListings.findIndex(l => l.id === listingId) + 1
+          }
+        });
+      } catch (error) {
+        console.error('Failed to track listing click:', error);
+      }
     }
     // Pass false for isLocked parameter since we're allowing the click
     handleListingClick(listingId, false);
@@ -163,7 +208,9 @@ export default function BrowsePage() {
 
   // Track page navigation
   const handlePageChangeWithAnalytics = useCallback((newPage: number, direction: 'previous' | 'next' | 'direct') => {
-    if (isMountedRef.current) {
+    if (!isMountedRef.current) return;
+    
+    try {
       trackEvent({
         action: 'navigate_page',
         category: 'browse',
@@ -174,6 +221,8 @@ export default function BrowsePage() {
           to_page: newPage
         }
       });
+    } catch (error) {
+      console.error('Failed to track page navigation:', error);
     }
     
     if (direction === 'previous') {
@@ -187,29 +236,23 @@ export default function BrowsePage() {
 
   // Track filter reset
   const resetFiltersWithAnalytics = useCallback(() => {
-    if (isMountedRef.current) {
+    if (!isMountedRef.current) return;
+    
+    try {
       trackEvent({
         action: 'reset_filters',
         category: 'browse',
         label: 'all_filters'
       });
+    } catch (error) {
+      console.error('Failed to track filter reset:', error);
     }
+    
+    // Reset the filter signature
+    previousFiltersRef.current = '';
+    
     resetFilters();
   }, [trackEvent, resetFilters]);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-      if (filterTimeoutRef.current) {
-        clearTimeout(filterTimeoutRef.current);
-        filterTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   return (
     <BanCheck>

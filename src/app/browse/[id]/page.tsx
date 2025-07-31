@@ -1,7 +1,7 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -23,6 +23,8 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const { trackEvent, trackPurchase } = useAnalytics();
+  const isMountedRef = useRef(true);
+  const trackingRef = useRef({ hasTrackedView: false, hasTrackedPurchase: false });
   
   const {
     // Data
@@ -90,118 +92,158 @@ export default function ListingDetailPage() {
   const { isFavorited: checkIsFavorited, toggleFavorite: toggleFav, error: favError } = useFavorites();
   const { success: showSuccessToast, error: showErrorToast } = useToast();
 
-  // Generate consistent seller ID
-  const sellerId = listing ? `seller_${listing.seller}` : null;
+  // Generate consistent seller ID with null safety
+  const sellerId = listing?.seller ? `seller_${listing.seller}` : null;
   const isFavorited = sellerId ? checkIsFavorited(sellerId) : false;
 
-  // Track product view when listing loads
+  // Track component mount/unmount
   useEffect(() => {
-    if (listing && listingId) {
-      trackEvent({
-        action: 'view_item',
-        category: 'browse',
-        label: listingId,
-        value: listing.price,
-        customData: {
-          item_name: listing.title,
-          seller_name: listing.seller,
-          seller_verified: listing.isSellerVerified,
-          is_premium: listing.isPremium,
-          is_auction: isAuctionListing
-        }
-      });
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Track product view when listing loads (with deduplication)
+  useEffect(() => {
+    if (listing && listingId && !trackingRef.current.hasTrackedView && isMountedRef.current) {
+      trackingRef.current.hasTrackedView = true;
+      
+      try {
+        trackEvent({
+          action: 'view_item',
+          category: 'browse',
+          label: listingId,
+          value: listing.price || 0,
+          customData: {
+            item_name: listing.title || 'Unknown',
+            seller_name: listing.seller || 'Unknown',
+            seller_verified: listing.isSellerVerified || false,
+            is_premium: listing.isPremium || false,
+            is_auction: isAuctionListing || false
+          }
+        });
+      } catch (error) {
+        console.error('Failed to track view event:', error);
+      }
     }
   }, [listing, listingId, isAuctionListing, trackEvent]);
 
-  // Track purchase success
+  // Track purchase success (with deduplication)
   useEffect(() => {
-    if (showPurchaseSuccess && listing && listingId) {
-      trackPurchase({
-        transactionId: `${listingId}_${Date.now()}`,
-        value: listing.price,
-        currency: 'USD',
-        items: [{
-          id: listingId,
-          name: listing.title,
-          category: listing.isPremium ? 'premium' : (listing.auction ? 'auction' : 'standard'),
-          price: listing.price,
-          quantity: 1
-        }]
-      });
+    if (showPurchaseSuccess && listing && listingId && !trackingRef.current.hasTrackedPurchase && isMountedRef.current) {
+      trackingRef.current.hasTrackedPurchase = true;
+      
+      try {
+        trackPurchase({
+          transactionId: `${listingId}_${Date.now()}`,
+          value: listing.price || 0,
+          currency: 'USD',
+          items: [{
+            id: listingId,
+            name: listing.title || 'Unknown',
+            category: listing.isPremium ? 'premium' : (listing.auction ? 'auction' : 'standard'),
+            price: listing.price || 0,
+            quantity: 1
+          }]
+        });
+      } catch (error) {
+        console.error('Failed to track purchase:', error);
+      }
     }
   }, [showPurchaseSuccess, listing, listingId, trackPurchase]);
 
   // Track auction bid success
   useEffect(() => {
-    if (bidSuccess && listing && listingId) {
-      trackEvent({
-        action: 'add_to_cart',
-        category: 'auction',
-        label: listingId,
-        value: parseFloat(bidAmount) || 0,
-        customData: {
-          item_name: listing.title,
-          seller_name: listing.seller
-        }
-      });
+    if (bidSuccess && listing && listingId && isMountedRef.current) {
+      try {
+        trackEvent({
+          action: 'add_to_cart',
+          category: 'auction',
+          label: listingId,
+          value: parseFloat(bidAmount) || 0,
+          customData: {
+            item_name: listing.title || 'Unknown',
+            seller_name: listing.seller || 'Unknown'
+          }
+        });
+      } catch (error) {
+        console.error('Failed to track bid success:', error);
+      }
     }
   }, [bidSuccess, listing, listingId, bidAmount, trackEvent]);
 
   const toggleFavorite = useCallback(async () => {
-    if (!listing || !sellerId) return;
+    if (!listing || !sellerId || !isMountedRef.current) return;
     
-    // Get seller tier info from the listing
-    const sellerTier = listing.sellerTierInfo?.tier;
-    
-    const success = await toggleFav({
-      id: sellerId,
-      username: listing.seller,
-      profilePicture: sellerProfile?.pic || undefined,
-      tier: sellerTier,
-      isVerified: listing.isSellerVerified || false,
-    });
-    
-    if (success) {
-      // Track favorite toggle
-      trackEvent({
-        action: isFavorited ? 'remove_from_favorites' : 'add_to_favorites',
-        category: 'engagement',
-        label: listing.seller,
-        customData: {
-          seller_id: sellerId
-        }
+    try {
+      // Get seller tier info from the listing with null safety
+      const sellerTier = listing.sellerTierInfo?.tier || undefined;
+      
+      const success = await toggleFav({
+        id: sellerId,
+        username: listing.seller,
+        profilePicture: sellerProfile?.pic || undefined,
+        tier: sellerTier,
+        isVerified: listing.isSellerVerified || false,
       });
       
-      showSuccessToast(
-        isFavorited ? 'Removed from favorites' : 'Added to favorites'
-      );
-    } else if (favError) {
-      showErrorToast(favError);
+      if (success && isMountedRef.current) {
+        // Track favorite toggle
+        trackEvent({
+          action: isFavorited ? 'remove_from_favorites' : 'add_to_favorites',
+          category: 'engagement',
+          label: listing.seller,
+          customData: {
+            seller_id: sellerId
+          }
+        });
+        
+        showSuccessToast(
+          isFavorited ? 'Removed from favorites' : 'Added to favorites'
+        );
+      } else if (favError && isMountedRef.current) {
+        showErrorToast(favError);
+      }
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+      if (isMountedRef.current) {
+        showErrorToast('Failed to update favorites');
+      }
     }
   }, [listing, sellerId, sellerProfile, isFavorited, toggleFav, trackEvent, showSuccessToast, showErrorToast, favError]);
 
   const handleSubscribeClick = useCallback(() => {
-    if (listing?.seller) {
-      // Track subscription click
-      trackEvent({
-        action: 'subscription_click',
-        category: 'engagement',
-        label: listing.seller
-      });
-      router.push(`/sellers/${listing.seller}`);
+    if (listing?.seller && isMountedRef.current) {
+      try {
+        // Track subscription click
+        trackEvent({
+          action: 'subscription_click',
+          category: 'engagement',
+          label: listing.seller
+        });
+        router.push(`/sellers/${listing.seller}`);
+      } catch (error) {
+        console.error('Failed to handle subscribe click:', error);
+      }
     }
   }, [listing, trackEvent, router]);
 
   // Enhanced purchase handler with analytics
   const handlePurchaseWithAnalytics = useCallback(async () => {
-    if (listing && listingId) {
-      // Track purchase attempt
-      trackEvent({
-        action: 'begin_checkout',
-        category: 'ecommerce',
-        label: listingId,
-        value: listing.price
-      });
+    if (listing && listingId && isMountedRef.current) {
+      try {
+        // Track purchase attempt
+        trackEvent({
+          action: 'begin_checkout',
+          category: 'ecommerce',
+          label: listingId,
+          value: listing.price || 0
+        });
+      } catch (error) {
+        console.error('Failed to track purchase attempt:', error);
+      }
     }
     
     // Call original purchase handler
@@ -210,14 +252,18 @@ export default function ListingDetailPage() {
 
   // Enhanced bid handler with analytics
   const handleBidSubmitWithAnalytics = useCallback(async () => {
-    if (listing && bidAmount && listingId) {
-      // Track bid attempt
-      trackEvent({
-        action: 'place_bid',
-        category: 'auction',
-        label: listingId,
-        value: parseFloat(bidAmount)
-      });
+    if (listing && bidAmount && listingId && isMountedRef.current) {
+      try {
+        // Track bid attempt
+        trackEvent({
+          action: 'place_bid',
+          category: 'auction',
+          label: listingId,
+          value: parseFloat(bidAmount) || 0
+        });
+      } catch (error) {
+        console.error('Failed to track bid attempt:', error);
+      }
     }
     
     // Call original bid handler
