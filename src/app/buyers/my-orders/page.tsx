@@ -90,18 +90,13 @@ function MyOrdersContent() {
 
 // Main page component with provider readiness check
 export default function MyOrdersPage() {
-  const [isReady, setIsReady] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
-    // Small delay to ensure providers are mounted
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 100);
-
-    return () => clearTimeout(timer);
+    setMounted(true);
   }, []);
 
-  if (!isReady) {
+  if (!mounted) {
     return (
       <BanCheck>
         <RequireAuth role="buyer">
