@@ -1,6 +1,7 @@
 // src/app/buyers/dashboard/page.tsx
 'use client';
 
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFavorites } from '@/context/FavoritesContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -16,7 +17,35 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import TierBadge from '@/components/TierBadge';
-import { useCallback, useState } from 'react';
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: (error: Error, reset: () => void) => React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Dashboard error:', error, errorInfo);
+  }
+
+  override render() {
+    if (this.state.hasError && this.state.error) {
+      return this.props.fallback(this.state.error, () => {
+        this.setState({ hasError: false, error: null });
+      });
+    }
+
+    return this.props.children;
+  }
+}
 
 // Error Fallback Component
 function DashboardErrorFallback({ error, reset }: { error: Error; reset: () => void }) {
@@ -45,6 +74,7 @@ function DashboardContent() {
   const { favorites, favoriteCount, toggleFavorite, loadingFavorites, error: favError } = useFavorites();
   const router = useRouter();
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const isMountedRef = useRef(true);
   
   const {
     user,
@@ -55,35 +85,73 @@ function DashboardContent() {
     isLoading
   } = useDashboardData();
 
+  // Track component mount status
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const handleRemoveFavorite = useCallback(async (favorite: any) => {
-    if (!favorite?.sellerId || !favorite?.sellerUsername) {
-      console.error('Invalid favorite data');
+    // Validate favorite data
+    if (!favorite || typeof favorite !== 'object') {
+      console.error('Invalid favorite object');
+      return;
+    }
+    
+    const { sellerId, sellerUsername, profilePicture, tier, isVerified } = favorite;
+    
+    if (!sellerId || !sellerUsername) {
+      console.error('Missing required favorite properties');
       return;
     }
     
     try {
       await toggleFavorite({
-        id: favorite.sellerId,
-        username: favorite.sellerUsername,
-        profilePicture: favorite.profilePicture,
-        tier: favorite.tier,
-        isVerified: favorite.isVerified,
+        id: sellerId,
+        username: sellerUsername,
+        profilePicture: profilePicture || undefined,
+        tier: tier || undefined,
+        isVerified: isVerified || false,
       });
+      
+      // Reset image error state for this seller if successful
+      if (isMountedRef.current) {
+        setImageErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[sellerId];
+          return newErrors;
+        });
+      }
     } catch (error) {
       console.error('Error removing favorite:', error);
     }
   }, [toggleFavorite]);
 
   const handleViewSellerProfile = useCallback((username: string) => {
-    if (!username) return;
+    if (!username || typeof username !== 'string') {
+      console.error('Invalid username provided');
+      return;
+    }
     router.push(`/sellers/${username}`);
   }, [router]);
 
   const handleImageError = useCallback((sellerId: string) => {
+    if (!sellerId || !isMountedRef.current) return;
     setImageErrors(prev => ({ ...prev, [sellerId]: true }));
   }, []);
 
-  // Remove the error check since useDashboardData doesn't return an error property
+  // Handle successful image load (reset error state)
+  const handleImageLoad = useCallback((sellerId: string) => {
+    if (!sellerId || !isMountedRef.current) return;
+    setImageErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[sellerId];
+      return newErrors;
+    });
+  }, []);
 
   if (!authUser || authUser.role !== 'buyer') {
     return (
@@ -98,18 +166,21 @@ function DashboardContent() {
 
   // Safe default values for stats - include all required properties
   const safeStats = {
-    totalSpent: stats?.totalSpent || 0,
-    totalOrders: stats?.totalOrders || 0,
-    pendingShipments: stats?.pendingShipments || 0,
-    completedOrders: stats?.completedOrders || 0,
-    thisWeekSpent: stats?.thisWeekSpent || 0,
-    averageOrderValue: stats?.averageOrderValue || 0,
-    activeSubscriptions: stats?.activeSubscriptions || 0,
-    pendingRequests: stats?.pendingRequests || 0,
-    unreadMessages: stats?.unreadMessages || 0,
-    favoriteSellerCount: stats?.favoriteSellerCount || 0,
-    thisMonthOrders: stats?.thisMonthOrders || 0
+    totalSpent: stats?.totalSpent ?? 0,
+    totalOrders: stats?.totalOrders ?? 0,
+    pendingShipments: stats?.pendingShipments ?? 0,
+    completedOrders: stats?.completedOrders ?? 0,
+    thisWeekSpent: stats?.thisWeekSpent ?? 0,
+    averageOrderValue: stats?.averageOrderValue ?? 0,
+    activeSubscriptions: stats?.activeSubscriptions ?? 0,
+    pendingRequests: stats?.pendingRequests ?? 0,
+    unreadMessages: stats?.unreadMessages ?? 0,
+    favoriteSellerCount: stats?.favoriteSellerCount ?? 0,
+    thisMonthOrders: stats?.thisMonthOrders ?? 0
   };
+
+  // Safe favorites list
+  const safeFavorites = Array.isArray(favorites) ? favorites : [];
 
   return (
     <BanCheck>
@@ -181,64 +252,69 @@ function DashboardContent() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {favorites.slice(0, 6).map((favorite) => (
-                        <div
-                          key={favorite.sellerId}
-                          className="bg-[#111] rounded-lg p-4 hover:bg-[#222] transition-colors group"
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <div 
-                                className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 cursor-pointer"
-                                onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                              >
-                                {favorite.profilePicture && !imageErrors[favorite.sellerId] ? (
-                                  <Image
-                                    src={favorite.profilePicture}
-                                    alt={favorite.sellerUsername}
-                                    fill
-                                    className="object-cover"
-                                    onError={() => handleImageError(favorite.sellerId)}
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-gray-600">
-                                    <Heart size={16} />
-                                  </div>
-                                )}
-                              </div>
-                              <div>
-                                <h3 
-                                  className="font-medium text-white hover:text-[#ff950e] cursor-pointer transition-colors"
+                      {safeFavorites.slice(0, 6).map((favorite) => {
+                        if (!favorite?.sellerId || !favorite?.sellerUsername) return null;
+                        
+                        return (
+                          <div
+                            key={favorite.sellerId}
+                            className="bg-[#111] rounded-lg p-4 hover:bg-[#222] transition-colors group"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div 
+                                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 cursor-pointer"
                                   onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
                                 >
-                                  {favorite.sellerUsername}
-                                </h3>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  {favorite.isVerified && (
-                                    <Star className="text-[#ff950e]" size={12} />
-                                  )}
-                                  {favorite.tier && (
-                                    <span className="text-xs text-gray-400">{favorite.tier}</span>
+                                  {favorite.profilePicture && !imageErrors[favorite.sellerId] ? (
+                                    <Image
+                                      src={favorite.profilePicture}
+                                      alt={favorite.sellerUsername}
+                                      fill
+                                      className="object-cover"
+                                      onError={() => handleImageError(favorite.sellerId)}
+                                      onLoad={() => handleImageLoad(favorite.sellerId)}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-600">
+                                      <Heart size={16} />
+                                    </div>
                                   )}
                                 </div>
+                                <div>
+                                  <h3 
+                                    className="font-medium text-white hover:text-[#ff950e] cursor-pointer transition-colors"
+                                    onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                                  >
+                                    {favorite.sellerUsername}
+                                  </h3>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    {favorite.isVerified && (
+                                      <Star className="text-[#ff950e]" size={12} />
+                                    )}
+                                    {favorite.tier && (
+                                      <span className="text-xs text-gray-400">{favorite.tier}</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
+                              <button
+                                onClick={() => handleRemoveFavorite(favorite)}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                                aria-label="Remove from favorites"
+                              >
+                                <X size={16} />
+                              </button>
                             </div>
                             <button
-                              onClick={() => handleRemoveFavorite(favorite)}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
-                              aria-label="Remove from favorites"
+                              onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                              className="w-full px-3 py-1.5 bg-[#222] text-white rounded text-xs font-medium hover:bg-[#333] transition-colors"
                             >
-                              <X size={16} />
+                              View Profile
                             </button>
                           </div>
-                          <button
-                            onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                            className="w-full px-3 py-1.5 bg-[#222] text-white rounded text-xs font-medium hover:bg-[#333] transition-colors"
-                          >
-                            View Profile
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                   
@@ -329,16 +405,13 @@ function DashboardContent() {
 
 // Main component with error boundary
 export default function BuyerDashboardPage() {
-  const [error, setError] = useState<Error | null>(null);
-
-  if (error) {
-    return <DashboardErrorFallback error={error} reset={() => setError(null)} />;
-  }
-
   return (
-    <div>
-      {/* Simple error boundary implementation */}
+    <ErrorBoundary
+      fallback={(error, reset) => (
+        <DashboardErrorFallback error={error} reset={reset} />
+      )}
+    >
       <DashboardContent />
-    </div>
+    </ErrorBoundary>
   );
 }

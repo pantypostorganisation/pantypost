@@ -1,7 +1,7 @@
 // src/app/buyers/messages/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useBuyerMessages } from '@/hooks/useBuyerMessages';
@@ -121,20 +121,41 @@ export default function BuyerMessagesPage() {
     isUserReported,
   } = useBuyerMessages();
 
-  // FIXED: wallet is already in the correct format from useBuyerMessages
-  // It's a { [username: string]: number } object
+  // Ensure wallet is in the correct format
   const walletData = wallet || {};
   
-  // Log wallet data for debugging
-  React.useEffect(() => {
-    if (user && wallet) {
-      console.log('BuyerMessagesPage: Wallet data', {
-        username: user.username,
-        wallet,
-        balance: wallet[user.username]
+  // Handle edit price conversion properly
+  const handleEditPriceChange = useCallback((value: string | number) => {
+    const numValue = typeof value === 'string' ? value : value.toString();
+    setEditPrice(numValue);
+  }, [setEditPrice]);
+
+  // Get numeric edit price for component props
+  const numericEditPrice = editPrice ? parseFloat(editPrice) : '';
+
+  // Simplified custom request form setter
+  const handleCustomRequestFormChange = useCallback((update: any) => {
+    if (typeof update === 'function') {
+      setCustomRequestForm(prev => {
+        const newForm = update(prev);
+        return {
+          title: newForm.title || prev.title || '',
+          price: newForm.price || prev.price || '',
+          description: newForm.description || prev.description || '',
+          tags: newForm.tags || prev.tags || [],
+          hoursWorn: newForm.hoursWorn || prev.hoursWorn || 0
+        };
       });
+    } else {
+      setCustomRequestForm(prev => ({
+        title: update.title || prev.title || '',
+        price: update.price || prev.price || '',
+        description: update.description || prev.description || '',
+        tags: update.tags || prev.tags || [],
+        hoursWorn: update.hoursWorn || prev.hoursWorn || 0
+      }));
     }
-  }, [user, wallet]);
+  }, [setCustomRequestForm]);
 
   if (!mounted || !user) {
     return (
@@ -199,8 +220,8 @@ export default function BuyerMessagesPage() {
                   imageError={imageError}
                   editRequestId={editRequestId}
                   setEditRequestId={setEditRequestId}
-                  editPrice={parseFloat(editPrice) || ''}
-                  setEditPrice={(price: number | '') => setEditPrice(price.toString())}
+                  editPrice={numericEditPrice}
+                  setEditPrice={handleEditPriceChange}
                   editTitle={editTitle}
                   setEditTitle={setEditTitle}
                   editTags={editTags}
@@ -235,7 +256,7 @@ export default function BuyerMessagesPage() {
             </div>
           </div>
           
-          {/* Bottom Padding - ADDED */}
+          {/* Bottom Padding */}
           <div className="py-3 bg-black"></div>
         </div>
 
@@ -248,37 +269,18 @@ export default function BuyerMessagesPage() {
           />
         )}
         
-        {showCustomRequestModal && (
+        {showCustomRequestModal && activeThread && (
           <CustomRequestModal
             show={showCustomRequestModal}
             onClose={closeCustomRequestModal}
-            activeThread={activeThread || ''}
+            activeThread={activeThread}
             onSubmit={handleCustomRequestSubmit}
             customRequestForm={{
-              title: customRequestForm.title,
-              price: customRequestForm.price,
-              description: customRequestForm.description
+              title: customRequestForm.title || '',
+              price: customRequestForm.price || '',
+              description: customRequestForm.description || ''
             }}
-            setCustomRequestForm={(form: any) => {
-              if (typeof form === 'function') {
-                setCustomRequestForm(prev => {
-                  const updated = form(prev);
-                  return {
-                    ...prev,
-                    title: updated.title,
-                    price: updated.price,
-                    description: updated.description
-                  };
-                });
-              } else {
-                setCustomRequestForm({
-                  ...customRequestForm,
-                  title: form.title,
-                  price: form.price,
-                  description: form.description
-                });
-              }
-            }}
+            setCustomRequestForm={handleCustomRequestFormChange}
             customRequestErrors={customRequestErrors}
             isSubmittingRequest={isSubmittingRequest}
             wallet={walletData}
@@ -286,7 +288,7 @@ export default function BuyerMessagesPage() {
           />
         )}
         
-        {showPayModal && payingRequest && (
+        {showPayModal && payingRequest && activeThread && (
           <PaymentModal
             show={showPayModal}
             onClose={() => {
@@ -300,7 +302,7 @@ export default function BuyerMessagesPage() {
           />
         )}
         
-        {showTipModal && (
+        {showTipModal && activeThread && (
           <TipModal
             show={showTipModal}
             onClose={() => {
@@ -308,7 +310,7 @@ export default function BuyerMessagesPage() {
               setTipAmount('');
               setTipResult(null);
             }}
-            activeThread={activeThread || ''}
+            activeThread={activeThread}
             tipAmount={tipAmount}
             setTipAmount={setTipAmount}
             tipResult={tipResult}
