@@ -89,6 +89,31 @@ export default function BanManagementPage() {
     rateLimitError
   } = useBanManagement();
 
+  // Early return if ban context is not available
+  if (!banContext) {
+    return (
+      <RequireAuth role="admin">
+        <div className="min-h-screen bg-black text-white">
+          <main className="p-8 max-w-7xl mx-auto">
+            <div className="bg-[#1a1a1a] border border-red-800 rounded-lg p-8 text-center">
+              <AlertTriangle size={48} className="mx-auto text-red-400 mb-4" />
+              <h2 className="text-2xl font-bold text-red-400 mb-2">Ban System Unavailable</h2>
+              <p className="text-gray-400">
+                The ban management system is currently unavailable. Please refresh the page or contact support.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-6 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800]"
+              >
+                Refresh Page
+              </button>
+            </div>
+          </main>
+        </div>
+      </RequireAuth>
+    );
+  }
+
   // Force refresh data
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -103,8 +128,33 @@ export default function BanManagementPage() {
     }
   };
 
-  // Safe data retrieval
+  // Safe data retrieval with banContext check
   const banStats: BanStats = (() => {
+    if (!banContext || typeof getBanStats !== 'function') {
+      return {
+        totalActiveBans: 0,
+        temporaryBans: 0,
+        permanentBans: 0,
+        pendingAppeals: 0,
+        recentBans24h: 0,
+        bansByReason: {
+          harassment: 0,
+          spam: 0,
+          inappropriate_content: 0,
+          scam: 0,
+          underage: 0,
+          payment_fraud: 0,
+          other: 0
+        },
+        appealStats: {
+          totalAppeals: 0,
+          pendingAppeals: 0,
+          approvedAppeals: 0,
+          rejectedAppeals: 0
+        }
+      };
+    }
+    
     try {
       const stats = getBanStats();
       return stats || {
@@ -157,6 +207,10 @@ export default function BanManagementPage() {
   })();
 
   const activeBans = (() => {
+    if (!banContext || typeof getActiveBans !== 'function') {
+      return [];
+    }
+    
     try {
       const bans = getActiveBans() || [];
       console.log('[BanManagementPage] Active bans:', bans.length);
@@ -168,6 +222,10 @@ export default function BanManagementPage() {
   })();
 
   const expiredBans = (() => {
+    if (!banContext || typeof getExpiredBans !== 'function') {
+      return [];
+    }
+    
     try {
       return getExpiredBans() || [];
     } catch (error) {
@@ -206,7 +264,7 @@ export default function BanManagementPage() {
     
     setIsLoading(true);
     try {
-      if (typeof unbanUser !== 'function') {
+      if (!banContext || typeof unbanUser !== 'function') {
         alert('Unban function not available');
         return;
       }
@@ -265,7 +323,7 @@ export default function BanManagementPage() {
     
     setIsLoading(true);
     try {
-      if (typeof reviewAppeal !== 'function') {
+      if (!banContext || typeof reviewAppeal !== 'function') {
         alert('Review appeal function not available');
         return;
       }
@@ -384,30 +442,6 @@ export default function BanManagementPage() {
     
     setFilters(prev => ({ ...prev, ...sanitizedFilters }));
   };
-
-  if (!banContext) {
-    return (
-      <RequireAuth role="admin">
-        <div className="min-h-screen bg-black text-white">
-          <main className="p-8 max-w-7xl mx-auto">
-            <div className="bg-[#1a1a1a] border border-red-800 rounded-lg p-8 text-center">
-              <AlertTriangle size={48} className="mx-auto text-red-400 mb-4" />
-              <h2 className="text-2xl font-bold text-red-400 mb-2">Ban System Unavailable</h2>
-              <p className="text-gray-400">
-                The ban management system is currently unavailable. Please refresh the page or contact support.
-              </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-4 px-6 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800]"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </main>
-        </div>
-      </RequireAuth>
-    );
-  }
 
   return (
     <RequireAuth role="admin">
