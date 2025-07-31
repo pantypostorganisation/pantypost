@@ -5,7 +5,7 @@
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { useAuth } from '@/context/AuthContext';
 import { useListings, VerificationDocs } from '@/context/ListingContext';
@@ -25,9 +25,23 @@ import { generateVerificationCode, getTimeAgo } from '@/components/seller-verifi
 // Client component for the login button to avoid SSR issues
 const LoginButton = () => {
   const router = useRouter();
+  const isMountedRef = useRef(true);
+  
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  const handleClick = () => {
+    if (isMountedRef.current) {
+      router.push('/login');
+    }
+  };
+  
   return (
     <button
-      onClick={() => router.push('/login')}
+      onClick={handleClick}
       className="mt-6 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition w-full"
     >
       Log In
@@ -38,6 +52,7 @@ const LoginButton = () => {
 export default function SellerVerifyPage() {
   const { user } = useAuth();
   const { requestVerification, users } = useListings();
+  const isMountedRef = useRef(true);
 
   const [code, setCode] = useState('');
   const [codePhoto, setCodePhoto] = useState<string | null>(null);
@@ -46,28 +61,43 @@ export default function SellerVerifyPage() {
   const [passport, setPassport] = useState<string | null>(null);
   const [currentImage, setCurrentImage] = useState<ImageViewData | null>(null);
 
+  // Track component mount status
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Generate or load unique code for this seller
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isMountedRef.current) return;
     
     // If user is rejected, always generate a new code
     if (user.verificationStatus === 'rejected') {
       const newCode = generateVerificationCode(user.username);
-      setCode(newCode);
+      if (isMountedRef.current) {
+        setCode(newCode);
+      }
     } else {
       // For non-rejected users, check for existing code
       const existing = users[user.username]?.verificationDocs?.code;
       if (existing) {
-        setCode(existing);
+        if (isMountedRef.current) {
+          setCode(existing);
+        }
       } else {
         // Generate new 8-digit code
         const newCode = generateVerificationCode(user.username);
-        setCode(newCode);
+        if (isMountedRef.current) {
+          setCode(newCode);
+        }
       }
     }
     
     // Load existing documents if available
-    if (users[user.username]?.verificationDocs) {
+    if (users[user.username]?.verificationDocs && isMountedRef.current) {
       const docs = users[user.username].verificationDocs;
       if (docs?.codePhoto) setCodePhoto(docs.codePhoto);
       if (docs?.idFront) setIdFront(docs.idFront);
@@ -77,13 +107,22 @@ export default function SellerVerifyPage() {
   }, [user, users]);
 
   const handleSubmit = (docs: VerificationDocs) => {
-    requestVerification(docs);
+    if (isMountedRef.current) {
+      requestVerification(docs);
+    }
   };
 
   // Function to view an image fullscreen
   const viewImage = (type: string, url: string | null) => {
-    if (!url) return;
+    if (!url || !isMountedRef.current) return;
     setCurrentImage({ type, url });
+  };
+
+  // Safe state update wrapper
+  const safeSetCurrentImage = (image: ImageViewData | null) => {
+    if (isMountedRef.current) {
+      setCurrentImage(image);
+    }
   };
 
   if (!user) {
@@ -125,7 +164,7 @@ export default function SellerVerifyPage() {
         />
         <ImageViewerModal 
           imageData={currentImage}
-          onClose={() => setCurrentImage(null)}
+          onClose={() => safeSetCurrentImage(null)}
         />
       </BanCheck>
     );
