@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PantyPost - Messaging Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            height: 80vh;
+            position: relative;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            overflow-y: auto;
+        }
+        
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            min-width: 0; /* Prevent flex child from overflowing */
+        }
+        
+        #chatContainer {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #ff69b4;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .user-select {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .user-select select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .threads-list {
+            padding: 10px;
+        }
+        
+        .thread-item {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+        }
+        
+        .thread-item:hover {
+            background: #f8f9fa;
+            transform: translateX(5px);
+        }
+        
+        .thread-item.active {
+            background: #ff69b4;
+            color: white;
+        }
+        
+        .thread-item .username {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .thread-item .last-message {
+            font-size: 14px;
+            opacity: 0.8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .thread-item .unread-badge {
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 8px;
+            font-size: 12px;
+            float: right;
+        }
+        
+        .chat-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 20px;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            max-height: 400px; /* Fixed height to ensure scrolling */
+            scroll-behavior: smooth;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-end;
+        }
+        
+        .message.sent {
+            justify-content: flex-end;
+        }
+        
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        
+        .message.sent .message-bubble {
+            background: #ff69b4;
+            color: white;
+        }
+        
+        .message.received .message-bubble {
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .message-time {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        
+        .message-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            position: sticky;
+            bottom: 0;
+            width: 100%;
+            flex-shrink: 0; /* Prevent this from shrinking */
+        }
+        
+        .message-input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 12px 20px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .message-input:focus {
+            border-color: #ff69b4;
+        }
+        
+        .send-button {
+            padding: 12px 25px;
+            background: #ff69b4;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .send-button:hover {
+            background: #ff1493;
+            transform: scale(1.05);
+        }
+        
+        .special-buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .special-button {
+            padding: 8px 15px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .special-button.tip {
+            background: #28a745;
+        }
+        
+        .special-button.custom {
+            background: #17a2b8;
+        }
+        
+        .custom-request {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .custom-request h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        
+        .tip-message {
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .start-chat {
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .start-chat-form {
+            display: flex;
+            gap: 10px;
+            max-width: 400px;
+            margin: 20px auto;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 10px;
+        }
+        
+        .login-first {
+            text-align: center;
+            padding: 40px;
+            color: #dc3545;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            width: 90%;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 20px;
+            position: relative;
+        }
+        
+        .modal h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .modal input, .modal textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h2>💬 Messages</h2>
+            </div>
+            
+            <div class="user-select">
+                <label>Current User:</label>
+                <select id="currentUser" onchange="switchUser()">
+                    <option value="">Select a user...</option>
+                    <option value="alice123">alice123</option>
+                    <option value="test">test</option>
+                    <option value="emma_seller">emma_seller</option>
+                    <option value="buyer789">buyer789</option>
+                    <option value="">--- Add your own ---</option>
+                </select>
+            </div>
+            
+            <div class="threads-list" id="threadsList">
+                <div class="empty-state">
+                    <p>Select a user to see messages</p>
+                </div>
+            </div>
+            
+            <div class="start-chat">
+                <h4>Start New Chat</h4>
+                <div class="start-chat-form">
+                    <input type="text" id="newChatUser" placeholder="Username">
+                    <button onclick="startNewChat()" class="send-button">Chat</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div id="loginFirst" class="login-first" style="display: block;">
+                <h2>👋 Welcome to Messaging</h2>
+                <p>Please select a user from the dropdown to start</p>
+            </div>
+            
+            <div id="chatContainer" style="display: none;">
+                <div class="chat-header" id="chatHeader">
+                    <h3>Select a conversation</h3>
+                </div>
+                
+                <div class="chat-content">
+                    <div class="messages-container" id="messagesContainer">
+                        <div class="empty-state">
+                            <h3>No messages yet</h3>
+                            <p>Start a conversation!</p>
+                        </div>
+                    </div>
+                    
+                    <div class="message-input-container">
+                        <div class="message-input-wrapper">
+                            <input 
+                                type="text" 
+                                id="messageInput" 
+                                class="message-input" 
+                                placeholder="Type a message..."
+                                onkeypress="handleKeyPress(event)"
+                            >
+                            <button onclick="sendMessage()" class="send-button">Send</button>
+                        </div>
+                        <div class="special-buttons">
+                            <button onclick="showTipModal()" class="special-button tip">💰 Send Tip</button>
+                            <button onclick="showCustomRequestModal()" class="special-button custom">📋 Custom Request</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tip Modal -->
+    <div id="tipModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeTipModal()">&times;</span>
+            <h3>💰 Send a Tip</h3>
+            <input type="number" id="tipAmount" placeholder="Tip amount ($)" min="1" step="0.01">
+            <input type="text" id="tipMessage" placeholder="Add a message (optional)">
+            <div class="modal-buttons">
+                <button onclick="closeTipModal()" class="special-button">Cancel</button>
+                <button onclick="sendTip()" class="send-button">Send Tip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Request Modal -->
+    <div id="customModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeCustomModal()">&times;</span>
+            <h3>📋 Custom Request</h3>
+            <input type="text" id="customTitle" placeholder="Request title">
+            <input type="number" id="customPrice" placeholder="Price ($)" min="1" step="0.01">
+            <textarea id="customDescription" placeholder="Describe your request..." rows="4"></textarea>
+            <input type="text" id="customTags" placeholder="Tags (comma separated)">
+            <div class="modal-buttons">
+                <button onclick="closeCustomModal()" class="special-button">Cancel</button>
+                <button onclick="sendCustomRequest()" class="send-button">Send Request</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentThread = null;
+        let authToken = null;
+
+        // Switch user
+        async function switchUser() {
+            const username = document.getElementById('currentUser').value;
+            if (!username) {
+                currentUser = null;
+                authToken = null;
+                document.getElementById('loginFirst').style.display = 'block';
+                document.getElementById('chatContainer').style.display = 'none';
+                return;
+            }
+            
+            currentUser = username;
+            
+            // Prompt for password
+            const password = prompt(`Enter password for ${username}:`, 'password123');
+            if (!password) return;
+            
+            // Login to get token
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    authToken = data.token; // Fixed: was data.data.token
+                    document.getElementById('loginFirst').style.display = 'none';
+                    document.getElementById('chatContainer').style.display = 'block';
+                    loadThreads();
+                } else {
+                    alert('Login failed. Check username and password.');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Could not login. Make sure the server is running.');
+            }
+        }
+
+        // Load message threads
+        async function loadThreads() {
+            if (!currentUser || !authToken) return;
+            
+            try {
+                const response = await fetch(`http://localhost:5000/api/messages/threads?username=${currentUser}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    displayThreads(data.data);
+                }
+            } catch (error) {
+                console.error('Error loading threads:', error);
+            }
+        }
+
+        // Display threads in sidebar
+        function displayThreads(threads) {
+            const container = document.getElementById('threadsList');
+            
+            if (threads.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No conversations yet</p></div>';
+                return;
+            }
+            
+            container.innerHTML = threads.map(thread => `
+                <div class="thread-item ${currentThread === thread._id ? 'active' : ''}" 
+                     onclick="selectThread('${thread._id}', '${thread.otherUser}')">
+                    <div class="username">
+                        ${thread.otherUser}
+                        ${thread.unreadCount > 0 ? `<span class="unread-badge">${thread.unreadCount}</span>` : ''}
+                    </div>
+                    <div class="last-message">${thread.lastMessage.content}</div>
+                </div>
+            `).join('');
+        }
+
+        // Select a thread
+        async function selectThread(threadId, otherUser) {
+            currentThread = threadId;
+            
+            // Update UI
+            document.querySelectorAll('.thread-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Find and highlight the active thread
+            const threadItems = document.querySelectorAll('.thread-item');
+            threadItems.forEach(item => {
+                if (item.getAttribute('onclick').includes(threadId)) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Update chat header
+            document.getElementById('chatHeader').innerHTML = `<h3>Chat with ${otherUser}</h3>`;
+            
+            // Load messages
+            try {
+                const response = await fetch(`http://localhost:5000/api/messages/threads/${threadId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    displayMessages(data.data.messages);
+                    markMessagesAsRead(data.data.messages);
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        // Display messages
+        function displayMessages(messages) {
+            const container = document.getElementById('messagesContainer');
+            
+            if (messages.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No messages yet</h3><p>Start the conversation!</p></div>';
+                return;
+            }
+            
+            container.innerHTML = messages.map(msg => {
+                const isSent = msg.sender === currentUser;
+                const time = new Date(msg.createdAt).toLocaleTimeString();
+                
+                let content = '';
+                if (msg.type === 'customRequest') {
+                    content = `
+                        <div class="custom-request">
+                            <h4>📋 ${msg.meta.title}</h4>
+                            <p><strong>Price:</strong> ${msg.meta.price}</p>
+                            <p>${msg.meta.message}</p>
+                            <p><small>Tags: ${msg.meta.tags?.join(', ') || 'None'}</small></p>
+                        </div>
+                    `;
+                } else if (msg.type === 'tip') {
+                    content = `
+                        <div class="tip-message">
+                            <h4>💰 Tip: ${msg.meta.tipAmount}</h4>
+                            <p>${msg.content}</p>
+                        </div>
+                    `;
+                } else {
+                    content = `<p>${msg.content}</p>`;
+                }
+                
+                return `
+                    <div class="message ${isSent ? 'sent' : 'received'}">
+                        <div class="message-bubble">
+                            ${content}
+                            <div class="message-time">${time}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Scroll to bottom to show latest message
+            setTimeout(() => {
+                container.scrollTop = container.scrollHeight;
+            }, 100);
+        }
+
+        // Mark messages as read
+        async function markMessagesAsRead(messages) {
+            const unreadIds = messages
+                .filter(msg => msg.receiver === currentUser && !msg.isRead)
+                .map(msg => msg._id);
+            
+            if (unreadIds.length === 0) return;
+            
+            try {
+                await fetch('http://localhost:5000/api/messages/mark-read', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ messageIds: unreadIds })
+                });
+                
+                // Reload threads to update unread counts
+                loadThreads();
+            } catch (error) {
+                console.error('Error marking messages as read:', error);
+            }
+        }
+
+        // Send a message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            
+            if (!content || !currentThread) return;
+            
+            const [user1, user2] = currentThread.split('-');
+            const receiver = user1 === currentUser ? user2 : user1;
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/messages/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        sender: currentUser,
+                        receiver: receiver,
+                        content: content,
+                        type: 'normal'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    input.value = '';
+                    // Refresh the current thread to show the new message
+                    if (currentThread) {
+                        const [user1, user2] = currentThread.split('-');
+                        const otherUser = user1 === currentUser ? user2 : user1;
+                        await selectThread(currentThread, otherUser);
+                    }
+                    loadThreads();
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Failed to send message');
+            }
+        }
+
+        // Start new chat
+        async function startNewChat() {
+            const username = document.getElementById('newChatUser').value.trim();
+            if (!username || username === currentUser) return;
+            
+            // Create thread ID
+            const threadId = [currentUser, username].sort().join('-');
+            
+            // Send initial message
+            try {
+                const response = await fetch('http://localhost:5000/api/messages/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        sender: currentUser,
+                        receiver: username,
+                        content: 'Hi! 👋',
+                        type: 'normal'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('newChatUser').value = '';
+                    await loadThreads();
+                    // Select the thread after a short delay to ensure it's loaded
+                    setTimeout(async () => {
+                        await selectThread(threadId, username);
+                    }, 500);
+                } else {
+                    alert('User not found');
+                }
+            } catch (error) {
+                console.error('Error starting chat:', error);
+                alert('Failed to start chat');
+            }
+        }
+
+        // Handle enter key
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Tip functions
+        function showTipModal() {
+            if (!currentThread) {
+                alert('Please select a conversation first');
+                return;
+            }
+            document.getElementById('tipModal').style.display = 'block';
+        }
+
+        function closeTipModal() {
+            document.getElementById('tipModal').style.display = 'none';
+            document.getElementById('tipAmount').value = '';
+            document.getElementById('tipMessage').value = '';
+        }
+
+        async function sendTip() {
+            const amount = parseFloat(document.getElementById('tipAmount').value);
+            const message = document.getElementById('tipMessage').value || 'Thanks for being awesome!';
+            
+            if (!amount || amount <= 0) {
+                alert('Please enter a valid tip amount');
+                return;
+            }
+            
+            const [user1, user2] = currentThread.split('-');
+            const receiver = user1 === currentUser ? user2 : user1;
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/messages/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        sender: currentUser,
+                        receiver: receiver,
+                        content: message,
+                        type: 'tip',
+                        meta: {
+                            tipAmount: amount
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    closeTipModal();
+                    selectThread(currentThread, receiver);
+                    alert(`Tip of $${amount} sent!`);
+                }
+            } catch (error) {
+                console.error('Error sending tip:', error);
+                alert('Failed to send tip');
+            }
+        }
+
+        // Custom request functions
+        function showCustomRequestModal() {
+            if (!currentThread) {
+                alert('Please select a conversation first');
+                return;
+            }
+            document.getElementById('customModal').style.display = 'block';
+        }
+
+        function closeCustomModal() {
+            document.getElementById('customModal').style.display = 'none';
+            document.getElementById('customTitle').value = '';
+            document.getElementById('customPrice').value = '';
+            document.getElementById('customDescription').value = '';
+            document.getElementById('customTags').value = '';
+        }
+
+        async function sendCustomRequest() {
+            const title = document.getElementById('customTitle').value.trim();
+            const price = parseFloat(document.getElementById('customPrice').value);
+            const description = document.getElementById('customDescription').value.trim();
+            const tags = document.getElementById('customTags').value.split(',').map(t => t.trim()).filter(t => t);
+            
+            if (!title || !price || !description) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            const [user1, user2] = currentThread.split('-');
+            const receiver = user1 === currentUser ? user2 : user1;
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/messages/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        sender: currentUser,
+                        receiver: receiver,
+                        content: 'Custom request',
+                        type: 'customRequest',
+                        meta: {
+                            title: title,
+                            price: price,
+                            message: description,
+                            tags: tags
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    closeCustomModal();
+                    selectThread(currentThread, receiver);
+                    alert('Custom request sent!');
+                }
+            } catch (error) {
+                console.error('Error sending custom request:', error);
+                alert('Failed to send custom request');
+            }
+        }
+
+        // Auto-refresh threads every 10 seconds
+        setInterval(() => {
+            if (currentUser && authToken) {
+                loadThreads();
+            }
+        }, 10000);
+    </script>
+</body>
+</html>
