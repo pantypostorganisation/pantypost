@@ -1,7 +1,7 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -19,7 +19,7 @@ import { useBrowseDetail } from '@/hooks/useBrowseDetail';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
 import { useAnalytics } from '@/hooks/useAnalytics';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 export default function ListingDetailPage() {
   const { trackEvent, trackPurchase } = useAnalytics();
@@ -58,6 +58,10 @@ export default function ListingDetailPage() {
     bidError,
     bidSuccess,
     currentImageIndex,
+    
+    // Loading and error states
+    isLoading,
+    error,
     
     // Refs
     imageRef,
@@ -220,18 +224,79 @@ export default function ListingDetailPage() {
     await handleBidSubmit();
   };
 
+  // Handle invalid listing ID
   if (!listingId) {
     return (
       <BanCheck>
-        <div className="text-white text-center p-10">Invalid listing URL.</div>
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold mb-2">Invalid Listing</h1>
+            <p className="text-gray-400 mb-4">The listing URL is invalid or malformed.</p>
+            <button
+              onClick={() => router.push('/browse')}
+              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
+            >
+              Back to Browse
+            </button>
+          </div>
+        </div>
       </BanCheck>
     );
   }
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <BanCheck>
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
+            <p className="text-gray-400">Loading listing details...</p>
+          </div>
+        </div>
+      </BanCheck>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <BanCheck>
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold mb-2">Error Loading Listing</h1>
+            <p className="text-gray-400 mb-4">{error}</p>
+            <button
+              onClick={() => router.push('/browse')}
+              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
+            >
+              Back to Browse
+            </button>
+          </div>
+        </div>
+      </BanCheck>
+    );
+  }
+
+  // Not found state
   if (!listing) {
     return (
       <BanCheck>
-        <div className="p-10 text-lg font-medium text-center text-white">Listing not found.</div>
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold mb-2">Listing Not Found</h1>
+            <p className="text-gray-400 mb-4">This listing may have been removed or sold.</p>
+            <button
+              onClick={() => router.push('/browse')}
+              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
+            >
+              Back to Browse
+            </button>
+          </div>
+        </div>
       </BanCheck>
     );
   }
