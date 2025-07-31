@@ -1,7 +1,7 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -115,7 +115,7 @@ export default function ListingDetailPage() {
 
   // Track purchase success
   useEffect(() => {
-    if (showPurchaseSuccess && listing) {
+    if (showPurchaseSuccess && listing && listingId) {
       trackPurchase({
         transactionId: `${listingId}_${Date.now()}`,
         value: listing.price,
@@ -133,7 +133,7 @@ export default function ListingDetailPage() {
 
   // Track auction bid success
   useEffect(() => {
-    if (bidSuccess && listing) {
+    if (bidSuccess && listing && listingId) {
       trackEvent({
         action: 'add_to_cart',
         category: 'auction',
@@ -147,7 +147,7 @@ export default function ListingDetailPage() {
     }
   }, [bidSuccess, listing, listingId, bidAmount, trackEvent]);
 
-  const toggleFavorite = async () => {
+  const toggleFavorite = useCallback(async () => {
     if (!listing || !sellerId) return;
     
     // Get seller tier info from the listing
@@ -178,9 +178,9 @@ export default function ListingDetailPage() {
     } else if (favError) {
       showErrorToast(favError);
     }
-  };
+  }, [listing, sellerId, sellerProfile, isFavorited, toggleFav, trackEvent, showSuccessToast, showErrorToast, favError]);
 
-  const handleSubscribeClick = () => {
+  const handleSubscribeClick = useCallback(() => {
     if (listing?.seller) {
       // Track subscription click
       trackEvent({
@@ -190,11 +190,11 @@ export default function ListingDetailPage() {
       });
       router.push(`/sellers/${listing.seller}`);
     }
-  };
+  }, [listing, trackEvent, router]);
 
   // Enhanced purchase handler with analytics
-  const handlePurchaseWithAnalytics = async () => {
-    if (listing) {
+  const handlePurchaseWithAnalytics = useCallback(async () => {
+    if (listing && listingId) {
       // Track purchase attempt
       trackEvent({
         action: 'begin_checkout',
@@ -206,11 +206,11 @@ export default function ListingDetailPage() {
     
     // Call original purchase handler
     await handlePurchase();
-  };
+  }, [listing, listingId, trackEvent, handlePurchase]);
 
   // Enhanced bid handler with analytics
-  const handleBidSubmitWithAnalytics = async () => {
-    if (listing && bidAmount) {
+  const handleBidSubmitWithAnalytics = useCallback(async () => {
+    if (listing && bidAmount && listingId) {
       // Track bid attempt
       trackEvent({
         action: 'place_bid',
@@ -222,7 +222,7 @@ export default function ListingDetailPage() {
     
     // Call original bid handler
     await handleBidSubmit();
-  };
+  }, [listing, bidAmount, listingId, trackEvent, handleBidSubmit]);
 
   // Handle invalid listing ID
   if (!listingId) {
