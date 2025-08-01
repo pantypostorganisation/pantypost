@@ -1,7 +1,7 @@
 // src/app/sellers/[username]/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import BanCheck from '@/components/BanCheck';
 import ProfileHeader from '@/components/seller-profile/ProfileHeader';
@@ -16,16 +16,32 @@ import { useSellerProfile } from '@/hooks/useSellerProfile';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
 
-// Optional: Memoize components for better performance
+// Memoized components for better performance
 const MemoizedProfileHeader = React.memo(ProfileHeader);
 const MemoizedListingsGrid = React.memo(ListingsGrid);
 const MemoizedProfileGallery = React.memo(ProfileGallery);
 const MemoizedReviewsSection = React.memo(ReviewsSection);
 
 export default function SellerProfilePage() {
-  const { username } = useParams<{ username: string }>();
+  const params = useParams<{ username: string }>();
+  const username = params?.username;
+  
   const { success: showSuccessToast, error: showErrorToast } = useToast();
   const { isFavorited: checkIsFavorited, toggleFavorite: toggleFav, error: favError } = useFavorites();
+  
+  // Validate username parameter
+  if (!username || typeof username !== 'string') {
+    return (
+      <BanCheck>
+        <main className="min-h-screen bg-black text-white flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Invalid Profile</h1>
+            <p className="text-gray-400">The username parameter is missing or invalid.</p>
+          </div>
+        </main>
+      </BanCheck>
+    );
+  }
   
   const {
     // User data
@@ -100,30 +116,88 @@ export default function SellerProfilePage() {
     goToNextSlide,
   } = useSellerProfile(username);
 
-  // Favorites functionality
-  // Generate consistent seller ID
-  const sellerId = `seller_${username}`;
-  const isFavorited = checkIsFavorited(sellerId);
+  // Memoize seller ID generation to prevent unnecessary recalculations
+  const sellerId = useMemo(() => `seller_${username}`, [username]);
   
-  const toggleFavorite = async () => {
-    if (!sellerUser) return;
-    
-    const success = await toggleFav({
-      id: sellerId,
-      username: sellerUser.username,
-      profilePicture: profilePic || undefined,
-      tier: sellerTierInfo?.tier,
-      isVerified: isVerified,
-    });
-    
-    if (success) {
-      showSuccessToast(
-        isFavorited ? 'Removed from favorites' : 'Added to favorites'
-      );
-    } else if (favError) {
-      showErrorToast(favError);
+  // Memoize favorite status check
+  const isFavorited = useMemo(() => {
+    try {
+      return checkIsFavorited(sellerId);
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+      return false;
     }
-  };
+  }, [checkIsFavorited, sellerId]);
+  
+  // Memoized toggle favorite handler
+  const toggleFavorite = useCallback(async () => {
+    if (!sellerUser) {
+      console.warn('Cannot toggle favorite: sellerUser not available');
+      return;
+    }
+    
+    try {
+      const success = await toggleFav({
+        id: sellerId,
+        username: sellerUser.username,
+        profilePicture: profilePic || undefined,
+        tier: sellerTierInfo?.tier,
+        isVerified: isVerified,
+      });
+      
+      if (success) {
+        showSuccessToast(
+          isFavorited ? 'Removed from favorites' : 'Added to favorites'
+        );
+      } else if (favError) {
+        showErrorToast(favError);
+      } else {
+        showErrorToast('Failed to update favorites');
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      showErrorToast('An error occurred while updating favorites');
+    }
+  }, [
+    sellerUser,
+    sellerId,
+    profilePic,
+    sellerTierInfo?.tier,
+    isVerified,
+    isFavorited,
+    toggleFav,
+    showSuccessToast,
+    showErrorToast,
+    favError
+  ]);
+
+  // Memoized modal handlers to prevent unnecessary re-renders
+  const modalHandlers = useMemo(() => ({
+    onShowSubscribeModal: () => setShowSubscribeModal(true),
+    onShowUnsubscribeModal: () => setShowUnsubscribeModal(true),
+    onShowTipModal: () => setShowTipModal(true),
+    onCloseSubscribeModal: () => setShowSubscribeModal(false),
+    onCloseUnsubscribeModal: () => setShowUnsubscribeModal(false),
+    onCloseTipModal: () => setShowTipModal(false),
+  }), [
+    setShowSubscribeModal,
+    setShowUnsubscribeModal,
+    setShowTipModal
+  ]);
+
+  // Validate required data before rendering
+  if (!user) {
+    return (
+      <BanCheck>
+        <main className="min-h-screen bg-black text-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading profile...</p>
+          </div>
+        </main>
+      </BanCheck>
+    );
+  }
 
   return (
     <BanCheck>
@@ -143,16 +217,16 @@ export default function SellerProfilePage() {
             isVerified={isVerified}
             sellerTierInfo={sellerTierInfo}
             user={user}
-            onShowSubscribeModal={() => setShowSubscribeModal(true)}
-            onShowUnsubscribeModal={() => setShowUnsubscribeModal(true)}
-            onShowTipModal={() => setShowTipModal(true)}
+            onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
+            onShowUnsubscribeModal={modalHandlers.onShowUnsubscribeModal}
+            onShowTipModal={modalHandlers.onShowTipModal}
             hasAccess={hasAccess}
             subscriptionPrice={subscriptionPrice}
             totalPhotos={totalPhotos}
             totalVideos={totalVideos}
             followers={followers}
             averageRating={averageRating}
-            reviewsCount={reviews.length}
+            reviewsCount={reviews?.length || 0}
             isFavorited={isFavorited}
             onToggleFavorite={toggleFavorite}
           />
@@ -164,24 +238,26 @@ export default function SellerProfilePage() {
             hasAccess={hasAccess}
             username={username}
             user={user}
-            onShowSubscribeModal={() => setShowSubscribeModal(true)}
+            onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
           />
 
           {/* Gallery Section */}
-          <MemoizedProfileGallery
-            galleryImages={galleryImages}
-            slideIndex={slideIndex}
-            isPaused={isPaused}
-            onSlideChange={setSlideIndex}
-            onTogglePause={togglePause}
-            onImageClick={handleImageClick}
-            onPrevSlide={goToPrevSlide}
-            onNextSlide={goToNextSlide}
-          />
+          {galleryImages && galleryImages.length > 0 && (
+            <MemoizedProfileGallery
+              galleryImages={galleryImages}
+              slideIndex={slideIndex}
+              isPaused={isPaused}
+              onSlideChange={setSlideIndex}
+              onTogglePause={togglePause}
+              onImageClick={handleImageClick}
+              onPrevSlide={goToPrevSlide}
+              onNextSlide={goToNextSlide}
+            />
+          )}
 
           {/* Reviews Section */}
           <MemoizedReviewsSection
-            reviews={reviews}
+            reviews={reviews || []}
             canReview={hasPurchased && !alreadyReviewed && user?.role === 'buyer'}
             rating={rating}
             comment={comment}
@@ -192,41 +268,49 @@ export default function SellerProfilePage() {
           />
 
           {/* Modals - These don't need memoization as they're conditionally rendered */}
-          <TipModal
-            show={showTipModal}
-            username={username}
-            tipAmount={tipAmount}
-            tipSuccess={tipSuccess}
-            tipError={tipError}
-            onAmountChange={setTipAmount}
-            onClose={() => setShowTipModal(false)}
-            onSubmit={handleTipSubmit}
-          />
+          {showTipModal && (
+            <TipModal
+              show={showTipModal}
+              username={username}
+              tipAmount={tipAmount}
+              tipSuccess={tipSuccess}
+              tipError={tipError}
+              onAmountChange={setTipAmount}
+              onClose={modalHandlers.onCloseTipModal}
+              onSubmit={handleTipSubmit}
+            />
+          )}
 
-          <SubscribeModal
-            show={showSubscribeModal}
-            username={username}
-            subscriptionPrice={subscriptionPrice}
-            onClose={() => setShowSubscribeModal(false)}
-            onConfirm={handleConfirmSubscribe}
-          />
+          {showSubscribeModal && (
+            <SubscribeModal
+              show={showSubscribeModal}
+              username={username}
+              subscriptionPrice={subscriptionPrice}
+              onClose={modalHandlers.onCloseSubscribeModal}
+              onConfirm={handleConfirmSubscribe}
+            />
+          )}
 
-          <UnsubscribeModal
-            show={showUnsubscribeModal}
-            username={username}
-            onClose={() => setShowUnsubscribeModal(false)}
-            onConfirm={handleConfirmUnsubscribe}
-          />
+          {showUnsubscribeModal && (
+            <UnsubscribeModal
+              show={showUnsubscribeModal}
+              username={username}
+              onClose={modalHandlers.onCloseUnsubscribeModal}
+              onConfirm={handleConfirmUnsubscribe}
+            />
+          )}
 
-          <GalleryModal
-            show={showGalleryModal}
-            selectedImage={selectedImage}
-            currentImageIndex={currentImageIndex}
-            galleryImages={galleryImages}
-            onClose={closeGalleryModal}
-            onPrevious={handlePrevImage}
-            onNext={handleNextImage}
-          />
+          {showGalleryModal && selectedImage && (
+            <GalleryModal
+              show={showGalleryModal}
+              selectedImage={selectedImage}
+              currentImageIndex={currentImageIndex}
+              galleryImages={galleryImages || []}
+              onClose={closeGalleryModal}
+              onPrevious={handlePrevImage}
+              onNext={handleNextImage}
+            />
+          )}
         </div>
       </main>
     </BanCheck>
