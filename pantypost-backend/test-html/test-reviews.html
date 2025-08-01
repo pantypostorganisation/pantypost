@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PantyPost Reviews Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff69b4, #ff1493);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .login-info {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #ff1493;
+        }
+        select, input, textarea, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #ff1493;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #ff69b4;
+        }
+        .order-item, .review-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .review-form {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .stars {
+            display: inline-block;
+            margin: 10px 0;
+        }
+        .star {
+            font-size: 24px;
+            color: #ddd;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .star:hover,
+        .star.active {
+            color: #ffc107;
+        }
+        .checkbox-group {
+            margin: 10px 0;
+        }
+        .checkbox-group label {
+            display: block;
+            margin: 5px 0;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        .rating-breakdown {
+            margin: 15px 0;
+        }
+        .rating-bar {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        .rating-bar-fill {
+            height: 20px;
+            background-color: #ffc107;
+            border-radius: 3px;
+            margin: 0 10px;
+            flex: 1;
+            position: relative;
+        }
+        .rating-bar-fill span {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #333;
+            font-weight: bold;
+        }
+        .response-form {
+            background-color: #e8f4f8;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+        }
+        .error {
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        .success {
+            color: #28a745;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⭐ PantyPost Reviews Test</h1>
+    </div>
+
+    <div class="login-info">
+        <div>
+            <strong>Logged in as:</strong> <span id="currentUser">Not logged in</span>
+        </div>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Login Section -->
+    <div class="section" id="loginSection">
+        <h2>🔐 Login</h2>
+        <div>
+            <select id="userSelect">
+                <option value="">Select a user...</option>
+                <option value="buyer789">buyer789 (buyer)</option>
+                <option value="alice123">alice123 (buyer)</option>
+                <option value="emma_seller">emma_seller (seller)</option>
+                <option value="sarah_s">sarah_s (seller)</option>
+            </select>
+            <input type="password" id="password" placeholder="Password" value="password123">
+            <button onclick="login()">Login</button>
+        </div>
+        <div id="loginError" class="error"></div>
+    </div>
+
+    <!-- Buyer Section - Write Reviews -->
+    <div class="section" id="buyerSection" style="display: none;">
+        <h2>📝 Your Orders (Available for Review)</h2>
+        <button onclick="loadBuyerOrders()">Load My Orders</button>
+        <div id="buyerOrders"></div>
+    </div>
+
+    <!-- Seller Section - View Reviews -->
+    <div class="section" id="sellerSection" style="display: none;">
+        <h2>⭐ Your Reviews</h2>
+        <button onclick="loadSellerReviews()">Load My Reviews</button>
+        <div id="reviewStats"></div>
+        <div id="sellerReviews"></div>
+    </div>
+
+    <!-- View Any Seller's Reviews -->
+    <div class="section">
+        <h2>🔍 View Seller Reviews</h2>
+        <div>
+            <input type="text" id="sellerUsername" placeholder="Enter seller username">
+            <button onclick="viewSellerReviews()">View Reviews</button>
+        </div>
+        <div id="publicReviews"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentUser = null;
+        let authToken = null;
+
+        // Star rating component
+        function createStarRating(containerId, initialRating = 0) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('span');
+                star.className = 'star';
+                star.innerHTML = '★';
+                star.dataset.rating = i;
+                
+                if (i <= initialRating) {
+                    star.classList.add('active');
+                }
+                
+                star.onclick = function() {
+                    const rating = parseInt(this.dataset.rating);
+                    container.querySelectorAll('.star').forEach((s, index) => {
+                        s.classList.toggle('active', index < rating);
+                    });
+                    container.dataset.rating = rating;
+                };
+                
+                container.appendChild(star);
+            }
+            
+            container.dataset.rating = initialRating;
+        }
+
+        // Login function
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username) {
+                document.getElementById('loginError').textContent = 'Please select a user';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.data.user;
+                    authToken = data.data.token;
+                    
+                    document.getElementById('currentUser').textContent = 
+                        `${currentUser.username} (${currentUser.role})`;
+                    document.getElementById('loginSection').style.display = 'none';
+                    
+                    // Show appropriate section based on role
+                    if (currentUser.role === 'buyer') {
+                        document.getElementById('buyerSection').style.display = 'block';
+                        loadBuyerOrders();
+                    } else if (currentUser.role === 'seller') {
+                        document.getElementById('sellerSection').style.display = 'block';
+                        loadSellerReviews();
+                    }
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Load buyer's orders
+        async function loadBuyerOrders() {
+            try {
+                const response = await fetch(`${API_BASE}/orders?buyer=${currentUser.username}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const ordersDiv = document.getElementById('buyerOrders');
+                
+                if (data.success && data.data.length > 0) {
+                    ordersDiv.innerHTML = '<h3>Orders you can review:</h3>';
+                    
+                    for (const order of data.data) {
+                        // Check if already reviewed
+                        const reviewCheck = await fetch(`${API_BASE}/reviews/order/${order._id}`, {
+                            headers: { 'Authorization': `Bearer ${authToken}` }
+                        });
+                        const reviewData = await reviewCheck.json();
+                        
+                        const orderDiv = document.createElement('div');
+                        orderDiv.className = 'order-item';
+                        orderDiv.innerHTML = `
+                            <h4>${order.title}</h4>
+                            <p>Seller: ${order.seller} | Price: $${order.price}</p>
+                            <p>Status: ${order.shippingStatus} | Date: ${new Date(order.date).toLocaleDateString()}</p>
+                        `;
+                        
+                        if (reviewData.data.hasReview) {
+                            orderDiv.innerHTML += `
+                                <p style="color: green;">✓ Already reviewed (Rating: ${reviewData.data.review.rating}/5)</p>
+                            `;
+                        } else if (order.shippingStatus === 'delivered') {
+                            orderDiv.innerHTML += `
+                                <button onclick="showReviewForm('${order._id}', '${order.seller}')">Write Review</button>
+                                <div id="reviewForm-${order._id}"></div>
+                            `;
+                        } else {
+                            orderDiv.innerHTML += `
+                                <p style="color: orange;">⏳ Can review after delivery</p>
+                            `;
+                        }
+                        
+                        ordersDiv.appendChild(orderDiv);
+                    }
+                } else {
+                    ordersDiv.innerHTML = '<p>No orders found</p>';
+                }
+            } catch (error) {
+                document.getElementById('buyerOrders').innerHTML = 
+                    '<p class="error">Error loading orders: ' + error.message + '</p>';
+            }
+        }
+
+        // Show review form
+        function showReviewForm(orderId, seller) {
+            const formDiv = document.getElementById(`reviewForm-${orderId}`);
+            formDiv.innerHTML = `
+                <div class="review-form">
+                    <h4>Write your review for ${seller}</h4>
+                    
+                    <div>
+                        <label>Rating:</label>
+                        <div class="stars" id="stars-${orderId}"></div>
+                    </div>
+                    
+                    <div>
+                        <label>Your Review:</label>
+                        <textarea id="comment-${orderId}" placeholder="Share your experience (minimum 10 characters)"></textarea>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="asDescribed-${orderId}" checked>
+                            Item was as described
+                        </label>
+                        <label>
+                            <input type="checkbox" id="fastShipping-${orderId}" checked>
+                            Fast shipping
+                        </label>
+                        <label>
+                            <input type="checkbox" id="wouldBuyAgain-${orderId}" checked>
+                            Would buy again
+                        </label>
+                    </div>
+                    
+                    <button onclick="submitReview('${orderId}')">Submit Review</button>
+                    <button onclick="document.getElementById('reviewForm-${orderId}').innerHTML = ''">Cancel</button>
+                    
+                    <div id="reviewError-${orderId}" class="error"></div>
+                    <div id="reviewSuccess-${orderId}" class="success"></div>
+                </div>
+            `;
+            
+            // Initialize star rating
+            createStarRating(`stars-${orderId}`, 5);
+        }
+
+        // Submit review
+        async function submitReview(orderId) {
+            const rating = parseInt(document.getElementById(`stars-${orderId}`).dataset.rating);
+            const comment = document.getElementById(`comment-${orderId}`).value;
+            const asDescribed = document.getElementById(`asDescribed-${orderId}`).checked;
+            const fastShipping = document.getElementById(`fastShipping-${orderId}`).checked;
+            const wouldBuyAgain = document.getElementById(`wouldBuyAgain-${orderId}`).checked;
+            
+            try {
+                const response = await fetch(`${API_BASE}/reviews`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        orderId,
+                        rating,
+                        comment,
+                        asDescribed,
+                        fastShipping,
+                        wouldBuyAgain
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById(`reviewSuccess-${orderId}`).textContent = 
+                        'Review submitted successfully!';
+                    setTimeout(() => loadBuyerOrders(), 2000);
+                } else {
+                    document.getElementById(`reviewError-${orderId}`).textContent = 
+                        data.error || 'Failed to submit review';
+                }
+            } catch (error) {
+                document.getElementById(`reviewError-${orderId}`).textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+
+        // Load seller's reviews
+        async function loadSellerReviews() {
+            try {
+                const response = await fetch(`${API_BASE}/reviews/seller/${currentUser.username}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Display stats
+                    const statsDiv = document.getElementById('reviewStats');
+                    const stats = data.data.stats;
+                    
+                    statsDiv.innerHTML = `
+                        <h3>Your Review Statistics</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>${stats.avgRating.toFixed(1)} ⭐</h4>
+                                <p>Average Rating</p>
+                            </div>
+                            <div class="stat-card">
+                                <h4>${stats.totalReviews}</h4>
+                                <p>Total Reviews</p>
+                            </div>
+                        </div>
+                        <div class="rating-breakdown">
+                            <h4>Rating Breakdown</h4>
+                            ${[5,4,3,2,1].map(stars => `
+                                <div class="rating-bar">
+                                    <span>${stars}★</span>
+                                    <div class="rating-bar-fill" style="width: ${(stats[`${['one','two','three','four','five'][stars-1]}Stars`] / stats.totalReviews * 100) || 0}%">
+                                        <span>${stats[`${['one','two','three','four','five'][stars-1]}Stars`] || 0}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    
+                    // Display reviews
+                    const reviewsDiv = document.getElementById('sellerReviews');
+                    reviewsDiv.innerHTML = '<h3>Recent Reviews</h3>';
+                    
+                    if (data.data.reviews.length > 0) {
+                        data.data.reviews.forEach(review => {
+                            const reviewDiv = document.createElement('div');
+                            reviewDiv.className = 'review-item';
+                            reviewDiv.innerHTML = `
+                                <div>
+                                    <strong>${review.reviewer}</strong> - ${'★'.repeat(review.rating)}${'☆'.repeat(5-review.rating)}
+                                    <span style="float: right;">${new Date(review.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <p>${review.comment}</p>
+                                <div style="font-size: 0.9em; color: #666;">
+                                    ${review.asDescribed ? '✓ As described' : '✗ Not as described'} |
+                                    ${review.fastShipping ? '✓ Fast shipping' : '✗ Slow shipping'} |
+                                    ${review.wouldBuyAgain ? '✓ Would buy again' : '✗ Would not buy again'}
+                                </div>
+                                ${review.sellerResponse ? `
+                                    <div style="background: #e8f4f8; padding: 10px; margin-top: 10px; border-radius: 5px;">
+                                        <strong>Your response:</strong> ${review.sellerResponse.text}
+                                    </div>
+                                ` : `
+                                    <button onclick="showResponseForm('${review._id}')">Respond</button>
+                                    <div id="responseForm-${review._id}"></div>
+                                `}
+                            `;
+                            reviewsDiv.appendChild(reviewDiv);
+                        });
+                    } else {
+                        reviewsDiv.innerHTML += '<p>No reviews yet</p>';
+                    }
+                } else {
+                    document.getElementById('sellerReviews').innerHTML = 
+                        '<p class="error">Error loading reviews</p>';
+                }
+            } catch (error) {
+                document.getElementById('sellerReviews').innerHTML = 
+                    '<p class="error">Error: ' + error.message + '</p>';
+            }
+        }
+
+        // Show response form
+        function showResponseForm(reviewId) {
+            const formDiv = document.getElementById(`responseForm-${reviewId}`);
+            formDiv.innerHTML = `
+                <div class="response-form">
+                    <textarea id="response-${reviewId}" placeholder="Write your response (minimum 10 characters)"></textarea>
+                    <button onclick="submitResponse('${reviewId}')">Submit Response</button>
+                    <button onclick="document.getElementById('responseForm-${reviewId}').innerHTML = ''">Cancel</button>
+                    <div id="responseError-${reviewId}" class="error"></div>
+                </div>
+            `;
+        }
+
+        // Submit response
+        async function submitResponse(reviewId) {
+            const response = document.getElementById(`response-${reviewId}`).value;
+            
+            try {
+                const res = await fetch(`${API_BASE}/reviews/${reviewId}/response`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ response })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    loadSellerReviews();
+                } else {
+                    document.getElementById(`responseError-${reviewId}`).textContent = 
+                        data.error || 'Failed to submit response';
+                }
+            } catch (error) {
+                document.getElementById(`responseError-${reviewId}`).textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+
+        // View any seller's reviews (public)
+        async function viewSellerReviews() {
+            const username = document.getElementById('sellerUsername').value;
+            if (!username) {
+                alert('Please enter a seller username');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/reviews/seller/${username}`);
+                const data = await response.json();
+                
+                const reviewsDiv = document.getElementById('publicReviews');
+                
+                if (data.success) {
+                    const stats = data.data.stats;
+                    reviewsDiv.innerHTML = `
+                        <h3>Reviews for ${username}</h3>
+                        <p><strong>Average Rating:</strong> ${stats.avgRating.toFixed(1)} ⭐ (${stats.totalReviews} reviews)</p>
+                    `;
+                    
+                    if (data.data.reviews.length > 0) {
+                        data.data.reviews.forEach(review => {
+                            reviewsDiv.innerHTML += `
+                                <div class="review-item">
+                                    <div>
+                                        <strong>${review.reviewer}</strong> - ${'★'.repeat(review.rating)}${'☆'.repeat(5-review.rating)}
+                                        <span style="float: right;">${new Date(review.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <p>${review.comment}</p>
+                                    ${review.sellerResponse ? `
+                                        <div style="background: #e8f4f8; padding: 10px; margin-top: 10px; border-radius: 5px;">
+                                            <strong>Seller response:</strong> ${review.sellerResponse.text}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        });
+                    } else {
+                        reviewsDiv.innerHTML += '<p>No reviews yet</p>';
+                    }
+                } else {
+                    reviewsDiv.innerHTML = `<p class="error">${data.error || 'Failed to load reviews'}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('publicReviews').innerHTML = 
+                    '<p class="error">Error: ' + error.message + '</p>';
+            }
+        }
+
+        // Logout
+        function logout() {
+            currentUser = null;
+            authToken = null;
+            document.getElementById('currentUser').textContent = 'Not logged in';
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('buyerSection').style.display = 'none';
+            document.getElementById('sellerSection').style.display = 'none';
+            document.getElementById('userSelect').value = '';
+        }
+    </script>
+</body>
+</html>

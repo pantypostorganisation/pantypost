@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PantyPost Subscriptions Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #e91e63;
+            text-align: center;
+        }
+        .user-info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .balance {
+            font-size: 20px;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .seller-card {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .subscription-card {
+            background: #e8f5e9;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #e91e63;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #d81b60;
+        }
+        button.cancel {
+            background-color: #dc3545;
+        }
+        button.cancel:hover {
+            background-color: #c82333;
+        }
+        .price {
+            font-size: 24px;
+            color: #e91e63;
+            font-weight: bold;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.active { background: #4CAF50; color: white; }
+        .status.cancelled { background: #dc3545; color: white; }
+        .error { color: #f44336; margin: 10px 0; }
+        .success { color: #4CAF50; margin: 10px 0; }
+        .stats {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .stats-item {
+            display: inline-block;
+            margin-right: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💝 PantyPost Subscriptions Test</h1>
+        
+        <div id="loginSection">
+            <h2>Login First</h2>
+            <select id="userSelect">
+                <option value="">Select a user...</option>
+                <option value="buyer789">buyer789 (Buyer - has $20.01)</option>
+                <option value="alice123">alice123 (Buyer)</option>
+                <option value="emma_seller">emma_seller (Seller - has $26.99)</option>
+                <option value="sarah_s">sarah_s (Seller)</option>
+            </select>
+            <button onclick="login()">Login</button>
+        </div>
+        
+        <div id="mainSection" style="display: none;">
+            <div class="user-info">
+                <div>
+                    <strong>Logged in as:</strong> <span id="currentUser"></span> 
+                    (<span id="userRole"></span>)
+                </div>
+                <div>
+                    <span class="balance">Balance: $<span id="balance">0.00</span></span>
+                    <button onclick="logout()">Logout</button>
+                </div>
+            </div>
+            
+            <!-- Buyer Section -->
+            <div id="buyerSection" style="display: none;">
+                <div class="section">
+                    <h3>🌟 Available Sellers to Subscribe</h3>
+                    <div class="seller-card">
+                        <h4>emma_seller</h4>
+                        <p>Premium content creator with daily updates!</p>
+                        <div class="price">$9.99/month</div>
+                        <button onclick="subscribe('emma_seller', 9.99)">Subscribe</button>
+                    </div>
+                    <div class="seller-card">
+                        <h4>sarah_s</h4>
+                        <p>Exclusive content and personalized messages!</p>
+                        <div class="price">$14.99/month</div>
+                        <button onclick="subscribe('sarah_s', 14.99)">Subscribe</button>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>📱 Your Active Subscriptions</h3>
+                    <button onclick="loadSubscriptions()">Refresh</button>
+                    <div id="activeSubscriptions"></div>
+                </div>
+            </div>
+            
+            <!-- Seller Section -->
+            <div id="sellerSection" style="display: none;">
+                <div class="section">
+                    <h3>📊 Subscription Statistics</h3>
+                    <div id="sellerStats" class="stats"></div>
+                </div>
+                
+                <div class="section">
+                    <h3>👥 Your Subscribers</h3>
+                    <button onclick="loadSubscribers()">Refresh</button>
+                    <div id="subscribersList"></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>💰 Subscription Transactions</h3>
+                <button onclick="loadTransactions()">Refresh</button>
+                <div id="transactionsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentUser = null;
+        let userRole = null;
+
+        // Login
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            if (!username) {
+                alert('Please select a user');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    authToken = data.data.token;
+                    currentUser = username;
+                    userRole = data.data.user.role;
+                    
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('mainSection').style.display = 'block';
+                    document.getElementById('currentUser').textContent = username;
+                    document.getElementById('userRole').textContent = userRole;
+                    
+                    // Show/hide sections
+                    document.getElementById('buyerSection').style.display = 
+                        userRole === 'buyer' ? 'block' : 'none';
+                    document.getElementById('sellerSection').style.display = 
+                        userRole === 'seller' ? 'block' : 'none';
+                    
+                    loadBalance();
+                    if (userRole === 'buyer') {
+                        loadSubscriptions();
+                    } else if (userRole === 'seller') {
+                        loadStats();
+                        loadSubscribers();
+                    }
+                    loadTransactions();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Logout
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            userRole = null;
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('mainSection').style.display = 'none';
+        }
+        
+        // Load balance
+        async function loadBalance() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/wallet/balance/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('balance').textContent = data.data.balance.toFixed(2);
+                }
+            } catch (error) {
+                console.error('Error loading balance:', error);
+            }
+        }
+        
+        // Subscribe to a seller
+        async function subscribe(seller, price) {
+            if (!confirm(`Subscribe to ${seller} for $${price}/month?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/subscriptions/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ seller, price })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert(`✅ Successfully subscribed to ${seller}!`);
+                    loadBalance();
+                    loadSubscriptions();
+                    loadTransactions();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Unsubscribe
+        async function unsubscribe(seller) {
+            if (!confirm(`Cancel subscription to ${seller}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/subscriptions/unsubscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ seller })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Subscription cancelled');
+                    loadSubscriptions();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Load subscriptions (for buyers)
+        async function loadSubscriptions() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/subscriptions/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const div = document.getElementById('activeSubscriptions');
+                
+                if (data.success && data.data.subscriptions.length > 0) {
+                    const activeSubs = data.data.subscriptions.filter(sub => sub.status === 'active');
+                    
+                    if (activeSubs.length > 0) {
+                        div.innerHTML = activeSubs.map(sub => `
+                            <div class="subscription-card">
+                                <h4>Subscribed to: ${sub.creator}</h4>
+                                <p><strong>Price:</strong> $${sub.price}/month</p>
+                                <p><strong>Started:</strong> ${new Date(sub.startDate).toLocaleDateString()}</p>
+                                <p><strong>Next billing:</strong> ${new Date(sub.nextBillingDate).toLocaleDateString()}</p>
+                                <p><strong>Status:</strong> <span class="status active">ACTIVE</span></p>
+                                <button class="cancel" onclick="unsubscribe('${sub.creator}')">Cancel Subscription</button>
+                            </div>
+                        `).join('');
+                    } else {
+                        div.innerHTML = '<p>No active subscriptions</p>';
+                    }
+                } else {
+                    div.innerHTML = '<p>No subscriptions yet</p>';
+                }
+            } catch (error) {
+                console.error('Error loading subscriptions:', error);
+            }
+        }
+        
+        // Load subscribers (for sellers)
+        async function loadSubscribers() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/subscriptions/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const div = document.getElementById('subscribersList');
+                
+                if (data.success && data.data.subscribers.length > 0) {
+                    div.innerHTML = data.data.subscribers.map(sub => `
+                        <div class="subscription-card">
+                            <h4>Subscriber: ${sub.subscriber}</h4>
+                            <p><strong>Monthly payment:</strong> $${sub.price}</p>
+                            <p><strong>Your earnings:</strong> $${sub.creatorEarnings}/month</p>
+                            <p><strong>Started:</strong> ${new Date(sub.startDate).toLocaleDateString()}</p>
+                            <p><strong>Next payment:</strong> ${new Date(sub.nextBillingDate).toLocaleDateString()}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    div.innerHTML = '<p>No subscribers yet</p>';
+                }
+            } catch (error) {
+                console.error('Error loading subscribers:', error);
+            }
+        }
+        
+        // Load seller stats
+        async function loadStats() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/subscriptions/stats/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const div = document.getElementById('sellerStats');
+                
+                if (data.success) {
+                    div.innerHTML = `
+                        <div class="stats-item">
+                            <strong>Active Subscribers:</strong> ${data.data.activeSubscribers}
+                        </div>
+                        <div class="stats-item">
+                            <strong>Monthly Revenue:</strong> $${data.data.monthlyRevenue.toFixed(2)}
+                        </div>
+                        <div class="stats-item">
+                            <strong>Average Price:</strong> $${data.data.averageSubscriptionPrice.toFixed(2)}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        // Load transactions
+        async function loadTransactions() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/wallet/transactions/${currentUser}?type=subscription`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const div = document.getElementById('transactionsList');
+                
+                if (data.success && data.data.length > 0) {
+                    div.innerHTML = data.data.slice(0, 5).map(trans => `
+                        <div style="padding: 10px; background: #f8f9fa; margin: 5px 0; border-radius: 5px;">
+                            <strong>${trans.type.toUpperCase()}</strong> - $${trans.amount.toFixed(2)}<br>
+                            <small>${trans.description}</small><br>
+                            <small>${new Date(trans.createdAt).toLocaleString()}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    div.innerHTML = '<p>No subscription transactions yet</p>';
+                }
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
+        }
+    </script>
+</body>
+</html>

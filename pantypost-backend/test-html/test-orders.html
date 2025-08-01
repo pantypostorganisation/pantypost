@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PantyPost Orders Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #e91e63;
+            text-align: center;
+        }
+        .user-info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .balance {
+            font-size: 20px;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .listing-card {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .order-card {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #e91e63;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 12px 25px;
+            background-color: #e91e63;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #d81b60;
+        }
+        .price {
+            font-size: 24px;
+            color: #e91e63;
+            font-weight: bold;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.pending { background: #ffc107; color: #000; }
+        .status.processing { background: #17a2b8; color: #fff; }
+        .status.shipped { background: #6f42c1; color: #fff; }
+        .status.delivered { background: #28a745; color: #fff; }
+        .error { color: #f44336; margin: 10px 0; }
+        .success { color: #4CAF50; margin: 10px 0; }
+        .address-form {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛍️ PantyPost Orders Test</h1>
+        
+        <div id="loginSection">
+            <h2>Login First</h2>
+            <select id="userSelect">
+                <option value="">Select a user...</option>
+                <option value="buyer789">buyer789 (Buyer - has $50)</option>
+                <option value="alice123">alice123 (Buyer - has $0)</option>
+                <option value="emma_seller">emma_seller (Seller)</option>
+                <option value="sarah_s">sarah_s (Seller)</option>
+            </select>
+            <button onclick="login()">Login</button>
+        </div>
+        
+        <div id="mainSection" style="display: none;">
+            <div class="user-info">
+                <div>
+                    <strong>Logged in as:</strong> <span id="currentUser"></span> 
+                    (<span id="userRole"></span>)
+                </div>
+                <div>
+                    <span class="balance">Balance: $<span id="balance">0.00</span></span>
+                    <button onclick="logout()" style="margin-left: 20px;">Logout</button>
+                </div>
+            </div>
+            
+            <!-- Buyer Section -->
+            <div id="buyerSection" style="display: none;">
+                <div class="section">
+                    <h3>📦 Available Listings to Purchase</h3>
+                    <div id="availableListings">
+                        <!-- Sample listings -->
+                        <div class="listing-card">
+                            <h4>Lacy Pink Set</h4>
+                            <p>Beautiful lacy set worn with care</p>
+                            <div class="price">$29.99</div>
+                            <p><strong>Seller:</strong> emma_seller</p>
+                            <button onclick="showPurchaseForm('Lacy Pink Set', 29.99, 'emma_seller')">Buy Now</button>
+                        </div>
+                        <div class="listing-card">
+                            <h4>Cotton Comfort Set</h4>
+                            <p>Comfortable cotton set for daily wear</p>
+                            <div class="price">$19.99</div>
+                            <p><strong>Seller:</strong> sarah_s</p>
+                            <button onclick="showPurchaseForm('Cotton Comfort Set', 19.99, 'sarah_s')">Buy Now</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Purchase Form -->
+                <div id="purchaseForm" class="section" style="display: none;">
+                    <h3>Complete Your Purchase</h3>
+                    <p><strong>Item:</strong> <span id="purchaseTitle"></span></p>
+                    <p><strong>Price:</strong> $<span id="purchasePrice"></span></p>
+                    <p><strong>Seller:</strong> <span id="purchaseSeller"></span></p>
+                    
+                    <div class="address-form">
+                        <h4>Delivery Address</h4>
+                        <input type="text" id="fullName" placeholder="Full Name" value="John Doe">
+                        <input type="text" id="addressLine1" placeholder="Address Line 1" value="123 Main St">
+                        <input type="text" id="addressLine2" placeholder="Address Line 2 (optional)">
+                        <input type="text" id="city" placeholder="City" value="New York">
+                        <input type="text" id="state" placeholder="State" value="NY">
+                        <input type="text" id="postalCode" placeholder="Postal Code" value="10001">
+                        <select id="country">
+                            <option value="US">United States</option>
+                            <option value="CA">Canada</option>
+                            <option value="UK">United Kingdom</option>
+                        </select>
+                    </div>
+                    
+                    <button onclick="completePurchase()">Complete Purchase</button>
+                    <button onclick="cancelPurchase()">Cancel</button>
+                    <div id="purchaseResult"></div>
+                </div>
+            </div>
+            
+            <!-- Orders List -->
+            <div class="section">
+                <h3>📋 Your Orders</h3>
+                <button onclick="loadOrders()">Refresh</button>
+                <div id="ordersList"></div>
+            </div>
+            
+            <!-- Seller Order Management -->
+            <div id="sellerOrderSection" class="section" style="display: none;">
+                <h3>📦 Manage Orders (Seller)</h3>
+                <div id="sellerOrders"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentUser = null;
+        let userRole = null;
+        let currentPurchase = {};
+
+        // Login
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            if (!username) {
+                alert('Please select a user');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    authToken = data.data.token;
+                    currentUser = username;
+                    userRole = data.data.user.role;
+                    
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('mainSection').style.display = 'block';
+                    document.getElementById('currentUser').textContent = username;
+                    document.getElementById('userRole').textContent = userRole;
+                    
+                    // Show/hide sections based on role
+                    document.getElementById('buyerSection').style.display = 
+                        userRole === 'buyer' ? 'block' : 'none';
+                    document.getElementById('sellerOrderSection').style.display = 
+                        userRole === 'seller' ? 'block' : 'none';
+                    
+                    loadBalance();
+                    loadOrders();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Logout
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            userRole = null;
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('mainSection').style.display = 'none';
+        }
+        
+        // Load balance
+        async function loadBalance() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/wallet/balance/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('balance').textContent = data.data.balance.toFixed(2);
+                }
+            } catch (error) {
+                console.error('Error loading balance:', error);
+            }
+        }
+        
+        // Show purchase form
+        function showPurchaseForm(title, price, seller) {
+            currentPurchase = { title, price, seller };
+            document.getElementById('purchaseTitle').textContent = title;
+            document.getElementById('purchasePrice').textContent = price.toFixed(2);
+            document.getElementById('purchaseSeller').textContent = seller;
+            document.getElementById('purchaseForm').style.display = 'block';
+            document.getElementById('purchaseResult').innerHTML = '';
+        }
+        
+        // Cancel purchase
+        function cancelPurchase() {
+            document.getElementById('purchaseForm').style.display = 'none';
+            currentPurchase = {};
+        }
+        
+        // Complete purchase
+        async function completePurchase() {
+            const resultDiv = document.getElementById('purchaseResult');
+            
+            const deliveryAddress = {
+                fullName: document.getElementById('fullName').value,
+                addressLine1: document.getElementById('addressLine1').value,
+                addressLine2: document.getElementById('addressLine2').value,
+                city: document.getElementById('city').value,
+                state: document.getElementById('state').value,
+                postalCode: document.getElementById('postalCode').value,
+                country: document.getElementById('country').value
+            };
+            
+            // Validate address
+            if (!deliveryAddress.fullName || !deliveryAddress.addressLine1 || 
+                !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.postalCode) {
+                resultDiv.innerHTML = '<div class="error">Please fill in all required address fields</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        title: currentPurchase.title,
+                        description: 'Test purchase',
+                        price: currentPurchase.price,
+                        seller: currentPurchase.seller,
+                        imageUrl: 'https://via.placeholder.com/300',
+                        tags: ['test'],
+                        deliveryAddress: deliveryAddress
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ Purchase successful! Order created.</div>';
+                    setTimeout(() => {
+                        cancelPurchase();
+                        loadBalance();
+                        loadOrders();
+                    }, 2000);
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ ' + data.error + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+        
+        // Load orders
+        async function loadOrders() {
+            try {
+                const response = await fetch('http://localhost:5000/api/orders', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const ordersDiv = document.getElementById('ordersList');
+                const sellerOrdersDiv = document.getElementById('sellerOrders');
+                
+                if (data.success && data.data.length > 0) {
+                    const ordersHTML = data.data.map(order => `
+                        <div class="order-card">
+                            <h4>${order.title}</h4>
+                            <p><strong>Price:</strong> $${order.price.toFixed(2)}</p>
+                            <p><strong>${userRole === 'buyer' ? 'Seller' : 'Buyer'}:</strong> ${userRole === 'buyer' ? order.seller : order.buyer}</p>
+                            <p><strong>Date:</strong> ${new Date(order.date).toLocaleDateString()}</p>
+                            <p><strong>Status:</strong> <span class="status ${order.shippingStatus}">${order.shippingStatus.toUpperCase()}</span></p>
+                            ${order.trackingNumber ? `<p><strong>Tracking:</strong> ${order.trackingNumber}</p>` : ''}
+                            ${userRole === 'seller' && order.shippingStatus === 'pending' ? 
+                                `<button onclick="updateOrderStatus('${order._id}', 'processing')">Mark as Processing</button>` : ''}
+                            ${userRole === 'seller' && order.shippingStatus === 'processing' ? 
+                                `<button onclick="showShippingForm('${order._id}')">Mark as Shipped</button>` : ''}
+                        </div>
+                    `).join('');
+                    
+                    ordersDiv.innerHTML = ordersHTML;
+                    if (sellerOrdersDiv) sellerOrdersDiv.innerHTML = ordersHTML;
+                } else {
+                    ordersDiv.innerHTML = '<p>No orders yet.</p>';
+                    if (sellerOrdersDiv) sellerOrdersDiv.innerHTML = '<p>No orders yet.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+        
+        // Update order status
+        async function updateOrderStatus(orderId, newStatus) {
+            try {
+                const response = await fetch(`http://localhost:5000/api/orders/${orderId}/status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ shippingStatus: newStatus })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Order status updated!');
+                    loadOrders();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Show shipping form
+        function showShippingForm(orderId) {
+            const trackingNumber = prompt('Enter tracking number:');
+            if (trackingNumber) {
+                updateOrderStatusWithTracking(orderId, 'shipped', trackingNumber);
+            }
+        }
+        
+        // Update with tracking
+        async function updateOrderStatusWithTracking(orderId, newStatus, trackingNumber) {
+            try {
+                const response = await fetch(`http://localhost:5000/api/orders/${orderId}/status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ 
+                        shippingStatus: newStatus,
+                        trackingNumber: trackingNumber 
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Order marked as shipped!');
+                    loadOrders();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,33 +1,21 @@
-// message.routes.js
-// This file contains all messaging-related routes
-
+// pantypost-backend/routes/message.routes.js
 const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
-const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
-const { ERROR_CODES, MESSAGE_TYPES } = require('../utils/constants');
 
-// ============= MESSAGING ROUTES =============
-
-// GET /api/messages/threads - Get message threads for a user (protected)
+// Get all threads for a user
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
     const threads = await Message.getThreads(username);
-    
-    // Get user info for each thread
-    for (let thread of threads) {
-      const otherUser = await User.findOne({ username: thread.otherUser })
-        .select('username profilePic isVerified role');
-      thread.userProfile = otherUser;
-    }
     
     res.json({
       success: true,
       data: threads
     });
   } catch (error) {
+    console.error('Get threads error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -35,35 +23,34 @@ router.get('/threads', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/messages/threads/:threadId - Get messages in a thread (protected)
+// Get messages for a specific thread
 router.get('/threads/:threadId', authMiddleware, async (req, res) => {
   try {
-    const messages = await Message.find({ 
-      threadId: req.params.threadId 
-    }).sort({ createdAt: 1 });
+    const { threadId } = req.params;
+    const username = req.user.username;
     
-    // Verify user is part of this conversation
-    const participants = req.params.threadId.split('-');
-    if (!participants.includes(req.user.username) && req.user.role !== 'admin') {
+    // Verify user is part of this thread
+    const [user1, user2] = threadId.split('-');
+    if (username !== user1 && username !== user2) {
       return res.status(403).json({
         success: false,
-        error: 'You are not part of this conversation'
+        error: 'Access denied to this thread'
       });
     }
     
-    // Get other user info
-    const otherUsername = participants.find(p => p !== req.user.username);
-    const otherUser = await User.findOne({ username: otherUsername })
-      .select('username profilePic isVerified role');
+    const messages = await Message.find({ threadId })
+      .sort({ createdAt: 1 })
+      .limit(100);
     
     res.json({
       success: true,
       data: {
-        messages,
-        otherUser
+        threadId,
+        messages
       }
     });
   } catch (error) {
+    console.error('Get thread messages error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -71,81 +58,100 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/messages/send - Send a message (protected)
+// Send a message
 router.post('/send', authMiddleware, async (req, res) => {
   try {
-    const { receiver, content, type, meta } = req.body;
-    const sender = req.user.username;
+    const { receiver, content, type = 'normal', meta } = req.body;
+    const sender = req.user.username; // Get sender from auth token
     
-    // Check if receiver exists
-    const receiverUser = await User.findOne({ username: receiver });
-    if (!receiverUser) {
-      return res.status(404).json({
+    // Validate input
+    if (!receiver || !content) {
+      return res.status(400).json({
         success: false,
-        error: 'Receiver not found'
+        error: 'Receiver and content are required'
       });
     }
     
-    // Generate thread ID
+    // Generate threadId
     const threadId = Message.getThreadId(sender, receiver);
     
-    const newMessage = new Message({
+    // Create new message
+    const message = new Message({
       sender,
       receiver,
       content,
-      type: type || 'normal',
+      type,
       meta,
       threadId
     });
     
-    await newMessage.save();
+    await message.save();
     
     res.json({
       success: true,
-      data: newMessage
+      data: message
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Send message error:', error);
+    res.status(500).json({
       success: false,
       error: error.message
     });
   }
 });
 
-// POST /api/messages/mark-read - Mark messages as read (protected)
+// Mark messages as read
 router.post('/mark-read', authMiddleware, async (req, res) => {
   try {
     const { messageIds } = req.body;
+    const username = req.user.username;
     
-    await Message.updateMany(
-      { 
+    if (!Array.isArray(messageIds)) {
+      return res.status(400).json({
+        success: false,
+        error: 'messageIds must be an array'
+      });
+    }
+    
+    // Update only messages where current user is receiver
+    const result = await Message.updateMany(
+      {
         _id: { $in: messageIds },
-        receiver: req.user.username 
+        receiver: username,
+        isRead: false
       },
-      { isRead: true }
+      {
+        isRead: true
+      }
     );
     
     res.json({
-      success: true
+      success: true,
+      data: {
+        updated: result.modifiedCount
+      }
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Mark read error:', error);
+    res.status(500).json({
       success: false,
       error: error.message
     });
   }
 });
 
-// GET /api/messages/unread-count - Get unread message count (protected)
+// Get unread count
 router.get('/unread-count', authMiddleware, async (req, res) => {
   try {
-    const count = await Message.getUnreadCount(req.user.username);
+    const username = req.user.username;
+    const count = await Message.getUnreadCount(username);
     
     res.json({
       success: true,
       data: { count }
     });
   } catch (error) {
+    console.error('Get unread count error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -153,5 +159,4 @@ router.get('/unread-count', authMiddleware, async (req, res) => {
   }
 });
 
-// Export the router
 module.exports = router;

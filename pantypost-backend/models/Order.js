@@ -18,7 +18,7 @@ const orderSchema = new mongoose.Schema({
   markedUpPrice: {
     type: Number,
     default: function() {
-      return this.price * 1.1; // 10% markup
+      return Math.round(this.price * 1.1 * 100) / 100; // 10% markup, rounded to 2 decimals
     }
   },
   imageUrl: {
@@ -45,6 +45,12 @@ const orderSchema = new mongoose.Schema({
     type: String,
     maxlength: 20
   }],
+  
+  // Reference to original listing
+  listingId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Listing'
+  },
   
   // Auction info (if applicable)
   wasAuction: {
@@ -91,11 +97,42 @@ const orderSchema = new mongoose.Schema({
   },
   trackingNumber: String,
   shippedDate: Date,
+  deliveredDate: Date,
   
   // Financial
   tierCreditAmount: {
     type: Number,
     default: 0
+  },
+  platformFee: {
+    type: Number,
+    default: function() {
+      return Math.round(this.price * 0.1 * 100) / 100; // 10% platform fee
+    }
+  },
+  sellerEarnings: {
+    type: Number,
+    default: function() {
+      return Math.round((this.price - this.platformFee) * 100) / 100; // Price minus platform fee
+    }
+  },
+  
+  // Payment status
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'completed', 'failed', 'refunded'],
+    default: 'pending'
+  },
+  paymentCompletedAt: Date,
+  
+  // Transaction references
+  paymentTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
+  },
+  feeTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
   }
 });
 
@@ -103,6 +140,15 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ buyer: 1, date: -1 });
 orderSchema.index({ seller: 1, date: -1 });
 orderSchema.index({ shippingStatus: 1 });
+orderSchema.index({ paymentStatus: 1 });
+
+// Calculate tier credit (difference between marked up price and original price)
+orderSchema.methods.calculateTierCredit = function() {
+  if (this.markedUpPrice && this.price) {
+    return Math.round((this.markedUpPrice - this.price) * 100) / 100;
+  }
+  return 0;
+};
 
 const Order = mongoose.model('Order', orderSchema);
 

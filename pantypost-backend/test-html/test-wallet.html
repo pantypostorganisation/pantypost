@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PantyPost Wallet Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #e91e63;
+            text-align: center;
+        }
+        .user-info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .balance-display {
+            font-size: 36px;
+            color: #4CAF50;
+            text-align: center;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #e91e63;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #d81b60;
+        }
+        .success {
+            color: #4CAF50;
+            margin: 10px 0;
+        }
+        .error {
+            color: #f44336;
+            margin: 10px 0;
+        }
+        .transaction {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 3px solid #e91e63;
+        }
+        .transaction.deposit {
+            border-left-color: #4CAF50;
+        }
+        .transaction.withdrawal {
+            border-left-color: #ff9800;
+        }
+        .not-logged-in {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 PantyPost Wallet Test</h1>
+        
+        <div id="loginSection">
+            <h2>Login First</h2>
+            <select id="userSelect">
+                <option value="">Select a user...</option>
+                <option value="alice123">alice123 (Buyer)</option>
+                <option value="emma_seller">emma_seller (Seller)</option>
+                <option value="sarah_s">sarah_s (Seller)</option>
+                <option value="buyer789">buyer789 (Buyer)</option>
+            </select>
+            <button onclick="login()">Login</button>
+        </div>
+        
+        <div id="walletSection" style="display: none;">
+            <div class="user-info">
+                <strong>Logged in as:</strong> <span id="currentUser"></span> 
+                (<span id="userRole"></span>)
+                <button onclick="logout()" style="float: right; width: auto; padding: 5px 15px;">Logout</button>
+            </div>
+            
+            <div class="balance-display">
+                Balance: $<span id="balance">0.00</span>
+            </div>
+            
+            <!-- Deposit Section (Buyers Only) -->
+            <div id="depositSection" class="section" style="display: none;">
+                <h3>💳 Deposit Money</h3>
+                <input type="number" id="depositAmount" placeholder="Amount ($1 - $5,000)" min="1" max="5000" step="0.01">
+                <select id="paymentMethod">
+                    <option value="credit_card">Credit Card</option>
+                    <option value="debit_card">Debit Card</option>
+                    <option value="paypal">PayPal</option>
+                </select>
+                <input type="text" id="depositNotes" placeholder="Notes (optional)">
+                <button onclick="deposit()">Deposit</button>
+                <div id="depositResult"></div>
+            </div>
+            
+            <!-- Withdraw Section (Sellers Only) -->
+            <div id="withdrawSection" class="section" style="display: none;">
+                <h3>🏦 Withdraw Money</h3>
+                <input type="number" id="withdrawAmount" placeholder="Amount ($20 - $10,000)" min="20" max="10000" step="0.01">
+                <input type="text" id="accountNumber" placeholder="Account Number">
+                <select id="accountType">
+                    <option value="checking">Checking</option>
+                    <option value="savings">Savings</option>
+                </select>
+                <button onclick="withdraw()">Request Withdrawal</button>
+                <div id="withdrawResult"></div>
+            </div>
+            
+            <!-- Transaction History -->
+            <div class="section">
+                <h3>📜 Transaction History</h3>
+                <button onclick="loadTransactions()">Refresh</button>
+                <div id="transactions"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = null;
+        let currentUser = null;
+        let userRole = null;
+
+        // Login function
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            if (!username) {
+                alert('Please select a user');
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    authToken = data.data.token;
+                    currentUser = username;
+                    userRole = data.data.user.role;
+                    
+                    // Show wallet section
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('walletSection').style.display = 'block';
+                    document.getElementById('currentUser').textContent = username;
+                    document.getElementById('userRole').textContent = userRole;
+                    
+                    // Show/hide sections based on role
+                    if (userRole === 'buyer') {
+                        document.getElementById('depositSection').style.display = 'block';
+                        document.getElementById('withdrawSection').style.display = 'none';
+                    } else if (userRole === 'seller') {
+                        document.getElementById('depositSection').style.display = 'none';
+                        document.getElementById('withdrawSection').style.display = 'block';
+                    }
+                    
+                    // Load wallet info
+                    loadBalance();
+                    loadTransactions();
+                } else {
+                    alert('Login failed: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Logout
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            userRole = null;
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('walletSection').style.display = 'none';
+            document.getElementById('userSelect').value = '';
+        }
+        
+        // Load balance
+        async function loadBalance() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/wallet/balance/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('balance').textContent = data.data.balance.toFixed(2);
+                }
+            } catch (error) {
+                console.error('Error loading balance:', error);
+            }
+        }
+        
+        // Deposit money
+        async function deposit() {
+            const amount = parseFloat(document.getElementById('depositAmount').value);
+            const method = document.getElementById('paymentMethod').value;
+            const notes = document.getElementById('depositNotes').value;
+            const resultDiv = document.getElementById('depositResult');
+            
+            if (!amount || amount < 1 || amount > 5000) {
+                resultDiv.innerHTML = '<div class="error">Amount must be between $1 and $5,000</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/wallet/deposit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ amount, method, notes })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ Deposit successful!</div>';
+                    document.getElementById('depositAmount').value = '';
+                    document.getElementById('depositNotes').value = '';
+                    loadBalance();
+                    loadTransactions();
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ ' + data.error + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+        
+        // Withdraw money
+        async function withdraw() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const accountNumber = document.getElementById('accountNumber').value;
+            const accountType = document.getElementById('accountType').value;
+            const resultDiv = document.getElementById('withdrawResult');
+            
+            if (!amount || amount < 20 || amount > 10000) {
+                resultDiv.innerHTML = '<div class="error">Amount must be between $20 and $10,000</div>';
+                return;
+            }
+            
+            if (!accountNumber) {
+                resultDiv.innerHTML = '<div class="error">Please enter account number</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/wallet/withdraw', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        amount,
+                        accountDetails: { accountNumber, accountType }
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ Withdrawal request submitted!</div>';
+                    document.getElementById('withdrawAmount').value = '';
+                    document.getElementById('accountNumber').value = '';
+                    loadBalance();
+                    loadTransactions();
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ ' + data.error + '</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+        
+        // Load transactions
+        async function loadTransactions() {
+            try {
+                const response = await fetch(`http://localhost:5000/api/wallet/transactions/${currentUser}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                const transDiv = document.getElementById('transactions');
+                
+                if (data.success && data.data.length > 0) {
+                    transDiv.innerHTML = data.data.map(trans => `
+                        <div class="transaction ${trans.type}">
+                            <strong>${trans.type.toUpperCase()}</strong> - $${trans.amount.toFixed(2)}<br>
+                            <small>${trans.description}</small><br>
+                            <small>${new Date(trans.createdAt).toLocaleString()}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    transDiv.innerHTML = '<p>No transactions yet.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
+        }
+    </script>
+</body>
+</html>
