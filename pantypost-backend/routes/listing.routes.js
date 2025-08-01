@@ -9,46 +9,263 @@ const authMiddleware = require('../middleware/auth.middleware');
 
 // ============= LISTING ROUTES =============
 
-// GET /api/listings - Get all listings with filters
+// GET /api/listings/debug - Debug endpoint to see all listings
+router.get('/debug', async (req, res) => {
+  try {
+    const listings = await Listing.find({});
+    res.json({
+      success: true,
+      count: listings.length,
+      listings: listings
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings - Get all listings with advanced filters
 router.get('/', async (req, res) => {
   try {
     const { 
+      // Search
+      search,           // Text search in title and description
+      
+      // Filters
       seller, 
-      tag, 
+      tags,             // Can be comma-separated for multiple tags
       minPrice, 
       maxPrice, 
       isPremium,
       isAuction,
       status = 'active',
-      sort = 'date',
-      order = 'desc' 
+      hoursWorn,        // Filter by hours worn
+      
+      // Sorting
+      sort = 'date',    // date, price, views, popularity
+      order = 'desc',
+      
+      // Pagination
+      page = 1,
+      limit = 20
     } = req.query;
     
     // Build filter
-    let filter = { status };
+    let filter = {};
+    
+    // Status filter - include listings without status field or with 'active' status
+    if (status === 'active') {
+      filter.$or = [
+        { status: 'active' },
+        { status: { $exists: false } }
+      ];
+    } else if (status) {
+      filter.status = status;
+    }
+    
+    // Text search
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Seller filter
     if (seller) filter.seller = seller;
-    if (tag) filter.tags = tag;
+    
+    // Tags filter (support multiple tags)
+    if (tags) {
+      const tagArray = tags.split(',').map(tag => tag.trim());
+      filter.tags = { $in: tagArray };
+    }
+    
+    // Premium filter
     if (isPremium !== undefined) filter.isPremium = isPremium === 'true';
+    
+    // Auction filter
     if (isAuction !== undefined) filter['auction.isAuction'] = isAuction === 'true';
     
-    // Price filter
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = parseFloat(minPrice);
-      if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+    // Price filter (for regular listings)
+    if (!isAuction || isAuction === 'false') {
+      if (minPrice || maxPrice) {
+        filter.price = {};
+        if (minPrice) filter.price.$gte = parseFloat(minPrice);
+        if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+      }
+    }
+    
+    // Hours worn filter
+    if (hoursWorn) {
+      const hours = parseInt(hoursWorn);
+      if (hours > 0) {
+        filter.hoursWorn = { $gte: hours };
+      }
     }
     
     // Build sort
     let sortObj = {};
-    if (sort === 'date') sortObj.createdAt = order === 'asc' ? 1 : -1;
-    else if (sort === 'price') sortObj.price = order === 'asc' ? 1 : -1;
-    else if (sort === 'views') sortObj.views = order === 'asc' ? 1 : -1;
+    switch (sort) {
+      case 'date':
+        sortObj.createdAt = order === 'asc' ? 1 : -1;
+        break;
+      case 'price':
+        // For auctions, sort by current bid
+        if (isAuction === 'true') {
+          sortObj['auction.currentBid'] = order === 'asc' ? 1 : -1;
+        } else {
+          sortObj.price = order === 'asc' ? 1 : -1;
+        }
+        break;
+      case 'views':
+        sortObj.views = order === 'asc' ? 1 : -1;
+        break;
+      case 'popularity':
+        // Sort by views and creation date
+        sortObj.views = -1;
+        sortObj.createdAt = -1;
+        break;
+      default:
+        sortObj.createdAt = -1;
+    }
     
-    const listings = await Listing.find(filter).sort(sortObj);
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = Math.min(parseInt(limit), 100); // Max 100 per page
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Execute query with pagination
+    const [listings, totalCount] = await Promise.all([
+      Listing.find(filter)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limitNum),
+      Listing.countDocuments(filter)
+    ]);
     
     res.json({
       success: true,
+      data: listings,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        pages: Math.ceil(totalCount / limitNum)
+      },
+      // Backwards compatibility
       listings: listings
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/search-suggestions - Get search suggestions
+router.get('/search-suggestions', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || q.length < 2) {
+      return res.json({ success: true, suggestions: [] });
+    }
+    
+    // Find listings matching the query
+    const suggestions = await Listing.find({
+      status: 'active',
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { tags: { $regex: q, $options: 'i' } }
+      ]
+    })
+    .select('title tags')
+    .limit(10);
+    
+    // Extract unique suggestions
+    const titleSuggestions = suggestions.map(l => l.title);
+    const tagSuggestions = [...new Set(suggestions.flatMap(l => l.tags))];
+    
+    res.json({
+      success: true,
+      suggestions: {
+        titles: titleSuggestions,
+        tags: tagSuggestions.filter(tag => 
+          tag.toLowerCase().includes(q.toLowerCase())
+        )
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/popular-tags - Get popular tags with counts
+router.get('/popular-tags', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    
+    const popularTags = await Listing.aggregate([
+      { $match: { status: 'active' } },
+      { $unwind: '$tags' },
+      { $group: {
+        _id: '$tags',
+        count: { $sum: 1 }
+      }},
+      { $sort: { count: -1 } },
+      { $limit: parseInt(limit) },
+      { $project: {
+        tag: '$_id',
+        count: 1,
+        _id: 0
+      }}
+    ]);
+    
+    res.json({
+      success: true,
+      data: popularTags
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/stats - Get listing statistics
+router.get('/stats', async (req, res) => {
+  try {
+    const [
+      totalListings,
+      activeListings,
+      activeAuctions,
+      totalSold
+    ] = await Promise.all([
+      Listing.countDocuments(),
+      Listing.countDocuments({ status: 'active' }),
+      Listing.countDocuments({ 
+        status: 'active', 
+        'auction.isAuction': true,
+        'auction.status': 'active'
+      }),
+      Listing.countDocuments({ status: 'sold' })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        total: totalListings,
+        active: activeListings,
+        activeAuctions: activeAuctions,
+        sold: totalSold
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -257,7 +474,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       res.json({
         success: true,
         data: listing,
-        message: `Bid placed successfully! ${amount} has been held. You are now the highest bidder!`
+        message: `Bid placed successfully! $${amount} has been held. You are now the highest bidder!`
       });
     } catch (bidError) {
       return res.status(400).json({
@@ -368,7 +585,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     const winner = listing.auction.highestBidder;
     
     // Get seller's wallet
-    const sellerWallet = await Wallet.findOne({ username: listing.seller });
+    let sellerWallet = await Wallet.findOne({ username: listing.seller });
     if (!sellerWallet) {
       // Create seller wallet if it doesn't exist
       sellerWallet = new Wallet({
@@ -463,7 +680,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     
     res.json({
       success: true,
-      message: `Auction ended successfully! Winner: ${winner} at ${winningBid}`,
+      message: `Auction ended successfully! Winner: ${winner} at $${winningBid}`,
       data: {
         listing: listing,
         order: order

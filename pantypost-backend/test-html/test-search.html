@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PantyPost Search & Filter Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff69b4, #ff1493);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+        .filters-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        .results-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .search-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #ff1493;
+        }
+        .search-button {
+            padding: 12px 30px;
+            background: #ff1493;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .search-button:hover {
+            background: #ff69b4;
+        }
+        .filter-group {
+            margin-bottom: 20px;
+        }
+        .filter-group h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .price-range {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .price-range input {
+            flex: 1;
+        }
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .tag {
+            display: inline-block;
+            padding: 5px 10px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tag:hover {
+            background: #ff69b4;
+            color: white;
+            border-color: #ff69b4;
+        }
+        .tag.selected {
+            background: #ff1493;
+            color: white;
+            border-color: #ff1493;
+        }
+        .listing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .listing-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .listing-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .listing-image {
+            width: 100%;
+            height: 200px;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+        .listing-info {
+            padding: 15px;
+        }
+        .listing-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .listing-price {
+            color: #ff1493;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .listing-seller {
+            color: #666;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+        .listing-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        .listing-tag {
+            font-size: 11px;
+            padding: 3px 8px;
+            background: #ff69b4;
+            color: white;
+            border-radius: 10px;
+        }
+        .auction-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 11px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        .sort-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .results-info {
+            color: #666;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+        }
+        .page-btn {
+            padding: 8px 12px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .page-btn:hover {
+            background: #ff69b4;
+            color: white;
+        }
+        .page-btn.active {
+            background: #ff1493;
+            color: white;
+        }
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .clear-filters {
+            width: 100%;
+            padding: 10px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .clear-filters:hover {
+            background: #555;
+        }
+        .suggestions {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            width: 100%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+        }
+        .suggestion-item:hover {
+            background: #f0f0f0;
+        }
+        .stats-bar {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .stat {
+            flex: 1;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff1493;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 PantyPost Search & Filter Test</h1>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+        <div class="stat">
+            <div class="stat-number" id="totalListings">0</div>
+            <div class="stat-label">Total Listings</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" id="activeListings">0</div>
+            <div class="stat-label">Active Listings</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" id="activeAuctions">0</div>
+            <div class="stat-label">Active Auctions</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" id="soldListings">0</div>
+            <div class="stat-label">Sold Items</div>
+        </div>
+    </div>
+
+    <div class="search-bar">
+        <div style="position: relative; flex: 1;">
+            <input type="text" 
+                   id="searchInput" 
+                   class="search-input" 
+                   placeholder="Search for items..." 
+                   autocomplete="off">
+            <div id="suggestions" class="suggestions" style="display: none;"></div>
+        </div>
+        <button class="search-button" onclick="performSearch()">Search</button>
+    </div>
+
+    <div class="container">
+        <div class="filters-section">
+            <h2>Filters</h2>
+            
+            <!-- Listing Status -->
+            <div class="filter-group">
+                <h3>Status</h3>
+                <label>
+                    <input type="radio" name="status" value="active" checked onchange="applyFilters()">
+                    Active Only
+                </label><br>
+                <label>
+                    <input type="radio" name="status" value="all" onchange="applyFilters()">
+                    All Listings
+                </label>
+            </div>
+
+            <!-- Listing Type -->
+            <div class="filter-group">
+                <h3>Listing Type</h3>
+                <label>
+                    <input type="radio" name="listingType" value="all" checked onchange="applyFilters()">
+                    All Listings
+                </label><br>
+                <label>
+                    <input type="radio" name="listingType" value="regular" onchange="applyFilters()">
+                    Buy Now Only
+                </label><br>
+                <label>
+                    <input type="radio" name="listingType" value="auction" onchange="applyFilters()">
+                    Auctions Only
+                </label>
+            </div>
+
+            <!-- Price Range -->
+            <div class="filter-group">
+                <h3>Price Range</h3>
+                <div class="price-range">
+                    <input type="number" id="minPrice" placeholder="Min" step="0.01" onchange="applyFilters()">
+                    <span>-</span>
+                    <input type="number" id="maxPrice" placeholder="Max" step="0.01" onchange="applyFilters()">
+                </div>
+            </div>
+
+            <!-- Seller -->
+            <div class="filter-group">
+                <h3>Seller</h3>
+                <select id="sellerFilter" onchange="applyFilters()">
+                    <option value="">All Sellers</option>
+                </select>
+            </div>
+
+            <!-- Hours Worn -->
+            <div class="filter-group">
+                <h3>Minimum Hours Worn</h3>
+                <input type="number" id="hoursWorn" min="0" max="168" placeholder="0" onchange="applyFilters()">
+            </div>
+
+            <!-- Premium Only -->
+            <div class="filter-group">
+                <label>
+                    <input type="checkbox" id="premiumOnly" onchange="applyFilters()">
+                    Premium Items Only
+                </label>
+            </div>
+
+            <!-- Popular Tags -->
+            <div class="filter-group">
+                <h3>Popular Tags</h3>
+                <div id="popularTags" class="tag-cloud"></div>
+            </div>
+
+            <button class="clear-filters" onclick="clearFilters()">Clear All Filters</button>
+        </div>
+
+        <div class="results-section">
+            <div class="sort-controls">
+                <div class="results-info">
+                    Showing <span id="resultCount">0</span> results
+                </div>
+                <div>
+                    <label>Sort by:</label>
+                    <select id="sortBy" onchange="applyFilters()">
+                        <option value="date">Newest First</option>
+                        <option value="date-asc">Oldest First</option>
+                        <option value="price">Price: High to Low</option>
+                        <option value="price-asc">Price: Low to High</option>
+                        <option value="views">Most Viewed</option>
+                        <option value="popularity">Most Popular</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="listingsGrid" class="listing-grid"></div>
+            
+            <div id="pagination" class="pagination"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentPage = 1;
+        let selectedTags = new Set();
+
+        // Load initial data
+        window.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadPopularTags();
+            loadSellers();
+            applyFilters();
+            setupSearchSuggestions();
+        });
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/listings/stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('totalListings').textContent = data.data.total;
+                    document.getElementById('activeListings').textContent = data.data.active;
+                    document.getElementById('activeAuctions').textContent = data.data.activeAuctions;
+                    document.getElementById('soldListings').textContent = data.data.sold;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load popular tags
+        async function loadPopularTags() {
+            try {
+                const response = await fetch(`${API_BASE}/listings/popular-tags?limit=15`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const tagsDiv = document.getElementById('popularTags');
+                    tagsDiv.innerHTML = data.data.map(item => `
+                        <span class="tag" onclick="toggleTag('${item.tag}')">
+                            ${item.tag} (${item.count})
+                        </span>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading tags:', error);
+            }
+        }
+
+        // Load sellers
+        async function loadSellers() {
+            try {
+                const response = await fetch(`${API_BASE}/test/users`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const sellers = data.users.filter(u => u.role === 'seller');
+                    const select = document.getElementById('sellerFilter');
+                    
+                    sellers.forEach(seller => {
+                        const option = document.createElement('option');
+                        option.value = seller.username;
+                        option.textContent = seller.username;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading sellers:', error);
+            }
+        }
+
+        // Toggle tag selection
+        function toggleTag(tag) {
+            if (selectedTags.has(tag)) {
+                selectedTags.delete(tag);
+            } else {
+                selectedTags.add(tag);
+            }
+            updateTagDisplay();
+            applyFilters();
+        }
+
+        // Update tag display
+        function updateTagDisplay() {
+            document.querySelectorAll('.tag').forEach(tagEl => {
+                const tagText = tagEl.textContent.split(' (')[0];
+                if (selectedTags.has(tagText)) {
+                    tagEl.classList.add('selected');
+                } else {
+                    tagEl.classList.remove('selected');
+                }
+            });
+        }
+
+        // Setup search suggestions
+        function setupSearchSuggestions() {
+            const searchInput = document.getElementById('searchInput');
+            const suggestionsDiv = document.getElementById('suggestions');
+            let timeout;
+
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                const query = e.target.value.trim();
+                
+                if (query.length < 2) {
+                    suggestionsDiv.style.display = 'none';
+                    return;
+                }
+                
+                timeout = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/listings/search-suggestions?q=${encodeURIComponent(query)}`);
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            showSuggestions(data.suggestions);
+                        }
+                    } catch (error) {
+                        console.error('Error loading suggestions:', error);
+                    }
+                }, 300);
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-bar')) {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+        }
+
+        // Show suggestions
+        function showSuggestions(suggestions) {
+            const suggestionsDiv = document.getElementById('suggestions');
+            
+            if (!suggestions.titles.length && !suggestions.tags.length) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+            
+            let html = '';
+            
+            if (suggestions.titles.length) {
+                html += '<div style="padding: 5px 10px; font-weight: bold; color: #666;">Items</div>';
+                suggestions.titles.forEach(title => {
+                    html += `<div class="suggestion-item" onclick="selectSuggestion('${title}')">${title}</div>`;
+                });
+            }
+            
+            if (suggestions.tags.length) {
+                html += '<div style="padding: 5px 10px; font-weight: bold; color: #666;">Tags</div>';
+                suggestions.tags.forEach(tag => {
+                    html += `<div class="suggestion-item" onclick="selectSuggestion('${tag}')">#${tag}</div>`;
+                });
+            }
+            
+            suggestionsDiv.innerHTML = html;
+            suggestionsDiv.style.display = 'block';
+        }
+
+        // Select suggestion
+        function selectSuggestion(value) {
+            document.getElementById('searchInput').value = value;
+            document.getElementById('suggestions').style.display = 'none';
+            performSearch();
+        }
+
+        // Perform search
+        function performSearch() {
+            currentPage = 1;
+            applyFilters();
+        }
+
+        // Apply filters
+        async function applyFilters() {
+            const params = new URLSearchParams();
+            
+            // Search term
+            const search = document.getElementById('searchInput').value.trim();
+            if (search) params.append('search', search);
+            
+            // Status
+            const status = document.querySelector('input[name="status"]:checked').value;
+            if (status !== 'all') params.append('status', status);
+            
+            // Listing type
+            const listingType = document.querySelector('input[name="listingType"]:checked').value;
+            if (listingType === 'regular') params.append('isAuction', 'false');
+            else if (listingType === 'auction') params.append('isAuction', 'true');
+            
+            // Price range
+            const minPrice = document.getElementById('minPrice').value;
+            const maxPrice = document.getElementById('maxPrice').value;
+            if (minPrice) params.append('minPrice', minPrice);
+            if (maxPrice) params.append('maxPrice', maxPrice);
+            
+            // Seller
+            const seller = document.getElementById('sellerFilter').value;
+            if (seller) params.append('seller', seller);
+            
+            // Hours worn
+            const hoursWorn = document.getElementById('hoursWorn').value;
+            if (hoursWorn) params.append('hoursWorn', hoursWorn);
+            
+            // Premium only
+            if (document.getElementById('premiumOnly').checked) {
+                params.append('isPremium', 'true');
+            }
+            
+            // Tags
+            if (selectedTags.size > 0) {
+                params.append('tags', Array.from(selectedTags).join(','));
+            }
+            
+            // Sorting
+            const sortBy = document.getElementById('sortBy').value;
+            if (sortBy.includes('-asc')) {
+                params.append('sort', sortBy.replace('-asc', ''));
+                params.append('order', 'asc');
+            } else {
+                params.append('sort', sortBy);
+                params.append('order', 'desc');
+            }
+            
+            // Pagination
+            params.append('page', currentPage);
+            params.append('limit', 12);
+            
+            try {
+                const response = await fetch(`${API_BASE}/listings?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayListings(data.data || data.listings);
+                    displayPagination(data.pagination);
+                    document.getElementById('resultCount').textContent = 
+                        data.pagination ? data.pagination.total : data.listings.length;
+                }
+            } catch (error) {
+                console.error('Error loading listings:', error);
+            }
+        }
+
+        // Display listings
+        function displayListings(listings) {
+            const grid = document.getElementById('listingsGrid');
+            
+            if (listings.length === 0) {
+                grid.innerHTML = '<p style="text-align: center; color: #666;">No listings found matching your criteria.</p>';
+                return;
+            }
+            
+            grid.innerHTML = listings.map(listing => {
+                const isAuction = listing.auction && listing.auction.isAuction;
+                const price = isAuction 
+                    ? `Current Bid: $${listing.auction.currentBid || listing.auction.startingPrice}`
+                    : `$${listing.price}`;
+                
+                return `
+                    <div class="listing-card">
+                        <div class="listing-image">
+                            ${listing.imageUrls && listing.imageUrls[0] !== 'https://via.placeholder.com/300' 
+                                ? `<img src="${listing.imageUrls[0]}" style="width: 100%; height: 100%; object-fit: cover;">` 
+                                : 'No Image'}
+                        </div>
+                        <div class="listing-info">
+                            <div class="listing-title">${listing.title}</div>
+                            <div class="listing-price">${price}</div>
+                            <div class="listing-seller">by ${listing.seller}</div>
+                            ${isAuction ? '<div class="auction-badge">AUCTION</div>' : ''}
+                            ${listing.isPremium ? '<div class="auction-badge" style="background: #9C27B0;">PREMIUM</div>' : ''}
+                            <div class="listing-tags">
+                                ${listing.tags.slice(0, 3).map(tag => 
+                                    `<span class="listing-tag">${tag}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Display pagination
+        function displayPagination(pagination) {
+            if (!pagination || pagination.pages <= 1) {
+                document.getElementById('pagination').innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Previous button
+            html += `<button class="page-btn" onclick="goToPage(${currentPage - 1})" 
+                     ${currentPage === 1 ? 'disabled' : ''}>Previous</button>`;
+            
+            // Page numbers
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(pagination.pages, currentPage + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" 
+                         onclick="goToPage(${i})">${i}</button>`;
+            }
+            
+            // Next button
+            html += `<button class="page-btn" onclick="goToPage(${currentPage + 1})" 
+                     ${currentPage === pagination.pages ? 'disabled' : ''}>Next</button>`;
+            
+            document.getElementById('pagination').innerHTML = html;
+        }
+
+        // Go to page
+        function goToPage(page) {
+            currentPage = page;
+            applyFilters();
+            window.scrollTo(0, 0);
+        }
+
+        // Clear filters
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.querySelector('input[name="listingType"][value="all"]').checked = true;
+            document.getElementById('minPrice').value = '';
+            document.getElementById('maxPrice').value = '';
+            document.getElementById('sellerFilter').value = '';
+            document.getElementById('hoursWorn').value = '';
+            document.getElementById('premiumOnly').checked = false;
+            selectedTags.clear();
+            updateTagDisplay();
+            currentPage = 1;
+            applyFilters();
+        }
+    </script>
+</body>
+</html>
