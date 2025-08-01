@@ -61,6 +61,12 @@
         button:hover {
             background-color: #d81b60;
         }
+        .refresh-btn {
+            background-color: #666;
+        }
+        .refresh-btn:hover {
+            background-color: #555;
+        }
         .success {
             color: #4CAF50;
             margin: 10px 0;
@@ -82,6 +88,15 @@
         .transaction.withdrawal {
             border-left-color: #ff9800;
         }
+        .transaction.bid_hold {
+            border-left-color: #2196F3;
+        }
+        .transaction.bid_refund {
+            border-left-color: #9C27B0;
+        }
+        .transaction.auction_sale {
+            border-left-color: #FF5722;
+        }
         .not-logged-in {
             text-align: center;
             color: #666;
@@ -97,12 +112,11 @@
             <h2>Login First</h2>
             <select id="userSelect">
                 <option value="">Select a user...</option>
-                <option value="alice123">alice123 (Buyer)</option>
-                <option value="emma_seller">emma_seller (Seller)</option>
-                <option value="sarah_s">sarah_s (Seller)</option>
-                <option value="buyer789">buyer789 (Buyer)</option>
             </select>
+            <input type="password" id="password" placeholder="Password" value="password123">
             <button onclick="login()">Login</button>
+            <button onclick="loadUsers()" class="refresh-btn">Refresh User List</button>
+            <div id="loginError" class="error"></div>
         </div>
         
         <div id="walletSection" style="display: none;">
@@ -153,25 +167,77 @@
     </div>
 
     <script>
+        const API_BASE = 'http://localhost:5000/api';
         let authToken = null;
         let currentUser = null;
         let userRole = null;
 
+        // Load all users from database
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/test/users`);
+                const data = await response.json();
+                
+                const select = document.getElementById('userSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    // Sort users by role (buyers first, then sellers)
+                    const sortedUsers = data.users.sort((a, b) => {
+                        if (a.role === b.role) return a.username.localeCompare(b.username);
+                        return a.role === 'buyer' ? -1 : 1;
+                    });
+                    
+                    sortedUsers.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        select.appendChild(option);
+                    });
+                    
+                    document.getElementById('loginError').textContent = '';
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                document.getElementById('loginError').textContent = 'Error loading users. Using default list.';
+                
+                // Fallback to hardcoded list
+                const select = document.getElementById('userSelect');
+                select.innerHTML = `
+                    <option value="">Select a user...</option>
+                    <option value="buyer789">buyer789 (buyer)</option>
+                    <option value="alice123">alice123 (buyer)</option>
+                    <option value="emma_seller">emma_seller (seller)</option>
+                    <option value="sarah_s">sarah_s (seller)</option>
+                `;
+            }
+        }
+
+        // Load users when page loads
+        window.addEventListener('DOMContentLoaded', loadUsers);
+
         // Login function
         async function login() {
             const username = document.getElementById('userSelect').value;
+            const password = document.getElementById('password').value;
+            
             if (!username) {
-                alert('Please select a user');
+                document.getElementById('loginError').textContent = 'Please select a user';
+                return;
+            }
+            
+            if (!password) {
+                document.getElementById('loginError').textContent = 'Please enter a password';
                 return;
             }
             
             try {
-                const response = await fetch('http://localhost:5000/api/auth/login', {
+                const response = await fetch(`${API_BASE}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         username: username,
-                        password: 'password123'
+                        password: password
                     })
                 });
                 
@@ -200,10 +266,10 @@
                     loadBalance();
                     loadTransactions();
                 } else {
-                    alert('Login failed: ' + data.error);
+                    document.getElementById('loginError').textContent = 'Login failed: ' + (data.error || 'Unknown error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
             }
         }
         
@@ -220,7 +286,7 @@
         // Load balance
         async function loadBalance() {
             try {
-                const response = await fetch(`http://localhost:5000/api/wallet/balance/${currentUser}`, {
+                const response = await fetch(`${API_BASE}/wallet/balance/${currentUser}`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 
@@ -246,7 +312,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:5000/api/wallet/deposit', {
+                const response = await fetch(`${API_BASE}/wallet/deposit`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -288,7 +354,7 @@
             }
             
             try {
-                const response = await fetch('http://localhost:5000/api/wallet/withdraw', {
+                const response = await fetch(`${API_BASE}/wallet/withdraw`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -318,7 +384,7 @@
         // Load transactions
         async function loadTransactions() {
             try {
-                const response = await fetch(`http://localhost:5000/api/wallet/transactions/${currentUser}`, {
+                const response = await fetch(`${API_BASE}/wallet/transactions/${currentUser}`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 
@@ -326,13 +392,18 @@
                 const transDiv = document.getElementById('transactions');
                 
                 if (data.success && data.data.length > 0) {
-                    transDiv.innerHTML = data.data.map(trans => `
-                        <div class="transaction ${trans.type}">
-                            <strong>${trans.type.toUpperCase()}</strong> - $${trans.amount.toFixed(2)}<br>
-                            <small>${trans.description}</small><br>
-                            <small>${new Date(trans.createdAt).toLocaleString()}</small>
-                        </div>
-                    `).join('');
+                    transDiv.innerHTML = data.data.map(trans => {
+                        // Format transaction type for display
+                        const typeDisplay = trans.type.replace(/_/g, ' ').toUpperCase();
+                        
+                        return `
+                            <div class="transaction ${trans.type}">
+                                <strong>${typeDisplay}</strong> - $${trans.amount.toFixed(2)}<br>
+                                <small>${trans.description}</small><br>
+                                <small>${new Date(trans.createdAt).toLocaleString()}</small>
+                            </div>
+                        `;
+                    }).join('');
                 } else {
                     transDiv.innerHTML = '<p>No transactions yet.</p>';
                 }

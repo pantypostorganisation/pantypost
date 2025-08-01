@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PantyPost Auctions Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff69b4, #ff1493);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .login-info {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .balance {
+            color: #28a745;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #ff1493;
+        }
+        input, textarea, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #ff1493;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #ff69b4;
+        }
+        .auction-card {
+            border: 2px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            position: relative;
+        }
+        .auction-card.active {
+            border-color: #28a745;
+        }
+        .auction-card.ended {
+            border-color: #dc3545;
+            opacity: 0.8;
+        }
+        .auction-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-active {
+            background: #28a745;
+            color: white;
+        }
+        .status-ended {
+            background: #dc3545;
+            color: white;
+        }
+        .current-bid {
+            font-size: 24px;
+            color: #ff1493;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .bid-info {
+            background: #e8f5e9;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .time-remaining {
+            color: #ff5722;
+            font-weight: bold;
+        }
+        .bid-history {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            background-color: #f5f5f5;
+        }
+        .bid-item {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+        .bid-item:last-child {
+            border-bottom: none;
+        }
+        .error {
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        .success {
+            color: #28a745;
+            margin: 10px 0;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .checkbox-label input {
+            width: auto;
+            margin-right: 10px;
+        }
+        .tag {
+            display: inline-block;
+            background: #ff1493;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏷️ PantyPost Auctions Test</h1>
+    </div>
+
+    <div class="login-info">
+        <div>
+            <strong>Logged in as:</strong> <span id="currentUser">Not logged in</span>
+        </div>
+        <div>
+            <span class="balance">Balance: $<span id="userBalance">0.00</span></span>
+            <button onclick="logout()" style="width: auto; margin-left: 20px;">Logout</button>
+        </div>
+    </div>
+
+    <!-- Login Section -->
+    <div class="section" id="loginSection">
+        <h2>🔐 Login</h2>
+        <select id="userSelect">
+            <option value="">Select a user...</option>
+        </select>
+        <input type="password" id="password" placeholder="Password" value="password123">
+        <button onclick="login()">Login</button>
+        <button onclick="loadUsers()" style="background-color: #666; margin-top: 10px;">Refresh User List</button>
+        <div id="loginError" class="error"></div>
+    </div>
+
+    <!-- Create Auction Section (Sellers Only) -->
+    <div class="section" id="createSection" style="display: none;">
+        <h2>🔨 Create New Auction</h2>
+        <div class="form-group">
+            <label>Title:</label>
+            <input type="text" id="auctionTitle" placeholder="e.g., Rare Vintage Lace Set">
+        </div>
+        <div class="form-group">
+            <label>Description:</label>
+            <textarea id="auctionDescription" rows="3" placeholder="Describe your item..."></textarea>
+        </div>
+        <div class="form-group">
+            <label>Starting Price:</label>
+            <input type="number" id="startingPrice" placeholder="10.00" step="0.01" min="0.01">
+        </div>
+        <div class="form-group">
+            <label>Reserve Price (optional - minimum you'll accept):</label>
+            <input type="number" id="reservePrice" placeholder="50.00" step="0.01">
+        </div>
+        <div class="form-group">
+            <label>Auction Duration:</label>
+            <select id="auctionDuration">
+                <option value="1">1 hour</option>
+                <option value="6">6 hours</option>
+                <option value="12">12 hours</option>
+                <option value="24" selected>1 day</option>
+                <option value="72">3 days</option>
+                <option value="168">7 days</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Tags (comma separated):</label>
+            <input type="text" id="auctionTags" placeholder="vintage, lace, premium">
+        </div>
+        <button onclick="createAuction()">Create Auction</button>
+        <div id="createResult"></div>
+    </div>
+
+    <!-- Active Auctions -->
+    <div class="section">
+        <h2>🔥 Active Auctions</h2>
+        <button onclick="loadAuctions()">Refresh Auctions</button>
+        <div id="activeAuctions"></div>
+    </div>
+
+    <!-- My Auctions (Sellers) -->
+    <div class="section" id="myAuctionsSection" style="display: none;">
+        <h2>📋 My Auctions</h2>
+        <div id="myAuctions"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentUser = null;
+        let authToken = null;
+
+        // Load all users from database
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/test/users`);
+                const data = await response.json();
+                
+                const select = document.getElementById('userSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                // Fallback to hardcoded list
+                const select = document.getElementById('userSelect');
+                select.innerHTML = `
+                    <option value="">Select a user...</option>
+                    <option value="buyer789">buyer789 (buyer)</option>
+                    <option value="alice123">alice123 (buyer)</option>
+                    <option value="emma_seller">emma_seller (seller)</option>
+                    <option value="sarah_s">sarah_s (seller)</option>
+                `;
+            }
+        }
+
+        // Load users when page loads
+        window.addEventListener('DOMContentLoaded', loadUsers);
+
+        // Login
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username) {
+                document.getElementById('loginError').textContent = 'Please select a user';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.data.user;
+                    authToken = data.data.token;
+                    
+                    document.getElementById('currentUser').textContent = 
+                        `${currentUser.username} (${currentUser.role})`;
+                    document.getElementById('loginSection').style.display = 'none';
+                    
+                    // Show/hide sections based on role
+                    if (currentUser.role === 'seller') {
+                        document.getElementById('createSection').style.display = 'block';
+                        document.getElementById('myAuctionsSection').style.display = 'block';
+                        loadMyAuctions();
+                    }
+                    
+                    loadBalance();
+                    loadAuctions();
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Load balance
+        async function loadBalance() {
+            if (!authToken) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/wallet/balance/${currentUser.username}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('userBalance').textContent = data.data.balance.toFixed(2);
+                }
+            } catch (error) {
+                console.error('Error loading balance:', error);
+            }
+        }
+
+        // Create auction
+        async function createAuction() {
+            const title = document.getElementById('auctionTitle').value;
+            const description = document.getElementById('auctionDescription').value;
+            const startingPrice = parseFloat(document.getElementById('startingPrice').value);
+            const reservePrice = parseFloat(document.getElementById('reservePrice').value) || null;
+            const duration = parseInt(document.getElementById('auctionDuration').value);
+            const tags = document.getElementById('auctionTags').value.split(',').map(t => t.trim()).filter(t => t);
+            
+            if (!title || !description || !startingPrice) {
+                showResult('createResult', 'Please fill in all required fields', false);
+                return;
+            }
+            
+            const endTime = new Date();
+            endTime.setHours(endTime.getHours() + duration);
+            
+            try {
+                const response = await fetch(`${API_BASE}/listings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        tags,
+                        isAuction: true,
+                        startingPrice,
+                        reservePrice,
+                        endTime: endTime.toISOString()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('createResult', 'Auction created successfully!', true);
+                    // Clear form
+                    document.getElementById('auctionTitle').value = '';
+                    document.getElementById('auctionDescription').value = '';
+                    document.getElementById('startingPrice').value = '';
+                    document.getElementById('reservePrice').value = '';
+                    document.getElementById('auctionTags').value = '';
+                    
+                    loadAuctions();
+                    loadMyAuctions();
+                } else {
+                    showResult('createResult', data.error || 'Failed to create auction', false);
+                }
+            } catch (error) {
+                showResult('createResult', 'Error: ' + error.message, false);
+            }
+        }
+
+        // Load active auctions
+        async function loadAuctions() {
+            try {
+                const response = await fetch(`${API_BASE}/listings?isAuction=true&status=active`);
+                const data = await response.json();
+                
+                const auctionsDiv = document.getElementById('activeAuctions');
+                
+                if (data.success && data.listings.length > 0) {
+                    auctionsDiv.innerHTML = data.listings.map(listing => {
+                        const timeLeft = getTimeRemaining(listing.auction.endTime);
+                        const isActive = new Date() < new Date(listing.auction.endTime);
+                        
+                        return `
+                            <div class="auction-card ${isActive ? 'active' : 'ended'}">
+                                <span class="auction-status ${isActive ? 'status-active' : 'status-ended'}">
+                                    ${listing.auction.status}
+                                </span>
+                                <h3>${listing.title}</h3>
+                                <p>${listing.description}</p>
+                                <p><strong>Seller:</strong> ${listing.seller}</p>
+                                <div>${listing.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>
+                                
+                                <div class="bid-info">
+                                    <div class="current-bid">
+                                        Current Bid: $${listing.auction.currentBid || listing.auction.startingPrice}
+                                    </div>
+                                    <p>Starting Price: $${listing.auction.startingPrice}</p>
+                                    ${listing.auction.reservePrice ? `<p>Reserve: ${listing.auction.currentBid >= listing.auction.reservePrice ? '✅ Met' : '❌ Not Met'}</p>` : ''}
+                                    <p>Bids: ${listing.auction.bidCount}</p>
+                                    ${listing.auction.highestBidder ? `<p>Highest Bidder: ${listing.auction.highestBidder}</p>` : ''}
+                                    <p class="time-remaining">Time Left: ${timeLeft}</p>
+                                </div>
+                                
+                                ${isActive && currentUser && currentUser.role === 'buyer' ? `
+                                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                        <input type="number" id="bid-${listing._id}" 
+                                               placeholder="Your bid" 
+                                               min="${(listing.auction.currentBid || listing.auction.startingPrice) + 1}" 
+                                               step="0.01" 
+                                               style="flex: 1;">
+                                        <button onclick="placeBid('${listing._id}')" style="width: auto;">Place Bid</button>
+                                    </div>
+                                    <div id="bidResult-${listing._id}"></div>
+                                ` : ''}
+                                
+                                ${listing.auction.bids && listing.auction.bids.length > 0 ? `
+                                    <details style="margin-top: 10px;">
+                                        <summary>Bid History (${listing.auction.bids.length})</summary>
+                                        <div class="bid-history">
+                                            ${listing.auction.bids.slice().reverse().map(bid => `
+                                                <div class="bid-item">
+                                                    <strong>${bid.bidder}</strong>: $${bid.amount} 
+                                                    <small>(${new Date(bid.date).toLocaleString()})</small>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </details>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    auctionsDiv.innerHTML = '<p>No active auctions at the moment.</p>';
+                }
+            } catch (error) {
+                document.getElementById('activeAuctions').innerHTML = 
+                    '<p class="error">Error loading auctions: ' + error.message + '</p>';
+            }
+        }
+
+        // Load seller's auctions
+        async function loadMyAuctions() {
+            if (!currentUser || currentUser.role !== 'seller') return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/listings?seller=${currentUser.username}&isAuction=true`);
+                const data = await response.json();
+                
+                const myAuctionsDiv = document.getElementById('myAuctions');
+                
+                if (data.success && data.listings.length > 0) {
+                    myAuctionsDiv.innerHTML = data.listings.map(listing => {
+                        const isActive = listing.auction.status === 'active' && new Date() < new Date(listing.auction.endTime);
+                        const canEnd = isActive && new Date() >= new Date(listing.auction.endTime);
+                        
+                        return `
+                            <div class="auction-card">
+                                <h4>${listing.title}</h4>
+                                <p>Status: ${listing.auction.status}</p>
+                                <p>Current Bid: $${listing.auction.currentBid || listing.auction.startingPrice}</p>
+                                <p>Bids: ${listing.auction.bidCount}</p>
+                                ${listing.auction.highestBidder ? `<p>Highest Bidder: ${listing.auction.highestBidder}</p>` : ''}
+                                <p>End Time: ${new Date(listing.auction.endTime).toLocaleString()}</p>
+                                
+                                ${canEnd ? `
+                                    <button onclick="endAuction('${listing._id}')">End Auction</button>
+                                    <div id="endResult-${listing._id}"></div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    myAuctionsDiv.innerHTML = '<p>You have no auctions.</p>';
+                }
+            } catch (error) {
+                document.getElementById('myAuctions').innerHTML = 
+                    '<p class="error">Error loading your auctions</p>';
+            }
+        }
+
+        // Place bid
+        async function placeBid(listingId) {
+            const bidAmount = parseFloat(document.getElementById(`bid-${listingId}`).value);
+            
+            if (!bidAmount || bidAmount <= 0) {
+                showResult(`bidResult-${listingId}`, 'Please enter a valid bid amount', false);
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/listings/${listingId}/bid`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ amount: bidAmount })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(`bidResult-${listingId}`, data.message, true);
+                    loadAuctions();
+                    loadBalance();
+                } else {
+                    showResult(`bidResult-${listingId}`, data.error, false);
+                }
+            } catch (error) {
+                showResult(`bidResult-${listingId}`, 'Error: ' + error.message, false);
+            }
+        }
+
+        // End auction
+        async function endAuction(listingId) {
+            if (!confirm('Are you sure you want to end this auction?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/listings/${listingId}/end-auction`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(`endResult-${listingId}`, data.message, true);
+                    loadMyAuctions();
+                    loadAuctions();
+                    loadBalance();
+                } else {
+                    showResult(`endResult-${listingId}`, data.error, false);
+                }
+            } catch (error) {
+                showResult(`endResult-${listingId}`, 'Error: ' + error.message, false);
+            }
+        }
+
+        // Get time remaining
+        function getTimeRemaining(endTime) {
+            const now = new Date();
+            const end = new Date(endTime);
+            const diff = end - now;
+            
+            if (diff <= 0) return 'Ended';
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        }
+
+        // Show result message
+        function showResult(elementId, message, isSuccess) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.className = isSuccess ? 'success' : 'error';
+                element.textContent = message;
+                setTimeout(() => {
+                    element.textContent = '';
+                }, 5000);
+            }
+        }
+
+        // Logout
+        function logout() {
+            currentUser = null;
+            authToken = null;
+            document.getElementById('currentUser').textContent = 'Not logged in';
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('createSection').style.display = 'none';
+            document.getElementById('myAuctionsSection').style.display = 'none';
+            document.getElementById('userSelect').value = '';
+        }
+
+        // Auto-refresh auctions every 30 seconds
+        setInterval(() => {
+            if (currentUser) {
+                loadAuctions();
+                if (currentUser.role === 'seller') {
+                    loadMyAuctions();
+                }
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

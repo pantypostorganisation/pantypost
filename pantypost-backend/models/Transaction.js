@@ -17,7 +17,10 @@ const transactionSchema = new mongoose.Schema({
       'admin_debit',   // Admin removes money
       'refund',        // Money returned
       'fee',           // Platform fee (10%)
-      'tier_credit'    // Tier bonus credit
+      'tier_credit',   // Tier bonus credit
+      'bid_hold',      // When a bid is placed, money is held
+      'bid_refund',    // When outbid or auction cancelled
+      'auction_sale'   // When auction completes successfully
     ],
     required: true
   },
@@ -91,7 +94,11 @@ const transactionSchema = new mongoose.Schema({
     subscriptionId: String,  // If this is for a subscription
     platformFee: Number,     // Amount taken as platform fee
     paymentMethod: String,   // How they paid
-    accountDetails: Object   // For withdrawals
+    accountDetails: Object,  // For withdrawals
+    auctionId: String,       // If this is for an auction
+    bidAmount: Number,       // For bid holds
+    reason: String,          // For refunds (outbid, cancelled, reserve not met)
+    newHighestBidder: String // Who outbid them (for bid refunds)
   }
 });
 
@@ -99,6 +106,7 @@ const transactionSchema = new mongoose.Schema({
 transactionSchema.index({ from: 1, createdAt: -1 });
 transactionSchema.index({ to: 1, createdAt: -1 });
 transactionSchema.index({ type: 1, status: 1 });
+transactionSchema.index({ 'metadata.auctionId': 1 }); // For finding auction-related transactions
 
 // Create the model
 const Transaction = mongoose.model('Transaction', transactionSchema);
