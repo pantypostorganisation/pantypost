@@ -11,7 +11,7 @@ import TrustIndicators from '@/components/login/TrustIndicators';
 import { useLogin } from '@/hooks/useLogin';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 
 export default function LoginPage() {
@@ -47,31 +47,65 @@ export default function LoginPage() {
   
   // Use ref to store interval ID for cleanup
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Cleanup function to prevent memory leaks
+  const clearCountdownInterval = useCallback(() => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+  }, []);
+
+  // Component unmount cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      clearCountdownInterval();
+    };
+  }, [clearCountdownInterval]);
 
   // Check rate limit status on component mount and when username changes
   useEffect(() => {
-    if (step === 2 && username) {
-      const limiter = getRateLimiter();
-      const result = limiter.check(`LOGIN:${username}`, RATE_LIMITS.LOGIN);
-      
-      if (!result.allowed && result.waitTime) {
-        setIsRateLimited(true);
-        setRateLimitWaitTime(result.waitTime);
-      } else {
-        setIsRateLimited(false);
-        setRateLimitWaitTime(0);
+    if (step === 2 && username && isMountedRef.current) {
+      try {
+        const limiter = getRateLimiter();
+        const result = limiter.check(`LOGIN:${username}`, RATE_LIMITS.LOGIN);
+        
+        if (!isMountedRef.current) return;
+        
+        if (!result.allowed && result.waitTime && result.waitTime > 0) {
+          setIsRateLimited(true);
+          setRateLimitWaitTime(result.waitTime);
+        } else {
+          setIsRateLimited(false);
+          setRateLimitWaitTime(0);
+        }
+      } catch (error) {
+        console.error('Error checking rate limit:', error);
+        // Fallback to allow login attempt if rate limiter fails
+        if (isMountedRef.current) {
+          setIsRateLimited(false);
+          setRateLimitWaitTime(0);
+        }
       }
     }
   }, [step, username]);
 
   // Update rate limit status when error changes
   useEffect(() => {
+    if (!isMountedRef.current) return;
+    
     if (error && error.includes('Too many login attempts')) {
       setIsRateLimited(true);
-      // Extract wait time from error message
+      // Extract wait time from error message with better validation
       const match = error.match(/Please wait (\d+) seconds/);
-      if (match) {
-        setRateLimitWaitTime(parseInt(match[1]));
+      if (match && match[1]) {
+        const waitTime = parseInt(match[1], 10);
+        if (!isNaN(waitTime) && waitTime > 0) {
+          setRateLimitWaitTime(waitTime);
+        }
       }
     } else if (!error) {
       // Clear rate limit when error is cleared
@@ -82,22 +116,19 @@ export default function LoginPage() {
 
   // Countdown timer for rate limit with proper cleanup
   useEffect(() => {
-    // Clear any existing interval
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
+    clearCountdownInterval();
 
-    if (isRateLimited && rateLimitWaitTime > 0) {
+    if (isRateLimited && rateLimitWaitTime > 0 && isMountedRef.current) {
       countdownIntervalRef.current = setInterval(() => {
+        if (!isMountedRef.current) {
+          clearCountdownInterval();
+          return;
+        }
+        
         setRateLimitWaitTime((prev) => {
           if (prev <= 1) {
             setIsRateLimited(false);
-            // Clear interval when countdown reaches 0
-            if (countdownIntervalRef.current) {
-              clearInterval(countdownIntervalRef.current);
-              countdownIntervalRef.current = null;
-            }
+            clearCountdownInterval();
             return 0;
           }
           return prev - 1;
@@ -105,37 +136,29 @@ export default function LoginPage() {
       }, 1000);
     }
 
-    // Cleanup function
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-    };
-  }, [isRateLimited, rateLimitWaitTime]);
-
-  // Additional cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-    };
-  }, []);
+    return clearCountdownInterval;
+  }, [isRateLimited, rateLimitWaitTime, clearCountdownInterval]);
 
   // Wrap handleLogin with rate limiting check
-  const handleSecureLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSecureLogin = useCallback(async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
     
-    // Don't proceed if rate limited
-    if (isRateLimited) {
+    // Don't proceed if rate limited or component unmounted
+    if (isRateLimited || !isMountedRef.current) {
       return;
     }
     
-    await handleLogin();
-  };
+    try {
+      await handleLogin();
+    } catch (error) {
+      console.error('Login error:', error);
+      // Error handling is managed by useLogin hook
+    }
+  }, [isRateLimited, handleLogin]);
 
+  // Early return for unmounted state
   if (!mounted) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -173,7 +196,7 @@ export default function LoginPage() {
           <LoginHeader 
             step={step} 
             showAdminMode={showAdminMode} 
-            onLogoClick={() => router.push('/')} 
+            onLogoClick={() => router?.push?.('/')} 
           />
 
           {/* Form Card */}

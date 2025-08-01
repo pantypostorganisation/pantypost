@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { CheckCircle } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import BanCheck from '@/components/BanCheck';
@@ -13,46 +13,96 @@ export default function PurchaseSuccessPage() {
   const { orderHistory } = useWallet();
   const { addSellerNotification } = useListings();
   const hasNotified = useRef(false);
-  const isMounted = useRef(true);
+  const isMountedRef = useRef(true);
 
+  // Component mount/unmount tracking
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      isMounted.current = false;
+      isMountedRef.current = false;
     };
   }, []);
 
-  useEffect(() => {
-    if (orderHistory.length > 0 && !hasNotified.current && isMounted.current) {
-      const latest = orderHistory[orderHistory.length - 1];
+  // Validate order data
+  const validateOrderData = useCallback((order: any) => {
+    if (!order || typeof order !== 'object') {
+      return { isValid: false, error: 'Invalid order object' };
+    }
+    
+    if (!order.seller || typeof order.seller !== 'string' || order.seller.trim().length === 0) {
+      return { isValid: false, error: 'Missing or invalid seller' };
+    }
+    
+    if (!order.title || typeof order.title !== 'string' || order.title.trim().length === 0) {
+      return { isValid: false, error: 'Missing or invalid title' };
+    }
+    
+    return { isValid: true };
+  }, []);
+
+  // Process notification with proper error handling
+  const processNotification = useCallback((latestOrder: any) => {
+    if (!isMountedRef.current || hasNotified.current) {
+      return;
+    }
+
+    // Validate order data before processing
+    const validation = validateOrderData(latestOrder);
+    if (!validation.isValid) {
+      console.error('Invalid order data in purchase success:', validation.error);
+      return;
+    }
+    
+    try {
+      // Sanitize seller name and title before adding to notification
+      const sanitizedSeller = sanitizeStrict(latestOrder.seller.trim());
+      const sanitizedTitle = sanitizeStrict(latestOrder.title.trim());
       
-      // Validate order data before processing
-      if (!latest || !latest.seller || !latest.title) {
-        console.error('Invalid order data in purchase success');
+      // Additional validation for length limits and XSS prevention
+      if (sanitizedSeller.length === 0 || sanitizedSeller.length > 50) {
+        console.error('Seller name is empty or exceeds maximum length (50 chars)');
         return;
       }
       
-      // Sanitize seller name and title before adding to notification
-      const sanitizedSeller = sanitizeStrict(latest.seller);
-      const sanitizedTitle = sanitizeStrict(latest.title);
+      if (sanitizedTitle.length === 0 || sanitizedTitle.length > 200) {
+        console.error('Product title is empty or exceeds maximum length (200 chars)');
+        return;
+      }
       
-      // Additional validation for XSS prevention
-      if (sanitizedSeller.length > 50 || sanitizedTitle.length > 200) {
-        console.error('Order data exceeds maximum length');
+      // Check if addSellerNotification function exists
+      if (typeof addSellerNotification !== 'function') {
+        console.error('addSellerNotification is not a function');
         return;
       }
       
       // Add seller name to notification message to make it easier to filter
-      try {
-        addSellerNotification(
-          sanitizedSeller, 
-          `💌 [For ${sanitizedSeller}] A buyer purchased: ${sanitizedTitle}`
-        );
-        hasNotified.current = true;
-      } catch (error) {
-        console.error('Error adding seller notification:', error);
-      }
+      addSellerNotification(
+        sanitizedSeller, 
+        `💌 [For ${sanitizedSeller}] A buyer purchased: ${sanitizedTitle}`
+      );
+      
+      hasNotified.current = true;
+    } catch (error) {
+      console.error('Error adding seller notification:', error);
+      // Don't rethrow - this is a non-critical feature
     }
-  }, [orderHistory, addSellerNotification]);
+  }, [validateOrderData, addSellerNotification]);
+
+  // Handle order history updates
+  useEffect(() => {
+    if (!isMountedRef.current) return;
+    
+    // Check if orderHistory exists and is an array
+    if (!Array.isArray(orderHistory)) {
+      console.error('orderHistory is not an array:', typeof orderHistory);
+      return;
+    }
+    
+    if (orderHistory.length > 0 && !hasNotified.current) {
+      const latestOrder = orderHistory[orderHistory.length - 1];
+      processNotification(latestOrder);
+    }
+  }, [orderHistory, processNotification]);
 
   return (
     <BanCheck>
