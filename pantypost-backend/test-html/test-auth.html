@@ -191,14 +191,14 @@
                 if (data.success) {
                     showMessage('✅ Account created successfully! You are now logged in.', true);
                     // Save token
-                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('token', data.data ? data.data.token : data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
                     // Clear form
                     document.getElementById('signup-username').value = '';
                     document.getElementById('signup-email').value = '';
                     document.getElementById('signup-password').value = '';
                     // Show user info
-                    showUserInfo(data.user);
+                    showUserInfo(data.data ? data.data.user : data.user);
                 } else {
                     showMessage('❌ ' + data.error, false);
                 }
@@ -231,13 +231,13 @@
                 if (data.success) {
                     showMessage('✅ Login successful!', true);
                     // Save token
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('token', data.data ? data.data.token : data.token);
+                    localStorage.setItem('user', JSON.stringify(data.data ? data.data.user : data.user));
                     // Clear form
                     document.getElementById('login-username').value = '';
                     document.getElementById('login-password').value = '';
                     // Show user info
-                    showUserInfo(data.user);
+                    showUserInfo(data.data ? data.data.user : data.user);
                 } else {
                     showMessage('❌ ' + data.error, false);
                 }
@@ -255,7 +255,7 @@
                 <p><strong>Username:</strong> ${user.username}</p>
                 <p><strong>Email:</strong> ${user.email}</p>
                 <p><strong>Role:</strong> ${user.role}</p>
-                <p><strong>User ID:</strong> ${user._id}</p>
+                <p><strong>User ID:</strong> ${user.id || user._id}</p>
             `;
             
             userInfoDiv.style.display = 'block';

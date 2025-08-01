@@ -477,7 +477,7 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    authToken = data.token; // Fixed: was data.data.token
+                    authToken = data.data ? data.data.token : data.token;
                     document.getElementById('loginFirst').style.display = 'none';
                     document.getElementById('chatContainer').style.display = 'block';
                     loadThreads();
@@ -662,8 +662,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        sender: currentUser,
-                        receiver: receiver,
+                        receiver: receiver,  // Removed 'sender'
                         content: content,
                         type: 'normal'
                     })
@@ -679,10 +678,12 @@
                         await selectThread(currentThread, otherUser);
                     }
                     loadThreads();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to send message'));
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
-                alert('Failed to send message');
+                alert('Failed to send message: ' + error.message);
             }
         }
 
@@ -703,8 +704,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        sender: currentUser,
-                        receiver: username,
+                        receiver: username,  // Removed 'sender' - server gets it from token
                         content: 'Hi! 👋',
                         type: 'normal'
                     })
@@ -719,11 +719,11 @@
                         await selectThread(threadId, username);
                     }, 500);
                 } else {
-                    alert('User not found');
+                    alert('Error: ' + (data.error || 'Failed to start chat'));
                 }
             } catch (error) {
                 console.error('Error starting chat:', error);
-                alert('Failed to start chat');
+                alert('Failed to start chat: ' + error.message);
             }
         }
 
@@ -769,8 +769,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        sender: currentUser,
-                        receiver: receiver,
+                        receiver: receiver,  // Removed 'sender'
                         content: message,
                         type: 'tip',
                         meta: {
@@ -830,8 +829,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        sender: currentUser,
-                        receiver: receiver,
+                        receiver: receiver,  // Removed 'sender'
                         content: 'Custom request',
                         type: 'customRequest',
                         meta: {

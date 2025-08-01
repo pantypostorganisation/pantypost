@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PantyPost Listings Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #e91e63;
+            text-align: center;
+        }
+        .user-info {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .not-logged-in {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #e91e63;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #d81b60;
+        }
+        .listing-card {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .price {
+            color: #e91e63;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .tag {
+            display: inline-block;
+            background: #e91e63;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .status {
+            float: right;
+            padding: 3px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .status.active {
+            background: #28a745;
+            color: white;
+        }
+        .error {
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        .success {
+            color: #28a745;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👙 PantyPost Listings Test</h1>
+        
+        <div id="authStatus"></div>
+        
+        <h2>Create a New Listing</h2>
+        <div id="listingForm">
+            <input type="text" id="title" placeholder="Title (e.g., Lacy Pink Set)">
+            <textarea id="description" placeholder="Description" rows="3"></textarea>
+            <input type="number" id="price" placeholder="Price (e.g., 29.99)" step="0.01">
+            <input type="text" id="tags" placeholder="Tags (comma separated: lace, pink, worn)">
+            <button onclick="createListing()">Create Listing</button>
+        </div>
+        
+        <div id="result"></div>
+        
+        <h2>Current Listings</h2>
+        <button onclick="loadListings()">Refresh Listings</button>
+        <div id="listingsList"></div>
+    </div>
+
+    <script>
+        // Check if user is logged in
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            const authStatus = document.getElementById('authStatus');
+            
+            if (token && user) {
+                const userData = JSON.parse(user);
+                authStatus.innerHTML = `
+                    <div class="user-info">
+                        Logged in as: <strong>${userData.username}</strong> (${userData.role})
+                        ${userData.role !== 'seller' ? '<br><em>Note: Only sellers can create listings</em>' : ''}
+                    </div>
+                `;
+                
+                // Auto-fill seller username if logged in as seller
+                if (userData.role === 'seller') {
+                    document.getElementById('seller').remove(); // Remove seller input
+                    // Add hidden seller value
+                    const form = document.getElementById('listingForm');
+                    const hiddenSeller = document.createElement('input');
+                    hiddenSeller.type = 'hidden';
+                    hiddenSeller.id = 'seller';
+                    hiddenSeller.value = userData.username;
+                    form.appendChild(hiddenSeller);
+                }
+            } else {
+                authStatus.innerHTML = `
+                    <div class="not-logged-in">
+                        Not logged in! Please login first using the auth test page.
+                    </div>
+                `;
+            }
+        }
+        
+        // Show result message
+        function showResult(message, isSuccess) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = isSuccess ? 'success' : 'error';
+            resultDiv.textContent = message;
+            
+            setTimeout(() => {
+                resultDiv.textContent = '';
+            }, 5000);
+        }
+        
+        // Create a listing
+        async function createListing() {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                showResult('❌ Error: Not logged in! Please login first.', false);
+                return;
+            }
+            
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const price = document.getElementById('price').value;
+            const tags = document.getElementById('tags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+            
+            // Get seller from hidden field or input
+            const sellerElement = document.getElementById('seller');
+            const seller = sellerElement ? sellerElement.value : '';
+            
+            if (!title || !description || !price) {
+                showResult('❌ Please fill in all fields!', false);
+                return;
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/listings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` // Add the token here!
+                    },
+                    body: JSON.stringify({ title, description, price: parseFloat(price), tags })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('✅ Listing created successfully!', true);
+                    // Clear form
+                    document.getElementById('title').value = '';
+                    document.getElementById('description').value = '';
+                    document.getElementById('price').value = '';
+                    document.getElementById('tags').value = '';
+                    loadListings();
+                } else {
+                    showResult('❌ Error: ' + (data.error?.message || data.error || 'Unknown error'), false);
+                }
+            } catch (error) {
+                showResult('❌ Error: ' + error.message, false);
+            }
+        }
+        
+        // Load all listings
+        async function loadListings() {
+            try {
+                const response = await fetch('http://localhost:5000/api/listings');
+                const data = await response.json();
+                
+                const listingsDiv = document.getElementById('listingsList');
+                
+                if (!data.listings || data.listings.length === 0) {
+                    listingsDiv.innerHTML = '<p>No listings yet. Create one above!</p>';
+                } else {
+                    listingsDiv.innerHTML = data.listings.map(listing => `
+                        <div class="listing-card">
+                            <span class="status ${listing.status}">${listing.status.toUpperCase()}</span>
+                            <h3>${listing.title}</h3>
+                            <p>${listing.description}</p>
+                            <div class="price">$${listing.price}</div>
+                            <p><strong>Seller:</strong> ${listing.seller}</p>
+                            <div>
+                                ${listing.tags && listing.tags.length > 0 ? listing.tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
+                            </div>
+                            <p><small>Created: ${new Date(listing.createdAt).toLocaleString()}</small></p>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading listings:', error);
+                document.getElementById('listingsList').innerHTML = '<p class="error">Error loading listings</p>';
+            }
+        }
+        
+        // Initialize when page loads
+        window.onload = function() {
+            checkAuth();
+            loadListings();
+        };
+    </script>
+</body>
+</html>
