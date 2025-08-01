@@ -98,17 +98,14 @@
             margin: 5px 0;
         }
         .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .stat-card {
-            background-color: #f9f9f9;
+            background: #f0f0f0;
             padding: 15px;
             border-radius: 5px;
-            text-align: center;
-            border: 1px solid #ddd;
+            margin: 10px 0;
+        }
+        .stats-item {
+            display: inline-block;
+            margin-right: 30px;
         }
         .rating-breakdown {
             margin: 15px 0;
@@ -147,6 +144,12 @@
             color: #28a745;
             margin: 10px 0;
         }
+        .refresh-btn {
+            background-color: #666;
+        }
+        .refresh-btn:hover {
+            background-color: #555;
+        }
     </style>
 </head>
 <body>
@@ -167,13 +170,10 @@
         <div>
             <select id="userSelect">
                 <option value="">Select a user...</option>
-                <option value="buyer789">buyer789 (buyer)</option>
-                <option value="alice123">alice123 (buyer)</option>
-                <option value="emma_seller">emma_seller (seller)</option>
-                <option value="sarah_s">sarah_s (seller)</option>
             </select>
-            <input type="password" id="password" placeholder="Password" value="password123">
+            <input type="password" id="password" placeholder="Password" value="">
             <button onclick="login()">Login</button>
+            <button onclick="loadUsers()" class="refresh-btn">Refresh User List</button>
         </div>
         <div id="loginError" class="error"></div>
     </div>
@@ -207,6 +207,33 @@
         const API_BASE = 'http://localhost:5000/api';
         let currentUser = null;
         let authToken = null;
+
+        // Load users from database
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/test/users`);
+                const data = await response.json();
+                
+                const select = document.getElementById('userSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        select.appendChild(option);
+                    });
+                    document.getElementById('loginError').textContent = '';
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                document.getElementById('loginError').textContent = 'Error loading users. Make sure the server is running.';
+            }
+        }
+
+        // Load users on page load
+        window.addEventListener('DOMContentLoaded', loadUsers);
 
         // Star rating component
         function createStarRating(containerId, initialRating = 0) {
@@ -244,6 +271,11 @@
             
             if (!username) {
                 document.getElementById('loginError').textContent = 'Please select a user';
+                return;
+            }
+            
+            if (!password) {
+                document.getElementById('loginError').textContent = 'Please enter a password';
                 return;
             }
             
@@ -598,6 +630,7 @@
             document.getElementById('buyerSection').style.display = 'none';
             document.getElementById('sellerSection').style.display = 'none';
             document.getElementById('userSelect').value = '';
+            document.getElementById('password').value = '';
         }
     </script>
 </body>

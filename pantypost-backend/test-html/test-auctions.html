@@ -187,7 +187,7 @@
         <select id="userSelect">
             <option value="">Select a user...</option>
         </select>
-        <input type="password" id="password" placeholder="Password" value="password123">
+        <input type="password" id="password" placeholder="Password" value="">
         <button onclick="login()">Login</button>
         <button onclick="loadUsers()" style="background-color: #666; margin-top: 10px;">Refresh User List</button>
         <div id="loginError" class="error"></div>
@@ -268,14 +268,10 @@
                 }
             } catch (error) {
                 console.error('Error loading users:', error);
-                // Fallback to hardcoded list
                 const select = document.getElementById('userSelect');
                 select.innerHTML = `
                     <option value="">Select a user...</option>
-                    <option value="buyer789">buyer789 (buyer)</option>
-                    <option value="alice123">alice123 (buyer)</option>
-                    <option value="emma_seller">emma_seller (seller)</option>
-                    <option value="sarah_s">sarah_s (seller)</option>
+                    <option value="">No users found - seed the database first</option>
                 `;
             }
         }
@@ -290,6 +286,11 @@
             
             if (!username) {
                 document.getElementById('loginError').textContent = 'Please select a user';
+                return;
+            }
+            
+            if (!password) {
+                document.getElementById('loginError').textContent = 'Please enter a password';
                 return;
             }
             
@@ -610,6 +611,7 @@
             document.getElementById('createSection').style.display = 'none';
             document.getElementById('myAuctionsSection').style.display = 'none';
             document.getElementById('userSelect').value = '';
+            document.getElementById('password').value = '';
         }
 
         // Auto-refresh auctions every 30 seconds

@@ -336,6 +336,17 @@
             cursor: pointer;
             color: #999;
         }
+        
+        .refresh-button {
+            padding: 8px 15px;
+            background: #666;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -349,12 +360,8 @@
                 <label>Current User:</label>
                 <select id="currentUser" onchange="switchUser()">
                     <option value="">Select a user...</option>
-                    <option value="alice123">alice123</option>
-                    <option value="test">test</option>
-                    <option value="emma_seller">emma_seller</option>
-                    <option value="buyer789">buyer789</option>
-                    <option value="">--- Add your own ---</option>
                 </select>
+                <button class="refresh-button" onclick="loadUserList()">Refresh User List</button>
             </div>
             
             <div class="threads-list" id="threadsList">
@@ -447,6 +454,32 @@
         let currentThread = null;
         let authToken = null;
 
+        // Load user list from database
+        async function loadUserList() {
+            try {
+                const response = await fetch('http://localhost:5000/api/test/users');
+                const data = await response.json();
+                
+                const select = document.getElementById('currentUser');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                alert('Could not load users. Make sure the server is running and users are seeded.');
+            }
+        }
+
+        // Load users on page load
+        window.addEventListener('DOMContentLoaded', loadUserList);
+
         // Switch user
         async function switchUser() {
             const username = document.getElementById('currentUser').value;
@@ -461,7 +494,7 @@
             currentUser = username;
             
             // Prompt for password
-            const password = prompt(`Enter password for ${username}:`, 'password123');
+            const password = prompt(`Enter password for ${username}:`);
             if (!password) return;
             
             // Login to get token
@@ -483,6 +516,7 @@
                     loadThreads();
                 } else {
                     alert('Login failed. Check username and password.');
+                    document.getElementById('currentUser').value = '';
                 }
             } catch (error) {
                 console.error('Login error:', error);
@@ -587,7 +621,7 @@
                     content = `
                         <div class="custom-request">
                             <h4>📋 ${msg.meta.title}</h4>
-                            <p><strong>Price:</strong> ${msg.meta.price}</p>
+                            <p><strong>Price:</strong> $${msg.meta.price}</p>
                             <p>${msg.meta.message}</p>
                             <p><small>Tags: ${msg.meta.tags?.join(', ') || 'None'}</small></p>
                         </div>
@@ -595,7 +629,7 @@
                 } else if (msg.type === 'tip') {
                     content = `
                         <div class="tip-message">
-                            <h4>💰 Tip: ${msg.meta.tipAmount}</h4>
+                            <h4>💰 Tip: $${msg.meta.tipAmount}</h4>
                             <p>${msg.content}</p>
                         </div>
                     `;
@@ -662,7 +696,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        receiver: receiver,  // Removed 'sender'
+                        receiver: receiver,
                         content: content,
                         type: 'normal'
                     })
@@ -704,7 +738,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        receiver: username,  // Removed 'sender' - server gets it from token
+                        receiver: username,
                         content: 'Hi! 👋',
                         type: 'normal'
                     })
@@ -769,7 +803,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        receiver: receiver,  // Removed 'sender'
+                        receiver: receiver,
                         content: message,
                         type: 'tip',
                         meta: {
@@ -782,7 +816,7 @@
                 if (data.success) {
                     closeTipModal();
                     selectThread(currentThread, receiver);
-                    alert(`Tip of $${amount} sent!`);
+                    alert(`Tip of ${amount} sent!`);
                 }
             } catch (error) {
                 console.error('Error sending tip:', error);
@@ -829,7 +863,7 @@
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        receiver: receiver,  // Removed 'sender'
+                        receiver: receiver,
                         content: 'Custom request',
                         type: 'customRequest',
                         meta: {

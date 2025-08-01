@@ -113,7 +113,7 @@
             <select id="userSelect">
                 <option value="">Select a user...</option>
             </select>
-            <input type="password" id="password" placeholder="Password" value="password123">
+            <input type="password" id="password" placeholder="Password" value="">
             <button onclick="login()">Login</button>
             <button onclick="loadUsers()" class="refresh-btn">Refresh User List</button>
             <div id="loginError" class="error"></div>
@@ -199,17 +199,7 @@
                 }
             } catch (error) {
                 console.error('Error loading users:', error);
-                document.getElementById('loginError').textContent = 'Error loading users. Using default list.';
-                
-                // Fallback to hardcoded list
-                const select = document.getElementById('userSelect');
-                select.innerHTML = `
-                    <option value="">Select a user...</option>
-                    <option value="buyer789">buyer789 (buyer)</option>
-                    <option value="alice123">alice123 (buyer)</option>
-                    <option value="emma_seller">emma_seller (seller)</option>
-                    <option value="sarah_s">sarah_s (seller)</option>
-                `;
+                document.getElementById('loginError').textContent = 'Error loading users. Make sure the server is running.';
             }
         }
 
@@ -281,6 +271,7 @@
             document.getElementById('loginSection').style.display = 'block';
             document.getElementById('walletSection').style.display = 'none';
             document.getElementById('userSelect').value = '';
+            document.getElementById('password').value = '';
         }
         
         // Load balance

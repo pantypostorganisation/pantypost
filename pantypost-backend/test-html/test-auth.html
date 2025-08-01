@@ -192,7 +192,7 @@
                     showMessage('✅ Account created successfully! You are now logged in.', true);
                     // Save token
                     localStorage.setItem('token', data.data ? data.data.token : data.token);
-                    localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('user', JSON.stringify(data.data ? data.data.user : data.user));
                     // Clear form
                     document.getElementById('signup-username').value = '';
                     document.getElementById('signup-email').value = '';
@@ -200,7 +200,7 @@
                     // Show user info
                     showUserInfo(data.data ? data.data.user : data.user);
                 } else {
-                    showMessage('❌ ' + data.error, false);
+                    showMessage('❌ ' + (data.error?.message || data.error || 'Signup failed'), false);
                 }
             } catch (error) {
                 showMessage('❌ Error: ' + error.message, false);
@@ -239,7 +239,7 @@
                     // Show user info
                     showUserInfo(data.data ? data.data.user : data.user);
                 } else {
-                    showMessage('❌ ' + data.error, false);
+                    showMessage('❌ ' + (data.error?.message || data.error || 'Login failed'), false);
                 }
             } catch (error) {
                 showMessage('❌ Error: ' + error.message, false);

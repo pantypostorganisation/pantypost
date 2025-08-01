@@ -16,76 +16,56 @@ const seedUsers = async () => {
     
     console.log('🌱 Starting user seeding...');
     
-    // Test users data
+    // Test users data - EMPTY ARRAY (no pre-seeded users)
     const testUsers = [
-      {
-        username: 'alice123',
-        email: 'alice@example.com',
-        password: 'password123',
-        role: 'buyer'
-      },
-      {
-        username: 'test',
-        email: 'test@example.com',
-        password: 'password123',
-        role: 'buyer'
-      },
-      {
-        username: 'emma_seller',
-        email: 'emma@example.com',
-        password: 'password123',
-        role: 'seller'
-      },
-      {
-        username: 'buyer789',
-        email: 'buyer789@example.com',
-        password: 'password123',
-        role: 'buyer'
-      },
-      {
-        username: 'sarah_s',
-        email: 'sarah@example.com',
-        password: 'password123',
-        role: 'seller'
-      },
-      {
-        username: 'john_buyer',
-        email: 'john@example.com',
-        password: 'password123',
-        role: 'buyer'
-      }
+      // Add your own test users here if needed
+      // Example format:
+      // {
+      //   username: 'testuser1',
+      //   email: 'test1@example.com',
+      //   password: 'password123',
+      //   role: 'buyer'
+      // },
     ];
     
-    // Create users
-    for (const userData of testUsers) {
-      try {
-        // Check if user already exists
-        const existingUser = await User.findOne({ 
-          $or: [
-            { username: userData.username }, 
-            { email: userData.email }
-          ] 
-        });
-        
-        if (existingUser) {
-          console.log(`⏭️  User ${userData.username} already exists, skipping...`);
-          continue;
+    if (testUsers.length === 0) {
+      console.log('📝 No users to seed. Add users to the testUsers array if needed.');
+      console.log('\nExample format:');
+      console.log(`{
+        username: 'testuser1',
+        email: 'test1@example.com',
+        password: 'password123',
+        role: 'buyer' // or 'seller'
+      }`);
+    } else {
+      // Create users
+      for (const userData of testUsers) {
+        try {
+          // Check if user already exists
+          const existingUser = await User.findOne({ 
+            $or: [
+              { username: userData.username }, 
+              { email: userData.email }
+            ] 
+          });
+          
+          if (existingUser) {
+            console.log(`⏭️  User ${userData.username} already exists, skipping...`);
+            continue;
+          }
+          
+          // Create new user (password will be hashed automatically by the model)
+          const newUser = new User(userData);
+          await newUser.save();
+          
+          console.log(`✅ Created user: ${userData.username} (${userData.role})`);
+        } catch (error) {
+          console.log(`❌ Error creating user ${userData.username}: ${error.message}`);
         }
-        
-        // Create new user (password will be hashed automatically by the model)
-        const newUser = new User(userData);
-        await newUser.save();
-        
-        console.log(`✅ Created user: ${userData.username} (${userData.role})`);
-      } catch (error) {
-        console.log(`❌ Error creating user ${userData.username}: ${error.message}`);
       }
     }
     
     console.log('\n🎉 User seeding completed!');
-    console.log('\n📝 Test credentials:');
-    console.log('Username: any of the above usernames');
-    console.log('Password: password123\n');
     
   } catch (error) {
     console.error('❌ Seeding error:', error);

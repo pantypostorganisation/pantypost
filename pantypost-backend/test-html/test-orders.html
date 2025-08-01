@@ -99,6 +99,12 @@
             border-radius: 5px;
             margin: 10px 0;
         }
+        .refresh-btn {
+            background-color: #666;
+        }
+        .refresh-btn:hover {
+            background-color: #555;
+        }
     </style>
 </head>
 <body>
@@ -109,12 +115,10 @@
             <h2>Login First</h2>
             <select id="userSelect">
                 <option value="">Select a user...</option>
-                <option value="buyer789">buyer789 (Buyer - has $50)</option>
-                <option value="alice123">alice123 (Buyer - has $0)</option>
-                <option value="emma_seller">emma_seller (Seller)</option>
-                <option value="sarah_s">sarah_s (Seller)</option>
             </select>
             <button onclick="login()">Login</button>
+            <button onclick="loadUsers()" class="refresh-btn">Refresh User List</button>
+            <div id="loginError" class="error"></div>
         </div>
         
         <div id="mainSection" style="display: none;">
@@ -133,22 +137,9 @@
             <div id="buyerSection" style="display: none;">
                 <div class="section">
                     <h3>📦 Available Listings to Purchase</h3>
+                    <button onclick="loadListings()" class="refresh-btn">Refresh Listings</button>
                     <div id="availableListings">
-                        <!-- Sample listings -->
-                        <div class="listing-card">
-                            <h4>Lacy Pink Set</h4>
-                            <p>Beautiful lacy set worn with care</p>
-                            <div class="price">$29.99</div>
-                            <p><strong>Seller:</strong> emma_seller</p>
-                            <button onclick="showPurchaseForm('Lacy Pink Set', 29.99, 'emma_seller')">Buy Now</button>
-                        </div>
-                        <div class="listing-card">
-                            <h4>Cotton Comfort Set</h4>
-                            <p>Comfortable cotton set for daily wear</p>
-                            <div class="price">$19.99</div>
-                            <p><strong>Seller:</strong> sarah_s</p>
-                            <button onclick="showPurchaseForm('Cotton Comfort Set', 19.99, 'sarah_s')">Buy Now</button>
-                        </div>
+                        <!-- Listings will be loaded from database -->
                     </div>
                 </div>
                 
@@ -161,12 +152,12 @@
                     
                     <div class="address-form">
                         <h4>Delivery Address</h4>
-                        <input type="text" id="fullName" placeholder="Full Name" value="John Doe">
-                        <input type="text" id="addressLine1" placeholder="Address Line 1" value="123 Main St">
+                        <input type="text" id="fullName" placeholder="Full Name" value="">
+                        <input type="text" id="addressLine1" placeholder="Address Line 1" value="">
                         <input type="text" id="addressLine2" placeholder="Address Line 2 (optional)">
-                        <input type="text" id="city" placeholder="City" value="New York">
-                        <input type="text" id="state" placeholder="State" value="NY">
-                        <input type="text" id="postalCode" placeholder="Postal Code" value="10001">
+                        <input type="text" id="city" placeholder="City" value="">
+                        <input type="text" id="state" placeholder="State" value="">
+                        <input type="text" id="postalCode" placeholder="Postal Code" value="">
                         <select id="country">
                             <option value="US">United States</option>
                             <option value="CA">Canada</option>
@@ -201,13 +192,43 @@
         let userRole = null;
         let currentPurchase = {};
 
+        // Load users from database
+        async function loadUsers() {
+            try {
+                const response = await fetch('http://localhost:5000/api/test/users');
+                const data = await response.json();
+                
+                const select = document.getElementById('userSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        select.appendChild(option);
+                    });
+                    document.getElementById('loginError').textContent = '';
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                document.getElementById('loginError').textContent = 'Error loading users. Make sure the server is running.';
+            }
+        }
+
+        // Load users on page load
+        window.addEventListener('DOMContentLoaded', loadUsers);
+
         // Login
         async function login() {
             const username = document.getElementById('userSelect').value;
             if (!username) {
-                alert('Please select a user');
+                document.getElementById('loginError').textContent = 'Please select a user';
                 return;
             }
+            
+            const password = prompt(`Enter password for ${username}:`, '');
+            if (!password) return;
             
             try {
                 const response = await fetch('http://localhost:5000/api/auth/login', {
@@ -215,7 +236,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         username: username,
-                        password: 'password123'
+                        password: password
                     })
                 });
                 
@@ -238,9 +259,14 @@
                     
                     loadBalance();
                     loadOrders();
+                    if (userRole === 'buyer') {
+                        loadListings();
+                    }
+                } else {
+                    document.getElementById('loginError').textContent = 'Login failed: ' + (data.error || 'Check password');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
             }
         }
         
@@ -266,6 +292,33 @@
                 }
             } catch (error) {
                 console.error('Error loading balance:', error);
+            }
+        }
+        
+        // Load listings
+        async function loadListings() {
+            try {
+                const response = await fetch('http://localhost:5000/api/listings?status=active');
+                const data = await response.json();
+                
+                const listingsDiv = document.getElementById('availableListings');
+                
+                if (data.success && data.listings && data.listings.length > 0) {
+                    listingsDiv.innerHTML = data.listings.map(listing => `
+                        <div class="listing-card">
+                            <h4>${listing.title}</h4>
+                            <p>${listing.description}</p>
+                            <div class="price">$${listing.price}</div>
+                            <p><strong>Seller:</strong> ${listing.seller}</p>
+                            <button onclick="showPurchaseForm('${listing.title}', ${listing.price}, '${listing.seller}')">Buy Now</button>
+                        </div>
+                    `).join('');
+                } else {
+                    listingsDiv.innerHTML = '<p>No listings available. Create some listings first!</p>';
+                }
+            } catch (error) {
+                console.error('Error loading listings:', error);
+                document.getElementById('availableListings').innerHTML = '<p class="error">Error loading listings</p>';
             }
         }
         
