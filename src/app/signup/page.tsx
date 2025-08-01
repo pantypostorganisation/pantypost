@@ -1,7 +1,7 @@
 // src/app/signup/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSignup } from '@/hooks/useSignup';
@@ -20,6 +20,7 @@ import { authSchemas } from '@/utils/validation/schemas';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { securityService } from '@/services/security.service';
 import { AlertCircle } from 'lucide-react';
+import { UserRole } from '@/types/signup';
 
 export default function SignupPage() {
   const {
@@ -52,74 +53,120 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordWarnings, setPasswordWarnings] = useState<string[]>([]);
 
+  // Memoize initial validation values to prevent unnecessary re-validations
+  const initialValidationValues = useMemo(() => ({
+    username,
+    email,
+    password,
+    confirmPassword,
+    role,
+    termsAccepted,
+    ageVerified,
+  }), [username, email, password, confirmPassword, role, termsAccepted, ageVerified]);
+
   // Form validation
   const validation = useValidation({
-    initialValues: {
-      username,
-      email,
-      password,
-      confirmPassword,
-      role,
-      termsAccepted,
-      ageVerified,
-    },
+    initialValues: initialValidationValues,
     validationSchema: authSchemas.signupSchema,
     validateOnChange: true,
     validateOnBlur: true,
   });
 
-  // Check password vulnerabilities
-  const checkPasswordSecurity = (pwd: string) => {
-    const result = securityService.checkPasswordVulnerabilities(pwd, {
-      username: validation.values.username,
-      email: validation.values.email,
-    });
-    setPasswordWarnings(result.warnings);
-  };
-
-  // Handle field updates with validation
-  const handleFieldUpdate = (field: string, value: any) => {
-    // Update validation state
-    validation.handleChange(field as any, value);
-    
-    // Update original form state
-    updateField(field as any, value);
-    
-    // Check password security if password field
-    if (field === 'password') {
-      checkPasswordSecurity(value);
-    }
-  };
-
-  // Handle secure form submission
-  const handleSecureSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Validate entire form
-    const isValid = await validation.validateForm();
-    if (!isValid) {
-      // Show first validation error as form error
-      const firstError = Object.values(validation.errors)[0];
-      if (firstError && updateField) {
-        updateField('form' as any, firstError);
-      }
+  // Memoized password security check to prevent unnecessary recalculations
+  const checkPasswordSecurity = useCallback((pwd: string) => {
+    if (!pwd || typeof pwd !== 'string') {
+      setPasswordWarnings([]);
       return;
     }
     
-    // Check for password warnings
-    if (passwordWarnings.length > 0) {
-      const confirmSubmit = window.confirm(
-        'Your password has some security concerns:\n\n' + 
-        passwordWarnings.join('\n') + 
-        '\n\nDo you want to continue anyway?'
-      );
-      if (!confirmSubmit) return;
+    try {
+      const result = securityService.checkPasswordVulnerabilities(pwd, {
+        username: validation.values.username || '',
+        email: validation.values.email || '',
+      });
+      setPasswordWarnings(result.warnings || []);
+    } catch (error) {
+      console.error('Error checking password security:', error);
+      setPasswordWarnings(['Unable to validate password security']);
+    }
+  }, [validation.values.username, validation.values.email]);
+
+  // Handle field updates with validation
+  const handleFieldUpdate = useCallback((field: string, value: any) => {
+    if (!field || value === undefined) {
+      console.warn('Invalid field update:', { field, value });
+      return;
     }
     
-    // Call original submit handler
-    await handleSubmit(e);
-  };
+    try {
+      // Update validation state
+      validation.handleChange(field as any, value);
+      
+      // Update original form state
+      if (updateField) {
+        updateField(field as any, value);
+      }
+      
+      // Check password security if password field
+      if (field === 'password') {
+        checkPasswordSecurity(value);
+      }
+    } catch (error) {
+      console.error('Error updating field:', error);
+    }
+  }, [validation, updateField, checkPasswordSecurity]);
 
+  // Handle secure form submission
+  const handleSecureSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isSubmitting) {
+      console.warn('Form submission already in progress');
+      return;
+    }
+    
+    try {
+      // Validate entire form
+      const isValid = await validation.validateForm();
+      if (!isValid) {
+        // Show first validation error as form error
+        const firstError = Object.values(validation.errors)[0];
+        if (firstError && updateField) {
+          updateField('form' as any, firstError);
+        }
+        return;
+      }
+      
+      // Check for password warnings
+      if (passwordWarnings.length > 0) {
+        const warningMessage = 'Your password has some security concerns:\n\n' + 
+          passwordWarnings.join('\n') + 
+          '\n\nDo you want to continue anyway?';
+        
+        const confirmSubmit = window.confirm(warningMessage);
+        if (!confirmSubmit) return;
+      }
+      
+      // Call original submit handler if available
+      if (handleSubmit) {
+        await handleSubmit(e);
+      }
+    } catch (error) {
+      console.error('Error during form submission:', error);
+      if (updateField) {
+        updateField('form' as any, 'An error occurred during submission. Please try again.');
+      }
+    }
+  }, [isSubmitting, validation, passwordWarnings, updateField, handleSubmit]);
+
+  // Memoized navigation handler
+  const handleLogoClick = useCallback(() => {
+    if (router) {
+      router.push('/');
+    }
+  }, [router]);
+
+  // Show loading state if not mounted
   if (!mounted) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -141,7 +188,7 @@ export default function SignupPage() {
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
         <div className="w-full max-w-md">
           {/* Header */}
-          <SignupHeader onLogoClick={() => router.push('/')} />
+          <SignupHeader onLogoClick={handleLogoClick} />
           
           {/* Form Card */}
           <motion.div 
@@ -176,7 +223,7 @@ export default function SignupPage() {
             >
               {/* Username Field */}
               <UsernameField
-                username={validation.values.username}
+                username={validation.values.username || ''}
                 error={validation.touched.username ? (validation.errors.username || errors.username) : errors.username}
                 isChecking={isCheckingUsername}
                 onChange={(value) => handleFieldUpdate('username', value)}
@@ -184,15 +231,15 @@ export default function SignupPage() {
 
               {/* Email Field */}
               <EmailField
-                email={validation.values.email}
+                email={validation.values.email || ''}
                 error={validation.touched.email ? (validation.errors.email || errors.email) : errors.email}
                 onChange={(value) => handleFieldUpdate('email', value)}
               />
 
               {/* Password Fields */}
               <PasswordField
-                password={validation.values.password}
-                confirmPassword={validation.values.confirmPassword}
+                password={validation.values.password || ''}
+                confirmPassword={validation.values.confirmPassword || ''}
                 passwordError={validation.touched.password ? (validation.errors.password || errors.password) : errors.password}
                 confirmError={validation.touched.confirmPassword ? (validation.errors.confirmPassword || errors.confirmPassword) : errors.confirmPassword}
                 showPassword={showPassword}
@@ -204,10 +251,15 @@ export default function SignupPage() {
               />
 
               {/* Password Strength Indicator */}
-              <PasswordStrength password={validation.values.password} strength={passwordStrength} />
+              {validation.values.password && (
+                <PasswordStrength 
+                  password={validation.values.password} 
+                  strength={passwordStrength} 
+                />
+              )}
               
               {/* Password Security Warnings */}
-              {passwordWarnings.length > 0 && validation.touched.password && (
+              {passwordWarnings.length > 0 && validation.touched.password && validation.values.password && (
                 <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <p className="text-yellow-400 text-sm font-medium mb-1">Security warnings:</p>
                   <ul className="text-yellow-400/80 text-xs space-y-1">
@@ -223,15 +275,15 @@ export default function SignupPage() {
 
               {/* Role Selection */}
               <RoleSelector
-                role={validation.values.role}
+                role={validation.values.role || null}
                 error={validation.touched.role ? (validation.errors.role || errors.role) : errors.role}
                 onChange={(value) => handleFieldUpdate('role', value)}
               />
 
               {/* Terms and Age Verification */}
               <TermsCheckboxes
-                termsAccepted={validation.values.termsAccepted}
-                ageVerified={validation.values.ageVerified}
+                termsAccepted={validation.values.termsAccepted || false}
+                ageVerified={validation.values.ageVerified || false}
                 termsError={validation.touched.termsAccepted ? (validation.errors.termsAccepted || errors.termsAccepted) : errors.termsAccepted}
                 ageError={validation.touched.ageVerified ? (validation.errors.ageVerified || errors.ageVerified) : errors.ageVerified}
                 onTermsChange={(checked) => handleFieldUpdate('termsAccepted', checked)}
@@ -241,7 +293,7 @@ export default function SignupPage() {
               {/* Submit Button */}
               <SecureSubmitButton
                 isLoading={isSubmitting || isCheckingUsername}
-                disabled={!validation.isValid || isCheckingUsername}
+                disabled={!validation.isValid || isCheckingUsername || isSubmitting}
                 className="w-full mt-6"
                 loadingText="Creating Account..."
               >

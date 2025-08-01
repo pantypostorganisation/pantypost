@@ -1,7 +1,7 @@
 // src/app/wallet/admin/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
@@ -15,6 +15,8 @@ import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
 import { getTimeFilteredData, getAllSellerWithdrawals } from '@/utils/admin/walletHelpers';
+
+type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
 
 function AdminProfitDashboardContent() {
   // All hooks must be called before any conditional returns
@@ -39,66 +41,126 @@ function AdminProfitDashboardContent() {
   
   const [showDetails, setShowDetails] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | '3months' | 'year' | 'all'>(() => {
-    // Load saved time filter or default to 'all'
-    if (typeof window !== 'undefined') {
+  const [mounted, setMounted] = useState(false);
+  
+  // Initialize time filter with proper error handling
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => {
+    // Only access localStorage on client side after mounting
+    if (typeof window === 'undefined') return 'all';
+    
+    try {
       const saved = localStorage.getItem('admin_dashboard_timefilter');
       if (saved && ['today', 'week', 'month', '3months', 'year', 'all'].includes(saved)) {
-        return saved as any;
+        return saved as TimeFilter;
       }
+    } catch (error) {
+      console.error('Error reading from localStorage:', error);
     }
     return 'all';
   });
-  
-  // Save time filter when it changes
-  useEffect(() => {
-    localStorage.setItem('admin_dashboard_timefilter', timeFilter);
-  }, [timeFilter]);
 
-  // Get filtered data (moved before conditional returns)
-  const { 
-    actions: filteredActions, 
-    orders: filteredOrders, 
-    deposits: filteredDeposits,
-    sellerWithdrawals: filteredSellerWithdrawals,
-    adminWithdrawals: filteredAdminWithdrawals
-  } = getTimeFilteredData(timeFilter, adminActions, orderHistory, depositLogs, sellerWithdrawals, adminWithdrawals);
-  
-  // Debug logging for deposits and orders
+  // Component mount tracking
   useEffect(() => {
-    console.log('Admin Dashboard Data:', {
-      timeFilter,
-      allOrders: orderHistory.length,
-      filteredOrders: filteredOrders.length,
-      pendingAuctionOrders: orderHistory.filter(o => o.shippingStatus === 'pending-auction').length,
-      completedAuctionOrders: orderHistory.filter(o => o.wasAuction && o.shippingStatus !== 'pending-auction').length,
-      allDeposits: depositLogs.length,
-      filteredDeposits: filteredDeposits.length,
-      totalDepositsAmount: getTotalDeposits()
-    });
-  }, [timeFilter, orderHistory, filteredOrders, depositLogs, filteredDeposits, getTotalDeposits]);
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+  
+  // Save time filter when it changes (only after mounting)
+  useEffect(() => {
+    if (!mounted) return;
+    
+    try {
+      localStorage.setItem('admin_dashboard_timefilter', timeFilter);
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
+  }, [timeFilter, mounted]);
 
-  // Handle force reload
-  const handleForceReload = async () => {
+  // Memoize admin status check
+  const isAdmin = useMemo(() => {
+    if (!user?.username) return false;
+    return user.username === 'oakley' || user.username === 'gerome';
+  }, [user?.username]);
+
+  // Memoize filtered data to prevent unnecessary recalculations
+  const filteredData = useMemo(() => {
+    if (!adminActions || !orderHistory || !depositLogs || !sellerWithdrawals || !adminWithdrawals) {
+      return {
+        actions: [],
+        orders: [],
+        deposits: [],
+        sellerWithdrawals: [],
+        adminWithdrawals: []
+      };
+    }
+
+    try {
+      return getTimeFilteredData(
+        timeFilter, 
+        adminActions, 
+        orderHistory, 
+        depositLogs, 
+        sellerWithdrawals, 
+        adminWithdrawals
+      );
+    } catch (error) {
+      console.error('Error filtering data:', error);
+      return {
+        actions: [],
+        orders: [],
+        deposits: [],
+        sellerWithdrawals: [],
+        adminWithdrawals: []
+      };
+    }
+  }, [timeFilter, adminActions, orderHistory, depositLogs, sellerWithdrawals, adminWithdrawals]);
+  
+  // Debug logging for deposits and orders with error handling
+  useEffect(() => {
+    if (!mounted) return;
+    
+    try {
+      console.log('Admin Dashboard Data:', {
+        timeFilter,
+        allOrders: orderHistory?.length || 0,
+        filteredOrders: filteredData.orders.length,
+        pendingAuctionOrders: orderHistory?.filter(o => o?.shippingStatus === 'pending-auction').length || 0,
+        completedAuctionOrders: orderHistory?.filter(o => o?.wasAuction && o?.shippingStatus !== 'pending-auction').length || 0,
+        allDeposits: depositLogs?.length || 0,
+        filteredDeposits: filteredData.deposits.length,
+        totalDepositsAmount: getTotalDeposits ? getTotalDeposits() : 0
+      });
+    } catch (error) {
+      console.error('Error logging dashboard data:', error);
+    }
+  }, [timeFilter, orderHistory, filteredData, depositLogs, getTotalDeposits, mounted]);
+
+  // Handle force reload with proper error handling
+  const handleForceReload = useCallback(async () => {
+    if (isReloading) return;
+    
     setIsReloading(true);
     try {
       // Reload wallet data
-      if (reloadData) {
+      if (reloadData && typeof reloadData === 'function') {
         await reloadData();
       }
       // Small delay to show loading state
       await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Error during force reload:', error);
     } finally {
       setIsReloading(false);
     }
-  };
+  }, [isReloading, reloadData]);
 
-  // Check admin status AFTER all hooks
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+  // Memoized time filter change handler
+  const handleTimeFilterChange = useCallback((filter: TimeFilter) => {
+    setTimeFilter(filter);
+  }, []);
 
-  // Now we can do conditional returns
   // Show loading state while wallet is initializing
-  if (!walletInitialized || walletLoading) {
+  if (!walletInitialized || walletLoading || !mounted) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
@@ -124,15 +186,17 @@ function AdminProfitDashboardContent() {
           </p>
           <button
             onClick={handleForceReload}
-            className="w-full px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg font-medium transition-colors"
+            disabled={isReloading}
+            className="w-full px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Retry Loading
+            {isReloading ? 'Retrying...' : 'Retry Loading'}
           </button>
         </div>
       </main>
     );
   }
 
+  // Access denied for non-admin users
   if (!isAdmin) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
@@ -184,7 +248,7 @@ function AdminProfitDashboardContent() {
               ].map((filter) => (
                 <button
                   key={filter.value}
-                  onClick={() => setTimeFilter(filter.value as any)}
+                  onClick={() => handleTimeFilterChange(filter.value as TimeFilter)}
                   className={`px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
                     timeFilter === filter.value
                       ? 'bg-[#ff950e] text-black shadow-lg'
@@ -203,7 +267,7 @@ function AdminProfitDashboardContent() {
               className="px-4 py-2 bg-[#1a1a1a] border border-gray-800 hover:bg-[#252525] text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
-              Force Reload
+              {isReloading ? 'Reloading...' : 'Force Reload'}
             </button>
           </div>
         </div>
@@ -223,45 +287,52 @@ function AdminProfitDashboardContent() {
           </div>
         )}
 
-        <AdminMetrics
-          timeFilter={timeFilter}
-          filteredActions={filteredActions}
-          filteredOrders={filteredOrders}
-          filteredDeposits={filteredDeposits}
-          filteredSellerWithdrawals={filteredSellerWithdrawals}
-          filteredAdminWithdrawals={filteredAdminWithdrawals}
-          adminBalance={adminBalance}
-          orderHistory={orderHistory}
-          adminActions={adminActions}
-          depositLogs={depositLogs}
-          sellerWithdrawals={sellerWithdrawals}
-          adminWithdrawals={adminWithdrawals}
-        />
+        {/* Component sections with proper error boundaries */}
+        {adminBalance !== undefined && (
+          <AdminMetrics
+            timeFilter={timeFilter}
+            filteredActions={filteredData.actions}
+            filteredOrders={filteredData.orders}
+            filteredDeposits={filteredData.deposits}
+            filteredSellerWithdrawals={filteredData.sellerWithdrawals}
+            filteredAdminWithdrawals={filteredData.adminWithdrawals}
+            adminBalance={adminBalance}
+            orderHistory={orderHistory || []}
+            adminActions={adminActions || []}
+            depositLogs={depositLogs || []}
+            sellerWithdrawals={sellerWithdrawals || []}
+            adminWithdrawals={adminWithdrawals || []}
+          />
+        )}
 
-        <AdminRevenueChart
-          timeFilter={timeFilter}
-          orderHistory={orderHistory}
-          adminActions={adminActions}
-        />
+        {orderHistory && adminActions && (
+          <AdminRevenueChart
+            timeFilter={timeFilter}
+            orderHistory={orderHistory}
+            adminActions={adminActions}
+          />
+        )}
 
-        <AdminHealthSection
-          users={users}
-          listings={listings}
-          wallet={wallet}
-          depositLogs={depositLogs}
-          filteredDeposits={filteredDeposits}
-          sellerWithdrawals={sellerWithdrawals}
-        />
+        {users && listings && wallet && depositLogs && sellerWithdrawals && (
+          <AdminHealthSection
+            users={users}
+            listings={listings}
+            wallet={wallet}
+            depositLogs={depositLogs}
+            filteredDeposits={filteredData.deposits}
+            sellerWithdrawals={sellerWithdrawals}
+          />
+        )}
 
         <AdminMoneyFlow />
 
         <AdminRecentActivity
           timeFilter={timeFilter}
-          filteredDeposits={filteredDeposits}
-          filteredSellerWithdrawals={filteredSellerWithdrawals}
-          filteredAdminWithdrawals={filteredAdminWithdrawals}
-          filteredActions={filteredActions}
-          filteredOrders={filteredOrders}
+          filteredDeposits={filteredData.deposits}
+          filteredSellerWithdrawals={filteredData.sellerWithdrawals}
+          filteredAdminWithdrawals={filteredData.adminWithdrawals}
+          filteredActions={filteredData.actions}
+          filteredOrders={filteredData.orders}
         />
       </div>
     </main>
