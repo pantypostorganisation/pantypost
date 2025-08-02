@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PantyPost File Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff69b4, #ff1493);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .login-info {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #ff1493;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #ff1493;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #ff69b4;
+        }
+        .preview {
+            margin: 10px 0;
+            max-width: 200px;
+            max-height: 200px;
+        }
+        .preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .gallery-item {
+            position: relative;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        .gallery-item button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            padding: 5px 10px;
+            font-size: 12px;
+            background: rgba(255, 0, 0, 0.8);
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .file-list {
+            margin: 10px 0;
+        }
+        .file-item {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        select {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📸 File Upload Test</h1>
+    </div>
+
+    <div class="login-info">
+        <strong>Logged in as:</strong> <span id="currentUser">Not logged in</span>
+        <button onclick="logout()" style="float: right;">Logout</button>
+    </div>
+
+    <!-- Login Section -->
+    <div class="section" id="loginSection">
+        <h2>Login First</h2>
+        <select id="userSelect">
+            <option value="">Select a user...</option>
+        </select>
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <div id="loginError" class="error" style="display: none;"></div>
+    </div>
+
+    <!-- Upload Sections (hidden until logged in) -->
+    <div id="uploadSections" style="display: none;">
+        
+        <!-- Profile Picture Upload -->
+        <div class="section">
+            <h2>Profile Picture Upload</h2>
+            <input type="file" id="profilePicFile" accept="image/*">
+            <div id="profilePreview" class="preview"></div>
+            <button onclick="uploadProfilePic()">Upload Profile Picture</button>
+            <div id="profileResult"></div>
+        </div>
+
+        <!-- Listing Images Upload (Sellers Only) -->
+        <div class="section" id="listingSection" style="display: none;">
+            <h2>Listing Images Upload</h2>
+            <p>Select up to 10 images for your listing</p>
+            <input type="file" id="listingFiles" accept="image/*" multiple>
+            <div id="listingPreview" class="gallery"></div>
+            <button onclick="uploadListingImages()">Upload Listing Images</button>
+            <div id="listingResult"></div>
+        </div>
+
+        <!-- Gallery Upload (Sellers Only) -->
+        <div class="section" id="gallerySection" style="display: none;">
+            <h2>Gallery Management</h2>
+            <input type="file" id="galleryFiles" accept="image/*" multiple>
+            <button onclick="uploadGallery()">Add to Gallery</button>
+            <div id="galleryResult"></div>
+            <h3>Current Gallery</h3>
+            <div id="currentGallery" class="gallery"></div>
+        </div>
+
+        <!-- Verification Upload (Sellers Only) -->
+        <div class="section" id="verificationSection" style="display: none;">
+            <h2>Verification Documents</h2>
+            <div>
+                <label>Code Photo:</label>
+                <input type="file" id="codePhoto" accept="image/*">
+            </div>
+            <div>
+                <label>ID Front:</label>
+                <input type="file" id="idFront" accept="image/*">
+            </div>
+            <div>
+                <label>ID Back:</label>
+                <input type="file" id="idBack" accept="image/*">
+            </div>
+            <button onclick="uploadVerification()">Upload Verification</button>
+            <div id="verificationResult"></div>
+        </div>
+
+        <!-- General File Upload -->
+        <div class="section">
+            <h2>General File Upload Test</h2>
+            <input type="file" id="generalFile" accept="image/*">
+            <button onclick="uploadGeneral()">Upload File</button>
+            <div id="generalResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let authToken = null;
+        let currentUser = null;
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/test/users`);
+                const data = await response.json();
+                
+                const select = document.getElementById('userSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        option.dataset.role = user.role;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        // Login
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            const password = document.getElementById('password').value;
+            const selectedOption = document.getElementById('userSelect').selectedOptions[0];
+            const role = selectedOption ? selectedOption.dataset.role : null;
+            
+            if (!username || !password) {
+                showError('loginError', 'Please select user and enter password');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.data.token;
+                    currentUser = data.data.user;
+                    
+                    document.getElementById('currentUser').textContent = 
+                        `${currentUser.username} (${currentUser.role})`;
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('uploadSections').style.display = 'block';
+                    
+                    // Show/hide seller sections
+                    const sellerSections = ['listingSection', 'gallerySection', 'verificationSection'];
+                    sellerSections.forEach(id => {
+                        document.getElementById(id).style.display = 
+                            currentUser.role === 'seller' ? 'block' : 'none';
+                    });
+                    
+                    // Load gallery if seller
+                    if (currentUser.role === 'seller') {
+                        loadGallery();
+                    }
+                } else {
+                    showError('loginError', data.error || 'Login failed');
+                }
+            } catch (error) {
+                showError('loginError', error.message);
+            }
+        }
+
+        // Logout
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            location.reload();
+        }
+
+        // Preview selected files
+        function previewFiles(input, previewId, multiple = false) {
+            const preview = document.getElementById(previewId);
+            preview.innerHTML = '';
+            
+            if (input.files) {
+                Array.from(input.files).forEach(file => {
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            preview.appendChild(img);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+        }
+
+        // Show result message
+        function showResult(elementId, message, isSuccess) {
+            const element = document.getElementById(elementId);
+            element.className = isSuccess ? 'result success' : 'result error';
+            element.textContent = message;
+            element.style.display = 'block';
+            
+            if (isSuccess) {
+                setTimeout(() => {
+                    element.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function showError(elementId, message) {
+            showResult(elementId, message, false);
+        }
+
+        // Upload profile picture
+        async function uploadProfilePic() {
+            const fileInput = document.getElementById('profilePicFile');
+            
+            if (!fileInput.files[0]) {
+                showError('profileResult', 'Please select a file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('profilePic', fileInput.files[0]);
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/profile-pic`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('profileResult', 
+                        `Profile picture uploaded! URL: ${data.data.url}`, true);
+                    fileInput.value = '';
+                    document.getElementById('profilePreview').innerHTML = '';
+                } else {
+                    showError('profileResult', data.error);
+                }
+            } catch (error) {
+                showError('profileResult', error.message);
+            }
+        }
+
+        // Upload listing images
+        async function uploadListingImages() {
+            const fileInput = document.getElementById('listingFiles');
+            
+            if (!fileInput.files.length) {
+                showError('listingResult', 'Please select files');
+                return;
+            }
+            
+            const formData = new FormData();
+            Array.from(fileInput.files).forEach(file => {
+                formData.append('images', file);
+            });
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/listing-images`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const urls = data.data.files.map(f => f.url).join('\n');
+                    showResult('listingResult', 
+                        `${data.data.count} images uploaded!\nURLs:\n${urls}`, true);
+                    fileInput.value = '';
+                    document.getElementById('listingPreview').innerHTML = '';
+                } else {
+                    showError('listingResult', data.error);
+                }
+            } catch (error) {
+                showError('listingResult', error.message);
+            }
+        }
+
+        // Upload gallery images
+        async function uploadGallery() {
+            const fileInput = document.getElementById('galleryFiles');
+            
+            if (!fileInput.files.length) {
+                showError('galleryResult', 'Please select files');
+                return;
+            }
+            
+            const formData = new FormData();
+            Array.from(fileInput.files).forEach(file => {
+                formData.append('gallery', file);
+            });
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/gallery`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('galleryResult', 
+                        `Added ${data.data.newImages.length} images to gallery!`, true);
+                    fileInput.value = '';
+                    loadGallery();
+                } else {
+                    showError('galleryResult', data.error);
+                }
+            } catch (error) {
+                showError('galleryResult', error.message);
+            }
+        }
+
+        // Load current gallery
+        async function loadGallery() {
+            try {
+                const response = await fetch(`${API_BASE}/users/${currentUser.username}/profile/full`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const gallery = document.getElementById('currentGallery');
+                    const images = data.data.galleryImages || [];
+                    
+                    if (images.length === 0) {
+                        gallery.innerHTML = '<p>No images in gallery</p>';
+                    } else {
+                        gallery.innerHTML = images.map((url, index) => `
+                            <div class="gallery-item">
+                                <img src="${url}" alt="Gallery image ${index + 1}">
+                                <button onclick="removeFromGallery(${index})">Remove</button>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading gallery:', error);
+            }
+        }
+
+        // Remove image from gallery
+        async function removeFromGallery(index) {
+            if (!confirm('Remove this image from gallery?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/gallery/${index}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    loadGallery();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Upload verification documents
+        async function uploadVerification() {
+            const codePhoto = document.getElementById('codePhoto').files[0];
+            const idFront = document.getElementById('idFront').files[0];
+            const idBack = document.getElementById('idBack').files[0];
+            
+            if (!codePhoto || !idFront || !idBack) {
+                showError('verificationResult', 'Please select all three files');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('codePhoto', codePhoto);
+            formData.append('idFront', idFront);
+            formData.append('idBack', idBack);
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/verification`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('verificationResult', 
+                        'Verification documents uploaded successfully!', true);
+                    document.getElementById('codePhoto').value = '';
+                    document.getElementById('idFront').value = '';
+                    document.getElementById('idBack').value = '';
+                } else {
+                    showError('verificationResult', data.error);
+                }
+            } catch (error) {
+                showError('verificationResult', error.message);
+            }
+        }
+
+        // Upload general file
+        async function uploadGeneral() {
+            const fileInput = document.getElementById('generalFile');
+            
+            if (!fileInput.files[0]) {
+                showError('generalResult', 'Please select a file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch(`${API_BASE}/upload/single`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('generalResult', 
+                        `File uploaded! URL: ${data.data.url}`, true);
+                    fileInput.value = '';
+                } else {
+                    showError('generalResult', data.error);
+                }
+            } catch (error) {
+                showError('generalResult', error.message);
+            }
+        }
+
+        // Set up file preview handlers
+        document.getElementById('profilePicFile').addEventListener('change', function() {
+            previewFiles(this, 'profilePreview');
+        });
+        
+        document.getElementById('listingFiles').addEventListener('change', function() {
+            previewFiles(this, 'listingPreview', true);
+        });
+
+        // Load users on page load
+        window.addEventListener('DOMContentLoaded', loadUsers);
+    </script>
+</body>
+</html>

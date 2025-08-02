@@ -24,6 +24,7 @@ const messageRoutes = require('./routes/message.routes');
 const walletRoutes = require('./routes/wallet.routes');
 const subscriptionRoutes = require('./routes/subscription.routes');
 const reviewRoutes = require('./routes/review.routes');
+const uploadRoutes = require('./routes/upload.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,7 +36,11 @@ connectDB();
 // Middleware
 app.use(cors()); // Allow all origins for testing
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // For form data
 app.use(express.static(__dirname)); // Serve static files from current directory
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -51,6 +56,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/upload', uploadRoutes); // Add upload routes
 
 // ============= TEST ROUTES (keeping these for now) =============
 
