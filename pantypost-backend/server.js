@@ -17,6 +17,7 @@ const authMiddleware = require('./middleware/auth.middleware');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
+const userRoutes = require('./routes/user.routes');
 const listingRoutes = require('./routes/listing.routes');
 const orderRoutes = require('./routes/order.routes');
 const messageRoutes = require('./routes/message.routes');
@@ -43,6 +44,7 @@ app.get('/api/health', (req, res) => {
 
 // ============= USE ROUTE FILES =============
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);  // Add user routes
 app.use('/api/listings', listingRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/messages', messageRoutes);

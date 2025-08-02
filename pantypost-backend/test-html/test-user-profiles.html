@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PantyPost User Profiles Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #ff69b4, #ff1493);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .login-info {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #ff1493;
+        }
+        input, textarea, select, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        input[type="text"], input[type="url"], input[type="tel"], textarea {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #ff1493;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 10px 20px;
+        }
+        button:hover {
+            background-color: #ff69b4;
+        }
+        .profile-pic {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
+            margin: 20px auto;
+            border: 3px solid #ff1493;
+        }
+        .error {
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        .success {
+            color: #28a745;
+            margin: 10px 0;
+        }
+        .user-card {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .verified-badge {
+            background: #28a745;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: inline-block;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .gallery img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .settings-group {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .checkbox-label {
+            display: block;
+            margin: 10px 0;
+        }
+        .checkbox-label input {
+            width: auto;
+            margin-right: 10px;
+        }
+        .verification-section {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .admin-section {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>👤 User Profiles Test</h1>
+    </div>
+
+    <div class="login-info">
+        <div>
+            <strong>Logged in as:</strong> <span id="currentUser">Not logged in</span>
+        </div>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Login Section -->
+    <div class="section" id="loginSection">
+        <h2>🔐 Login</h2>
+        <select id="userSelect">
+            <option value="">Select a user...</option>
+        </select>
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <button onclick="loadUsers()">Refresh User List</button>
+        <div id="loginError" class="error"></div>
+    </div>
+
+    <!-- View Profile Section -->
+    <div class="section" id="viewProfileSection" style="display: none;">
+        <h2>👀 View User Profile</h2>
+        <input type="text" id="viewUsername" placeholder="Enter username to view">
+        <button onclick="viewProfile()">View Profile</button>
+        <div id="profileDisplay"></div>
+    </div>
+
+    <!-- Edit Profile Section -->
+    <div class="section" id="editProfileSection" style="display: none;">
+        <h2>✏️ Edit Your Profile</h2>
+        
+        <div class="form-group">
+            <label>Profile Picture URL:</label>
+            <input type="url" id="profilePic" placeholder="https://example.com/your-photo.jpg">
+            <img id="profilePicPreview" class="profile-pic" src="https://via.placeholder.com/150" alt="Profile">
+        </div>
+
+        <div class="form-group">
+            <label>Bio (max 500 characters):</label>
+            <textarea id="bio" placeholder="Tell us about yourself..."></textarea>
+            <small>Characters: <span id="bioCount">0</span>/500</small>
+        </div>
+
+        <div class="form-group">
+            <label>Phone Number:</label>
+            <input type="tel" id="phoneNumber" placeholder="+1234567890">
+        </div>
+
+        <!-- Seller-only fields -->
+        <div id="sellerFields" style="display: none;">
+            <div class="form-group">
+                <label>Subscription Price ($/month):</label>
+                <input type="number" id="subscriptionPrice" min="0.01" max="999.99" step="0.01" placeholder="9.99">
+            </div>
+
+            <div class="form-group">
+                <label>Gallery Images (comma-separated URLs):</label>
+                <textarea id="galleryImages" placeholder="https://example.com/img1.jpg, https://example.com/img2.jpg"></textarea>
+                <div id="galleryPreview" class="gallery"></div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="settings-group">
+            <h3>Settings</h3>
+            <label class="checkbox-label">
+                <input type="checkbox" id="emailNotifications" checked>
+                Email Notifications
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="pushNotifications">
+                Push Notifications
+            </label>
+            <label>
+                Privacy:
+                <select id="privacy">
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                </select>
+            </label>
+        </div>
+
+        <button onclick="updateProfile()">Save Profile</button>
+        <div id="updateResult"></div>
+    </div>
+
+    <!-- Verification Section (Sellers Only) -->
+    <div class="section verification-section" id="verificationSection" style="display: none;">
+        <h2>✅ Verification</h2>
+        <p>Status: <span id="verificationStatus">Unverified</span></p>
+        
+        <div id="verificationForm" style="display: none;">
+            <h3>Submit Verification</h3>
+            <div class="form-group">
+                <label>Code Photo URL:</label>
+                <input type="url" id="codePhoto" placeholder="URL of photo with your verification code">
+            </div>
+            <div class="form-group">
+                <label>ID Front URL:</label>
+                <input type="url" id="idFront" placeholder="URL of ID front">
+            </div>
+            <div class="form-group">
+                <label>ID Back URL:</label>
+                <input type="url" id="idBack" placeholder="URL of ID back">
+            </div>
+            <div class="form-group">
+                <label>Verification Code:</label>
+                <input type="text" id="verificationCode" placeholder="Enter the code shown in your photo">
+            </div>
+            <button onclick="submitVerification()">Submit for Verification</button>
+        </div>
+        
+        <div id="verificationResult"></div>
+    </div>
+
+    <!-- Admin Section -->
+    <div class="section admin-section" id="adminSection" style="display: none;">
+        <h2>🛡️ Admin Actions</h2>
+        
+        <h3>Review Verification</h3>
+        <input type="text" id="adminVerifyUsername" placeholder="Username to verify">
+        <select id="adminVerifyStatus">
+            <option value="verified">Approve</option>
+            <option value="rejected">Reject</option>
+        </select>
+        <input type="text" id="rejectionReason" placeholder="Rejection reason (if rejecting)">
+        <button onclick="adminVerifyUser()">Update Verification</button>
+        
+        <h3>Ban/Unban User</h3>
+        <input type="text" id="banUsername" placeholder="Username">
+        <input type="text" id="banReason" placeholder="Ban reason (min 10 chars)">
+        <input type="number" id="banDuration" placeholder="Duration in days (optional)" min="1" max="365">
+        <button onclick="banUser()">Ban User</button>
+        <button onclick="unbanUser()">Unban User</button>
+        
+        <div id="adminResult"></div>
+    </div>
+
+    <!-- All Users List -->
+    <div class="section" id="usersListSection" style="display: none;">
+        <h2>📋 All Users</h2>
+        <button onclick="loadAllUsers()">Load Users</button>
+        <div id="usersList"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let currentUser = null;
+        let authToken = null;
+
+        // Load users for login
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/test/users`);
+                const data = await response.json();
+                
+                const select = document.getElementById('userSelect');
+                select.innerHTML = '<option value="">Select a user...</option>';
+                
+                if (data.success && data.users) {
+                    data.users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.username;
+                        option.textContent = `${user.username} (${user.role})`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Error loading users';
+            }
+        }
+
+        // Load on page load
+        window.addEventListener('DOMContentLoaded', loadUsers);
+
+        // Preview profile picture
+        document.getElementById('profilePic').addEventListener('input', (e) => {
+            const url = e.target.value;
+            document.getElementById('profilePicPreview').src = url || 'https://via.placeholder.com/150';
+        });
+
+        // Count bio characters
+        document.getElementById('bio').addEventListener('input', (e) => {
+            document.getElementById('bioCount').textContent = e.target.value.length;
+        });
+
+        // Preview gallery images
+        document.getElementById('galleryImages').addEventListener('input', (e) => {
+            const urls = e.target.value.split(',').map(url => url.trim()).filter(url => url);
+            const preview = document.getElementById('galleryPreview');
+            preview.innerHTML = urls.map(url => 
+                `<img src="${url}" onerror="this.style.display='none'">`
+            ).join('');
+        });
+
+        // Login
+        async function login() {
+            const username = document.getElementById('userSelect').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                document.getElementById('loginError').textContent = 'Please fill all fields';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.data.user;
+                    authToken = data.data.token;
+                    
+                    document.getElementById('currentUser').textContent = 
+                        `${currentUser.username} (${currentUser.role})`;
+                    document.getElementById('loginSection').style.display = 'none';
+                    document.getElementById('viewProfileSection').style.display = 'block';
+                    document.getElementById('editProfileSection').style.display = 'block';
+                    document.getElementById('usersListSection').style.display = 'block';
+                    
+                    // Show seller-specific sections
+                    if (currentUser.role === 'seller') {
+                        document.getElementById('sellerFields').style.display = 'block';
+                        document.getElementById('verificationSection').style.display = 'block';
+                    }
+                    
+                    // Show admin section
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('adminSection').style.display = 'block';
+                    }
+                    
+                    loadMyProfile();
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Login failed';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Load my profile
+        async function loadMyProfile() {
+            try {
+                const response = await fetch(`${API_BASE}/users/${currentUser.username}/profile/full`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const user = data.data;
+                    
+                    // Fill in form fields
+                    document.getElementById('profilePic').value = user.profilePic || '';
+                    document.getElementById('profilePicPreview').src = user.profilePic || 'https://via.placeholder.com/150';
+                    document.getElementById('bio').value = user.bio || '';
+                    document.getElementById('bioCount').textContent = (user.bio || '').length;
+                    document.getElementById('phoneNumber').value = user.phoneNumber || '';
+                    
+                    if (user.role === 'seller') {
+                        document.getElementById('subscriptionPrice').value = user.subscriptionPrice || 9.99;
+                        document.getElementById('galleryImages').value = (user.galleryImages || []).join(', ');
+                        
+                        // Update verification status
+                        document.getElementById('verificationStatus').textContent = 
+                            user.verificationStatus.charAt(0).toUpperCase() + user.verificationStatus.slice(1);
+                        
+                        if (user.verificationStatus === 'unverified' || user.verificationStatus === 'rejected') {
+                            document.getElementById('verificationForm').style.display = 'block';
+                        } else {
+                            document.getElementById('verificationForm').style.display = 'none';
+                        }
+                    }
+                    
+                    // Settings
+                    if (user.settings) {
+                        document.getElementById('emailNotifications').checked = user.settings.emailNotifications;
+                        document.getElementById('pushNotifications').checked = user.settings.pushNotifications;
+                        document.getElementById('privacy').value = user.settings.privacy;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        // View profile
+        async function viewProfile() {
+            const username = document.getElementById('viewUsername').value;
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${username}/profile`);
+                const data = await response.json();
+                
+                const display = document.getElementById('profileDisplay');
+                
+                if (data.success) {
+                    const user = data.data;
+                    display.innerHTML = `
+                        <div class="user-card">
+                            <img src="${user.profilePic || 'https://via.placeholder.com/150'}" class="profile-pic">
+                            <h3>${user.username} ${user.isVerified ? '<span class="verified-badge">Verified</span>' : ''}</h3>
+                            <p><strong>Role:</strong> ${user.role}</p>
+                            <p><strong>Bio:</strong> ${user.bio || 'No bio yet'}</p>
+                            ${user.role === 'seller' ? `
+                                <p><strong>Subscription:</strong> $${user.subscriptionPrice}/month</p>
+                                <p><strong>Rating:</strong> ${user.rating} ⭐ (${user.reviewCount} reviews)</p>
+                                <p><strong>Subscribers:</strong> ${user.subscriberCount}</p>
+                                <p><strong>Total Sales:</strong> ${user.totalSales}</p>
+                                ${user.galleryImages && user.galleryImages.length > 0 ? `
+                                    <h4>Gallery</h4>
+                                    <div class="gallery">
+                                        ${user.galleryImages.map(img => `<img src="${img}">`).join('')}
+                                    </div>
+                                ` : ''}
+                            ` : ''}
+                            <p><strong>Joined:</strong> ${new Date(user.joinedDate).toLocaleDateString()}</p>
+                        </div>
+                    `;
+                } else {
+                    display.innerHTML = `<p class="error">${data.error.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('profileDisplay').innerHTML = 
+                    `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Update profile
+        async function updateProfile() {
+            const profileData = {
+                bio: document.getElementById('bio').value,
+                profilePic: document.getElementById('profilePic').value,
+                phoneNumber: document.getElementById('phoneNumber').value,
+                settings: {
+                    emailNotifications: document.getElementById('emailNotifications').checked,
+                    pushNotifications: document.getElementById('pushNotifications').checked,
+                    privacy: document.getElementById('privacy').value
+                }
+            };
+            
+            if (currentUser.role === 'seller') {
+                profileData.subscriptionPrice = parseFloat(document.getElementById('subscriptionPrice').value);
+                const galleryUrls = document.getElementById('galleryImages').value
+                    .split(',')
+                    .map(url => url.trim())
+                    .filter(url => url);
+                profileData.galleryImages = galleryUrls;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${currentUser.username}/profile`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(profileData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('updateResult').innerHTML = 
+                        '<p class="success">Profile updated successfully!</p>';
+                } else {
+                    document.getElementById('updateResult').innerHTML = 
+                        `<p class="error">${data.error.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('updateResult').innerHTML = 
+                    `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Submit verification
+        async function submitVerification() {
+            const verificationData = {
+                codePhoto: document.getElementById('codePhoto').value,
+                idFront: document.getElementById('idFront').value,
+                idBack: document.getElementById('idBack').value,
+                code: document.getElementById('verificationCode').value
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${currentUser.username}/verification`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(verificationData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('verificationResult').innerHTML = 
+                        '<p class="success">Verification submitted! Waiting for admin approval.</p>';
+                    document.getElementById('verificationStatus').textContent = 'Pending';
+                    document.getElementById('verificationForm').style.display = 'none';
+                } else {
+                    document.getElementById('verificationResult').innerHTML = 
+                        `<p class="error">${data.error.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('verificationResult').innerHTML = 
+                    `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Admin verify user
+        async function adminVerifyUser() {
+            const username = document.getElementById('adminVerifyUsername').value;
+            const status = document.getElementById('adminVerifyStatus').value;
+            const rejectionReason = document.getElementById('rejectionReason').value;
+            
+            const data = {
+                status,
+                adminUsername: currentUser.username
+            };
+            
+            if (status === 'rejected') {
+                data.rejectionReason = rejectionReason;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${username}/verification`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('adminResult').innerHTML = 
+                        `<p class="success">${result.message}</p>`;
+                } else {
+                    document.getElementById('adminResult').innerHTML = 
+                        `<p class="error">${result.error.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('adminResult').innerHTML = 
+                    `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Ban user
+        async function banUser() {
+            const username = document.getElementById('banUsername').value;
+            const reason = document.getElementById('banReason').value;
+            const duration = document.getElementById('banDuration').value;
+            
+            const data = {
+                reason,
+                adminUsername: currentUser.username
+            };
+            
+            if (duration) {
+                data.duration = parseInt(duration);
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${username}/ban`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('adminResult').innerHTML = 
+                        `<p class="success">${result.message}</p>`;
+                } else {
+                    document.getElementById('adminResult').innerHTML = 
+                        `<p class="error">${result.error.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('adminResult').innerHTML = 
+                    `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Unban user
+        async function unbanUser() {
+            const username = document.getElementById('banUsername').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/users/${username}/unban`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ adminUsername: currentUser.username })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('adminResult').innerHTML = 
+                        `<p class="success">${result.message}</p>`;
+                } else {
+                    document.getElementById('adminResult').innerHTML = 
+                        `<p class="error">${result.error.message}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('adminResult').innerHTML = 
+                    `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Load all users
+        async function loadAllUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/users`);
+                const data = await response.json();
+                
+                const list = document.getElementById('usersList');
+                
+                if (data.success) {
+                    list.innerHTML = data.data.map(user => `
+                        <div class="user-card">
+                            <h4>${user.username} ${user.isVerified ? '<span class="verified-badge">Verified</span>' : ''}</h4>
+                            <p>Role: ${user.role} | Email: ${user.email}</p>
+                            <p>Status: ${user.isBanned ? '🚫 Banned' : '✅ Active'}</p>
+                            ${user.isBanned ? `<p>Ban reason: ${user.banReason}</p>` : ''}
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                document.getElementById('usersList').innerHTML = 
+                    `<p class="error">Error loading users</p>`;
+            }
+        }
+
+        // Logout
+        function logout() {
+            currentUser = null;
+            authToken = null;
+            location.reload();
+        }
+    </script>
+</body>
+</html>
