@@ -45,7 +45,11 @@ export default function ClientLayout({
   ];
 
   // Check if current route should hide header
-  const shouldHideHeader = hideHeaderRoutes.some(route => pathname.startsWith(route));
+  // Using exact match to avoid issues with similar route names
+  const shouldHideHeader = hideHeaderRoutes.some(route => {
+    // Exact match or starts with route followed by query params or hash
+    return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -69,6 +73,14 @@ export default function ClientLayout({
 
   // Initialize performance monitoring
   usePerformanceMonitoring();
+
+  // Debug log for development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Current pathname:', pathname);
+      console.log('Should hide header:', shouldHideHeader);
+    }
+  }, [pathname, shouldHideHeader]);
 
   // Prevent SSR/hydration issues by only rendering after mount
   if (!mounted) {

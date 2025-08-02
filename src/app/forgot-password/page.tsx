@@ -87,7 +87,7 @@ export default function ForgotPasswordPage() {
     );
   }
 
-  // Main form
+  // Main form - matching login page layout exactly
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
       {/* Floating Particles Background */}
@@ -100,17 +100,17 @@ export default function ForgotPasswordPage() {
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
-      {/* Main Content */}
-      <div className="relative z-10 flex items-center justify-center p-4 min-h-screen">
+      {/* Main Content - matching login page structure */}
+      <div className="relative z-10 flex items-center justify-center p-4 min-h-[90vh] pt-4">
         <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-6">
+          {/* Header - matching login page exactly */}
+          <div className="text-center mb-4">
+            <div className="flex justify-center mb-3">
               <img 
                 src="/logo.png" 
                 alt="PantyPost" 
                 className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
-                style={{ width: '180px', height: '180px' }}
+                style={{ width: '220px', height: '220px' }}
                 onClick={() => router.push('/')}
               />
             </div>
@@ -120,8 +120,8 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
 
-          {/* Form Card */}
-          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
+          {/* Form Card - matching login page */}
+          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
             <form onSubmit={handleSubmit}>
               {/* Error display */}
               {error && (
@@ -174,31 +174,30 @@ export default function ForgotPasswordPage() {
                   </>
                 )}
               </button>
-
-              {/* Back to Login Link */}
-              <div className="flex items-center justify-between mt-6">
-                <Link 
-                  href="/login" 
-                  className="text-gray-400 hover:text-white text-sm transition-colors flex items-center gap-1"
-                >
-                  <ArrowLeft className="w-3 h-3" />
-                  Back to Login
-                </Link>
-                <Link 
-                  href="/signup" 
-                  className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium transition-colors"
-                >
-                  Create Account
-                </Link>
-              </div>
             </form>
           </div>
 
-          {/* Trust Indicators */}
+          {/* Footer - matching login page structure */}
+          <div className="text-center mt-6 space-y-3 transition-all duration-500">
+            <p className="text-sm">
+              <Link href="/login" className="text-gray-400 hover:text-[#ff950e] transition-colors">
+                Back to Login
+              </Link>
+            </p>
+            
+            <p className="text-base text-gray-500">
+              Don't have an account?{' '}
+              <Link href="/signup" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
+                Sign up
+              </Link>
+            </p>
+          </div>
+
+          {/* Trust Indicators - matching login page */}
           <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600 transition-all duration-500">
             <span>🔒 Secure</span>
             <span>🛡️ Encrypted</span>
-            <span>✓ Private</span>
+            <span>✓ Verified</span>
           </div>
         </div>
       </div>
