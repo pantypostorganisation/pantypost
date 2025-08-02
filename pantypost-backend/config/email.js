@@ -10,18 +10,36 @@ const createTransporter = () => {
   }
   
   try {
+    // Create reusable transporter object using SMTP transport
     const transporter = nodemailer.createTransport({
       service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
     
     console.log('✅ Email transporter created successfully');
+    
+    // Verify connection configuration
+    transporter.verify(function(error, success) {
+      if (error) {
+        console.error('❌ Email verification failed:', error.message);
+      } else {
+        console.log('✅ Email server is ready to send messages');
+      }
+    });
+    
     return transporter;
   } catch (error) {
     console.error('❌ Failed to create email transporter:', error.message);
+    console.error('Error details:', error);
     return null;
   }
 };
@@ -59,7 +77,10 @@ const sendEmail = async (options) => {
       console.log('📧 EMAIL CONTENT (failed to send):');
       console.log('To:', options.to);
       console.log('Subject:', options.subject);
+      console.log('Content:', options.text || options.html);
       console.log('-------------------');
+      // Return success in development to continue flow
+      return { messageId: 'dev-mode-email' };
     }
     throw error;
   }
