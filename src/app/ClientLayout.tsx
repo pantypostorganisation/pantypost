@@ -39,7 +39,9 @@ export default function ClientLayout({
     '/login',
     '/signup',
     '/reset-password',
-    '/forgot-password'
+    '/forgot-password',
+    '/verify-reset-code',
+    '/reset-password-final'
   ];
 
   // Check if current route should hide header

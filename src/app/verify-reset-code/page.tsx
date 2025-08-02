@@ -1,13 +1,19 @@
 // src/app/verify-reset-code/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { KeyRound, ArrowLeft, AlertCircle } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
+import PublicRouteWrapper from '@/components/PublicRouteWrapper';
 
-export default function VerifyResetCodePage() {
+// Mark this as a public page
+if (typeof window !== 'undefined') {
+  (window as any).__IS_PUBLIC_PAGE__ = true;
+}
+
+function VerifyResetCodeContent() {
   const router = useRouter();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
@@ -15,22 +21,97 @@ export default function VerifyResetCodePage() {
   const [email, setEmail] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [needsEmail, setNeedsEmail] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  useEffect(() => {
-    // Get email from session storage
-    const storedEmail = sessionStorage.getItem('resetEmail');
-    console.log('Verify Reset Code Page - Stored email:', storedEmail);
-    console.log('Verify Reset Code Page - needsEmail before:', needsEmail);
+  // Prevent any early redirects
+  useLayoutEffect(() => {
+    console.log('[Verify Reset Code] Page mounted, preventing redirects');
+    console.log('[Verify Reset Code] Window location:', window.location.href);
+    console.log('[Verify Reset Code] Session storage keys:', Object.keys(sessionStorage));
+    console.log('[Verify Reset Code] Local storage keys:', Object.keys(localStorage));
     
-    if (!storedEmail) {
-      // If no email in session, ask for it
-      console.log('No email found, setting needsEmail to true');
-      setNeedsEmail(true);
-    } else {
-      console.log('Email found:', storedEmail);
-      setEmail(storedEmail);
+    // Check for service workers
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        console.log('[Verify Reset Code] Service workers:', registrations.length);
+      });
     }
+    
+    // Store current path to detect unwanted navigation
+    const currentPath = window.location.pathname;
+    
+    // Check if we're still on the correct page after a short delay
+    const checkPath = setTimeout(() => {
+      if (window.location.pathname !== currentPath) {
+        console.error('[Verify Reset Code] Unwanted redirect detected!', {
+          from: currentPath,
+          to: window.location.pathname
+        });
+      }
+    }, 100);
+    
+    return () => clearTimeout(checkPath);
+  }, []);
+
+  useEffect(() => {
+    // Skip if already initialized
+    if (isInitialized) return;
+    
+    // Disable router prefetching
+    router.prefetch = () => Promise.resolve();
+    
+    // Prevent any auth-related redirects
+    const checkSession = () => {
+      console.log('[Verify Reset Code] Initializing page...');
+      console.log('[Verify Reset Code] Current URL:', window.location.href);
+      console.log('[Verify Reset Code] Current pathname:', window.location.pathname);
+      
+      // Clear any potentially conflicting auth data
+      const authKeys = ['token', 'refreshToken', 'authToken'];
+      authKeys.forEach(key => {
+        if (sessionStorage.getItem(key)) {
+          console.log(`[Verify Reset Code] Clearing conflicting key: ${key}`);
+          sessionStorage.removeItem(key);
+        }
+      });
+
+      // Get email from session storage
+      const storedEmail = sessionStorage.getItem('resetEmail');
+      console.log('[Verify Reset Code] Stored email:', storedEmail);
+      
+      if (!storedEmail) {
+        // If no email in session, ask for it
+        console.log('[Verify Reset Code] No email found, showing email input');
+        setNeedsEmail(true);
+      } else {
+        console.log('[Verify Reset Code] Email found:', storedEmail);
+        setEmail(storedEmail);
+      }
+      
+      // Mark as initialized and ready
+      setIsInitialized(true);
+      setIsReady(true);
+    };
+
+    // Use requestAnimationFrame to ensure we run after any potential redirects
+    requestAnimationFrame(() => {
+      checkSession();
+    });
+  }, [isInitialized, router]);
+
+  // Check for navigation away
+  useEffect(() => {
+    const handleRouteChange = () => {
+      console.log('[Verify Reset Code] Navigation detected, current path:', window.location.pathname);
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
   }, []);
 
   const handleCodeChange = (index: number, value: string) => {
@@ -103,6 +184,15 @@ export default function VerifyResetCodePage() {
   const handleResend = async () => {
     router.push('/forgot-password');
   };
+
+  // Don't render until we've checked session storage
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
@@ -277,5 +367,13 @@ export default function VerifyResetCodePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VerifyResetCodePage() {
+  return (
+    <PublicRouteWrapper>
+      <VerifyResetCodeContent />
+    </PublicRouteWrapper>
   );
 }

@@ -6,6 +6,7 @@ import { authService } from '@/services';
 import { sanitizeUsername, sanitizeStrict } from '@/utils/security/sanitization';
 import { authSchemas } from '@/utils/validation/schemas';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { usePathname } from 'next/navigation';
 
 export interface User {
   id: string;
@@ -46,6 +47,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// List of public routes that should never trigger auth redirects
+const PUBLIC_ROUTES = [
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/verify-reset-code',
+  '/reset-password-final',
+  '/reset-password'
+];
+
 // Input validation
 const validateUsername = (username: string): string | null => {
   const validation = authSchemas.username.safeParse(username);
@@ -63,6 +74,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initializingRef = useRef(false);
   const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const rateLimiter = getRateLimiter();
+  const pathname = usePathname();
+
+  // Check if current route is public
+  const isPublicRoute = useCallback(() => {
+    // Check window flags
+    if (typeof window !== 'undefined') {
+      if ((window as any).__IS_PUBLIC_ROUTE__ || (window as any).__IS_PUBLIC_PAGE__) {
+        return true;
+      }
+    }
+    
+    // Check pathname
+    return PUBLIC_ROUTES.some(route => pathname?.startsWith(route));
+  }, [pathname]);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -123,6 +148,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         console.log('[Auth] Starting auth initialization...');
         
+        // Skip auth check on public routes
+        if (isPublicRoute()) {
+          console.log('[Auth] On public route, skipping auth check:', pathname);
+          setIsAuthReady(true);
+          initializingRef.current = false;
+          return;
+        }
+        
         // Check for existing session
         const result = await authService.getCurrentUser();
         console.log('[Auth] getCurrentUser result:', result);
@@ -155,11 +188,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       clearSessionMonitoring();
     };
-  }, [setupSessionMonitoring, clearSessionMonitoring]);
+  }, [setupSessionMonitoring, clearSessionMonitoring, isPublicRoute, pathname]);
 
   // Listen for storage events (for multi-tab logout)
   useEffect(() => {
     const handleStorageChange = async (e: StorageEvent) => {
+      // Skip on public routes
+      if (isPublicRoute()) return;
+
       if (e.key === 'currentUser' && e.newValue === null) {
         // User logged out in another tab
         console.log('[Auth] User logged out in another tab');
@@ -183,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [setupSessionMonitoring, clearSessionMonitoring]);
+  }, [setupSessionMonitoring, clearSessionMonitoring, isPublicRoute]);
 
   // Login function using auth service with rate limiting
   const login = useCallback(async (
