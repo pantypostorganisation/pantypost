@@ -54,6 +54,13 @@ const sendEmail = async (options) => {
     console.log('To:', options.to);
     console.log('Subject:', options.subject);
     console.log('Content:', options.text || options.html);
+    
+    // Add helpful link for password reset emails
+    if (options.subject && options.subject.includes('Password Reset Code')) {
+      console.log('\n🔗 Quick Link: ' + process.env.FRONTEND_URL + '/verify-reset-code');
+      console.log('   (Copy the code above and paste it at this link)');
+    }
+    
     console.log('-------------------');
     return { messageId: 'console-only' };
   }
@@ -88,7 +95,113 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
-  // Password reset email template
+  // New template for verification code
+  passwordResetCode: (username, code) => ({
+    subject: 'Your PantyPost Password Reset Code',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .header {
+            background-color: #ff1493;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+          }
+          .content {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 0 0 10px 10px;
+          }
+          .code-box {
+            background-color: #fff;
+            border: 2px solid #ff1493;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+          }
+          .code {
+            font-size: 36px;
+            font-weight: bold;
+            color: #ff1493;
+            letter-spacing: 8px;
+            font-family: monospace;
+          }
+          .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Password Reset Request</h1>
+          </div>
+          <div class="content">
+            <h2>Hello ${username}!</h2>
+            <p>We received a request to reset your PantyPost password.</p>
+            
+            <p>Your verification code is:</p>
+            
+            <div class="code-box">
+              <div class="code">${code}</div>
+            </div>
+            
+            <p><strong>This code will expire in 15 minutes.</strong></p>
+            
+            <p>Enter this code on the password reset page to continue.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.FRONTEND_URL}/verify-reset-code" style="display: inline-block; padding: 12px 30px; background-color: #ff1493; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Enter Reset Code</a>
+            </div>
+            
+            <p style="text-align: center; color: #666; font-size: 14px;">Or visit this link: <a href="${process.env.FRONTEND_URL}/verify-reset-code" style="color: #ff1493;">${process.env.FRONTEND_URL}/verify-reset-code</a></p>
+            
+            <p>If you didn't request this password reset, you can safely ignore this email. Your password won't be changed.</p>
+            
+            <div class="footer">
+              <p>Best regards,<br>The PantyPost Team</p>
+              <p>This is an automated message, please do not reply to this email.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `
+Hello ${username}!
+
+We received a request to reset your PantyPost password.
+
+Your verification code is: ${code}
+
+This code will expire in 15 minutes.
+
+Enter this code on the password reset page to continue.
+
+If you didn't request this password reset, you can safely ignore this email. Your password won't be changed.
+
+Best regards,
+The PantyPost Team
+    `
+  }),
+
+  // Original password reset email template (keeping for backward compatibility)
   passwordReset: (username, resetLink) => ({
     subject: 'Reset Your PantyPost Password',
     html: `

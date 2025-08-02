@@ -268,7 +268,7 @@ router.get('/verify-username', async (req, res) => {
 
 // ============= PASSWORD RESET ROUTES =============
 
-// POST /api/auth/forgot-password - Request password reset
+// POST /api/auth/forgot-password - Request password reset with code
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -286,46 +286,56 @@ router.post('/forgot-password', async (req, res) => {
     // Find user by email
     const user = await User.findOne({ email: email.toLowerCase() });
     
-    // Always return success to prevent email enumeration attacks
+    // Always return success to prevent email enumeration
     if (!user) {
       return res.json({
         success: true,
-        message: 'If an account exists with this email, a password reset link has been sent.'
+        message: 'If an account exists with this email, a verification code has been sent.'
       });
     }
     
     // Delete any existing reset tokens for this user
     await PasswordReset.deleteMany({ email: user.email });
     
-    // Generate new token
+    // Generate token and verification code
     const resetToken = PasswordReset.generateToken();
     const hashedToken = PasswordReset.hashToken(resetToken);
+    const verificationCode = PasswordReset.generateVerificationCode();
     
-    // Save hashed token to database
+    // Save to database
     const passwordReset = new PasswordReset({
       email: user.email,
       username: user.username,
-      token: hashedToken
+      token: hashedToken,
+      verificationCode: verificationCode
     });
     await passwordReset.save();
     
-    // Create reset link
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
-    // Send email
+    // Send email with verification code
     try {
       await sendEmail({
         to: user.email,
-        ...emailTemplates.passwordReset(user.username, resetLink)
+        ...emailTemplates.passwordResetCode(user.username, verificationCode)
       });
+      
+      // Log to console in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`\n🔑 Password Reset Code for ${user.email}: ${verificationCode}`);
+        console.log(`📧 Reset Link: ${process.env.FRONTEND_URL}/verify-reset-code`);
+        console.log(`   (Go to this link and enter the code above)\n`);
+      }
     } catch (emailError) {
       console.error('Failed to send password reset email:', emailError);
-      // Still return success to user
     }
     
     res.json({
       success: true,
-      message: 'If an account exists with this email, a password reset link has been sent.'
+      message: 'If an account exists with this email, a verification code has been sent.',
+      data: {
+        // Include token in response for frontend to use
+        resetToken: resetToken,
+        expiresIn: 900 // 15 minutes
+      }
     });
   } catch (error) {
     console.error('Password reset error:', error);
@@ -339,68 +349,94 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// GET /api/auth/verify-reset-token - Verify if reset token is valid
-router.get('/verify-reset-token', async (req, res) => {
+// POST /api/auth/verify-reset-code - Verify the 6-digit code
+router.post('/verify-reset-code', async (req, res) => {
   try {
-    const { token } = req.query;
+    const { email, code } = req.body;
     
-    if (!token) {
+    if (!email || !code) {
       return res.status(400).json({
         success: false,
         error: {
           code: ERROR_CODES.MISSING_REQUIRED_FIELD,
-          message: 'Token is required'
+          message: 'Email and verification code are required'
         }
       });
     }
     
-    // Hash the token to find it in database
-    const hashedToken = PasswordReset.hashToken(token);
+    // Find the reset request
+    const resetRequest = await PasswordReset.findOne({ 
+      email: email.toLowerCase(),
+      verificationCode: code
+    });
     
-    // Find the reset token
-    const resetToken = await PasswordReset.findOne({ token: hashedToken });
-    
-    if (!resetToken || !resetToken.isValid()) {
+    if (!resetRequest) {
+      // Find if there's a reset request for this email to increment attempts
+      const anyRequest = await PasswordReset.findOne({ email: email.toLowerCase() });
+      if (anyRequest && anyRequest.isValid()) {
+        const maxAttempts = await anyRequest.incrementAttempts();
+        if (maxAttempts) {
+          return res.status(400).json({
+            success: false,
+            error: {
+              code: ERROR_CODES.AUTH_TOKEN_INVALID,
+              message: 'Too many failed attempts. Please request a new code.'
+            }
+          });
+        }
+      }
+      
       return res.status(400).json({
         success: false,
         error: {
           code: ERROR_CODES.AUTH_TOKEN_INVALID,
-          message: 'Invalid or expired reset token'
+          message: 'Invalid verification code'
         }
       });
     }
     
+    if (!resetRequest.isValid()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_TOKEN_INVALID,
+          message: resetRequest.isExpired() ? 'Verification code has expired' : 'Invalid verification code'
+        }
+      });
+    }
+    
+    // Code is valid - return success with the original token
     res.json({
       success: true,
       data: {
         valid: true,
-        email: resetToken.email,
-        username: resetToken.username
+        message: 'Code verified successfully'
       }
     });
   } catch (error) {
+    console.error('Code verification error:', error);
     res.status(500).json({
       success: false,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
-        message: 'Failed to verify token'
+        message: 'Failed to verify code'
       }
     });
   }
 });
 
-// POST /api/auth/reset-password - Reset password with token
+// POST /api/auth/reset-password - Reset password with email and code
 router.post('/reset-password', async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
+    const { email, code, newPassword } = req.body;
     
     // Validate input
-    if (!token || !newPassword) {
+    if (!email || !code || !newPassword) {
       return res.status(400).json({
         success: false,
         error: {
           code: ERROR_CODES.MISSING_REQUIRED_FIELD,
-          message: 'Token and new password are required'
+          message: 'Email, verification code, and new password are required'
         }
       });
     }
@@ -416,24 +452,24 @@ router.post('/reset-password', async (req, res) => {
       });
     }
     
-    // Hash the token to find it in database
-    const hashedToken = PasswordReset.hashToken(token);
+    // Find the reset request
+    const resetRequest = await PasswordReset.findOne({ 
+      email: email.toLowerCase(),
+      verificationCode: code
+    });
     
-    // Find the reset token
-    const resetToken = await PasswordReset.findOne({ token: hashedToken });
-    
-    if (!resetToken || !resetToken.isValid()) {
+    if (!resetRequest || !resetRequest.isValid()) {
       return res.status(400).json({
         success: false,
         error: {
           code: ERROR_CODES.AUTH_TOKEN_INVALID,
-          message: 'Invalid or expired reset token'
+          message: 'Invalid or expired verification code'
         }
       });
     }
     
     // Find the user
-    const user = await User.findOne({ email: resetToken.email });
+    const user = await User.findOne({ email: resetRequest.email });
     
     if (!user) {
       return res.status(404).json({
@@ -445,13 +481,13 @@ router.post('/reset-password', async (req, res) => {
       });
     }
     
-    // Update password (will be hashed by the model)
+    // Update password
     user.password = newPassword;
     await user.save();
     
-    // Mark token as used
-    resetToken.used = true;
-    await resetToken.save();
+    // Mark reset request as used
+    resetRequest.used = true;
+    await resetRequest.save();
     
     // Send confirmation email
     try {
@@ -461,7 +497,6 @@ router.post('/reset-password', async (req, res) => {
       });
     } catch (emailError) {
       console.error('Failed to send confirmation email:', emailError);
-      // Don't fail the request if email fails
     }
     
     res.json({

@@ -37,8 +37,14 @@ export default function ForgotPasswordPage() {
       
       if (response.success) {
         setSuccess(true);
+        // Store email in session storage for the next step
+        sessionStorage.setItem('resetEmail', email);
+        // Navigate to code verification page after 2 seconds
+        setTimeout(() => {
+          router.push('/verify-reset-code');
+        }, 2000);
       } else {
-        setError(response.error?.message || 'Failed to send reset email');
+        setError(response.error?.message || 'Failed to send reset code');
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -66,20 +72,16 @@ export default function ForgotPasswordPage() {
           <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-500" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Check Your Email!</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Verification Code Sent!</h2>
           <p className="text-gray-400 mb-6">
-            If an account exists with <span className="text-[#ff950e] font-medium">{email}</span>, we've sent password reset instructions to your inbox.
+            We've sent a 6-digit verification code to <span className="text-[#ff950e] font-medium">{email}</span>
           </p>
-          <p className="text-sm text-gray-500 mb-6">
-            Don't see the email? Check your spam folder or try again.
+          <p className="text-sm text-gray-500 mb-4">
+            Please check your email inbox for the code.
           </p>
-          <Link 
-            href="/login" 
-            className="inline-flex items-center gap-2 text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Login
-          </Link>
+          <p className="text-xs text-gray-600">
+            Redirecting to verification page...
+          </p>
         </div>
       </div>
     );
@@ -114,7 +116,7 @@ export default function ForgotPasswordPage() {
             </div>
             <h1 className="text-2xl font-bold text-white mb-1">Forgot Your Password?</h1>
             <p className="text-gray-400 text-sm">
-              No worries! We'll send you reset instructions.
+              No worries! We'll send you a verification code.
             </p>
           </div>
 
@@ -149,7 +151,7 @@ export default function ForgotPasswordPage() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  We'll send a password reset link to this email address.
+                  We'll send a 6-digit verification code to this email address.
                 </p>
               </div>
 
@@ -163,12 +165,12 @@ export default function ForgotPasswordPage() {
                 {isLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
-                    Sending Reset Link...
+                    Sending Code...
                   </>
                 ) : (
                   <>
                     <Mail className="w-4 h-4" />
-                    Send Reset Link
+                    Send Verification Code
                   </>
                 )}
               </button>

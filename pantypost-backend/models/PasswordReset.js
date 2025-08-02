@@ -2,41 +2,49 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 
-// Create password reset schema
 const passwordResetSchema = new mongoose.Schema({
-  // The user's email address
   email: {
     type: String,
     required: true,
     lowercase: true
   },
   
-  // The username of the user
   username: {
     type: String,
     required: true
   },
   
-  // The reset token (we'll store a hashed version for security)
+  // Store both token and verification code
   token: {
     type: String,
     required: true
   },
   
-  // When the token expires (1 hour from creation)
+  // Add verification code field
+  verificationCode: {
+    type: String,
+    required: true,
+    length: 6
+  },
+  
+  // Track attempts to prevent brute force
+  attempts: {
+    type: Number,
+    default: 0,
+    max: 5
+  },
+  
   expiresAt: {
     type: Date,
     default: Date.now,
-    expires: 3600 // Token expires after 1 hour (3600 seconds)
+    expires: 900 // 15 minutes for code-based resets
   },
   
-  // Has this token been used?
   used: {
     type: Boolean,
     default: false
   },
   
-  // When was it created?
   createdAt: {
     type: Date,
     default: Date.now
@@ -44,16 +52,21 @@ const passwordResetSchema = new mongoose.Schema({
 });
 
 // Index for faster lookups
+passwordResetSchema.index({ email: 1, verificationCode: 1 });
 passwordResetSchema.index({ token: 1 });
-passwordResetSchema.index({ email: 1 });
+
+// Generate a 6-digit verification code
+passwordResetSchema.statics.generateVerificationCode = function() {
+  // Generate a random 6-digit number
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 // Static method to generate a reset token
 passwordResetSchema.statics.generateToken = function() {
-  // Generate a random token
   return crypto.randomBytes(32).toString('hex');
 };
 
-// Static method to hash a token (for secure storage)
+// Static method to hash a token
 passwordResetSchema.statics.hashToken = function(token) {
   return crypto
     .createHash('sha256')
@@ -61,14 +74,21 @@ passwordResetSchema.statics.hashToken = function(token) {
     .digest('hex');
 };
 
-// Method to check if token is expired
+// Method to check if code/token is expired
 passwordResetSchema.methods.isExpired = function() {
   return Date.now() > this.expiresAt;
 };
 
-// Method to check if token is valid (not used and not expired)
+// Method to check if code/token is valid
 passwordResetSchema.methods.isValid = function() {
-  return !this.used && !this.isExpired();
+  return !this.used && !this.isExpired() && this.attempts < 5;
+};
+
+// Method to increment attempts
+passwordResetSchema.methods.incrementAttempts = async function() {
+  this.attempts += 1;
+  await this.save();
+  return this.attempts >= 5;
 };
 
 const PasswordReset = mongoose.model('PasswordReset', passwordResetSchema);
