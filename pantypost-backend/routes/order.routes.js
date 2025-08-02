@@ -1,6 +1,4 @@
-// order.routes.js
-// This file contains all order-related routes
-
+// pantypost-backend/routes/order.routes.js
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');

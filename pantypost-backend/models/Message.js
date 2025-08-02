@@ -1,3 +1,4 @@
+// pantypost-backend/models/Message.js
 const mongoose = require('mongoose');
 
 // Create message schema

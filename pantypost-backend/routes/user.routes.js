@@ -1,6 +1,4 @@
-// user.routes.js
-// This file contains all user-related routes
-
+// pantypost-backend/routes/user.routes.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');

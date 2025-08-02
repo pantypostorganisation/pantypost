@@ -1,6 +1,4 @@
-// auth.routes.js
-// This file contains all authentication-related routes
-
+// pantypost-backend/routes/auth.routes.js
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
