@@ -38,6 +38,10 @@ export const API_ENDPOINTS = {
     REFRESH: '/auth/refresh',
     ME: '/auth/me',
     VERIFY_USERNAME: '/auth/verify-username',
+    // Password reset endpoints
+    FORGOT_PASSWORD: '/auth/forgot-password',
+    VERIFY_RESET_TOKEN: '/auth/verify-reset-token',
+    RESET_PASSWORD: '/auth/reset-password',
   },
   
   // User endpoints

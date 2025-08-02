@@ -33,6 +33,16 @@ export interface UsernameCheckResponse {
   message?: string;
 }
 
+export interface PasswordResetResponse {
+  message: string;
+}
+
+export interface PasswordResetTokenData {
+  valid: boolean;
+  email: string;
+  username: string;
+}
+
 /**
  * Authentication Service with security enhancements
  */
@@ -1013,6 +1023,272 @@ export class AuthService {
    */
   async getAuthToken(): Promise<string | null> {
     return this.getValidToken();
+  }
+
+  /**
+   * Request password reset - sends email with reset link
+   */
+  async forgotPassword(email: string): Promise<ApiResponse<PasswordResetResponse>> {
+    try {
+      // Validate email
+      const validation = authSchemas.email.safeParse(email);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: {
+            message: validation.error.errors[0].message,
+            field: 'email',
+          },
+        };
+      }
+
+      // Check rate limit for password reset
+      const rateLimitResult = this.rateLimiter.check('PASSWORD_RESET', RATE_LIMITS.PASSWORD_RESET || RATE_LIMITS.LOGIN);
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: {
+            message: `Too many password reset attempts. Please wait ${rateLimitResult.waitTime} seconds.`,
+            code: 'RATE_LIMIT_EXCEEDED',
+          },
+        };
+      }
+
+      if (FEATURES.USE_API_AUTH) {
+        const response = await apiCall<PasswordResetResponse>(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, {
+          method: 'POST',
+          body: JSON.stringify({ email: validation.data }),
+        });
+        return response;
+      }
+
+      // LocalStorage implementation - simulate email sent
+      // In real implementation, this would send an email
+      console.log('[Auth] Password reset requested for:', validation.data);
+      
+      // Store reset request temporarily (for demo purposes)
+      const resetRequests = await storageService.getItem<Record<string, any>>('passwordResetRequests', {});
+      const resetToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      
+      resetRequests[resetToken] = {
+        email: validation.data,
+        timestamp: Date.now(),
+        expires: Date.now() + 3600000, // 1 hour
+      };
+      
+      await storageService.setItem('passwordResetRequests', resetRequests);
+      
+      return {
+        success: true,
+        data: {
+          message: 'If an account exists with this email, a password reset link has been sent.',
+        },
+      };
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      return {
+        success: false,
+        error: {
+          message: 'Failed to process password reset request. Please try again.',
+        },
+      };
+    }
+  }
+
+  /**
+   * Verify password reset token
+   */
+  async verifyResetToken(token: string): Promise<ApiResponse<PasswordResetTokenData>> {
+    try {
+      if (!token) {
+        return {
+          success: false,
+          error: {
+            message: 'Invalid reset token',
+            code: 'INVALID_TOKEN',
+          },
+        };
+      }
+
+      if (FEATURES.USE_API_AUTH) {
+        const response = await apiCall<PasswordResetTokenData>(
+          `${API_ENDPOINTS.AUTH.VERIFY_RESET_TOKEN}?token=${encodeURIComponent(token)}`
+        );
+        return response;
+      }
+
+      // LocalStorage implementation
+      const resetRequests = await storageService.getItem<Record<string, any>>('passwordResetRequests', {});
+      const resetRequest = resetRequests[token];
+      
+      if (!resetRequest) {
+        return {
+          success: false,
+          error: {
+            message: 'Invalid or expired reset token',
+            code: 'INVALID_TOKEN',
+          },
+        };
+      }
+      
+      // Check if token is expired
+      if (Date.now() > resetRequest.expires) {
+        // Clean up expired token
+        delete resetRequests[token];
+        await storageService.setItem('passwordResetRequests', resetRequests);
+        
+        return {
+          success: false,
+          error: {
+            message: 'Reset token has expired',
+            code: 'TOKEN_EXPIRED',
+          },
+        };
+      }
+      
+      // Find user by email
+      const credentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
+      let username = '';
+      
+      for (const [user, creds] of Object.entries(credentials)) {
+        if ((creds as any).email === resetRequest.email) {
+          username = user;
+          break;
+        }
+      }
+      
+      if (!username) {
+        return {
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND',
+          },
+        };
+      }
+      
+      return {
+        success: true,
+        data: {
+          valid: true,
+          email: resetRequest.email,
+          username: username,
+        },
+      };
+    } catch (error) {
+      console.error('Verify reset token error:', error);
+      return {
+        success: false,
+        error: {
+          message: 'Failed to verify reset token',
+        },
+      };
+    }
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<ApiResponse<PasswordResetResponse>> {
+    try {
+      // Validate new password
+      const passwordValidation = authSchemas.password.safeParse(newPassword);
+      if (!passwordValidation.success) {
+        return {
+          success: false,
+          error: {
+            message: passwordValidation.error.errors[0].message,
+            field: 'password',
+          },
+        };
+      }
+
+      if (!token) {
+        return {
+          success: false,
+          error: {
+            message: 'Reset token is required',
+            code: 'MISSING_TOKEN',
+          },
+        };
+      }
+
+      if (FEATURES.USE_API_AUTH) {
+        const response = await apiCall<PasswordResetResponse>(API_ENDPOINTS.AUTH.RESET_PASSWORD, {
+          method: 'POST',
+          body: JSON.stringify({
+            token,
+            newPassword: passwordValidation.data,
+          }),
+        });
+        return response;
+      }
+
+      // LocalStorage implementation
+      // First verify the token
+      const verifyResult = await this.verifyResetToken(token);
+      if (!verifyResult.success || !verifyResult.data) {
+        return {
+          success: false,
+          error: verifyResult.error || { message: 'Invalid token' },
+        };
+      }
+      
+      const { username } = verifyResult.data;
+      
+      // Check password vulnerabilities
+      const passwordCheck = securityService.checkPasswordVulnerabilities(newPassword, {
+        username: username,
+        email: verifyResult.data.email,
+      });
+
+      if (!passwordCheck.secure) {
+        return {
+          success: false,
+          error: {
+            message: passwordCheck.warnings[0],
+            field: 'password',
+          },
+        };
+      }
+      
+      // Update password
+      const hashedPassword = await this.hashPasswordWithSalt(newPassword);
+      const credentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
+      
+      if (credentials[username]) {
+        credentials[username].password = hashedPassword;
+        await storageService.setItem('userCredentials', credentials);
+        
+        // Clean up used token
+        const resetRequests = await storageService.getItem<Record<string, any>>('passwordResetRequests', {});
+        delete resetRequests[token];
+        await storageService.setItem('passwordResetRequests', resetRequests);
+        
+        return {
+          success: true,
+          data: {
+            message: 'Password has been reset successfully',
+          },
+        };
+      }
+      
+      return {
+        success: false,
+        error: {
+          message: 'Failed to reset password',
+          code: 'RESET_FAILED',
+        },
+      };
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return {
+        success: false,
+        error: {
+          message: 'Failed to reset password. Please try again.',
+        },
+      };
+    }
   }
 }
 

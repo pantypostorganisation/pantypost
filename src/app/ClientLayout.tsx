@@ -2,6 +2,7 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
@@ -31,6 +32,18 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+
+  // Define routes where header should be hidden
+  const hideHeaderRoutes = [
+    '/login',
+    '/signup',
+    '/reset-password',
+    '/forgot-password'
+  ];
+
+  // Check if current route should hide header
+  const shouldHideHeader = hideHeaderRoutes.some(route => pathname.startsWith(route));
 
   useEffect(() => {
     setMounted(true);
@@ -69,7 +82,7 @@ export default function ClientLayout({
         <Suspense fallback={<LoadingFallback />}>
           <div className="min-h-screen bg-black text-white">
             <BanCheck>
-              <Header />
+              {!shouldHideHeader && <Header />}
               <main className="flex-grow">
                 {children}
               </main>
