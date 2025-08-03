@@ -7,11 +7,11 @@ import { Search, Calendar, DollarSign, ArrowUpDown } from 'lucide-react';
 interface OrderFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  filterStatus: string;
-  onFilterStatusChange: (status: string) => void;
-  sortBy: 'date' | 'price';
+  filterStatus: 'all' | 'pending' | 'processing' | 'shipped';
+  onFilterStatusChange: (status: 'all' | 'pending' | 'processing' | 'shipped') => void;
+  sortBy: 'date' | 'price' | 'status';
   sortOrder: 'asc' | 'desc';
-  onToggleSort: (sortBy: 'date' | 'price') => void;
+  onToggleSort: (sortBy: 'date' | 'price' | 'status') => void;
 }
 
 export default function OrderFilters({
@@ -44,13 +44,12 @@ export default function OrderFilters({
         <select
           className="px-4 py-3 bg-black border border-gray-700 rounded-lg text-white focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e] transition-all min-w-[150px]"
           value={filterStatus}
-          onChange={(e) => onFilterStatusChange(e.target.value)}
+          onChange={(e) => onFilterStatusChange(e.target.value as 'all' | 'pending' | 'processing' | 'shipped')}
         >
           <option value="all">All Status</option>
           <option value="pending">Pending</option>
           <option value="processing">Processing</option>
           <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
         </select>
         
         {/* Sort Options */}

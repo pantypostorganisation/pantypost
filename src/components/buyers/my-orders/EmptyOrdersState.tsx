@@ -23,7 +23,7 @@ export default function EmptyOrdersState() {
         </Link>
         <Link
           href="/buyers/messages"
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-xl"
+          className="inline-flex items-center gap-2 bg-transparent hover:bg-[#ff950e]/10 text-[#ff950e] font-bold px-8 py-4 rounded-xl transition-all border-2 border-[#ff950e] hover:border-[#ff6b00] shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/20 transform hover:scale-105"
         >
           <MessageCircle className="w-5 h-5" />
           Send Custom Requests
