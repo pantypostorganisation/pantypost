@@ -16,11 +16,11 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 // Error component
 function OrdersError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
+    <div className="min-h-screen bg-blue-50 p-4 md:p-10" style={{ backgroundColor: '#eff6ff' }}>
       <div className="max-w-md mx-auto text-center pt-20">
         <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-white mb-2">Error Loading Orders</h1>
-        <p className="text-gray-400 mb-6">{error}</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Orders</h1>
+        <p className="text-gray-600 mb-6">{error}</p>
         <button
           onClick={onRetry}
           className="px-6 py-3 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff7a00] transition-colors font-medium"
@@ -35,11 +35,11 @@ function OrdersError({ error, onRetry }: { error: string; onRetry: () => void })
 // Loading component
 function OrdersLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
+    <div className="min-h-screen bg-blue-50 p-4 md:p-10" style={{ backgroundColor: '#eff6ff' }}>
       <div className="max-w-7xl mx-auto">
         <div className="text-center py-20">
           <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading your orders...</p>
+          <p className="text-gray-600">Loading your orders...</p>
         </div>
       </div>
     </div>
@@ -106,46 +106,48 @@ function MyOrdersContent() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-950 p-4 md:p-10">
-      <div className="max-w-7xl mx-auto">
-        <OrdersHeader />
-        
-        <OrderStats stats={safeStats} />
-        
-        <OrderFilters
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          filterStatus={filterStatus}
-          onFilterStatusChange={setFilterStatus}
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          onToggleSort={toggleSort}
-        />
-        
-        {!userOrders || userOrders.length === 0 ? (
-          <EmptyOrdersState />
-        ) : (
-          <OrderSections
-            directOrders={directOrders || []}
-            customRequestOrders={customRequestOrders || []}
-            auctionOrders={auctionOrders || []}
-            expandedOrder={expandedOrder}
-            onToggleExpanded={setExpandedOrder}
-            onOpenAddressModal={handleOpenAddressModal}
+    <div className="min-h-screen" style={{ backgroundColor: '#eff6ff' }}>
+      <main className="p-4 md:p-10">
+        <div className="max-w-7xl mx-auto">
+          <OrdersHeader />
+          
+          <OrderStats stats={safeStats} />
+          
+          <OrderFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            filterStatus={filterStatus}
+            onFilterStatusChange={setFilterStatus}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onToggleSort={toggleSort}
           />
-        )}
-        
-        <AddressConfirmationModal
-          isOpen={addressModalOpen}
-          onClose={() => {
-            setAddressModalOpen(false);
-          }}
-          onConfirm={handleConfirmAddress}
-          existingAddress={getSelectedOrderAddress()}
-          orderId={selectedOrder || ''}
-        />
-      </div>
-    </main>
+          
+          {!userOrders || userOrders.length === 0 ? (
+            <EmptyOrdersState />
+          ) : (
+            <OrderSections
+              directOrders={directOrders || []}
+              customRequestOrders={customRequestOrders || []}
+              auctionOrders={auctionOrders || []}
+              expandedOrder={expandedOrder}
+              onToggleExpanded={setExpandedOrder}
+              onOpenAddressModal={handleOpenAddressModal}
+            />
+          )}
+          
+          <AddressConfirmationModal
+            isOpen={addressModalOpen}
+            onClose={() => {
+              setAddressModalOpen(false);
+            }}
+            onConfirm={handleConfirmAddress}
+            existingAddress={getSelectedOrderAddress()}
+            orderId={selectedOrder || ''}
+          />
+        </div>
+      </main>
+    </div>
   );
 }
 
