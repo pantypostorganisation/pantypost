@@ -7,6 +7,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES, ORDER_STATUS } = require('../utils/constants');
+const webSocketService = require('../config/websocket'); // ADD THIS
 
 // ============= ORDER ROUTES =============
 
@@ -194,6 +195,30 @@ router.post('/', authMiddleware, async (req, res) => {
         );
       }
       
+      // WEBSOCKET: Emit new order event
+      webSocketService.emitNewOrder(newOrder);
+      
+      // WEBSOCKET: Emit wallet balance updates
+      webSocketService.emitBalanceUpdate(
+        buyer, 
+        'buyer', 
+        buyerWallet.balance + totalAmount, 
+        buyerWallet.balance, 
+        'purchase'
+      );
+      
+      webSocketService.emitBalanceUpdate(
+        orderData.seller, 
+        'seller', 
+        sellerWallet.balance - sellerEarnings, 
+        sellerWallet.balance, 
+        'sale'
+      );
+      
+      // WEBSOCKET: Emit transaction events
+      webSocketService.emitTransaction(purchaseTransaction);
+      webSocketService.emitTransaction(saleTransaction);
+      
       res.json({
         success: true,
         data: newOrder,
@@ -290,6 +315,9 @@ router.post('/:id/status', authMiddleware, async (req, res) => {
       });
     }
     
+    // Store previous status for WebSocket event
+    const previousStatus = order.shippingStatus;
+    
     // Update order
     order.shippingStatus = shippingStatus;
     if (trackingNumber) order.trackingNumber = trackingNumber;
@@ -301,6 +329,9 @@ router.post('/:id/status', authMiddleware, async (req, res) => {
     }
     
     await order.save();
+    
+    // WEBSOCKET: Emit order status change
+    webSocketService.emitOrderStatusChange(order, previousStatus);
     
     res.json({
       success: true,

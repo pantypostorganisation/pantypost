@@ -1,4 +1,3 @@
-<!-- pantypost-backend/test-html/test-auctions.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -165,7 +164,62 @@
             font-size: 12px;
             margin-right: 5px;
         }
+        .websocket-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            z-index: 1000;
+        }
+        .ws-connected {
+            background-color: #28a745;
+        }
+        .ws-disconnected {
+            background-color: #dc3545;
+        }
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin-left: 5px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: #17a2b8;
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
     </style>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="header">
@@ -180,6 +234,12 @@
             <span class="balance">Balance: $<span id="userBalance">0.00</span></span>
             <button onclick="logout()" style="width: auto; margin-left: 20px;">Logout</button>
         </div>
+    </div>
+
+    <!-- WebSocket Status Indicator -->
+    <div id="wsStatus" class="websocket-status ws-disconnected">
+        <span id="wsStatusText">Disconnected</span>
+        <span class="live-indicator" style="display: none;"></span>
     </div>
 
     <!-- Login Section -->
@@ -249,6 +309,159 @@
         const API_BASE = 'http://localhost:5000/api';
         let currentUser = null;
         let authToken = null;
+        let socket = null;
+        let activeAuctions = new Map(); // Store active auctions for real-time updates
+
+        // Initialize Socket.IO connection
+        function initializeWebSocket() {
+            if (!authToken) return;
+
+            socket = io('http://localhost:5000', {
+                auth: {
+                    token: authToken
+                }
+            });
+
+            // Connection events
+            socket.on('connect', () => {
+                console.log('WebSocket connected');
+                updateWebSocketStatus(true);
+                showNotification('Connected to live updates', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('WebSocket disconnected');
+                updateWebSocketStatus(false);
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connection error:', error.message);
+                updateWebSocketStatus(false);
+            });
+
+            // Auction events
+            socket.on('auction:bid', (data) => {
+                console.log('New bid received:', data);
+                handleNewBid(data);
+            });
+
+            socket.on('auction:outbid', (data) => {
+                console.log('You were outbid:', data);
+                showNotification(`You were outbid on "${data.title}"! Current bid: $${data.currentBid}`, 'warning');
+                loadAuctions(); // Refresh to show updated bid
+            });
+
+            socket.on('auction:ending', (data) => {
+                console.log('Auction ending soon:', data);
+                showNotification(`Auction "${data.title}" ending in ${data.minutesRemaining} minutes!`, 'info');
+            });
+
+            socket.on('auction:ended', (data) => {
+                console.log('Auction ended:', data);
+                handleAuctionEnded(data);
+            });
+
+            // Wallet events
+            socket.on('wallet:balance_update', (data) => {
+                console.log('Balance updated:', data);
+                document.getElementById('userBalance').textContent = data.newBalance.toFixed(2);
+                showNotification(`Balance updated: $${data.newBalance.toFixed(2)} (${data.reason})`, 'info');
+            });
+
+            // User online status
+            socket.on('user:online', (data) => {
+                console.log('User online status:', data);
+                // Could update UI to show online indicators for sellers
+            });
+        }
+
+        // Update WebSocket status indicator
+        function updateWebSocketStatus(connected) {
+            const statusEl = document.getElementById('wsStatus');
+            const statusText = document.getElementById('wsStatusText');
+            const indicator = statusEl.querySelector('.live-indicator');
+            
+            if (connected) {
+                statusEl.className = 'websocket-status ws-connected';
+                statusText.textContent = 'Live';
+                indicator.style.display = 'inline-block';
+            } else {
+                statusEl.className = 'websocket-status ws-disconnected';
+                statusText.textContent = 'Disconnected';
+                indicator.style.display = 'none';
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.style.backgroundColor = type === 'success' ? '#28a745' : 
+                                               type === 'warning' ? '#ffc107' : 
+                                               type === 'error' ? '#dc3545' : '#17a2b8';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Handle new bid event
+        function handleNewBid(data) {
+            // Update the bid in UI if we're viewing this auction
+            const auctionCard = document.querySelector(`[data-auction-id="${data.listingId}"]`);
+            if (auctionCard) {
+                const currentBidEl = auctionCard.querySelector('.current-bid');
+                if (currentBidEl) {
+                    currentBidEl.innerHTML = `Current Bid: $${data.amount}`;
+                    // Add animation effect
+                    currentBidEl.style.animation = 'pulse 0.5s';
+                    setTimeout(() => currentBidEl.style.animation = '', 500);
+                }
+                
+                // Update bid count
+                const bidCountEl = auctionCard.querySelector('.bid-count');
+                if (bidCountEl) {
+                    bidCountEl.textContent = `Bids: ${data.bidCount}`;
+                }
+                
+                // Update highest bidder
+                const bidderEl = auctionCard.querySelector('.highest-bidder');
+                if (bidderEl) {
+                    bidderEl.textContent = `Highest Bidder: ${data.bidder}`;
+                }
+            }
+            
+            // Show notification if it's not our bid
+            if (data.bidder !== currentUser?.username) {
+                showNotification(`New bid on auction: $${data.amount}`, 'info');
+            }
+        }
+
+        // Handle auction ended event
+        function handleAuctionEnded(data) {
+            showNotification(`Auction ended! Winner: ${data.winner} - Final bid: $${data.finalBid}`, 'info');
+            
+            // Update the auction card
+            const auctionCard = document.querySelector(`[data-auction-id="${data.listingId}"]`);
+            if (auctionCard) {
+                auctionCard.classList.remove('active');
+                auctionCard.classList.add('ended');
+                const statusEl = auctionCard.querySelector('.auction-status');
+                if (statusEl) {
+                    statusEl.className = 'auction-status status-ended';
+                    statusEl.textContent = 'ENDED';
+                }
+            }
+            
+            // Refresh auctions list
+            loadAuctions();
+            if (currentUser?.role === 'seller') {
+                loadMyAuctions();
+            }
+        }
 
         // Load all users from database
         async function loadUsers() {
@@ -319,6 +532,9 @@
                         loadMyAuctions();
                     }
                     
+                    // Initialize WebSocket connection
+                    initializeWebSocket();
+                    
                     loadBalance();
                     loadAuctions();
                 } else {
@@ -386,6 +602,7 @@
                 
                 if (data.success) {
                     showResult('createResult', 'Auction created successfully!', true);
+                    showNotification('Auction created successfully!', 'success');
                     // Clear form
                     document.getElementById('auctionTitle').value = '';
                     document.getElementById('auctionDescription').value = '';
@@ -412,12 +629,18 @@
                 const auctionsDiv = document.getElementById('activeAuctions');
                 
                 if (data.success && data.listings.length > 0) {
+                    // Store auctions for real-time updates
+                    activeAuctions.clear();
+                    data.listings.forEach(listing => {
+                        activeAuctions.set(listing._id, listing);
+                    });
+                    
                     auctionsDiv.innerHTML = data.listings.map(listing => {
                         const timeLeft = getTimeRemaining(listing.auction.endTime);
                         const isActive = new Date() < new Date(listing.auction.endTime);
                         
                         return `
-                            <div class="auction-card ${isActive ? 'active' : 'ended'}">
+                            <div class="auction-card ${isActive ? 'active' : 'ended'}" data-auction-id="${listing._id}">
                                 <span class="auction-status ${isActive ? 'status-active' : 'status-ended'}">
                                     ${listing.auction.status}
                                 </span>
@@ -432,8 +655,8 @@
                                     </div>
                                     <p>Starting Price: $${listing.auction.startingPrice}</p>
                                     ${listing.auction.reservePrice ? `<p>Reserve: ${listing.auction.currentBid >= listing.auction.reservePrice ? '✅ Met' : '❌ Not Met'}</p>` : ''}
-                                    <p>Bids: ${listing.auction.bidCount}</p>
-                                    ${listing.auction.highestBidder ? `<p>Highest Bidder: ${listing.auction.highestBidder}</p>` : ''}
+                                    <p class="bid-count">Bids: ${listing.auction.bidCount}</p>
+                                    ${listing.auction.highestBidder ? `<p class="highest-bidder">Highest Bidder: ${listing.auction.highestBidder}</p>` : ''}
                                     <p class="time-remaining">Time Left: ${timeLeft}</p>
                                 </div>
                                 
@@ -537,8 +760,8 @@
                 
                 if (data.success) {
                     showResult(`bidResult-${listingId}`, data.message, true);
-                    loadAuctions();
-                    loadBalance();
+                    showNotification('Bid placed successfully!', 'success');
+                    // The auction will be updated via WebSocket
                 } else {
                     showResult(`bidResult-${listingId}`, data.error, false);
                 }
@@ -563,9 +786,8 @@
                 
                 if (data.success) {
                     showResult(`endResult-${listingId}`, data.message, true);
-                    loadMyAuctions();
-                    loadAuctions();
-                    loadBalance();
+                    showNotification('Auction ended!', 'success');
+                    // The UI will be updated via WebSocket
                 } else {
                     showResult(`endResult-${listingId}`, data.error, false);
                 }
@@ -605,6 +827,10 @@
 
         // Logout
         function logout() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
             currentUser = null;
             authToken = null;
             document.getElementById('currentUser').textContent = 'Not logged in';
@@ -613,17 +839,25 @@
             document.getElementById('myAuctionsSection').style.display = 'none';
             document.getElementById('userSelect').value = '';
             document.getElementById('password').value = '';
+            updateWebSocketStatus(false);
         }
 
-        // Auto-refresh auctions every 30 seconds
-        setInterval(() => {
-            if (currentUser) {
-                loadAuctions();
-                if (currentUser.role === 'seller') {
-                    loadMyAuctions();
-                }
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                socket.disconnect();
             }
-        }, 30000);
+        });
+
+        // Update countdown timers every second
+        setInterval(() => {
+            activeAuctions.forEach((auction, id) => {
+                const timeRemainingEl = document.querySelector(`[data-auction-id="${id}"] .time-remaining`);
+                if (timeRemainingEl) {
+                    timeRemainingEl.textContent = `Time Left: ${getTimeRemaining(auction.auction.endTime)}`;
+                }
+            });
+        }, 1000);
     </script>
 </body>
 </html>

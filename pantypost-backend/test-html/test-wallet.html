@@ -1,4 +1,3 @@
-<!-- pantypost-backend/test-html/test-wallet.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -33,6 +32,15 @@
             text-align: center;
             margin: 20px 0;
             font-weight: bold;
+            position: relative;
+        }
+        .balance-display.updating {
+            animation: pulse 0.5s ease-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
         .section {
             margin: 20px 0;
@@ -82,6 +90,20 @@
             margin: 5px 0;
             border-radius: 5px;
             border-left: 3px solid #e91e63;
+            position: relative;
+        }
+        .transaction.new {
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
         .transaction.deposit {
             border-left-color: #4CAF50;
@@ -98,16 +120,79 @@
         .transaction.auction_sale {
             border-left-color: #FF5722;
         }
+        .transaction.sale {
+            border-left-color: #4CAF50;
+        }
+        .transaction.purchase {
+            border-left-color: #f44336;
+        }
+        .transaction.subscription {
+            border-left-color: #673AB7;
+        }
+        .transaction.tip {
+            border-left-color: #00BCD4;
+        }
         .not-logged-in {
             text-align: center;
             color: #666;
             padding: 40px;
         }
+        .websocket-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            z-index: 1000;
+        }
+        .ws-connected {
+            background-color: #28a745;
+        }
+        .ws-disconnected {
+            background-color: #dc3545;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: #333;
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            animation: slideInNotification 0.3s ease-out;
+            z-index: 1000;
+        }
+        @keyframes slideInNotification {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .live-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
     </style>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>💰 PantyPost Wallet Test</h1>
+        <h1>💰 PantyPost Wallet Test <span id="liveBadge" class="live-badge" style="display: none;">LIVE</span></h1>
         
         <div id="loginSection">
             <h2>Login First</h2>
@@ -127,7 +212,7 @@
                 <button onclick="logout()" style="float: right; width: auto; padding: 5px 15px;">Logout</button>
             </div>
             
-            <div class="balance-display">
+            <div class="balance-display" id="balanceDisplay">
                 Balance: $<span id="balance">0.00</span>
             </div>
             
@@ -167,11 +252,147 @@
         </div>
     </div>
 
+    <!-- WebSocket Status Indicator -->
+    <div id="wsStatus" class="websocket-status ws-disconnected">
+        <span id="wsStatusText">Disconnected</span>
+    </div>
+
     <script>
         const API_BASE = 'http://localhost:5000/api';
         let authToken = null;
         let currentUser = null;
         let userRole = null;
+        let socket = null;
+        let lastBalance = 0;
+
+        // Initialize Socket.IO connection
+        function initializeWebSocket() {
+            if (!authToken) return;
+
+            socket = io('http://localhost:5000', {
+                auth: {
+                    token: authToken
+                }
+            });
+
+            // Connection events
+            socket.on('connect', () => {
+                console.log('WebSocket connected');
+                updateWebSocketStatus(true);
+                document.getElementById('liveBadge').style.display = 'inline-block';
+                showNotification('Connected to live updates');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('WebSocket disconnected');
+                updateWebSocketStatus(false);
+                document.getElementById('liveBadge').style.display = 'none';
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connection error:', error.message);
+                updateWebSocketStatus(false);
+            });
+
+            // Wallet events
+            socket.on('wallet:balance_update', (data) => {
+                console.log('Balance update received:', data);
+                handleBalanceUpdate(data);
+            });
+
+            socket.on('wallet:transaction', (transaction) => {
+                console.log('New transaction:', transaction);
+                handleNewTransaction(transaction);
+            });
+
+            // Notification events
+            socket.on('notification:new', (notification) => {
+                console.log('New notification:', notification);
+                showNotification(notification.body || notification.title);
+            });
+        }
+
+        // Update WebSocket status indicator
+        function updateWebSocketStatus(connected) {
+            const statusEl = document.getElementById('wsStatus');
+            const statusText = document.getElementById('wsStatusText');
+            
+            if (connected) {
+                statusEl.className = 'websocket-status ws-connected';
+                statusText.textContent = 'Live';
+            } else {
+                statusEl.className = 'websocket-status ws-disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        // Show notification
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideInNotification 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Handle balance update from WebSocket
+        function handleBalanceUpdate(data) {
+            const balanceEl = document.getElementById('balance');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+            
+            // Update balance with animation
+            balanceEl.textContent = data.newBalance.toFixed(2);
+            balanceDisplay.classList.add('updating');
+            setTimeout(() => balanceDisplay.classList.remove('updating'), 500);
+            
+            // Show change notification
+            const change = data.newBalance - data.previousBalance;
+            const changeSymbol = change >= 0 ? '+' : '';
+            const changeColor = change >= 0 ? '#4CAF50' : '#f44336';
+            
+            showNotification(`Balance ${changeSymbol}$${change.toFixed(2)} (${data.reason})`);
+        }
+
+        // Handle new transaction from WebSocket
+        function handleNewTransaction(transaction) {
+            // Add transaction to the top of the list
+            const transDiv = document.getElementById('transactions');
+            const transactionEl = createTransactionElement(transaction, true);
+            
+            // Insert at the beginning
+            if (transDiv.firstChild && !transDiv.firstChild.classList.contains('empty-message')) {
+                transDiv.insertBefore(transactionEl, transDiv.firstChild);
+            } else {
+                transDiv.innerHTML = '';
+                transDiv.appendChild(transactionEl);
+            }
+            
+            // Limit displayed transactions to 20
+            while (transDiv.children.length > 20) {
+                transDiv.removeChild(transDiv.lastChild);
+            }
+        }
+
+        // Create transaction element
+        function createTransactionElement(trans, isNew = false) {
+            const div = document.createElement('div');
+            div.className = `transaction ${trans.type} ${isNew ? 'new' : ''}`;
+            
+            // Format transaction type for display
+            const typeDisplay = trans.type.replace(/_/g, ' ').toUpperCase();
+            
+            div.innerHTML = `
+                <strong>${typeDisplay}</strong> - $${trans.amount.toFixed(2)}<br>
+                <small>${trans.description}</small><br>
+                <small>${new Date(trans.createdAt).toLocaleString()}</small>
+            `;
+            
+            return div;
+        }
 
         // Load all users from database
         async function loadUsers() {
@@ -253,6 +474,9 @@
                         document.getElementById('withdrawSection').style.display = 'block';
                     }
                     
+                    // Initialize WebSocket connection
+                    initializeWebSocket();
+                    
                     // Load wallet info
                     loadBalance();
                     loadTransactions();
@@ -266,6 +490,10 @@
         
         // Logout
         function logout() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
             authToken = null;
             currentUser = null;
             userRole = null;
@@ -273,6 +501,7 @@
             document.getElementById('walletSection').style.display = 'none';
             document.getElementById('userSelect').value = '';
             document.getElementById('password').value = '';
+            updateWebSocketStatus(false);
         }
         
         // Load balance
@@ -284,6 +513,7 @@
                 
                 const data = await response.json();
                 if (data.success) {
+                    lastBalance = data.data.balance;
                     document.getElementById('balance').textContent = data.data.balance.toFixed(2);
                 }
             } catch (error) {
@@ -318,8 +548,7 @@
                     resultDiv.innerHTML = '<div class="success">✅ Deposit successful!</div>';
                     document.getElementById('depositAmount').value = '';
                     document.getElementById('depositNotes').value = '';
-                    loadBalance();
-                    loadTransactions();
+                    // Balance will be updated via WebSocket
                 } else {
                     resultDiv.innerHTML = '<div class="error">❌ ' + data.error + '</div>';
                 }
@@ -363,8 +592,7 @@
                     resultDiv.innerHTML = '<div class="success">✅ Withdrawal request submitted!</div>';
                     document.getElementById('withdrawAmount').value = '';
                     document.getElementById('accountNumber').value = '';
-                    loadBalance();
-                    loadTransactions();
+                    // Balance and transaction will be updated via WebSocket
                 } else {
                     resultDiv.innerHTML = '<div class="error">❌ ' + data.error + '</div>';
                 }
@@ -384,25 +612,22 @@
                 const transDiv = document.getElementById('transactions');
                 
                 if (data.success && data.data.length > 0) {
-                    transDiv.innerHTML = data.data.map(trans => {
-                        // Format transaction type for display
-                        const typeDisplay = trans.type.replace(/_/g, ' ').toUpperCase();
-                        
-                        return `
-                            <div class="transaction ${trans.type}">
-                                <strong>${typeDisplay}</strong> - $${trans.amount.toFixed(2)}<br>
-                                <small>${trans.description}</small><br>
-                                <small>${new Date(trans.createdAt).toLocaleString()}</small>
-                            </div>
-                        `;
-                    }).join('');
+                    transDiv.innerHTML = '';
+                    data.data.forEach(trans => {
+                        const transactionEl = createTransactionElement(trans);
+                        transDiv.appendChild(transactionEl);
+                    });
                 } else {
-                    transDiv.innerHTML = '<p>No transactions yet.</p>';
+                    transDiv.innerHTML = '<p class="empty-message">No transactions yet.</p>';
                 }
             } catch (error) {
                 console.error('Error loading transactions:', error);
             }
         }
-    </script>
-</body>
-</html>
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+        });

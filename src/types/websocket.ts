@@ -40,7 +40,13 @@ export enum WebSocketEvent {
   
   // Subscription events
   SUBSCRIPTION_NEW = 'subscription:new',
-  SUBSCRIPTION_CANCELLED = 'subscription:cancelled'
+  SUBSCRIPTION_CANCELLED = 'subscription:cancelled',
+  
+  // Auction events (ADDED)
+  AUCTION_BID = 'auction:bid',
+  AUCTION_OUTBID = 'auction:outbid',
+  AUCTION_ENDING = 'auction:ending',
+  AUCTION_ENDED = 'auction:ended'
 }
 
 // WebSocket connection states
@@ -93,17 +99,19 @@ export interface TypingData {
 // Online status data
 export interface OnlineStatusData {
   userId: string;
+  username: string;  // Added this field
   isOnline: boolean;
+  timestamp: string; // Added for backend compatibility
   lastSeen?: Date;
 }
 
 // Real-time notification
 export interface RealtimeNotification {
   id: string;
-  type: 'message' | 'order' | 'wallet' | 'subscription' | 'system';
+  type: 'message' | 'order' | 'wallet' | 'subscription' | 'system' | 'auction'; // Added 'auction'
   title: string;
   body: string;
   data?: any;
   read: boolean;
-  createdAt: Date;
+  createdAt: Date | string; // Allow string for JSON dates
 }

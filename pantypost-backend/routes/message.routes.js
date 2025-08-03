@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
 const authMiddleware = require('../middleware/auth.middleware');
+const webSocketService = require('../config/websocket'); // ADD THIS
 
 // Get all threads for a user
 router.get('/threads', authMiddleware, async (req, res) => {
@@ -87,6 +88,18 @@ router.post('/send', authMiddleware, async (req, res) => {
     
     await message.save();
     
+    // WEBSOCKET: Emit new message event
+    webSocketService.emitNewMessage({
+      id: message._id,
+      sender: message.sender,
+      receiver: message.receiver,
+      content: message.content,
+      type: message.type,
+      date: message.createdAt,
+      threadId: message.threadId,
+      meta: message.meta
+    });
+    
     res.json({
       success: true,
       data: message
@@ -113,6 +126,15 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
       });
     }
     
+    // Get the thread ID from the first message to emit the right event
+    let threadId = null;
+    if (messageIds.length > 0) {
+      const firstMessage = await Message.findById(messageIds[0]);
+      if (firstMessage) {
+        threadId = firstMessage.threadId;
+      }
+    }
+    
     // Update only messages where current user is receiver
     const result = await Message.updateMany(
       {
@@ -124,6 +146,11 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
         isRead: true
       }
     );
+    
+    // WEBSOCKET: Emit message read event if we have a threadId
+    if (threadId && result.modifiedCount > 0) {
+      webSocketService.emitMessageRead(messageIds, threadId, username);
+    }
     
     res.json({
       success: true,

@@ -132,7 +132,7 @@ export const limits = {
 
 // WebSocket configuration
 export const websocketConfig = {
-  enabled: getEnvBool('NEXT_PUBLIC_ENABLE_REALTIME', false),
+  enabled: true, // Force enable WebSocket
   url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000'),
   path: getEnvVar('NEXT_PUBLIC_WS_PATH', '/socket.io'),
 } as const;

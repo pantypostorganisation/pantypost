@@ -28,7 +28,7 @@ class WebSocketService {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
         // FIXED: Changed from decoded.id to decoded.userId
-        const user = await User.findById(decoded.userId).select('-password');
+        const user = await User.findById(decoded.id).select('-password');
         
         if (!user) {
           return next(new Error('User not found'));
@@ -72,7 +72,7 @@ class WebSocketService {
     this.userSockets.get(socket.username).push(socket.id);
 
     // Send connection confirmation
-    socket.emit('connect', {
+    socket.emit('connected', {
       connected: true,
       sessionId: socket.id
     });

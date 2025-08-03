@@ -1,4 +1,3 @@
-<!-- pantypost-backend/test-html/test-messages.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -86,6 +85,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             border: 1px solid #e9ecef;
+            position: relative;
         }
         
         .thread-item:hover {
@@ -120,10 +120,33 @@
             float: right;
         }
         
+        .online-indicator {
+            position: absolute;
+            right: 10px;
+            top: 15px;
+            width: 10px;
+            height: 10px;
+            background: #28a745;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        
+        .typing-indicator {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 12px;
+            color: #6c757d;
+            font-style: italic;
+        }
+        
         .chat-header {
             padding: 20px;
             background: #f8f9fa;
             border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
         .messages-container {
@@ -170,6 +193,12 @@
             font-size: 12px;
             opacity: 0.7;
             margin-top: 5px;
+        }
+        
+        .message-read {
+            font-size: 11px;
+            color: #28a745;
+            margin-top: 3px;
         }
         
         .message-input-container {
@@ -348,7 +377,85 @@
             margin-bottom: 10px;
             width: 100%;
         }
+        
+        .websocket-status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            z-index: 1000;
+        }
+        
+        .ws-connected {
+            background-color: #28a745;
+        }
+        
+        .ws-disconnected {
+            background-color: #dc3545;
+        }
+        
+        .typing-dots {
+            display: inline-block;
+            margin-left: 5px;
+        }
+        
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            animation: typing 1.4s infinite;
+            margin: 0 2px;
+        }
+        
+        .typing-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        .notification-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: #333;
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1001;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
     </style>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -389,6 +496,11 @@
             <div id="chatContainer" style="display: none;">
                 <div class="chat-header" id="chatHeader">
                     <h3>Select a conversation</h3>
+                    <div id="typingStatus" style="display: none;">
+                        <span class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </span>
+                    </div>
                 </div>
                 
                 <div class="chat-content">
@@ -407,6 +519,7 @@
                                 class="message-input" 
                                 placeholder="Type a message..."
                                 onkeypress="handleKeyPress(event)"
+                                oninput="handleTyping()"
                             >
                             <button onclick="sendMessage()" class="send-button">Send</button>
                         </div>
@@ -418,6 +531,11 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- WebSocket Status Indicator -->
+    <div id="wsStatus" class="websocket-status ws-disconnected">
+        <span id="wsStatusText">Disconnected</span>
     </div>
 
     <!-- Tip Modal -->
@@ -454,6 +572,254 @@
         let currentUser = null;
         let currentThread = null;
         let authToken = null;
+        let socket = null;
+        let typingTimeout = null;
+        let isTyping = false;
+        let onlineUsers = new Set();
+
+        // Initialize Socket.IO connection
+        function initializeWebSocket() {
+            if (!authToken) return;
+
+            socket = io('http://localhost:5000', {
+                auth: {
+                    token: authToken
+                }
+            });
+
+            // Connection events
+            socket.on('connect', () => {
+                console.log('WebSocket connected');
+                updateWebSocketStatus(true);
+                // Emit online status
+                socket.emit('user:online');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('WebSocket disconnected');
+                updateWebSocketStatus(false);
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connection error:', error.message);
+                updateWebSocketStatus(false);
+            });
+
+            // Message events
+            socket.on('message:new', (message) => {
+                console.log('New message received:', message);
+                handleNewMessage(message);
+            });
+
+            socket.on('message:typing', (data) => {
+                console.log('Typing indicator:', data);
+                handleTypingIndicator(data);
+            });
+
+            socket.on('message:read', (data) => {
+                console.log('Messages read:', data);
+                handleMessagesRead(data);
+            });
+
+            // User status events
+            socket.on('user:online', (data) => {
+                console.log('User online status:', data);
+                handleUserOnlineStatus(data);
+            });
+
+            // Notification events
+            socket.on('notification:new', (notification) => {
+                console.log('New notification:', notification);
+                showNotification(notification.title, notification.body);
+            });
+        }
+
+        // Update WebSocket status indicator
+        function updateWebSocketStatus(connected) {
+            const statusEl = document.getElementById('wsStatus');
+            const statusText = document.getElementById('wsStatusText');
+            
+            if (connected) {
+                statusEl.className = 'websocket-status ws-connected';
+                statusText.textContent = 'Connected';
+            } else {
+                statusEl.className = 'websocket-status ws-disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        // Show notification toast
+        function showNotification(title, body) {
+            const notification = document.createElement('div');
+            notification.className = 'notification-toast';
+            notification.innerHTML = `<strong>${title}</strong><br>${body}`;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Handle new message from WebSocket
+        function handleNewMessage(message) {
+            // Update thread list if message is for current user
+            if (message.sender === currentUser || message.receiver === currentUser) {
+                loadThreads();
+                
+                // If currently viewing this thread, add message to UI
+                const otherUser = message.sender === currentUser ? message.receiver : message.sender;
+                const expectedThreadId = [currentUser, otherUser].sort().join('-');
+                
+                if (currentThread === expectedThreadId) {
+                    addMessageToUI(message);
+                    
+                    // Mark as read if we're the receiver
+                    if (message.receiver === currentUser && !message.isRead) {
+                        markMessagesAsRead([message._id || message.id]);
+                    }
+                } else {
+                    // Show notification if message is for us but we're not viewing the thread
+                    if (message.receiver === currentUser) {
+                        showNotification(`New message from ${message.sender}`, message.content);
+                    }
+                }
+            }
+        }
+
+        // Add message to UI
+        function addMessageToUI(message) {
+            const container = document.getElementById('messagesContainer');
+            const isSent = message.sender === currentUser;
+            const time = new Date(message.createdAt || message.date).toLocaleTimeString();
+            
+            let content = '';
+            if (message.type === 'customRequest') {
+                content = `
+                    <div class="custom-request">
+                        <h4>📋 ${message.meta.title}</h4>
+                        <p><strong>Price:</strong> $${message.meta.price}</p>
+                        <p>${message.meta.message}</p>
+                        <p><small>Tags: ${message.meta.tags?.join(', ') || 'None'}</small></p>
+                    </div>
+                `;
+            } else if (message.type === 'tip') {
+                content = `
+                    <div class="tip-message">
+                        <h4>💰 Tip: $${message.meta.tipAmount}</h4>
+                        <p>${message.content}</p>
+                    </div>
+                `;
+            } else {
+                content = `<p>${message.content}</p>`;
+            }
+            
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${isSent ? 'sent' : 'received'}`;
+            messageEl.innerHTML = `
+                <div class="message-bubble">
+                    ${content}
+                    <div class="message-time">${time}</div>
+                    ${isSent && message.isRead ? '<div class="message-read">Read</div>' : ''}
+                </div>
+            `;
+            
+            // Remove empty state if exists
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            container.appendChild(messageEl);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Handle typing indicator
+        function handleTypingIndicator(data) {
+            if (data.conversationId === currentThread && data.username !== currentUser) {
+                const typingStatus = document.getElementById('typingStatus');
+                const chatHeader = document.getElementById('chatHeader');
+                
+                if (data.isTyping) {
+                    typingStatus.style.display = 'block';
+                    chatHeader.querySelector('h3').textContent = `${data.username} is typing...`;
+                } else {
+                    typingStatus.style.display = 'none';
+                    const otherUser = currentThread.split('-').find(u => u !== currentUser);
+                    chatHeader.querySelector('h3').textContent = `Chat with ${otherUser}`;
+                }
+            }
+        }
+
+        // Handle messages read
+        function handleMessagesRead(data) {
+            if (data.threadId === currentThread) {
+                // Update UI to show messages as read
+                const messages = document.querySelectorAll('.message.sent .message-bubble');
+                messages.forEach(msg => {
+                    if (!msg.querySelector('.message-read')) {
+                        const readIndicator = document.createElement('div');
+                        readIndicator.className = 'message-read';
+                        readIndicator.textContent = 'Read';
+                        msg.appendChild(readIndicator);
+                    }
+                });
+            }
+        }
+
+        // Handle user online status
+        function handleUserOnlineStatus(data) {
+            if (data.isOnline) {
+                onlineUsers.add(data.username);
+            } else {
+                onlineUsers.delete(data.username);
+            }
+            
+            // Update online indicators in thread list
+            updateOnlineIndicators();
+        }
+
+        // Update online indicators
+        function updateOnlineIndicators() {
+            document.querySelectorAll('.thread-item').forEach(item => {
+                const username = item.querySelector('.username').textContent;
+                const indicator = item.querySelector('.online-indicator');
+                
+                if (onlineUsers.has(username)) {
+                    if (!indicator) {
+                        const onlineIndicator = document.createElement('div');
+                        onlineIndicator.className = 'online-indicator';
+                        item.appendChild(onlineIndicator);
+                    }
+                } else {
+                    if (indicator) {
+                        indicator.remove();
+                    }
+                }
+            });
+        }
+
+        // Handle typing
+        function handleTyping() {
+            if (!socket || !currentThread) return;
+            
+            if (!isTyping) {
+                isTyping = true;
+                socket.emit('message:typing', {
+                    conversationId: currentThread,
+                    isTyping: true
+                });
+            }
+            
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                isTyping = false;
+                socket.emit('message:typing', {
+                    conversationId: currentThread,
+                    isTyping: false
+                });
+            }, 2000);
+        }
 
         // Load user list from database
         async function loadUserList() {
@@ -478,7 +844,7 @@
             }
         }
 
-        // Load users on page load
+        // Load users when page loads
         window.addEventListener('DOMContentLoaded', loadUserList);
 
         // Switch user
@@ -489,6 +855,10 @@
                 authToken = null;
                 document.getElementById('loginFirst').style.display = 'block';
                 document.getElementById('chatContainer').style.display = 'none';
+                if (socket) {
+                    socket.disconnect();
+                    socket = null;
+                }
                 return;
             }
             
@@ -514,6 +884,10 @@
                     authToken = data.data ? data.data.token : data.token;
                     document.getElementById('loginFirst').style.display = 'none';
                     document.getElementById('chatContainer').style.display = 'block';
+                    
+                    // Initialize WebSocket connection
+                    initializeWebSocket();
+                    
                     loadThreads();
                 } else {
                     alert('Login failed. Check username and password.');
@@ -554,21 +928,33 @@
                 return;
             }
             
-            container.innerHTML = threads.map(thread => `
-                <div class="thread-item ${currentThread === thread._id ? 'active' : ''}" 
-                     onclick="selectThread('${thread._id}', '${thread.otherUser}')">
-                    <div class="username">
-                        ${thread.otherUser}
-                        ${thread.unreadCount > 0 ? `<span class="unread-badge">${thread.unreadCount}</span>` : ''}
+            container.innerHTML = threads.map(thread => {
+                const isOnline = onlineUsers.has(thread.otherUser);
+                return `
+                    <div class="thread-item ${currentThread === thread._id ? 'active' : ''}" 
+                         onclick="selectThread('${thread._id}', '${thread.otherUser}')">
+                        <div class="username">
+                            ${thread.otherUser}
+                            ${thread.unreadCount > 0 ? `<span class="unread-badge">${thread.unreadCount}</span>` : ''}
+                        </div>
+                        <div class="last-message">${thread.lastMessage.content}</div>
+                        ${isOnline ? '<div class="online-indicator"></div>' : ''}
                     </div>
-                    <div class="last-message">${thread.lastMessage.content}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // Select a thread
         async function selectThread(threadId, otherUser) {
             currentThread = threadId;
+            
+            // Join the conversation room for real-time updates
+            if (socket) {
+                socket.emit('room:join', {
+                    roomId: threadId,
+                    roomType: 'conversation'
+                });
+            }
             
             // Update UI
             document.querySelectorAll('.thread-item').forEach(item => {
@@ -584,7 +970,14 @@
             });
             
             // Update chat header
-            document.getElementById('chatHeader').innerHTML = `<h3>Chat with ${otherUser}</h3>`;
+            document.getElementById('chatHeader').innerHTML = `
+                <h3>Chat with ${otherUser}</h3>
+                <div id="typingStatus" style="display: none;">
+                    <span class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </span>
+                </div>
+            `;
             
             // Load messages
             try {
@@ -622,7 +1015,7 @@
                     content = `
                         <div class="custom-request">
                             <h4>📋 ${msg.meta.title}</h4>
-                            <p><strong>Price:</strong> $${msg.meta.price}</p>
+                            <p><strong>Price:</strong> ${msg.meta.price}</p>
                             <p>${msg.meta.message}</p>
                             <p><small>Tags: ${msg.meta.tags?.join(', ') || 'None'}</small></p>
                         </div>
@@ -630,7 +1023,7 @@
                 } else if (msg.type === 'tip') {
                     content = `
                         <div class="tip-message">
-                            <h4>💰 Tip: $${msg.meta.tipAmount}</h4>
+                            <h4>💰 Tip: ${msg.meta.tipAmount}</h4>
                             <p>${msg.content}</p>
                         </div>
                     `;
@@ -643,6 +1036,7 @@
                         <div class="message-bubble">
                             ${content}
                             <div class="message-time">${time}</div>
+                            ${isSent && msg.isRead ? '<div class="message-read">Read</div>' : ''}
                         </div>
                     </div>
                 `;
@@ -671,6 +1065,14 @@
                     },
                     body: JSON.stringify({ messageIds: unreadIds })
                 });
+                
+                // Emit read event via WebSocket
+                if (socket && currentThread) {
+                    socket.emit('message:read', {
+                        messageIds: unreadIds,
+                        threadId: currentThread
+                    });
+                }
                 
                 // Reload threads to update unread counts
                 loadThreads();
@@ -706,13 +1108,7 @@
                 const data = await response.json();
                 if (data.success) {
                     input.value = '';
-                    // Refresh the current thread to show the new message
-                    if (currentThread) {
-                        const [user1, user2] = currentThread.split('-');
-                        const otherUser = user1 === currentUser ? user2 : user1;
-                        await selectThread(currentThread, otherUser);
-                    }
-                    loadThreads();
+                    // Message will be added to UI via WebSocket event
                 } else {
                     alert('Error: ' + (data.error || 'Failed to send message'));
                 }
@@ -748,11 +1144,7 @@
                 const data = await response.json();
                 if (data.success) {
                     document.getElementById('newChatUser').value = '';
-                    await loadThreads();
-                    // Select the thread after a short delay to ensure it's loaded
-                    setTimeout(async () => {
-                        await selectThread(threadId, username);
-                    }, 500);
+                    // Thread will be updated via WebSocket
                 } else {
                     alert('Error: ' + (data.error || 'Failed to start chat'));
                 }
@@ -816,8 +1208,7 @@
                 const data = await response.json();
                 if (data.success) {
                     closeTipModal();
-                    selectThread(currentThread, receiver);
-                    alert(`Tip of ${amount} sent!`);
+                    showNotification('Tip sent!', `${amount} tip sent successfully`);
                 }
             } catch (error) {
                 console.error('Error sending tip:', error);
@@ -879,8 +1270,7 @@
                 const data = await response.json();
                 if (data.success) {
                     closeCustomModal();
-                    selectThread(currentThread, receiver);
-                    alert('Custom request sent!');
+                    showNotification('Request sent!', 'Custom request sent successfully');
                 }
             } catch (error) {
                 console.error('Error sending custom request:', error);
@@ -888,12 +1278,16 @@
             }
         }
 
-        // Auto-refresh threads every 10 seconds
-        setInterval(() => {
-            if (currentUser && authToken) {
-                loadThreads();
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                // Stop typing indicator
+                if (isTyping) {
+                    socket.emit('message:typing', {
+                        conversationId: currentThread,
+                        isTyping: false
+                    });
+                }
+                socket.disconnect();
             }
-        }, 10000);
-    </script>
-</body>
-</html>
+        });

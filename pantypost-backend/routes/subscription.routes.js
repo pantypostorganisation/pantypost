@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth.middleware');
+const webSocketService = require('../config/websocket'); // ADD THIS
 
 // ============= SUBSCRIPTION ROUTES =============
 
@@ -148,6 +149,10 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     }
     
     try {
+      // Store previous balances for WebSocket events
+      const buyerPreviousBalance = buyerWallet.balance;
+      const sellerPreviousBalance = sellerWallet.balance;
+      
       // Process payment
       await buyerWallet.withdraw(price);
       
@@ -188,6 +193,36 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         }
       });
       await feeTransaction.save();
+      
+      // WEBSOCKET: Emit new subscription event
+      webSocketService.emitNewSubscription({
+        id: subscription._id,
+        subscriber: subscription.subscriber,
+        creator: subscription.creator,
+        price: subscription.price,
+        startDate: subscription.startDate
+      });
+      
+      // WEBSOCKET: Emit balance updates
+      webSocketService.emitBalanceUpdate(
+        buyer,
+        'buyer',
+        buyerPreviousBalance,
+        buyerWallet.balance,
+        'subscription'
+      );
+      
+      webSocketService.emitBalanceUpdate(
+        seller,
+        'seller',
+        sellerPreviousBalance,
+        sellerWallet.balance,
+        'subscription'
+      );
+      
+      // WEBSOCKET: Emit transaction events
+      webSocketService.emitTransaction(paymentTransaction);
+      webSocketService.emitTransaction(feeTransaction);
       
       res.json({
         success: true,
@@ -237,6 +272,16 @@ router.post('/unsubscribe', authMiddleware, async (req, res) => {
     
     // Cancel the subscription
     await subscription.cancel('User requested cancellation');
+    
+    // WEBSOCKET: Emit subscription cancelled event
+    webSocketService.emitSubscriptionCancelled(
+      {
+        id: subscription._id,
+        subscriber: subscription.subscriber,
+        creator: subscription.creator
+      },
+      'user_cancelled'
+    );
     
     res.json({
       success: true,
@@ -369,6 +414,10 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
           continue;
         }
         
+        // Store previous balances for WebSocket events
+        const buyerPreviousBalance = buyerWallet.balance;
+        const sellerPreviousBalance = sellerWallet.balance;
+        
         // Process payment
         await buyerWallet.withdraw(subscription.price);
         await sellerWallet.deposit(subscription.creatorEarnings);
@@ -395,8 +444,42 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
         await subscription.processRenewal();
         processed++;
         
+        // WEBSOCKET: Emit balance updates
+        webSocketService.emitBalanceUpdate(
+          subscription.subscriber,
+          'buyer',
+          buyerPreviousBalance,
+          buyerWallet.balance,
+          'subscription'
+        );
+        
+        webSocketService.emitBalanceUpdate(
+          subscription.creator,
+          'seller',
+          sellerPreviousBalance,
+          sellerWallet.balance,
+          'subscription'
+        );
+        
+        // WEBSOCKET: Emit transaction event
+        webSocketService.emitTransaction(paymentTransaction);
+        
       } catch (error) {
         await subscription.handleFailedPayment();
+        
+        // If subscription was cancelled due to failed payment
+        if (subscription.status === 'cancelled') {
+          // WEBSOCKET: Emit subscription cancelled event
+          webSocketService.emitSubscriptionCancelled(
+            {
+              id: subscription._id,
+              subscriber: subscription.subscriber,
+              creator: subscription.creator
+            },
+            'failed_payment'
+          );
+        }
+        
         failed++;
       }
     }

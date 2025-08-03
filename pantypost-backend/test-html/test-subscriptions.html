@@ -1,4 +1,3 @@
-<!-- pantypost-backend/test-html/test-subscriptions.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -47,6 +46,11 @@
             margin: 10px 0;
             border-radius: 8px;
             border: 1px solid #dee2e6;
+            transition: transform 0.2s;
+        }
+        .seller-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         .subscription-card {
             background: #e8f5e9;
@@ -54,6 +58,18 @@
             margin: 10px 0;
             border-radius: 8px;
             border-left: 4px solid #4CAF50;
+            position: relative;
+        }
+        .subscription-card.new {
+            animation: highlight 2s ease-out;
+        }
+        @keyframes highlight {
+            0% { background-color: #ffeb3b; }
+            100% { background-color: #e8f5e9; }
+        }
+        .subscription-card.cancelled {
+            background: #ffebee;
+            border-left-color: #f44336;
         }
         input, select {
             width: 100%;
@@ -114,7 +130,70 @@
         .refresh-btn:hover {
             background-color: #555;
         }
+        .websocket-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            z-index: 1000;
+        }
+        .ws-connected {
+            background-color: #28a745;
+        }
+        .ws-disconnected {
+            background-color: #dc3545;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: #17a2b8;
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin-left: 5px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .online-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
     </style>
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -135,6 +214,7 @@
                 <div>
                     <strong>Logged in as:</strong> <span id="currentUser"></span> 
                     (<span id="userRole"></span>)
+                    <span class="live-indicator" id="liveIndicator" style="display: none;"></span>
                 </div>
                 <div>
                     <span class="balance">Balance: $<span id="balance">0.00</span></span>
@@ -179,10 +259,156 @@
         </div>
     </div>
 
+    <!-- WebSocket Status Indicator -->
+    <div id="wsStatus" class="websocket-status ws-disconnected">
+        <span id="wsStatusText">Disconnected</span>
+    </div>
+
     <script>
         let authToken = null;
         let currentUser = null;
         let userRole = null;
+        let socket = null;
+        let onlineUsers = new Set();
+        let activeSubscriptions = new Map();
+
+        // Initialize Socket.IO connection
+        function initializeWebSocket() {
+            if (!authToken) return;
+
+            socket = io('http://localhost:5000', {
+                auth: {
+                    token: authToken
+                }
+            });
+
+            // Connection events
+            socket.on('connect', () => {
+                console.log('WebSocket connected');
+                updateWebSocketStatus(true);
+                document.getElementById('liveIndicator').style.display = 'inline-block';
+                showNotification('Connected to live updates');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('WebSocket disconnected');
+                updateWebSocketStatus(false);
+                document.getElementById('liveIndicator').style.display = 'none';
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('WebSocket connection error:', error.message);
+                updateWebSocketStatus(false);
+            });
+
+            // Subscription events
+            socket.on('subscription:new', (subscription) => {
+                console.log('New subscription:', subscription);
+                handleNewSubscription(subscription);
+            });
+
+            socket.on('subscription:cancelled', (data) => {
+                console.log('Subscription cancelled:', data);
+                handleSubscriptionCancelled(data);
+            });
+
+            // Wallet events
+            socket.on('wallet:balance_update', (data) => {
+                console.log('Balance updated:', data);
+                document.getElementById('balance').textContent = data.newBalance.toFixed(2);
+                showNotification(`Balance updated: $${data.newBalance.toFixed(2)} (${data.reason})`);
+            });
+
+            // User online status
+            socket.on('user:online', (data) => {
+                console.log('User online status:', data);
+                if (data.isOnline) {
+                    onlineUsers.add(data.username);
+                } else {
+                    onlineUsers.delete(data.username);
+                }
+                updateOnlineStatus();
+            });
+
+            // Notification events
+            socket.on('notification:new', (notification) => {
+                console.log('New notification:', notification);
+                showNotification(notification.body || notification.title);
+            });
+        }
+
+        // Update WebSocket status indicator
+        function updateWebSocketStatus(connected) {
+            const statusEl = document.getElementById('wsStatus');
+            const statusText = document.getElementById('wsStatusText');
+            
+            if (connected) {
+                statusEl.className = 'websocket-status ws-connected';
+                statusText.textContent = 'Live';
+            } else {
+                statusEl.className = 'websocket-status ws-disconnected';
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        // Show notification
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Handle new subscription event
+        function handleNewSubscription(subscription) {
+            if (subscription.creator === currentUser && userRole === 'seller') {
+                // New subscriber for this seller
+                showNotification(`New subscriber: ${subscription.subscriber}!`);
+                loadSubscribers();
+                loadStats();
+            } else if (subscription.subscriber === currentUser && userRole === 'buyer') {
+                // Subscription confirmed for this buyer
+                loadSubscriptions();
+            }
+            loadTransactions();
+        }
+
+        // Handle subscription cancelled event
+        function handleSubscriptionCancelled(data) {
+            if (data.creator === currentUser && userRole === 'seller') {
+                showNotification(`Subscriber cancelled: ${data.subscriber}`);
+                loadSubscribers();
+                loadStats();
+            } else if (data.subscriber === currentUser && userRole === 'buyer') {
+                loadSubscriptions();
+            }
+            
+            // Update UI to show cancelled status
+            const subCard = document.querySelector(`[data-subscription-id="${data._id}"]`);
+            if (subCard) {
+                subCard.classList.add('cancelled');
+                const statusEl = subCard.querySelector('.status');
+                if (statusEl) {
+                    statusEl.className = 'status cancelled';
+                    statusEl.textContent = 'CANCELLED';
+                }
+            }
+        }
+
+        // Update online status indicators
+        function updateOnlineStatus() {
+            document.querySelectorAll('.online-badge').forEach(badge => {
+                const username = badge.getAttribute('data-username');
+                if (username) {
+                    badge.style.display = onlineUsers.has(username) ? 'inline-block' : 'none';
+                }
+            });
+        }
 
         // Load users from database
         async function loadUsers() {
@@ -249,6 +475,9 @@
                     document.getElementById('sellerSection').style.display = 
                         userRole === 'seller' ? 'block' : 'none';
                     
+                    // Initialize WebSocket connection
+                    initializeWebSocket();
+                    
                     loadBalance();
                     if (userRole === 'buyer') {
                         loadAvailableSellers();
@@ -268,11 +497,16 @@
         
         // Logout
         function logout() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
             authToken = null;
             currentUser = null;
             userRole = null;
             document.getElementById('loginSection').style.display = 'block';
             document.getElementById('mainSection').style.display = 'none';
+            updateWebSocketStatus(false);
         }
         
         // Load balance
@@ -305,7 +539,10 @@
                     if (sellers.length > 0) {
                         sellersDiv.innerHTML = sellers.map(seller => `
                             <div class="seller-card">
-                                <h4>${seller.username}</h4>
+                                <h4>
+                                    ${seller.username}
+                                    <span class="online-badge" data-username="${seller.username}" style="display: ${onlineUsers.has(seller.username) ? 'inline-block' : 'none'};">ONLINE</span>
+                                </h4>
                                 <p>Premium content creator!</p>
                                 <div class="price">$9.99/month</div>
                                 <button onclick="subscribe('${seller.username}', 9.99)">Subscribe</button>
@@ -339,10 +576,8 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    alert(`✅ Successfully subscribed to ${seller}!`);
-                    loadBalance();
-                    loadSubscriptions();
-                    loadTransactions();
+                    showNotification(`Successfully subscribed to ${seller}!`);
+                    // Updates will come via WebSocket
                 } else {
                     alert('❌ ' + data.error);
                 }
@@ -369,8 +604,8 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    alert('Subscription cancelled');
-                    loadSubscriptions();
+                    showNotification('Subscription cancelled');
+                    // Updates will come via WebSocket
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -390,11 +625,17 @@
                 if (data.success && data.data.subscriptions.length > 0) {
                     const activeSubs = data.data.subscriptions.filter(sub => sub.status === 'active');
                     
+                    // Store subscriptions for real-time updates
+                    activeSubscriptions.clear();
+                    activeSubs.forEach(sub => {
+                        activeSubscriptions.set(sub._id, sub);
+                    });
+                    
                     if (activeSubs.length > 0) {
                         div.innerHTML = activeSubs.map(sub => `
-                            <div class="subscription-card">
+                            <div class="subscription-card" data-subscription-id="${sub._id}">
                                 <h4>Subscribed to: ${sub.creator}</h4>
-                                <p><strong>Price:</strong> ${sub.price}/month</p>
+                                <p><strong>Price:</strong> $${sub.price}/month</p>
                                 <p><strong>Started:</strong> ${new Date(sub.startDate).toLocaleDateString()}</p>
                                 <p><strong>Next billing:</strong> ${new Date(sub.nextBillingDate).toLocaleDateString()}</p>
                                 <p><strong>Status:</strong> <span class="status active">ACTIVE</span></p>
@@ -424,10 +665,13 @@
                 
                 if (data.success && data.data.subscribers.length > 0) {
                     div.innerHTML = data.data.subscribers.map(sub => `
-                        <div class="subscription-card">
-                            <h4>Subscriber: ${sub.subscriber}</h4>
-                            <p><strong>Monthly payment:</strong> ${sub.price}</p>
-                            <p><strong>Your earnings:</strong> ${sub.creatorEarnings}/month</p>
+                        <div class="subscription-card ${sub.status === 'active' ? '' : 'cancelled'}">
+                            <h4>
+                                Subscriber: ${sub.subscriber}
+                                <span class="online-badge" data-username="${sub.subscriber}" style="display: ${onlineUsers.has(sub.subscriber) ? 'inline-block' : 'none'};">ONLINE</span>
+                            </h4>
+                            <p><strong>Monthly payment:</strong> $${sub.price}</p>
+                            <p><strong>Your earnings:</strong> $${sub.creatorEarnings}/month</p>
                             <p><strong>Started:</strong> ${new Date(sub.startDate).toLocaleDateString()}</p>
                             <p><strong>Next payment:</strong> ${new Date(sub.nextBillingDate).toLocaleDateString()}</p>
                         </div>
@@ -456,10 +700,10 @@
                             <strong>Active Subscribers:</strong> ${data.data.activeSubscribers}
                         </div>
                         <div class="stats-item">
-                            <strong>Monthly Revenue:</strong> ${data.data.monthlyRevenue.toFixed(2)}
+                            <strong>Monthly Revenue:</strong> $${data.data.monthlyRevenue.toFixed(2)}
                         </div>
                         <div class="stats-item">
-                            <strong>Average Price:</strong> ${data.data.averageSubscriptionPrice.toFixed(2)}
+                            <strong>Average Price:</strong> $${data.data.averageSubscriptionPrice.toFixed(2)}
                         </div>
                     `;
                 }
@@ -481,7 +725,7 @@
                 if (data.success && data.data.length > 0) {
                     div.innerHTML = data.data.slice(0, 5).map(trans => `
                         <div style="padding: 10px; background: #f8f9fa; margin: 5px 0; border-radius: 5px;">
-                            <strong>${trans.type.toUpperCase()}</strong> - ${trans.amount.toFixed(2)}<br>
+                            <strong>${trans.type.toUpperCase()}</strong> - $${trans.amount.toFixed(2)}<br>
                             <small>${trans.description}</small><br>
                             <small>${new Date(trans.createdAt).toLocaleString()}</small>
                         </div>
@@ -493,6 +737,13 @@
                 console.error('Error loading transactions:', error);
             }
         }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (socket) {
+                socket.disconnect();
+            }
+        });
     </script>
 </body>
 </html>

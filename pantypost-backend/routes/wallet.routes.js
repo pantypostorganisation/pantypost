@@ -5,6 +5,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
+const webSocketService = require('../config/websocket'); // ADD THIS
 
 // ============= WALLET ROUTES =============
 
@@ -107,6 +108,9 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       });
     }
     
+    // Store previous balance for WebSocket event
+    const previousBalance = wallet.balance;
+    
     // Add money to wallet
     await wallet.deposit(amount);
     
@@ -124,6 +128,18 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       }
     });
     await transaction.save();
+    
+    // WEBSOCKET: Emit balance update
+    webSocketService.emitBalanceUpdate(
+      username,
+      wallet.role,
+      previousBalance,
+      wallet.balance,
+      'deposit'
+    );
+    
+    // WEBSOCKET: Emit transaction event
+    webSocketService.emitTransaction(transaction);
     
     res.json({
       success: true,
@@ -184,6 +200,9 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
       });
     }
     
+    // Store previous balance for WebSocket event
+    const previousBalance = wallet.balance;
+    
     // Remove money from wallet
     await wallet.withdraw(amount);
     
@@ -203,6 +222,18 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
       }
     });
     await transaction.save();
+    
+    // WEBSOCKET: Emit balance update
+    webSocketService.emitBalanceUpdate(
+      username,
+      wallet.role,
+      previousBalance,
+      wallet.balance,
+      'withdrawal'
+    );
+    
+    // WEBSOCKET: Emit transaction event
+    webSocketService.emitTransaction(transaction);
     
     res.json({
       success: true,
@@ -319,6 +350,9 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
       });
     }
     
+    // Store previous balance for WebSocket event
+    const previousBalance = wallet.balance;
+    
     // Perform action
     if (action === 'credit') {
       await wallet.deposit(amount);
@@ -349,6 +383,18 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
       }
     });
     await transaction.save();
+    
+    // WEBSOCKET: Emit balance update
+    webSocketService.emitBalanceUpdate(
+      username,
+      wallet.role,
+      previousBalance,
+      wallet.balance,
+      action === 'credit' ? 'admin_credit' : 'admin_debit'
+    );
+    
+    // WEBSOCKET: Emit transaction event
+    webSocketService.emitTransaction(transaction);
     
     res.json({
       success: true,

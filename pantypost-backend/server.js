@@ -1,13 +1,18 @@
+// pantypost-backend/server.js
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const path = require('path');
+const http = require('http'); // ADD THIS - needed for WebSocket
 require('dotenv').config();
 
 // Import database connection - CORRECT PATH
 const connectDB = require('./config/database');
+
+// Import WebSocket service - ADD THIS
+const webSocketService = require('./config/websocket');
 
 // Import models (we'll keep these imports for the test routes)
 const User = require('./models/User');
@@ -29,6 +34,12 @@ const uploadRoutes = require('./routes/upload.routes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Create HTTP server - ADD THIS
+const server = http.createServer(app);
+
+// Initialize WebSocket service - ADD THIS
+webSocketService.initialize(server);
 
 // Connect to MongoDB
 connectDB();
@@ -57,6 +68,22 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes); // Add upload routes
+
+// ============= WEBSOCKET STATUS ENDPOINT (optional but helpful) =============
+app.get('/api/ws/status', authMiddleware, (req, res) => {
+  // Only admins can check WebSocket status
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+  
+  res.json({
+    success: true,
+    data: webSocketService.getConnectionStats()
+  });
+});
 
 // ============= TEST ROUTES (keeping these for now) =============
 
@@ -108,7 +135,8 @@ app.post('/api/test/create-user', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server - UPDATED THIS
+server.listen(PORT, () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket server ready for connections`);
 });

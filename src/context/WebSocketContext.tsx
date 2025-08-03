@@ -82,8 +82,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           return undefined;
         }
         
-        // Use WebSocket URL from config, or derive from API URL
-        const wsUrl = websocketConfig.url || apiConfig.baseUrl.replace(/^http/, 'ws') + '/ws';
+        // Use WebSocket URL from config
+        const wsUrl = websocketConfig.url || apiConfig.baseUrl.replace('/api', '');
         
         // Create WebSocket service if it doesn't exist
         if (!wsService.current) {

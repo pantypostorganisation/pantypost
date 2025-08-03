@@ -6,6 +6,7 @@ const Order = require('../models/Order');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth.middleware');
+const webSocketService = require('../config/websocket'); // ADD THIS
 
 // ============= LISTING ROUTES =============
 
@@ -329,6 +330,9 @@ router.post('/', authMiddleware, async (req, res) => {
     const listing = new Listing(listingData);
     await listing.save();
     
+    // WEBSOCKET: Emit new listing event
+    webSocketService.emitNewListing(listing);
+    
     res.json({
       success: true,
       data: listing
@@ -471,6 +475,13 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         }
       }
       
+      // WEBSOCKET: Emit new bid event
+      webSocketService.emitNewBid(listing, {
+        bidder: bidder,
+        amount: amount,
+        date: new Date()
+      });
+      
       res.json({
         success: true,
         data: listing,
@@ -540,6 +551,9 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       listing.status = 'expired';
       await listing.save();
       
+      // WEBSOCKET: Emit auction ended event
+      webSocketService.emitAuctionEnded(listing, null, 0);
+      
       return res.json({
         success: true,
         message: 'Auction ended with no bids'
@@ -573,6 +587,9 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
         });
         await refundTransaction.save();
       }
+      
+      // WEBSOCKET: Emit auction ended event
+      webSocketService.emitAuctionEnded(listing, null, listing.auction.currentBid);
       
       return res.json({
         success: true,
@@ -677,6 +694,12 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     listing.status = 'sold';
     listing.soldAt = new Date();
     await listing.save();
+    
+    // WEBSOCKET: Emit auction ended event
+    webSocketService.emitAuctionEnded(listing, winner, winningBid);
+    
+    // WEBSOCKET: Emit listing sold event
+    webSocketService.emitListingSold(listing, winner);
     
     res.json({
       success: true,
