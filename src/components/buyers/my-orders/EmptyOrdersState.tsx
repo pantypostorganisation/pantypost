@@ -7,7 +7,7 @@ import { Package, MessageCircle } from 'lucide-react';
 
 export default function EmptyOrdersState() {
   return (
-    <div className="text-center py-20 bg-gray-900/30 rounded-2xl border border-gray-700">
+    <div className="text-center py-20 bg-[#1a1a1a] rounded-2xl border border-gray-800">
       <Package className="w-24 h-24 text-gray-600 mx-auto mb-8" />
       <h3 className="text-2xl font-bold text-gray-400 mb-4">No orders yet</h3>
       <p className="text-gray-500 text-lg mb-8 max-w-md mx-auto">
@@ -23,7 +23,7 @@ export default function EmptyOrdersState() {
         </Link>
         <Link
           href="/buyers/messages"
-          className="inline-flex items-center gap-2 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] border-2 border-[#ff950e]/50 hover:border-[#ff950e] font-bold px-8 py-4 rounded-xl transition-all shadow-xl hover:shadow-[#ff950e]/20"
+          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-4 rounded-xl transition-all shadow-xl"
         >
           <MessageCircle className="w-5 h-5" />
           Send Custom Requests

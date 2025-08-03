@@ -16,7 +16,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 // Error component
 function OrdersError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-10">
+    <div className="min-h-screen bg-black p-4 md:p-10">
       <div className="max-w-md mx-auto text-center pt-20">
         <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-white mb-2">Error Loading Orders</h1>
@@ -35,7 +35,7 @@ function OrdersError({ error, onRetry }: { error: string; onRetry: () => void })
 // Loading component
 function OrdersLoading() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-10">
+    <div className="min-h-screen bg-black p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
         <div className="text-center py-20">
           <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
@@ -106,7 +106,7 @@ function MyOrdersContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] p-4 md:p-10">
+    <main className="min-h-screen bg-black p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
         <OrdersHeader />
         
