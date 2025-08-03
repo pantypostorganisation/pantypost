@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useCallback, useContext } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { WalletContext, Order } from '@/context/WalletContext';
+import { WalletContext } from '@/context/WalletContext';
+import type { Order } from '@/types/order';
 import { useListings } from '@/context/ListingContext';
-import { DeliveryAddress } from '@/components/AddressConfirmationModal';
+import type { DeliveryAddress } from '@/types/order';
 import { sanitizeStrict, sanitizeSearchQuery, sanitizeNumber } from '@/utils/security/sanitization';
 import { z } from 'zod';
 

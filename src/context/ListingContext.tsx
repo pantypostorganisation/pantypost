@@ -12,9 +12,9 @@ import {
 import { useWallet } from './WalletContext';
 import { useAuth } from './AuthContext';
 import { useAuction } from './AuctionContext';
-import { Order } from './WalletContext';
+import type { Order } from '@/types/order';
 import { v4 as uuidv4 } from 'uuid';
-import { getSellerTierMemoized } from '@/utils/sellerTiers';
+// Removed getSellerTierMemoized import to avoid circular dependency
 import { listingsService, usersService, storageService, ordersService } from '@/services';
 import { ListingDraft } from '@/types/myListings';
 import { securityService, sanitize } from '@/services/security.service';
@@ -550,8 +550,38 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       // Sanitize buyer username
       const sanitizedBuyer = sanitize.username(buyerUsername);
       
+      // Convert ListingContext's Listing to the format that WalletContext expects
+      const listingForWallet = {
+        id: listing.id,
+        title: listing.title,
+        description: listing.description,
+        price: listing.price,
+        markedUpPrice: listing.markedUpPrice,
+        seller: listing.seller,
+        sellerUsername: listing.seller,
+        imageUrls: listing.imageUrls,
+        type: 'instant' as const,
+        status: 'active' as const,
+        category: 'panties' as const,
+        shippingIncluded: true,
+        internationalShipping: false,
+        createdAt: listing.date,
+        updatedAt: listing.date,
+        views: 0,
+        favorites: 0,
+        tags: listing.tags,
+        size: undefined,
+        color: undefined,
+        material: undefined,
+        wearTime: listing.hoursWorn?.toString(),
+        customizations: [],
+        featured: false,
+        verified: listing.isVerified,
+        nsfw: false
+      };
+      
       // First, process the purchase through wallet
-      const success = await purchaseListing(listing, sanitizedBuyer);
+      const success = await purchaseListing(listingForWallet as any, sanitizedBuyer);
       
       if (success) {
         // If purchase was successful, remove the listing

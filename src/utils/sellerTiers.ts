@@ -1,5 +1,7 @@
-// utils/sellerTiers.ts
-import { Order } from '@/context/WalletContext';
+// src/utils/sellerTiers.ts
+
+// Import Order type from shared types to avoid circular dependencies
+import type { Order } from '@/types/order';
 
 export type TierLevel = 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess' | 'None';
 

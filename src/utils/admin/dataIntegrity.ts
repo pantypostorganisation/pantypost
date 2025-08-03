@@ -1,7 +1,9 @@
 // src/utils/admin/dataIntegrity.ts
 
 import { storageService } from '@/services/storage.service';
-import { Order, DepositLog } from '@/context/WalletContext';
+import { Order } from '@/types/wallet';
+import type { DepositLog } from '@/types/wallet';
+
 
 interface DataValidationResult {
   isValid: boolean;

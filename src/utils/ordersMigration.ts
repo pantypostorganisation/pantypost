@@ -1,6 +1,6 @@
 // src/utils/ordersMigration.ts
 
-import { Order } from '@/context/WalletContext';
+import type { Order } from '@/types/wallet';
 import { storageService, ordersService } from '@/services';
 
 /**

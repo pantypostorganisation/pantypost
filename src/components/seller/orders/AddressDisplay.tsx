@@ -3,8 +3,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Order } from '@/context/WalletContext';
-import { DeliveryAddress } from '@/components/AddressConfirmationModal';
+import type { Order } from '@/types/order';
+import type { DeliveryAddress } from '@/types/order';
 import { 
   AlertTriangle, 
   Copy, 

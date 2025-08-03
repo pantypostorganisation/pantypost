@@ -7,8 +7,10 @@ import { useWallet } from './WalletContext';
 import { listingsService, storageService, ordersService } from '@/services';
 import { sanitize } from '@/services/security.service';
 import { v4 as uuidv4 } from 'uuid';
+// Import types from ListingContext directly since they have auction-specific properties
 import type { Listing, Bid, AuctionStatus } from './ListingContext';
-import type { Order } from './WalletContext';
+// Import Order from shared types
+import type { Order } from '@/types/order';
 
 // Auction tracking types
 interface AuctionBidRecord {
@@ -607,8 +609,29 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           amount: winningAmount
         });
 
+        // Convert ListingContext's Listing to a format that WalletContext expects
+        // The wallet just needs basic listing info for the purchase
+        const listingForWallet = {
+          id: listing.id,
+          title: listing.title,
+          description: listing.description,
+          price: winningAmount,
+          markedUpPrice: listing.markedUpPrice || winningAmount,
+          seller: listing.seller,
+          imageUrls: listing.imageUrls,
+          type: 'instant' as const,
+          status: 'active' as const,
+          category: 'panties' as const,
+          shippingIncluded: true,
+          internationalShipping: false,
+          createdAt: listing.date,
+          updatedAt: listing.date,
+          views: 0,
+          favorites: 0
+        };
+
         // Finalize the purchase for winner
-        const success = await finalizeAuctionPurchase(listing, winnerUsername, winningAmount);
+        const success = await finalizeAuctionPurchase(listingForWallet as any, winnerUsername, winningAmount);
         
         if (success && state.activeBidders) {
           // Refund all other active bidders

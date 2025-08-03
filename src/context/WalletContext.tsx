@@ -10,8 +10,6 @@ import {
   useCallback,
   useRef,
 } from "react";
-import { DeliveryAddress } from '@/components/AddressConfirmationModal';
-import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { v4 as uuidv4 } from 'uuid';
 import { sanitizeStrict, sanitizeUsername, sanitizeCurrency } from '@/utils/security/sanitization';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
@@ -21,47 +19,13 @@ import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { useAuth } from '@/context/AuthContext';
 
+// Import shared types
+import type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog } from '@/types/order';
+
+// Re-export types for backward compatibility
+export type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog };
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
-
-// Export Order type to make it available to other components
-export type Order = {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  markedUpPrice: number;
-  imageUrl?: string;
-  date: string;
-  seller: string;
-  buyer: string;
-  tags?: string[];
-  wearTime?: string;
-  wasAuction?: boolean;
-  finalBid?: number;
-  deliveryAddress?: DeliveryAddress;
-  shippingStatus?: 'pending' | 'processing' | 'shipped' | 'pending-auction';
-  tierCreditAmount?: number;
-  isCustomRequest?: boolean;
-  originalRequestId?: string;
-  listingId?: string;
-  listingTitle?: string;
-  quantity?: number;
-};
-
-// Import Listing from ListingContext to avoid conflicts
-import { Listing as ListingContextType } from '@/context/ListingContext';
-
-// Use the ListingContext's Listing type directly
-type Listing = ListingContextType;
-
-export type CustomRequestPurchase = {
-  requestId: string;
-  buyer: string;
-  seller: string;
-  amount: number;
-  description: string;
-  metadata?: any;
-};
 
 type Withdrawal = {
   amount: number;
@@ -80,17 +44,6 @@ type AdminAction = {
   reason: string;
   date: string;
   role: 'buyer' | 'seller';
-};
-
-export type DepositLog = {
-  id: string;
-  username: string;
-  amount: number;
-  method: 'credit_card' | 'bank_transfer' | 'crypto' | 'admin_credit';
-  date: string;
-  status: 'pending' | 'completed' | 'failed';
-  transactionId?: string;
-  notes?: string;
 };
 
 // Validation schemas for wallet operations

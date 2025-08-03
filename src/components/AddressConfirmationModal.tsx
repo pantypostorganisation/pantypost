@@ -5,18 +5,11 @@ import { useState, useEffect } from 'react';
 import { X, MapPin, Home, Building, CheckCircle, AlertCircle } from 'lucide-react';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
+// Import from shared types
+import type { DeliveryAddress } from '@/types/order';
 
-// Export the DeliveryAddress type
-export type DeliveryAddress = {
-  fullName: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  specialInstructions?: string;
-};
+// Re-export for backward compatibility
+export type { DeliveryAddress };
 
 type AddressConfirmationModalProps = {
   isOpen: boolean;
@@ -240,51 +233,31 @@ export default function AddressConfirmationModal({
                 />
                 
                 {/* Address Line 1 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Address Line 1
-                  </label>
-                  <div className="relative">
-                    <SecureInput
-                      type="text"
-                      value={address.addressLine1}
-                      onChange={handleChange('addressLine1')}
-                      onBlur={() => setTouched(prev => ({ ...prev, addressLine1: true }))}
-                      error={errors.addressLine1}
-                      touched={touched.addressLine1}
-                      className="w-full p-3 pl-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
-                      placeholder="123 Main Street"
-                      maxLength={200}
-                      required
-                    />
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Home size={16} className="text-gray-500" />
-                    </div>
-                  </div>
-                </div>
+                <SecureInput
+                  label="Address Line 1"
+                  type="text"
+                  value={address.addressLine1}
+                  onChange={handleChange('addressLine1')}
+                  onBlur={() => setTouched(prev => ({ ...prev, addressLine1: true }))}
+                  error={errors.addressLine1}
+                  touched={touched.addressLine1}
+                  placeholder="123 Main Street"
+                  maxLength={200}
+                  required
+                />
                 
                 {/* Address Line 2 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Address Line 2 <span className="text-gray-500 text-xs">(Optional)</span>
-                  </label>
-                  <div className="relative">
-                    <SecureInput
-                      type="text"
-                      value={address.addressLine2 || ''}
-                      onChange={handleChange('addressLine2')}
-                      className="w-full p-3 pl-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e]"
-                      placeholder="Apt 4B, Floor 2, etc."
-                      maxLength={200}
-                    />
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building size={16} className="text-gray-500" />
-                    </div>
-                  </div>
-                </div>
+                <SecureInput
+                  label="Address Line 2"
+                  type="text"
+                  value={address.addressLine2 || ''}
+                  onChange={handleChange('addressLine2')}
+                  placeholder="Apartment, suite, etc. (optional)"
+                  maxLength={200}
+                />
                 
-                {/* City, State, Postal Code */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* City and State in same row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SecureInput
                     label="City"
                     type="text"
@@ -310,9 +283,12 @@ export default function AddressConfirmationModal({
                     maxLength={100}
                     required
                   />
-                  
+                </div>
+                
+                {/* Postal Code and Country in same row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SecureInput
-                    label="ZIP/Postal Code"
+                    label="Postal/ZIP Code"
                     type="text"
                     value={address.postalCode}
                     onChange={handleChange('postalCode')}
@@ -323,21 +299,21 @@ export default function AddressConfirmationModal({
                     maxLength={20}
                     required
                   />
+                  
+                  {/* Country */}
+                  <SecureInput
+                    label="Country"
+                    type="text"
+                    value={address.country}
+                    onChange={handleChange('country')}
+                    onBlur={() => setTouched(prev => ({ ...prev, country: true }))}
+                    error={errors.country}
+                    touched={touched.country}
+                    placeholder="United States"
+                    maxLength={100}
+                    required
+                  />
                 </div>
-                
-                {/* Country */}
-                <SecureInput
-                  label="Country"
-                  type="text"
-                  value={address.country}
-                  onChange={handleChange('country')}
-                  onBlur={() => setTouched(prev => ({ ...prev, country: true }))}
-                  error={errors.country}
-                  touched={touched.country}
-                  placeholder="United States"
-                  maxLength={100}
-                  required
-                />
                 
                 {/* Special Instructions */}
                 <SecureTextarea
