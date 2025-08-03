@@ -133,10 +133,11 @@ jest.mock('next/image', () => ({
   },
 }));
 
-// Mock environment variables
+// Mock environment variables - UPDATED FOR REAL BACKEND
 process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3000/api';
-process.env.NEXT_PUBLIC_USE_MOCK_API = 'true';
-process.env.NEXT_PUBLIC_MOCK_SCENARIO = 'HAPPY_PATH';
+process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:5000/api';
+// REMOVED: process.env.NEXT_PUBLIC_USE_MOCK_API = 'true';
+// REMOVED: process.env.NEXT_PUBLIC_MOCK_SCENARIO = 'HAPPY_PATH';
 process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME = 'test-cloud';
 process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET = 'test-preset';
 

@@ -5,8 +5,6 @@
  * Centralizes all API-related configuration and provides environment-based settings
  */
 
-import { mockApiCall } from './mock/mock-api';
-import { getMockConfig } from './mock/mock.config';
 import { apiConfig, appConfig, securityConfig, isDevelopment } from '@/config/environment';
 import { securityService } from './security.service';
 import { sanitizeUrl, sanitizeStrict } from '@/utils/security/sanitization';
@@ -25,7 +23,7 @@ export const FEATURES = {
   USE_API_MESSAGES: apiConfig.features.useMessages,
   USE_API_WALLET: apiConfig.features.useWallet,
   USE_API_USERS: apiConfig.features.useUsers,
-  USE_MOCK_API: apiConfig.features.useMockApi,
+  USE_MOCK_API: false, // Always false - no mocks!
 };
 
 // API Endpoints
@@ -179,8 +177,8 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
     throw new Error('Missing required URL parameters');
   }
   
-  // Only prepend base URL if we're using the API and not mocking
-  if (API_BASE_URL && !FEATURES.USE_MOCK_API) {
+  // Always use real API URL
+  if (API_BASE_URL) {
     const fullUrl = `${API_BASE_URL}${url}`;
     const sanitizedUrl = sanitizeUrl(fullUrl);
     
@@ -429,28 +427,7 @@ class ApiClient {
       };
     }
 
-    // Use mock API if enabled
-    if (FEATURES.USE_MOCK_API) {
-      try {
-        this.pendingRequests.delete(requestKey || '');
-        return await mockApiCall<T>(endpoint, options);
-      } catch (error) {
-        // Handle mock API errors
-        if (error && typeof error === 'object' && 'response' in error) {
-          const errorResponse = (error as any).response;
-          return errorResponse.data;
-        }
-        
-        return {
-          success: false,
-          error: {
-            message: error instanceof Error ? error.message : 'Mock API error',
-            code: 'MOCK_ERROR',
-          },
-          meta: { requestId },
-        };
-      }
-    }
+    // NO MORE MOCK API - Always use real API
     
     // Cancel previous request with same key if exists
     if (requestKey) {
@@ -631,11 +608,6 @@ export async function apiCallWithRetry<T>(
          lastError.code === 'RATE_LIMIT_EXCEEDED' ||
          lastError.code === 'VALIDATION_ERROR' ||
          lastError.code === 'DUPLICATE_REQUEST')) {
-      return result;
-    }
-    
-    // Don't retry if using mock API
-    if (FEATURES.USE_MOCK_API) {
       return result;
     }
     

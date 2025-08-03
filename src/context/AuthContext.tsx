@@ -1,11 +1,7 @@
 // src/context/AuthContext.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
-import { authService } from '@/services';
-import { sanitizeUsername, sanitizeStrict } from '@/utils/security/sanitization';
-import { authSchemas } from '@/utils/validation/schemas';
-import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 
 export interface User {
@@ -43,357 +39,193 @@ interface AuthContextType {
   error: string | null;
   clearError: () => void;
   refreshSession: () => Promise<void>;
+  getAuthToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// List of public routes that should never trigger auth redirects
-const PUBLIC_ROUTES = [
-  '/login',
-  '/signup',
-  '/forgot-password',
-  '/verify-reset-code',
-  '/reset-password-final',
-  '/reset-password'
-];
+// Direct API URL - no environment variables, no complications
+const API_BASE_URL = 'http://localhost:5000/api';
 
-// Input validation
-const validateUsername = (username: string): string | null => {
-  const validation = authSchemas.username.safeParse(username);
-  if (!validation.success) {
-    return validation.error.errors[0]?.message || 'Invalid username';
+// Simple fetch wrapper with auth token
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const token = localStorage.getItem('auth_token');
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'API request failed');
   }
-  return null;
-};
+
+  return data;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const initializingRef = useRef(false);
-  const sessionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const rateLimiter = getRateLimiter();
   const pathname = usePathname();
-
-  // Check if current route is public
-  const isPublicRoute = useCallback(() => {
-    // Check window flags
-    if (typeof window !== 'undefined') {
-      if ((window as any).__IS_PUBLIC_ROUTE__ || (window as any).__IS_PUBLIC_PAGE__) {
-        return true;
-      }
-    }
-    
-    // Check pathname
-    return PUBLIC_ROUTES.some(route => pathname?.startsWith(route));
-  }, [pathname]);
 
   // Clear error
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
-  // Clear session monitoring interval
-  const clearSessionMonitoring = useCallback(() => {
-    if (sessionCheckIntervalRef.current) {
-      clearInterval(sessionCheckIntervalRef.current);
-      sessionCheckIntervalRef.current = null;
+  // Get auth token
+  const getAuthToken = useCallback(() => {
+    return localStorage.getItem('auth_token');
+  }, []);
+
+  // Refresh session - fetch current user
+  const refreshSession = useCallback(async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      setUser(null);
+      return;
+    }
+
+    try {
+      const response = await fetchWithAuth('/auth/me');
+      if (response.success && response.data) {
+        setUser(response.data);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+      setUser(null);
+      // Clear invalid token
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
     }
   }, []);
 
-  // Refresh session
-  const refreshSession = useCallback(async () => {
-    try {
-      const result = await authService.getCurrentUser();
-      if (result.success && result.data) {
-        setUser(result.data);
-      } else {
-        setUser(null);
-        clearSessionMonitoring(); // Clear monitoring if no user
-      }
-    } catch (error) {
-      console.error('Session refresh error:', error);
-    }
-  }, [clearSessionMonitoring]);
-
-  // Set up session monitoring
-  const setupSessionMonitoring = useCallback(() => {
-    // Clear any existing interval first
-    clearSessionMonitoring();
-    
-    if (process.env.NEXT_PUBLIC_USE_API_AUTH === 'true') {
-      // Check session every 5 minutes
-      sessionCheckIntervalRef.current = setInterval(async () => {
-        const isAuthenticated = await authService.isAuthenticated();
-        if (!isAuthenticated) {
-          console.log('[Auth] Session expired, clearing user');
-          setUser(null);
-          clearSessionMonitoring();
-        } else {
-          // Refresh user data
-          await refreshSession();
-        }
-      }, 5 * 60 * 1000); // 5 minutes
-    }
-  }, [clearSessionMonitoring, refreshSession]);
-
-  // Initialize auth state
+  // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
-      // Prevent double initialization
-      if (initializingRef.current) return;
-      initializingRef.current = true;
-
+      console.log('[Auth] Initializing...');
+      
       try {
-        console.log('[Auth] Starting auth initialization...');
-        
-        // Skip auth check on public routes
-        if (isPublicRoute()) {
-          console.log('[Auth] On public route, skipping auth check:', pathname);
-          setIsAuthReady(true);
-          initializingRef.current = false;
-          return;
-        }
-        
-        // Check for existing session
-        const result = await authService.getCurrentUser();
-        console.log('[Auth] getCurrentUser result:', result);
-        
-        if (result.success && result.data) {
-          console.log('[Auth] User found:', { 
-            username: result.data.username, 
-            role: result.data.role,
-            isVerified: result.data.isVerified 
-          });
-          setUser(result.data);
-          
-          // Set up session monitoring for API mode
-          setupSessionMonitoring();
-        } else {
-          console.log('[Auth] No user found in session');
-        }
+        await refreshSession();
       } catch (error) {
-        console.error('[Auth] Auth initialization error:', error);
+        console.error('[Auth] Init error:', error);
       } finally {
         setIsAuthReady(true);
-        initializingRef.current = false;
-        console.log('[Auth] Auth initialization complete, isAuthReady: true');
+        console.log('[Auth] Ready');
       }
     };
 
     initAuth();
+  }, [refreshSession]);
 
-    // Cleanup
-    return () => {
-      clearSessionMonitoring();
-    };
-  }, [setupSessionMonitoring, clearSessionMonitoring, isPublicRoute, pathname]);
-
-  // Listen for storage events (for multi-tab logout)
-  useEffect(() => {
-    const handleStorageChange = async (e: StorageEvent) => {
-      // Skip on public routes
-      if (isPublicRoute()) return;
-
-      if (e.key === 'currentUser' && e.newValue === null) {
-        // User logged out in another tab
-        console.log('[Auth] User logged out in another tab');
-        setUser(null);
-        clearSessionMonitoring();
-      } else if (e.key === 'currentUser' && e.newValue) {
-        // User logged in or updated in another tab
-        try {
-          const updatedUser = JSON.parse(e.newValue);
-          console.log('[Auth] User updated in another tab:', { 
-            username: updatedUser.username, 
-            role: updatedUser.role 
-          });
-          setUser(updatedUser);
-          setupSessionMonitoring();
-        } catch (error) {
-          console.error('Error parsing user from storage event:', error);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [setupSessionMonitoring, clearSessionMonitoring, isPublicRoute]);
-
-  // Login function using auth service with rate limiting
+  // Login function
   const login = useCallback(async (
     username: string, 
-    password: string = '', // Default for backward compatibility
+    password: string = '', 
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
-    console.log('[AuthContext] Login called with:', { username, hasPassword: !!password, role });
+    console.log('[Auth] Login attempt:', { username, role });
     
-    // Check rate limit in context as well - UPDATED TO 300/30min
-    const rateLimitResult = rateLimiter.check('LOGIN_CONTEXT', {
-      maxAttempts: 300, // Increased from 10 to 300 for testing
-      windowMs: 30 * 60 * 1000 // Changed to 30 minutes
-    });
-
-    if (!rateLimitResult.allowed) {
-      setError(`Too many login attempts. Please wait ${rateLimitResult.waitTime} seconds.`);
-      return false;
-    }
-
-    // Validate and sanitize input
-    const validationError = validateUsername(username);
-    if (validationError) {
-      console.error('[AuthContext] Validation error:', validationError);
-      setError(sanitizeStrict(validationError));
-      return false;
-    }
-
-    // Sanitize username
-    const sanitizedUsername = sanitizeUsername(username);
-    if (!sanitizedUsername) {
-      console.error('[AuthContext] Username sanitization failed');
-      setError('Invalid username format');
-      return false;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
-      console.log('[AuthContext] Attempting login:', { username: sanitizedUsername, role });
-      
-      // Add error handling wrapper around authService call
-      let result;
-      try {
-        console.log('[AuthContext] Calling authService.login with:', { 
-          username: sanitizedUsername, 
-          hasPassword: !!password,
-          role 
-        });
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role }),
+      });
+
+      const data = await response.json();
+      console.log('[Auth] Login response:', data);
+
+      if (data.success && data.data) {
+        // Store tokens
+        localStorage.setItem('auth_token', data.data.token);
+        localStorage.setItem('refresh_token', data.data.refreshToken);
         
-        result = await authService.login({ 
-          username: sanitizedUsername, 
-          password, // Include password for enhanced security
-          role 
-        });
+        // Set user state
+        setUser(data.data.user);
         
-        console.log('[AuthContext] authService.login returned:', {
-          success: result?.success,
-          hasData: !!result?.data,
-          hasError: !!result?.error
-        });
-      } catch (authError) {
-        console.error('[AuthContext] AuthService error:', authError);
-        setError('Authentication service error. Please try again.');
+        console.log('[Auth] Login successful');
         setLoading(false);
-        return false;
-      }
-      
-      if (result.success && result.data) {
-        console.log('[AuthContext] Login successful, setting user:', { 
-          username: result.data.user.username, 
-          role: result.data.user.role 
-        });
-        
-        setUser(result.data.user);
-        setLoading(false); // Important: Clear loading state before return
-        
-        // Set up session monitoring for API mode
-        setupSessionMonitoring();
-        
-        console.log('[AuthContext] Login process completed successfully');
         return true;
       } else {
-        console.error('[AuthContext] Login failed:', {
-          result,
-          error: result.error,
-          success: result.success,
-          data: result.data,
-          errorMessage: result.error?.message,
-          errorCode: result.error?.code
-        });
-        setError(sanitizeStrict(result.error?.message || 'Login failed'));
+        setError(data.error?.message || 'Login failed');
         setLoading(false);
         return false;
       }
     } catch (error) {
-      console.error('[AuthContext] Login error:', error);
-      setError('Login failed. Please try again.');
+      console.error('[Auth] Login error:', error);
+      setError('Network error. Please try again.');
       setLoading(false);
       return false;
     }
-  }, [setupSessionMonitoring, rateLimiter]);
+  }, []);
 
-  // Logout function using auth service
+  // Logout function
   const logout = useCallback(async () => {
+    console.log('[Auth] Logging out...');
+    
     try {
-      console.log('[Auth] Logging out...');
-      await authService.logout();
-      setUser(null);
-      setError(null);
-      
-      // Clear session monitoring
-      clearSessionMonitoring();
-      
-      console.log('[Auth] Logout complete');
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        // Call logout endpoint
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
     } catch (error) {
-      console.error('Logout error:', error);
-      // Still clear user state even if service fails
-      setUser(null);
-      
-      // Clear session monitoring
-      clearSessionMonitoring();
+      console.error('[Auth] Logout API error:', error);
     }
-  }, [clearSessionMonitoring]);
 
-  // Update user function using auth service with validation
+    // Clear local state regardless of API response
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    sessionStorage.clear();
+    setUser(null);
+    setError(null);
+    
+    console.log('[Auth] Logout complete');
+  }, []);
+
+  // Update user function
   const updateUser = useCallback(async (updates: Partial<User>) => {
     if (!user) {
       setError('No user to update');
       return;
     }
 
-    // Validate updates
-    const sanitizedUpdates: Partial<User> = {};
-    
-    // Sanitize string fields
-    if (updates.bio !== undefined) {
-      sanitizedUpdates.bio = sanitizeStrict(updates.bio);
-    }
-    if (updates.username !== undefined) {
-      const usernameError = validateUsername(updates.username);
-      if (usernameError) {
-        setError(usernameError);
-        return;
-      }
-      sanitizedUpdates.username = sanitizeUsername(updates.username);
-    }
-    
-    // Copy safe fields directly
-    const safeFields = ['profilePicture', 'isVerified', 'tier', 'subscriberCount', 
-                       'totalSales', 'rating', 'reviewCount'] as const;
-    
-    for (const field of safeFields) {
-      if (field in updates) {
-        (sanitizedUpdates as any)[field] = updates[field];
-      }
-    }
-
     try {
-      console.log('[Auth] Updating user:', sanitizedUpdates);
-      const result = await authService.updateCurrentUser(sanitizedUpdates);
-      
-      if (result.success && result.data) {
-        console.log('[Auth] User updated successfully');
-        setUser(result.data);
-        setError(null);
+      const response = await fetchWithAuth(`/users/${user.username}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+
+      if (response.success && response.data) {
+        setUser(response.data);
       } else {
-        console.error('[Auth] User update failed:', result.error);
-        setError(sanitizeStrict(result.error?.message || 'Failed to update user'));
+        setError(response.error?.message || 'Failed to update user');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Update user error:', error);
-      setError('Failed to update user');
+      setError(error.message || 'Failed to update user');
     }
   }, [user]);
 
@@ -408,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error,
     clearError,
     refreshSession,
+    getAuthToken,
   };
 
   return (

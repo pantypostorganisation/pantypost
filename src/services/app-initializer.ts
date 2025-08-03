@@ -2,8 +2,8 @@
 
 import { authService, walletService, storageService } from '@/services';
 import { runOrdersMigration } from '@/utils/ordersMigration';
-import { getMockConfig } from './mock/mock.config';
-import { mockInterceptor } from './mock/mock-interceptor';
+// REMOVED: import { getMockConfig } from './mock/mock.config';
+// REMOVED: import { mockInterceptor } from './mock/mock-interceptor';
 import { validateConfiguration, getAllConfig, isDevelopment } from '@/config/environment';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from './security.service';
@@ -130,12 +130,8 @@ export class AppInitializer {
         errors.push(`Storage initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 4. Initialize mock API if enabled
-      try {
-        await this.initializeMockApi();
-      } catch (error) {
-        warnings.push(`Mock API initialization warning: ${this.sanitizeError(error)}`);
-      }
+      // 4. REMOVED MOCK API INITIALIZATION
+      console.log('[AppInitializer] Mock API disabled - using real backend');
 
       // 5. Initialize auth service
       try {
@@ -298,47 +294,6 @@ export class AppInitializer {
   }
 
   /**
-   * Initialize mock API with validation
-   */
-  private async initializeMockApi(): Promise<void> {
-    const config = getMockConfig();
-    
-    if (config.enabled) {
-      console.log('[AppInitializer] Mock API is enabled, initializing...');
-      
-      // Validate mock scenario
-      const validScenarios = ['default', 'error-prone', 'slow-network', 'realistic'];
-      if (!validScenarios.includes(config.scenario.name)) {
-        throw new Error('Invalid mock scenario');
-      }
-      
-      console.log(`[AppInitializer] Mock scenario: ${sanitizeStrict(config.scenario.name)}`);
-      
-      try {
-        await mockInterceptor.initialize();
-        console.log('[AppInitializer] Mock API initialized successfully');
-        
-        // Log mock configuration for debugging (sanitized)
-        if (isDevelopment()) {
-          console.log('[AppInitializer] Mock API Configuration:', {
-            enabled: config.enabled,
-            scenario: sanitizeStrict(config.scenario.name),
-            errorRate: `${(config.scenario.errorRate * 100).toFixed(0)}%`,
-            networkDelay: `${config.scenario.networkDelay.min}-${config.scenario.networkDelay.max}ms`,
-            persistState: config.persistState,
-            logRequests: config.logRequests,
-          });
-        }
-      } catch (error) {
-        console.error('[AppInitializer] Failed to initialize mock API:', error);
-        throw error;
-      }
-    } else {
-      console.log('[AppInitializer] Mock API is disabled, using real API');
-    }
-  }
-
-  /**
    * Clean up corrupted wallet data
    */
   private async cleanupCorruptedData(): Promise<void> {
@@ -437,13 +392,8 @@ export class AppInitializer {
       'wallet_orders',
     ];
 
-    // Skip integrity check if using mock API
-    const mockConfig = getMockConfig();
-    if (mockConfig.enabled) {
-      console.log('[AppInitializer] Skipping data integrity check in mock mode');
-      return;
-    }
-
+    // No longer skip for mock mode since we're not using mocks
+    
     for (const key of criticalKeys) {
       try {
         const data = await storageService.getItem(key, null);
@@ -482,20 +432,16 @@ export class AppInitializer {
       'old_wallet_data',
       'temp_listings',
       '__test_data__',
+      // Add mock-related keys to cleanup
+      'mock_api_state',
+      'mock_api_requests',
+      'mock_api_responses',
     ];
 
     // Validate each key before removal
     const safeDeprecatedKeys = deprecatedKeys
       .filter(key => typeof key === 'string' && key.length < 100)
       .map(key => sanitizeStrict(key));
-
-    // Don't clean up mock data
-    const mockConfig = getMockConfig();
-    if (mockConfig.enabled && mockConfig.persistState) {
-      const filteredKeys = safeDeprecatedKeys.filter(key => !key.startsWith('mock_api_'));
-      safeDeprecatedKeys.length = 0;
-      safeDeprecatedKeys.push(...filteredKeys);
-    }
 
     for (const key of safeDeprecatedKeys) {
       try {
@@ -598,11 +544,11 @@ export class AppInitializer {
     mockScenario?: string;
     attempts: number;
   } {
-    const mockConfig = getMockConfig();
+    // Always return mock as disabled
     return {
       initialized: this.initialized,
-      mockApiEnabled: mockConfig.enabled,
-      mockScenario: mockConfig.enabled ? sanitizeStrict(mockConfig.scenario.name) : undefined,
+      mockApiEnabled: false,
+      mockScenario: undefined,
       attempts: this.initAttempts,
     };
   }

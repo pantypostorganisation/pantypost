@@ -8,7 +8,6 @@ import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import BanCheck from '@/components/BanCheck';
 import MessageNotifications from '@/components/MessageNotifications';
-import { MockApiDevTools } from '@/components/MockApiDevTools';
 import { PWAInstall } from '@/components/PWAInstall';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { errorTracker } from '@/lib/errorTracking';
@@ -107,8 +106,6 @@ export default function ClientLayout({
         </Suspense>
         {/* PWA Install Prompt */}
         <PWAInstall />
-        {/* Mock API Dev Tools - Outside BanCheck so it's always accessible during development */}
-        <MockApiDevTools />
       </Providers>
     </>
   );
