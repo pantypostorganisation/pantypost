@@ -24,57 +24,62 @@ export default function OrderFilters({
   onToggleSort,
 }: OrderFiltersProps) {
   return (
-    <div className="bg-[#1a1a1a] rounded-xl p-6 mb-8 border border-gray-800">
-      <div className="flex flex-col lg:flex-row gap-4">
+    <div className="bg-gray-800/50 rounded-2xl p-5 mb-8 border border-[#ff950e]/40">
+      <div className="flex flex-col lg:flex-row gap-3">
         {/* Search */}
         <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 w-4 h-4 group-focus-within:text-[#ff950e] transition-colors duration-300" />
             <input
               type="text"
               placeholder="Search orders..."
-              className="w-full pl-10 pr-4 py-3 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e] transition-all"
+              className="w-full pl-11 pr-4 py-3 bg-black/30 border border-gray-800/50 rounded-xl text-white placeholder-gray-600 focus:border-[#ff950e]/50 focus:bg-black/50 focus:outline-none focus:placeholder-gray-500 transition-all duration-300"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
             />
           </div>
         </div>
         
-        {/* Status Filter */}
-        <select
-          className="px-4 py-3 bg-black border border-gray-700 rounded-lg text-white focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e] transition-all min-w-[150px]"
-          value={filterStatus}
-          onChange={(e) => onFilterStatusChange(e.target.value as 'all' | 'pending' | 'processing' | 'shipped')}
-        >
-          <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="processing">Processing</option>
-          <option value="shipped">Shipped</option>
-        </select>
-        
-        {/* Sort Options */}
+        {/* Filters Group */}
         <div className="flex gap-2">
-          <button
-            onClick={() => onToggleSort('date')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-              sortBy === 'date' ? 'bg-[#ff950e] text-black' : 'bg-gray-800 text-white hover:bg-gray-700'
-            }`}
+          {/* Status Filter - Sleek Dropdown */}
+          <select
+            className="px-4 py-3 bg-black/30 border border-gray-800/50 rounded-xl text-gray-300 focus:text-white focus:border-[#ff950e]/50 focus:outline-none transition-all duration-300 cursor-pointer hover:bg-black/50"
+            value={filterStatus}
+            onChange={(e) => onFilterStatusChange(e.target.value as 'all' | 'pending' | 'processing' | 'shipped')}
           >
-            <Calendar className="w-4 h-4" />
-            Date
-            <ArrowUpDown className="w-3 h-3" />
-          </button>
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="shipped">Shipped</option>
+          </select>
           
-          <button
-            onClick={() => onToggleSort('price')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-              sortBy === 'price' ? 'bg-[#ff950e] text-black' : 'bg-gray-800 text-white hover:bg-gray-700'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" />
-            Price
-            <ArrowUpDown className="w-3 h-3" />
-          </button>
+          {/* Sort Options - Minimal Style */}
+          <div className="flex bg-black/30 rounded-xl p-1 border border-gray-800/50">
+            <button
+              onClick={() => onToggleSort('date')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all duration-300 text-sm font-medium ${
+                sortBy === 'date' 
+                  ? 'bg-[#ff950e] text-black shadow-md' 
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Date</span>
+            </button>
+            
+            <button
+              onClick={() => onToggleSort('price')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all duration-300 text-sm font-medium ${
+                sortBy === 'price' 
+                  ? 'bg-[#ff950e] text-black shadow-md' 
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>Price</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
