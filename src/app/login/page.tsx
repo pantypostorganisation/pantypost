@@ -1,282 +1,284 @@
 // src/app/login/page.tsx
 'use client';
 
-import FloatingParticle from '@/components/login/FloatingParticle';
-import LoginHeader from '@/components/login/LoginHeader';
-import UsernameStep from '@/components/login/UsernameStep';
-import RoleSelectionStep from '@/components/login/RoleSelectionStep'; // FIXED: Changed from PasswordStep
-import AdminCrownButton from '@/components/login/AdminCrownButton';
-import LoginFooter from '@/components/login/LoginFooter';
-import TrustIndicators from '@/components/login/TrustIndicators';
-import { useAuth } from '@/context/AuthContext'; // DIRECT AUTH CONTEXT
-import { SecureForm } from '@/components/ui/SecureForm';
-import { RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { getRateLimiter } from '@/utils/security/rate-limiter';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import Link from 'next/link';
+import { Eye, EyeOff, User, ShoppingBag, Crown, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
-  const { user, login, loading, error, clearError } = useAuth();
   const router = useRouter();
+  const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = useAuth();
   
   // Form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'buyer' | 'seller' | 'admin' | null>(null); // ADDED: role state
-  const [step, setStep] = useState(1); // 1 = username, 2 = role selection
+  const [role, setRole] = useState<'buyer' | 'seller' | 'admin'>('buyer');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
-  const [showAdminMode, setShowAdminMode] = useState(false);
-  
-  // Track rate limit state
-  const [isRateLimited, setIsRateLimited] = useState(false);
-  const [rateLimitWaitTime, setRateLimitWaitTime] = useState(0);
-  
-  // Use ref to store interval ID for cleanup
-  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(true);
 
-  // Role options configuration
-  const roleOptions = [
-    { key: 'buyer', label: 'Buyer', description: 'Browse and purchase items', icon: require('lucide-react').ShoppingBag },
-    { key: 'seller', label: 'Seller', description: 'List and sell your items', icon: require('lucide-react').User },
-    ...(showAdminMode ? [{ key: 'admin', label: 'Admin', description: 'Administrator access', icon: require('lucide-react').Shield }] : [])
-  ];
-
-  // Cleanup function to prevent memory leaks
-  const clearCountdownInterval = useCallback(() => {
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-  }, []);
-
-  // Component mount/unmount
+  // Set mounted state
   useEffect(() => {
     setMounted(true);
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      clearCountdownInterval();
-    };
-  }, [clearCountdownInterval]);
+  }, []);
 
   // Redirect if already logged in
   useEffect(() => {
-    if (user && mounted) {
+    if (isAuthReady && user) {
       console.log('[Login] User already logged in, redirecting...');
-      router.push(user.role === 'admin' ? '/admin' : user.role === 'seller' ? '/seller' : '/buyer');
+      router.replace('/');
     }
-  }, [user, mounted, router]);
+  }, [isAuthReady, user, router]);
 
-  // Check rate limit status when entering role selection step
+  // Sync auth errors
   useEffect(() => {
-    if (step === 2 && username && isMountedRef.current) {
-      try {
-        const limiter = getRateLimiter();
-        const result = limiter.check(`LOGIN:${username}`, RATE_LIMITS.LOGIN);
-        
-        if (!isMountedRef.current) return;
-        
-        if (!result.allowed && result.waitTime && result.waitTime > 0) {
-          setIsRateLimited(true);
-          setRateLimitWaitTime(result.waitTime);
-        } else {
-          setIsRateLimited(false);
-          setRateLimitWaitTime(0);
-        }
-      } catch (error) {
-        console.error('Error checking rate limit:', error);
-        if (isMountedRef.current) {
-          setIsRateLimited(false);
-          setRateLimitWaitTime(0);
-        }
-      }
+    if (authError) {
+      setError(authError);
+      setIsLoading(false);
     }
-  }, [step, username]);
+  }, [authError]);
 
-  // Update rate limit status when error changes
-  useEffect(() => {
-    if (!isMountedRef.current) return;
-    
-    if (error && error.includes('Too many login attempts')) {
-      setIsRateLimited(true);
-      const match = error.match(/Please wait (\d+) seconds/);
-      if (match && match[1]) {
-        const waitTime = parseInt(match[1], 10);
-        if (!isNaN(waitTime) && waitTime > 0) {
-          setRateLimitWaitTime(waitTime);
-        }
-      }
-    } else if (!error) {
-      setIsRateLimited(false);
-      setRateLimitWaitTime(0);
+  // Clear errors when user types
+  const handleInputChange = useCallback((field: 'username' | 'password', value: string) => {
+    if (field === 'username') {
+      setUsername(value);
+    } else {
+      setPassword(value);
     }
-  }, [error]);
-
-  // Countdown timer for rate limit
-  useEffect(() => {
-    clearCountdownInterval();
-
-    if (isRateLimited && rateLimitWaitTime > 0 && isMountedRef.current) {
-      countdownIntervalRef.current = setInterval(() => {
-        if (!isMountedRef.current) {
-          clearCountdownInterval();
-          return;
-        }
-        
-        setRateLimitWaitTime((prev) => {
-          if (prev <= 1) {
-            setIsRateLimited(false);
-            clearCountdownInterval();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    
+    // Clear errors
+    setError('');
+    if (clearError) {
+      clearError();
     }
+  }, [clearError]);
 
-    return clearCountdownInterval;
-  }, [isRateLimited, rateLimitWaitTime, clearCountdownInterval]);
-
-  // Handle username submission (Step 1 → Step 2)
-  const handleUsernameSubmit = useCallback(() => {
-    if (!username.trim()) return;
+  // Handle form submission
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    clearError();
-    setStep(2);
-    console.log('[Login] Moving to role selection step for:', username);
-  }, [username, clearError]);
-
-  // Handle role selection submission (Step 2 → Login)
-  const handleRoleSubmit = useCallback(async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    
-    if (!username.trim() || !role || isRateLimited || !isMountedRef.current) {
+    // Validation
+    if (!username.trim()) {
+      setError('Please enter your username');
       return;
     }
     
+    if (!password) {
+      setError('Please enter your password');
+      return;
+    }
+    
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError('');
+    
     try {
-      console.log('[Login] Attempting login with role:', role);
-      // Note: The actual login function might need to be updated to accept role
-      // For now, assuming password is handled differently or not needed
-      const success = await login(username.trim(), password || '', role);
+      console.log('[Login] Attempting login...');
+      const success = await login(username.trim(), password, role);
       
-      if (success && isMountedRef.current) {
-        console.log('[Login] Login successful, redirecting...');
-        // Redirect handled by useEffect above
+      if (success) {
+        console.log('[Login] Success! Redirecting...');
+        // The auth context will handle the redirect
       } else {
-        console.log('[Login] Login failed');
+        // Error will be set by auth context
+        console.log('[Login] Failed');
       }
-    } catch (error) {
-      console.error('[Login] Login error:', error);
+    } catch (err) {
+      console.error('[Login] Error:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
     }
-  }, [username, password, role, login, isRateLimited]);
+  }, [username, password, role, login]);
 
-  // Go back to username step
-  const goBack = useCallback(() => {
-    setStep(1);
-    setRole(null);
-    clearError();
-  }, [clearError]);
-
-  // Handle crown click for admin mode
-  const handleCrownClick = useCallback(() => {
-    setShowAdminMode(!showAdminMode);
-  }, [showAdminMode]);
-
-  // Handle key press in username field
+  // Handle Enter key
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleUsernameSubmit();
+    if (e.key === 'Enter' && !isLoading) {
+      handleSubmit(e as any);
     }
-  }, [handleUsernameSubmit]);
+  }, [isLoading, handleSubmit]);
 
-  // Early return for unmounted state
-  if (!mounted) {
+  // Loading state
+  if (!mounted || !isAuthReady) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-2 border-gray-600 border-t-[#ff950e] rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black overflow-hidden relative">
-      {/* Enhanced Floating Particles Background */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {Array.from({ length: 35 }).map((_, i) => (
-          <FloatingParticle 
-            key={i} 
-            delay={0}
-            index={i}
-          />
-        ))}
-      </div>
+    <div className="min-h-screen bg-black relative overflow-hidden">
+      {/* Background gradient effects */}
+      <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-transparent to-orange-500/10"></div>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-pink-500/20 rounded-full blur-[128px]"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-orange-500/20 rounded-full blur-[128px]"></div>
 
-      {/* Subtle gradient overlay for depth */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
-
-      {/* Secret Admin Crown - Bottom Right */}
-      <AdminCrownButton 
-        showAdminMode={showAdminMode} 
-        onToggle={handleCrownClick} 
-      />
-
-      {/* Main Content */}
-      <div className={`relative z-10 flex items-center justify-center p-4 ${step === 1 ? 'min-h-[90vh] pt-4' : 'min-h-screen py-4'}`}>
+      <div className="relative z-10 flex items-center justify-center min-h-screen p-4">
         <div className="w-full max-w-md">
-          {/* Header */}
-          <LoginHeader 
-            step={step} 
-            showAdminMode={showAdminMode} 
-            onLogoClick={() => router?.push?.('/')} 
-          />
+          {/* Logo/Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Welcome Back
+            </h1>
+            <p className="text-gray-400">Log in to your PantyPost account</p>
+          </div>
 
           {/* Form Card */}
-          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
-            {/* Step Content */}
-            <div className="transition-all duration-300">
-              {step === 1 && (
-                <UsernameStep
-                  username={username}
-                  error={error || ''}
-                  onUsernameChange={setUsername}
-                  onSubmit={handleUsernameSubmit}
+          <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-gray-800">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Username Field */}
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => handleInputChange('username', e.target.value)}
                   onKeyPress={handleKeyPress}
-                  isDisabled={loading}
+                  placeholder="Enter your username"
+                  className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-all"
+                  disabled={isLoading || authLoading}
+                  autoComplete="username"
+                  autoFocus
                 />
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Enter your password"
+                    className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-all pr-12"
+                    disabled={isLoading || authLoading}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Login as
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRole('buyer')}
+                    className={`p-3 rounded-lg border transition-all ${
+                      role === 'buyer'
+                        ? 'bg-[#ff950e]/20 border-[#ff950e] text-[#ff950e]'
+                        : 'bg-black/30 border-gray-700 text-gray-400 hover:border-gray-600'
+                    }`}
+                    disabled={isLoading || authLoading}
+                  >
+                    <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
+                    <span className="text-xs">Buyer</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setRole('seller')}
+                    className={`p-3 rounded-lg border transition-all ${
+                      role === 'seller'
+                        ? 'bg-[#ff950e]/20 border-[#ff950e] text-[#ff950e]'
+                        : 'bg-black/30 border-gray-700 text-gray-400 hover:border-gray-600'
+                    }`}
+                    disabled={isLoading || authLoading}
+                  >
+                    <User className="w-5 h-5 mx-auto mb-1" />
+                    <span className="text-xs">Seller</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setRole('admin')}
+                    className={`p-3 rounded-lg border transition-all ${
+                      role === 'admin'
+                        ? 'bg-[#ff950e]/20 border-[#ff950e] text-[#ff950e]'
+                        : 'bg-black/30 border-gray-700 text-gray-400 hover:border-gray-600'
+                    }`}
+                    disabled={isLoading || authLoading}
+                  >
+                    <Crown className="w-5 h-5 mx-auto mb-1" />
+                    <span className="text-xs">Admin</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
               )}
 
-              {step === 2 && (
-                <SecureForm
-                  onSubmit={handleRoleSubmit}
-                  rateLimitKey={`LOGIN:${username}`}
-                  rateLimitConfig={RATE_LIMITS.LOGIN}
-                  isRateLimited={isRateLimited}
-                  rateLimitWaitTime={rateLimitWaitTime}
-                >
-                  <RoleSelectionStep
-                    role={role}
-                    error={error || ''}
-                    roleOptions={roleOptions}
-                    onRoleSelect={setRole}
-                    onBack={goBack}
-                    onSubmit={handleRoleSubmit}
-                    isLoading={loading || isRateLimited}
-                    hasUser={!!user}
-                    isRateLimited={isRateLimited}
-                    rateLimitWaitTime={rateLimitWaitTime}
-                  />
-                </SecureForm>
-              )}
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading || authLoading || !username || !password}
+                className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {isLoading || authLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    <span>Logging in...</span>
+                  </>
+                ) : (
+                  <span>Log in as {role}</span>
+                )}
+              </button>
+            </form>
+
+            {/* Footer Links */}
+            <div className="mt-6 text-center space-y-3">
+              <p className="text-sm">
+                <Link href="/forgot-password" className="text-gray-400 hover:text-[#ff950e] transition-colors">
+                  Forgot password?
+                </Link>
+              </p>
+              
+              <p className="text-base text-gray-500">
+                Don't have an account?{' '}
+                <Link href="/signup" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
+                  Sign up
+                </Link>
+              </p>
             </div>
           </div>
 
-          {/* Footer */}
-          <LoginFooter step={step} />
-
           {/* Trust Indicators */}
-          <TrustIndicators />
+          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
+            <span>🔒 Secure</span>
+            <span>🛡️ Encrypted</span>
+            <span>✓ Verified</span>
+          </div>
         </div>
       </div>
     </div>
