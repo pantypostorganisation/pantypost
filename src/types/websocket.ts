@@ -1,55 +1,6 @@
-// src/types/websocket.ts
-
-// WebSocket event types for real-time communication
-export enum WebSocketEvent {
-  // Connection events
-  CONNECT = 'connect',
-  DISCONNECT = 'disconnect',
-  ERROR = 'error',
-  RECONNECT = 'reconnect',
-  
-  // Message events
-  MESSAGE_NEW = 'message:new',
-  MESSAGE_UPDATE = 'message:update',
-  MESSAGE_DELETE = 'message:delete',
-  MESSAGE_TYPING = 'message:typing',
-  MESSAGE_READ = 'message:read',
-  
-  // Order events
-  ORDER_NEW = 'order:new',
-  ORDER_UPDATE = 'order:update',
-  ORDER_STATUS_CHANGE = 'order:status_change',
-  
-  // Notification events
-  NOTIFICATION_NEW = 'notification:new',
-  NOTIFICATION_READ = 'notification:read',
-  
-  // User events
-  USER_ONLINE = 'user:online',
-  USER_OFFLINE = 'user:offline',
-  USER_UPDATED = 'user:updated',
-  
-  // Wallet events
-  WALLET_BALANCE_UPDATE = 'wallet:balance_update',
-  WALLET_TRANSACTION = 'wallet:transaction',
-  
-  // Listing events
-  LISTING_NEW = 'listing:new',
-  LISTING_UPDATE = 'listing:update',
-  LISTING_SOLD = 'listing:sold',
-  
-  // Subscription events
-  SUBSCRIPTION_NEW = 'subscription:new',
-  SUBSCRIPTION_CANCELLED = 'subscription:cancelled',
-  
-  // Auction events (ADDED)
-  AUCTION_BID = 'auction:bid',
-  AUCTION_OUTBID = 'auction:outbid',
-  AUCTION_ENDING = 'auction:ending',
-  AUCTION_ENDED = 'auction:ended'
-}
-
-// WebSocket connection states
+/**
+ * WebSocket connection states
+ */
 export enum WebSocketState {
   CONNECTING = 'connecting',
   CONNECTED = 'connected',
@@ -58,60 +9,122 @@ export enum WebSocketState {
   ERROR = 'error'
 }
 
-// WebSocket message structure
-export interface WebSocketMessage<T = any> {
-  event: WebSocketEvent;
-  data: T;
-  timestamp: number;
-  id?: string;
-}
+/**
+ * WebSocket event handler type
+ */
+export type WebSocketHandler = (data: any) => void;
 
-// WebSocket connection options
-export interface WebSocketOptions {
-  url: string;
-  autoConnect?: boolean;
-  reconnect?: boolean;
-  reconnectAttempts?: number;
-  reconnectDelay?: number;
-  auth?: {
-    token?: string;
-  };
-}
-
-// WebSocket subscription handler
-export type WebSocketHandler<T = any> = (data: T) => void;
-
-// WebSocket error
-export interface WebSocketError {
-  message: string;
-  code?: string;
-  details?: any;
-}
-
-// Typing indicator data
+/**
+ * Typing indicator data
+ */
 export interface TypingData {
   userId: string;
   username: string;
-  conversationId: string;
   isTyping: boolean;
+  timestamp: string;
 }
 
-// Online status data
+/**
+ * Online status data
+ */
 export interface OnlineStatusData {
   userId: string;
-  username: string;  // Added this field
+  username: string;
   isOnline: boolean;
-  timestamp: string; // Added for backend compatibility
-  lastSeen?: Date;
+  lastSeen?: string;
 }
 
-// Real-time notification
+/**
+ * Real-time notification data
+ */
 export interface RealtimeNotification {
   id: string;
-  type: 'message' | 'order' | 'wallet' | 'subscription' | 'system' | 'auction'; // Added 'auction'
+  type: 'message' | 'order' | 'bid' | 'system';
   title: string;
-  body: string;
+  message: string;
   data?: any;
+  timestamp: string;
   read: boolean;
-  createdAt: Date | string; // Allow string for JSON dates
+}// src/types/websocket.ts
+
+/**
+ * WebSocket event types used throughout the application
+ */
+export enum WebSocketEvent {
+  // Connection events
+  CONNECT = 'connect',
+  DISCONNECT = 'disconnect',
+  ERROR = 'error',
+  
+  // Authentication events
+  AUTH_SUCCESS = 'auth:success',
+  AUTH_ERROR = 'auth:error',
+  
+  // Message events
+  MESSAGE_NEW = 'message:new',
+  MESSAGE_READ = 'message:read',
+  MESSAGE_UPDATE = 'message:update',
+  MESSAGE_DELETE = 'message:delete',
+  
+  // Wallet events
+  WALLET_BALANCE_UPDATE = 'wallet:balance:update',
+  WALLET_TRANSACTION = 'wallet:transaction',
+  WALLET_DEPOSIT = 'wallet:deposit',
+  WALLET_WITHDRAWAL = 'wallet:withdrawal',
+  
+  // Auction events
+  AUCTION_BID = 'auction:bid',
+  AUCTION_ENDED = 'auction:ended',
+  AUCTION_CANCELLED = 'auction:cancelled',
+  AUCTION_UPDATE = 'auction:update',
+  
+  // Listing events
+  LISTING_NEW = 'listing:new',
+  LISTING_UPDATE = 'listing:update',
+  LISTING_DELETE = 'listing:delete',
+  LISTING_SOLD = 'listing:sold',
+  
+  // Order events
+  ORDER_NEW = 'order:new',
+  ORDER_UPDATE = 'order:update',
+  ORDER_SHIPPED = 'order:shipped',
+  ORDER_DELIVERED = 'order:delivered',
+  
+  // User events
+  USER_ONLINE = 'user:online',
+  USER_OFFLINE = 'user:offline',
+  USER_UPDATE = 'user:update',
+  
+  // Custom request events
+  REQUEST_NEW = 'request:new',
+  REQUEST_UPDATE = 'request:update',
+  REQUEST_ACCEPTED = 'request:accepted',
+  REQUEST_DECLINED = 'request:declined',
+  
+  // Admin events
+  ADMIN_NOTIFICATION = 'admin:notification',
+  ADMIN_ACTION = 'admin:action',
+  
+  // Generic message type for custom events
+  MESSAGE = 'message'
+}
+
+/**
+ * WebSocket message structure
+ */
+export interface WebSocketMessage<T = any> {
+  type: WebSocketEvent | string;
+  data: T;
+  timestamp: string;
+  userId?: string;
+}
+
+/**
+ * WebSocket context type
+ */
+export interface WebSocketContextType {
+  isConnected: boolean;
+  subscribe: (event: WebSocketEvent | string, handler: (data: any) => void) => () => void;
+  send: (event: WebSocketEvent | string, data: any) => void;
+  lastMessage: WebSocketMessage | null;
 }

@@ -2,6 +2,7 @@
 
 export interface LoginState {
   username: string;
+  password: string;  // ADDED PASSWORD
   role: 'buyer' | 'seller' | 'admin' | null;
   error: string;
   isLoading: boolean;
@@ -42,11 +43,25 @@ export interface LoginHeaderProps {
 
 export interface UsernameStepProps {
   username: string;
-  error: string;
+  error: string | null;
   onUsernameChange: (value: string) => void;
   onSubmit: () => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
   isDisabled: boolean;
+}
+
+// NEW: Password Step Props
+export interface PasswordStepProps {
+  username: string;
+  password: string;
+  error: string | null;
+  onPasswordChange: (password: string) => void;
+  onBack: () => void;
+  onSubmit: (e?: React.FormEvent) => void;
+  isLoading: boolean;
+  hasUser: boolean;
+  isRateLimited?: boolean;
+  rateLimitWaitTime?: number;
 }
 
 export interface RoleSelectionStepProps {
