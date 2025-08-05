@@ -19,6 +19,14 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = useAuth();
   
+  // Debug: Check if login function exists
+  console.log('[Login] useAuth hook returned:', { 
+    hasLogin: !!login, 
+    loginType: typeof login,
+    isAuthReady,
+    hasUser: !!user 
+  });
+  
   // State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -178,12 +186,23 @@ export default function LoginPage() {
 
   // Handle login
   const handleLogin = useCallback(async (e?: React.FormEvent) => {
+    console.log('[Login] handleLogin called', {
+      hasEvent: !!e,
+      username,
+      role,
+      isRateLimited,
+      isMounted: isMountedRef.current,
+      isLoading,
+      hasPassword: !!password
+    });
+
     if (e) {
       e.preventDefault();
     }
     
     // Don't proceed if rate limited
     if (isRateLimited || !isMountedRef.current) {
+      console.log('[Login] Blocked by rate limit or unmounted');
       return;
     }
     
@@ -208,24 +227,27 @@ export default function LoginPage() {
       return;
     }
     
+    console.log('[Login] Validation passed, setting loading state');
     setIsLoading(true);
     setError('');
     
     try {
-      console.log('[Login] Attempting login...');
+      console.log('[Login] Calling auth login function...');
       const success = await login(username.trim(), password, role);
       
+      console.log('[Login] Auth login returned:', success);
+      
       if (success) {
-        console.log('[Login] Success! Redirecting...');
+        console.log('[Login] Success! Redirecting to home...');
         // Manually redirect to home page
         router.push('/');
       } else {
         // Error will be set by auth context
-        console.log('[Login] Failed');
+        console.log('[Login] Login failed, error should be set by auth context');
         setIsLoading(false);
       }
     } catch (err) {
-      console.error('[Login] Error:', err);
+      console.error('[Login] Caught error:', err);
       setError('An unexpected error occurred');
       setIsLoading(false);
     }

@@ -373,11 +373,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
     console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`); // Added debug log
+    console.log('[Auth] About to set loading state...');
     
     setLoading(true);
     setError(null);
 
+    console.log('[Auth] About to make fetch request...');
     try {
+      console.log('[Auth] Fetching login...'); // ADD THIS
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
