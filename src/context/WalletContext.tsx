@@ -25,7 +25,7 @@ import type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog
 // Re-export types for backward compatibility
 export type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 type Withdrawal = {
   amount: number;
@@ -164,32 +164,8 @@ class TransactionLockManager {
   }
 }
 
-// Helper function to make authenticated API calls
-async function apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('auth_token') || sessionStorage.getItem('authToken');
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'API request failed');
-  }
-  
-  return data;
-}
-
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, getAuthToken, apiClient } = useAuth();
   const { sendMessage, subscribe, isConnected } = useWebSocket();
   
   // State management - these will be populated from API
@@ -266,21 +242,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [isConnected, sendMessage]);
 
-  // Fetch balance from API
+  // Fetch balance from API using the apiClient from AuthContext
   const fetchBalance = useCallback(async (username: string): Promise<number> => {
     try {
-      const response = await apiCall<any>(`/wallet/balance/${username}`);
+      const response = await apiClient.get<any>(`/api/wallet/balance/${username}`);
       return response.data?.balance || 0;
     } catch (error) {
       console.error(`[WalletContext] Failed to fetch balance for ${username}:`, error);
       return 0;
     }
-  }, []);
+  }, [apiClient]);
 
   // Fetch transaction history from API
   const fetchTransactionHistory = useCallback(async (username: string) => {
     try {
-      const response = await apiCall<any>(`/wallet/transactions/${username}`);
+      const response = await apiClient.get<any>(`/api/wallet/transactions/${username}`);
       if (response.success && response.data) {
         // Convert transactions to our order format
         const orders = response.data
@@ -302,7 +278,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('[WalletContext] Failed to fetch transaction history:', error);
     }
-  }, []);
+  }, [apiClient]);
 
   // Load all data from API
   const loadAllData = useCallback(async () => {
@@ -454,19 +430,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Create order via API
   const addOrder = useCallback(async (order: Order) => {
     try {
-      const response = await apiCall<any>('/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: order.title,
-          description: order.description,
-          price: order.price,
-          seller: order.seller,
-          buyer: order.buyer,
-          tags: order.tags,
-          wasAuction: order.wasAuction,
-          deliveryAddress: order.deliveryAddress,
-          imageUrl: order.imageUrl,
-        }),
+      const response = await apiClient.post<any>('/api/orders', {
+        title: order.title,
+        description: order.description,
+        price: order.price,
+        seller: order.seller,
+        buyer: order.buyer,
+        tags: order.tags,
+        wasAuction: order.wasAuction,
+        deliveryAddress: order.deliveryAddress,
+        imageUrl: order.imageUrl,
       });
 
       if (response.success && response.data) {
@@ -480,7 +453,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[WalletContext] Failed to create order:', error);
       throw error;
     }
-  }, [fetchBalance]);
+  }, [apiClient, fetchBalance]);
 
   // Make a deposit via API
   const addDeposit = useCallback(async (
@@ -495,14 +468,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedUsername = validateUsername(username);
       const validatedAmount = validateTransactionAmount(amount);
       
-      const response = await apiCall<any>('/wallet/deposit', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: validatedUsername,
-          amount: validatedAmount,
-          method,
-          notes,
-        }),
+      const response = await apiClient.post<any>('/api/wallet/deposit', {
+        username: validatedUsername,
+        amount: validatedAmount,
+        method,
+        notes,
       });
       
       if (response.success) {
@@ -531,7 +501,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Error processing deposit:', error);
       return false;
     }
-  }, [fetchBalance]);
+  }, [apiClient, fetchBalance]);
 
   // Purchase listing (simplified - actual implementation would call order API)
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
@@ -579,17 +549,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedUsername = validateUsername(username);
       const validatedAmount = validateTransactionAmount(amount);
       
-      const response = await apiCall<any>('/wallet/withdraw', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: validatedUsername,
-          amount: validatedAmount,
-          accountDetails: {
-            accountNumber: '****1234',
-            routingNumber: '123456789',
-            accountType: 'checking',
-          },
-        }),
+      const response = await apiClient.post<any>('/api/wallet/withdraw', {
+        username: validatedUsername,
+        amount: validatedAmount,
+        accountDetails: {
+          accountNumber: '****1234',
+          routingNumber: '123456789',
+          accountType: 'checking',
+        },
       });
       
       if (response.success) {
@@ -611,7 +578,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       throw error;
     }
-  }, [fetchBalance]);
+  }, [apiClient, fetchBalance]);
 
   // Admin credit via API
   const adminCreditUser = useCallback(async (
@@ -627,15 +594,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedAmount = validateTransactionAmount(amount);
       const sanitizedReason = sanitizeStrict(reason);
       
-      const response = await apiCall<any>('/wallet/admin-actions', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'credit',
-          username: validatedUsername,
-          amount: validatedAmount,
-          reason: sanitizedReason,
-          adminUsername: user?.username || 'Unknown Admin',
-        }),
+      const response = await apiClient.post<any>('/api/wallet/admin-actions', {
+        action: 'credit',
+        username: validatedUsername,
+        amount: validatedAmount,
+        reason: sanitizedReason,
+        adminUsername: user?.username || 'Unknown Admin',
       });
       
       if (response.success) {
@@ -665,16 +629,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin credit error:', error);
       return false;
     }
-  }, [user, fetchBalance]);
+  }, [user, apiClient, fetchBalance]);
 
   // Get transaction history from API
   const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
     try {
       const endpoint = username 
-        ? `/wallet/transactions/${username}?limit=${limit || 50}`
-        : `/wallet/transactions?limit=${limit || 50}`;
+        ? `/api/wallet/transactions/${username}?limit=${limit || 50}`
+        : `/api/wallet/transactions?limit=${limit || 50}`;
         
-      const response = await apiCall<any>(endpoint);
+      const response = await apiClient.get<any>(endpoint);
       
       if (response.success && response.data) {
         return response.data;
@@ -685,7 +649,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Error getting transaction history:', error);
       return [];
     }
-  }, []);
+  }, [apiClient]);
 
   // Reload all data
   const reloadData = useCallback(async () => {
@@ -721,9 +685,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     amount: number
   ): Promise<boolean> => {
     try {
-      const response = await apiCall<any>('/subscriptions/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({ buyer, seller, price: amount }),
+      const response = await apiClient.post<any>('/api/subscriptions/subscribe', {
+        buyer, 
+        seller, 
+        price: amount
       });
       
       if (response.success) {
@@ -736,7 +701,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Subscription error:', error);
       return false;
     }
-  }, [fetchBalance]);
+  }, [apiClient, fetchBalance]);
 
   // Auction-related stubs
   const holdBidFunds = useCallback(async (): Promise<boolean> => {

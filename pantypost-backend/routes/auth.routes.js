@@ -77,7 +77,7 @@ router.post('/signup', async (req, res) => {
 // POST /api/auth/login - Sign in to existing account
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, role } = req.body;
     
     // Find user
     const user = await User.findOne({ username });
@@ -101,6 +101,17 @@ router.post('/login', async (req, res) => {
         error: {
           code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
           message: 'Invalid username or password'
+        }
+      });
+    }
+    
+    // Check if the role matches (if role is provided)
+    if (role && user.role !== role) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+          message: `This account is registered as a ${user.role}, not a ${role}`
         }
       });
     }

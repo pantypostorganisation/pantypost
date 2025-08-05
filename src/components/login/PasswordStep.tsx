@@ -66,7 +66,7 @@ export default function PasswordStep({
     }
   };
 
-  // Handle form submission - FIXED
+  // Handle form submission - ENHANCED WITH DEBUGGING
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('[PasswordStep] Form submitted', { 
@@ -78,10 +78,18 @@ export default function PasswordStep({
       onSubmitExists: !!onSubmit
     });
     
+    // Add detailed debug log
+    console.log('[PasswordStep] onSubmit details:', {
+      onSubmit,
+      isFunction: typeof onSubmit === 'function',
+      toString: onSubmit?.toString?.()
+    });
+    
     if (!isLoading && !isRateLimited && role) {
       console.log('[PasswordStep] Calling onSubmit...');
       try {
         onSubmit(e);
+        console.log('[PasswordStep] onSubmit called successfully');
       } catch (error) {
         console.error('[PasswordStep] Error calling onSubmit:', error);
       }
@@ -134,8 +142,6 @@ export default function PasswordStep({
       )}
 
       <form onSubmit={handleSubmit}>
-        {/* Remove the TEST BUTTON section - it's not needed */}
-
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Password (Optional)

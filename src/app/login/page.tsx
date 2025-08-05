@@ -1,4 +1,4 @@
-// src/app/login/page.tsx (updated version with better debugging)
+// src/app/login/page.tsx
 'use client';
 
 import FloatingParticle from '@/components/login/FloatingParticle';
@@ -15,16 +15,25 @@ import { User, ShoppingBag, Shield } from 'lucide-react';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 
+// Add this at the very top of the component
+console.log('[Login] LoginPage component loading...');
+
 export default function LoginPage() {
+  console.log('[Login] LoginPage component rendering...');
+  
   const router = useRouter();
-  const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = useAuth();
+  const authData = useAuth();
+  console.log('[Login] useAuth returned:', authData);
+  
+  const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = authData;
   
   // Debug: Check if login function exists
   console.log('[Login] useAuth hook returned:', { 
     hasLogin: !!login, 
     loginType: typeof login,
     isAuthReady,
-    hasUser: !!user 
+    hasUser: !!user,
+    authData: authData
   });
   
   // State
@@ -43,7 +52,7 @@ export default function LoginPage() {
   
   // Use ref to store interval ID for cleanup
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(true);
+  const isMountedRef = useRef(false); // Changed to false initially
 
   // Role options configuration
   const roleOptions = [
@@ -69,8 +78,12 @@ export default function LoginPage() {
 
   // Set mounted state
   useEffect(() => {
+    console.log('[Login] Mount effect running...');
     setMounted(true);
+    isMountedRef.current = true; // Set to true when mounted
+    
     return () => {
+      console.log('[Login] Unmount effect running...');
       isMountedRef.current = false;
       clearCountdownInterval();
     };
@@ -78,6 +91,7 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
+    console.log('[Login] Checking if user logged in:', { isAuthReady, user });
     if (isAuthReady && user) {
       console.log('[Login] User already logged in, redirecting...');
       router.replace('/');
@@ -87,6 +101,7 @@ export default function LoginPage() {
   // Sync auth errors
   useEffect(() => {
     if (authError) {
+      console.log('[Login] Auth error detected:', authError);
       setError(authError);
       setIsLoading(false);
     }
@@ -172,6 +187,7 @@ export default function LoginPage() {
 
   // Handle username submit
   const handleUsernameSubmit = useCallback(() => {
+    console.log('[Login] Username submit:', username);
     if (!username.trim()) {
       setError('Please enter your username');
       return;
@@ -193,14 +209,16 @@ export default function LoginPage() {
       isRateLimited,
       isMounted: isMountedRef.current,
       isLoading,
-      password: password || 'will use dummy'
+      password: password || 'will use dummy',
+      loginFunction: !!login,
+      loginType: typeof login
     });
 
     if (e) {
       e.preventDefault();
     }
     
-    // Don't proceed if rate limited
+    // Don't proceed if rate limited or not mounted
     if (isRateLimited || !isMountedRef.current) {
       console.log('[Login] Blocked by rate limit or unmounted');
       return;
@@ -214,6 +232,13 @@ export default function LoginPage() {
     
     if (!role) {
       setError('Please select a role');
+      return;
+    }
+    
+    // Check if login function exists
+    if (!login || typeof login !== 'function') {
+      console.error('[Login] Login function not available!', { login, type: typeof login });
+      setError('Authentication system not ready. Please refresh the page.');
       return;
     }
     
@@ -250,6 +275,12 @@ export default function LoginPage() {
     }
   }, [username, password, role, login, isRateLimited]);
 
+  // Add debug log after handleLogin function
+  console.log('[Login] handleLogin function created:', {
+    handleLogin,
+    isFunction: typeof handleLogin === 'function'
+  });
+
   // Handle key press
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !isLoading) {
@@ -261,6 +292,7 @@ export default function LoginPage() {
 
   // Handle going back
   const goBack = useCallback(() => {
+    console.log('[Login] Going back to step 1');
     setStep(1);
     setPassword('');
     setRole(null);
@@ -301,12 +333,15 @@ export default function LoginPage() {
 
   // Early return for unmounted state
   if (!mounted || !isAuthReady) {
+    console.log('[Login] Not ready yet:', { mounted, isAuthReady });
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin"></div>
       </div>
     );
   }
+
+  console.log('[Login] Rendering main content, step:', step);
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">

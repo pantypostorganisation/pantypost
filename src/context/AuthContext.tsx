@@ -83,7 +83,7 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -235,8 +235,8 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// FIXED: Use the correct environment variable name
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
+// Use the base URL from environment
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 // Secure token storage using memory + sessionStorage
 class TokenStorage {
@@ -330,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const response = await apiClientRef.current!.get<User>('/auth/me');
+      const response = await apiClientRef.current!.get<User>('/api/auth/me');
       
       if (response.success && response.data) {
         setUser(response.data);
@@ -350,7 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       console.log('[Auth] Initializing...');
-      console.log('[Auth] API_BASE_URL:', API_BASE_URL); // Added debug log
+      console.log('[Auth] API_BASE_URL:', API_BASE_URL);
       
       try {
         await refreshSession();
@@ -365,30 +365,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [refreshSession]);
 
-  // Login function - NOW WITH PASSWORD SUPPORT
+  // Login function
   const login = useCallback(async (
     username: string, 
     password: string,
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
-    console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`); // Added debug log
-    console.log('[Auth] About to set loading state...');
+    console.log('[Auth] API endpoint:', `${API_BASE_URL}/api/auth/login`);
     
     setLoading(true);
     setError(null);
 
-    console.log('[Auth] About to make fetch request...');
     try {
-      console.log('[Auth] Fetching login...'); // ADD THIS
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      console.log('[Auth] Making login request...');
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role }),
       });
 
       const data = await response.json();
-      console.log('[Auth] Login response:', { success: data.success, hasUser: !!data.data?.user });
+      console.log('[Auth] Login response:', { 
+        status: response.status, 
+        success: data.success, 
+        hasUser: !!data.data?.user 
+      });
 
       if (data.success && data.data) {
         // Calculate token expiration (30 minutes from now)
@@ -430,7 +432,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = getAuthToken();
       if (token) {
         // Call logout endpoint
-        await apiClientRef.current!.post('/auth/logout');
+        await apiClientRef.current!.post('/api/auth/logout');
       }
     } catch (error) {
       console.error('[Auth] Logout API error:', error);
@@ -456,7 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await apiClientRef.current!.patch<User>(
-        `/users/${user.username}`,
+        `/api/users/${user.username}`,
         updates
       );
 
