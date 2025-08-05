@@ -62,16 +62,36 @@ export default function PasswordStep({
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && password && role && !isLoading && !isRateLimited) {
       e.preventDefault();
-      onSubmit();
+      onSubmit(e);
     }
   };
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[PasswordStep] Form submitted', { password: !!password, role, isLoading, isRateLimited });
+    console.log('[PasswordStep] Form submitted', { 
+      password: !!password, 
+      role, 
+      isLoading, 
+      isRateLimited,
+      onSubmitType: typeof onSubmit,
+      onSubmitExists: !!onSubmit
+    });
+    
     if (!isLoading && !isRateLimited && password && role) {
-      onSubmit();
+      console.log('[PasswordStep] Calling onSubmit...');
+      try {
+        onSubmit(e);
+      } catch (error) {
+        console.error('[PasswordStep] Error calling onSubmit:', error);
+      }
+    } else {
+      console.log('[PasswordStep] Not submitting because:', {
+        isLoading,
+        isRateLimited,
+        hasPassword: !!password,
+        hasRole: !!role
+      });
     }
   };
   
@@ -139,6 +159,7 @@ export default function PasswordStep({
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={handleChange}
+            onKeyPress={handleKeyPress}
             placeholder="Enter your password"
             className="w-full px-4 py-3 pr-10 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
             autoFocus

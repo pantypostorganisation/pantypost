@@ -235,7 +235,8 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+// FIXED: Use the correct environment variable name
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
 
 // Secure token storage using memory + sessionStorage
 class TokenStorage {
@@ -349,6 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       console.log('[Auth] Initializing...');
+      console.log('[Auth] API_BASE_URL:', API_BASE_URL); // Added debug log
       
       try {
         await refreshSession();
@@ -370,6 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
+    console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`); // Added debug log
     
     setLoading(true);
     setError(null);
