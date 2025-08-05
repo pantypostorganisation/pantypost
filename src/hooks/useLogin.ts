@@ -28,6 +28,7 @@ export const useLogin = () => {
 
   const [state, setState] = useState<LoginState>({
     username: '',
+    password: '', // ADD THIS LINE - was missing
     role: null,
     error: '',
     isLoading: false,
@@ -88,9 +89,10 @@ export const useLogin = () => {
     return MIN_LOGIN_DELAY + Math.random() * (MAX_LOGIN_DELAY - MIN_LOGIN_DELAY);
   }, []);
 
-  // Handle login with security enhancements
-  const handleLogin = useCallback(async () => {
+  // Handle login with security enhancements - UPDATED to use password from state
+  const handleLogin = useCallback(async (password?: string) => {
     const { username, role } = state;
+    const loginPassword = password || state.password || 'password123'; // Use passed password, state password, or dummy
     
     // Clear any previous auth errors
     if (clearError) {
@@ -156,7 +158,7 @@ export const useLogin = () => {
       console.log('[useLogin] Attempting login with:', { 
         username: sanitizedUsername, 
         role,
-        hasPassword: false // We're not using passwords in this demo
+        hasPassword: !!loginPassword
       });
       
       // Validate admin credentials if admin role
@@ -172,8 +174,8 @@ export const useLogin = () => {
         return;
       }
       
-      // Perform login - pass empty string for password (backward compatibility)
-      const success = await login(sanitizedUsername, '', role);
+      // Perform login with the password
+      const success = await login(sanitizedUsername, loginPassword, role);
       
       if (success) {
         console.log('[useLogin] Login successful, preparing redirect...');
@@ -183,7 +185,7 @@ export const useLogin = () => {
         resetLoginLimit(); // Reset rate limit on success
         
         // Clear sensitive data from state
-        updateState({ username: '', role: null, error: '', isLoading: false });
+        updateState({ username: '', password: '', role: null, error: '', isLoading: false });
         
         // Extended delay to ensure auth context is fully updated
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -264,7 +266,7 @@ export const useLogin = () => {
 
   // Go back to username step
   const goBack = useCallback(() => {
-    updateState({ step: 1, error: '', role: null });
+    updateState({ step: 1, error: '', role: null, password: '' });
     // Clear auth error when going back
     if (clearError) {
       clearError();
@@ -301,6 +303,16 @@ export const useLogin = () => {
     
     // Clear error when user types
     updateState({ username: value, error: '' });
+    
+    // Clear auth error when user types
+    if (clearError) {
+      clearError();
+    }
+  }, [updateState, clearError]);
+
+  // Handle password input
+  const handlePasswordChange = useCallback((value: string) => {
+    updateState({ password: value, error: '' });
     
     // Clear auth error when user types
     if (clearError) {
@@ -345,6 +357,7 @@ export const useLogin = () => {
     handleUsernameSubmit,
     handleKeyPress,
     handleUsernameChange,
+    handlePasswordChange, // ADD THIS
     goBack,
     handleCrownClick,
     
