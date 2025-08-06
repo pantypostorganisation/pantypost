@@ -45,10 +45,7 @@ webSocketService.initialize(server);
 connectDB();
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://192.168.0.21:3000'], // Allow both localhost and network access
-  credentials: true
-}));
+app.use(cors()); // Allow all origins for testing
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); // For form data
 app.use(express.static(__dirname)); // Serve static files from current directory
@@ -138,9 +135,8 @@ app.post('/api/test/create-user', async (req, res) => {
   }
 });
 
-// Start server - UPDATED THIS TO ALLOW NETWORK ACCESS
-server.listen(PORT, '0.0.0.0', () => {
+// Start server - UPDATED THIS
+server.listen(PORT, () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-  console.log(`🌐 Network access available at http://192.168.0.21:${PORT}`);
   console.log(`🔌 WebSocket server ready for connections`);
 });

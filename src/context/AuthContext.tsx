@@ -83,7 +83,7 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
+        const response = await fetch(`${this.baseURL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -171,10 +171,7 @@ class ApiClient {
     }
 
     try {
-      // Make sure endpoint starts with /api
-      const fullEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
-      
-      const response = await fetch(`${this.baseURL}${fullEndpoint}`, {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
         ...options,
         headers: headerObj,
       });
@@ -187,7 +184,7 @@ class ApiClient {
         if (newTokens) {
           // Retry request with new token
           headerObj['Authorization'] = `Bearer ${newTokens.token}`;
-          const retryResponse = await fetch(`${this.baseURL}${fullEndpoint}`, {
+          const retryResponse = await fetch(`${this.baseURL}${endpoint}`, {
             ...options,
             headers: headerObj,
           });
@@ -238,8 +235,8 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// FIXED: Use the base URL from environment with fallback to your network IP
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://192.168.0.21:5000';
+// Use the base URL from environment
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 // Secure token storage using memory + sessionStorage
 class TokenStorage {
@@ -368,21 +365,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [refreshSession]);
 
-  // Login function - FIXED: Now uses correct endpoint
+  // Login function
   const login = useCallback(async (
     username: string, 
     password: string,
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
-    console.log('[Auth] API endpoint:', `${API_BASE_URL}/api/auth/login`);
+    console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`);
     
     setLoading(true);
     setError(null);
 
     try {
       console.log('[Auth] Making login request...');
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role }),
