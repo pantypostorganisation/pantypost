@@ -40,6 +40,7 @@ interface AuthContextType {
   user: User | null;
   isAuthReady: boolean;
   login: (username: string, password: string, role?: 'buyer' | 'seller' | 'admin') => Promise<boolean>;
+  signup: (username: string, email: string, password: string, role: 'buyer' | 'seller') => Promise<boolean>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   isLoggedIn: boolean;
@@ -424,6 +425,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Signup function
+  const signup = useCallback(async (
+    username: string,
+    email: string,
+    password: string,
+    role: 'buyer' | 'seller'
+  ): Promise<boolean> => {
+    console.log('[Auth] Signup attempt:', { username, email, role, hasPassword: !!password });
+    console.log('[Auth] API endpoint:', `${API_BASE_URL}/api/auth/signup`);
+    
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('[Auth] Making signup request...');
+      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password, role }),
+      });
+
+      const data = await response.json();
+      console.log('[Auth] Signup response:', { 
+        status: response.status, 
+        success: data.success, 
+        hasUser: !!data.data?.user 
+      });
+
+      if (data.success && data.data) {
+        // Calculate token expiration (30 minutes from now)
+        const tokens: AuthTokens = {
+          token: data.data.token,
+          refreshToken: data.data.refreshToken,
+          expiresAt: Date.now() + (30 * 60 * 1000),
+        };
+        
+        // Store tokens securely
+        tokenStorageRef.current.setTokens(tokens);
+        
+        // Set user state
+        setUser(data.data.user);
+        
+        console.log('[Auth] Signup successful');
+        setLoading(false);
+        return true;
+      } else {
+        // Extract error message from backend response
+        const errorMessage = data.error?.message || 'Signup failed';
+        setError(errorMessage);
+        setLoading(false);
+        return false;
+      }
+    } catch (error) {
+      console.error('[Auth] Signup error:', error);
+      setError('Network error. Please check your connection and try again.');
+      setLoading(false);
+      return false;
+    }
+  }, []);
+
   // Logout function
   const logout = useCallback(async () => {
     console.log('[Auth] Logging out...');
@@ -477,6 +538,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthReady,
     login,
+    signup,
     logout,
     updateUser,
     isLoggedIn: !!user,

@@ -53,20 +53,17 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordWarnings, setPasswordWarnings] = useState<string[]>([]);
 
-  // Memoize initial validation values to prevent unnecessary re-validations
-  const initialValidationValues = useMemo(() => ({
-    username,
-    email,
-    password,
-    confirmPassword,
-    role,
-    termsAccepted,
-    ageVerified,
-  }), [username, email, password, confirmPassword, role, termsAccepted, ageVerified]);
-
-  // Form validation
+  // Form validation - using the hook values directly
   const validation = useValidation({
-    initialValues: initialValidationValues,
+    initialValues: {
+      username: username || '',
+      email: email || '',
+      password: password || '',
+      confirmPassword: confirmPassword || '',
+      role: role || null,
+      termsAccepted: termsAccepted || false,
+      ageVerified: ageVerified || false,
+    },
     validationSchema: authSchemas.signupSchema,
     validateOnChange: true,
     validateOnBlur: true,
@@ -81,15 +78,15 @@ export default function SignupPage() {
     
     try {
       const result = securityService.checkPasswordVulnerabilities(pwd, {
-        username: validation.values.username || '',
-        email: validation.values.email || '',
+        username: username || '',
+        email: email || '',
       });
       setPasswordWarnings(result.warnings || []);
     } catch (error) {
       console.error('Error checking password security:', error);
       setPasswordWarnings(['Unable to validate password security']);
     }
-  }, [validation.values.username, validation.values.email]);
+  }, [username, email]);
 
   // Handle field updates with validation
   const handleFieldUpdate = useCallback((field: string, value: any) => {
@@ -102,10 +99,8 @@ export default function SignupPage() {
       // Update validation state
       validation.handleChange(field as any, value);
       
-      // Update original form state
-      if (updateField) {
-        updateField(field as any, value);
-      }
+      // Update form state in the hook
+      updateField(field as any, value);
       
       // Check password security if password field
       if (field === 'password') {
@@ -125,18 +120,26 @@ export default function SignupPage() {
       return;
     }
     
-    try {
-      // Validate entire form
-      const isValid = await validation.validateForm();
-      if (!isValid) {
-        // Show first validation error as form error
-        const firstError = Object.values(validation.errors)[0];
-        if (firstError && updateField) {
-          updateField('form' as any, firstError);
-        }
-        return;
+    // Manual validation check before submitting
+    const hasErrors = !username || !email || !password || !confirmPassword || 
+                     !role || !termsAccepted || !ageVerified ||
+                     password !== confirmPassword;
+    
+    if (hasErrors) {
+      if (!username) updateField('username' as any, '');
+      if (!email) updateField('email' as any, '');
+      if (!password) updateField('password' as any, '');
+      if (!confirmPassword) updateField('confirmPassword' as any, '');
+      if (!role) updateField('form' as any, 'Please select a role');
+      if (!termsAccepted) updateField('form' as any, 'You must accept the terms');
+      if (!ageVerified) updateField('form' as any, 'You must confirm you are 18+');
+      if (password && confirmPassword && password !== confirmPassword) {
+        updateField('form' as any, 'Passwords do not match');
       }
-      
+      return;
+    }
+    
+    try {
       // Check for password warnings
       if (passwordWarnings.length > 0) {
         const warningMessage = 'Your password has some security concerns:\n\n' + 
@@ -147,17 +150,14 @@ export default function SignupPage() {
         if (!confirmSubmit) return;
       }
       
-      // Call original submit handler if available
-      if (handleSubmit) {
-        await handleSubmit(e);
-      }
+      // Call the handleSubmit from useSignup hook
+      await handleSubmit(e);
     } catch (error) {
       console.error('Error during form submission:', error);
-      if (updateField) {
-        updateField('form' as any, 'An error occurred during submission. Please try again.');
-      }
+      updateField('form' as any, 'An error occurred during submission. Please try again.');
     }
-  }, [isSubmitting, validation, passwordWarnings, updateField, handleSubmit]);
+  }, [isSubmitting, username, email, password, confirmPassword, role, 
+      termsAccepted, ageVerified, passwordWarnings, updateField, handleSubmit]);
 
   // Memoized navigation handler
   const handleLogoClick = useCallback(() => {
@@ -223,25 +223,25 @@ export default function SignupPage() {
             >
               {/* Username Field */}
               <UsernameField
-                username={validation.values.username || ''}
-                error={validation.touched.username ? (validation.errors.username || errors.username) : errors.username}
+                username={username || ''}
+                error={errors.username}
                 isChecking={isCheckingUsername}
                 onChange={(value) => handleFieldUpdate('username', value)}
               />
 
               {/* Email Field */}
               <EmailField
-                email={validation.values.email || ''}
-                error={validation.touched.email ? (validation.errors.email || errors.email) : errors.email}
+                email={email || ''}
+                error={errors.email}
                 onChange={(value) => handleFieldUpdate('email', value)}
               />
 
               {/* Password Fields */}
               <PasswordField
-                password={validation.values.password || ''}
-                confirmPassword={validation.values.confirmPassword || ''}
-                passwordError={validation.touched.password ? (validation.errors.password || errors.password) : errors.password}
-                confirmError={validation.touched.confirmPassword ? (validation.errors.confirmPassword || errors.confirmPassword) : errors.confirmPassword}
+                password={password || ''}
+                confirmPassword={confirmPassword || ''}
+                passwordError={errors.password}
+                confirmError={errors.confirmPassword}
                 showPassword={showPassword}
                 showConfirmPassword={showConfirmPassword}
                 onPasswordChange={(value) => handleFieldUpdate('password', value)}
@@ -251,15 +251,15 @@ export default function SignupPage() {
               />
 
               {/* Password Strength Indicator */}
-              {validation.values.password && (
+              {password && (
                 <PasswordStrength 
-                  password={validation.values.password} 
+                  password={password} 
                   strength={passwordStrength} 
                 />
               )}
               
               {/* Password Security Warnings */}
-              {passwordWarnings.length > 0 && validation.touched.password && validation.values.password && (
+              {passwordWarnings.length > 0 && password && (
                 <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <p className="text-yellow-400 text-sm font-medium mb-1">Security warnings:</p>
                   <ul className="text-yellow-400/80 text-xs space-y-1">
@@ -275,17 +275,17 @@ export default function SignupPage() {
 
               {/* Role Selection */}
               <RoleSelector
-                role={validation.values.role || null}
-                error={validation.touched.role ? (validation.errors.role || errors.role) : errors.role}
+                role={role || null}
+                error={errors.role}
                 onChange={(value) => handleFieldUpdate('role', value)}
               />
 
               {/* Terms and Age Verification */}
               <TermsCheckboxes
-                termsAccepted={validation.values.termsAccepted || false}
-                ageVerified={validation.values.ageVerified || false}
-                termsError={validation.touched.termsAccepted ? (validation.errors.termsAccepted || errors.termsAccepted) : errors.termsAccepted}
-                ageError={validation.touched.ageVerified ? (validation.errors.ageVerified || errors.ageVerified) : errors.ageVerified}
+                termsAccepted={termsAccepted || false}
+                ageVerified={ageVerified || false}
+                termsError={errors.termsAccepted}
+                ageError={errors.ageVerified}
                 onTermsChange={(checked) => handleFieldUpdate('termsAccepted', checked)}
                 onAgeChange={(checked) => handleFieldUpdate('ageVerified', checked)}
               />
@@ -293,7 +293,7 @@ export default function SignupPage() {
               {/* Submit Button */}
               <SecureSubmitButton
                 isLoading={isSubmitting || isCheckingUsername}
-                disabled={!validation.isValid || isCheckingUsername || isSubmitting}
+                disabled={isCheckingUsername || isSubmitting}
                 className="w-full mt-6"
                 loadingText="Creating Account..."
               >
