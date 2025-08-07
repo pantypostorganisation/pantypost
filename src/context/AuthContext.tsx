@@ -83,7 +83,8 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        // 🔧 FIX: Add /api prefix for refresh endpoint
+        const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -171,7 +172,10 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      // 🔧 FIX: Make sure endpoint includes /api if it doesn't already
+      const fullEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
+      
+      const response = await fetch(`${this.baseURL}${fullEndpoint}`, {
         ...options,
         headers: headerObj,
       });
@@ -184,7 +188,7 @@ class ApiClient {
         if (newTokens) {
           // Retry request with new token
           headerObj['Authorization'] = `Bearer ${newTokens.token}`;
-          const retryResponse = await fetch(`${this.baseURL}${endpoint}`, {
+          const retryResponse = await fetch(`${this.baseURL}${fullEndpoint}`, {
             ...options,
             headers: headerObj,
           });
@@ -235,8 +239,8 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Use the base URL from environment
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000';
+// 🔧 FIX: Use correct API base URL (localhost instead of 52.62.54.24)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 // Secure token storage using memory + sessionStorage
 class TokenStorage {
@@ -330,6 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // 🔧 FIX: Use correct endpoint path
       const response = await apiClientRef.current!.get<User>('/auth/me');
       
       if (response.success && response.data) {
@@ -365,21 +370,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [refreshSession]);
 
-  // Login function
+  // 🔧 FIX: Updated login function to use correct endpoint and include password
   const login = useCallback(async (
     username: string, 
     password: string,
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
-    console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`);
+    console.log('[Auth] API endpoint:', `${API_BASE_URL}/api/auth/login`);
     
     setLoading(true);
     setError(null);
 
     try {
       console.log('[Auth] Making login request...');
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      // 🔧 FIX: Use correct endpoint with /api prefix
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role }),
@@ -393,11 +399,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (data.success && data.data) {
-        // Calculate token expiration (30 minutes from now)
+        // Calculate token expiration (7 days as per backend)
         const tokens: AuthTokens = {
           token: data.data.token,
           refreshToken: data.data.refreshToken,
-          expiresAt: Date.now() + (30 * 60 * 1000),
+          expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
         };
         
         // Store tokens securely
@@ -424,14 +430,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Logout function
+  // 🔧 FIX: Updated logout function to use correct endpoint
   const logout = useCallback(async () => {
     console.log('[Auth] Logging out...');
     
     try {
       const token = getAuthToken();
       if (token) {
-        // Call logout endpoint
+        // Call logout endpoint with correct path
         await apiClientRef.current!.post('/auth/logout');
       }
     } catch (error) {

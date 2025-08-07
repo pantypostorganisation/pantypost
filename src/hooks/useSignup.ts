@@ -11,12 +11,12 @@ import { SignupState, SignupFormData, FormErrors, UserRole } from '@/types/signu
 import { validateForm, calculatePasswordStrength } from '@/utils/signupUtils';
 import { z } from 'zod';
 
-// API Base URL from environment
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000';
+// 🔧 FIX: Use correct API Base URL (localhost instead of 52.62.54.24)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 export const useSignup = () => {
   const router = useRouter();
-  const { user, isAuthReady, apiClient } = useAuth();
+  const { user, isAuthReady, apiClient, login } = useAuth();
   
   // Security features
   const [csrfManager] = useState(() => new CSRFTokenManager());
@@ -78,9 +78,9 @@ export const useSignup = () => {
           const sanitized = sanitizeUsername(state.username);
           authSchemas.username.parse(sanitized);
           
-          // Check with backend API
+          // 🔧 FIX: Use correct endpoint path (remove /api prefix since apiClient adds it)
           const response = await apiClient.get<{ available: boolean; message: string }>(
-            `/api/auth/verify-username?username=${encodeURIComponent(sanitized)}`
+            `/auth/verify-username?username=${encodeURIComponent(sanitized)}`
           );
           
           setState(prev => ({
@@ -156,7 +156,7 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, [field]: sanitizedValue }));
   }, []);
 
-  // Handle form submission with backend API
+  // 🔧 FIX: Updated handleSubmit to work properly with backend
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
@@ -223,44 +223,70 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, isSubmitting: true, errors: {} }));
     
     try {
-      // Call backend signup API
-      const response = await apiClient.post<{
-        user: any;
-        token: string;
-        refreshToken: string;
-      }>('/api/auth/signup', {
-        username: state.username,
-        email: state.email,
-        password: state.password,
-        role: state.role
+      // 🔧 FIX: Call backend signup API directly (not through apiClient to avoid double /api prefix)
+      console.log('[Signup] Making signup request to:', `${API_BASE_URL}/api/auth/signup`);
+      
+      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: state.username,
+          email: state.email,
+          password: state.password,
+          role: state.role
+        })
       });
       
-      if (response.success && response.data) {
+      const data = await response.json();
+      console.log('[Signup] Response:', { status: response.status, success: data.success });
+      
+      if (data.success && data.data) {
+        console.log('[Signup] Success! Now logging in...');
+        
         // Clear rate limit on success
         resetSignupLimit(state.email);
         
-        // Clear sensitive data from state
-        setState(prev => ({
-          ...prev,
-          password: '',
-          confirmPassword: '',
-          email: '',
-          errors: {}
-        }));
+        // Use the login function from AuthContext to properly set up the session
+        const loginSuccess = await login(state.username, state.password, state.role || 'buyer');
         
-        // The AuthContext will automatically handle the token storage and user state
-        // from the apiClient response, so we just need to redirect
-        router.push('/');
+        if (loginSuccess) {
+          console.log('[Signup] Auto-login successful, redirecting...');
+          
+          // Clear sensitive data from state
+          setState(prev => ({
+            ...prev,
+            password: '',
+            confirmPassword: '',
+            email: '',
+            errors: {}
+          }));
+          
+          // Redirect to dashboard
+          router.push('/');
+        } else {
+          // Signup worked but login failed - this shouldn't happen
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              form: 'Account created successfully! Please try logging in manually.'
+            }
+          }));
+          
+          // Redirect to login page
+          setTimeout(() => router.push('/login'), 2000);
+        }
       } else {
         // Handle API error response
-        const errorMessage = response.error?.message || 'Registration failed. Please try again.';
+        const errorMessage = data.error?.message || 'Registration failed. Please try again.';
         setState(prev => ({
           ...prev,
           errors: { 
             ...prev.errors, 
             form: errorMessage,
             // If the error has a field, set that specific field error
-            ...(response.error?.field && { [response.error.field]: errorMessage })
+            ...(data.error?.field && { [data.error.field]: errorMessage })
           }
         }));
       }

@@ -55,25 +55,27 @@ function getEnvNumber(key: string, defaultValue: number): number {
 export const appConfig = {
   name: getEnvVar('NEXT_PUBLIC_APP_NAME', 'PantyPost'),
   version: getEnvVar('NEXT_PUBLIC_APP_VERSION', '1.0.0'),
-  url: getEnvVar('NEXT_PUBLIC_APP_URL', 'http://52.62.54.24:3000'),
+  // 🔧 FIX: Use correct local development URL
+  url: getEnvVar('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'),
   environment: getEnvironment(),
 } as const;
 
 // API configuration
 export const apiConfig = {
-  baseUrl: getEnvVar('NEXT_PUBLIC_API_BASE_URL', ''),
+  // 🔧 FIX: Use correct backend URL for development
+  baseUrl: getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:5000'),
   timeout: getEnvNumber('NEXT_PUBLIC_API_TIMEOUT', 30000),
   retryAttempts: getEnvNumber('NEXT_PUBLIC_API_RETRY_ATTEMPTS', 3),
   
   // Feature flags for gradual backend migration
   features: {
-    useAuth: getEnvBool('NEXT_PUBLIC_USE_API_AUTH'),
-    useListings: getEnvBool('NEXT_PUBLIC_USE_API_LISTINGS'),
-    useOrders: getEnvBool('NEXT_PUBLIC_USE_API_ORDERS'),
-    useMessages: getEnvBool('NEXT_PUBLIC_USE_API_MESSAGES'),
-    useWallet: getEnvBool('NEXT_PUBLIC_USE_API_WALLET'),
-    useUsers: getEnvBool('NEXT_PUBLIC_USE_API_USERS'),
-    useMockApi: getEnvBool('NEXT_PUBLIC_USE_MOCK_API', false),
+    useAuth: getEnvBool('NEXT_PUBLIC_USE_API_AUTH', true), // 🔧 FIX: Enable by default
+    useListings: getEnvBool('NEXT_PUBLIC_USE_API_LISTINGS', true), // 🔧 FIX: Enable by default
+    useOrders: getEnvBool('NEXT_PUBLIC_USE_API_ORDERS', true), // 🔧 FIX: Enable by default
+    useMessages: getEnvBool('NEXT_PUBLIC_USE_API_MESSAGES', true), // 🔧 FIX: Enable by default
+    useWallet: getEnvBool('NEXT_PUBLIC_USE_API_WALLET', true), // 🔧 FIX: Enable by default
+    useUsers: getEnvBool('NEXT_PUBLIC_USE_API_USERS', true), // 🔧 FIX: Enable by default
+    useMockApi: getEnvBool('NEXT_PUBLIC_USE_MOCK_API', false), // 🔧 FIX: Disable mock API
   },
 } as const;
 
@@ -133,7 +135,8 @@ export const limits = {
 // WebSocket configuration
 export const websocketConfig = {
   enabled: true, // Force enable WebSocket
-  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://52.62.54.24:5000'),
+  // 🔧 FIX: Use correct WebSocket URL for localhost
+  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000'),
   path: getEnvVar('NEXT_PUBLIC_WS_PATH', '/socket.io'),
 } as const;
 

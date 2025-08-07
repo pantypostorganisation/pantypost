@@ -25,8 +25,6 @@ import type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog
 // Re-export types for backward compatibility
 export type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000';
-
 type Withdrawal = {
   amount: number;
   date: string;
@@ -212,6 +210,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             ...prev,
             [data.username]: data.balance
           }));
+        } else if (data.role === 'admin') {
+          setAdminBalanceState(data.balance);
         }
       }
     });
@@ -245,8 +245,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Fetch balance from API using the apiClient from AuthContext
   const fetchBalance = useCallback(async (username: string): Promise<number> => {
     try {
-      const response = await apiClient.get<any>(`/api/wallet/balance/${username}`);
-      return response.data?.balance || 0;
+      console.log('[WalletContext] Fetching balance for:', username);
+      
+      // FIXED: Remove /api prefix - backend routes are /wallet/balance/:username
+      const response = await apiClient.get<any>(`/wallet/balance/${username}`);
+      
+      console.log('[WalletContext] Balance response:', response);
+      
+      if (response.success && response.data) {
+        return response.data.balance || 0;
+      }
+      
+      console.warn('[WalletContext] Balance fetch failed:', response.error);
+      return 0;
     } catch (error) {
       console.error(`[WalletContext] Failed to fetch balance for ${username}:`, error);
       return 0;
@@ -256,7 +267,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Fetch transaction history from API
   const fetchTransactionHistory = useCallback(async (username: string) => {
     try {
-      const response = await apiClient.get<any>(`/api/wallet/transactions/${username}`);
+      console.log('[WalletContext] Fetching transactions for:', username);
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.get<any>(`/wallet/transactions/${username}`);
+      
+      console.log('[WalletContext] Transactions response:', response);
+      
       if (response.success && response.data) {
         // Convert transactions to our order format
         const orders = response.data
@@ -267,13 +284,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             description: tx.description,
             price: tx.amount,
             markedUpPrice: tx.amount,
-            date: tx.createdAt,
+            date: tx.createdAt || tx.date,
             seller: tx.toRole === 'seller' ? tx.to : tx.from,
             buyer: tx.fromRole === 'buyer' ? tx.from : tx.to,
             shippingStatus: tx.status === 'completed' ? 'pending' : 'pending-auction',
           }));
         
         setOrderHistory(orders);
+        console.log('[WalletContext] Transaction history updated:', orders.length, 'orders');
       }
     } catch (error) {
       console.error('[WalletContext] Failed to fetch transaction history:', error);
@@ -284,14 +302,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const loadAllData = useCallback(async () => {
     if (!user) {
       console.log('[WalletContext] No user, skipping data load');
-      return;
+      return false;
     }
 
     try {
-      console.log('[WalletContext] Loading wallet data from API...');
+      console.log('[WalletContext] Loading wallet data from API for user:', user.username);
       
       // Fetch current user's balance
       const balance = await fetchBalance(user.username);
+      console.log('[WalletContext] Fetched balance:', balance, 'for role:', user.role);
       
       if (user.role === 'buyer') {
         setBuyerBalancesState(prev => ({ ...prev, [user.username]: balance }));
@@ -400,26 +419,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [sellerBalances]);
 
-  // Balance setters (update cache and emit events)
+  // Balance setters (update cache and call API)
   const setBuyerBalance = useCallback(async (username: string, balance: number) => {
     const validatedUsername = validateUsername(username);
     
+    // Update local cache immediately
     setBuyerBalancesState((prev) => ({
       ...prev,
       [validatedUsername]: balance,
     }));
     
+    // Emit WebSocket update
     emitBalanceUpdate(validatedUsername, 'buyer', balance);
+    
+    // Note: In a real app, you might want to sync this back to the server
+    // For now, we trust the server as the source of truth
   }, [emitBalanceUpdate]);
 
   const setSellerBalance = useCallback(async (seller: string, balance: number) => {
     const validatedSeller = validateUsername(seller);
     
+    // Update local cache immediately
     setSellerBalancesState((prev) => ({
       ...prev,
       [validatedSeller]: balance,
     }));
     
+    // Emit WebSocket update
     emitBalanceUpdate(validatedSeller, 'seller', balance);
   }, [emitBalanceUpdate]);
 
@@ -430,7 +456,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Create order via API
   const addOrder = useCallback(async (order: Order) => {
     try {
-      const response = await apiClient.post<any>('/api/orders', {
+      console.log('[WalletContext] Creating order via API:', order);
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.post<any>('/orders', {
         title: order.title,
         description: order.description,
         price: order.price,
@@ -442,12 +471,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         imageUrl: order.imageUrl,
       });
 
+      console.log('[WalletContext] Order creation response:', response);
+
       if (response.success && response.data) {
         setOrderHistory((prev) => [...prev, response.data]);
         
         // Refresh balances after order
-        if (order.buyer) await fetchBalance(order.buyer);
-        if (order.seller) await fetchBalance(order.seller);
+        if (order.buyer) {
+          const newBuyerBalance = await fetchBalance(order.buyer);
+          setBuyerBalancesState(prev => ({ ...prev, [order.buyer!]: newBuyerBalance }));
+        }
+        if (order.seller) {
+          const newSellerBalance = await fetchBalance(order.seller);
+          setSellerBalancesState(prev => ({ ...prev, [order.seller]: newSellerBalance }));
+        }
       }
     } catch (error) {
       console.error('[WalletContext] Failed to create order:', error);
@@ -468,16 +505,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedUsername = validateUsername(username);
       const validatedAmount = validateTransactionAmount(amount);
       
-      const response = await apiClient.post<any>('/api/wallet/deposit', {
+      console.log('[WalletContext] Processing deposit via API:', {
+        username: validatedUsername,
+        amount: validatedAmount,
+        method
+      });
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.post<any>('/wallet/deposit', {
         username: validatedUsername,
         amount: validatedAmount,
         method,
         notes,
       });
       
+      console.log('[WalletContext] Deposit response:', response);
+      
       if (response.success) {
         // Refresh balance after deposit
-        await fetchBalance(validatedUsername);
+        const newBalance = await fetchBalance(validatedUsername);
+        setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
         
         // Add to local deposit logs
         if (response.data) {
@@ -486,16 +533,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             username: validatedUsername,
             amount: validatedAmount,
             method,
-            date: response.data.createdAt,
-            status: response.data.status,
+            date: response.data.createdAt || new Date().toISOString(),
+            status: response.data.status || 'completed',
             transactionId: response.data.id,
             notes,
           }]);
         }
         
+        console.log('[WalletContext] Deposit successful');
         return true;
       }
       
+      console.error('[WalletContext] Deposit failed:', response.error);
       return false;
     } catch (error) {
       console.error('Error processing deposit:', error);
@@ -510,6 +559,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       const validatedBuyer = validateUsername(buyerUsername);
       const validatedSeller = validateUsername(listing.seller);
+      
+      console.log('[WalletContext] Processing purchase:', {
+        buyer: validatedBuyer,
+        seller: validatedSeller,
+        listing: listing.title,
+        price: listing.price
+      });
       
       // Create order via API
       await addOrder({
@@ -530,10 +586,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (addSellerNotification) {
         addSellerNotification(
           validatedSeller,
-          `New sale: "${listing.title}" for ${listing.price.toFixed(2)}`
+          `New sale: "${listing.title}" for $${listing.price.toFixed(2)}`
         );
       }
       
+      console.log('[WalletContext] Purchase successful');
       return true;
     } catch (error) {
       console.error('[Purchase] Error:', error);
@@ -549,7 +606,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedUsername = validateUsername(username);
       const validatedAmount = validateTransactionAmount(amount);
       
-      const response = await apiClient.post<any>('/api/wallet/withdraw', {
+      console.log('[WalletContext] Processing withdrawal via API:', {
+        username: validatedUsername,
+        amount: validatedAmount
+      });
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.post<any>('/wallet/withdraw', {
         username: validatedUsername,
         amount: validatedAmount,
         accountDetails: {
@@ -559,12 +622,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         },
       });
       
+      console.log('[WalletContext] Withdrawal response:', response);
+      
       if (response.success) {
         // Update local state
         const newWithdrawal: Withdrawal = { 
           amount: validatedAmount, 
-          date: new Date().toISOString(), 
-          status: 'pending' 
+          date: response.data?.createdAt || new Date().toISOString(), 
+          status: response.data?.status || 'pending'
         };
         
         setSellerWithdrawals((prev) => ({
@@ -573,9 +638,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }));
         
         // Refresh balance
-        await fetchBalance(validatedUsername);
+        const newBalance = await fetchBalance(validatedUsername);
+        setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        
+        console.log('[WalletContext] Withdrawal successful');
+      } else {
+        console.error('[WalletContext] Withdrawal failed:', response.error);
+        throw new Error(response.error?.message || 'Withdrawal failed');
       }
     } catch (error) {
+      console.error('[WalletContext] Withdrawal error:', error);
       throw error;
     }
   }, [apiClient, fetchBalance]);
@@ -594,7 +666,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const validatedAmount = validateTransactionAmount(amount);
       const sanitizedReason = sanitizeStrict(reason);
       
-      const response = await apiClient.post<any>('/api/wallet/admin-actions', {
+      console.log('[WalletContext] Processing admin credit via API:', {
+        username: validatedUsername,
+        role,
+        amount: validatedAmount,
+        reason: sanitizedReason
+      });
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.post<any>('/wallet/admin-actions', {
         action: 'credit',
         username: validatedUsername,
         amount: validatedAmount,
@@ -602,28 +682,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         adminUsername: user?.username || 'Unknown Admin',
       });
       
+      console.log('[WalletContext] Admin credit response:', response);
+      
       if (response.success) {
         // Refresh balance
-        await fetchBalance(validatedUsername);
+        const newBalance = await fetchBalance(validatedUsername);
+        
+        if (role === 'buyer') {
+          setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        } else if (role === 'seller') {
+          setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        }
         
         // Update admin actions
         const action: AdminAction = {
-          id: uuidv4(),
+          id: response.data?.id || uuidv4(),
           type: 'credit',
           amount: validatedAmount,
           targetUser: validatedUsername,
           username: validatedUsername,
           adminUser: user?.username || 'Unknown Admin',
           reason: sanitizedReason,
-          date: new Date().toISOString(),
+          date: response.data?.createdAt || new Date().toISOString(),
           role,
         };
         
         setAdminActions(prev => [...prev, action]);
         
+        console.log('[WalletContext] Admin credit successful');
         return true;
       }
       
+      console.error('[WalletContext] Admin credit failed:', response.error);
       return false;
     } catch (error) {
       console.error('Admin credit error:', error);
@@ -631,14 +721,91 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, apiClient, fetchBalance]);
 
+  // Admin debit via API
+  const adminDebitUser = useCallback(async (
+    username: string,
+    role: 'buyer' | 'seller',
+    amount: number,
+    reason: string
+  ): Promise<boolean> => {
+    try {
+      checkRateLimit('REPORT_ACTION', 'admin');
+      
+      const validatedUsername = validateUsername(username);
+      const validatedAmount = validateTransactionAmount(amount);
+      const sanitizedReason = sanitizeStrict(reason);
+      
+      console.log('[WalletContext] Processing admin debit via API:', {
+        username: validatedUsername,
+        role,
+        amount: validatedAmount,
+        reason: sanitizedReason
+      });
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.post<any>('/wallet/admin-actions', {
+        action: 'debit',
+        username: validatedUsername,
+        amount: validatedAmount,
+        reason: sanitizedReason,
+        adminUsername: user?.username || 'Unknown Admin',
+      });
+      
+      console.log('[WalletContext] Admin debit response:', response);
+      
+      if (response.success) {
+        // Refresh balance
+        const newBalance = await fetchBalance(validatedUsername);
+        
+        if (role === 'buyer') {
+          setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        } else if (role === 'seller') {
+          setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        }
+        
+        // Update admin actions
+        const action: AdminAction = {
+          id: response.data?.id || uuidv4(),
+          type: 'debit',
+          amount: validatedAmount,
+          targetUser: validatedUsername,
+          username: validatedUsername,
+          adminUser: user?.username || 'Unknown Admin',
+          reason: sanitizedReason,
+          date: response.data?.createdAt || new Date().toISOString(),
+          role,
+        };
+        
+        setAdminActions(prev => [...prev, action]);
+        
+        console.log('[WalletContext] Admin debit successful');
+        return true;
+      }
+      
+      console.error('[WalletContext] Admin debit failed:', response.error);
+      return false;
+    } catch (error) {
+      console.error('Admin debit error:', error);
+      return false;
+    }
+  }, [user, apiClient, fetchBalance]);
+
   // Get transaction history from API
   const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
     try {
-      const endpoint = username 
-        ? `/api/wallet/transactions/${username}?limit=${limit || 50}`
-        : `/api/wallet/transactions?limit=${limit || 50}`;
-        
+      const targetUsername = username || user?.username;
+      if (!targetUsername) {
+        console.warn('[WalletContext] No username for transaction history');
+        return [];
+      }
+      
+      const endpoint = `/wallet/transactions/${targetUsername}${limit ? `?limit=${limit}` : ''}`;
+      console.log('[WalletContext] Fetching transaction history:', endpoint);
+      
+      // FIXED: Remove /api prefix
       const response = await apiClient.get<any>(endpoint);
+      
+      console.log('[WalletContext] Transaction history response:', response);
       
       if (response.success && response.data) {
         return response.data;
@@ -649,7 +816,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Error getting transaction history:', error);
       return [];
     }
-  }, [apiClient]);
+  }, [apiClient, user]);
 
   // Reload all data
   const reloadData = useCallback(async () => {
@@ -666,33 +833,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [loadAllData, isLoading]);
 
-  // Stub implementations for features not in API spec
-  const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
-    // This would be implemented as a special type of transaction
-    console.log('[WalletContext] Tip feature not implemented in API');
-    return false;
-  }, []);
-
-  const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
-    // This would create an order with custom request metadata
-    console.log('[WalletContext] Custom request purchase not implemented');
-    return false;
-  }, []);
-
+  // Subscription payment via API
   const subscribeToSellerWithPayment = useCallback(async (
     buyer: string,
     seller: string,
     amount: number
   ): Promise<boolean> => {
     try {
-      const response = await apiClient.post<any>('/api/subscriptions/subscribe', {
+      console.log('[WalletContext] Processing subscription via API:', { buyer, seller, amount });
+      
+      // FIXED: Remove /api prefix
+      const response = await apiClient.post<any>('/subscriptions/subscribe', {
         buyer, 
         seller, 
         price: amount
       });
       
+      console.log('[WalletContext] Subscription response:', response);
+      
       if (response.success) {
-        await fetchBalance(buyer);
+        // Refresh buyer balance
+        const newBalance = await fetchBalance(buyer);
+        setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
         return true;
       }
       
@@ -703,25 +865,89 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, fetchBalance]);
 
-  // Auction-related stubs
+  // Stub implementations for features not yet in API
+  const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
+    // TODO: Implement tip endpoint when ready
+    console.log('[WalletContext] Tip feature - using mock implementation');
+    
+    // For now, treat as a simple transfer
+    try {
+      const validatedAmount = validateTransactionAmount(amount);
+      
+      // Check buyer has sufficient balance
+      const buyerBalance = getBuyerBalance(buyer);
+      if (buyerBalance < validatedAmount) {
+        throw new Error('Insufficient balance for tip');
+      }
+      
+      // Update balances locally (mock)
+      setBuyerBalancesState(prev => ({ 
+        ...prev, 
+        [buyer]: prev[buyer] - validatedAmount 
+      }));
+      setSellerBalancesState(prev => ({ 
+        ...prev, 
+        [seller]: (prev[seller] || 0) + validatedAmount 
+      }));
+      
+      return true;
+    } catch (error) {
+      console.error('Tip error:', error);
+      return false;
+    }
+  }, [getBuyerBalance]);
+
+  const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
+    // TODO: Implement custom request endpoint when ready
+    console.log('[WalletContext] Custom request purchase - using mock implementation');
+    return false;
+  }, []);
+
+  // Admin withdrawal (mock)
+  const addAdminWithdrawal = useCallback(async (amount: number) => {
+    console.log('[WalletContext] Admin withdrawal not implemented in API yet');
+    
+    // Mock implementation
+    const withdrawal: Withdrawal = {
+      amount,
+      date: new Date().toISOString(),
+      status: 'pending',
+      method: 'bank_transfer'
+    };
+    
+    setAdminWithdrawals(prev => [...prev, withdrawal]);
+  }, []);
+
+  // Auction-related stubs (to be implemented later)
   const holdBidFunds = useCallback(async (): Promise<boolean> => {
-    console.log('[WalletContext] Auction features not fully implemented');
+    console.log('[WalletContext] Auction features not fully implemented in API yet');
     return false;
   }, []);
 
   const refundBidFunds = useCallback(async (): Promise<boolean> => {
-    console.log('[WalletContext] Auction features not fully implemented');
+    console.log('[WalletContext] Auction features not fully implemented in API yet');
     return false;
   }, []);
 
   const placeBid = useCallback(async (): Promise<boolean> => {
-    console.log('[WalletContext] Auction features not fully implemented');
+    console.log('[WalletContext] Auction features not fully implemented in API yet');
     return false;
   }, []);
 
   const finalizeAuctionPurchase = useCallback(async (): Promise<boolean> => {
-    console.log('[WalletContext] Auction features not fully implemented');
+    console.log('[WalletContext] Auction features not fully implemented in API yet');
     return false;
+  }, []);
+
+  // Enhanced features stubs
+  const checkSuspiciousActivity = useCallback(async (username: string) => {
+    // TODO: Implement when backend supports it
+    return { suspicious: false, reasons: [] };
+  }, []);
+
+  const reconcileBalance = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin') => {
+    // TODO: Implement when backend supports it
+    return null;
   }, []);
 
   const contextValue: WalletContextType = {
@@ -747,23 +973,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     sellerWithdrawals,
     adminWithdrawals,
     addSellerWithdrawal,
-    addAdminWithdrawal: async () => { console.log('Admin withdrawal not implemented'); },
+    addAdminWithdrawal,
     wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
-    updateWallet: () => { console.warn('updateWallet is deprecated'); },
+    updateWallet: () => { console.warn('updateWallet is deprecated - use API methods instead'); },
     sendTip,
     setAddSellerNotificationCallback,
     adminCreditUser,
-    adminDebitUser: async () => false, // Stub
+    adminDebitUser,
     adminActions,
-    updateOrderAddress: async () => { console.log('Not implemented'); },
-    updateShippingStatus: async () => { console.log('Not implemented'); },
+    updateOrderAddress: async () => { console.log('Order address update not implemented yet'); },
+    updateShippingStatus: async () => { console.log('Shipping status update not implemented yet'); },
     depositLogs,
     addDeposit,
     getDepositsForUser: (username: string) => depositLogs.filter(log => log.username === username),
     getTotalDeposits: () => depositLogs.reduce((sum, log) => sum + log.amount, 0),
     getDepositsByTimeframe: () => depositLogs,
     
-    // Auction methods (stubs)
+    // Auction methods (stubs for now)
     holdBidFunds,
     refundBidFunds,
     finalizeAuctionPurchase,
@@ -773,8 +999,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     cleanupAuctionTracking: async () => {},
     
     // Enhanced features
-    checkSuspiciousActivity: async () => ({ suspicious: false, reasons: [] }),
-    reconcileBalance: async () => null,
+    checkSuspiciousActivity,
+    reconcileBalance,
     getTransactionHistory,
     reloadData,
   };

@@ -26,89 +26,89 @@ export const FEATURES = {
   USE_MOCK_API: false, // Always false - no mocks!
 };
 
-// API Endpoints
+// 🔧 FIX: Add /api prefix to all endpoints to match backend
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    LOGIN: '/auth/login',
-    SIGNUP: '/auth/signup',
-    LOGOUT: '/auth/logout',
-    REFRESH: '/auth/refresh',
-    ME: '/auth/me',
-    VERIFY_USERNAME: '/auth/verify-username',
+    LOGIN: '/api/auth/login',
+    SIGNUP: '/api/auth/signup',
+    LOGOUT: '/api/auth/logout',
+    REFRESH: '/api/auth/refresh',
+    ME: '/api/auth/me',
+    VERIFY_USERNAME: '/api/auth/verify-username',
     // Password reset endpoints
-    FORGOT_PASSWORD: '/auth/forgot-password',
-    VERIFY_RESET_TOKEN: '/auth/verify-reset-token',
-    RESET_PASSWORD: '/auth/reset-password',
+    FORGOT_PASSWORD: '/api/auth/forgot-password',
+    VERIFY_RESET_TOKEN: '/api/auth/verify-reset-token',
+    RESET_PASSWORD: '/api/auth/reset-password',
   },
   
   // User endpoints
   USERS: {
-    PROFILE: '/users/:username/profile',
-    UPDATE_PROFILE: '/users/:username/profile',
-    VERIFICATION: '/users/:username/verification',
-    SETTINGS: '/users/:username/settings',
-    LIST: '/users',
+    PROFILE: '/api/users/:username/profile',
+    UPDATE_PROFILE: '/api/users/:username/profile',
+    VERIFICATION: '/api/users/:username/verification',
+    SETTINGS: '/api/users/:username/settings',
+    LIST: '/api/users',
   },
   
   // Listing endpoints
   LISTINGS: {
-    LIST: '/listings',
-    CREATE: '/listings',
-    GET: '/listings/:id',
-    UPDATE: '/listings/:id',
-    DELETE: '/listings/:id',
-    BY_SELLER: '/listings/seller/:username',
-    VIEWS: '/listings/:id/views',
-    SEARCH: '/listings/search',
+    LIST: '/api/listings',
+    CREATE: '/api/listings',
+    GET: '/api/listings/:id',
+    UPDATE: '/api/listings/:id',
+    DELETE: '/api/listings/:id',
+    BY_SELLER: '/api/listings/seller/:username',
+    VIEWS: '/api/listings/:id/views',
+    SEARCH: '/api/listings/search',
   },
   
   // Order endpoints
   ORDERS: {
-    LIST: '/orders',
-    CREATE: '/orders',
-    GET: '/orders/:id',
-    UPDATE_STATUS: '/orders/:id/status',
-    BY_BUYER: '/orders/buyer/:username',
-    BY_SELLER: '/orders/seller/:username',
-    SHIPPING: '/orders/:id/shipping',
+    LIST: '/api/orders',
+    CREATE: '/api/orders',
+    GET: '/api/orders/:id',
+    UPDATE_STATUS: '/api/orders/:id/status',
+    BY_BUYER: '/api/orders/buyer/:username',
+    BY_SELLER: '/api/orders/seller/:username',
+    SHIPPING: '/api/orders/:id/shipping',
   },
   
   // Message endpoints
   MESSAGES: {
-    THREADS: '/messages/threads',
-    THREAD: '/messages/threads/:threadId',
-    SEND: '/messages/send',
-    MARK_READ: '/messages/mark-read',
-    BLOCK_USER: '/messages/block',
-    UNBLOCK_USER: '/messages/unblock',
-    REPORT: '/messages/report',
+    THREADS: '/api/messages/threads',
+    THREAD: '/api/messages/threads/:threadId',
+    SEND: '/api/messages/send',
+    MARK_READ: '/api/messages/mark-read',
+    BLOCK_USER: '/api/messages/block',
+    UNBLOCK_USER: '/api/messages/unblock',
+    REPORT: '/api/messages/report',
   },
   
   // Wallet endpoints
   WALLET: {
-    BALANCE: '/wallet/balance/:username',
-    DEPOSIT: '/wallet/deposit',
-    WITHDRAW: '/wallet/withdraw',
-    TRANSACTIONS: '/wallet/transactions/:username',
-    ADMIN_ACTIONS: '/wallet/admin-actions',
+    BALANCE: '/api/wallet/balance/:username',
+    DEPOSIT: '/api/wallet/deposit',
+    WITHDRAW: '/api/wallet/withdraw',
+    TRANSACTIONS: '/api/wallet/transactions/:username',
+    ADMIN_ACTIONS: '/api/wallet/admin-actions',
   },
   
   // Subscription endpoints
   SUBSCRIPTIONS: {
-    LIST: '/subscriptions/:username',
-    SUBSCRIBE: '/subscriptions/subscribe',
-    UNSUBSCRIBE: '/subscriptions/unsubscribe',
-    CHECK: '/subscriptions/check',
+    LIST: '/api/subscriptions/:username',
+    SUBSCRIBE: '/api/subscriptions/subscribe',
+    UNSUBSCRIBE: '/api/subscriptions/unsubscribe',
+    CHECK: '/api/subscriptions/check',
   },
   
   // Custom request endpoints
   REQUESTS: {
-    LIST: '/requests',
-    CREATE: '/requests',
-    UPDATE: '/requests/:id',
-    RESPOND: '/requests/:id/respond',
-    BY_USER: '/requests/user/:username',
+    LIST: '/api/requests',
+    CREATE: '/api/requests',
+    UPDATE: '/api/requests/:id',
+    RESPOND: '/api/requests/:id/respond',
+    BY_USER: '/api/requests/user/:username',
   },
 };
 
@@ -179,6 +179,7 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
   
   // Always use real API URL
   if (API_BASE_URL) {
+    // 🔧 FIX: Don't add extra /api prefix since endpoints already include it
     const fullUrl = `${API_BASE_URL}${url}`;
     const sanitizedUrl = sanitizeUrl(fullUrl);
     
@@ -446,6 +447,7 @@ class ApiClient {
     }, REQUEST_CONFIG.TIMEOUT);
 
     try {
+      // 🔧 FIX: Properly construct URL - endpoints already have /api prefix
       const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
       const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
       
@@ -460,6 +462,9 @@ class ApiClient {
       
       // Add request ID to headers
       headers['X-Request-ID'] = requestId;
+      
+      // 🔧 DEBUG: Log the exact URL being called
+      console.log(`[ApiClient] Making request to: ${url}`);
       
       const response = await fetch(url, {
         ...options,
@@ -629,7 +634,8 @@ export async function apiCallWithRetry<T>(
 // Health check function
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    const response = await apiCall<{ status: string }>('/health', {
+    // 🔧 FIX: Use correct health endpoint
+    const response = await apiCall<{ status: string }>('/api/health', {
       method: 'GET',
     });
     return response.success && response.data?.status === 'ok';
