@@ -38,7 +38,7 @@ export const useBuyerWallet = () => {
     getBuyerBalance,
     setBuyerBalance, 
     orderHistory, 
-    addDeposit,
+    addDeposit,  // ← This is the WalletContext API method we should use
     getTransactionHistory,
     checkSuspiciousActivity,
     reconcileBalance,
@@ -296,7 +296,7 @@ export const useBuyerWallet = () => {
     return undefined; // Added explicit return for when condition is false
   }, [user?.username, syncBalance]);
 
-  // Enhanced add funds with validation and rate limiting
+  // 🔧 FIXED: Enhanced add funds - now uses WalletContext addDeposit directly
   const handleAddFunds = useCallback(async () => {
     // Check rate limit first
     const rateLimitResult = checkDepositLimit();
@@ -365,26 +365,17 @@ export const useBuyerWallet = () => {
         );
       }
 
-      // Process deposit using enhanced service
-      const success = await WalletIntegration.addFunds(
+      // 🔧 FIXED: Use addDeposit directly instead of WalletIntegration.addFunds
+      console.log('[BuyerWallet] Processing deposit via WalletContext addDeposit...');
+      
+      const depositSuccess = await addDeposit(
         user.username!,
         amount,
-        'credit_card'
+        'credit_card',
+        sanitizeStrict('Wallet deposit via buyer dashboard')
       );
       
-      if (success) {
-        // Add deposit log for admin dashboard tracking
-        const depositSuccess = await addDeposit(
-          user.username!,
-          amount,
-          'credit_card',
-          sanitizeStrict('Wallet deposit via buyer dashboard')
-        );
-        
-        if (!depositSuccess) {
-          console.warn('Failed to log deposit to admin dashboard');
-        }
-        
+      if (depositSuccess) {
         // Wait a moment for the deposit to process
         await new Promise(resolve => setTimeout(resolve, 500));
         
