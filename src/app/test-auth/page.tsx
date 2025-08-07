@@ -12,7 +12,7 @@ export default function AuthTestPage() {
   const [testPassword, setTestPassword] = useState('buyer1');
   const [testRole, setTestRole] = useState<'buyer' | 'seller'>('buyer');
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000/api';
 
   // Log auth state changes
   useEffect(() => {

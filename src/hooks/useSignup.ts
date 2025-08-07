@@ -12,7 +12,7 @@ import { validateForm, calculatePasswordStrength } from '@/utils/signupUtils';
 import { z } from 'zod';
 
 // API Base URL from environment
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000';
 
 export const useSignup = () => {
   const router = useRouter();

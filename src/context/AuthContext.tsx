@@ -236,7 +236,7 @@ class ApiClient {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Use the base URL from environment
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000';
 
 // Secure token storage using memory + sessionStorage
 class TokenStorage {

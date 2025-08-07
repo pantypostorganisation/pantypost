@@ -25,7 +25,7 @@ import type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog
 // Re-export types for backward compatibility
 export type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://52.62.54.24:5000';
 
 type Withdrawal = {
   amount: number;

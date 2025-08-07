@@ -55,7 +55,7 @@ function getEnvNumber(key: string, defaultValue: number): number {
 export const appConfig = {
   name: getEnvVar('NEXT_PUBLIC_APP_NAME', 'PantyPost'),
   version: getEnvVar('NEXT_PUBLIC_APP_VERSION', '1.0.0'),
-  url: getEnvVar('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'),
+  url: getEnvVar('NEXT_PUBLIC_APP_URL', 'http://52.62.54.24:3000'),
   environment: getEnvironment(),
 } as const;
 
@@ -133,7 +133,7 @@ export const limits = {
 // WebSocket configuration
 export const websocketConfig = {
   enabled: true, // Force enable WebSocket
-  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000'),
+  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://52.62.54.24:5000'),
   path: getEnvVar('NEXT_PUBLIC_WS_PATH', '/socket.io'),
 } as const;
 
