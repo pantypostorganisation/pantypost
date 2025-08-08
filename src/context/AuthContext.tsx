@@ -83,8 +83,8 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        // 🔧 FIX: Add /api prefix for refresh endpoint
-        const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
+        // 🔧 FIX: Use baseURL directly since it already includes /api
+        const response = await fetch(`${this.baseURL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -172,8 +172,8 @@ class ApiClient {
     }
 
     try {
-      // 🔧 FIX: Make sure endpoint includes /api if it doesn't already
-      const fullEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
+      // 🔧 FIX: Don't add /api since baseURL already includes it
+      const fullEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       
       const response = await fetch(`${this.baseURL}${fullEndpoint}`, {
         ...options,
@@ -239,8 +239,8 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// 🔧 FIX: Use correct API base URL (localhost instead of 52.62.54.24)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+// 🔧 FIXED: Use correct environment variable name that matches .env.local
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 // Secure token storage using memory + sessionStorage
 class TokenStorage {
@@ -370,22 +370,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [refreshSession]);
 
-  // 🔧 FIX: Updated login function to use correct endpoint and include password
+  // 🔧 FIX: Updated login function to use baseURL directly
   const login = useCallback(async (
     username: string, 
     password: string,
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
-    console.log('[Auth] API endpoint:', `${API_BASE_URL}/api/auth/login`);
+    console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`);
     
     setLoading(true);
     setError(null);
 
     try {
       console.log('[Auth] Making login request...');
-      // 🔧 FIX: Use correct endpoint with /api prefix
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      // 🔧 FIX: Use baseURL directly since it already includes /api
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role }),
