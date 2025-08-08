@@ -7,7 +7,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES, ORDER_STATUS } = require('../utils/constants');
-const webSocketService = require('../config/websocket'); // ADD THIS
+const webSocketService = require('../config/websocket');
 
 // ============= ORDER ROUTES =============
 
@@ -43,7 +43,7 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/orders - Create an order with wallet payment (NO TRANSACTIONS)
+// POST /api/orders - Create an order with wallet payment and DOUBLE 10% FEE MODEL
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const orderData = req.body;
@@ -58,10 +58,10 @@ router.post('/', authMiddleware, async (req, res) => {
     }
     
     // Validate required fields
-    if (!orderData.deliveryAddress || !orderData.seller || !orderData.price) {
+    if (!orderData.deliveryAddress || !orderData.seller || !orderData.price || !orderData.markedUpPrice) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields'
+        error: 'Missing required fields (deliveryAddress, seller, price, markedUpPrice)'
       });
     }
     
@@ -74,12 +74,48 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if buyer has enough balance
-    const totalAmount = orderData.price;
-    if (!buyerWallet.hasBalance(totalAmount)) {
+    // ✅ CORRECTED FEE CALCULATION FOR DOUBLE 10% MODEL
+    const originalPrice = orderData.price;          // $100 (what seller listed)
+    const buyerPayment = orderData.markedUpPrice;   // $110 (what buyer pays)
+    const buyerMarkupFee = Math.round((buyerPayment - originalPrice) * 100) / 100; // $10 (buyer's 10%)
+    const sellerPlatformFee = Math.round(originalPrice * 0.1 * 100) / 100;         // $10 (seller's 10%)
+    const totalPlatformFee = buyerMarkupFee + sellerPlatformFee;                   // $20 total
+    const sellerEarnings = Math.round((originalPrice - sellerPlatformFee) * 100) / 100; // $90
+    
+    console.log('💰 Order Fee Calculation:', {
+      originalPrice,
+      buyerPayment,
+      buyerMarkupFee,
+      sellerPlatformFee,
+      totalPlatformFee,
+      sellerEarnings,
+      verification: {
+        buyerPays: buyerPayment,
+        sellerGets: sellerEarnings,
+        platformProfit: totalPlatformFee,
+        totalCheck: sellerEarnings + totalPlatformFee // Should equal buyerPayment
+      }
+    });
+    
+    // Verify our math is correct
+    if (Math.abs((sellerEarnings + totalPlatformFee) - buyerPayment) > 0.01) {
+      console.error('❌ Fee calculation error! Numbers don\'t add up:', {
+        sellerEarnings,
+        totalPlatformFee,
+        sum: sellerEarnings + totalPlatformFee,
+        buyerPayment
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Internal fee calculation error'
+      });
+    }
+    
+    // Check if buyer has enough balance (they need to pay the marked up price)
+    if (!buyerWallet.hasBalance(buyerPayment)) {
       return res.status(400).json({
         success: false,
-        error: `Insufficient balance. You have $${buyerWallet.balance.toFixed(2)} but need $${totalAmount.toFixed(2)}`
+        error: `Insufficient balance. You have $${buyerWallet.balance.toFixed(2)} but need $${buyerPayment.toFixed(2)}`
       });
     }
     
@@ -95,19 +131,58 @@ router.post('/', authMiddleware, async (req, res) => {
       await sellerWallet.save();
     }
     
-    // Calculate fees and earnings
-    const platformFee = Math.round(totalAmount * 0.1 * 100) / 100; // 10% platform fee
-    const sellerEarnings = Math.round((totalAmount - platformFee) * 100) / 100;
+    // 🔧 CRITICAL FIX: Get or create admin wallet for platform fees
+    const adminUser = await require('../models/User').findOne({ role: 'admin' });
+    if (!adminUser) {
+      console.error('❌ No admin user found! Please create an admin user first');
+      return res.status(500).json({
+        success: false,
+        error: 'Platform admin not configured. Please contact support.'
+      });
+    }
     
-    // Create the order
+    // Find admin wallet by username OR role (in case wallet exists with wrong role)
+    let adminWallet = await Wallet.findOne({ 
+      $or: [
+        { username: adminUser.username },
+        { role: 'admin' }
+      ]
+    });
+    
+    if (!adminWallet) {
+      // Create new admin wallet
+      adminWallet = new Wallet({
+        username: adminUser.username,
+        role: 'admin',
+        balance: 0
+      });
+      await adminWallet.save();
+      console.log('✅ Created admin wallet for platform fees');
+    } else if (adminWallet.role !== 'admin') {
+      // Update existing wallet to admin role
+      adminWallet.role = 'admin';
+      await adminWallet.save();
+      console.log('✅ Updated existing wallet to admin role');
+    }
+    
+    console.log('💳 Admin wallet before transaction:', {
+      username: adminWallet.username,
+      balance: adminWallet.balance,
+      willReceive: totalPlatformFee
+    });
+    
+    // Create the order with correct fee breakdown
     const newOrder = new Order({
       ...orderData,
       buyer: buyer,
-      platformFee: platformFee,
+      platformFee: totalPlatformFee,
       sellerEarnings: sellerEarnings,
       paymentStatus: 'pending',
       shippingStatus: 'pending',
-      date: new Date()
+      date: new Date(),
+      // Add breakdown for transparency
+      buyerMarkupFee: buyerMarkupFee,
+      sellerPlatformFee: sellerPlatformFee
     });
     
     // Calculate tier credit if applicable
@@ -119,13 +194,27 @@ router.post('/', authMiddleware, async (req, res) => {
     await newOrder.save();
     
     try {
-      // Process payment: Deduct from buyer
-      await buyerWallet.withdraw(totalAmount);
+      // ✅ CORRECTED PAYMENT PROCESSING WITH ADMIN WALLET CREDITING
       
-      // Create purchase transaction
+      // 1. Deduct the FULL amount buyer pays ($110)
+      await buyerWallet.withdraw(buyerPayment);
+      
+      // 2. Add earnings to seller (after platform fee deduction) - $90
+      await sellerWallet.deposit(sellerEarnings);
+      
+      // 🔧 3. CRITICAL FIX: Credit the TOTAL platform fees to admin wallet - $20
+      await adminWallet.deposit(totalPlatformFee);
+      
+      console.log('💰 Admin wallet after crediting fees:', {
+        username: adminWallet.username,
+        newBalance: adminWallet.balance,
+        credited: totalPlatformFee
+      });
+      
+      // 4. Create purchase transaction for the full amount
       const purchaseTransaction = new Transaction({
         type: 'purchase',
-        amount: totalAmount,
+        amount: buyerPayment,
         from: buyer,
         to: orderData.seller,
         fromRole: 'buyer',
@@ -135,15 +224,14 @@ router.post('/', authMiddleware, async (req, res) => {
         completedAt: new Date(),
         metadata: {
           orderId: newOrder._id.toString(),
-          listingId: orderData.listingId
+          listingId: orderData.listingId,
+          originalPrice: originalPrice,
+          buyerMarkupFee: buyerMarkupFee
         }
       });
       await purchaseTransaction.save();
       
-      // Add earnings to seller
-      await sellerWallet.deposit(sellerEarnings);
-      
-      // Create sale transaction
+      // 5. Create sale transaction for seller earnings
       const saleTransaction = new Transaction({
         type: 'sale',
         amount: sellerEarnings,
@@ -151,40 +239,88 @@ router.post('/', authMiddleware, async (req, res) => {
         to: orderData.seller,
         fromRole: 'buyer',
         toRole: 'seller',
-        description: `Sale: ${orderData.title} (after fees)`,
+        description: `Sale: ${orderData.title} (after platform fees)`,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
           orderId: newOrder._id.toString(),
-          originalPrice: totalAmount,
-          platformFee: platformFee
+          originalPrice: originalPrice,
+          sellerPlatformFee: sellerPlatformFee,
+          buyerMarkupFee: buyerMarkupFee,
+          totalPlatformFee: totalPlatformFee
         }
       });
       await saleTransaction.save();
       
-      // Create platform fee transaction
-      const feeTransaction = new Transaction({
+      // 6. Create buyer markup fee transaction
+      const buyerFeeTransaction = new Transaction({
         type: 'fee',
-        amount: platformFee,
-        from: orderData.seller,
-        to: 'platform',
-        fromRole: 'seller',
+        amount: buyerMarkupFee,
+        from: buyer,
+        to: adminWallet.username,
+        fromRole: 'buyer',
         toRole: 'admin',
-        description: `Platform fee (10%) for: ${orderData.title}`,
+        description: `Buyer markup fee (10%) for: ${orderData.title}`,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
           orderId: newOrder._id.toString(),
-          percentage: 10
+          feeType: 'buyer_markup',
+          percentage: 10,
+          originalPrice: originalPrice
         }
       });
-      await feeTransaction.save();
+      await buyerFeeTransaction.save();
+      
+      // 7. Create seller platform fee transaction
+      const sellerFeeTransaction = new Transaction({
+        type: 'fee',
+        amount: sellerPlatformFee,
+        from: orderData.seller,
+        to: adminWallet.username,
+        fromRole: 'seller',
+        toRole: 'admin',
+        description: `Seller platform fee (10%) for: ${orderData.title}`,
+        status: 'completed',
+        completedAt: new Date(),
+        metadata: {
+          orderId: newOrder._id.toString(),
+          feeType: 'seller_platform',
+          percentage: 10,
+          originalPrice: originalPrice
+        }
+      });
+      await sellerFeeTransaction.save();
+      
+      // 🔧 8. NEW: Create combined platform fee transaction for admin tracking
+      const adminFeeTransaction = new Transaction({
+        type: 'platform_fee',
+        amount: totalPlatformFee,
+        from: 'system',
+        to: adminWallet.username,
+        fromRole: 'system',
+        toRole: 'admin',
+        description: `Platform fees collected for order: ${orderData.title}`,
+        status: 'completed',
+        completedAt: new Date(),
+        metadata: {
+          orderId: newOrder._id.toString(),
+          breakdown: {
+            buyerMarkupFee: buyerMarkupFee,
+            sellerPlatformFee: sellerPlatformFee,
+            originalPrice: originalPrice
+          }
+        }
+      });
+      await adminFeeTransaction.save();
       
       // Update order with transaction references
       newOrder.paymentStatus = 'completed';
       newOrder.paymentCompletedAt = new Date();
       newOrder.paymentTransactionId = purchaseTransaction._id;
-      newOrder.feeTransactionId = feeTransaction._id;
+      newOrder.feeTransactionId = sellerFeeTransaction._id;
+      newOrder.buyerFeeTransactionId = buyerFeeTransaction._id;
+      newOrder.adminFeeTransactionId = adminFeeTransaction._id;
       await newOrder.save();
       
       // Update listing to sold if provided
@@ -202,7 +338,7 @@ router.post('/', authMiddleware, async (req, res) => {
       webSocketService.emitBalanceUpdate(
         buyer, 
         'buyer', 
-        buyerWallet.balance + totalAmount, 
+        buyerWallet.balance + buyerPayment, 
         buyerWallet.balance, 
         'purchase'
       );
@@ -215,21 +351,56 @@ router.post('/', authMiddleware, async (req, res) => {
         'sale'
       );
       
+      // 🔧 NEW: Emit admin wallet balance update
+      webSocketService.emitBalanceUpdate(
+        adminWallet.username,
+        'admin',
+        adminWallet.balance - totalPlatformFee,
+        adminWallet.balance,
+        'platform_fee'
+      );
+      
       // WEBSOCKET: Emit transaction events
       webSocketService.emitTransaction(purchaseTransaction);
       webSocketService.emitTransaction(saleTransaction);
+      webSocketService.emitTransaction(buyerFeeTransaction);
+      webSocketService.emitTransaction(sellerFeeTransaction);
+      webSocketService.emitTransaction(adminFeeTransaction); // New admin transaction
+      
+      console.log('✅ Order completed successfully!', {
+        orderId: newOrder._id,
+        buyerBalance: buyerWallet.balance,
+        sellerBalance: sellerWallet.balance,
+        adminBalance: adminWallet.balance,
+        platformFeesCollected: totalPlatformFee
+      });
       
       res.json({
         success: true,
         data: newOrder,
-        message: 'Order created successfully! Payment processed.'
+        message: 'Order created successfully! Payment processed.',
+        breakdown: {
+          buyerPaid: buyerPayment,
+          sellerReceived: sellerEarnings,
+          platformFeesCollected: totalPlatformFee,
+          platformFees: {
+            fromBuyer: buyerMarkupFee,
+            fromSeller: sellerPlatformFee,
+            total: totalPlatformFee
+          },
+          walletBalances: {
+            buyer: buyerWallet.balance,
+            seller: sellerWallet.balance,
+            admin: adminWallet.balance
+          }
+        }
       });
       
     } catch (paymentError) {
       // If payment fails, delete the order
       await Order.findByIdAndDelete(newOrder._id);
       
-      // Return the error
+      console.error('Payment processing failed:', paymentError);
       return res.status(400).json({
         success: false,
         error: `Payment failed: ${paymentError.message}`
@@ -237,6 +408,7 @@ router.post('/', authMiddleware, async (req, res) => {
     }
     
   } catch (error) {
+    console.error('Order creation error:', error);
     res.status(400).json({
       success: false,
       error: error.message
@@ -362,9 +534,20 @@ router.get('/stats/summary', authMiddleware, async (req, res) => {
     const shippedOrders = await Order.countDocuments({ ...filter, shippingStatus: 'shipped' });
     const deliveredOrders = await Order.countDocuments({ ...filter, shippingStatus: 'delivered' });
     
-    // Calculate total sales/purchases
+    // Calculate total sales/purchases based on role
     const orders = await Order.find(filter);
-    const totalAmount = orders.reduce((sum, order) => sum + order.price, 0);
+    
+    let totalAmount = 0;
+    if (req.user.role === 'buyer') {
+      // For buyers, show what they paid (markedUpPrice)
+      totalAmount = orders.reduce((sum, order) => sum + (order.markedUpPrice || order.price), 0);
+    } else if (req.user.role === 'seller') {
+      // For sellers, show what they earned (sellerEarnings)
+      totalAmount = orders.reduce((sum, order) => sum + (order.sellerEarnings || (order.price * 0.9)), 0);
+    } else {
+      // For admin, show platform fees earned
+      totalAmount = orders.reduce((sum, order) => sum + (order.platformFee || (order.price * 0.2)), 0);
+    }
     
     res.json({
       success: true,

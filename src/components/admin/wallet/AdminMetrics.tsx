@@ -29,7 +29,7 @@ interface AdminMetricsProps {
   filteredDeposits: any[];
   filteredSellerWithdrawals: any[];
   filteredAdminWithdrawals: any[];
-  adminBalance: number;
+  adminBalance: number; // 🔧 This is the real admin wallet balance from API
   orderHistory: any[];
   adminActions: any[];
   depositLogs: any[];
@@ -132,7 +132,7 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     filteredDeposits,
     filteredSellerWithdrawals,
     filteredAdminWithdrawals,
-    adminBalance,
+    adminBalance, // 🔧 This is the REAL admin wallet balance that contains platform fees
     orderHistory,
     adminActions,
     depositLogs,
@@ -178,9 +178,28 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         ? (allTimeSalesRevenue / orderHistory.length) 
         : 0;
 
-      const displayPlatformProfit = timeFilter === 'all' ? allTimeSalesProfit : periodSalesProfit;
-      const displaySubscriptionProfit = timeFilter === 'all' ? allTimeSubscriptionProfit : periodSubscriptionProfit;
-      const displayTotalProfit = displayPlatformProfit + displaySubscriptionProfit;
+      // 🔧 CRITICAL FIX: For "Money Made" - use REAL admin wallet balance instead of calculated values
+      // Ensure adminBalance is always a number to prevent dependency array issues
+      const safeAdminBalance = typeof adminBalance === 'number' ? adminBalance : 0;
+      
+      let displayTotalProfit;
+      
+      if (timeFilter === 'all') {
+        // For "all time", show the actual admin wallet balance (real accumulated platform fees)
+        displayTotalProfit = safeAdminBalance;
+      } else {
+        // For specific time periods, calculate from filtered data
+        displayTotalProfit = periodSalesProfit + periodSubscriptionProfit;
+      }
+
+      console.log('💰 [AdminMetrics] Platform profit calculation:', {
+        timeFilter,
+        adminWalletBalance: safeAdminBalance,
+        calculatedPeriodProfit: periodSalesProfit + periodSubscriptionProfit,
+        calculatedAllTimeProfit: allTimeSalesProfit + allTimeSubscriptionProfit,
+        displayTotalProfit,
+        usingRealBalance: timeFilter === 'all'
+      });
 
       const displayTotalRevenue = timeFilter === 'all' ? allTimeTotalRevenue : periodTotalRevenue;
       const displayAverageOrderValue = timeFilter === 'all' ? allTimeAverageOrderValue : periodAverageOrderValue;
@@ -209,6 +228,7 @@ export default function AdminMetrics(props: AdminMetricsProps) {
       const previousPeriodWithdrawalAmount = previousPeriodWithdrawals
         .reduce((sum: number, withdrawal: any) => sum + withdrawal.amount, 0);
 
+      // 🔧 IMPROVED: Growth rate calculation - only for specific time periods, not "all time"
       const growthRate = timeFilter !== 'all' && previousPeriodProfit > 0 ?
         ((displayTotalProfit - previousPeriodProfit) / previousPeriodProfit) * 100 : 0;
 
@@ -219,9 +239,9 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         ((withdrawalMetrics.totalWithdrawals - previousPeriodWithdrawalAmount) / previousPeriodWithdrawalAmount) * 100 : 0;
 
       setMetrics({
-        platformProfit: displayPlatformProfit,
-        subscriptionProfit: displaySubscriptionProfit,
-        totalProfit: displayTotalProfit,
+        platformProfit: timeFilter === 'all' ? allTimeSalesProfit : periodSalesProfit,
+        subscriptionProfit: timeFilter === 'all' ? allTimeSubscriptionProfit : periodSubscriptionProfit,
+        totalProfit: displayTotalProfit, // 🔧 This now uses real admin wallet balance for "all time"
         totalDeposits: displayTotalDeposits,
         totalWithdrawals: allTimeWithdrawalData.totalWithdrawals,
         totalRevenue: displayTotalRevenue,
@@ -245,22 +265,26 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     adminActions,
     depositLogs,
     sellerWithdrawals,
-    adminWithdrawals
+    adminWithdrawals,
+    typeof adminBalance === 'number' ? adminBalance : 0 // 🔧 Fix: Always pass a number to prevent dependency array issues
   ]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
       <MetricCard
         title="Money Made"
-        subtitle="Your platform profit"
+        subtitle={timeFilter === 'all' ? 'Total platform wallet balance' : 'Platform profit this period'}
         value={metrics.totalProfit}
         icon={DollarSign}
         iconColor="bg-[#ff950e]"
         bgGradient="from-[#ff950e]/20 to-[#ff6b00]/10 border-[#ff950e]/30"
         growthRate={timeFilter !== 'all' ? metrics.growthRate : undefined}
-        breakdown={[
+        breakdown={timeFilter !== 'all' ? [
           { label: 'Sales', value: metrics.platformProfit },
           { label: 'Subs', value: metrics.subscriptionProfit }
+        ] : [
+          { label: 'Real Balance', value: typeof adminBalance === 'number' ? adminBalance : 0 },
+          { label: 'In Wallet', value: typeof adminBalance === 'number' ? adminBalance : 0 }
         ]}
       />
 

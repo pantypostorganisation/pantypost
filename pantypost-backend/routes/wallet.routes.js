@@ -408,5 +408,133 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
   }
 });
 
+// 🔧 NEW: GET /api/wallet/admin-platform-balance - Get platform admin wallet balance (admin only)
+router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
+  try {
+    // Check if admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    console.log('[Wallet API] Admin requesting platform wallet balance...');
+    
+    // Find the admin wallet (the one that collects platform fees)
+    const adminWallet = await Wallet.findOne({ role: 'admin' });
+    
+    if (!adminWallet) {
+      console.log('[Wallet API] No admin wallet found, checking for any admin user wallet...');
+      
+      // Fallback: Try to find any admin user's wallet
+      const adminUser = await User.findOne({ role: 'admin' });
+      if (adminUser) {
+        const userWallet = await Wallet.findOne({ username: adminUser.username });
+        if (userWallet) {
+          console.log('[Wallet API] Found admin user wallet:', userWallet.username, userWallet.balance);
+          return res.json({
+            success: true,
+            data: {
+              username: userWallet.username,
+              balance: userWallet.balance,
+              role: userWallet.role,
+              lastTransaction: userWallet.lastTransaction,
+              source: 'admin_user_wallet'
+            }
+          });
+        }
+      }
+      
+      console.log('[Wallet API] No admin wallet found at all');
+      return res.json({
+        success: true,
+        data: {
+          username: 'platform-admin',
+          balance: 0,
+          role: 'admin',
+          message: 'No platform admin wallet found - will be created on first transaction',
+          source: 'not_found'
+        }
+      });
+    }
+    
+    console.log('[Wallet API] Found admin platform wallet:', adminWallet.username, adminWallet.balance);
+    
+    res.json({
+      success: true,
+      data: {
+        username: adminWallet.username,
+        balance: adminWallet.balance,
+        role: adminWallet.role,
+        lastTransaction: adminWallet.lastTransaction,
+        source: 'platform_wallet'
+      }
+    });
+  } catch (error) {
+    console.error('[Wallet API] Error fetching admin platform balance:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 🔧 NEW: GET /api/wallet/platform-transactions - Get all platform fee transactions (admin only)
+router.get('/platform-transactions', authMiddleware, async (req, res) => {
+  try {
+    // Check if admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    const { limit = 100, page = 1 } = req.query;
+    
+    console.log('[Wallet API] Admin requesting platform transactions...');
+    
+    // Get all platform fee transactions
+    const query = {
+      $or: [
+        { type: 'platform_fee' },
+        { type: 'fee' },
+        { 
+          type: 'admin_credit',
+          description: { $regex: /platform fees collected/i }
+        }
+      ]
+    };
+    
+    const skip = (page - 1) * limit;
+    const transactions = await Transaction.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    const total = await Transaction.countDocuments(query);
+    
+    console.log('[Wallet API] Found', transactions.length, 'platform transactions');
+    
+    res.json({
+      success: true,
+      data: transactions,
+      meta: {
+        page: parseInt(page),
+        pageSize: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('[Wallet API] Error fetching platform transactions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Export the router
 module.exports = router;

@@ -83,7 +83,6 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        // 🔧 FIX: Use baseURL directly since it already includes /api
         const response = await fetch(`${this.baseURL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -104,6 +103,13 @@ class ApiClient {
           
           this.authContext.setTokens(newTokens);
           
+          // 🔧 FIRE TOKEN UPDATE EVENT for WebSocket
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('auth-token-updated', { 
+              detail: { token: newTokens.token } 
+            }));
+          }
+          
           // Call the refresh callback if provided
           if (this.authContext.onTokenRefresh) {
             await this.authContext.onTokenRefresh();
@@ -117,6 +123,12 @@ class ApiClient {
         console.error('Token refresh failed:', error);
         // Clear tokens on refresh failure
         this.authContext.setTokens(null);
+        
+        // Fire token cleared event
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth-token-cleared'));
+        }
+        
         return null;
       } finally {
         this.refreshPromise = null;
@@ -172,7 +184,6 @@ class ApiClient {
     }
 
     try {
-      // 🔧 FIX: Don't add /api since baseURL already includes it
       const fullEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       
       const response = await fetch(`${this.baseURL}${fullEndpoint}`, {
@@ -239,10 +250,9 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// 🔧 FIXED: Use correct environment variable name that matches .env.local
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-// Secure token storage using memory + sessionStorage
+// 🔧 ENHANCED: Token storage with WebSocket event support
 class TokenStorage {
   private memoryTokens: AuthTokens | null = null;
 
@@ -253,6 +263,14 @@ class TokenStorage {
         const stored = sessionStorage.getItem('auth_tokens');
         if (stored) {
           this.memoryTokens = JSON.parse(stored);
+          // Fire initial token event if we have tokens
+          if (this.memoryTokens?.token) {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('auth-token-updated', { 
+                detail: { token: this.memoryTokens!.token } 
+              }));
+            }, 100);
+          }
         }
       } catch (error) {
         console.error('Failed to restore tokens:', error);
@@ -267,11 +285,17 @@ class TokenStorage {
       if (tokens) {
         try {
           sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
+          // Fire token update event
+          window.dispatchEvent(new CustomEvent('auth-token-updated', { 
+            detail: { token: tokens.token } 
+          }));
         } catch (error) {
           console.error('Failed to store tokens:', error);
         }
       } else {
         sessionStorage.removeItem('auth_tokens');
+        // Fire token cleared event
+        window.dispatchEvent(new CustomEvent('auth-token-cleared'));
       }
     }
   }
@@ -284,6 +308,8 @@ class TokenStorage {
     this.memoryTokens = null;
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('auth_tokens');
+      // Fire token cleared event
+      window.dispatchEvent(new CustomEvent('auth-token-cleared'));
     }
   }
 }
@@ -334,14 +360,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // 🔧 FIX: Use correct endpoint path
       const response = await apiClientRef.current!.get<User>('/auth/me');
       
       if (response.success && response.data) {
         setUser(response.data);
       } else {
         setUser(null);
-        // Clear tokens if user fetch fails
         tokenStorageRef.current.clear();
       }
     } catch (error) {
@@ -370,7 +394,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [refreshSession]);
 
-  // 🔧 FIX: Updated login function to use baseURL directly
   const login = useCallback(async (
     username: string, 
     password: string,
@@ -384,7 +407,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log('[Auth] Making login request...');
-      // 🔧 FIX: Use baseURL directly since it already includes /api
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -406,7 +428,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
         };
         
-        // Store tokens securely
+        // Store tokens securely (this will fire the WebSocket event)
         tokenStorageRef.current.setTokens(tokens);
         
         // Set user state
@@ -416,7 +438,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         return true;
       } else {
-        // Extract error message from backend response
         const errorMessage = data.error?.message || 'Login failed';
         setError(errorMessage);
         setLoading(false);
@@ -430,21 +451,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 🔧 FIX: Updated logout function to use correct endpoint
   const logout = useCallback(async () => {
     console.log('[Auth] Logging out...');
     
     try {
       const token = getAuthToken();
       if (token) {
-        // Call logout endpoint with correct path
         await apiClientRef.current!.post('/auth/logout');
       }
     } catch (error) {
       console.error('[Auth] Logout API error:', error);
     }
 
-    // Clear local state regardless of API response
+    // Clear local state regardless of API response (this will fire the WebSocket event)
     tokenStorageRef.current.clear();
     setUser(null);
     setError(null);
@@ -508,3 +527,20 @@ export function useAuth() {
   }
   return context;
 }
+
+// 🔧 NEW: Export getAuthToken globally for WebSocket access
+export const getGlobalAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const stored = sessionStorage.getItem('auth_tokens');
+    if (stored) {
+      const tokens = JSON.parse(stored);
+      return tokens?.token || null;
+    }
+  } catch (error) {
+    console.error('Failed to get global auth token:', error);
+  }
+  
+  return null;
+};

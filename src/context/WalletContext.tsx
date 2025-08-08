@@ -126,6 +126,10 @@ type WalletContextType = {
   reconcileBalance: (username: string, role: 'buyer' | 'seller' | 'admin') => Promise<any>;
   getTransactionHistory: (username?: string, limit?: number) => Promise<any[]>;
   
+  // 🔧 NEW: Admin-specific methods
+  refreshAdminData: () => Promise<void>;
+  getPlatformTransactions: (limit?: number, page?: number) => Promise<any[]>;
+  
   // Data management
   reloadData: () => Promise<void>;
 };
@@ -190,6 +194,49 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const setAddSellerNotificationCallback = (fn: (seller: string, message: string) => void) => {
     setAddSellerNotification(() => fn);
   };
+
+  // 🔧 LISTEN TO WEBSOCKET BALANCE UPDATES
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      const data = event.detail;
+      console.log('[WalletContext] Received WebSocket balance update:', data);
+      
+      if (data.username && data.role && typeof data.balance === 'number') {
+        if (data.role === 'buyer') {
+          setBuyerBalancesState(prev => ({
+            ...prev,
+            [data.username]: data.balance
+          }));
+        } else if (data.role === 'seller') {
+          setSellerBalancesState(prev => ({
+            ...prev,
+            [data.username]: data.balance
+          }));
+        } else if (data.role === 'admin') {
+          setAdminBalanceState(data.balance);
+        }
+      }
+    };
+
+    const handleTransaction = (event: CustomEvent) => {
+      console.log('[WalletContext] Received WebSocket transaction:', event.detail);
+      // Refresh transaction history when a new transaction occurs
+      if (user) {
+        fetchTransactionHistory(user.username);
+      }
+    };
+
+    // Listen for WebSocket events from WebSocketContext
+    window.addEventListener('wallet:balance_update', handleBalanceUpdate as EventListener);
+    window.addEventListener('wallet:transaction', handleTransaction as EventListener);
+
+    return () => {
+      window.removeEventListener('wallet:balance_update', handleBalanceUpdate as EventListener);
+      window.removeEventListener('wallet:transaction', handleTransaction as EventListener);
+    };
+  }, [user]);
 
   // Subscribe to WebSocket wallet updates
   useEffect(() => {
@@ -263,6 +310,60 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
+  // 🔧 NEW: Fetch admin platform wallet balance (contains platform fees)
+  const fetchAdminPlatformBalance = useCallback(async (): Promise<number> => {
+    if (!user || user.role !== 'admin') {
+      console.log('[WalletContext] Not admin user, skipping platform balance fetch');
+      return 0;
+    }
+
+    try {
+      console.log('[WalletContext] Fetching admin platform wallet balance...');
+      
+      const response = await apiClient.get<any>('/wallet/admin-platform-balance');
+      
+      console.log('[WalletContext] Admin platform balance response:', response);
+      
+      if (response.success && response.data) {
+        const balance = response.data.balance || 0;
+        console.log('[WalletContext] Admin platform wallet balance:', balance, 'from source:', response.data.source);
+        return balance;
+      }
+      
+      console.warn('[WalletContext] Admin platform balance fetch failed:', response.error);
+      return 0;
+    } catch (error) {
+      console.error('[WalletContext] Error fetching admin platform balance:', error);
+      return 0;
+    }
+  }, [user, apiClient]);
+
+  // 🔧 NEW: Fetch platform transactions
+  const getPlatformTransactions = useCallback(async (limit: number = 100, page: number = 1): Promise<any[]> => {
+    if (!user || user.role !== 'admin') {
+      console.log('[WalletContext] Not admin user, skipping platform transactions fetch');
+      return [];
+    }
+
+    try {
+      console.log('[WalletContext] Fetching platform transactions...');
+      
+      const response = await apiClient.get<any>(`/wallet/platform-transactions?limit=${limit}&page=${page}`);
+      
+      console.log('[WalletContext] Platform transactions response:', response);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      console.warn('[WalletContext] Platform transactions fetch failed:', response.error);
+      return [];
+    } catch (error) {
+      console.error('[WalletContext] Error fetching platform transactions:', error);
+      return [];
+    }
+  }, [user, apiClient]);
+
   // Fetch transaction history from API
   const fetchTransactionHistory = useCallback(async (username: string) => {
     try {
@@ -296,7 +397,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
-  // Load all data from API
+  // 🔧 UPDATED: Load all data from API with admin platform balance support
   const loadAllData = useCallback(async () => {
     if (!user) {
       console.log('[WalletContext] No user, skipping data load');
@@ -315,7 +416,54 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } else if (user.role === 'seller') {
         setSellerBalancesState(prev => ({ ...prev, [user.username]: balance }));
       } else if (user.role === 'admin') {
-        setAdminBalanceState(balance);
+        // For admin users, fetch the platform admin wallet that collects fees
+        try {
+          console.log('[WalletContext] Admin detected - fetching platform wallet...');
+          
+          const platformBalance = await fetchAdminPlatformBalance();
+          console.log('[WalletContext] Platform admin wallet balance:', platformBalance);
+          setAdminBalanceState(platformBalance);
+          
+          // Also fetch platform transactions for admin dashboard
+          const platformTransactions = await getPlatformTransactions(50, 1);
+          console.log('[WalletContext] Fetched', platformTransactions.length, 'platform transactions');
+          
+          // Convert platform transactions to order format for dashboard display
+          const platformOrders: Order[] = platformTransactions
+            .filter((tx: any) => tx.metadata?.orderId)
+            .map((tx: any) => ({
+              id: tx.metadata?.orderId || tx.id,
+              title: tx.metadata?.listingTitle || tx.description || 'Platform Fee Collection',
+              description: tx.description || 'Platform fee transaction',
+              price: tx.metadata?.originalPrice || tx.amount,
+              markedUpPrice: tx.metadata?.buyerPayment || tx.amount,
+              date: tx.createdAt || tx.date,
+              seller: tx.metadata?.seller || 'Unknown',
+              buyer: tx.metadata?.buyer || 'Unknown',
+              shippingStatus: 'shipped' as const, // Use 'shipped' instead of 'completed'
+              wasAuction: tx.metadata?.wasAuction || false,
+              finalBid: tx.metadata?.finalBid,
+              imageUrl: undefined,
+              tags: [],
+              deliveryAddress: undefined,
+            }));
+          
+          if (platformOrders.length > 0) {
+            setOrderHistory(prev => {
+              // Merge with existing orders, avoiding duplicates
+              const existingIds = new Set(prev.map(order => order.id));
+              const newOrders = platformOrders.filter(order => !existingIds.has(order.id));
+              return [...prev, ...newOrders];
+            });
+            console.log('[WalletContext] Added', platformOrders.length, 'platform orders to history');
+          }
+          
+        } catch (adminError) {
+          console.error('[WalletContext] Error fetching platform wallet:', adminError);
+          // Fallback to personal admin balance
+          setAdminBalanceState(balance);
+          console.log('[WalletContext] Using personal admin balance as fallback:', balance);
+        }
       }
       
       // Fetch transaction history
@@ -328,7 +476,34 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInitializationError('Failed to load wallet data');
       return false;
     }
-  }, [user, fetchBalance, fetchTransactionHistory]);
+  }, [user, fetchBalance, fetchAdminPlatformBalance, getPlatformTransactions, fetchTransactionHistory]);
+
+  // 🔧 NEW: Refresh admin data specifically
+  const refreshAdminData = useCallback(async () => {
+    if (!user || user.role !== 'admin') {
+      console.log('[WalletContext] Not admin, skipping admin data refresh');
+      return;
+    }
+    
+    try {
+      console.log('[WalletContext] Refreshing admin data...');
+      
+      // Refresh admin platform wallet balance
+      const platformBalance = await fetchAdminPlatformBalance();
+      setAdminBalanceState(platformBalance);
+      
+      // Refresh platform transactions
+      const platformTransactions = await getPlatformTransactions(50, 1);
+      console.log('[WalletContext] Refreshed', platformTransactions.length, 'platform transactions');
+      
+      // Refresh transaction history
+      await fetchTransactionHistory(user.username);
+      
+      console.log('[WalletContext] Admin data refreshed successfully');
+    } catch (error) {
+      console.error('[WalletContext] Error refreshing admin data:', error);
+    }
+  }, [user, fetchAdminPlatformBalance, getPlatformTransactions, fetchTransactionHistory]);
 
   // Initialize wallet when user logs in
   useEffect(() => {
@@ -451,25 +626,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAdminBalanceState(balance);
   }, []);
 
-  // ✅ FIXED: Create order via API with proper fields
+  // 🔧 FIXED: Create order via API with debug logging
   const addOrder = useCallback(async (order: Order) => {
     try {
       console.log('[WalletContext] Creating order via API:', order);
       
-      // ✅ FIXED: Ensure all required fields are included
+      // ✅ ADD DEBUG LOGGING HERE
+      console.log('[DEBUG] Order object received:', {
+        title: order.title,
+        description: order.description,
+        price: order.price,
+        markedUpPrice: order.markedUpPrice,
+        seller: order.seller,
+        buyer: order.buyer,
+        deliveryAddress: order.deliveryAddress
+      });
+      
       const orderPayload = {
         title: order.title,
         description: order.description,
         price: order.price,
+        markedUpPrice: order.markedUpPrice,
         seller: order.seller,
         buyer: order.buyer,
         tags: order.tags || [],
         wasAuction: order.wasAuction || false,
         imageUrl: order.imageUrl,
-        listingId: order.listingId, // Reference to original listing
-        // ✅ FIXED: Include required deliveryAddress
+        listingId: order.listingId,
         deliveryAddress: order.deliveryAddress || {
-          fullName: 'John Doe', // TODO: Get from user profile in production
+          fullName: 'John Doe',
           addressLine1: '123 Main St',
           city: 'New York',
           state: 'NY',
@@ -477,6 +662,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           country: 'US',
         },
       };
+
+      // ✅ ADD MORE DEBUG LOGGING HERE
+      console.log('[DEBUG] Order payload being sent to API:', orderPayload);
+      console.log('[DEBUG] Payload validation check:', {
+        hasTitle: !!orderPayload.title,
+        hasDescription: !!orderPayload.description,
+        hasPrice: typeof orderPayload.price === 'number',
+        hasMarkedUpPrice: typeof orderPayload.markedUpPrice === 'number',
+        hasSeller: !!orderPayload.seller,
+        hasBuyer: !!orderPayload.buyer,
+        hasDeliveryAddress: !!orderPayload.deliveryAddress
+      });
 
       console.log('[WalletContext] Order payload:', orderPayload);
 
@@ -487,17 +684,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (response.success && response.data) {
         setOrderHistory((prev) => [...prev, response.data]);
         
-        // Refresh balances after order
-        if (order.buyer) {
-          const newBuyerBalance = await fetchBalance(order.buyer);
-          setBuyerBalancesState(prev => ({ ...prev, [order.buyer!]: newBuyerBalance }));
+        // 🔧 FIXED: Only fetch current user's balance after order creation
+        // Don't try to fetch seller's balance as buyer (causes 403)
+        if (user?.username) {
+          const newBalance = await fetchBalance(user.username);
+          
+          if (user.role === 'buyer') {
+            setBuyerBalancesState(prev => ({ ...prev, [user.username]: newBalance }));
+          } else if (user.role === 'seller') {
+            setSellerBalancesState(prev => ({ ...prev, [user.username]: newBalance }));
+          }
         }
-        if (order.seller) {
-          const newSellerBalance = await fetchBalance(order.seller);
-          setSellerBalancesState(prev => ({ ...prev, [order.seller]: newSellerBalance }));
+        
+        // 🔧 NEW: If admin user exists, refresh their platform balance
+        if (user?.role === 'admin') {
+          await refreshAdminData();
         }
+        
+        // Refresh transaction history for current user only
+        if (user?.username) {
+          await fetchTransactionHistory(user.username);
+        }
+        
+        console.log('[WalletContext] Order created and balance updated');
       } else {
-        // ✅ IMPROVED: Throw error with backend message
         const errorMessage = response.error?.message || response.error || 'Order creation failed';
         console.error('[WalletContext] Order creation failed:', errorMessage);
         throw new Error(errorMessage);
@@ -506,7 +716,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[WalletContext] Failed to create order:', error);
       throw error;
     }
-  }, [apiClient, fetchBalance]);
+  }, [apiClient, fetchBalance, fetchTransactionHistory, refreshAdminData, user]);
 
   // Make a deposit via API
   const addDeposit = useCallback(async (
@@ -593,7 +803,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         buyer: validatedBuyer,
         seller: validatedSeller,
         listing: listing.title,
-        price: listing.price
+        price: listing.price,
+        markedUpPrice: listing.markedUpPrice
       });
       
       // ✅ FIXED: Include all required fields including deliveryAddress
@@ -1037,6 +1248,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     checkSuspiciousActivity,
     reconcileBalance,
     getTransactionHistory,
+    
+    // 🔧 NEW: Admin-specific methods
+    refreshAdminData,
+    getPlatformTransactions,
+    
+    // Data management
     reloadData,
   };
 

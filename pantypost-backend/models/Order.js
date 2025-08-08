@@ -100,21 +100,43 @@ const orderSchema = new mongoose.Schema({
   shippedDate: Date,
   deliveredDate: Date,
   
-  // Financial
+  // 🔧 ENHANCED FINANCIAL FIELDS FOR DOUBLE 10% FEE MODEL
   tierCreditAmount: {
     type: Number,
     default: 0
   },
+  
+  // Platform fee breakdown
   platformFee: {
     type: Number,
     default: function() {
-      return Math.round(this.price * 0.1 * 100) / 100; // 10% platform fee
+      return Math.round(this.price * 0.2 * 100) / 100; // 20% total platform fee (10% from buyer + 10% from seller)
     }
   },
+  
+  // 🔧 NEW: Individual fee components
+  buyerMarkupFee: {
+    type: Number,
+    default: function() {
+      if (this.markedUpPrice && this.price) {
+        return Math.round((this.markedUpPrice - this.price) * 100) / 100; // 10% buyer markup fee
+      }
+      return Math.round(this.price * 0.1 * 100) / 100;
+    }
+  },
+  
+  sellerPlatformFee: {
+    type: Number,
+    default: function() {
+      return Math.round(this.price * 0.1 * 100) / 100; // 10% seller platform fee
+    }
+  },
+  
   sellerEarnings: {
     type: Number,
     default: function() {
-      return Math.round((this.price - this.platformFee) * 100) / 100; // Price minus platform fee
+      const sellerFee = Math.round(this.price * 0.1 * 100) / 100;
+      return Math.round((this.price - sellerFee) * 100) / 100; // Original price minus seller's 10%
     }
   },
   
@@ -126,12 +148,20 @@ const orderSchema = new mongoose.Schema({
   },
   paymentCompletedAt: Date,
   
-  // Transaction references
+  // 🔧 ENHANCED TRANSACTION REFERENCES
   paymentTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
   },
   feeTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
+  },
+  buyerFeeTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
+  },
+  adminFeeTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
   }
@@ -149,6 +179,13 @@ orderSchema.methods.calculateTierCredit = function() {
     return Math.round((this.markedUpPrice - this.price) * 100) / 100;
   }
   return 0;
+};
+
+// 🔧 NEW: Calculate total platform profit for this order
+orderSchema.methods.calculatePlatformProfit = function() {
+  const buyerFee = this.buyerMarkupFee || Math.round((this.markedUpPrice - this.price) * 100) / 100;
+  const sellerFee = this.sellerPlatformFee || Math.round(this.price * 0.1 * 100) / 100;
+  return Math.round((buyerFee + sellerFee) * 100) / 100;
 };
 
 const Order = mongoose.model('Order', orderSchema);
