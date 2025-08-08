@@ -1,7 +1,7 @@
 ﻿// src/hooks/useBuyerWallet.ts
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -37,7 +37,7 @@ export const useBuyerWallet = () => {
   const { 
     getBuyerBalance,
     setBuyerBalance, 
-    orderHistory, 
+    orderHistory, // ← This can be undefined initially
     addDeposit,  // ← This is the WalletContext API method we should use
     getTransactionHistory,
     checkSuspiciousActivity,
@@ -72,25 +72,90 @@ export const useBuyerWallet = () => {
   const lastActivityCheckRef = useRef<Date>(new Date());
   const initialSyncDone = useRef(false);
 
-  // Get buyer's purchase history with sanitization
-  const buyerPurchases = user?.username 
-    ? orderHistory.filter(order => order.buyer === user.username)
-    : [];
-  
-  // Sort purchases by date (newest first)
-  const recentPurchases = [...buyerPurchases]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 3);
-
-  // Calculate total spent with validation
-  const totalSpent = buyerPurchases.reduce((sum, order) => {
-    const price = order.markedUpPrice || order.price;
-    // Validate price is a positive number
-    if (typeof price === 'number' && price > 0) {
-      return sum + price;
+  // ✅ EXTRA SAFE: Triple-check orderHistory with detailed logging
+  const buyerPurchases = useMemo(() => {
+    console.log('[BuyerWallet] Computing buyerPurchases:', {
+      hasUser: !!user,
+      username: user?.username,
+      orderHistoryType: typeof orderHistory,
+      orderHistoryIsArray: Array.isArray(orderHistory),
+      orderHistoryLength: orderHistory?.length,
+      orderHistory: orderHistory
+    });
+    
+    // Multiple levels of safety checks
+    if (!user?.username) {
+      console.log('[BuyerWallet] No username, returning empty array');
+      return [];
     }
-    return sum;
-  }, 0);
+    
+    if (!orderHistory) {
+      console.log('[BuyerWallet] orderHistory is null/undefined, returning empty array');
+      return [];
+    }
+    
+    if (!Array.isArray(orderHistory)) {
+      console.log('[BuyerWallet] orderHistory is not an array, returning empty array');
+      return [];
+    }
+    
+    try {
+      const filtered = orderHistory.filter(order => order && order.buyer === user.username);
+      console.log('[BuyerWallet] Successfully filtered purchases:', filtered.length);
+      return filtered;
+    } catch (error) {
+      console.error('[BuyerWallet] Error filtering purchases:', error);
+      return [];
+    }
+  }, [user?.username, orderHistory]);
+  
+  // Sort purchases by date (newest first) - also with safe access
+  const recentPurchases = useMemo(() => {
+    if (!Array.isArray(buyerPurchases) || buyerPurchases.length === 0) {
+      return [];
+    }
+    
+    try {
+      return [...buyerPurchases]
+        .sort((a, b) => {
+          try {
+            const aTime = new Date(a.date).getTime();
+            const bTime = new Date(b.date).getTime();
+            return bTime - aTime;
+          } catch (error) {
+            console.error('[BuyerWallet] Error sorting by date:', error);
+            return 0;
+          }
+        })
+        .slice(0, 3);
+    } catch (error) {
+      console.error('[BuyerWallet] Error processing recent purchases:', error);
+      return [];
+    }
+  }, [buyerPurchases]);
+
+  // Calculate total spent with validation - safe access
+  const totalSpent = useMemo(() => {
+    if (!Array.isArray(buyerPurchases)) {
+      return 0;
+    }
+    
+    try {
+      return buyerPurchases.reduce((sum, order) => {
+        if (!order) return sum;
+        
+        const price = order.markedUpPrice || order.price;
+        // Validate price is a positive number
+        if (typeof price === 'number' && price > 0) {
+          return sum + price;
+        }
+        return sum;
+      }, 0);
+    } catch (error) {
+      console.error('[BuyerWallet] Error calculating total spent:', error);
+      return 0;
+    }
+  }, [buyerPurchases]);
 
   // Update state helper with sanitization
   const updateState = useCallback((updates: Partial<EnhancedBuyerWalletState>) => {
@@ -208,8 +273,11 @@ export const useBuyerWallet = () => {
       try {
         const history = await getTransactionHistory(user.username, 20);
         
+        // ✅ FIXED: Safe array access with proper checking
+        const transactionArray = Array.isArray(history) ? history : [];
+        
         // Calculate daily limit usage
-        const todaysDeposits = history.filter((t: any) => {
+        const todaysDeposits = transactionArray.filter((t: any) => {
           const isDeposit = t.type === 'deposit' || (t.displayType === 'Deposit' && t.isCredit);
           const transactionDate = t.date || t.rawTransaction?.createdAt;
           if (!transactionDate) return false;
@@ -229,10 +297,14 @@ export const useBuyerWallet = () => {
         
         updateState({
           remainingDepositLimit: Math.max(0, remainingLimit),
-          transactionHistory: history,
+          transactionHistory: transactionArray,
         });
       } catch (historyError) {
         console.error('[BuyerWallet] Error getting transaction history:', historyError);
+        // Don't fail the whole sync if transaction history fails
+        updateState({
+          transactionHistory: [],
+        });
       }
       
     } catch (error) {
@@ -255,7 +327,7 @@ export const useBuyerWallet = () => {
 
   // Listen for changes in buyer balances
   useEffect(() => {
-    if (user?.username && buyerBalances[user.username] !== undefined) {
+    if (user?.username && buyerBalances && buyerBalances[user.username] !== undefined) {
       const newBalance = buyerBalances[user.username];
       if (Math.abs(newBalance - state.balance) > 0.01) {
         console.log('[BuyerWallet] Balance change detected:', newBalance);
@@ -276,8 +348,13 @@ export const useBuyerWallet = () => {
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
+    }
+    
+    // Return undefined when window is not available (SSR)
+    return undefined;
   }, [syncBalance]);
 
   // Periodic sync (every 15 seconds) - FIXED
@@ -491,8 +568,9 @@ export const useBuyerWallet = () => {
     updateState({ isLoadingHistory: true });
     try {
       const history = await getTransactionHistory(user.username, 50);
+      const transactionArray = Array.isArray(history) ? history : [];
       updateState({ 
-        transactionHistory: history,
+        transactionHistory: transactionArray,
         isLoadingHistory: false 
       });
     } catch (error) {
@@ -500,7 +578,8 @@ export const useBuyerWallet = () => {
       updateState({ 
         isLoadingHistory: false,
         message: 'Failed to load transaction history',
-        messageType: 'error'
+        messageType: 'error',
+        transactionHistory: []
       });
     }
   }, [user, getTransactionHistory, updateState]);

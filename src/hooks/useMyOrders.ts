@@ -98,6 +98,11 @@ function sanitizeOrder(order: any): ValidatedOrder | null {
     // Validate order structure
     const validated = OrderSchema.parse(orderWithDefaults);
     
+    // ✅ FIXED: Type-safe sanitization that preserves the correct types
+    const sanitizedMarkedUpPrice = validated.markedUpPrice 
+      ? sanitizeNumber(validated.markedUpPrice, 0.01, 100000) 
+      : validated.markedUpPrice; // This keeps it as undefined if it was undefined
+
     // ✅ ADDITIONAL: Sanitize string fields
     return {
       ...validated,
@@ -106,7 +111,7 @@ function sanitizeOrder(order: any): ValidatedOrder | null {
       seller: sanitizeStrict(validated.seller),
       buyer: sanitizeStrict(validated.buyer),
       price: sanitizeNumber(validated.price, 0.01, 100000),
-      markedUpPrice: validated.markedUpPrice ? sanitizeNumber(validated.markedUpPrice, 0.01, 100000) : undefined,
+      markedUpPrice: sanitizedMarkedUpPrice,
       trackingNumber: validated.trackingNumber ? sanitizeStrict(validated.trackingNumber) : undefined,
     };
   } catch (error) {
