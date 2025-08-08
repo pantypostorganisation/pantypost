@@ -260,10 +260,27 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setError(null);
 
     try {
-      // Load users
+      // Load users - FIXED: Handle new UsersResponse format with proper type checking
       const usersResult = await usersService.getUsers();
       if (usersResult.success && usersResult.data) {
-        setUsers(usersResult.data);
+        // Convert UsersResponse back to Record<string, User> format for backward compatibility
+        const usersMap: { [username: string]: any } = {};
+        
+        if (Array.isArray(usersResult.data)) {
+          // Handle case where data is directly an array
+          usersResult.data.forEach((user: any) => {
+            usersMap[user.username] = user;
+          });
+        } else if (usersResult.data && typeof usersResult.data === 'object' && 'users' in usersResult.data) {
+          // Handle case where data is UsersResponse object - check if users property exists and is array
+          const usersResponse = usersResult.data as any;
+          if (Array.isArray(usersResponse.users)) {
+            usersResponse.users.forEach((user: any) => {
+              usersMap[user.username] = user;
+            });
+          }
+        }
+        setUsers(usersMap);
       }
 
       // Load listings using the service

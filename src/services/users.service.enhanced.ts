@@ -281,14 +281,31 @@ export class EnhancedUsersService {
           });
         }
         
-        const response = await apiCall<UsersResponse>(
+        const response = await apiCall<any>(
           `${API_ENDPOINTS.USERS.LIST}?${queryParams.toString()}`
         );
         
         if (response.success && response.data) {
-          // Sanitize all users
-          const sanitizedUsers = response.data.users.map(user => this.sanitizeUserData(user));
-          const sanitizedResponse = { ...response.data, users: sanitizedUsers };
+          // CRITICAL FIX: Handle both response formats
+          let sanitizedResponse: UsersResponse;
+          
+          if (Array.isArray(response.data)) {
+            // Backend returns array directly
+            const sanitizedUsers = response.data.map((user: any) => this.sanitizeUserData(user));
+            sanitizedResponse = {
+              users: sanitizedUsers,
+              total: sanitizedUsers.length,
+              page: validatedParams?.page || 1,
+              totalPages: 1,
+            };
+          } else {
+            // Backend returns UsersResponse object
+            const sanitizedUsers = response.data.users?.map((user: any) => this.sanitizeUserData(user)) || [];
+            sanitizedResponse = { 
+              ...response.data, 
+              users: sanitizedUsers 
+            };
+          }
           
           // Cache the result
           this.listCache.set(cacheKey, {
@@ -296,10 +313,18 @@ export class EnhancedUsersService {
             expiresAt: Date.now() + CACHE_CONFIG.LIST_TTL,
           });
           
-          return { ...response, data: sanitizedResponse };
+          return { 
+            success: true, 
+            data: sanitizedResponse,
+            error: response.error,
+            meta: response.meta 
+          };
         }
         
-        return response;
+        return {
+          success: false,
+          error: response.error || { code: UserErrorCode.NETWORK_ERROR, message: 'Failed to get users' }
+        };
       }
 
       // LocalStorage implementation with advanced filtering

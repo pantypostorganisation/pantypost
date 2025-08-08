@@ -1,7 +1,7 @@
 // src/utils/ordersMigration.ts
 
 import type { Order } from '@/types/wallet';
-import { storageService, ordersService } from '@/services';
+import { storageService, ordersService, authService } from '@/services';
 
 /**
  * Orders Migration Utilities
@@ -34,6 +34,14 @@ export async function checkOrdersMigrationNeeded(): Promise<boolean> {
 export async function migrateOrdersToService(): Promise<{ success: boolean; migratedCount: number }> {
   try {
     console.log('[OrdersMigration] Starting orders migration...');
+
+    // CRITICAL FIX: Check if user is authenticated before attempting migration
+    const isAuthenticated = await authService.isAuthenticated();
+    if (!isAuthenticated) {
+      console.log('[OrdersMigration] No authenticated user - skipping API migration');
+      await storageService.setItem('orders_migrated_to_service', true);
+      return { success: true, migratedCount: 0 };
+    }
 
     // Get existing orders from storage
     const existingOrders = await storageService.getItem<Order[]>('wallet_orders', []);
@@ -128,6 +136,13 @@ export async function migrateOrdersToService(): Promise<{ success: boolean; migr
  */
 export async function syncOrdersWithService(): Promise<void> {
   try {
+    // CRITICAL FIX: Check if user is authenticated before attempting sync
+    const isAuthenticated = await authService.isAuthenticated();
+    if (!isAuthenticated) {
+      console.log('[OrdersSync] No authenticated user - skipping API sync');
+      return;
+    }
+
     // Get orders from both sources
     const [storageOrders, serviceResult] = await Promise.all([
       storageService.getItem<Order[]>('wallet_orders', []),
@@ -202,6 +217,13 @@ export async function validateOrderIntegrity(): Promise<{
   const issues: string[] = [];
 
   try {
+    // CRITICAL FIX: Check if user is authenticated before attempting validation
+    const isAuthenticated = await authService.isAuthenticated();
+    if (!isAuthenticated) {
+      console.log('[OrdersIntegrity] No authenticated user - skipping API validation');
+      return { valid: true, issues: [] };
+    }
+
     const result = await ordersService.getOrders();
     if (!result.success || !result.data) {
       issues.push('Failed to fetch orders from service');
@@ -246,6 +268,15 @@ export async function runOrdersMigration(): Promise<void> {
   try {
     console.log('[OrdersMigration] Checking if migration is needed...');
     
+    // CRITICAL FIX: Check authentication FIRST before any migration logic
+    const isAuthenticated = await authService.isAuthenticated();
+    if (!isAuthenticated) {
+      console.log('[OrdersMigration] No authenticated user - skipping all migration activities');
+      // Still set the migration flag to prevent future attempts during this session
+      await storageService.setItem('orders_migrated_to_service', true);
+      return;
+    }
+
     const needsMigration = await checkOrdersMigrationNeeded();
     
     if (needsMigration) {
@@ -262,13 +293,16 @@ export async function runOrdersMigration(): Promise<void> {
       console.log('[OrdersMigration] No migration needed');
     }
 
-    // Always run sync to ensure consistency
-    await syncOrdersWithService();
+    // Only run sync and validation if user is authenticated (double-check)
+    if (isAuthenticated) {
+      // Always run sync to ensure consistency
+      await syncOrdersWithService();
 
-    // Validate integrity
-    const validation = await validateOrderIntegrity();
-    if (!validation.valid) {
-      console.error('[OrdersMigration] Integrity issues found:', validation.issues);
+      // Validate integrity
+      const validation = await validateOrderIntegrity();
+      if (!validation.valid) {
+        console.error('[OrdersMigration] Integrity issues found:', validation.issues);
+      }
     }
   } catch (error) {
     console.error('[OrdersMigration] Migration process failed:', error);
