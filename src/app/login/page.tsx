@@ -200,7 +200,7 @@ export default function LoginPage() {
     setStep(2);
   }, [username, clearError]);
 
-  // Handle login - FIXED VERSION
+  // Handle login - UPDATED VERSION WITHOUT DEMO MODE
   const handleLogin = useCallback(async (e?: React.FormEvent) => {
     console.log('[Login] handleLogin called', {
       hasEvent: !!e,
@@ -209,7 +209,7 @@ export default function LoginPage() {
       isRateLimited,
       isMounted: isMountedRef.current,
       isLoading,
-      password: password || 'will use dummy',
+      hasPassword: !!password,
       loginFunction: !!login,
       loginType: typeof login
     });
@@ -230,6 +230,12 @@ export default function LoginPage() {
       return;
     }
     
+    // UPDATED: Require password
+    if (!password.trim()) {
+      setError('Please enter your password');
+      return;
+    }
+    
     if (!role) {
       setError('Please select a role');
       return;
@@ -242,9 +248,6 @@ export default function LoginPage() {
       return;
     }
     
-    // Use the password from state or a dummy password
-    const loginPassword = password || 'password123';
-    
     console.log('[Login] Validation passed, setting loading state');
     setIsLoading(true);
     setError('');
@@ -252,11 +255,12 @@ export default function LoginPage() {
     try {
       console.log('[Login] Calling auth login function with:', {
         username: username.trim(),
-        passwordLength: loginPassword.length,
+        passwordLength: password.length,
         role
       });
       
-      const success = await login(username.trim(), loginPassword, role);
+      // UPDATED: Use actual password
+      const success = await login(username.trim(), password, role);
       
       console.log('[Login] Auth login returned:', success);
       
