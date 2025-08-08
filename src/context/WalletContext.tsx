@@ -247,7 +247,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Fetching balance for:', username);
       
-      // FIXED: Remove /api prefix - backend routes are /wallet/balance/:username
       const response = await apiClient.get<any>(`/wallet/balance/${username}`);
       
       console.log('[WalletContext] Balance response:', response);
@@ -269,7 +268,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Fetching transactions for:', username);
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.get<any>(`/wallet/transactions/${username}`);
       
       console.log('[WalletContext] Transactions response:', response);
@@ -458,7 +456,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Creating order via API:', order);
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.post<any>('/orders', {
         title: order.title,
         description: order.description,
@@ -508,12 +505,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('[WalletContext] Processing deposit via API:', {
         username: validatedUsername,
         amount: validatedAmount,
-        method
+        method,
+        authUser: user?.username
       });
       
-      // FIXED: Remove /api prefix
+      // The backend gets username from the auth token, not the request body
+      // So we only send amount, method, and notes
       const response = await apiClient.post<any>('/wallet/deposit', {
-        username: validatedUsername,
         amount: validatedAmount,
         method,
         notes,
@@ -522,35 +520,47 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('[WalletContext] Deposit response:', response);
       
       if (response.success) {
+        // Wait a moment for the transaction to be processed
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Refresh balance after deposit
         const newBalance = await fetchBalance(validatedUsername);
+        console.log('[WalletContext] New balance after deposit:', newBalance);
+        
         setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
         
         // Add to local deposit logs
-        if (response.data) {
-          setDepositLogs(prev => [...prev, {
-            id: response.data.id,
-            username: validatedUsername,
-            amount: validatedAmount,
-            method,
-            date: response.data.createdAt || new Date().toISOString(),
-            status: response.data.status || 'completed',
-            transactionId: response.data.id,
-            notes,
-          }]);
-        }
+        const depositLog: DepositLog = {
+          id: response.data?.id || uuidv4(),
+          username: validatedUsername,
+          amount: validatedAmount,
+          method,
+          date: response.data?.createdAt || new Date().toISOString(),
+          status: 'completed',
+          transactionId: response.data?.id || uuidv4(),
+          notes,
+        };
+        
+        setDepositLogs(prev => [...prev, depositLog]);
+        
+        // Emit WebSocket event for real-time update
+        emitBalanceUpdate(validatedUsername, 'buyer', newBalance);
         
         console.log('[WalletContext] Deposit successful');
         return true;
+      } else {
+        console.error('[WalletContext] Deposit failed:', response.error);
+        // Show the actual error from the backend
+        if (response.error?.message) {
+          throw new Error(response.error.message);
+        }
+        return false;
       }
-      
-      console.error('[WalletContext] Deposit failed:', response.error);
-      return false;
     } catch (error) {
-      console.error('Error processing deposit:', error);
-      return false;
+      console.error('[WalletContext] Error processing deposit:', error);
+      throw error;
     }
-  }, [apiClient, fetchBalance]);
+  }, [apiClient, fetchBalance, emitBalanceUpdate, user]);
 
   // Purchase listing (simplified - actual implementation would call order API)
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
@@ -611,7 +621,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         amount: validatedAmount
       });
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.post<any>('/wallet/withdraw', {
         username: validatedUsername,
         amount: validatedAmount,
@@ -673,7 +682,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         reason: sanitizedReason
       });
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.post<any>('/wallet/admin-actions', {
         action: 'credit',
         username: validatedUsername,
@@ -742,7 +750,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         reason: sanitizedReason
       });
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.post<any>('/wallet/admin-actions', {
         action: 'debit',
         username: validatedUsername,
@@ -802,7 +809,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const endpoint = `/wallet/transactions/${targetUsername}${limit ? `?limit=${limit}` : ''}`;
       console.log('[WalletContext] Fetching transaction history:', endpoint);
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.get<any>(endpoint);
       
       console.log('[WalletContext] Transaction history response:', response);
@@ -842,7 +848,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Processing subscription via API:', { buyer, seller, amount });
       
-      // FIXED: Remove /api prefix
       const response = await apiClient.post<any>('/subscriptions/subscribe', {
         buyer, 
         seller, 
