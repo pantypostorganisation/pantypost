@@ -1,8 +1,9 @@
 // src/hooks/useMyOrders.ts
 
-import { useState, useMemo, useCallback, useContext } from 'react';
+import { useState, useMemo, useCallback, useContext, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { WalletContext } from '@/context/WalletContext';
+import { ordersService } from '@/services/orders.service';
 import type { Order } from '@/types/order';
 import { useListings } from '@/context/ListingContext';
 import type { DeliveryAddress } from '@/types/order';
@@ -90,10 +91,52 @@ export function useMyOrders() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
+  
+  // 🔧 NEW: Direct API order fetching
+  const [apiOrders, setApiOrders] = useState<Order[]>([]);
+  const [isLoadingApiOrders, setIsLoadingApiOrders] = useState(false);
+  
+  // 🔧 NEW: Load orders directly from API
+  const loadOrdersFromApi = useCallback(async () => {
+    if (!user?.username || isLoadingApiOrders) return;
+    
+    setIsLoadingApiOrders(true);
+    try {
+      console.log('[useMyOrders] Loading orders from API for buyer:', user.username);
+      
+      const result = await ordersService.getOrders({ buyer: user.username });
+      
+      if (result.success && result.data) {
+        const sanitizedOrders = result.data
+          .map(order => sanitizeOrder(order))
+          .filter((order): order is Order => order !== null);
+        
+        console.log('[useMyOrders] Loaded', sanitizedOrders.length, 'orders from API');
+        setApiOrders(sanitizedOrders);
+        setErrors([]);
+      } else {
+        console.warn('[useMyOrders] Failed to load orders:', result.error);
+        setErrors([result.error?.message || 'Failed to load orders']);
+      }
+    } catch (error) {
+      console.error('[useMyOrders] Error loading orders:', error);
+      setErrors(['Failed to load orders from server']);
+    } finally {
+      setIsLoadingApiOrders(false);
+    }
+  }, [user?.username, isLoadingApiOrders]);
+  
+  // 🔧 NEW: Load orders on mount and when user changes
+  useEffect(() => {
+    if (user?.username) {
+      loadOrdersFromApi();
+    }
+  }, [user?.username, loadOrdersFromApi]);
 
-  // Get order history safely with validation
+  // 🔧 ENHANCED: Combine wallet context orders with API orders, prioritizing API
   const orderHistory = useMemo(() => {
-    const rawOrders = walletContext?.orderHistory || [];
+    // If we have API orders, use those. Otherwise fall back to wallet context orders.
+    const rawOrders = apiOrders.length > 0 ? apiOrders : (walletContext?.orderHistory || []);
     const validOrders: Order[] = [];
     const invalidCount = { count: 0 };
     
@@ -111,9 +154,32 @@ export function useMyOrders() {
     }
     
     return validOrders;
-  }, [walletContext?.orderHistory]);
+  }, [apiOrders, walletContext?.orderHistory]);
 
-  const updateOrderAddress = walletContext?.updateOrderAddress || (() => {});
+  // 🔧 ENHANCED: Update order address via API
+  const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
+    if (!orderId || !address) {
+      console.error('[useMyOrders] Invalid order ID or address');
+      return;
+    }
+    
+    try {
+      console.log('[useMyOrders] Updating order address via API:', { orderId, address });
+      
+      const success = await ordersService.updateOrderAddress(orderId, address);
+      
+      if (success) {
+        // Reload orders to get updated data
+        await loadOrdersFromApi();
+        setErrors([]);
+      } else {
+        setErrors(['Failed to update delivery address']);
+      }
+    } catch (error) {
+      console.error('[useMyOrders] Error updating order address:', error);
+      setErrors(['Failed to update address']);
+    }
+  }, [loadOrdersFromApi]);
 
   // Sanitized search query setter
   const handleSearchQueryChange = useCallback((query: string) => {
@@ -244,8 +310,8 @@ export function useMyOrders() {
     setAddressModalOpen(true);
   }, [orderHistory]);
 
-  const handleConfirmAddress = useCallback((address: DeliveryAddress) => {
-    if (!selectedOrder || !walletContext) {
+  const handleConfirmAddress = useCallback(async (address: DeliveryAddress) => {
+    if (!selectedOrder) {
       setErrors(['No order selected']);
       return;
     }
@@ -257,7 +323,7 @@ export function useMyOrders() {
     }
     
     try {
-      updateOrderAddress(selectedOrder, address);
+      await updateOrderAddress(selectedOrder, address);
       setAddressModalOpen(false);
       setSelectedOrder(null);
       setErrors([]);
@@ -265,7 +331,7 @@ export function useMyOrders() {
       console.error('Error updating address:', error);
       setErrors(['Failed to update address']);
     }
-  }, [selectedOrder, updateOrderAddress, walletContext]);
+  }, [selectedOrder, updateOrderAddress]);
 
   const getSelectedOrderAddress = useCallback((): DeliveryAddress | null => {
     if (!selectedOrder) return null;
@@ -312,6 +378,11 @@ export function useMyOrders() {
     }
   }, []);
 
+  // 🔧 NEW: Refresh orders from API
+  const refreshOrders = useCallback(async () => {
+    await loadOrdersFromApi();
+  }, [loadOrdersFromApi]);
+
   return {
     // Data
     user,
@@ -321,6 +392,9 @@ export function useMyOrders() {
     customRequestOrders,
     auctionOrders,
     stats,
+    
+    // Loading state
+    isLoadingApiOrders,
     
     // UI State
     searchQuery,
@@ -342,5 +416,6 @@ export function useMyOrders() {
     handleConfirmAddress,
     toggleSort,
     getSelectedOrderAddress,
+    refreshOrders,
   };
 }

@@ -1,12 +1,15 @@
 // src/components/browse-detail/PurchaseSection.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Heart, Crown, ShoppingBag, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import { formatMoney } from '@/utils/format';
 import { Money } from '@/types/common';
 import { Listing } from '@/context/ListingContext';
+import { DeliveryAddress } from '@/types/order';
 
 interface PurchaseSectionProps {
   listing: Listing;
@@ -17,6 +20,16 @@ interface PurchaseSectionProps {
   toggleFavorite: () => void;
   onSubscribeClick: () => void;
 }
+
+// Mock delivery address for now - in production you'd get this from user profile
+const DEFAULT_DELIVERY_ADDRESS: DeliveryAddress = {
+  fullName: 'John Doe',
+  addressLine1: '123 Main St',
+  city: 'New York',
+  state: 'NY',
+  postalCode: '10001',
+  country: 'US',
+};
 
 export default function PurchaseSection({
   listing,
@@ -29,14 +42,105 @@ export default function PurchaseSection({
 }: PurchaseSectionProps) {
   const router = useRouter();
   const { isSubscribed } = useListings();
-  const { getBuyerBalance } = useWallet();
+  const { getBuyerBalance, purchaseListing, reloadData } = useWallet();
+  const { showToast } = useToast();
+  const [isPurchasing, setIsPurchasing] = useState(false);
   
   const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
   const isSeller = user?.username === listing.seller;
   
   // Get buyer's balance
   const buyerBalance = user ? getBuyerBalance(user.username) : 0;
-  const canAfford = buyerBalance >= (listing.markedUpPrice || listing.price);
+  const purchasePrice = listing.markedUpPrice || listing.price;
+  const canAfford = buyerBalance >= purchasePrice;
+
+  // 🔧 NEW: Real purchase handler that calls backend API
+  const handleRealPurchase = async () => {
+    if (!user || isPurchasing || isProcessing) return;
+    
+    // Validation
+    if (isSeller) {
+      showToast({ type: 'error', title: 'You cannot purchase your own listing' });
+      return;
+    }
+    
+    if (listing.isPremium && !isUserSubscribed) {
+      showToast({ type: 'error', title: 'You must be subscribed to purchase premium content' });
+      return;
+    }
+    
+    if (!canAfford) {
+      showToast({ type: 'error', title: 'Insufficient balance. Please add funds to your wallet.' });
+      router.push('/wallet/buyer');
+      return;
+    }
+
+    setIsPurchasing(true);
+    
+    try {
+      console.log('[PurchaseSection] Starting purchase:', {
+        listing: listing.title,
+        price: purchasePrice,
+        buyer: user.username,
+        seller: listing.seller,
+        listingId: listing.id
+      });
+      
+      // 🔧 ENHANCED: Call WalletContext.purchaseListing with better error handling
+      const success = await purchaseListing(
+        {
+          id: listing.id,
+          title: listing.title,
+          description: listing.description,
+          price: listing.price,
+          markedUpPrice: purchasePrice,
+          imageUrls: listing.imageUrls,
+          seller: listing.seller,
+          tags: listing.tags || [],
+        } as any,
+        user.username
+      );
+      
+      console.log('[PurchaseSection] Purchase result:', success);
+      
+      if (success) {
+        showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
+        
+        // Reload wallet data to get updated balance and orders
+        console.log('[PurchaseSection] Reloading wallet data...');
+        await reloadData();
+        
+        // Wait a moment for the data to sync
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Redirect to orders page to see the new order
+        router.push('/buyers/my-orders');
+      } else {
+        console.error('[PurchaseSection] Purchase failed - purchaseListing returned false');
+        showToast({ type: 'error', title: 'Purchase failed. Please check your balance and try again.' });
+      }
+    } catch (error) {
+      console.error('[PurchaseSection] Purchase error:', error);
+      
+      // Show more detailed error information
+      let errorMessage = 'Purchase failed. Please try again.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        console.log('[PurchaseSection] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      }
+      
+      showToast({
+        type: 'error',
+        title: errorMessage
+      });
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
 
   if (listing.auction && listing.auction.status === 'active') {
     // Auction listing - show in AuctionSection instead
@@ -49,7 +153,7 @@ export default function PurchaseSection({
         <div>
           <p className="text-sm text-gray-400">Price</p>
           <p className="text-3xl font-bold text-white">
-            {formatMoney(Money.fromDollars(listing.markedUpPrice))}
+            {formatMoney(Money.fromDollars(purchasePrice))}
           </p>
         </div>
         {user?.role === 'buyer' && (
@@ -87,7 +191,7 @@ export default function PurchaseSection({
             <div className="flex-1">
               <p className="text-red-500 font-semibold">Insufficient Balance</p>
               <p className="text-sm text-red-400 mt-1">
-                You need {formatMoney(Money.fromDollars(listing.markedUpPrice - buyerBalance))} more to purchase this item
+                You need {formatMoney(Money.fromDollars(purchasePrice - buyerBalance))} more to purchase this item
               </p>
               <button
                 onClick={() => router.push('/wallet/buyer')}
@@ -125,16 +229,16 @@ export default function PurchaseSection({
         </button>
       ) : (
         <button
-          onClick={handlePurchase}
-          disabled={isProcessing || !canAfford}
+          onClick={handleRealPurchase}
+          disabled={isPurchasing || isProcessing || !canAfford}
           className={`w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-            canAfford
+            canAfford && !isPurchasing
               ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
               : 'bg-gray-700 text-gray-400 cursor-not-allowed'
           }`}
         >
           <ShoppingBag className="w-5 h-5" />
-          {isProcessing ? 'Processing...' : 'Purchase Now'}
+          {isPurchasing ? 'Processing Purchase...' : isProcessing ? 'Processing...' : 'Purchase Now'}
         </button>
       )}
 

@@ -44,7 +44,7 @@ webSocketService.initialize(server);
 // Connect to MongoDB
 connectDB();
 
-// Middleware - UPDATED CORS CONFIGURATION
+// 🔧 FIXED CORS CONFIGURATION - Allow all frontend headers
 app.use(cors({
   origin: [
     'http://localhost:3000',           // Your local frontend
@@ -53,8 +53,19 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-CSRF-Token',
+    'X-Client-Version',
+    'X-App-Name',
+    'X-Content-Type-Options',
+    'X-Frame-Options',
+    'X-XSS-Protection',
+    'X-Request-ID'
+  ]
 }));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true })); // For form data
 app.use(express.static(__dirname)); // Serve static files from current directory
