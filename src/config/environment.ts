@@ -62,8 +62,8 @@ export const appConfig = {
 
 // API configuration
 export const apiConfig = {
-  // 🔧 FIXED: Use NEXT_PUBLIC_API_URL instead of NEXT_PUBLIC_API_BASE_URL
-  baseUrl: getEnvVar('NEXT_PUBLIC_API_URL', 'http://localhost:5000/api'),
+  // 🔧 FIX: Use correct backend URL for development
+  baseUrl: getEnvVar('NEXT_PUBLIC_API_BASE_URL', 'http://localhost:5000'),
   timeout: getEnvNumber('NEXT_PUBLIC_API_TIMEOUT', 30000),
   retryAttempts: getEnvNumber('NEXT_PUBLIC_API_RETRY_ATTEMPTS', 3),
   
@@ -157,7 +157,7 @@ export function validateConfiguration(): { valid: boolean; errors: string[] } {
 
   // Validate API configuration
   if (!apiConfig.features.useMockApi && !apiConfig.baseUrl) {
-    errors.push('NEXT_PUBLIC_API_URL is required when not using mock API');
+    errors.push('NEXT_PUBLIC_API_BASE_URL is required when not using mock API');
   }
 
   // Validate Cloudinary in production
@@ -196,7 +196,6 @@ export function getAllConfig() {
 // Log configuration in development
 if (isDevelopment() && typeof window !== 'undefined') {
   console.log('[Environment] Current configuration:', getAllConfig());
-  console.log('[Environment] API Base URL:', getEnvVar('NEXT_PUBLIC_API_URL', 'not found'));
   
   const validation = validateConfiguration();
   if (!validation.valid) {
