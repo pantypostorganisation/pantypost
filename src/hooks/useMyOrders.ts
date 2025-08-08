@@ -1,8 +1,7 @@
 // src/hooks/useMyOrders.ts
 
-import { useState, useMemo, useCallback, useContext, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { WalletContext } from '@/context/WalletContext';
 import { ordersService } from '@/services/orders.service';
 import type { Order } from '@/types/order';
 import { useListings } from '@/context/ListingContext';
@@ -10,34 +9,68 @@ import type { DeliveryAddress } from '@/types/order';
 import { sanitizeStrict, sanitizeSearchQuery, sanitizeNumber } from '@/utils/security/sanitization';
 import { z } from 'zod';
 
-// Order validation schema matching the WalletContext Order type
+// ✅ FIXED: Updated validation schema to match backend response format
 const OrderSchema = z.object({
-  id: z.string(),
+  // Backend uses _id (MongoDB) or id, so handle both
+  _id: z.string().optional(),
+  id: z.string().optional(),
   title: z.string(),
   description: z.string(),
   price: z.number().positive(),
   markedUpPrice: z.number().positive().optional(),
-  imageUrl: z.string().optional(), // FIXED: Changed from imageUrls array to imageUrl string
+  // ✅ FIXED: Backend returns imageUrl (string), not imageUrls (array)
+  imageUrl: z.string().optional(),
   seller: z.string(),
   buyer: z.string(),
   date: z.string(),
-  shippingStatus: z.enum(['pending', 'processing', 'shipped', 'delivered', 'pending-auction']).optional(),
+  shippingStatus: z.enum(['pending', 'processing', 'shipped', 'delivered', 'cancelled']).optional(),
   wasAuction: z.boolean().optional(),
-  isCustomRequest: z.boolean().optional(),
-  deliveryAddress: z.any().optional(),
+  deliveryAddress: z.object({
+    fullName: z.string(),
+    addressLine1: z.string(),
+    addressLine2: z.string().optional(),
+    city: z.string(),
+    state: z.string(),
+    postalCode: z.string(),
+    country: z.string()
+  }).optional(),
   listingId: z.string().optional(),
   trackingNumber: z.string().optional(),
   shippedDate: z.string().optional(),
   deliveredDate: z.string().optional(),
-  // Add any other fields that might be on the order
   tags: z.array(z.string()).optional(),
-  wearTime: z.string().optional(),
   finalBid: z.number().optional(),
   tierCreditAmount: z.number().optional(),
-  originalRequestId: z.string().optional(),
-  listingTitle: z.string().optional(),
-  quantity: z.number().optional()
-});
+  platformFee: z.number().optional(),
+  sellerEarnings: z.number().optional(),
+  paymentStatus: z.enum(['pending', 'completed', 'failed', 'refunded']).optional(),
+  paymentCompletedAt: z.string().optional(),
+}).transform((data) => ({
+  // ✅ CRITICAL: Ensure we always have an id field
+  id: data.id || data._id || `order-${Date.now()}-${Math.random()}`,
+  title: data.title,
+  description: data.description,
+  price: data.price,
+  markedUpPrice: data.markedUpPrice || data.price,
+  imageUrl: data.imageUrl || '',
+  seller: data.seller,
+  buyer: data.buyer,
+  date: data.date,
+  shippingStatus: data.shippingStatus || 'pending',
+  wasAuction: data.wasAuction || false,
+  deliveryAddress: data.deliveryAddress,
+  listingId: data.listingId,
+  trackingNumber: data.trackingNumber,
+  shippedDate: data.shippedDate,
+  deliveredDate: data.deliveredDate,
+  tags: data.tags || [],
+  finalBid: data.finalBid,
+  tierCreditAmount: data.tierCreditAmount,
+  platformFee: data.platformFee,
+  sellerEarnings: data.sellerEarnings,
+  paymentStatus: data.paymentStatus,
+  paymentCompletedAt: data.paymentCompletedAt,
+}));
 
 type ValidatedOrder = z.infer<typeof OrderSchema>;
 
@@ -47,42 +80,52 @@ export interface OrderStats {
   shippedOrders: number;
 }
 
-// Helper function to validate and sanitize order
+// ✅ IMPROVED: Better error handling in sanitization
 function sanitizeOrder(order: any): ValidatedOrder | null {
   try {
-    // Add default description if missing
+    console.log('[useMyOrders] Sanitizing order:', order);
+    
+    // ✅ FIXED: Add required defaults for missing fields
     const orderWithDefaults = {
       ...order,
-      description: order.description || 'No description available'
+      // Ensure we have an ID from either _id or id field
+      id: order.id || order._id || `order-${Date.now()}-${Math.random()}`,
+      description: order.description || order.title || 'No description available',
+      shippingStatus: order.shippingStatus || 'pending',
+      date: order.date || order.createdAt || new Date().toISOString(),
     };
     
     // Validate order structure
     const validated = OrderSchema.parse(orderWithDefaults);
     
-    // Sanitize string fields
+    // ✅ ADDITIONAL: Sanitize string fields
     return {
       ...validated,
       title: sanitizeStrict(validated.title),
       description: sanitizeStrict(validated.description),
       seller: sanitizeStrict(validated.seller),
       buyer: sanitizeStrict(validated.buyer),
-      price: sanitizeNumber(validated.price, 0, 10000),
-      markedUpPrice: validated.markedUpPrice ? sanitizeNumber(validated.markedUpPrice, 0, 10000) : undefined,
+      price: sanitizeNumber(validated.price, 0.01, 100000),
+      markedUpPrice: validated.markedUpPrice ? sanitizeNumber(validated.markedUpPrice, 0.01, 100000) : undefined,
       trackingNumber: validated.trackingNumber ? sanitizeStrict(validated.trackingNumber) : undefined,
-      imageUrl: validated.imageUrl // Preserve the imageUrl
     };
   } catch (error) {
-    console.error('Invalid order data:', error);
+    console.error('[useMyOrders] Invalid order data:', error);
+    console.error('[useMyOrders] Raw order data that failed:', order);
     return null;
   }
 }
 
 export function useMyOrders() {
   const { user } = useAuth();
-  const walletContext = useContext(WalletContext);
   const { users } = useListings();
   
-  // State
+  // ✅ SIMPLIFIED: Single source of truth for orders
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  
+  // UI State
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'date' | 'price' | 'status'>('date');
@@ -90,76 +133,77 @@ export function useMyOrders() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processing' | 'shipped'>('all');
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [errors, setErrors] = useState<string[]>([]);
   
-  // 🔧 NEW: Direct API order fetching
-  const [apiOrders, setApiOrders] = useState<Order[]>([]);
-  const [isLoadingApiOrders, setIsLoadingApiOrders] = useState(false);
-  
-  // 🔧 NEW: Load orders directly from API
-  const loadOrdersFromApi = useCallback(async () => {
-    if (!user?.username || isLoadingApiOrders) return;
+  // ✅ PRIMARY: Load orders from API only
+  const loadOrders = useCallback(async () => {
+    if (!user?.username || isLoading) return;
     
-    setIsLoadingApiOrders(true);
+    setIsLoading(true);
+    setErrors([]);
+    
     try {
       console.log('[useMyOrders] Loading orders from API for buyer:', user.username);
       
       const result = await ordersService.getOrders({ buyer: user.username });
       
+      console.log('[useMyOrders] API response:', result);
+      
       if (result.success && result.data) {
-        const sanitizedOrders = result.data
-          .map(order => sanitizeOrder(order))
-          .filter((order): order is Order => order !== null);
+        console.log('[useMyOrders] Raw orders from API:', result.data);
         
-        console.log('[useMyOrders] Loaded', sanitizedOrders.length, 'orders from API');
-        setApiOrders(sanitizedOrders);
+        // ✅ CRITICAL: Sanitize each order and filter out invalid ones
+        const validOrders: Order[] = [];
+        const invalidOrders: any[] = [];
+        
+        result.data.forEach((rawOrder, index) => {
+          const sanitized = sanitizeOrder(rawOrder);
+          if (sanitized) {
+            validOrders.push(sanitized as Order);
+          } else {
+            invalidOrders.push(rawOrder);
+            console.warn(`[useMyOrders] Order ${index} failed validation:`, rawOrder);
+          }
+        });
+        
+        console.log('[useMyOrders] Successfully validated', validOrders.length, 'orders');
+        if (invalidOrders.length > 0) {
+          console.warn('[useMyOrders]', invalidOrders.length, 'orders failed validation');
+        }
+        
+        setOrders(validOrders);
         setErrors([]);
       } else {
-        console.warn('[useMyOrders] Failed to load orders:', result.error);
-        setErrors([result.error?.message || 'Failed to load orders']);
+        console.error('[useMyOrders] Failed to load orders:', result.error);
+        setErrors([result.error?.message || 'Failed to load orders from server']);
+        setOrders([]);
       }
     } catch (error) {
       console.error('[useMyOrders] Error loading orders:', error);
       setErrors(['Failed to load orders from server']);
+      setOrders([]);
     } finally {
-      setIsLoadingApiOrders(false);
+      setIsLoading(false);
     }
-  }, [user?.username, isLoadingApiOrders]);
+  }, [user?.username, isLoading]);
   
-  // 🔧 NEW: Load orders on mount and when user changes
+  // ✅ AUTOMATIC: Load orders on mount and when user changes
   useEffect(() => {
     if (user?.username) {
-      loadOrdersFromApi();
+      loadOrders();
+    } else {
+      setOrders([]);
+      setErrors([]);
     }
-  }, [user?.username, loadOrdersFromApi]);
+  }, [user?.username, loadOrders]);
 
-  // 🔧 ENHANCED: Combine wallet context orders with API orders, prioritizing API
-  const orderHistory = useMemo(() => {
-    // If we have API orders, use those. Otherwise fall back to wallet context orders.
-    const rawOrders = apiOrders.length > 0 ? apiOrders : (walletContext?.orderHistory || []);
-    const validOrders: Order[] = [];
-    const invalidCount = { count: 0 };
-    
-    rawOrders.forEach(order => {
-      const sanitized = sanitizeOrder(order);
-      if (sanitized) {
-        validOrders.push(sanitized as Order);
-      } else {
-        invalidCount.count++;
-      }
-    });
-    
-    if (invalidCount.count > 0) {
-      console.warn(`${invalidCount.count} invalid orders filtered out`);
-    }
-    
-    return validOrders;
-  }, [apiOrders, walletContext?.orderHistory]);
+  // ✅ SIMPLIFIED: Use single orders array
+  const orderHistory = useMemo(() => orders, [orders]);
 
-  // 🔧 ENHANCED: Update order address via API
+  // ✅ IMPROVED: Update order address via API
   const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
     if (!orderId || !address) {
       console.error('[useMyOrders] Invalid order ID or address');
+      setErrors(['Invalid order ID or address']);
       return;
     }
     
@@ -170,16 +214,18 @@ export function useMyOrders() {
       
       if (success) {
         // Reload orders to get updated data
-        await loadOrdersFromApi();
+        await loadOrders();
         setErrors([]);
+        console.log('[useMyOrders] Address updated successfully');
       } else {
+        console.error('[useMyOrders] Failed to update address');
         setErrors(['Failed to update delivery address']);
       }
     } catch (error) {
       console.error('[useMyOrders] Error updating order address:', error);
-      setErrors(['Failed to update address']);
+      setErrors(['Failed to update address - please try again']);
     }
-  }, [loadOrdersFromApi]);
+  }, [loadOrders]);
 
   // Sanitized search query setter
   const handleSearchQueryChange = useCallback((query: string) => {
@@ -187,15 +233,15 @@ export function useMyOrders() {
     setSearchQuery(sanitized);
   }, []);
 
-  // Filter and sort orders with validation
+  // ✅ ENHANCED: Filter and sort orders
   const userOrders = useMemo(() => {
     if (!user?.username) return [];
     
     let filtered = orderHistory.filter(order => order.buyer === user.username);
     
-    // Apply search filter with sanitized query
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const lowerQuery = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(order => 
         order.title.toLowerCase().includes(lowerQuery) ||
         order.seller.toLowerCase().includes(lowerQuery) ||
@@ -206,17 +252,16 @@ export function useMyOrders() {
     // Apply status filter
     if (filterStatus !== 'all') {
       filtered = filtered.filter(order => {
+        const status = order.shippingStatus || 'pending';
+        
         if (filterStatus === 'pending') {
-          // Include both 'pending' and 'pending-auction' when filtering for pending
-          return order.shippingStatus === 'pending' || 
-                 order.shippingStatus === 'pending-auction' || 
-                 !order.shippingStatus;
+          return status === 'pending' || status === 'pending-auction';
         }
-        return order.shippingStatus === filterStatus;
+        return status === filterStatus;
       });
     }
     
-    // Sort orders with validation
+    // Sort orders
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
       
@@ -231,16 +276,16 @@ export function useMyOrders() {
           }
           break;
         case 'price':
-          aValue = a.markedUpPrice || a.price;
-          bValue = b.markedUpPrice || b.price;
+          aValue = a.markedUpPrice || a.price || 0;
+          bValue = b.markedUpPrice || b.price || 0;
           break;
         case 'status':
           const statusOrder: Record<string, number> = { 
             'pending': 0,
-            'pending-auction': 1,
-            'processing': 2,
-            'shipped': 3,
-            'delivered': 4
+            'processing': 1,
+            'shipped': 2,
+            'delivered': 3,
+            'cancelled': 4
           };
           aValue = statusOrder[a.shippingStatus || 'pending'] || 0;
           bValue = statusOrder[b.shippingStatus || 'pending'] || 0;
@@ -259,7 +304,7 @@ export function useMyOrders() {
     return filtered;
   }, [user?.username, orderHistory, searchQuery, filterStatus, sortBy, sortOrder]);
 
-  // Separate orders by type with safe filtering
+  // ✅ ENHANCED: Separate orders by type
   const directOrders = useMemo(() => 
     userOrders.filter(order => !order.wasAuction && !order.isCustomRequest),
     [userOrders]
@@ -275,31 +320,34 @@ export function useMyOrders() {
     [userOrders]
   );
 
-  // Calculate stats with validation
+  // ✅ IMPROVED: Calculate stats with proper validation
   const stats: OrderStats = useMemo(() => {
     const totalSpent = userOrders.reduce((sum, order) => {
-      const price = order.markedUpPrice || order.price;
-      // Validate price is a positive number
-      if (typeof price === 'number' && price > 0 && price <= 10000) {
+      const price = order.markedUpPrice || order.price || 0;
+      if (typeof price === 'number' && price > 0) {
         return sum + price;
       }
       return sum;
     }, 0);
 
+    const pendingCount = userOrders.filter(order => {
+      const status = order.shippingStatus || 'pending';
+      return status === 'pending' || status === 'processing';
+    }).length;
+
+    const shippedCount = userOrders.filter(order => 
+      order.shippingStatus === 'shipped'
+    ).length;
+
     return {
       totalSpent: Math.max(0, totalSpent),
-      pendingOrders: Math.max(0, userOrders.filter(order => 
-        !order.shippingStatus || 
-        order.shippingStatus === 'pending' || 
-        order.shippingStatus === 'pending-auction'
-      ).length),
-      shippedOrders: Math.max(0, userOrders.filter(order => order.shippingStatus === 'shipped').length),
+      pendingOrders: Math.max(0, pendingCount),
+      shippedOrders: Math.max(0, shippedCount),
     };
   }, [userOrders]);
 
-  // Handlers
+  // ✅ ENHANCED: Event handlers with proper validation
   const handleOpenAddressModal = useCallback((orderId: string) => {
-    // Validate order exists
     const orderExists = orderHistory.some(order => order.id === orderId);
     if (!orderExists) {
       setErrors(['Invalid order selected']);
@@ -308,6 +356,7 @@ export function useMyOrders() {
     
     setSelectedOrder(orderId);
     setAddressModalOpen(true);
+    setErrors([]);
   }, [orderHistory]);
 
   const handleConfirmAddress = useCallback(async (address: DeliveryAddress) => {
@@ -316,9 +365,8 @@ export function useMyOrders() {
       return;
     }
     
-    // Validate address data
-    if (!address || typeof address !== 'object') {
-      setErrors(['Invalid address data']);
+    if (!address || typeof address !== 'object' || !address.fullName || !address.addressLine1) {
+      setErrors(['Please fill in all required address fields']);
       return;
     }
     
@@ -328,8 +376,7 @@ export function useMyOrders() {
       setSelectedOrder(null);
       setErrors([]);
     } catch (error) {
-      console.error('Error updating address:', error);
-      setErrors(['Failed to update address']);
+      console.error('[useMyOrders] Error updating address:', error);
     }
   }, [selectedOrder, updateOrderAddress]);
 
@@ -337,11 +384,7 @@ export function useMyOrders() {
     if (!selectedOrder) return null;
     
     const order = orderHistory.find(order => order.id === selectedOrder);
-    if (!order?.deliveryAddress) return null;
-    
-    // Return the delivery address as-is since we don't know its exact structure
-    // The DeliveryAddress type should handle its own validation
-    return order.deliveryAddress;
+    return order?.deliveryAddress || null;
   }, [selectedOrder, orderHistory]);
 
   const toggleSort = useCallback((field: 'date' | 'price' | 'status') => {
@@ -353,14 +396,12 @@ export function useMyOrders() {
     }
   }, [sortBy, sortOrder]);
 
-  // Safe expanded order toggle - now accepts string | null
   const handleToggleExpanded = useCallback((orderId: string | null) => {
     if (orderId === null) {
       setExpandedOrder(null);
       return;
     }
     
-    // Validate order exists
     const orderExists = orderHistory.some(order => order.id === orderId);
     if (!orderExists) {
       setErrors(['Invalid order']);
@@ -368,20 +409,27 @@ export function useMyOrders() {
     }
     
     setExpandedOrder(prev => prev === orderId ? null : orderId);
+    setErrors([]);
   }, [orderHistory]);
 
-  // Safe filter status setter
   const handleFilterStatusChange = useCallback((status: 'all' | 'pending' | 'processing' | 'shipped') => {
     const validStatuses = ['all', 'pending', 'processing', 'shipped'];
     if (validStatuses.includes(status)) {
       setFilterStatus(status);
+      setErrors([]);
     }
   }, []);
 
-  // 🔧 NEW: Refresh orders from API
+  // ✅ PUBLIC: Refresh method
   const refreshOrders = useCallback(async () => {
-    await loadOrdersFromApi();
-  }, [loadOrdersFromApi]);
+    console.log('[useMyOrders] Manual refresh requested');
+    await loadOrders();
+  }, [loadOrders]);
+
+  // ✅ PUBLIC: Clear errors
+  const clearErrors = useCallback(() => {
+    setErrors([]);
+  }, []);
 
   return {
     // Data
@@ -393,8 +441,9 @@ export function useMyOrders() {
     auctionOrders,
     stats,
     
-    // Loading state
-    isLoadingApiOrders,
+    // Loading and error state
+    isLoading,
+    errors,
     
     // UI State
     searchQuery,
@@ -409,13 +458,13 @@ export function useMyOrders() {
     addressModalOpen,
     setAddressModalOpen,
     selectedOrder,
-    errors,
     
-    // Handlers
+    // Actions
     handleOpenAddressModal,
     handleConfirmAddress,
     toggleSort,
     getSelectedOrderAddress,
     refreshOrders,
+    clearErrors,
   };
 }

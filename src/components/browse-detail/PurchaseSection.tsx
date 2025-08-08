@@ -54,7 +54,7 @@ export default function PurchaseSection({
   const purchasePrice = listing.markedUpPrice || listing.price;
   const canAfford = buyerBalance >= purchasePrice;
 
-  // 🔧 NEW: Real purchase handler that calls backend API
+  // ✅ IMPROVED: Real purchase handler that calls backend API with better error handling
   const handleRealPurchase = async () => {
     if (!user || isPurchasing || isProcessing) return;
     
@@ -86,8 +86,8 @@ export default function PurchaseSection({
         listingId: listing.id
       });
       
-      // 🔧 ENHANCED: Call WalletContext.purchaseListing with better error handling
-      const success = await purchaseListing(
+      // ✅ IMPROVED: Call WalletContext.purchaseListing - it now throws errors properly
+      await purchaseListing(
         {
           id: listing.id,
           title: listing.title,
@@ -101,36 +101,46 @@ export default function PurchaseSection({
         user.username
       );
       
-      console.log('[PurchaseSection] Purchase result:', success);
+      console.log('[PurchaseSection] Purchase completed successfully');
       
-      if (success) {
-        showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
-        
-        // Reload wallet data to get updated balance and orders
-        console.log('[PurchaseSection] Reloading wallet data...');
-        await reloadData();
-        
-        // Wait a moment for the data to sync
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Redirect to orders page to see the new order
-        router.push('/buyers/my-orders');
-      } else {
-        console.error('[PurchaseSection] Purchase failed - purchaseListing returned false');
-        showToast({ type: 'error', title: 'Purchase failed. Please check your balance and try again.' });
-      }
+      // ✅ SUCCESS: Show success message
+      showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
+      
+      // Reload wallet data to get updated balance and orders
+      console.log('[PurchaseSection] Reloading wallet data...');
+      await reloadData();
+      
+      // Wait a moment for the data to sync
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Redirect to orders page to see the new order
+      router.push('/buyers/my-orders');
+      
     } catch (error) {
       console.error('[PurchaseSection] Purchase error:', error);
       
-      // Show more detailed error information
+      // ✅ IMPROVED: Show detailed error information from backend
       let errorMessage = 'Purchase failed. Please try again.';
       if (error instanceof Error) {
         errorMessage = error.message;
+        
+        // Log detailed error information for debugging
         console.log('[PurchaseSection] Error details:', {
           message: error.message,
           stack: error.stack,
           name: error.name
         });
+        
+        // Handle specific error types
+        if (error.message.includes('Missing required fields')) {
+          errorMessage = 'Order creation failed due to missing information. Please try again.';
+        } else if (error.message.includes('Insufficient balance')) {
+          errorMessage = 'Insufficient balance. Please add funds to your wallet.';
+          // Automatically redirect to wallet page for balance issues
+          setTimeout(() => router.push('/wallet/buyer'), 2000);
+        } else if (error.message.includes('Rate limit exceeded')) {
+          errorMessage = 'Too many requests. Please wait a moment and try again.';
+        }
       }
       
       showToast({
