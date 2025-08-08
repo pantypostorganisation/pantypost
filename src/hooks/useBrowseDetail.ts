@@ -19,6 +19,7 @@ import { DetailState, ListingWithDetails } from '@/types/browseDetail';
 import { securityService, sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
+import { ApiResponse } from '@/services/api.config';
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -206,16 +207,17 @@ export const useBrowseDetail = () => {
         viewIncrementedRef.current = true;
         
         try {
-          // Update view count
-          await listingsService.updateViews({ 
-            listingId: listing.id, 
-            viewerId: currentUsername || undefined 
-          });
-          
-          // Get updated view count
-          const viewsResponse = await listingsService.getListingViews(listing.id);
-          if (viewsResponse.success && viewsResponse.data !== undefined) {
-            setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+          // Track views if user is logged in
+          if (user && user.username !== listing.seller) {
+            await listingsService.updateViews({
+              listingId: listing.id,
+              viewerId: user.username,
+            });
+
+            const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
+            if (viewsResponse.success && viewsResponse.data !== undefined) {
+              setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+            }
           }
         } catch (error) {
           console.error('Error tracking view:', error);
@@ -224,7 +226,7 @@ export const useBrowseDetail = () => {
     };
     
     trackView();
-  }, [listing, currentUsername]);
+  }, [listing, user]);
 
   // Get seller reviews
   const sellerReviews = useMemo(() => {

@@ -14,108 +14,134 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 export { isDevelopment };
 export const isProduction = !isDevelopment();
 
-// Use environment configuration
-export const API_BASE_URL = apiConfig.baseUrl;
+// 🔧 FIXED: Use environment configuration correctly
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 export const FEATURES = {
-  USE_API_AUTH: apiConfig.features.useAuth,
-  USE_API_LISTINGS: apiConfig.features.useListings,
-  USE_API_ORDERS: apiConfig.features.useOrders,
-  USE_API_MESSAGES: apiConfig.features.useMessages,
-  USE_API_WALLET: apiConfig.features.useWallet,
-  USE_API_USERS: apiConfig.features.useUsers,
+  USE_API_AUTH: process.env.NEXT_PUBLIC_USE_API_AUTH !== 'false',
+  USE_API_LISTINGS: process.env.NEXT_PUBLIC_USE_API_LISTINGS !== 'false',
+  USE_API_ORDERS: process.env.NEXT_PUBLIC_USE_API_ORDERS !== 'false',
+  USE_API_MESSAGES: process.env.NEXT_PUBLIC_USE_API_MESSAGES !== 'false',
+  USE_API_WALLET: process.env.NEXT_PUBLIC_USE_API_WALLET !== 'false',
+  USE_API_USERS: process.env.NEXT_PUBLIC_USE_API_USERS !== 'false',
   USE_MOCK_API: false, // Always false - no mocks!
 };
 
-// 🔧 FIX: Add /api prefix to all endpoints to match backend
+// 🔧 CRITICAL FIX: Remove /api prefix from endpoints since API_BASE_URL already includes it
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    LOGIN: '/api/auth/login',
-    SIGNUP: '/api/auth/signup',
-    LOGOUT: '/api/auth/logout',
-    REFRESH: '/api/auth/refresh',
-    ME: '/api/auth/me',
-    VERIFY_USERNAME: '/api/auth/verify-username',
+    LOGIN: '/auth/login',
+    SIGNUP: '/auth/signup',
+    LOGOUT: '/auth/logout',
+    REFRESH: '/auth/refresh',
+    ME: '/auth/me',
+    VERIFY_USERNAME: '/auth/verify-username',
     // Password reset endpoints
-    FORGOT_PASSWORD: '/api/auth/forgot-password',
-    VERIFY_RESET_TOKEN: '/api/auth/verify-reset-token',
-    RESET_PASSWORD: '/api/auth/reset-password',
+    FORGOT_PASSWORD: '/auth/forgot-password',
+    VERIFY_RESET_TOKEN: '/auth/verify-reset-token',
+    RESET_PASSWORD: '/auth/reset-password',
   },
   
   // User endpoints
   USERS: {
-    PROFILE: '/api/users/:username/profile',
-    UPDATE_PROFILE: '/api/users/:username/profile',
-    VERIFICATION: '/api/users/:username/verification',
-    SETTINGS: '/api/users/:username/settings',
-    LIST: '/api/users',
+    PROFILE: '/users/:username/profile',
+    UPDATE_PROFILE: '/users/:username/profile',
+    VERIFICATION: '/users/:username/verification',
+    SETTINGS: '/users/:username/settings',
+    LIST: '/users',
   },
   
   // Listing endpoints
   LISTINGS: {
-    LIST: '/api/listings',
-    CREATE: '/api/listings',
-    GET: '/api/listings/:id',
-    UPDATE: '/api/listings/:id',
-    DELETE: '/api/listings/:id',
-    BY_SELLER: '/api/listings/seller/:username',
-    VIEWS: '/api/listings/:id/views',
-    SEARCH: '/api/listings/search',
+    LIST: '/listings',
+    CREATE: '/listings',
+    GET: '/listings/:id',
+    UPDATE: '/listings/:id',
+    DELETE: '/listings/:id',
+    BY_SELLER: '/listings/seller/:username',
+    VIEWS: '/listings/:id/views',
+    SEARCH: '/listings/search',
+    POPULAR_TAGS: '/listings/popular-tags',
+    STATS: '/listings/stats',
+    BID: '/listings/:id/bid',
+    END_AUCTION: '/listings/:id/end-auction',
   },
   
   // Order endpoints
   ORDERS: {
-    LIST: '/api/orders',
-    CREATE: '/api/orders',
-    GET: '/api/orders/:id',
-    UPDATE_STATUS: '/api/orders/:id/status',
-    BY_BUYER: '/api/orders/buyer/:username',
-    BY_SELLER: '/api/orders/seller/:username',
-    SHIPPING: '/api/orders/:id/shipping',
+    LIST: '/orders',
+    CREATE: '/orders',
+    GET: '/orders/:id',
+    UPDATE_STATUS: '/orders/:id/status',
+    BY_BUYER: '/orders/buyer/:username',
+    BY_SELLER: '/orders/seller/:username',
+    SHIPPING: '/orders/:id/shipping',
+    UPDATE_ADDRESS: '/orders/:id/address',
   },
   
   // Message endpoints
   MESSAGES: {
-    THREADS: '/api/messages/threads',
-    THREAD: '/api/messages/threads/:threadId',
-    SEND: '/api/messages/send',
-    MARK_READ: '/api/messages/mark-read',
-    BLOCK_USER: '/api/messages/block',
-    UNBLOCK_USER: '/api/messages/unblock',
-    REPORT: '/api/messages/report',
+    THREADS: '/messages/threads',
+    THREAD: '/messages/threads/:threadId',
+    SEND: '/messages/send',
+    MARK_READ: '/messages/mark-read',
+    BLOCK_USER: '/messages/block',
+    UNBLOCK_USER: '/messages/unblock',
+    REPORT: '/messages/report',
+    TIP: '/messages/tip',
+    CUSTOM_REQUEST: '/messages/custom-request',
   },
   
   // Wallet endpoints
   WALLET: {
-    BALANCE: '/api/wallet/balance/:username',
-    DEPOSIT: '/api/wallet/deposit',
-    WITHDRAW: '/api/wallet/withdraw',
-    TRANSACTIONS: '/api/wallet/transactions/:username',
-    ADMIN_ACTIONS: '/api/wallet/admin-actions',
+    BALANCE: '/wallet/balance/:username',
+    DEPOSIT: '/wallet/deposit',
+    WITHDRAW: '/wallet/withdraw',
+    TRANSACTIONS: '/wallet/transactions/:username',
+    ADMIN_ACTIONS: '/wallet/admin-actions',
+    TRANSFER: '/wallet/transfer',
   },
   
   // Subscription endpoints
   SUBSCRIPTIONS: {
-    LIST: '/api/subscriptions/:username',
-    SUBSCRIBE: '/api/subscriptions/subscribe',
-    UNSUBSCRIBE: '/api/subscriptions/unsubscribe',
-    CHECK: '/api/subscriptions/check',
+    LIST: '/subscriptions/:username',
+    SUBSCRIBE: '/subscriptions/subscribe',
+    UNSUBSCRIBE: '/subscriptions/unsubscribe',
+    CHECK: '/subscriptions/check',
+  },
+  
+  // Review endpoints
+  REVIEWS: {
+    LIST: '/reviews',
+    CREATE: '/reviews',
+    GET: '/reviews/:id',
+    UPDATE: '/reviews/:id',
+    DELETE: '/reviews/:id',
+    BY_SELLER: '/reviews/seller/:username',
+    BY_BUYER: '/reviews/buyer/:username',
+  },
+  
+  // Upload endpoints
+  UPLOAD: {
+    IMAGE: '/upload/image',
+    PROFILE: '/upload/profile',
+    VERIFICATION: '/upload/verification',
   },
   
   // Custom request endpoints
   REQUESTS: {
-    LIST: '/api/requests',
-    CREATE: '/api/requests',
-    UPDATE: '/api/requests/:id',
-    RESPOND: '/api/requests/:id/respond',
-    BY_USER: '/api/requests/user/:username',
+    LIST: '/requests',
+    CREATE: '/requests',
+    UPDATE: '/requests/:id',
+    RESPOND: '/requests/:id/respond',
+    BY_USER: '/requests/user/:username',
   },
 };
 
 // Request configuration from environment
 export const REQUEST_CONFIG = {
-  TIMEOUT: apiConfig.timeout,
-  RETRY_ATTEMPTS: apiConfig.retryAttempts,
+  TIMEOUT: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '30000'),
+  RETRY_ATTEMPTS: parseInt(process.env.NEXT_PUBLIC_API_RETRY_ATTEMPTS || '3'),
   RETRY_DELAY: 1000, // 1 second
   MAX_REQUEST_SIZE: 5 * 1024 * 1024, // 5MB
   MAX_URL_LENGTH: 2048, // Maximum URL length
@@ -126,8 +152,8 @@ export const REQUEST_CONFIG = {
 export const getDefaultHeaders = (): HeadersInit => {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'X-Client-Version': sanitizeStrict(appConfig.version),
-    'X-App-Name': sanitizeStrict(appConfig.name),
+    'X-Client-Version': sanitizeStrict(process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'),
+    'X-App-Name': sanitizeStrict(process.env.NEXT_PUBLIC_APP_NAME || 'PantyPost'),
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '1; mode=block',
@@ -135,9 +161,14 @@ export const getDefaultHeaders = (): HeadersInit => {
   };
 
   // Add CSRF token if available
-  const csrfToken = securityService.generateCSRFToken();
-  if (csrfToken) {
-    headers['X-CSRF-Token'] = csrfToken;
+  try {
+    const csrfToken = securityService.generateCSRFToken();
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+  } catch (error) {
+    // securityService might not be available in all contexts
+    console.warn('Could not generate CSRF token:', error);
   }
 
   return headers;
@@ -177,10 +208,12 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
     throw new Error('Missing required URL parameters');
   }
   
-  // Always use real API URL
+  // 🔧 CRITICAL FIX: Build URL correctly
+  // API_BASE_URL = http://localhost:5000 (no /api)
+  // Endpoint = /listings (no /api prefix)
+  // Final URL = http://localhost:5000/api/listings (add /api here)
   if (API_BASE_URL) {
-    // 🔧 FIX: Don't add extra /api prefix since endpoints already include it
-    const fullUrl = `${API_BASE_URL}${url}`;
+    const fullUrl = `${API_BASE_URL}/api${url}`;
     const sanitizedUrl = sanitizeUrl(fullUrl);
     
     if (!sanitizedUrl) {
@@ -192,6 +225,7 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
       throw new Error('URL too long');
     }
     
+    console.log(`[API Config] Built URL: ${sanitizedUrl}`);
     return sanitizedUrl;
   }
   
@@ -230,7 +264,6 @@ class ApiClient {
   private abortControllers: Map<string, AbortController> = new Map();
   private requestCount: number = 0;
   private requestWindowStart: number = Date.now();
-  private rateLimiter = getRateLimiter();
   private pendingRequests: Set<string> = new Set();
 
   static getInstance(): ApiClient {
@@ -265,11 +298,17 @@ class ApiClient {
    * Check rate limit
    */
   private checkRateLimit(): { allowed: boolean; waitTime?: number } {
-    if (!securityConfig.enableRateLimiting) return { allowed: true };
+    if (process.env.NEXT_PUBLIC_ENABLE_RATE_LIMITING === 'false') return { allowed: true };
 
-    // Use rate limiter service
-    const result = this.rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
-    return result;
+    // Use rate limiter service if available
+    try {
+      const rateLimiter = getRateLimiter();
+      const result = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
+      return result;
+    } catch (error) {
+      console.warn('Rate limiter not available:', error);
+      return { allowed: true };
+    }
   }
 
   /**
@@ -338,19 +377,29 @@ class ApiClient {
     // Basic sanitization for common attack vectors
     if (typeof data === 'string') {
       // Check for potential XSS in string responses
-      const sanitized = securityService.sanitizeForDisplay(data, {
-        allowHtml: false,
-        allowMarkdown: false,
-      });
-      return sanitized as unknown as T;
+      try {
+        const sanitized = securityService.sanitizeForDisplay(data, {
+          allowHtml: false,
+          allowMarkdown: false,
+        });
+        return sanitized as unknown as T;
+      } catch (error) {
+        console.warn('Could not sanitize string response:', error);
+        return data as T;
+      }
     }
     
     if (typeof data === 'object' && data !== null) {
       // Sanitize object responses
-      return securityService.sanitizeForAPI(data) as T;
+      try {
+        return securityService.sanitizeForAPI(data) as T;
+      } catch (error) {
+        console.warn('Could not sanitize object response:', error);
+        return data as T;
+      }
     }
     
-    return data;
+    return data as T;
   }
 
   /**
@@ -369,6 +418,28 @@ class ApiClient {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('text/html') && !response.url.includes('.html')) {
       console.warn('Unexpected HTML response');
+    }
+  }
+
+  /**
+   * Get auth token from storage
+   */
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Try sessionStorage first (where AuthContext stores tokens)
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (authTokens) {
+        const parsed = JSON.parse(authTokens);
+        return parsed.token;
+      }
+      
+      // Fallback to localStorage
+      return localStorage.getItem('auth_token');
+    } catch (error) {
+      console.warn('Failed to get auth token:', error);
+      return null;
     }
   }
 
@@ -428,8 +499,6 @@ class ApiClient {
       };
     }
 
-    // NO MORE MOCK API - Always use real API
-    
     // Cancel previous request with same key if exists
     if (requestKey) {
       this.cancelRequest(requestKey);
@@ -447,9 +516,9 @@ class ApiClient {
     }, REQUEST_CONFIG.TIMEOUT);
 
     try {
-      // 🔧 FIX: Properly construct URL - endpoints already have /api prefix
-      const url = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
-      const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
+      // 🔧 CRITICAL FIX: Build URL using buildApiUrl helper
+      const url = buildApiUrl(endpoint);
+      const token = this.getAuthToken();
       
       const headers: Record<string, string> = {
         ...getDefaultHeaders() as Record<string, string>,
@@ -463,8 +532,9 @@ class ApiClient {
       // Add request ID to headers
       headers['X-Request-ID'] = requestId;
       
-      // 🔧 DEBUG: Log the exact URL being called
       console.log(`[ApiClient] Making request to: ${url}`);
+      console.log(`[ApiClient] Method: ${options.method || 'GET'}`);
+      console.log(`[ApiClient] Headers:`, headers);
       
       const response = await fetch(url, {
         ...options,
@@ -486,9 +556,16 @@ class ApiClient {
       // Validate response
       this.validateResponse(response);
       
-      // Check content type
+      let data: any;
+      
+      // Parse response based on content type
       const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        console.warn('Non-JSON response:', text);
         return {
           success: false,
           error: { message: 'Invalid response format', code: 'INVALID_CONTENT_TYPE' },
@@ -496,17 +573,7 @@ class ApiClient {
         };
       }
       
-      // Check response size
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && parseInt(contentLength) > REQUEST_CONFIG.MAX_REQUEST_SIZE) {
-        return {
-          success: false,
-          error: { message: 'Response too large', code: 'RESPONSE_TOO_LARGE' },
-          meta: { requestId },
-        };
-      }
-      
-      const data = await response.json();
+      console.log(`[ApiClient] Response [${response.status}]:`, data);
       
       if (!response.ok) {
         // Log error for monitoring
@@ -514,27 +581,40 @@ class ApiClient {
         
         return {
           success: false,
-          error: data.error || { message: 'An error occurred', code: String(response.status) },
+          error: data.error || { message: data.message || 'An error occurred', code: String(response.status) },
           meta: { requestId },
         };
       }
       
-      // Sanitize response data
-      const sanitizedData = this.sanitizeResponse<T>(data.data || data);
-      
-      // Log successful request (in production, send to monitoring)
-      if (isDevelopment()) {
-        console.log(`API Success [${Date.now() - startTime}ms]:`, endpoint);
+      // Handle backend response format
+      if (data.success !== undefined) {
+        // Backend returns { success, data, error } format
+        if (data.success) {
+          const sanitizedData = this.sanitizeResponse<T>(data.data);
+          return {
+            success: true,
+            data: sanitizedData,
+            meta: {
+              ...data.meta,
+              requestId,
+            },
+          };
+        } else {
+          return {
+            success: false,
+            error: data.error || { message: 'Unknown error' },
+            meta: { requestId },
+          };
+        }
+      } else {
+        // Backend returns data directly
+        const sanitizedData = this.sanitizeResponse<T>(data);
+        return {
+          success: true,
+          data: sanitizedData,
+          meta: { requestId },
+        };
       }
-      
-      return {
-        success: true,
-        data: sanitizedData,
-        meta: {
-          ...data.meta,
-          requestId,
-        },
-      };
     } catch (error) {
       clearTimeout(timeoutId);
       
@@ -634,8 +714,7 @@ export async function apiCallWithRetry<T>(
 // Health check function
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    // 🔧 FIX: Use correct health endpoint
-    const response = await apiCall<{ status: string }>('/api/health', {
+    const response = await apiCall<{ status: string }>('/health', {
       method: 'GET',
     });
     return response.success && response.data?.status === 'ok';

@@ -68,6 +68,41 @@ export interface PopularTag {
   count: number;
 }
 
+// Backend listing format (from your backend)
+interface BackendListing {
+  _id: string;
+  title: string;
+  description: string;
+  price?: number;
+  markedUpPrice?: number;
+  imageUrls: string[];
+  seller: string;
+  isVerified?: boolean;
+  isPremium?: boolean;
+  tags?: string[];
+  hoursWorn?: number;
+  status: 'active' | 'sold' | 'expired' | 'cancelled';
+  views?: number;
+  createdAt: string;
+  soldAt?: string;
+  auction?: {
+    isAuction: boolean;
+    startingPrice: number;
+    reservePrice?: number;
+    currentBid: number;
+    bidIncrement?: number;
+    highestBidder?: string;
+    endTime: string;
+    status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met';
+    bidCount: number;
+    bids: Array<{
+      bidder: string;
+      amount: number;
+      date: string;
+    }>;
+  };
+}
+
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const VIEW_CACHE_DURATION = 30 * 1000; // 30 seconds
@@ -83,6 +118,77 @@ const createListingValidationSchema = z.object({
 });
 
 type CreateListingValidationData = z.infer<typeof createListingValidationSchema>;
+
+/**
+ * Convert backend listing format to frontend format
+ */
+function convertBackendToFrontend(backendListing: BackendListing): Listing {
+  const frontendListing: Listing = {
+    id: backendListing._id,
+    title: backendListing.title,
+    description: backendListing.description,
+    price: backendListing.price || 0,
+    markedUpPrice: backendListing.markedUpPrice || Math.round((backendListing.price || 0) * 1.1 * 100) / 100,
+    imageUrls: backendListing.imageUrls || [],
+    date: backendListing.createdAt,
+    seller: backendListing.seller,
+    isVerified: backendListing.isVerified || false,
+    isPremium: backendListing.isPremium || false,
+    tags: backendListing.tags || [],
+    hoursWorn: backendListing.hoursWorn,
+  };
+
+  // Convert auction data if present
+  if (backendListing.auction?.isAuction) {
+    frontendListing.auction = {
+      isAuction: true,
+      startingPrice: backendListing.auction.startingPrice,
+      reservePrice: backendListing.auction.reservePrice,
+      endTime: backendListing.auction.endTime,
+      bids: backendListing.auction.bids.map(bid => ({
+        id: uuidv4(), // Generate ID for frontend
+        bidder: bid.bidder,
+        amount: bid.amount,
+        date: bid.date,
+      })),
+      highestBid: backendListing.auction.currentBid > 0 ? backendListing.auction.currentBid : undefined,
+      highestBidder: backendListing.auction.highestBidder,
+      status: backendListing.auction.status === 'active' ? 'active' : 
+              backendListing.auction.status === 'ended' ? 'ended' : 'cancelled',
+      minimumIncrement: backendListing.auction.bidIncrement || 1,
+    };
+  }
+
+  return frontendListing;
+}
+
+/**
+ * Convert frontend listing format to backend format for creation
+ */
+function convertFrontendToBackend(frontendListing: CreateListingRequest): any {
+  const backendListing: any = {
+    title: frontendListing.title,
+    description: frontendListing.description,
+    imageUrls: frontendListing.imageUrls,
+    seller: frontendListing.seller,
+    isVerified: frontendListing.isVerified,
+    isPremium: frontendListing.isPremium,
+    tags: frontendListing.tags,
+    hoursWorn: frontendListing.hoursWorn,
+  };
+
+  // Handle auction vs regular listing
+  if (frontendListing.auction) {
+    backendListing.isAuction = true;
+    backendListing.startingPrice = frontendListing.auction.startingPrice;
+    backendListing.reservePrice = frontendListing.auction.reservePrice;
+    backendListing.endTime = frontendListing.auction.endTime;
+  } else {
+    backendListing.price = frontendListing.price;
+  }
+
+  return backendListing;
+}
 
 /**
  * Listings Service
@@ -127,20 +233,59 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
+        console.log('[ListingsService] Using backend API for listings');
+        
         const queryParams = new URLSearchParams();
         if (params) {
-          Object.entries(params).forEach(([key, value]) => {
-            if (value !== undefined) {
-              queryParams.append(key, String(value));
-            }
-          });
+          // Map frontend params to backend params
+          if (params.query) queryParams.append('search', params.query);
+          if (params.seller) queryParams.append('seller', params.seller);
+          if (params.minPrice !== undefined) queryParams.append('minPrice', params.minPrice.toString());
+          if (params.maxPrice !== undefined) queryParams.append('maxPrice', params.maxPrice.toString());
+          if (params.tags) queryParams.append('tags', params.tags.join(','));
+          if (params.isPremium !== undefined) queryParams.append('isPremium', params.isPremium.toString());
+          if (params.isAuction !== undefined) queryParams.append('isAuction', params.isAuction.toString());
+          if (params.sortBy) {
+            const sortMap: Record<string, string> = {
+              'date': 'date',
+              'price': 'price',
+              'views': 'views',
+              'endingSoon': 'date' // Backend doesn't have endingSoon, use date
+            };
+            queryParams.append('sort', sortMap[params.sortBy] || 'date');
+          }
+          if (params.sortOrder) queryParams.append('order', params.sortOrder);
+          if (params.page !== undefined) queryParams.append('page', (params.page + 1).toString()); // Frontend is 0-based
+          if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
         }
         
-        return await apiCall<Listing[]>(
-          `${API_ENDPOINTS.LISTINGS.LIST}?${queryParams.toString()}`
+        const response = await apiCall<BackendListing[]>(
+          `/listings?${queryParams.toString()}`
         );
+
+        if (response.success && response.data) {
+          // Convert backend format to frontend format
+          const convertedListings = response.data.map(convertBackendToFrontend);
+          console.log('[ListingsService] Converted backend listings:', convertedListings.length);
+          
+          // Update cache only if no filters
+          if (!params) {
+            this.listingsCache = { data: convertedListings, timestamp: Date.now() };
+          }
+          
+          return {
+            success: true,
+            data: convertedListings,
+            meta: response.meta
+          };
+        } else {
+          throw new Error(response.error?.message || 'Failed to fetch listings from backend');
+        }
       }
 
+      // Fallback to localStorage implementation
+      console.log('[ListingsService] Using localStorage fallback');
+      
       // Check cache first - but ONLY if no params are provided
       const now = Date.now();
       if (
@@ -170,7 +315,7 @@ export class ListingsService {
 
       let filteredListings = [...listings];
 
-      // Apply filters
+      // Apply filters (same as before)
       if (params) {
         const beforeFilterCount = filteredListings.length;
         
@@ -334,9 +479,22 @@ export class ListingsService {
       const sanitizedId = sanitize.strict(id);
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: sanitizedId })
-        );
+        console.log('[ListingsService] Fetching listing from backend:', sanitizedId);
+        
+        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`);
+        
+        if (response.success && response.data) {
+          const convertedListing = convertBackendToFrontend(response.data);
+          return {
+            success: true,
+            data: convertedListing,
+          };
+        } else {
+          return {
+            success: true,
+            data: null,
+          };
+        }
       }
 
       // Try cache first
@@ -377,7 +535,7 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         return await apiCall<Listing[]>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.BY_SELLER, { username: sanitizedUsername })
+          `/listings?seller=${sanitizedUsername}`
         );
       }
 
@@ -454,19 +612,37 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing>(API_ENDPOINTS.LISTINGS.CREATE, {
-          method: 'POST',
-          body: JSON.stringify({
-            ...sanitizedData,
-            imageUrls: request.imageUrls,
-            isVerified: request.isVerified,
-            isPremium: request.isPremium,
-            auction: request.auction,
-          }),
+        console.log('[ListingsService] Creating listing via backend API');
+        
+        const backendRequest = convertFrontendToBackend({
+          ...sanitizedData,
+          imageUrls: request.imageUrls,
+          isVerified: request.isVerified,
+          isPremium: request.isPremium,
+          auction: request.auction,
         });
+
+        const response = await apiCall<BackendListing>('/listings', {
+          method: 'POST',
+          body: JSON.stringify(backendRequest),
+        });
+
+        if (response.success && response.data) {
+          const convertedListing = convertBackendToFrontend(response.data);
+          
+          // Invalidate cache
+          this.invalidateCache();
+          
+          return {
+            success: true,
+            data: convertedListing,
+          };
+        } else {
+          throw new Error(response.error?.message || 'Backend API error');
+        }
       }
 
-      // LocalStorage implementation
+      // LocalStorage implementation (fallback)
       const listings = await storageService.getItem<Listing[]>('listings', []);
       console.log('[ListingsService] Current listings count before create:', listings.length);
       
@@ -577,13 +753,26 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.UPDATE, { id: sanitizedId }),
-          {
-            method: 'PATCH',
-            body: JSON.stringify(sanitizedUpdates),
-          }
-        );
+        console.log('[ListingsService] Updating listing via backend API:', sanitizedId);
+        
+        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(sanitizedUpdates),
+        });
+
+        if (response.success && response.data) {
+          const convertedListing = convertBackendToFrontend(response.data);
+          
+          // Invalidate cache
+          this.invalidateCache();
+          
+          return {
+            success: true,
+            data: convertedListing,
+          };
+        } else {
+          throw new Error(response.error?.message || 'Backend API error');
+        }
       }
 
       // LocalStorage implementation
@@ -635,10 +824,27 @@ export class ListingsService {
       const sanitizedId = sanitize.strict(id);
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.DELETE, { id: sanitizedId }),
-          { method: 'DELETE' }
-        );
+        console.log('[ListingsService] Deleting listing via backend API:', sanitizedId);
+        
+        const response = await apiCall<void>(`/listings/${sanitizedId}`, { 
+          method: 'DELETE' 
+        });
+
+        if (response.success) {
+          // Invalidate cache
+          this.invalidateCache();
+          
+          // Trigger a custom event to notify other components
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('listingDeleted', { 
+              detail: { listingId: sanitizedId } 
+            }));
+          }
+          
+          return { success: true };
+        } else {
+          throw new Error(response.error?.message || 'Backend API error');
+        }
       }
 
       // LocalStorage implementation
@@ -723,7 +929,7 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing[]>(`${API_ENDPOINTS.LISTINGS.LIST}/bulk`, {
+        return await apiCall<Listing[]>(`/listings/bulk`, {
           method: 'PATCH',
           body: JSON.stringify({
             listingIds: sanitizedIds,
@@ -769,7 +975,7 @@ export class ListingsService {
   }
 
   /**
-   * FIXED: Place bid on auction listing with proper minimum bid validation
+   * Place bid on auction listing with proper minimum bid validation
    */
   async placeBid(
     listingId: string,
@@ -791,13 +997,29 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing>(
-          `${buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: sanitizedId })}/bids`,
-          {
-            method: 'POST',
-            body: JSON.stringify({ bidder: sanitizedBidder, amount: sanitizedAmount }),
-          }
-        );
+        console.log('[ListingsService] Placing bid via backend API:', sanitizedId, sanitizedAmount);
+        
+        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}/bid`, {
+          method: 'POST',
+          body: JSON.stringify({ amount: sanitizedAmount }),
+        });
+
+        if (response.success && response.data) {
+          const convertedListing = convertBackendToFrontend(response.data);
+          
+          // Invalidate cache
+          this.invalidateCache();
+          
+          return {
+            success: true,
+            data: convertedListing,
+          };
+        } else {
+          return {
+            success: false,
+            error: { message: response.error?.message || 'Failed to place bid' },
+          };
+        }
       }
 
       // LocalStorage implementation
@@ -828,7 +1050,7 @@ export class ListingsService {
         };
       }
 
-      // FIXED: Proper bid validation logic
+      // Proper bid validation logic
       const currentHighestBid = listing.auction.highestBid || 0;
       const startingPrice = listing.auction.startingPrice;
       
@@ -888,10 +1110,25 @@ export class ListingsService {
       const sanitizedId = sanitize.strict(listingId);
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing>(
-          `${buildApiUrl(API_ENDPOINTS.LISTINGS.GET, { id: sanitizedId })}/auction/cancel`,
-          { method: 'POST' }
-        );
+        // Backend doesn't have a specific cancel endpoint, so we'll use a status update
+        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ 'auction.status': 'cancelled' }),
+        });
+
+        if (response.success && response.data) {
+          const convertedListing = convertBackendToFrontend(response.data);
+          
+          // Invalidate cache
+          this.invalidateCache();
+          
+          return {
+            success: true,
+            data: convertedListing,
+          };
+        } else {
+          throw new Error(response.error?.message || 'Backend API error');
+        }
       }
 
       // LocalStorage implementation
@@ -934,13 +1171,10 @@ export class ListingsService {
       const sanitizedViewerId = update.viewerId ? sanitize.username(update.viewerId) : undefined;
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.VIEWS, { id: sanitizedId }),
-          {
-            method: 'POST',
-            body: JSON.stringify({ viewerId: sanitizedViewerId }),
-          }
-        );
+        return await apiCall<void>(`/listings/${sanitizedId}/views`, {
+          method: 'POST',
+          body: JSON.stringify({ viewerId: sanitizedViewerId }),
+        });
       }
 
       // LocalStorage implementation
@@ -985,9 +1219,7 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        const response = await apiCall<number>(
-          buildApiUrl(API_ENDPOINTS.LISTINGS.VIEWS, { id: sanitizedId })
-        );
+        const response = await apiCall<number>(`/listings/${sanitizedId}/views`);
         
         if (response.success && response.data !== undefined) {
           this.viewsCache.set(sanitizedId, { count: response.data, timestamp: now });
@@ -1039,9 +1271,7 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<PopularTag[]>(
-          `${API_ENDPOINTS.LISTINGS.LIST}/tags/popular?limit=${sanitizedLimit}`
-        );
+        return await apiCall<PopularTag[]>(`/listings/popular-tags?limit=${sanitizedLimit}`);
       }
 
       // LocalStorage implementation
@@ -1250,7 +1480,7 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<void>(`${API_ENDPOINTS.LISTINGS.LIST}/images/delete`, {
+        return await apiCall<void>(`/listings/images/delete`, {
           method: 'DELETE',
           body: JSON.stringify({ imageUrl: sanitizedUrl }),
         });

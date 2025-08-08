@@ -17,6 +17,7 @@ import { listingSchemas, financialSchemas } from '@/utils/validation/schemas';
 import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
 import { securityService } from '@/services';
 import { z } from 'zod';
+import { ApiResponse } from '@/services/api.config';
 
 // Validation schema for listing form
 const listingFormSchema = z.object({
@@ -133,15 +134,15 @@ export const useMyListings = () => {
       // Mark as loading/loaded
       loadedViewsRef.current.add(listing.id);
       
-      // Load view count
+      // Load view count with proper typing
       listingsService.getListingViews(listing.id)
-        .then(result => {
+        .then((result: ApiResponse<number>) => {
           if (result.success && result.data !== undefined) {
             const views = Math.max(0, parseInt(result.data.toString()) || 0);
             setViewsData(prev => ({ ...prev, [listing.id]: views }));
           }
         })
-        .catch(error => {
+        .catch((error: any) => {
           console.error(`Error loading views for listing ${listing.id}:`, error);
           // Remove from loaded set so it can be retried
           loadedViewsRef.current.delete(listing.id);
