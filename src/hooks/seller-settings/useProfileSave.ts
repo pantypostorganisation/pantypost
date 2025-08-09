@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { storageService } from '@/services';
-import { sanitizeStrict, sanitizeUrl, sanitizeCurrency } from '@/utils/security/sanitization';
+import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
+import { usersService } from '@/services/users.service';
+import { apiClient } from '@/services/api.config';
 
 interface ProfileSaveData {
   bio: string;
@@ -17,6 +18,7 @@ export function useProfileSave() {
   const { user, updateUser } = useAuth();
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const validateAndSanitizeData = (data: ProfileSaveData): ProfileSaveData | null => {
     try {
@@ -78,57 +80,69 @@ export function useProfileSave() {
     }
 
     setSaveError('');
+    setIsSaving(true);
     
     // Validate and sanitize data
     const sanitizedData = validateAndSanitizeData(data);
     if (!sanitizedData) {
+      setIsSaving(false);
       return; // Error already set
     }
 
     try {
-      // Get existing user profiles data
-      const profiles = await storageService.getItem<Record<string, any>>('user_profiles', {});
+      console.log('[useProfileSave] Saving profile for:', user.username);
+      console.log('[useProfileSave] Data to save:', sanitizedData);
+
+      // Use the users service if available, otherwise use apiClient directly
+      let response;
       
-      // Sanitize the profiles object to prevent prototype pollution
-      const sanitizedProfiles = securityService.sanitizeForAPI(profiles) as Record<string, any>;
-      
-      // Update this user's profile with sanitized data
-      sanitizedProfiles[user.username] = {
-        ...sanitizedProfiles[user.username],
-        bio: sanitizedData.bio,
-        profilePic: sanitizedData.profilePic,
-        subscriptionPrice: sanitizedData.subscriptionPrice,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      // Save back to localStorage (shared storage)
-      await storageService.setItem('user_profiles', sanitizedProfiles);
-      
-      // Also update sessionStorage for faster local access
-      sessionStorage.setItem(`profile_bio_${user.username}`, sanitizedData.bio);
-      if (sanitizedData.profilePic) {
-        sessionStorage.setItem(`profile_pic_${user.username}`, sanitizedData.profilePic);
+      // Try using the users service first (it handles caching and other optimizations)
+      if (usersService && typeof usersService.updateUserProfile === 'function') {
+        console.log('[useProfileSave] Using usersService.updateUserProfile');
+        response = await usersService.updateUserProfile(user.username, sanitizedData);
       } else {
-        sessionStorage.removeItem(`profile_pic_${user.username}`);
-      }
-      sessionStorage.setItem(`subscription_price_${user.username}`, sanitizedData.subscriptionPrice);
-      
-      // Save gallery if provided
-      if (sanitizedData.galleryImages !== undefined) {
-        await storageService.setItem(`profile_gallery_${user.username}`, sanitizedData.galleryImages);
-      }
-
-      // Update user in auth context if needed
-      if (sanitizedData.bio && updateUser) {
-        updateUser({ bio: sanitizedData.bio });
+        // Fallback to direct API call
+        console.log('[useProfileSave] Using direct API call');
+        response = await apiClient.call(`/users/${user.username}/profile`, {
+          method: 'PATCH',
+          body: JSON.stringify(sanitizedData)
+        });
       }
 
-      // Show success message
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      if (response.success) {
+        console.log('[useProfileSave] Profile saved successfully:', response.data);
+        
+        // Update user in auth context if bio or profile pic changed
+        const updates: any = {};
+        if (sanitizedData.bio && sanitizedData.bio !== user.bio) {
+          updates.bio = sanitizedData.bio;
+        }
+        if (sanitizedData.profilePic && sanitizedData.profilePic !== user.profilePicture) {
+          updates.profilePicture = sanitizedData.profilePic;
+        }
+        
+        if (Object.keys(updates).length > 0 && updateUser) {
+          await updateUser(updates);
+        }
+
+        // Show success message
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        console.error('[useProfileSave] Failed to save profile:', response.error);
+        setSaveError(response.error?.message || 'Failed to save profile');
+        
+        // Show error for 5 seconds
+        setTimeout(() => setSaveError(''), 5000);
+      }
     } catch (error) {
-      console.error('Error saving profile:', error);
+      console.error('[useProfileSave] Error saving profile:', error);
       setSaveError('Failed to save profile. Please try again.');
+      
+      // Show error for 5 seconds
+      setTimeout(() => setSaveError(''), 5000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -139,6 +153,7 @@ export function useProfileSave() {
     }
 
     setSaveError('');
+    setIsSaving(true);
 
     // Sanitize gallery URLs
     const sanitizedGallery = galleryImages
@@ -147,16 +162,53 @@ export function useProfileSave() {
       .slice(0, 20); // Enforce max limit
 
     try {
-      await storageService.setItem(`profile_gallery_${user.username}`, sanitizedGallery);
+      console.log('[useProfileSave] Updating gallery for:', user.username);
+      console.log('[useProfileSave] Gallery images:', sanitizedGallery);
+
+      // Update profile with just gallery images
+      let response;
+      
+      if (usersService && typeof usersService.updateUserProfile === 'function') {
+        console.log('[useProfileSave] Updating gallery via usersService');
+        response = await usersService.updateUserProfile(user.username, {
+          galleryImages: sanitizedGallery
+        });
+      } else {
+        console.log('[useProfileSave] Updating gallery via direct API call');
+        response = await apiClient.call(`/users/${user.username}/profile`, {
+          method: 'PATCH',
+          body: JSON.stringify({ galleryImages: sanitizedGallery })
+        });
+      }
+
+      if (!response.success) {
+        console.error('[useProfileSave] Failed to save gallery:', response.error);
+        setSaveError(response.error?.message || 'Failed to save gallery images');
+        
+        // Show error for 5 seconds
+        setTimeout(() => setSaveError(''), 5000);
+      } else {
+        console.log('[useProfileSave] Gallery saved successfully');
+        
+        // Show success briefly
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+      }
     } catch (error) {
-      console.error('Error saving gallery:', error);
+      console.error('[useProfileSave] Error saving gallery:', error);
       setSaveError('Failed to save gallery images');
+      
+      // Show error for 5 seconds
+      setTimeout(() => setSaveError(''), 5000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return {
     saveSuccess,
     saveError,
+    isSaving,
     handleSave,
     handleSaveWithGallery
   };

@@ -50,8 +50,10 @@ export default function SellerProfileSettingsPage() {
     selectedTierDetails,
     setSelectedTierDetails,
     
-    // Save functionality
+    // Save functionality - Now includes all states
     saveSuccess,
+    saveError,
+    isSaving,
     handleSave
   } = useProfileSettings();
 
@@ -83,9 +85,14 @@ export default function SellerProfileSettingsPage() {
                   isUploading={profileUploading}
                 />
 
-                {/* Save Button */}
+                {/* Save Button with loading and error states */}
                 <div className="flex justify-center">
-                  <SaveButton onClick={handleSave} showSuccess={saveSuccess} />
+                  <SaveButton 
+                    onClick={handleSave} 
+                    showSuccess={saveSuccess}
+                    showError={saveError}
+                    isLoading={isSaving}
+                  />
                 </div>
 
                 {sellerTierInfo && (
