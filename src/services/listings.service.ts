@@ -103,6 +103,18 @@ interface BackendListing {
   };
 }
 
+// Backend response format - THIS IS THE KEY FIX
+interface BackendApiResponse<T> {
+  success: boolean;
+  data: T;
+  meta?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const VIEW_CACHE_DURATION = 30 * 1000; // 30 seconds
@@ -259,13 +271,18 @@ export class ListingsService {
           if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
         }
         
-        const response = await apiCall<BackendListing[]>(
+        // FIX: Backend returns wrapped response, so we need to handle it properly
+        const response = await apiCall<BackendApiResponse<BackendListing[]>>(
           `/listings?${queryParams.toString()}`
         );
 
         if (response.success && response.data) {
+          // response.data is the backend response object with success, data, meta
+          const backendResponse = response.data;
+          const backendListings = backendResponse.data || [];
+          
           // Convert backend format to frontend format
-          const convertedListings = response.data.map(convertBackendToFrontend);
+          const convertedListings = backendListings.map(convertBackendToFrontend);
           console.log('[ListingsService] Converted backend listings:', convertedListings.length);
           
           // Update cache only if no filters
@@ -276,7 +293,7 @@ export class ListingsService {
           return {
             success: true,
             data: convertedListings,
-            meta: response.meta
+            meta: backendResponse.meta || response.meta
           };
         } else {
           throw new Error(response.error?.message || 'Failed to fetch listings from backend');
@@ -481,20 +498,26 @@ export class ListingsService {
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Fetching listing from backend:', sanitizedId);
         
-        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`);
+        // FIX: Backend returns wrapped response
+        const response = await apiCall<BackendApiResponse<BackendListing>>(`/listings/${sanitizedId}`);
         
         if (response.success && response.data) {
-          const convertedListing = convertBackendToFrontend(response.data);
-          return {
-            success: true,
-            data: convertedListing,
-          };
-        } else {
-          return {
-            success: true,
-            data: null,
-          };
+          const backendResponse = response.data;
+          const backendListing = backendResponse.data;
+          
+          if (backendListing) {
+            const convertedListing = convertBackendToFrontend(backendListing);
+            return {
+              success: true,
+              data: convertedListing,
+            };
+          }
         }
+        
+        return {
+          success: true,
+          data: null,
+        };
       }
 
       // Try cache first
@@ -533,14 +556,8 @@ export class ListingsService {
       // Sanitize username
       const sanitizedUsername = sanitize.username(username);
 
-      if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing[]>(
-          `/listings?seller=${sanitizedUsername}`
-        );
-      }
-
-      // LocalStorage implementation
-      return this.getListings({ seller: sanitizedUsername });
+      // FIX: Use getListings with seller filter instead of direct API call
+      return await this.getListings({ seller: sanitizedUsername });
     } catch (error) {
       console.error('Get listings by seller error:', error);
       return {
@@ -622,24 +639,30 @@ export class ListingsService {
           auction: request.auction,
         });
 
-        const response = await apiCall<BackendListing>('/listings', {
+        // FIX: Backend returns wrapped response
+        const response = await apiCall<BackendApiResponse<BackendListing>>('/listings', {
           method: 'POST',
           body: JSON.stringify(backendRequest),
         });
 
         if (response.success && response.data) {
-          const convertedListing = convertBackendToFrontend(response.data);
+          const backendResponse = response.data;
+          const backendListing = backendResponse.data;
           
-          // Invalidate cache
-          this.invalidateCache();
-          
-          return {
-            success: true,
-            data: convertedListing,
-          };
-        } else {
-          throw new Error(response.error?.message || 'Backend API error');
+          if (backendListing) {
+            const convertedListing = convertBackendToFrontend(backendListing);
+            
+            // Invalidate cache
+            this.invalidateCache();
+            
+            return {
+              success: true,
+              data: convertedListing,
+            };
+          }
         }
+        
+        throw new Error(response.error?.message || 'Backend API error');
       }
 
       // LocalStorage implementation (fallback)
@@ -755,24 +778,30 @@ export class ListingsService {
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Updating listing via backend API:', sanitizedId);
         
-        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
-          method: 'PATCH',
+        // FIX: Backend uses PUT not PATCH, and returns wrapped response
+        const response = await apiCall<BackendApiResponse<BackendListing>>(`/listings/${sanitizedId}`, {
+          method: 'PUT',
           body: JSON.stringify(sanitizedUpdates),
         });
 
         if (response.success && response.data) {
-          const convertedListing = convertBackendToFrontend(response.data);
+          const backendResponse = response.data;
+          const backendListing = backendResponse.data;
           
-          // Invalidate cache
-          this.invalidateCache();
-          
-          return {
-            success: true,
-            data: convertedListing,
-          };
-        } else {
-          throw new Error(response.error?.message || 'Backend API error');
+          if (backendListing) {
+            const convertedListing = convertBackendToFrontend(backendListing);
+            
+            // Invalidate cache
+            this.invalidateCache();
+            
+            return {
+              success: true,
+              data: convertedListing,
+            };
+          }
         }
+        
+        throw new Error(response.error?.message || 'Backend API error');
       }
 
       // LocalStorage implementation
@@ -813,6 +842,9 @@ export class ListingsService {
     }
   }
 
+  // Keep all other methods exactly the same...
+  // [Rest of the file remains unchanged - deleteListing, bulkUpdateListings, placeBid, etc.]
+  
   /**
    * Delete listing - Enhanced with event broadcasting
    */
@@ -999,27 +1031,33 @@ export class ListingsService {
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Placing bid via backend API:', sanitizedId, sanitizedAmount);
         
-        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}/bid`, {
+        // FIX: Backend returns wrapped response
+        const response = await apiCall<BackendApiResponse<BackendListing>>(`/listings/${sanitizedId}/bid`, {
           method: 'POST',
           body: JSON.stringify({ amount: sanitizedAmount }),
         });
 
         if (response.success && response.data) {
-          const convertedListing = convertBackendToFrontend(response.data);
+          const backendResponse = response.data;
+          const backendListing = backendResponse.data;
           
-          // Invalidate cache
-          this.invalidateCache();
-          
-          return {
-            success: true,
-            data: convertedListing,
-          };
-        } else {
-          return {
-            success: false,
-            error: { message: response.error?.message || 'Failed to place bid' },
-          };
+          if (backendListing) {
+            const convertedListing = convertBackendToFrontend(backendListing);
+            
+            // Invalidate cache
+            this.invalidateCache();
+            
+            return {
+              success: true,
+              data: convertedListing,
+            };
+          }
         }
+        
+        return {
+          success: false,
+          error: { message: response.error?.message || 'Failed to place bid' },
+        };
       }
 
       // LocalStorage implementation
@@ -1101,6 +1139,8 @@ export class ListingsService {
     }
   }
 
+  // Keep all remaining methods unchanged...
+  
   /**
    * Cancel auction
    */
@@ -1111,24 +1151,29 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         // Backend doesn't have a specific cancel endpoint, so we'll use a status update
-        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
-          method: 'PATCH',
+        const response = await apiCall<BackendApiResponse<BackendListing>>(`/listings/${sanitizedId}`, {
+          method: 'PUT',
           body: JSON.stringify({ 'auction.status': 'cancelled' }),
         });
 
         if (response.success && response.data) {
-          const convertedListing = convertBackendToFrontend(response.data);
+          const backendResponse = response.data;
+          const backendListing = backendResponse.data;
           
-          // Invalidate cache
-          this.invalidateCache();
-          
-          return {
-            success: true,
-            data: convertedListing,
-          };
-        } else {
-          throw new Error(response.error?.message || 'Backend API error');
+          if (backendListing) {
+            const convertedListing = convertBackendToFrontend(backendListing);
+            
+            // Invalidate cache
+            this.invalidateCache();
+            
+            return {
+              success: true,
+              data: convertedListing,
+            };
+          }
         }
+        
+        throw new Error(response.error?.message || 'Backend API error');
       }
 
       // LocalStorage implementation
@@ -1271,7 +1316,26 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<PopularTag[]>(`/listings/popular-tags?limit=${sanitizedLimit}`);
+        // FIX: Backend returns wrapped response
+        const response = await apiCall<BackendApiResponse<PopularTag[]>>(
+          `/listings/popular-tags?limit=${sanitizedLimit}`
+        );
+        
+        if (response.success && response.data) {
+          const backendResponse = response.data;
+          const tags = backendResponse.data || [];
+          
+          // Cache the result
+          this.popularTagsCache = {
+            data: tags,
+            timestamp: now,
+          };
+          
+          return {
+            success: true,
+            data: tags,
+          };
+        }
       }
 
       // LocalStorage implementation
@@ -1305,6 +1369,8 @@ export class ListingsService {
     }
   }
 
+  // Keep all draft management, image upload, and other methods exactly the same...
+  
   /**
    * Draft Management
    */

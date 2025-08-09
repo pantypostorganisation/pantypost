@@ -3,9 +3,12 @@ const express = require('express');
 const router = express.Router();
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const Order = require('../models/Order');
 const User = require('../models/User');
+const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
+const mongoose = require('mongoose');
 
 // ============= WALLET ROUTES =============
 
@@ -124,22 +127,25 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       status: 'completed',
       completedAt: new Date(),
       metadata: {
-        paymentMethod: method || 'credit_card'
+        paymentMethod: method || 'credit_card',
+        notes: notes
       }
     });
     await transaction.save();
     
     // WEBSOCKET: Emit balance update
-    webSocketService.emitBalanceUpdate(
-      username,
-      wallet.role,
-      previousBalance,
-      wallet.balance,
-      'deposit'
-    );
-    
-    // WEBSOCKET: Emit transaction event
-    webSocketService.emitTransaction(transaction);
+    if (webSocketService) {
+      webSocketService.emitBalanceUpdate(
+        username,
+        wallet.role,
+        previousBalance,
+        wallet.balance,
+        'deposit'
+      );
+      
+      // WEBSOCKET: Emit transaction event
+      webSocketService.emitTransaction(transaction);
+    }
     
     res.json({
       success: true,
@@ -224,16 +230,18 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
     await transaction.save();
     
     // WEBSOCKET: Emit balance update
-    webSocketService.emitBalanceUpdate(
-      username,
-      wallet.role,
-      previousBalance,
-      wallet.balance,
-      'withdrawal'
-    );
-    
-    // WEBSOCKET: Emit transaction event
-    webSocketService.emitTransaction(transaction);
+    if (webSocketService) {
+      webSocketService.emitBalanceUpdate(
+        username,
+        wallet.role,
+        previousBalance,
+        wallet.balance,
+        'withdrawal'
+      );
+      
+      // WEBSOCKET: Emit transaction event
+      webSocketService.emitTransaction(transaction);
+    }
     
     res.json({
       success: true,
@@ -385,16 +393,18 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
     await transaction.save();
     
     // WEBSOCKET: Emit balance update
-    webSocketService.emitBalanceUpdate(
-      username,
-      wallet.role,
-      previousBalance,
-      wallet.balance,
-      action === 'credit' ? 'admin_credit' : 'admin_debit'
-    );
-    
-    // WEBSOCKET: Emit transaction event
-    webSocketService.emitTransaction(transaction);
+    if (webSocketService) {
+      webSocketService.emitBalanceUpdate(
+        username,
+        wallet.role,
+        previousBalance,
+        wallet.balance,
+        action === 'credit' ? 'admin_credit' : 'admin_debit'
+      );
+      
+      // WEBSOCKET: Emit transaction event
+      webSocketService.emitTransaction(transaction);
+    }
     
     res.json({
       success: true,
@@ -408,7 +418,7 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
   }
 });
 
-// 🔧 FIXED: GET /api/wallet/admin-platform-balance - Get platform admin wallet balance
+// GET /api/wallet/admin-platform-balance - Get platform admin wallet balance
 router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
   try {
     // Only admins can check platform balance
@@ -456,7 +466,7 @@ router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
   }
 });
 
-// 🔧 FIXED: GET /api/wallet/platform-transactions - Get platform fee transactions
+// GET /api/wallet/platform-transactions - Get platform fee transactions
 router.get('/platform-transactions', authMiddleware, async (req, res) => {
   try {
     // Only admins can view platform transactions
@@ -535,7 +545,7 @@ router.get('/platform-transactions', authMiddleware, async (req, res) => {
   }
 });
 
-// 🔧 NEW: POST /api/wallet/admin-withdraw - Admin withdraw from platform wallet
+// POST /api/wallet/admin-withdraw - Admin withdraw from platform wallet
 router.post('/admin-withdraw', authMiddleware, async (req, res) => {
   try {
     // Only admins can withdraw from platform wallet
@@ -600,16 +610,18 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
     await withdrawalTransaction.save();
     
     // WEBSOCKET: Emit balance update
-    webSocketService.emitBalanceUpdate(
-      'platform',
-      'admin',
-      previousBalance,
-      platformWallet.balance,
-      'withdrawal'
-    );
-    
-    // WEBSOCKET: Emit transaction event
-    webSocketService.emitTransaction(withdrawalTransaction);
+    if (webSocketService) {
+      webSocketService.emitBalanceUpdate(
+        'platform',
+        'admin',
+        previousBalance,
+        platformWallet.balance,
+        'withdrawal'
+      );
+      
+      // WEBSOCKET: Emit transaction event
+      webSocketService.emitTransaction(withdrawalTransaction);
+    }
     
     console.log('[Wallet] Platform withdrawal processed:', {
       amount,
@@ -628,6 +640,417 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
     
   } catch (error) {
     console.error('[Wallet] Admin withdrawal error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ============= ADMIN ANALYTICS ROUTES =============
+
+// GET /api/wallet/admin/analytics - Complete analytics data for admin dashboard
+router.get('/admin/analytics', authMiddleware, async (req, res) => {
+  try {
+    // Only admins can access analytics
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    const { timeFilter = 'all' } = req.query;
+    
+    // Get date range based on filter
+    const now = new Date();
+    let startDate = null;
+    
+    switch (timeFilter) {
+      case 'today':
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate = new Date(now);
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3months':
+        startDate = new Date(now);
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case 'year':
+        startDate = new Date(now);
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default: // 'all'
+        startDate = null;
+    }
+
+    // Build query filter
+    const dateFilter = startDate ? { createdAt: { $gte: startDate } } : {};
+    const orderDateFilter = startDate ? { date: { $gte: startDate } } : {};
+
+    // 1. Get platform wallet balance (admin profit)
+    const platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    const adminBalance = platformWallet ? platformWallet.balance : 0;
+
+    // 2. Get all orders with date filter
+    const orders = await Order.find(orderDateFilter)
+      .sort({ date: -1 })
+      .limit(1000);
+
+    // 3. Get deposit transactions
+    const deposits = await Transaction.find({
+      type: 'deposit',
+      status: 'completed',
+      ...dateFilter
+    }).sort({ createdAt: -1 });
+
+    // 4. Get seller withdrawals
+    const sellerWithdrawals = await Transaction.find({
+      type: 'withdrawal',
+      fromRole: 'seller',
+      ...dateFilter
+    }).sort({ createdAt: -1 });
+
+    // 5. Get admin withdrawals (platform withdrawals)
+    const adminWithdrawals = await Transaction.find({
+      type: 'withdrawal',
+      from: 'platform',
+      ...dateFilter
+    }).sort({ createdAt: -1 });
+
+    // 6. Get subscription transactions
+    const subscriptionTransactions = await Transaction.find({
+      type: 'subscription',
+      status: 'completed',
+      ...dateFilter
+    }).sort({ createdAt: -1 });
+
+    // 7. Get platform fee transactions
+    const platformFeeTransactions = await Transaction.find({
+      $or: [
+        { type: 'platform_fee' },
+        { type: 'fee', to: 'platform' }
+      ],
+      status: 'completed',
+      ...dateFilter
+    }).sort({ createdAt: -1 });
+
+    // 8. Get all users
+    const users = await User.find({});
+    const usersObject = {};
+    users.forEach(user => {
+      usersObject[user.username] = {
+        username: user.username,
+        role: user.role,
+        verified: user.verified || false,
+        verificationStatus: user.verificationStatus || 'unverified',
+        createdAt: user.createdAt
+      };
+    });
+
+    // 9. Get all active listings (check if Listing model exists)
+    let listings = [];
+    try {
+      const ListingModel = mongoose.models.Listing || require('../models/Listing');
+      listings = await ListingModel.find({ status: 'active' });
+    } catch (error) {
+      console.log('[Analytics] Listing model not found, skipping listings');
+    }
+
+    // 10. Get all wallets for balance info
+    const wallets = await Wallet.find({});
+    const walletBalances = {};
+    wallets.forEach(wallet => {
+      walletBalances[wallet.username] = wallet.balance;
+    });
+
+    // 11. Format admin actions from admin credit/debit transactions
+    const adminActions = await Transaction.find({
+      type: { $in: ['admin_credit', 'admin_debit'] },
+      ...dateFilter
+    }).sort({ createdAt: -1 });
+
+    const formattedAdminActions = adminActions.map(action => ({
+      id: action._id.toString(),
+      type: action.type === 'admin_credit' ? 'credit' : 'debit',
+      amount: action.amount,
+      targetUser: action.type === 'admin_credit' ? action.to : action.from,
+      username: action.type === 'admin_credit' ? action.to : action.from,
+      adminUser: action.metadata?.adminUsername || 'admin',
+      reason: action.metadata?.reason || action.description,
+      date: action.createdAt.toISOString(),
+      role: action.type === 'admin_credit' ? action.toRole : action.fromRole
+    }));
+
+    // 12. Format seller withdrawals by username
+    const sellerWithdrawalsByUser = {};
+    sellerWithdrawals.forEach(withdrawal => {
+      const username = withdrawal.from;
+      if (!sellerWithdrawalsByUser[username]) {
+        sellerWithdrawalsByUser[username] = [];
+      }
+      sellerWithdrawalsByUser[username].push({
+        amount: withdrawal.amount,
+        date: withdrawal.createdAt.toISOString(),
+        status: withdrawal.status
+      });
+    });
+
+    // 13. Format deposit logs
+    const depositLogs = deposits.map(deposit => ({
+      id: deposit._id.toString(),
+      username: deposit.to,
+      amount: deposit.amount,
+      method: deposit.metadata?.paymentMethod || 'credit_card',
+      date: deposit.createdAt.toISOString(),
+      status: deposit.status,
+      transactionId: deposit._id.toString(),
+      notes: deposit.metadata?.notes
+    }));
+
+    // 14. Format order history
+    const orderHistory = orders.map(order => ({
+      id: order._id.toString(),
+      title: order.title,
+      description: order.description,
+      price: order.price,
+      markedUpPrice: order.markedUpPrice,
+      date: order.date.toISOString(),
+      seller: order.seller,
+      buyer: order.buyer,
+      shippingStatus: order.shippingStatus,
+      wasAuction: order.wasAuction || false,
+      finalBid: order.finalBid,
+      imageUrl: order.imageUrl,
+      tags: order.tags || [],
+      deliveryAddress: order.deliveryAddress,
+      listingId: order.listingId
+    }));
+
+    // 15. Format admin withdrawals array
+    const formattedAdminWithdrawals = adminWithdrawals.map(withdrawal => ({
+      amount: withdrawal.amount,
+      date: withdrawal.createdAt.toISOString(),
+      status: withdrawal.status,
+      method: 'bank_transfer'
+    }));
+
+    // Calculate subscription revenue from subscription transactions
+    const subscriptionRevenue = subscriptionTransactions.reduce((sum, tx) => {
+      // Platform gets 25% of subscription amount
+      return sum + (tx.amount * 0.25);
+    }, 0);
+
+    // Add subscription revenue actions to admin actions for display
+    subscriptionTransactions.forEach(tx => {
+      const platformAmount = tx.amount * 0.25;
+      formattedAdminActions.push({
+        id: `sub_${tx._id.toString()}`,
+        type: 'credit',
+        amount: platformAmount,
+        targetUser: 'platform',
+        username: 'platform',
+        adminUser: 'system',
+        reason: `Subscription revenue (25% of $${tx.amount.toFixed(2)}) from ${tx.from} to ${tx.to}`,
+        date: tx.createdAt.toISOString(),
+        role: 'admin'
+      });
+    });
+
+    // Calculate summary statistics
+    const totalDeposits = deposits.reduce((sum, d) => sum + d.amount, 0);
+    const totalWithdrawals = sellerWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const totalAdminWithdrawals = adminWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+
+    // Send response
+    res.json({
+      success: true,
+      data: {
+        adminBalance,
+        orderHistory,
+        depositLogs,
+        sellerWithdrawals: sellerWithdrawalsByUser,
+        adminWithdrawals: formattedAdminWithdrawals,
+        adminActions: formattedAdminActions,
+        users: usersObject,
+        listings: listings.map(l => ({
+          id: l._id.toString(),
+          title: l.title,
+          price: l.price,
+          seller: l.seller,
+          status: l.status
+        })),
+        wallet: walletBalances,
+        summary: {
+          totalDeposits,
+          totalWithdrawals,
+          totalAdminWithdrawals,
+          totalOrders: orders.length,
+          totalUsers: users.length,
+          totalListings: listings.length,
+          platformProfit: adminBalance,
+          subscriptionRevenue
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[Analytics] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/wallet/admin/revenue-chart - Get revenue data for chart
+router.get('/admin/revenue-chart', authMiddleware, async (req, res) => {
+  try {
+    // Only admins can access
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    const { timeFilter = 'month' } = req.query;
+    
+    // Determine aggregation period and date range
+    let groupBy = {};
+    let startDate = new Date();
+    
+    switch (timeFilter) {
+      case 'today':
+        // Group by hour for today
+        startDate.setHours(0, 0, 0, 0);
+        groupBy = {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+          day: { $dayOfMonth: '$createdAt' },
+          hour: { $hour: '$createdAt' }
+        };
+        break;
+      case 'week':
+        // Group by day for last week
+        startDate.setDate(startDate.getDate() - 7);
+        groupBy = {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+          day: { $dayOfMonth: '$createdAt' }
+        };
+        break;
+      case 'month':
+        // Group by day for last month
+        startDate.setMonth(startDate.getMonth() - 1);
+        groupBy = {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+          day: { $dayOfMonth: '$createdAt' }
+        };
+        break;
+      case '3months':
+        // Group by week for last 3 months
+        startDate.setMonth(startDate.getMonth() - 3);
+        groupBy = {
+          year: { $year: '$createdAt' },
+          week: { $week: '$createdAt' }
+        };
+        break;
+      case 'year':
+        // Group by month for last year
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        groupBy = {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' }
+        };
+        break;
+      default:
+        // Default to last 30 days grouped by day
+        startDate.setDate(startDate.getDate() - 30);
+        groupBy = {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+          day: { $dayOfMonth: '$createdAt' }
+        };
+    }
+
+    // Get revenue from platform fees and subscriptions
+    const revenueData = await Transaction.aggregate([
+      {
+        $match: {
+          $or: [
+            { type: 'platform_fee', status: 'completed' },
+            { type: 'fee', to: 'platform', status: 'completed' },
+            { type: 'subscription', status: 'completed' }
+          ],
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $project: {
+          createdAt: 1,
+          revenue: {
+            $cond: {
+              if: { $eq: ['$type', 'subscription'] },
+              then: { $multiply: ['$amount', 0.25] }, // 25% of subscription
+              else: '$amount' // Full amount for platform fees
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: groupBy,
+          revenue: { $sum: '$revenue' },
+          transactions: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { 
+          '_id.year': 1, 
+          '_id.month': 1, 
+          '_id.week': 1,
+          '_id.day': 1, 
+          '_id.hour': 1 
+        }
+      }
+    ]);
+
+    // Format the response for the chart
+    const formattedData = revenueData.map(item => {
+      let date = '';
+      if (timeFilter === 'today') {
+        date = `${item._id.hour}:00`;
+      } else if (timeFilter === '3months' && item._id.week) {
+        date = `Week ${item._id.week}`;
+      } else if (timeFilter === 'year') {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        date = monthNames[item._id.month - 1];
+      } else {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        date = `${monthNames[item._id.month - 1]} ${item._id.day}`;
+      }
+      
+      return {
+        date,
+        revenue: item.revenue,
+        transactions: item.transactions
+      };
+    });
+
+    res.json({
+      success: true,
+      data: formattedData
+    });
+  } catch (error) {
+    console.error('[Revenue Chart] Error:', error);
     res.status(500).json({
       success: false,
       error: error.message

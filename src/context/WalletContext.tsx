@@ -127,9 +127,10 @@ type WalletContextType = {
   reconcileBalance: (username: string, role: 'buyer' | 'seller' | 'admin') => Promise<any>;
   getTransactionHistory: (username?: string, limit?: number) => Promise<any[]>;
   
-  // 🔧 NEW: Admin-specific methods
+  // Admin-specific methods
   refreshAdminData: () => Promise<void>;
   getPlatformTransactions: (limit?: number, page?: number) => Promise<any[]>;
+  getAnalyticsData: (timeFilter?: string) => Promise<any>;
   
   // Data management
   reloadData: () => Promise<void>;
@@ -196,7 +197,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAddSellerNotification(() => fn);
   };
 
-  // 🔧 LISTEN TO WEBSOCKET BALANCE UPDATES
+  // Listen to WebSocket balance updates
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -290,7 +291,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [isConnected, sendMessage]);
 
-  // Fetch balance from API using the apiClient from AuthContext
+  // Fetch balance from API
   const fetchBalance = useCallback(async (username: string): Promise<number> => {
     try {
       console.log('[WalletContext] Fetching balance for:', username);
@@ -311,7 +312,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
-  // 🔧 NEW: Fetch admin platform wallet balance (contains platform fees)
+  // Fetch admin platform wallet balance
   const fetchAdminPlatformBalance = useCallback(async (): Promise<number> => {
     if (!user || user.role !== 'admin') {
       console.log('[WalletContext] Not admin user, skipping platform balance fetch');
@@ -327,7 +328,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       if (response.success && response.data) {
         const balance = response.data.balance || 0;
-        console.log('[WalletContext] Admin platform wallet balance:', balance, 'from source:', response.data.source);
+        console.log('[WalletContext] Admin platform wallet balance:', balance);
         return balance;
       }
       
@@ -339,7 +340,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, apiClient]);
 
-  // 🔧 NEW: Fetch platform transactions
+  // Fetch platform transactions
   const getPlatformTransactions = useCallback(async (limit: number = 100, page: number = 1): Promise<any[]> => {
     if (!user || user.role !== 'admin') {
       console.log('[WalletContext] Not admin user, skipping platform transactions fetch');
@@ -364,6 +365,74 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return [];
     }
   }, [user, apiClient]);
+
+  // Fetch complete admin analytics data
+  const fetchAdminAnalytics = useCallback(async (timeFilter: string = 'all'): Promise<any> => {
+    if (!user || user.role !== 'admin') {
+      console.log('[WalletContext] Not admin user, skipping analytics fetch');
+      return null;
+    }
+
+    try {
+      console.log('[WalletContext] Fetching admin analytics data with filter:', timeFilter);
+      
+      const response = await apiClient.get<any>(`/wallet/admin/analytics?timeFilter=${timeFilter}`);
+      
+      console.log('[WalletContext] Admin analytics response:', response);
+      
+      if (response.success && response.data) {
+        const data = response.data;
+        
+        // Update all the state variables with the fetched data
+        setAdminBalanceState(data.adminBalance);
+        setOrderHistory(data.orderHistory);
+        setDepositLogs(data.depositLogs);
+        setSellerWithdrawals(data.sellerWithdrawals);
+        setAdminWithdrawals(data.adminWithdrawals);
+        setAdminActions(data.adminActions);
+        
+        // Update wallet balances
+        if (data.wallet) {
+          Object.entries(data.wallet).forEach(([username, balance]) => {
+            if (data.users[username]) {
+              const userRole = data.users[username].role;
+              if (userRole === 'buyer') {
+                setBuyerBalancesState(prev => ({ ...prev, [username]: balance as number }));
+              } else if (userRole === 'seller') {
+                setSellerBalancesState(prev => ({ ...prev, [username]: balance as number }));
+              }
+            }
+          });
+        }
+        
+        console.log('[WalletContext] Analytics data loaded:', {
+          adminBalance: data.adminBalance,
+          orders: data.orderHistory.length,
+          deposits: data.depositLogs.length,
+          adminActions: data.adminActions.length,
+          summary: data.summary
+        });
+        
+        return data;
+      }
+      
+      console.warn('[WalletContext] Analytics fetch failed:', response.error);
+      return null;
+    } catch (error) {
+      console.error('[WalletContext] Error fetching analytics:', error);
+      return null;
+    }
+  }, [user, apiClient]);
+
+  // Get analytics data with time filter
+  const getAnalyticsData = useCallback(async (timeFilter: string = 'all') => {
+    if (!user || user.role !== 'admin') {
+      console.log('[WalletContext] Not admin, cannot get analytics');
+      return null;
+    }
+    
+    return await fetchAdminAnalytics(timeFilter);
+  }, [user, fetchAdminAnalytics]);
 
   // Fetch transaction history from API
   const fetchTransactionHistory = useCallback(async (username: string) => {
@@ -398,7 +467,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
-  // 🔧 UPDATED: Load all data from API with admin platform balance support
+  // Load all data from API with admin analytics support
   const loadAllData = useCallback(async () => {
     if (!user) {
       console.log('[WalletContext] No user, skipping data load');
@@ -408,7 +477,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Loading wallet data from API for user:', user.username);
       
-      // Fetch current user's balance
+      // For admin users, fetch complete analytics data
+      if (user.role === 'admin') {
+        console.log('[WalletContext] Admin detected - fetching analytics data...');
+        
+        const analyticsData = await fetchAdminAnalytics('all');
+        
+        if (analyticsData) {
+          console.log('[WalletContext] Admin analytics loaded successfully');
+          return true;
+        } else {
+          console.error('[WalletContext] Failed to load admin analytics');
+          // Fall back to regular data loading
+        }
+      }
+      
+      // For non-admin users, fetch regular wallet data
       const balance = await fetchBalance(user.username);
       console.log('[WalletContext] Fetched balance:', balance, 'for role:', user.role);
       
@@ -416,55 +500,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setBuyerBalancesState(prev => ({ ...prev, [user.username]: balance }));
       } else if (user.role === 'seller') {
         setSellerBalancesState(prev => ({ ...prev, [user.username]: balance }));
-      } else if (user.role === 'admin') {
-        // For admin users, fetch the platform admin wallet that collects fees
-        try {
-          console.log('[WalletContext] Admin detected - fetching platform wallet...');
-          
-          const platformBalance = await fetchAdminPlatformBalance();
-          console.log('[WalletContext] Platform admin wallet balance:', platformBalance);
-          setAdminBalanceState(platformBalance);
-          
-          // Also fetch platform transactions for admin dashboard
-          const platformTransactions = await getPlatformTransactions(50, 1);
-          console.log('[WalletContext] Fetched', platformTransactions.length, 'platform transactions');
-          
-          // Convert platform transactions to order format for dashboard display
-          const platformOrders: Order[] = platformTransactions
-            .filter((tx: any) => tx.metadata?.orderId)
-            .map((tx: any) => ({
-              id: tx.metadata?.orderId || tx.id,
-              title: tx.metadata?.listingTitle || tx.description || 'Platform Fee Collection',
-              description: tx.description || 'Platform fee transaction',
-              price: tx.metadata?.originalPrice || tx.amount,
-              markedUpPrice: tx.metadata?.buyerPayment || tx.amount,
-              date: tx.createdAt || tx.date,
-              seller: tx.metadata?.seller || 'Unknown',
-              buyer: tx.metadata?.buyer || 'Unknown',
-              shippingStatus: 'shipped' as const, // Use 'shipped' instead of 'completed'
-              wasAuction: tx.metadata?.wasAuction || false,
-              finalBid: tx.metadata?.finalBid,
-              imageUrl: undefined,
-              tags: [],
-              deliveryAddress: undefined,
-            }));
-          
-          if (platformOrders.length > 0) {
-            setOrderHistory(prev => {
-              // Merge with existing orders, avoiding duplicates
-              const existingIds = new Set(prev.map(order => order.id));
-              const newOrders = platformOrders.filter(order => !existingIds.has(order.id));
-              return [...prev, ...newOrders];
-            });
-            console.log('[WalletContext] Added', platformOrders.length, 'platform orders to history');
-          }
-          
-        } catch (adminError) {
-          console.error('[WalletContext] Error fetching platform wallet:', adminError);
-          // Fallback to personal admin balance
-          setAdminBalanceState(balance);
-          console.log('[WalletContext] Using personal admin balance as fallback:', balance);
-        }
       }
       
       // Fetch transaction history
@@ -477,9 +512,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInitializationError('Failed to load wallet data');
       return false;
     }
-  }, [user, fetchBalance, fetchAdminPlatformBalance, getPlatformTransactions, fetchTransactionHistory]);
+  }, [user, fetchBalance, fetchAdminAnalytics, fetchTransactionHistory]);
 
-  // 🔧 NEW: Refresh admin data specifically
+  // Refresh admin data specifically using analytics endpoint
   const refreshAdminData = useCallback(async () => {
     if (!user || user.role !== 'admin') {
       console.log('[WalletContext] Not admin, skipping admin data refresh');
@@ -489,22 +524,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Refreshing admin data...');
       
-      // Refresh admin platform wallet balance
-      const platformBalance = await fetchAdminPlatformBalance();
-      setAdminBalanceState(platformBalance);
+      // Fetch complete analytics data
+      const analyticsData = await fetchAdminAnalytics('all');
       
-      // Refresh platform transactions
-      const platformTransactions = await getPlatformTransactions(50, 1);
-      console.log('[WalletContext] Refreshed', platformTransactions.length, 'platform transactions');
-      
-      // Refresh transaction history
-      await fetchTransactionHistory(user.username);
-      
-      console.log('[WalletContext] Admin data refreshed successfully');
+      if (analyticsData) {
+        console.log('[WalletContext] Admin data refreshed successfully');
+      } else {
+        console.error('[WalletContext] Failed to refresh admin data');
+      }
     } catch (error) {
       console.error('[WalletContext] Error refreshing admin data:', error);
     }
-  }, [user, fetchAdminPlatformBalance, getPlatformTransactions, fetchTransactionHistory]);
+  }, [user, fetchAdminAnalytics]);
 
   // Initialize wallet when user logs in
   useEffect(() => {
@@ -605,9 +636,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     
     // Emit WebSocket update
     emitBalanceUpdate(validatedUsername, 'buyer', balance);
-    
-    // Note: In a real app, you might want to sync this back to the server
-    // For now, we trust the server as the source of truth
   }, [emitBalanceUpdate]);
 
   const setSellerBalance = useCallback(async (seller: string, balance: number) => {
@@ -627,21 +655,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAdminBalanceState(balance);
   }, []);
 
-  // 🔧 FIXED: Create order via API with debug logging
+  // Create order via API
   const addOrder = useCallback(async (order: Order) => {
     try {
       console.log('[WalletContext] Creating order via API:', order);
-      
-      // ✅ ADD DEBUG LOGGING HERE
-      console.log('[DEBUG] Order object received:', {
-        title: order.title,
-        description: order.description,
-        price: order.price,
-        markedUpPrice: order.markedUpPrice,
-        seller: order.seller,
-        buyer: order.buyer,
-        deliveryAddress: order.deliveryAddress
-      });
       
       const orderPayload = {
         title: order.title,
@@ -664,18 +681,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         },
       };
 
-      // ✅ ADD MORE DEBUG LOGGING HERE
-      console.log('[DEBUG] Order payload being sent to API:', orderPayload);
-      console.log('[DEBUG] Payload validation check:', {
-        hasTitle: !!orderPayload.title,
-        hasDescription: !!orderPayload.description,
-        hasPrice: typeof orderPayload.price === 'number',
-        hasMarkedUpPrice: typeof orderPayload.markedUpPrice === 'number',
-        hasSeller: !!orderPayload.seller,
-        hasBuyer: !!orderPayload.buyer,
-        hasDeliveryAddress: !!orderPayload.deliveryAddress
-      });
-
       console.log('[WalletContext] Order payload:', orderPayload);
 
       const response = await apiClient.post<any>('/orders', orderPayload);
@@ -685,8 +690,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (response.success && response.data) {
         setOrderHistory((prev) => [...prev, response.data]);
         
-        // 🔧 FIXED: Only fetch current user's balance after order creation
-        // Don't try to fetch seller's balance as buyer (causes 403)
+        // Only fetch current user's balance after order creation
         if (user?.username) {
           const newBalance = await fetchBalance(user.username);
           
@@ -697,7 +701,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           }
         }
         
-        // 🔧 NEW: If admin user exists, refresh their platform balance
+        // If admin user exists, refresh their platform balance
         if (user?.role === 'admin') {
           await refreshAdminData();
         }
@@ -739,8 +743,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         authUser: user?.username
       });
       
-      // The backend gets username from the auth token, not the request body
-      // So we only send amount, method, and notes
       const response = await apiClient.post<any>('/wallet/deposit', {
         amount: validatedAmount,
         method,
@@ -780,7 +782,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return true;
       } else {
         console.error('[WalletContext] Deposit failed:', response.error);
-        // Show the actual error from the backend
         if (response.error?.message) {
           throw new Error(response.error.message);
         }
@@ -792,7 +793,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, fetchBalance, emitBalanceUpdate, user]);
 
-  // ✅ IMPROVED: Purchase listing with proper error handling
+  // Purchase listing with proper error handling
   const purchaseListing = useCallback(async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
       checkRateLimit('API_CALL', buyerUsername);
@@ -808,7 +809,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         markedUpPrice: listing.markedUpPrice
       });
       
-      // ✅ FIXED: Include all required fields including deliveryAddress
       await addOrder({
         id: listing.id || uuidv4(),
         title: listing.title,
@@ -821,10 +821,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString(),
         shippingStatus: 'pending',
         tags: listing.tags || [],
-        listingId: listing.id, // Reference to original listing
-        // ✅ FIXED: Include required delivery address
+        listingId: listing.id,
         deliveryAddress: {
-          fullName: 'John Doe', // TODO: Get from user profile in production
+          fullName: 'John Doe',
           addressLine1: '123 Main St',
           city: 'New York',
           state: 'NY',
@@ -837,7 +836,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (addSellerNotification) {
         addSellerNotification(
           validatedSeller,
-          `New sale: "${listing.title}" for $${listing.price.toFixed(2)}`
+          `New sale: "${listing.title}" for ${listing.price.toFixed(2)}`
         );
       }
       
@@ -845,7 +844,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('[Purchase] Error:', error);
-      // ✅ IMPROVED: Let the error bubble up with details instead of swallowing it
       throw error;
     }
   }, [addOrder, addSellerNotification]);
@@ -876,7 +874,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('[WalletContext] Withdrawal response:', response);
       
       if (response.success) {
-        // Update local state
         const newWithdrawal: Withdrawal = { 
           amount: validatedAmount, 
           date: response.data?.createdAt || new Date().toISOString(), 
@@ -1111,7 +1108,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, fetchBalance]);
 
-  // 🔧 NEW: Unsubscribe from seller via API
+  // Unsubscribe from seller via API
   const unsubscribeFromSeller = useCallback(async (
     buyer: string,
     seller: string
@@ -1120,7 +1117,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('[WalletContext] Processing unsubscribe via API:', { buyer, seller });
       
       const response = await apiClient.post<any>('/subscriptions/unsubscribe', {
-        seller  // The backend gets buyer from auth token
+        seller
       });
       
       console.log('[WalletContext] Unsubscribe response:', response);
@@ -1147,10 +1144,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Stub implementations for features not yet in API
   const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
-    // TODO: Implement tip endpoint when ready
     console.log('[WalletContext] Tip feature - using mock implementation');
     
-    // For now, treat as a simple transfer
     try {
       const validatedAmount = validateTransactionAmount(amount);
       
@@ -1178,7 +1173,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [getBuyerBalance]);
 
   const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
-    // TODO: Implement custom request endpoint when ready
     console.log('[WalletContext] Custom request purchase - using mock implementation');
     return false;
   }, []);
@@ -1187,7 +1181,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const addAdminWithdrawal = useCallback(async (amount: number) => {
     console.log('[WalletContext] Admin withdrawal not implemented in API yet');
     
-    // Mock implementation
     const withdrawal: Withdrawal = {
       amount,
       date: new Date().toISOString(),
@@ -1198,7 +1191,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setAdminWithdrawals(prev => [...prev, withdrawal]);
   }, []);
 
-  // Auction-related stubs (to be implemented later)
+  // Auction-related stubs
   const holdBidFunds = useCallback(async (): Promise<boolean> => {
     console.log('[WalletContext] Auction features not fully implemented in API yet');
     return false;
@@ -1221,12 +1214,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Enhanced features stubs
   const checkSuspiciousActivity = useCallback(async (username: string) => {
-    // TODO: Implement when backend supports it
     return { suspicious: false, reasons: [] };
   }, []);
 
   const reconcileBalance = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin') => {
-    // TODO: Implement when backend supports it
     return null;
   }, []);
 
@@ -1284,9 +1275,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     reconcileBalance,
     getTransactionHistory,
     
-    // 🔧 NEW: Admin-specific methods
+    // Admin-specific methods
     refreshAdminData,
     getPlatformTransactions,
+    getAnalyticsData,
     
     // Data management
     reloadData,

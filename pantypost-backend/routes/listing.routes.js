@@ -6,7 +6,7 @@ const Order = require('../models/Order');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth.middleware');
-const webSocketService = require('../config/websocket'); // ADD THIS
+const webSocketService = require('../config/websocket');
 
 // ============= LISTING ROUTES =============
 
@@ -68,10 +68,22 @@ router.get('/', async (req, res) => {
     
     // Text search
     if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
+      // If there's already an $or for status, we need to combine them differently
+      const searchCondition = {
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } }
+        ]
+      };
+      
+      if (filter.$or) {
+        // Combine status and search conditions
+        const statusCondition = { $or: filter.$or };
+        delete filter.$or;
+        filter.$and = [statusCondition, searchCondition];
+      } else {
+        filter.$or = searchCondition.$or;
+      }
     }
     
     // Seller filter
@@ -146,17 +158,16 @@ router.get('/', async (req, res) => {
       Listing.countDocuments(filter)
     ]);
     
+    // FIXED: Return proper response format that frontend expects
     res.json({
       success: true,
       data: listings,
-      pagination: {
+      meta: {  // Changed from 'pagination' to 'meta'
         page: pageNum,
-        limit: limitNum,
+        pageSize: limitNum,  // Changed from 'limit' to 'pageSize'
         total: totalCount,
-        pages: Math.ceil(totalCount / limitNum)
-      },
-      // Backwards compatibility
-      listings: listings
+        totalPages: Math.ceil(totalCount / limitNum)  // Changed from 'pages' to 'totalPages'
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -330,8 +341,10 @@ router.post('/', authMiddleware, async (req, res) => {
     const listing = new Listing(listingData);
     await listing.save();
     
-    // WEBSOCKET: Emit new listing event
-    webSocketService.emitNewListing(listing);
+    // WEBSOCKET: Emit new listing event if available
+    if (webSocketService) {
+      webSocketService.emitNewListing(listing);
+    }
     
     res.json({
       success: true,
@@ -475,12 +488,14 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         }
       }
       
-      // WEBSOCKET: Emit new bid event
-      webSocketService.emitNewBid(listing, {
-        bidder: bidder,
-        amount: amount,
-        date: new Date()
-      });
+      // WEBSOCKET: Emit new bid event if available
+      if (webSocketService) {
+        webSocketService.emitNewBid(listing, {
+          bidder: bidder,
+          amount: amount,
+          date: new Date()
+        });
+      }
       
       res.json({
         success: true,
@@ -551,8 +566,10 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       listing.status = 'expired';
       await listing.save();
       
-      // WEBSOCKET: Emit auction ended event
-      webSocketService.emitAuctionEnded(listing, null, 0);
+      // WEBSOCKET: Emit auction ended event if available
+      if (webSocketService) {
+        webSocketService.emitAuctionEnded(listing, null, 0);
+      }
       
       return res.json({
         success: true,
@@ -588,8 +605,10 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
         await refundTransaction.save();
       }
       
-      // WEBSOCKET: Emit auction ended event
-      webSocketService.emitAuctionEnded(listing, null, listing.auction.currentBid);
+      // WEBSOCKET: Emit auction ended event if available
+      if (webSocketService) {
+        webSocketService.emitAuctionEnded(listing, null, listing.auction.currentBid);
+      }
       
       return res.json({
         success: true,
@@ -601,34 +620,48 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     const winningBid = listing.auction.currentBid;
     const winner = listing.auction.highestBidder;
     
-    // Get seller's wallet
+    // Get or create seller's wallet
     let sellerWallet = await Wallet.findOne({ username: listing.seller });
     if (!sellerWallet) {
       // Create seller wallet if it doesn't exist
+      const sellerUser = await User.findOne({ username: listing.seller });
       sellerWallet = new Wallet({
         username: listing.seller,
-        role: 'seller',
+        role: sellerUser ? sellerUser.role : 'seller',
         balance: 0
       });
       await sellerWallet.save();
     }
     
-    // Calculate fees
-    const platformFee = Math.round(winningBid * 0.1 * 100) / 100;
-    const sellerEarnings = Math.round((winningBid - platformFee) * 100) / 100;
+    // Get or create platform wallet
+    let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    if (!platformWallet) {
+      platformWallet = new Wallet({
+        username: 'platform',
+        role: 'admin',
+        balance: 0
+      });
+      await platformWallet.save();
+    }
+    
+    // Calculate fees (20% total - 10% from buyer already paid, 10% from seller)
+    const sellerPlatformFee = Math.round(winningBid * 0.1 * 100) / 100;
+    const sellerEarnings = Math.round((winningBid - sellerPlatformFee) * 100) / 100;
     
     // Create order
     const order = new Order({
       title: listing.title,
       description: listing.description,
       price: winningBid,
+      markedUpPrice: winningBid, // For auctions, price = markedUpPrice
       seller: listing.seller,
       buyer: winner,
       imageUrl: listing.imageUrls[0],
       tags: listing.tags,
       wasAuction: true,
       finalBid: winningBid,
-      platformFee: platformFee,
+      platformFee: sellerPlatformFee,
+      sellerPlatformFee: sellerPlatformFee,
       sellerEarnings: sellerEarnings,
       paymentStatus: 'completed', // Payment already held
       paymentCompletedAt: new Date(),
@@ -648,6 +681,9 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     // Note: Buyer's money was already deducted when they placed the winning bid
     await sellerWallet.deposit(sellerEarnings);
     
+    // Transfer platform fee to platform wallet
+    await platformWallet.deposit(sellerPlatformFee);
+    
     // Create transactions for the sale
     const saleTransaction = new Transaction({
       type: 'auction_sale',
@@ -658,28 +694,36 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       toRole: 'seller',
       description: `Auction won: ${listing.title} (after fees)`,
       status: 'completed',
+      completedAt: new Date(),
       metadata: { 
         orderId: order._id.toString(), 
         auctionId: listing._id.toString(),
         originalAmount: winningBid,
-        platformFee: platformFee
+        platformFee: sellerPlatformFee
       }
     });
     await saleTransaction.save();
     
     // Create platform fee transaction
     const feeTransaction = new Transaction({
-      type: 'fee',
-      amount: platformFee,
+      type: 'platform_fee',
+      amount: sellerPlatformFee,
       from: listing.seller,
       to: 'platform',
       fromRole: 'seller',
       toRole: 'admin',
       description: `Platform fee (10%) for auction: ${listing.title}`,
       status: 'completed',
+      completedAt: new Date(),
       metadata: { 
         orderId: order._id.toString(),
-        auctionId: listing._id.toString()
+        auctionId: listing._id.toString(),
+        listingTitle: listing.title,
+        seller: listing.seller,
+        buyer: winner,
+        originalPrice: winningBid,
+        sellerFee: sellerPlatformFee,
+        totalFee: sellerPlatformFee
       }
     });
     await feeTransaction.save();
@@ -695,11 +739,11 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     listing.soldAt = new Date();
     await listing.save();
     
-    // WEBSOCKET: Emit auction ended event
-    webSocketService.emitAuctionEnded(listing, winner, winningBid);
-    
-    // WEBSOCKET: Emit listing sold event
-    webSocketService.emitListingSold(listing, winner);
+    // WEBSOCKET: Emit events if available
+    if (webSocketService) {
+      webSocketService.emitAuctionEnded(listing, winner, winningBid);
+      webSocketService.emitListingSold(listing, winner);
+    }
     
     res.json({
       success: true,
@@ -711,6 +755,59 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/listings/:id - Update a listing
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // Check if user owns the listing or is admin
+    if (listing.seller !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only edit your own listings'
+      });
+    }
+    
+    // Don't allow changing the seller
+    delete req.body.seller;
+    
+    // Don't allow editing active auctions with bids
+    if (listing.auction && listing.auction.isAuction && 
+        listing.auction.status === 'active' && listing.auction.bidCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot edit an active auction with bids'
+      });
+    }
+    
+    // Update listing
+    Object.assign(listing, req.body);
+    await listing.save();
+    
+    // WEBSOCKET: Emit listing update if available
+    if (webSocketService) {
+      webSocketService.emitListingUpdated(listing);
+    }
+    
+    res.json({
+      success: true,
+      data: listing
+    });
+  } catch (error) {
+    res.status(400).json({
       success: false,
       error: error.message
     });
@@ -746,7 +843,14 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    await listing.deleteOne();
+    // Soft delete by setting status
+    listing.status = 'deleted';
+    await listing.save();
+    
+    // WEBSOCKET: Emit listing deleted if available
+    if (webSocketService) {
+      webSocketService.emitListingDeleted(listing._id);
+    }
     
     res.json({
       success: true,
@@ -760,4 +864,5 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Export the router
 module.exports = router;

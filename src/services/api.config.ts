@@ -278,8 +278,12 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
     // Ensure API_BASE_URL doesn't end with a slash
     const baseUrl = API_BASE_URL.replace(/\/$/, '');
     
-    // Build the full URL (add /api prefix to the endpoint)
-    const fullUrl = `${baseUrl}/api${url}`;
+    // FIX: Check if baseUrl already contains /api path
+    // If it does, don't add it again
+    const hasApiPath = baseUrl.endsWith('/api') || baseUrl.includes('/api/');
+    
+    // Build the full URL (only add /api if not already present)
+    const fullUrl = hasApiPath ? `${baseUrl}${url}` : `${baseUrl}/api${url}`;
     
     // Sanitize the final URL
     const sanitizedUrl = sanitizeUrl(fullUrl);
