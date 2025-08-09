@@ -27,7 +27,6 @@ class WebSocketService {
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-        // FIXED: Changed from decoded.id to decoded.userId
         const user = await User.findById(decoded.id).select('-password');
         
         if (!user) {
@@ -36,7 +35,7 @@ class WebSocketService {
 
         socket.userId = user._id.toString();
         socket.user = user;
-        socket.username = user.username; // Add username for convenience
+        socket.username = user.username;
         next();
       } catch (error) {
         next(new Error('Invalid token'));
@@ -65,7 +64,7 @@ class WebSocketService {
       connectedAt: new Date()
     });
 
-    // Track user sockets - using username as key to match your API
+    // Track user sockets
     if (!this.userSockets.has(socket.username)) {
       this.userSockets.set(socket.username, []);
     }
@@ -103,7 +102,6 @@ class WebSocketService {
   handleTyping(socket, data) {
     const { conversationId, isTyping } = data;
     
-    // Broadcast to conversation participants
     socket.to(`conversation:${conversationId}`).emit('message:typing', {
       userId: socket.userId,
       username: socket.username,
@@ -135,7 +133,6 @@ class WebSocketService {
   }
 
   // Emit events from other parts of the application
-  // FIXED: Changed to use username instead of userId
   emitToUser(username, event, data) {
     const socketIds = this.userSockets.get(username) || [];
     socketIds.forEach(socketId => {
@@ -149,7 +146,6 @@ class WebSocketService {
 
   // Message events
   emitNewMessage(message) {
-    // Emit to both sender and receiver
     this.emitToUser(message.sender, 'message:new', message);
     this.emitToUser(message.receiver, 'message:new', message);
   }
@@ -164,17 +160,32 @@ class WebSocketService {
   }
 
   // Order events
-  emitNewOrder(order) {
-    this.emitToUser(order.seller, 'order:new', order);
+  emitOrderCreated(order) {
+    // Emit to seller
+    this.emitToUser(order.seller, 'order:created', order);
+    
+    // Emit to buyer
+    this.emitToUser(order.buyer, 'order:created', order);
+    
+    // Send notification to buyer
     this.emitToUser(order.buyer, 'notification:new', {
       id: `notif_${Date.now()}`,
       type: 'order',
       title: 'Order Placed!',
       body: `Your order for ${order.title} has been placed`,
-      data: { orderId: order._id },
+      data: { orderId: order._id || order.id },
       read: false,
       createdAt: new Date()
     });
+  }
+
+  emitNewOrder(order) {
+    this.emitOrderCreated(order);
+  }
+
+  emitOrderUpdated(order) {
+    this.emitToUser(order.buyer, 'order:updated', order);
+    this.emitToUser(order.seller, 'order:updated', order);
   }
 
   emitOrderStatusChange(order, previousStatus) {
@@ -192,7 +203,6 @@ class WebSocketService {
 
   // Auction events
   emitNewBid(listing, bid) {
-    // Notify all watchers
     this.io.emit('auction:bid', {
       listingId: listing._id,
       bidder: bid.bidder,
@@ -243,7 +253,8 @@ class WebSocketService {
       previousBalance,
       newBalance,
       change: newBalance - previousBalance,
-      reason
+      reason,
+      timestamp: new Date()
     });
   }
 
@@ -251,7 +262,7 @@ class WebSocketService {
     if (transaction.from) {
       this.emitToUser(transaction.from, 'wallet:transaction', transaction);
     }
-    if (transaction.to) {
+    if (transaction.to && transaction.to !== 'platform') {
       this.emitToUser(transaction.to, 'wallet:transaction', transaction);
     }
   }
@@ -280,7 +291,6 @@ class WebSocketService {
 
   // Listing events
   emitNewListing(listing) {
-    // Emit to subscribers of the seller
     this.io.emit('listing:new', {
       id: listing._id,
       title: listing.title,
@@ -288,6 +298,24 @@ class WebSocketService {
       seller: listing.seller,
       tags: listing.tags,
       createdAt: listing.createdAt
+    });
+  }
+
+  emitListingUpdated(listing) {
+    this.io.emit('listing:updated', {
+      id: listing._id,
+      title: listing.title,
+      price: listing.price,
+      seller: listing.seller,
+      tags: listing.tags,
+      updatedAt: new Date()
+    });
+  }
+
+  emitListingDeleted(listingId) {
+    this.io.emit('listing:deleted', {
+      id: listingId,
+      deletedAt: new Date()
     });
   }
 

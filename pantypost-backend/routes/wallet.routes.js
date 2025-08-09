@@ -7,12 +7,90 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
-const webSocketService = require('../config/websocket');
 const mongoose = require('mongoose');
 
 // ============= WALLET ROUTES =============
 
-// GET /api/wallet/balance/:username - Get wallet balance
+// GET /api/wallet/balance - Get wallet balance with query params
+router.get('/balance', authMiddleware, async (req, res) => {
+  try {
+    const { username, role } = req.query;
+    
+    // For admin users requesting platform wallet
+    if (req.user.role === 'admin' && role === 'admin') {
+      let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+      
+      if (!platformWallet) {
+        platformWallet = new Wallet({
+          username: 'platform',
+          role: 'admin',
+          balance: 0
+        });
+        await platformWallet.save();
+      }
+      
+      return res.json({
+        success: true,
+        data: {
+          username: 'platform',
+          balance: platformWallet.balance,
+          role: 'admin'
+        }
+      });
+    }
+    
+    // Regular user wallet
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username is required'
+      });
+    }
+    
+    // Check if user can view this wallet
+    if (req.user.username !== username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only view your own wallet'
+      });
+    }
+    
+    let wallet = await Wallet.findOne({ username });
+    
+    if (!wallet) {
+      const user = await User.findOne({ username });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
+      
+      wallet = new Wallet({
+        username,
+        role: user.role,
+        balance: 0
+      });
+      await wallet.save();
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        username: wallet.username,
+        balance: wallet.balance,
+        role: wallet.role
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/wallet/balance/:username - Get wallet balance by username
 router.get('/balance/:username', authMiddleware, async (req, res) => {
   try {
     const { username } = req.params;
@@ -134,8 +212,8 @@ router.post('/deposit', authMiddleware, async (req, res) => {
     await transaction.save();
     
     // WEBSOCKET: Emit balance update
-    if (webSocketService) {
-      webSocketService.emitBalanceUpdate(
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
         username,
         wallet.role,
         previousBalance,
@@ -144,7 +222,7 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       );
       
       // WEBSOCKET: Emit transaction event
-      webSocketService.emitTransaction(transaction);
+      global.webSocketService.emitTransaction(transaction);
     }
     
     res.json({
@@ -230,8 +308,8 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
     await transaction.save();
     
     // WEBSOCKET: Emit balance update
-    if (webSocketService) {
-      webSocketService.emitBalanceUpdate(
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
         username,
         wallet.role,
         previousBalance,
@@ -240,7 +318,7 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
       );
       
       // WEBSOCKET: Emit transaction event
-      webSocketService.emitTransaction(transaction);
+      global.webSocketService.emitTransaction(transaction);
     }
     
     res.json({
@@ -393,8 +471,8 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
     await transaction.save();
     
     // WEBSOCKET: Emit balance update
-    if (webSocketService) {
-      webSocketService.emitBalanceUpdate(
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
         username,
         wallet.role,
         previousBalance,
@@ -403,7 +481,7 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
       );
       
       // WEBSOCKET: Emit transaction event
-      webSocketService.emitTransaction(transaction);
+      global.webSocketService.emitTransaction(transaction);
     }
     
     res.json({
@@ -418,7 +496,78 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/wallet/admin-platform-balance - Get platform admin wallet balance
+// GET /api/wallet/admin/platform - Get platform wallet balance (admin only)
+router.get('/admin/platform', authMiddleware, async (req, res) => {
+  try {
+    // Only admins can access platform wallet
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    // Get platform wallet
+    let platformWallet = await Wallet.findOne({ 
+      username: 'platform', 
+      role: 'admin' 
+    });
+
+    // Create platform wallet if it doesn't exist
+    if (!platformWallet) {
+      platformWallet = new Wallet({
+        username: 'platform',
+        role: 'admin',
+        balance: 0
+      });
+      await platformWallet.save();
+      console.log('[Wallet] Created platform wallet');
+    }
+
+    // Calculate total platform revenue
+    const totalRevenue = await Transaction.aggregate([
+      {
+        $match: {
+          type: 'platform_fee',
+          status: 'completed',
+          to: 'platform'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const revenue = totalRevenue[0]?.total || 0;
+
+    res.json({
+      success: true,
+      data: {
+        balance: platformWallet.balance,
+        revenue: revenue,
+        wallet: {
+          username: platformWallet.username,
+          role: platformWallet.role,
+          balance: platformWallet.balance,
+          createdAt: platformWallet.createdAt,
+          updatedAt: platformWallet.updatedAt
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('[Wallet] Error fetching platform balance:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/wallet/admin-platform-balance - Legacy endpoint (redirect to new one)
 router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
   try {
     // Only admins can check platform balance
@@ -610,8 +759,8 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
     await withdrawalTransaction.save();
     
     // WEBSOCKET: Emit balance update
-    if (webSocketService) {
-      webSocketService.emitBalanceUpdate(
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
         'platform',
         'admin',
         previousBalance,
@@ -620,7 +769,7 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
       );
       
       // WEBSOCKET: Emit transaction event
-      webSocketService.emitTransaction(withdrawalTransaction);
+      global.webSocketService.emitTransaction(withdrawalTransaction);
     }
     
     console.log('[Wallet] Platform withdrawal processed:', {

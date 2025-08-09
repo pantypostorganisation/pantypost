@@ -7,7 +7,6 @@ const Transaction = require('../models/Transaction');
 const Listing = require('../models/Listing');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
-const webSocketService = require('../config/websocket');
 
 // POST /api/orders - Create new order with proper fee tracking
 router.post('/', authMiddleware, async (req, res) => {
@@ -219,10 +218,10 @@ router.post('/', authMiddleware, async (req, res) => {
       order.feeTransactionId = feeTransaction._id;
       await order.save();
 
-      // Emit WebSocket events
-      if (webSocketService) {
+      // Emit WebSocket events using global webSocketService
+      if (global.webSocketService) {
         // Buyer balance update
-        webSocketService.emitBalanceUpdate(
+        global.webSocketService.emitBalanceUpdate(
           buyer,
           'buyer',
           previousBuyerBalance,
@@ -231,7 +230,7 @@ router.post('/', authMiddleware, async (req, res) => {
         );
 
         // Seller balance update
-        webSocketService.emitBalanceUpdate(
+        global.webSocketService.emitBalanceUpdate(
           seller,
           'seller',
           previousSellerBalance,
@@ -240,7 +239,7 @@ router.post('/', authMiddleware, async (req, res) => {
         );
 
         // Platform balance update
-        webSocketService.emitBalanceUpdate(
+        global.webSocketService.emitBalanceUpdate(
           'platform',
           'admin',
           previousPlatformBalance,
@@ -249,11 +248,19 @@ router.post('/', authMiddleware, async (req, res) => {
         );
 
         // Emit transaction events
-        webSocketService.emitTransaction(purchaseTransaction);
-        webSocketService.emitTransaction(feeTransaction);
+        global.webSocketService.emitTransaction(purchaseTransaction.toObject());
+        global.webSocketService.emitTransaction(feeTransaction.toObject());
 
-        // Emit order event
-        webSocketService.emitOrderCreated(order);
+        // Emit order created event
+        global.webSocketService.emitOrderCreated({
+          _id: order._id,
+          id: order._id.toString(),
+          title: order.title,
+          seller: order.seller,
+          buyer: order.buyer,
+          price: order.price,
+          markedUpPrice: order.markedUpPrice
+        });
       }
 
       console.log('[Order] Order processing complete');
@@ -499,8 +506,15 @@ router.put('/:id/shipping', authMiddleware, async (req, res) => {
     await order.save();
 
     // Emit WebSocket event
-    if (webSocketService) {
-      webSocketService.emitOrderUpdated(order);
+    if (global.webSocketService) {
+      global.webSocketService.emitOrderUpdated({
+        _id: order._id,
+        id: order._id.toString(),
+        shippingStatus: order.shippingStatus,
+        trackingNumber: order.trackingNumber,
+        buyer: order.buyer,
+        seller: order.seller
+      });
     }
 
     res.json({

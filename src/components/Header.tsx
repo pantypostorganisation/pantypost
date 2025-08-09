@@ -94,7 +94,7 @@ export default function Header() {
     listings, 
     checkEndedAuctions 
   } = useListings();
-  const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory } = useWallet();
+  const { getBuyerBalance, getSellerBalance, orderHistory } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
   
@@ -106,6 +106,7 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
+  const [platformBalance, setPlatformBalance] = useState(0);
   
   // ✅ Button loading states to prevent double-clicks
   const [clearingNotifications, setClearingNotifications] = useState(false);
@@ -214,7 +215,39 @@ export default function Header() {
     }
   }, [user?.username, user?.role, sellerNotifications]);
 
-  // ✅ Enhanced balance memoization that also listens to WalletContext changes
+  // ✅ FIXED: Function to fetch platform balance without causing loops
+  const fetchPlatformBalance = useCallback(async () => {
+    if (!isAdminUser || !user || !isMountedRef.current) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/wallet/admin/platform`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && typeof data.data.balance === 'number') {
+          setPlatformBalance(prevBalance => {
+            // Only update if actually changed to prevent re-renders
+            if (Math.abs(prevBalance - data.data.balance) > 0.01) {
+              console.log('[Header] Platform balance updated:', data.data.balance);
+              return data.data.balance;
+            }
+            return prevBalance;
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[Header] Error fetching platform balance:', error);
+    }
+  }, [isAdminUser, user]);
+
+  // ✅ Enhanced balance memoization
   const buyerBalance = useMemo(() => {
     if (!username || typeof getBuyerBalance !== 'function') return 0;
     try {
@@ -239,47 +272,14 @@ export default function Header() {
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
 
-  // ✅ Add effect to listen for balance changes in WalletContext
+  // ✅ FIXED: Removed the problematic balance checking effect that was causing infinite loops
+
+  // ✅ FIXED: Fetch platform balance when admin user logs in or balance updates
   useEffect(() => {
-    if (!username) return;
-
-    // Check for balance changes on a short interval
-    const checkBalanceChanges = () => {
-      if (!isMountedRef.current) return;
-
-      let hasChanged = false;
-
-      if (role === 'buyer' && typeof getBuyerBalance === 'function') {
-        const currentBalance = getBuyerBalance(username);
-        const displayedBalance = buyerBalance;
-        if (Math.abs(currentBalance - displayedBalance) > 0.01) {
-          console.log('[Header] Buyer balance change detected:', { current: currentBalance, displayed: displayedBalance });
-          hasChanged = true;
-        }
-      }
-
-      if (role === 'seller' && typeof getSellerBalance === 'function') {
-        const currentBalance = getSellerBalance(username);
-        const displayedBalance = sellerBalance;
-        if (Math.abs(currentBalance - displayedBalance) > 0.01) {
-          console.log('[Header] Seller balance change detected:', { current: currentBalance, displayed: displayedBalance });
-          hasChanged = true;
-        }
-      }
-
-      if (hasChanged) {
-        setBalanceUpdateTrigger(prev => prev + 1);
-      }
-    };
-
-    // Check immediately
-    checkBalanceChanges();
-
-    // Then check every second for immediate updates
-    const interval = setInterval(checkBalanceChanges, 1000);
-
-    return () => clearInterval(interval);
-  }, [username, role, getBuyerBalance, getSellerBalance, buyerBalance, sellerBalance]);
+    if (isAdminUser && user && isMountedRef.current) {
+      fetchPlatformBalance();
+    }
+  }, [isAdminUser, user, balanceUpdateTrigger]); // Removed fetchPlatformBalance from deps to prevent loops
 
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
@@ -313,17 +313,27 @@ export default function Header() {
     }
   }, [user?.username, messages]);
 
-  // ✅ Rate-limited balance update function with context safety
+  // ✅ FIXED: Rate-limited balance update function without circular dependencies
   const forceUpdateBalances = useCallback(() => {
     if (!isMountedRef.current) return;
     
     const now = Date.now();
-    if (now - lastBalanceUpdate.current < 500) return; // Reduced rate limit to 500ms for faster updates
+    if (now - lastBalanceUpdate.current < 1000) return; // Rate limit to 1 second
     
     lastBalanceUpdate.current = now;
     console.log('[Header] Force updating balances');
     setBalanceUpdateTrigger(prev => prev + 1);
-  }, []);
+    
+    // Fetch platform balance for admins without causing loops
+    if (isAdminUser && user) {
+      // Use setTimeout to prevent synchronous loops
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          fetchPlatformBalance();
+        }
+      }, 100);
+    }
+  }, [isAdminUser, user]); // Removed fetchPlatformBalance from deps
 
   // Rate-limited auction check function
   const checkAuctionsWithRateLimit = useCallback(() => {
@@ -425,10 +435,10 @@ export default function Header() {
     }
   }, [user, sellerNotifications, deletingNotifications]);
 
-  // Setup intervals using custom hook - reduced interval for faster updates
+  // ✅ FIXED: Setup intervals using custom hook with longer intervals
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
-  }, 5000); // Reduced from 15000 to 5000 for more frequent updates
+  }, 15000); // Changed to 15 seconds to reduce load
 
   const clearAuctionInterval = useInterval(() => {
     if (isMountedRef.current) checkAuctionsWithRateLimit();
@@ -453,7 +463,7 @@ export default function Header() {
     }
   }, [user, orderHistory, getRequestsForUser]);
 
-  // ✅ Main component setup with secure context function instead of global window function
+  // ✅ Main component setup with secure context function
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
@@ -489,7 +499,7 @@ export default function Header() {
     window.addEventListener('auctionEnded', handleAuctionEnd);
     window.addEventListener('walletUpdated', handleWalletUpdate as EventListener);
     
-    // ✅ Secure context-based balance updates instead of global window function
+    // ✅ Secure context-based balance updates
     const balanceUpdateContext = { forceUpdate: forceUpdateBalances };
     (window as any).__pantypost_balance_context = balanceUpdateContext;
     
@@ -513,7 +523,7 @@ export default function Header() {
         delete (window as any).__pantypost_balance_context;
       }
     };
-  }, []);
+  }, []); // Empty deps to run only once on mount
 
   // Reset notification tab when dropdown opens
   useEffect(() => {
@@ -522,13 +532,13 @@ export default function Header() {
     }
   }, [showNotifDropdown]);
 
-  // ✅ Reusable mobile link renderer to reduce code duplication
+  // ✅ Reusable mobile link renderer
   const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
     <Link 
       href={href}
       className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-colors"
       onClick={() => setMobileMenuOpen(false)}
-      style={{ touchAction: 'manipulation' }} // ✅ Better mobile responsiveness
+      style={{ touchAction: 'manipulation' }}
     >
       {icon}
       <span>{label}</span>
@@ -540,14 +550,14 @@ export default function Header() {
     </Link>
   );
 
-  // ✅ Mobile Navigation Component with better scroll handling
+  // ✅ Mobile Navigation Component
   const MobileMenu = () => (
     <div className={`mobile-menu fixed inset-0 z-50 lg:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
       <div 
         ref={mobileMenuRef}
         className="fixed top-0 left-0 w-64 h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-r border-[#ff950e]/30 overflow-y-auto overscroll-contain"
-        style={{ touchAction: 'pan-y' }} // ✅ Prevent iOS bounce scroll
+        style={{ touchAction: 'pan-y' }}
       >
         <div className="p-4 border-b border-[#ff950e]/30">
           <div className="flex items-center justify-between">
@@ -576,6 +586,7 @@ export default function Header() {
                 <span className="text-purple-300 font-bold">ADMIN</span>
               </div>
               {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
+              {renderMobileLink('/wallet/admin', <Wallet className="w-5 h-5" />, `Platform: $${platformBalance.toFixed(2)}`)}
             </>
           )}
           
@@ -617,7 +628,6 @@ export default function Header() {
   );
 
   // ✅ FIXED: Early return MUST be after all hooks
-  // Early return for excluded pages - this MUST be after all hooks are called
   if (pathname === '/login' || pathname === '/signup') {
     return null;
   }
@@ -710,21 +720,19 @@ export default function Header() {
                 <span>Wallets</span>
               </Link>
               
-              {/* FIXED: Added preventDefault and explicit navigation */}
+              {/* Display platform balance for admins */}
               <Link 
                 href="/wallet/admin" 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
                 onClick={(e) => {
-                  // Prevent any default behavior that might interfere
                   e.preventDefault();
                   e.stopPropagation();
-                  // Force navigation using window.location
                   window.location.href = '/wallet/admin';
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
                 <Wallet className="w-3.5 h-3.5 text-purple-400" />
-                <span className="font-bold text-purple-300">${adminBalance.toFixed(2)}</span>
+                <span className="font-bold text-purple-300">${platformBalance.toFixed(2)}</span>
               </Link>
             </>
           )}
@@ -746,15 +754,12 @@ export default function Header() {
                 <span className="font-medium">Get Verified</span>
               </Link>
               
-              {/* FIXED: Added preventDefault and explicit navigation for seller wallet */}
               <Link 
                 href="/wallet/seller" 
                 className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
                 onClick={(e) => {
-                  // Prevent any default behavior that might interfere
                   e.preventDefault();
                   e.stopPropagation();
-                  // Force navigation using window.location
                   window.location.href = '/wallet/seller';
                 }}
                 style={{ touchAction: 'manipulation' }}
@@ -959,15 +964,12 @@ export default function Header() {
                 <span>My Orders</span>
               </Link>
               
-              {/* FIXED: Added preventDefault and explicit navigation for buyer wallet */}
               <Link 
                 href="/wallet/buyer" 
                 className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs"
                 onClick={(e) => {
-                  // Prevent any default behavior that might interfere
                   e.preventDefault();
                   e.stopPropagation();
-                  // Force navigation using window.location
                   window.location.href = '/wallet/buyer';
                 }}
                 style={{ touchAction: 'manipulation' }}

@@ -5,8 +5,8 @@ const Listing = require('../models/Listing');
 const Order = require('../models/Order');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
-const webSocketService = require('../config/websocket');
 
 // ============= LISTING ROUTES =============
 
@@ -31,24 +31,17 @@ router.get('/debug', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { 
-      // Search
-      search,           // Text search in title and description
-      
-      // Filters
+      search,
       seller, 
-      tags,             // Can be comma-separated for multiple tags
+      tags,
       minPrice, 
       maxPrice, 
       isPremium,
       isAuction,
       status = 'active',
-      hoursWorn,        // Filter by hours worn
-      
-      // Sorting
-      sort = 'date',    // date, price, views, popularity
+      hoursWorn,
+      sort = 'date',
       order = 'desc',
-      
-      // Pagination
       page = 1,
       limit = 20
     } = req.query;
@@ -56,7 +49,7 @@ router.get('/', async (req, res) => {
     // Build filter
     let filter = {};
     
-    // Status filter - include listings without status field or with 'active' status
+    // Status filter
     if (status === 'active') {
       filter.$or = [
         { status: 'active' },
@@ -68,7 +61,6 @@ router.get('/', async (req, res) => {
     
     // Text search
     if (search) {
-      // If there's already an $or for status, we need to combine them differently
       const searchCondition = {
         $or: [
           { title: { $regex: search, $options: 'i' } },
@@ -77,7 +69,6 @@ router.get('/', async (req, res) => {
       };
       
       if (filter.$or) {
-        // Combine status and search conditions
         const statusCondition = { $or: filter.$or };
         delete filter.$or;
         filter.$and = [statusCondition, searchCondition];
@@ -89,7 +80,7 @@ router.get('/', async (req, res) => {
     // Seller filter
     if (seller) filter.seller = seller;
     
-    // Tags filter (support multiple tags)
+    // Tags filter
     if (tags) {
       const tagArray = tags.split(',').map(tag => tag.trim());
       filter.tags = { $in: tagArray };
@@ -101,7 +92,7 @@ router.get('/', async (req, res) => {
     // Auction filter
     if (isAuction !== undefined) filter['auction.isAuction'] = isAuction === 'true';
     
-    // Price filter (for regular listings)
+    // Price filter
     if (!isAuction || isAuction === 'false') {
       if (minPrice || maxPrice) {
         filter.price = {};
@@ -125,7 +116,6 @@ router.get('/', async (req, res) => {
         sortObj.createdAt = order === 'asc' ? 1 : -1;
         break;
       case 'price':
-        // For auctions, sort by current bid
         if (isAuction === 'true') {
           sortObj['auction.currentBid'] = order === 'asc' ? 1 : -1;
         } else {
@@ -136,7 +126,6 @@ router.get('/', async (req, res) => {
         sortObj.views = order === 'asc' ? 1 : -1;
         break;
       case 'popularity':
-        // Sort by views and creation date
         sortObj.views = -1;
         sortObj.createdAt = -1;
         break;
@@ -146,10 +135,10 @@ router.get('/', async (req, res) => {
     
     // Pagination
     const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 100); // Max 100 per page
+    const limitNum = Math.min(parseInt(limit), 100);
     const skip = (pageNum - 1) * limitNum;
     
-    // Execute query with pagination
+    // Execute query
     const [listings, totalCount] = await Promise.all([
       Listing.find(filter)
         .sort(sortObj)
@@ -158,15 +147,14 @@ router.get('/', async (req, res) => {
       Listing.countDocuments(filter)
     ]);
     
-    // FIXED: Return proper response format that frontend expects
     res.json({
       success: true,
       data: listings,
-      meta: {  // Changed from 'pagination' to 'meta'
+      meta: {
         page: pageNum,
-        pageSize: limitNum,  // Changed from 'limit' to 'pageSize'
+        pageSize: limitNum,
         total: totalCount,
-        totalPages: Math.ceil(totalCount / limitNum)  // Changed from 'pages' to 'totalPages'
+        totalPages: Math.ceil(totalCount / limitNum)
       }
     });
   } catch (error) {
@@ -186,7 +174,6 @@ router.get('/search-suggestions', async (req, res) => {
       return res.json({ success: true, suggestions: [] });
     }
     
-    // Find listings matching the query
     const suggestions = await Listing.find({
       status: 'active',
       $or: [
@@ -197,7 +184,6 @@ router.get('/search-suggestions', async (req, res) => {
     .select('title tags')
     .limit(10);
     
-    // Extract unique suggestions
     const titleSuggestions = suggestions.map(l => l.title);
     const tagSuggestions = [...new Set(suggestions.flatMap(l => l.tags))];
     
@@ -218,7 +204,7 @@ router.get('/search-suggestions', async (req, res) => {
   }
 });
 
-// GET /api/listings/popular-tags - Get popular tags with counts
+// GET /api/listings/popular-tags - Get popular tags
 router.get('/popular-tags', async (req, res) => {
   try {
     const { limit = 20 } = req.query;
@@ -287,10 +273,9 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// POST /api/listings - Create a new listing (regular or auction)
+// POST /api/listings - Create a new listing
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    // Only sellers can create listings
     if (req.user.role !== 'seller') {
       return res.status(403).json({
         success: false,
@@ -299,17 +284,14 @@ router.post('/', authMiddleware, async (req, res) => {
     }
     
     const listingData = req.body;
-    
-    // Set seller from authenticated user
     listingData.seller = req.user.username;
     
-    // If imageUrl provided (old format), convert to imageUrls array
+    // Handle images
     if (listingData.imageUrl && !listingData.imageUrls) {
       listingData.imageUrls = [listingData.imageUrl];
       delete listingData.imageUrl;
     }
     
-    // Default image if none provided
     if (!listingData.imageUrls || listingData.imageUrls.length === 0) {
       listingData.imageUrls = ['https://via.placeholder.com/300'];
     }
@@ -327,23 +309,19 @@ router.post('/', authMiddleware, async (req, res) => {
         status: 'active'
       };
       
-      // Remove the flat fields
       delete listingData.isAuction;
       delete listingData.startingPrice;
       delete listingData.reservePrice;
       delete listingData.endTime;
-      
-      // Auctions don't have a fixed price
       delete listingData.price;
     }
     
-    // Create listing
     const listing = new Listing(listingData);
     await listing.save();
     
-    // WEBSOCKET: Emit new listing event if available
-    if (webSocketService) {
-      webSocketService.emitNewListing(listing);
+    // Emit WebSocket event
+    if (global.webSocketService) {
+      global.webSocketService.emitNewListing(listing);
     }
     
     res.json({
@@ -370,10 +348,6 @@ router.get('/:id', async (req, res) => {
       });
     }
     
-    // Increment views
-    listing.views = (listing.views || 0) + 1;
-    await listing.save();
-    
     res.json({
       success: true,
       data: listing
@@ -386,13 +360,64 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/bid - Place a bid on an auction (with bid holding)
+// POST /api/listings/:id/views - Track listing view
+router.post('/:id/views', async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // Increment views
+    listing.views = (listing.views || 0) + 1;
+    await listing.save();
+    
+    res.json({
+      success: true,
+      views: listing.views
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/:id/views - Get listing views
+router.get('/:id/views', async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      views: listing.views || 0
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/listings/:id/bid - Place a bid on an auction
 router.post('/:id/bid', authMiddleware, async (req, res) => {
   try {
     const { amount } = req.body;
     const bidder = req.user.username;
     
-    // Validate amount
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
@@ -400,7 +425,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // Get listing
     const listing = await Listing.findById(req.params.id);
     if (!listing) {
       return res.status(404).json({
@@ -409,7 +433,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if it's an auction
     if (!listing.auction || !listing.auction.isAuction) {
       return res.status(400).json({
         success: false,
@@ -417,7 +440,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if auction is active
     if (listing.auction.status !== 'active' || new Date() >= listing.auction.endTime) {
       return res.status(400).json({
         success: false,
@@ -425,7 +447,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check buyer has enough balance
     const buyerWallet = await Wallet.findOne({ username: bidder });
     if (!buyerWallet || !buyerWallet.hasBalance(amount)) {
       return res.status(400).json({
@@ -434,18 +455,13 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // Store previous highest bidder info (for refund)
     const previousHighestBidder = listing.auction.highestBidder;
     const previousHighestBid = listing.auction.currentBid;
     
-    // Place the bid using the model method
     try {
       await listing.placeBid(bidder, amount);
-      
-      // HOLD THE BID AMOUNT (deduct from bidder's wallet)
       await buyerWallet.withdraw(amount);
       
-      // Create transaction for bid hold
       const holdTransaction = new Transaction({
         type: 'bid_hold',
         amount: amount,
@@ -462,13 +478,12 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
       await holdTransaction.save();
       
-      // REFUND PREVIOUS HIGHEST BIDDER (if exists and not same person)
+      // Refund previous bidder
       if (previousHighestBidder && previousHighestBid > 0 && previousHighestBidder !== bidder) {
         const previousBidderWallet = await Wallet.findOne({ username: previousHighestBidder });
         if (previousBidderWallet) {
           await previousBidderWallet.deposit(previousHighestBid);
           
-          // Create refund transaction
           const refundTransaction = new Transaction({
             type: 'bid_refund',
             amount: previousHighestBid,
@@ -488,9 +503,9 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         }
       }
       
-      // WEBSOCKET: Emit new bid event if available
-      if (webSocketService) {
-        webSocketService.emitNewBid(listing, {
+      // Emit WebSocket event
+      if (global.webSocketService) {
+        global.webSocketService.emitNewBid(listing, {
           bidder: bidder,
           amount: amount,
           date: new Date()
@@ -516,7 +531,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/end-auction - End an auction and create order for winner
+// POST /api/listings/:id/end-auction - End an auction
 router.post('/:id/end-auction', authMiddleware, async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -528,7 +543,6 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if user is the seller or admin
     if (listing.seller !== req.user.username && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -536,7 +550,6 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if it's an auction
     if (!listing.auction || !listing.auction.isAuction) {
       return res.status(400).json({
         success: false,
@@ -544,7 +557,6 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if auction is active
     if (listing.auction.status !== 'active') {
       return res.status(400).json({
         success: false,
@@ -552,7 +564,6 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if auction time has passed
     if (new Date() < listing.auction.endTime && req.user.role !== 'admin') {
       return res.status(400).json({
         success: false,
@@ -560,15 +571,14 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if there are any bids
+    // No bids
     if (!listing.auction.highestBidder || listing.auction.currentBid === 0) {
       listing.auction.status = 'ended';
       listing.status = 'expired';
       await listing.save();
       
-      // WEBSOCKET: Emit auction ended event if available
-      if (webSocketService) {
-        webSocketService.emitAuctionEnded(listing, null, 0);
+      if (global.webSocketService) {
+        global.webSocketService.emitAuctionEnded(listing, null, 0);
       }
       
       return res.json({
@@ -577,13 +587,12 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if reserve price is met
+    // Reserve not met
     if (listing.auction.reservePrice && listing.auction.currentBid < listing.auction.reservePrice) {
       listing.auction.status = 'reserve_not_met';
       listing.status = 'expired';
       await listing.save();
       
-      // REFUND THE HIGHEST BIDDER since reserve not met
       const bidderWallet = await Wallet.findOne({ username: listing.auction.highestBidder });
       if (bidderWallet) {
         await bidderWallet.deposit(listing.auction.currentBid);
@@ -605,9 +614,8 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
         await refundTransaction.save();
       }
       
-      // WEBSOCKET: Emit auction ended event if available
-      if (webSocketService) {
-        webSocketService.emitAuctionEnded(listing, null, listing.auction.currentBid);
+      if (global.webSocketService) {
+        global.webSocketService.emitAuctionEnded(listing, null, listing.auction.currentBid);
       }
       
       return res.json({
@@ -616,14 +624,12 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Create order for the winner
+    // Create order for winner
     const winningBid = listing.auction.currentBid;
     const winner = listing.auction.highestBidder;
     
-    // Get or create seller's wallet
     let sellerWallet = await Wallet.findOne({ username: listing.seller });
     if (!sellerWallet) {
-      // Create seller wallet if it doesn't exist
       const sellerUser = await User.findOne({ username: listing.seller });
       sellerWallet = new Wallet({
         username: listing.seller,
@@ -633,7 +639,6 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       await sellerWallet.save();
     }
     
-    // Get or create platform wallet
     let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
     if (!platformWallet) {
       platformWallet = new Wallet({
@@ -644,16 +649,14 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       await platformWallet.save();
     }
     
-    // Calculate fees (20% total - 10% from buyer already paid, 10% from seller)
     const sellerPlatformFee = Math.round(winningBid * 0.1 * 100) / 100;
     const sellerEarnings = Math.round((winningBid - sellerPlatformFee) * 100) / 100;
     
-    // Create order
     const order = new Order({
       title: listing.title,
       description: listing.description,
       price: winningBid,
-      markedUpPrice: winningBid, // For auctions, price = markedUpPrice
+      markedUpPrice: winningBid,
       seller: listing.seller,
       buyer: winner,
       imageUrl: listing.imageUrls[0],
@@ -663,7 +666,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       platformFee: sellerPlatformFee,
       sellerPlatformFee: sellerPlatformFee,
       sellerEarnings: sellerEarnings,
-      paymentStatus: 'completed', // Payment already held
+      paymentStatus: 'completed',
       paymentCompletedAt: new Date(),
       deliveryAddress: {
         fullName: 'To be provided',
@@ -677,14 +680,9 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     
     await order.save();
     
-    // Transfer held bid to seller (minus fees)
-    // Note: Buyer's money was already deducted when they placed the winning bid
     await sellerWallet.deposit(sellerEarnings);
-    
-    // Transfer platform fee to platform wallet
     await platformWallet.deposit(sellerPlatformFee);
     
-    // Create transactions for the sale
     const saleTransaction = new Transaction({
       type: 'auction_sale',
       amount: sellerEarnings,
@@ -704,7 +702,6 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     });
     await saleTransaction.save();
     
-    // Create platform fee transaction
     const feeTransaction = new Transaction({
       type: 'platform_fee',
       amount: sellerPlatformFee,
@@ -728,21 +725,18 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     });
     await feeTransaction.save();
     
-    // Update order with transaction references
     order.paymentTransactionId = saleTransaction._id;
     order.feeTransactionId = feeTransaction._id;
     await order.save();
     
-    // Update listing
     listing.auction.status = 'ended';
     listing.status = 'sold';
     listing.soldAt = new Date();
     await listing.save();
     
-    // WEBSOCKET: Emit events if available
-    if (webSocketService) {
-      webSocketService.emitAuctionEnded(listing, winner, winningBid);
-      webSocketService.emitListingSold(listing, winner);
+    if (global.webSocketService) {
+      global.webSocketService.emitAuctionEnded(listing, winner, winningBid);
+      global.webSocketService.emitListingSold(listing, winner);
     }
     
     res.json({
@@ -773,7 +767,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if user owns the listing or is admin
     if (listing.seller !== req.user.username && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -781,10 +774,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    // Don't allow changing the seller
     delete req.body.seller;
     
-    // Don't allow editing active auctions with bids
     if (listing.auction && listing.auction.isAuction && 
         listing.auction.status === 'active' && listing.auction.bidCount > 0) {
       return res.status(400).json({
@@ -793,13 +784,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    // Update listing
     Object.assign(listing, req.body);
     await listing.save();
     
-    // WEBSOCKET: Emit listing update if available
-    if (webSocketService) {
-      webSocketService.emitListingUpdated(listing);
+    if (global.webSocketService) {
+      global.webSocketService.emitListingUpdated(listing);
     }
     
     res.json({
@@ -826,7 +815,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if user owns the listing or is admin
     if (listing.seller !== req.user.username && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -834,7 +822,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    // Don't allow deletion of active auctions with bids
     if (listing.auction && listing.auction.isAuction && 
         listing.auction.status === 'active' && listing.auction.bidCount > 0) {
       return res.status(400).json({
@@ -843,13 +830,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    // Soft delete by setting status
     listing.status = 'deleted';
     await listing.save();
     
-    // WEBSOCKET: Emit listing deleted if available
-    if (webSocketService) {
-      webSocketService.emitListingDeleted(listing._id);
+    if (global.webSocketService) {
+      global.webSocketService.emitListingDeleted(listing._id);
     }
     
     res.json({
@@ -864,5 +849,4 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Export the router
 module.exports = router;

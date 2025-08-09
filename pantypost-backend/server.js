@@ -5,16 +5,16 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const path = require('path');
-const http = require('http'); // ADD THIS - needed for WebSocket
+const http = require('http');
 require('dotenv').config();
 
-// Import database connection - CORRECT PATH
+// Import database connection
 const connectDB = require('./config/database');
 
-// Import WebSocket service - ADD THIS
+// Import WebSocket service
 const webSocketService = require('./config/websocket');
 
-// Import models (we'll keep these imports for the test routes)
+// Import models
 const User = require('./models/User');
 
 // Import middleware
@@ -35,21 +35,24 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// Create HTTP server - ADD THIS
+// Create HTTP server
 const server = http.createServer(app);
 
-// Initialize WebSocket service - ADD THIS
+// Initialize WebSocket service
 webSocketService.initialize(server);
+
+// Make webSocketService globally available for routes
+global.webSocketService = webSocketService;
 
 // Connect to MongoDB
 connectDB();
 
-// 🔧 FIXED CORS CONFIGURATION - Allow all frontend headers
+// CORS Configuration
 app.use(cors({
   origin: [
-    'http://localhost:3000',           // Your local frontend
-    'http://192.168.0.21:3000',       // Your IP-based frontend
-    'http://127.0.0.1:3000'           // Alternative localhost
+    'http://localhost:3000',
+    'http://192.168.0.21:3000',
+    'http://127.0.0.1:3000'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -67,8 +70,8 @@ app.use(cors({
 }));
 
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true })); // For form data
-app.use(express.static(__dirname)); // Serve static files from current directory
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(__dirname));
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -78,20 +81,19 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
 
-// ============= USE ROUTE FILES =============
+// API Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);  // Add user routes
+app.use('/api/users', userRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
-app.use('/api/upload', uploadRoutes); // Add upload routes
+app.use('/api/upload', uploadRoutes);
 
-// ============= WEBSOCKET STATUS ENDPOINT (optional but helpful) =============
+// WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
-  // Only admins can check WebSocket status
   if (req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
@@ -105,12 +107,10 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
   });
 });
 
-// ============= TEST ROUTES (keeping these for now) =============
-
-// Get all users (for testing)
+// Test Routes
 app.get('/api/test/users', async (req, res) => {
   try {
-    const users = await User.find({}).select('-password'); // Exclude passwords
+    const users = await User.find({}).select('-password');
     res.json({
       success: true,
       count: users.length,
@@ -124,7 +124,6 @@ app.get('/api/test/users', async (req, res) => {
   }
 });
 
-// Test endpoint to create a user (for testing only)
 app.post('/api/test/create-user', async (req, res) => {
   try {
     const { username, email } = req.body;
@@ -155,7 +154,7 @@ app.post('/api/test/create-user', async (req, res) => {
   }
 });
 
-// Start server - UPDATED THIS
+// Start server
 server.listen(PORT, () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`🔌 WebSocket server ready for connections`);
