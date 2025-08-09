@@ -127,8 +127,8 @@ type CreateListingValidationData = z.infer<typeof createListingValidationSchema>
 function convertBackendToFrontend(backendListing: BackendListing): Listing {
   // Handle both _id and id fields
   const listingId = backendListing._id || backendListing.id || uuidv4();
+  
   const frontendListing: Listing = {
-    id: backendListing._id,
     id: listingId,
     title: backendListing.title,
     description: backendListing.description,
