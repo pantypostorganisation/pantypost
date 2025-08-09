@@ -9,6 +9,44 @@ const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const mongoose = require('mongoose');
 
+// ============= HELPER FUNCTIONS FOR UNIFIED ADMIN WALLET =============
+
+// Helper function to get unified admin wallet
+async function getUnifiedAdminWallet() {
+  // Always use 'platform' as the single admin wallet
+  let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+  
+  if (!platformWallet) {
+    platformWallet = new Wallet({
+      username: 'platform',
+      role: 'admin',
+      balance: 0
+    });
+    await platformWallet.save();
+    console.log('[Wallet] Created unified platform wallet');
+  }
+  
+  return platformWallet;
+}
+
+// Helper function to check if user is admin
+function isAdminUser(user) {
+  if (!user) return false;
+  return user.role === 'admin' || 
+         user.username === 'oakley' || 
+         user.username === 'gerome' ||
+         user.username === 'platform';
+}
+
+// Helper to check if a username belongs to an admin
+async function isAdminUsername(username) {
+  if (username === 'platform' || username === 'oakley' || username === 'gerome') {
+    return true;
+  }
+  const user = await User.findOne({ username });
+  return user && user.role === 'admin';
+}
+
 // ============= WALLET ROUTES =============
 
 // GET /api/wallet/balance - Get wallet balance with query params
@@ -16,27 +54,20 @@ router.get('/balance', authMiddleware, async (req, res) => {
   try {
     const { username, role } = req.query;
     
-    // For admin users requesting platform wallet
-    if (req.user.role === 'admin' && role === 'admin') {
-      let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
-      
-      if (!platformWallet) {
-        platformWallet = new Wallet({
-          username: 'platform',
-          role: 'admin',
-          balance: 0
+    // For ANY admin user or admin role request, return unified platform wallet
+    if (isAdminUser(req.user)) {
+      if (role === 'admin' || username === 'platform' || await isAdminUsername(username)) {
+        const platformWallet = await getUnifiedAdminWallet();
+        
+        return res.json({
+          success: true,
+          data: {
+            username: 'platform',
+            balance: platformWallet.balance,
+            role: 'admin'
+          }
         });
-        await platformWallet.save();
       }
-      
-      return res.json({
-        success: true,
-        data: {
-          username: 'platform',
-          balance: platformWallet.balance,
-          role: 'admin'
-        }
-      });
     }
     
     // Regular user wallet
@@ -48,7 +79,7 @@ router.get('/balance', authMiddleware, async (req, res) => {
     }
     
     // Check if user can view this wallet
-    if (req.user.username !== username && req.user.role !== 'admin') {
+    if (req.user.username !== username && !isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'You can only view your own wallet'
@@ -95,8 +126,22 @@ router.get('/balance/:username', authMiddleware, async (req, res) => {
   try {
     const { username } = req.params;
     
+    // If requesting admin balance, always return unified platform wallet
+    if (await isAdminUsername(username)) {
+      const platformWallet = await getUnifiedAdminWallet();
+      
+      return res.json({
+        success: true,
+        data: {
+          username: 'platform',
+          balance: platformWallet.balance,
+          role: 'admin'
+        }
+      });
+    }
+    
     // Check if user can view this wallet (must be owner or admin)
-    if (req.user.username !== username && req.user.role !== 'admin') {
+    if (req.user.username !== username && !isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'You can only view your own wallet'
@@ -163,8 +208,8 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       });
     }
     
-    // Only buyers can deposit
-    if (req.user.role !== 'buyer' && req.user.role !== 'admin') {
+    // Only buyers can deposit (admins don't need to deposit)
+    if (req.user.role !== 'buyer' && !isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Only buyers can make deposits'
@@ -259,21 +304,26 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
       });
     }
     
-    // Only sellers can withdraw
-    if (req.user.role !== 'seller' && req.user.role !== 'admin') {
+    // Only sellers and admins can withdraw
+    if (req.user.role !== 'seller' && !isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Only sellers can make withdrawals'
       });
     }
     
-    // Get wallet
-    const wallet = await Wallet.findOne({ username });
-    if (!wallet) {
-      return res.status(404).json({
-        success: false,
-        error: 'Wallet not found'
-      });
+    // For admin users, use platform wallet
+    let wallet;
+    if (isAdminUser(req.user)) {
+      wallet = await getUnifiedAdminWallet();
+    } else {
+      wallet = await Wallet.findOne({ username });
+      if (!wallet) {
+        return res.status(404).json({
+          success: false,
+          error: 'Wallet not found'
+        });
+      }
     }
     
     // Check balance
@@ -294,8 +344,8 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
     const transaction = new Transaction({
       type: 'withdrawal',
       amount,
-      from: username,
-      fromRole: req.user.role,
+      from: isAdminUser(req.user) ? 'platform' : username,
+      fromRole: isAdminUser(req.user) ? 'admin' : req.user.role,
       description: 'Withdrawal request',
       status: 'pending', // Withdrawals start as pending
       metadata: {
@@ -310,7 +360,7 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
     // WEBSOCKET: Emit balance update
     if (global.webSocketService) {
       global.webSocketService.emitBalanceUpdate(
-        username,
+        isAdminUser(req.user) ? 'platform' : username,
         wallet.role,
         previousBalance,
         wallet.balance,
@@ -339,8 +389,11 @@ router.get('/transactions/:username', authMiddleware, async (req, res) => {
     const { username } = req.params;
     const { type, status, startDate, endDate, page = 1, limit = 50 } = req.query;
     
+    // For admin usernames, use platform
+    const queryUsername = await isAdminUsername(username) ? 'platform' : username;
+    
     // Check permissions
-    if (req.user.username !== username && req.user.role !== 'admin') {
+    if (req.user.username !== username && !isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'You can only view your own transactions'
@@ -350,8 +403,8 @@ router.get('/transactions/:username', authMiddleware, async (req, res) => {
     // Build query
     const query = {
       $or: [
-        { from: username },
-        { to: username }
+        { from: queryUsername },
+        { to: queryUsername }
       ]
     };
     
@@ -398,7 +451,7 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
     const { action, username, amount, reason } = req.body;
     
     // Check if admin
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'
@@ -452,12 +505,12 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
       await wallet.withdraw(amount);
     }
     
-    // Create transaction
+    // Create transaction - always use platform for admin
     const transaction = new Transaction({
       type: action === 'credit' ? 'admin_credit' : 'admin_debit',
       amount,
-      from: action === 'debit' ? username : req.user.username,
-      to: action === 'credit' ? username : req.user.username,
+      from: action === 'debit' ? username : 'platform',
+      to: action === 'credit' ? username : 'platform',
       fromRole: action === 'debit' ? wallet.role : 'admin',
       toRole: action === 'credit' ? wallet.role : 'admin',
       description: `Admin ${action}: ${reason}`,
@@ -496,35 +549,21 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/wallet/admin/platform - Get platform wallet balance (admin only)
+// GET /api/wallet/admin/platform - Get unified platform wallet balance (admin only)
 router.get('/admin/platform', authMiddleware, async (req, res) => {
   try {
     // Only admins can access platform wallet
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'
       });
     }
 
-    // Get platform wallet
-    let platformWallet = await Wallet.findOne({ 
-      username: 'platform', 
-      role: 'admin' 
-    });
+    // Get unified platform wallet
+    const platformWallet = await getUnifiedAdminWallet();
 
-    // Create platform wallet if it doesn't exist
-    if (!platformWallet) {
-      platformWallet = new Wallet({
-        username: 'platform',
-        role: 'admin',
-        balance: 0
-      });
-      await platformWallet.save();
-      console.log('[Wallet] Created platform wallet');
-    }
-
-    // Calculate total platform revenue
+    // Calculate total platform revenue from all platform fees
     const totalRevenue = await Transaction.aggregate([
       {
         $match: {
@@ -567,33 +606,23 @@ router.get('/admin/platform', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/wallet/admin-platform-balance - Legacy endpoint (redirect to new one)
+// GET /api/wallet/admin-platform-balance - Always return unified platform wallet
 router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
   try {
     // Only admins can check platform balance
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'
       });
     }
     
-    console.log('[Wallet] Admin requesting platform wallet balance...');
+    console.log('[Wallet] Admin requesting unified platform wallet balance...');
     
-    // Get or create platform admin wallet
-    let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    // Always get unified platform wallet
+    const platformWallet = await getUnifiedAdminWallet();
     
-    if (!platformWallet) {
-      console.log('[Wallet] Creating platform admin wallet...');
-      platformWallet = new Wallet({
-        username: 'platform',
-        role: 'admin',
-        balance: 0
-      });
-      await platformWallet.save();
-    }
-    
-    console.log('[Wallet] Platform admin wallet balance:', platformWallet.balance);
+    console.log('[Wallet] Unified platform wallet balance:', platformWallet.balance);
     
     res.json({
       success: true,
@@ -619,7 +648,7 @@ router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
 router.get('/platform-transactions', authMiddleware, async (req, res) => {
   try {
     // Only admins can view platform transactions
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'
@@ -694,11 +723,11 @@ router.get('/platform-transactions', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/wallet/admin-withdraw - Admin withdraw from platform wallet
+// POST /api/wallet/admin-withdraw - Admin withdraw from unified platform wallet
 router.post('/admin-withdraw', authMiddleware, async (req, res) => {
   try {
     // Only admins can withdraw from platform wallet
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'
@@ -715,15 +744,8 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
       });
     }
     
-    // Get platform wallet
-    const platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
-    
-    if (!platformWallet) {
-      return res.status(404).json({
-        success: false,
-        error: 'Platform wallet not found'
-      });
-    }
+    // Get unified platform wallet
+    const platformWallet = await getUnifiedAdminWallet();
     
     // Check if platform wallet has sufficient balance
     if (!platformWallet.hasBalance(amount)) {
@@ -802,7 +824,7 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
 router.get('/admin/analytics', authMiddleware, async (req, res) => {
   try {
     // Only admins can access analytics
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'
@@ -844,9 +866,9 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
     const dateFilter = startDate ? { createdAt: { $gte: startDate } } : {};
     const orderDateFilter = startDate ? { date: { $gte: startDate } } : {};
 
-    // 1. Get platform wallet balance (admin profit)
-    const platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
-    const adminBalance = platformWallet ? platformWallet.balance : 0;
+    // 1. Get unified platform wallet balance (admin profit)
+    const platformWallet = await getUnifiedAdminWallet();
+    const adminBalance = platformWallet.balance;
 
     // 2. Get all orders with date filter
     const orders = await Order.find(orderDateFilter)
@@ -917,7 +939,12 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
     const wallets = await Wallet.find({});
     const walletBalances = {};
     wallets.forEach(wallet => {
-      walletBalances[wallet.username] = wallet.balance;
+      // For admin wallets, always use platform balance
+      if (wallet.role === 'admin' || isAdminUser({ username: wallet.username })) {
+        walletBalances[wallet.username] = platformWallet.balance;
+      } else {
+        walletBalances[wallet.username] = wallet.balance;
+      }
     });
 
     // 11. Format admin actions from admin credit/debit transactions
@@ -1062,7 +1089,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
 router.get('/admin/revenue-chart', authMiddleware, async (req, res) => {
   try {
     // Only admins can access
-    if (req.user.role !== 'admin') {
+    if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         error: 'Admin access required'

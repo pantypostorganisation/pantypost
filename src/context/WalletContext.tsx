@@ -55,6 +55,14 @@ const walletOperationSchemas = {
   depositMethod: z.enum(['credit_card', 'bank_transfer', 'crypto', 'admin_credit']),
 };
 
+// Helper function to check if user is admin
+const isAdminUser = (username: string): boolean => {
+  return username === 'oakley' || 
+         username === 'gerome' || 
+         username === 'platform' ||
+         username === 'admin';
+};
+
 type WalletContextType = {
   // Loading state
   isLoading: boolean;
@@ -205,8 +213,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const data = event.detail;
       console.log('[WalletContext] Received WebSocket balance update:', data);
       
+      // For admin users, always update the unified admin balance
       if (data.username && data.role && typeof data.balance === 'number') {
-        if (data.role === 'buyer') {
+        if (data.role === 'admin' || isAdminUser(data.username)) {
+          setAdminBalanceState(data.balance);
+        } else if (data.role === 'buyer') {
           setBuyerBalancesState(prev => ({
             ...prev,
             [data.username]: data.balance
@@ -216,8 +227,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             ...prev,
             [data.username]: data.balance
           }));
-        } else if (data.role === 'admin') {
-          setAdminBalanceState(data.balance);
         }
       }
     };
@@ -249,7 +258,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Update local cached state based on the WebSocket data
       if (data.username && data.role && typeof data.balance === 'number') {
-        if (data.role === 'buyer') {
+        if (data.role === 'admin' || isAdminUser(data.username)) {
+          setAdminBalanceState(data.balance);
+        } else if (data.role === 'buyer') {
           setBuyerBalancesState(prev => ({
             ...prev,
             [data.username]: data.balance
@@ -259,8 +270,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             ...prev,
             [data.username]: data.balance
           }));
-        } else if (data.role === 'admin') {
-          setAdminBalanceState(data.balance);
         }
       }
     });
@@ -280,7 +289,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [isConnected, subscribe, user]);
 
   // Helper to emit wallet balance updates
-  const emitBalanceUpdate = useCallback((username: string, role: 'buyer' | 'seller', balance: number) => {
+  const emitBalanceUpdate = useCallback((username: string, role: 'buyer' | 'seller' | 'admin', balance: number) => {
     if (isConnected) {
       sendMessage(WebSocketEvent.WALLET_BALANCE_UPDATE, {
         username,
@@ -291,11 +300,28 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [isConnected, sendMessage]);
 
-  // Fetch balance from API
+  // Fetch balance from API - UPDATED FOR UNIFIED ADMIN WALLET
   const fetchBalance = useCallback(async (username: string): Promise<number> => {
     try {
       console.log('[WalletContext] Fetching balance for:', username);
       
+      // For admin users, always fetch platform wallet
+      if (isAdminUser(username)) {
+        console.log('[WalletContext] Admin user detected, fetching unified platform wallet');
+        
+        const response = await apiClient.get<any>('/wallet/admin-platform-balance');
+        
+        if (response.success && response.data) {
+          const balance = response.data.balance || 0;
+          console.log('[WalletContext] Unified platform wallet balance:', balance);
+          return balance;
+        }
+        
+        console.warn('[WalletContext] Platform balance fetch failed:', response.error);
+        return 0;
+      }
+      
+      // For regular users, fetch their individual wallet
       const response = await apiClient.get<any>(`/wallet/balance/${username}`);
       
       console.log('[WalletContext] Balance response:', response);
@@ -312,37 +338,42 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
-  // Fetch admin platform wallet balance
+  // Fetch admin platform wallet balance - ALWAYS UNIFIED
   const fetchAdminPlatformBalance = useCallback(async (): Promise<number> => {
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       console.log('[WalletContext] Not admin user, skipping platform balance fetch');
       return 0;
     }
 
     try {
-      console.log('[WalletContext] Fetching admin platform wallet balance...');
+      console.log('[WalletContext] Fetching unified admin platform wallet balance...');
       
+      // Always use the unified endpoint
       const response = await apiClient.get<any>('/wallet/admin-platform-balance');
       
-      console.log('[WalletContext] Admin platform balance response:', response);
+      console.log('[WalletContext] Unified platform balance response:', response);
       
       if (response.success && response.data) {
         const balance = response.data.balance || 0;
-        console.log('[WalletContext] Admin platform wallet balance:', balance);
+        console.log('[WalletContext] Unified platform wallet balance:', balance);
+        
+        // Set this as THE admin balance for all admin users
+        setAdminBalanceState(balance);
+        
         return balance;
       }
       
-      console.warn('[WalletContext] Admin platform balance fetch failed:', response.error);
+      console.warn('[WalletContext] Platform balance fetch failed:', response.error);
       return 0;
     } catch (error) {
-      console.error('[WalletContext] Error fetching admin platform balance:', error);
+      console.error('[WalletContext] Error fetching platform balance:', error);
       return 0;
     }
   }, [user, apiClient]);
 
   // Fetch platform transactions
   const getPlatformTransactions = useCallback(async (limit: number = 100, page: number = 1): Promise<any[]> => {
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       console.log('[WalletContext] Not admin user, skipping platform transactions fetch');
       return [];
     }
@@ -368,7 +399,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Fetch complete admin analytics data
   const fetchAdminAnalytics = useCallback(async (timeFilter: string = 'all'): Promise<any> => {
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       console.log('[WalletContext] Not admin user, skipping analytics fetch');
       return null;
     }
@@ -384,6 +415,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const data = response.data;
         
         // Update all the state variables with the fetched data
+        // IMPORTANT: Admin balance is the unified platform wallet balance
         setAdminBalanceState(data.adminBalance);
         setOrderHistory(data.orderHistory);
         setDepositLogs(data.depositLogs);
@@ -396,7 +428,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           Object.entries(data.wallet).forEach(([username, balance]) => {
             if (data.users[username]) {
               const userRole = data.users[username].role;
-              if (userRole === 'buyer') {
+              // Skip admin users as they use unified balance
+              if (userRole === 'admin' || isAdminUser(username)) {
+                // Don't set individual balances for admin users
+                return;
+              } else if (userRole === 'buyer') {
                 setBuyerBalancesState(prev => ({ ...prev, [username]: balance as number }));
               } else if (userRole === 'seller') {
                 setSellerBalancesState(prev => ({ ...prev, [username]: balance as number }));
@@ -426,7 +462,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Get analytics data with time filter
   const getAnalyticsData = useCallback(async (timeFilter: string = 'all') => {
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       console.log('[WalletContext] Not admin, cannot get analytics');
       return null;
     }
@@ -439,7 +475,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Fetching transactions for:', username);
       
-      const response = await apiClient.get<any>(`/wallet/transactions/${username}`);
+      // For admin users, fetch platform transactions
+      const queryUsername = isAdminUser(username) ? 'platform' : username;
+      
+      const response = await apiClient.get<any>(`/wallet/transactions/${queryUsername}`);
       
       console.log('[WalletContext] Transactions response:', response);
       
@@ -467,7 +506,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
-  // Load all data from API with admin analytics support
+  // Load all data from API with admin analytics support - UPDATED FOR UNIFIED WALLET
   const loadAllData = useCallback(async () => {
     if (!user) {
       console.log('[WalletContext] No user, skipping data load');
@@ -477,19 +516,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Loading wallet data from API for user:', user.username);
       
-      // For admin users, fetch complete analytics data
-      if (user.role === 'admin') {
-        console.log('[WalletContext] Admin detected - fetching analytics data...');
+      // For admin users, always fetch unified platform wallet
+      if (user.role === 'admin' || isAdminUser(user.username)) {
+        console.log('[WalletContext] Admin detected - fetching unified platform wallet...');
         
+        // Fetch unified platform balance
+        const platformBalance = await fetchAdminPlatformBalance();
+        
+        // Also fetch analytics data if needed
         const analyticsData = await fetchAdminAnalytics('all');
         
         if (analyticsData) {
-          console.log('[WalletContext] Admin analytics loaded successfully');
-          return true;
-        } else {
-          console.error('[WalletContext] Failed to load admin analytics');
-          // Fall back to regular data loading
+          // Override the admin balance with unified platform balance
+          setAdminBalanceState(platformBalance);
+          console.log('[WalletContext] Admin analytics loaded with unified balance:', platformBalance);
         }
+        
+        return true;
       }
       
       // For non-admin users, fetch regular wallet data
@@ -512,11 +555,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInitializationError('Failed to load wallet data');
       return false;
     }
-  }, [user, fetchBalance, fetchAdminAnalytics, fetchTransactionHistory]);
+  }, [user, fetchBalance, fetchAdminPlatformBalance, fetchAdminAnalytics, fetchTransactionHistory]);
 
   // Refresh admin data specifically using analytics endpoint
   const refreshAdminData = useCallback(async () => {
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       console.log('[WalletContext] Not admin, skipping admin data refresh');
       return;
     }
@@ -524,18 +567,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[WalletContext] Refreshing admin data...');
       
+      // Fetch unified platform balance
+      const platformBalance = await fetchAdminPlatformBalance();
+      
       // Fetch complete analytics data
       const analyticsData = await fetchAdminAnalytics('all');
       
       if (analyticsData) {
-        console.log('[WalletContext] Admin data refreshed successfully');
+        // Ensure unified balance is used
+        setAdminBalanceState(platformBalance);
+        console.log('[WalletContext] Admin data refreshed with unified balance:', platformBalance);
       } else {
         console.error('[WalletContext] Failed to refresh admin data');
       }
     } catch (error) {
       console.error('[WalletContext] Error refreshing admin data:', error);
     }
-  }, [user, fetchAdminAnalytics]);
+  }, [user, fetchAdminPlatformBalance, fetchAdminAnalytics]);
 
   // Initialize wallet when user logs in
   useEffect(() => {
@@ -609,6 +657,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const getBuyerBalance = useCallback((username: string): number => {
     try {
       const validatedUsername = validateUsername(username);
+      // Admin users don't have buyer balances
+      if (isAdminUser(validatedUsername)) {
+        return 0;
+      }
       return buyerBalances[validatedUsername] || 0;
     } catch {
       return 0;
@@ -618,14 +670,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const getSellerBalance = useCallback((seller: string): number => {
     try {
       const validatedSeller = validateUsername(seller);
+      // Admin users don't have seller balances
+      if (isAdminUser(validatedSeller)) {
+        return 0;
+      }
       return sellerBalances[validatedSeller] || 0;
     } catch {
       return 0;
     }
   }, [sellerBalances]);
 
-  // Balance setters (update cache and call API)
+  // Balance setters (update cache and call API) - UPDATED FOR UNIFIED ADMIN
   const setBuyerBalance = useCallback(async (username: string, balance: number) => {
+    // Don't set buyer balance for admin users
+    if (isAdminUser(username)) {
+      console.log('[WalletContext] Skipping buyer balance update for admin user');
+      return;
+    }
+    
     const validatedUsername = validateUsername(username);
     
     // Update local cache immediately
@@ -639,6 +701,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [emitBalanceUpdate]);
 
   const setSellerBalance = useCallback(async (seller: string, balance: number) => {
+    // Don't set seller balance for admin users
+    if (isAdminUser(seller)) {
+      console.log('[WalletContext] Skipping seller balance update for admin user');
+      return;
+    }
+    
     const validatedSeller = validateUsername(seller);
     
     // Update local cache immediately
@@ -653,7 +721,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const setAdminBalance = useCallback(async (balance: number) => {
     setAdminBalanceState(balance);
-  }, []);
+    // Emit WebSocket update for platform wallet
+    emitBalanceUpdate('platform', 'admin', balance);
+  }, [emitBalanceUpdate]);
 
   // Create order via API
   const addOrder = useCallback(async (order: Order) => {
@@ -698,12 +768,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             setBuyerBalancesState(prev => ({ ...prev, [user.username]: newBalance }));
           } else if (user.role === 'seller') {
             setSellerBalancesState(prev => ({ ...prev, [user.username]: newBalance }));
+          } else if (user.role === 'admin' || isAdminUser(user.username)) {
+            // For admin users, refresh platform balance
+            await refreshAdminData();
           }
-        }
-        
-        // If admin user exists, refresh their platform balance
-        if (user?.role === 'admin') {
-          await refreshAdminData();
         }
         
         // Refresh transaction history for current user only
@@ -759,7 +827,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const newBalance = await fetchBalance(validatedUsername);
         console.log('[WalletContext] New balance after deposit:', newBalance);
         
-        setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        if (!isAdminUser(validatedUsername)) {
+          setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        }
         
         // Add to local deposit logs
         const depositLog: DepositLog = {
@@ -776,7 +846,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setDepositLogs(prev => [...prev, depositLog]);
         
         // Emit WebSocket event for real-time update
-        emitBalanceUpdate(validatedUsername, 'buyer', newBalance);
+        if (!isAdminUser(validatedUsername)) {
+          emitBalanceUpdate(validatedUsername, 'buyer', newBalance);
+        }
         
         console.log('[WalletContext] Deposit successful');
         return true;
@@ -887,7 +959,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         // Refresh balance
         const newBalance = await fetchBalance(validatedUsername);
-        setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        if (!isAdminUser(validatedUsername)) {
+          setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        }
         
         console.log('[WalletContext] Withdrawal successful');
       } else {
@@ -900,7 +974,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, fetchBalance]);
 
-  // Admin credit via API
+  // Admin credit via API - ALWAYS USES PLATFORM WALLET
   const adminCreditUser = useCallback(async (
     username: string,
     role: 'buyer' | 'seller',
@@ -926,7 +1000,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         username: validatedUsername,
         amount: validatedAmount,
         reason: sanitizedReason,
-        adminUsername: user?.username || 'Unknown Admin',
+        adminUsername: user?.username || 'platform', // Always use platform for consistency
       });
       
       console.log('[WalletContext] Admin credit response:', response);
@@ -935,10 +1009,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Refresh balance
         const newBalance = await fetchBalance(validatedUsername);
         
-        if (role === 'buyer') {
+        if (role === 'buyer' && !isAdminUser(validatedUsername)) {
           setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
-        } else if (role === 'seller') {
+        } else if (role === 'seller' && !isAdminUser(validatedUsername)) {
           setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        }
+        
+        // Refresh platform balance after admin action
+        if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
+          await fetchAdminPlatformBalance();
         }
         
         // Update admin actions
@@ -948,7 +1027,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           amount: validatedAmount,
           targetUser: validatedUsername,
           username: validatedUsername,
-          adminUser: user?.username || 'Unknown Admin',
+          adminUser: user?.username || 'platform',
           reason: sanitizedReason,
           date: response.data?.createdAt || new Date().toISOString(),
           role,
@@ -966,9 +1045,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin credit error:', error);
       return false;
     }
-  }, [user, apiClient, fetchBalance]);
+  }, [user, apiClient, fetchBalance, fetchAdminPlatformBalance]);
 
-  // Admin debit via API
+  // Admin debit via API - ALWAYS USES PLATFORM WALLET
   const adminDebitUser = useCallback(async (
     username: string,
     role: 'buyer' | 'seller',
@@ -994,7 +1073,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         username: validatedUsername,
         amount: validatedAmount,
         reason: sanitizedReason,
-        adminUsername: user?.username || 'Unknown Admin',
+        adminUsername: user?.username || 'platform', // Always use platform for consistency
       });
       
       console.log('[WalletContext] Admin debit response:', response);
@@ -1003,10 +1082,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Refresh balance
         const newBalance = await fetchBalance(validatedUsername);
         
-        if (role === 'buyer') {
+        if (role === 'buyer' && !isAdminUser(validatedUsername)) {
           setBuyerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
-        } else if (role === 'seller') {
+        } else if (role === 'seller' && !isAdminUser(validatedUsername)) {
           setSellerBalancesState(prev => ({ ...prev, [validatedUsername]: newBalance }));
+        }
+        
+        // Refresh platform balance after admin action
+        if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
+          await fetchAdminPlatformBalance();
         }
         
         // Update admin actions
@@ -1016,7 +1100,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           amount: validatedAmount,
           targetUser: validatedUsername,
           username: validatedUsername,
-          adminUser: user?.username || 'Unknown Admin',
+          adminUser: user?.username || 'platform',
           reason: sanitizedReason,
           date: response.data?.createdAt || new Date().toISOString(),
           role,
@@ -1034,7 +1118,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin debit error:', error);
       return false;
     }
-  }, [user, apiClient, fetchBalance]);
+  }, [user, apiClient, fetchBalance, fetchAdminPlatformBalance]);
 
   // Get transaction history from API
   const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
@@ -1045,7 +1129,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return [];
       }
       
-      const endpoint = `/wallet/transactions/${targetUsername}${limit ? `?limit=${limit}` : ''}`;
+      // For admin users, use platform
+      const queryUsername = isAdminUser(targetUsername) ? 'platform' : targetUsername;
+      
+      const endpoint = `/wallet/transactions/${queryUsername}${limit ? `?limit=${limit}` : ''}`;
       console.log('[WalletContext] Fetching transaction history:', endpoint);
       
       const response = await apiClient.get<any>(endpoint);
@@ -1097,7 +1184,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (response.success) {
         // Refresh buyer balance
         const newBalance = await fetchBalance(buyer);
-        setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
+        if (!isAdminUser(buyer)) {
+          setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
+        }
         return true;
       }
       
@@ -1128,7 +1217,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Optionally refresh buyer balance to reflect any changes
         if (buyer === user?.username) {
           const newBalance = await fetchBalance(buyer);
-          setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
+          if (!isAdminUser(buyer)) {
+            setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
+          }
         }
         
         return true;
@@ -1177,19 +1268,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
-  // Admin withdrawal (mock)
+  // Admin withdrawal - USES UNIFIED PLATFORM WALLET
   const addAdminWithdrawal = useCallback(async (amount: number) => {
-    console.log('[WalletContext] Admin withdrawal not implemented in API yet');
-    
-    const withdrawal: Withdrawal = {
-      amount,
-      date: new Date().toISOString(),
-      status: 'pending',
-      method: 'bank_transfer'
-    };
-    
-    setAdminWithdrawals(prev => [...prev, withdrawal]);
-  }, []);
+    try {
+      console.log('[WalletContext] Processing admin withdrawal from unified platform wallet');
+      
+      const response = await apiClient.post<any>('/wallet/admin-withdraw', {
+        amount,
+        accountDetails: {
+          accountNumber: '****9999',
+          accountType: 'business'
+        },
+        notes: `Platform withdrawal by ${user?.username}`
+      });
+      
+      if (response.success) {
+        const withdrawal: Withdrawal = {
+          amount,
+          date: new Date().toISOString(),
+          status: 'completed',
+          method: 'bank_transfer'
+        };
+        
+        setAdminWithdrawals(prev => [...prev, withdrawal]);
+        
+        // Refresh unified platform balance
+        await fetchAdminPlatformBalance();
+        
+        console.log('[WalletContext] Admin withdrawal successful');
+      } else {
+        console.error('[WalletContext] Admin withdrawal failed:', response.error);
+        throw new Error(response.error?.message || 'Withdrawal failed');
+      }
+    } catch (error) {
+      console.error('[WalletContext] Admin withdrawal error:', error);
+      throw error;
+    }
+  }, [apiClient, fetchAdminPlatformBalance, user]);
 
   // Auction-related stubs
   const holdBidFunds = useCallback(async (): Promise<boolean> => {
