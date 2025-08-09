@@ -5,7 +5,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
-const webSocketService = require('../config/websocket'); // ADD THIS
+const webSocketService = require('../config/websocket');
 
 // ============= WALLET ROUTES =============
 
@@ -408,10 +408,10 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
   }
 });
 
-// 🔧 NEW: GET /api/wallet/admin-platform-balance - Get platform admin wallet balance (admin only)
+// 🔧 FIXED: GET /api/wallet/admin-platform-balance - Get platform admin wallet balance
 router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
   try {
-    // Check if admin
+    // Only admins can check platform balance
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -419,60 +419,36 @@ router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
       });
     }
     
-    console.log('[Wallet API] Admin requesting platform wallet balance...');
+    console.log('[Wallet] Admin requesting platform wallet balance...');
     
-    // Find the admin wallet (the one that collects platform fees)
-    const adminWallet = await Wallet.findOne({ role: 'admin' });
+    // Get or create platform admin wallet
+    let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
     
-    if (!adminWallet) {
-      console.log('[Wallet API] No admin wallet found, checking for any admin user wallet...');
-      
-      // Fallback: Try to find any admin user's wallet
-      const adminUser = await User.findOne({ role: 'admin' });
-      if (adminUser) {
-        const userWallet = await Wallet.findOne({ username: adminUser.username });
-        if (userWallet) {
-          console.log('[Wallet API] Found admin user wallet:', userWallet.username, userWallet.balance);
-          return res.json({
-            success: true,
-            data: {
-              username: userWallet.username,
-              balance: userWallet.balance,
-              role: userWallet.role,
-              lastTransaction: userWallet.lastTransaction,
-              source: 'admin_user_wallet'
-            }
-          });
-        }
-      }
-      
-      console.log('[Wallet API] No admin wallet found at all');
-      return res.json({
-        success: true,
-        data: {
-          username: 'platform-admin',
-          balance: 0,
-          role: 'admin',
-          message: 'No platform admin wallet found - will be created on first transaction',
-          source: 'not_found'
-        }
+    if (!platformWallet) {
+      console.log('[Wallet] Creating platform admin wallet...');
+      platformWallet = new Wallet({
+        username: 'platform',
+        role: 'admin',
+        balance: 0
       });
+      await platformWallet.save();
     }
     
-    console.log('[Wallet API] Found admin platform wallet:', adminWallet.username, adminWallet.balance);
+    console.log('[Wallet] Platform admin wallet balance:', platformWallet.balance);
     
     res.json({
       success: true,
       data: {
-        username: adminWallet.username,
-        balance: adminWallet.balance,
-        role: adminWallet.role,
-        lastTransaction: adminWallet.lastTransaction,
-        source: 'platform_wallet'
+        balance: platformWallet.balance,
+        username: 'platform',
+        role: 'admin',
+        source: 'platform_wallet',
+        lastTransaction: platformWallet.lastTransaction
       }
     });
+    
   } catch (error) {
-    console.error('[Wallet API] Error fetching admin platform balance:', error);
+    console.error('[Wallet] Error fetching platform balance:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -480,10 +456,10 @@ router.get('/admin-platform-balance', authMiddleware, async (req, res) => {
   }
 });
 
-// 🔧 NEW: GET /api/wallet/platform-transactions - Get all platform fee transactions (admin only)
+// 🔧 FIXED: GET /api/wallet/platform-transactions - Get platform fee transactions
 router.get('/platform-transactions', authMiddleware, async (req, res) => {
   try {
-    // Check if admin
+    // Only admins can view platform transactions
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -492,43 +468,166 @@ router.get('/platform-transactions', authMiddleware, async (req, res) => {
     }
     
     const { limit = 100, page = 1 } = req.query;
+    const skip = (page - 1) * limit;
     
-    console.log('[Wallet API] Admin requesting platform transactions...');
+    console.log('[Wallet] Fetching platform transactions...');
     
-    // Get all platform fee transactions
-    const query = {
+    // Find all platform fee transactions
+    const transactions = await Transaction.find({
       $or: [
         { type: 'platform_fee' },
-        { type: 'fee' },
-        { 
-          type: 'admin_credit',
-          description: { $regex: /platform fees collected/i }
-        }
+        { type: 'fee', to: 'platform' },
+        { to: 'platform', toRole: 'admin' }
       ]
-    };
+    })
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .skip(skip);
     
-    const skip = (page - 1) * limit;
-    const transactions = await Transaction.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    // Get total count for pagination
+    const totalCount = await Transaction.countDocuments({
+      $or: [
+        { type: 'platform_fee' },
+        { type: 'fee', to: 'platform' },
+        { to: 'platform', toRole: 'admin' }
+      ]
+    });
     
-    const total = await Transaction.countDocuments(query);
+    // Calculate total platform revenue
+    const totalRevenue = await Transaction.aggregate([
+      {
+        $match: {
+          $or: [
+            { type: 'platform_fee' },
+            { type: 'fee', to: 'platform' },
+            { to: 'platform', toRole: 'admin' }
+          ],
+          status: 'completed'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
     
-    console.log('[Wallet API] Found', transactions.length, 'platform transactions');
+    console.log('[Wallet] Found', transactions.length, 'platform transactions');
     
     res.json({
       success: true,
       data: transactions,
       meta: {
+        total: totalCount,
         page: parseInt(page),
-        pageSize: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / limit)
+        limit: parseInt(limit),
+        totalRevenue: totalRevenue[0]?.total || 0
       }
     });
+    
   } catch (error) {
-    console.error('[Wallet API] Error fetching platform transactions:', error);
+    console.error('[Wallet] Error fetching platform transactions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 🔧 NEW: POST /api/wallet/admin-withdraw - Admin withdraw from platform wallet
+router.post('/admin-withdraw', authMiddleware, async (req, res) => {
+  try {
+    // Only admins can withdraw from platform wallet
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    const { amount, accountDetails, notes } = req.body;
+    
+    // Validate amount
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid withdrawal amount'
+      });
+    }
+    
+    // Get platform wallet
+    const platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    
+    if (!platformWallet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Platform wallet not found'
+      });
+    }
+    
+    // Check if platform wallet has sufficient balance
+    if (!platformWallet.hasBalance(amount)) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. Platform wallet has $${platformWallet.balance.toFixed(2)}`
+      });
+    }
+    
+    // Store previous balance for WebSocket event
+    const previousBalance = platformWallet.balance;
+    
+    // Process withdrawal
+    await platformWallet.withdraw(amount);
+    
+    // Create withdrawal transaction
+    const withdrawalTransaction = new Transaction({
+      type: 'withdrawal',
+      amount: amount,
+      from: 'platform',
+      to: req.user.username, // Admin who initiated withdrawal
+      fromRole: 'admin',
+      toRole: 'admin',
+      description: `Platform wallet withdrawal by ${req.user.username}`,
+      status: 'completed',
+      completedAt: new Date(),
+      metadata: {
+        accountDetails: accountDetails,
+        notes: notes,
+        adminUsername: req.user.username
+      }
+    });
+    await withdrawalTransaction.save();
+    
+    // WEBSOCKET: Emit balance update
+    webSocketService.emitBalanceUpdate(
+      'platform',
+      'admin',
+      previousBalance,
+      platformWallet.balance,
+      'withdrawal'
+    );
+    
+    // WEBSOCKET: Emit transaction event
+    webSocketService.emitTransaction(withdrawalTransaction);
+    
+    console.log('[Wallet] Platform withdrawal processed:', {
+      amount,
+      previousBalance,
+      newBalance: platformWallet.balance,
+      admin: req.user.username
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        withdrawal: withdrawalTransaction,
+        newBalance: platformWallet.balance
+      }
+    });
+    
+  } catch (error) {
+    console.error('[Wallet] Admin withdrawal error:', error);
     res.status(500).json({
       success: false,
       error: error.message

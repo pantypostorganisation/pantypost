@@ -77,19 +77,19 @@ const subscriptionSchema = new mongoose.Schema({
   cancelledAt: Date,
   cancelReason: String,
   
-  // Platform fee (10%)
+  // 🔧 FIXED: Platform fee (25%)
   platformFee: {
     type: Number,
     default: function() {
-      return Math.round(this.price * 0.1 * 100) / 100;
+      return Math.round(this.price * 0.25 * 100) / 100;
     }
   },
   
-  // Creator earnings (90%)
+  // 🔧 FIXED: Creator earnings (75%)
   creatorEarnings: {
     type: Number,
     default: function() {
-      return Math.round((this.price - this.platformFee) * 100) / 100;
+      return Math.round(this.price * 0.75 * 100) / 100;
     }
   }
 });

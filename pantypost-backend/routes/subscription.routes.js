@@ -6,7 +6,7 @@ const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const authMiddleware = require('../middleware/auth.middleware');
-const webSocketService = require('../config/websocket'); // ADD THIS
+const webSocketService = require('../config/websocket');
 
 // ============= SUBSCRIPTION ROUTES =============
 
@@ -113,9 +113,29 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       await sellerWallet.save();
     }
     
-    // Calculate fees
-    const platformFee = Math.round(price * 0.1 * 100) / 100;
-    const creatorEarnings = Math.round((price - platformFee) * 100) / 100;
+    // 🔧 FIXED: Get or create platform admin wallet
+    let adminWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    if (!adminWallet) {
+      console.log('[Subscription] Creating platform admin wallet...');
+      adminWallet = new Wallet({
+        username: 'platform',
+        role: 'admin',
+        balance: 0
+      });
+      await adminWallet.save();
+    }
+    
+    // 🔧 FIXED: Calculate fees with 75/25 split
+    const platformFee = Math.round(price * 0.25 * 100) / 100;  // 25% platform fee
+    const creatorEarnings = Math.round((price - platformFee) * 100) / 100;  // 75% to creator
+    
+    console.log('[Subscription] Payment breakdown:', {
+      total: price,
+      platformFee: platformFee,
+      creatorEarnings: creatorEarnings,
+      buyer: buyer,
+      seller: seller
+    });
     
     // Create or reactivate subscription
     let subscription;
@@ -152,8 +172,9 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       // Store previous balances for WebSocket events
       const buyerPreviousBalance = buyerWallet.balance;
       const sellerPreviousBalance = sellerWallet.balance;
+      const adminPreviousBalance = adminWallet.balance;
       
-      // Process payment
+      // Process payment - withdraw full amount from buyer
       await buyerWallet.withdraw(price);
       
       // Create subscription payment transaction
@@ -168,28 +189,37 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         status: 'completed',
         completedAt: new Date(),
         metadata: {
-          subscriptionId: subscription._id.toString()
+          subscriptionId: subscription._id.toString(),
+          platformFee: platformFee,
+          creatorEarnings: creatorEarnings
         }
       });
       await paymentTransaction.save();
       
-      // Add earnings to seller
+      // Add earnings to seller (75%)
       await sellerWallet.deposit(creatorEarnings);
+      
+      // 🔧 FIXED: Add platform fee to admin wallet (25%)
+      await adminWallet.deposit(platformFee);
+      console.log('[Subscription] Added platform fee to admin wallet:', platformFee);
       
       // Create platform fee transaction
       const feeTransaction = new Transaction({
-        type: 'fee',
+        type: 'platform_fee',  // Changed from 'fee' to 'platform_fee'
         amount: platformFee,
-        from: seller,
+        from: buyer,
         to: 'platform',
-        fromRole: 'seller',
+        fromRole: 'buyer',
         toRole: 'admin',
-        description: `Subscription fee (10%) for subscription from ${buyer}`,
+        description: `Platform fee (25%) for subscription to ${seller}`,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
           subscriptionId: subscription._id.toString(),
-          percentage: 10
+          percentage: 25,
+          originalAmount: price,
+          seller: seller,
+          buyer: buyer
         }
       });
       await feeTransaction.save();
@@ -203,7 +233,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         startDate: subscription.startDate
       });
       
-      // WEBSOCKET: Emit balance updates
+      // WEBSOCKET: Emit balance updates for buyer
       webSocketService.emitBalanceUpdate(
         buyer,
         'buyer',
@@ -212,12 +242,22 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         'subscription'
       );
       
+      // WEBSOCKET: Emit balance updates for seller
       webSocketService.emitBalanceUpdate(
         seller,
         'seller',
         sellerPreviousBalance,
         sellerWallet.balance,
         'subscription'
+      );
+      
+      // 🔧 FIXED: Emit balance update for admin wallet
+      webSocketService.emitBalanceUpdate(
+        'platform',
+        'admin',
+        adminPreviousBalance,
+        adminWallet.balance,
+        'platform_fee'
       );
       
       // WEBSOCKET: Emit transaction events
@@ -228,7 +268,8 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         success: true,
         data: {
           subscription: subscription,
-          transaction: paymentTransaction
+          transaction: paymentTransaction,
+          platformFeeCollected: platformFee
         }
       });
       
@@ -243,6 +284,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
     }
     
   } catch (error) {
+    console.error('[Subscription] Error:', error);
     res.status(400).json({
       success: false,
       error: error.message
@@ -255,6 +297,8 @@ router.post('/unsubscribe', authMiddleware, async (req, res) => {
   try {
     const { seller } = req.body;
     const buyer = req.user.username;
+    
+    console.log('[Subscription] Unsubscribe request:', { buyer, seller });
     
     // Find the subscription
     const subscription = await Subscription.findOne({
@@ -273,6 +317,8 @@ router.post('/unsubscribe', authMiddleware, async (req, res) => {
     // Cancel the subscription
     await subscription.cancel('User requested cancellation');
     
+    console.log('[Subscription] Successfully cancelled subscription:', subscription._id);
+    
     // WEBSOCKET: Emit subscription cancelled event
     webSocketService.emitSubscriptionCancelled(
       {
@@ -285,10 +331,12 @@ router.post('/unsubscribe', authMiddleware, async (req, res) => {
     
     res.json({
       success: true,
-      data: subscription
+      data: subscription,
+      message: 'Successfully unsubscribed'
     });
     
   } catch (error) {
+    console.error('[Subscription] Unsubscribe error:', error);
     res.status(400).json({
       success: false,
       error: error.message
@@ -296,21 +344,21 @@ router.post('/unsubscribe', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/subscriptions/check - Check if subscribed
-router.get('/check', authMiddleware, async (req, res) => {
+// 🔧 NEW: POST /api/subscriptions/check - Check if subscribed
+router.post('/check', authMiddleware, async (req, res) => {
   try {
-    const { buyer, seller } = req.query;
+    const { subscriber, creator } = req.body;
     
-    if (!buyer || !seller) {
+    if (!subscriber || !creator) {
       return res.status(400).json({
         success: false,
-        error: 'Both buyer and seller parameters are required'
+        error: 'Both subscriber and creator parameters are required'
       });
     }
     
     // Check if user can view this subscription
-    if (req.user.username !== buyer && 
-        req.user.username !== seller && 
+    if (req.user.username !== subscriber && 
+        req.user.username !== creator && 
         req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -319,14 +367,38 @@ router.get('/check', authMiddleware, async (req, res) => {
     }
     
     const subscription = await Subscription.findOne({
-      subscriber: buyer,
-      creator: seller,
+      subscriber: subscriber,
+      creator: creator,
       status: 'active'
     });
     
     res.json({
       success: true,
+      isSubscribed: !!subscription,
       data: subscription
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/subscriptions/active - Get all active subscriptions for the current user
+router.get('/active', authMiddleware, async (req, res) => {
+  try {
+    const username = req.user.username;
+    
+    const subscriptions = await Subscription.find({
+      subscriber: username,
+      status: 'active'
+    });
+    
+    res.json({
+      success: true,
+      data: subscriptions
     });
     
   } catch (error) {
@@ -392,6 +464,17 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
       });
     }
     
+    // Get platform admin wallet
+    let adminWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    if (!adminWallet) {
+      adminWallet = new Wallet({
+        username: 'platform',
+        role: 'admin',
+        balance: 0
+      });
+      await adminWallet.save();
+    }
+    
     // Find all due subscriptions
     const dueSubscriptions = await Subscription.find({
       status: 'active',
@@ -417,10 +500,14 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
         // Store previous balances for WebSocket events
         const buyerPreviousBalance = buyerWallet.balance;
         const sellerPreviousBalance = sellerWallet.balance;
+        const adminPreviousBalance = adminWallet.balance;
         
         // Process payment
         await buyerWallet.withdraw(subscription.price);
         await sellerWallet.deposit(subscription.creatorEarnings);
+        
+        // 🔧 FIXED: Add platform fee to admin wallet
+        await adminWallet.deposit(subscription.platformFee);
         
         // Create transactions
         const paymentTransaction = new Transaction({
@@ -435,10 +522,31 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
           completedAt: new Date(),
           metadata: {
             subscriptionId: subscription._id.toString(),
-            renewal: true
+            renewal: true,
+            platformFee: subscription.platformFee,
+            creatorEarnings: subscription.creatorEarnings
           }
         });
         await paymentTransaction.save();
+        
+        // Create platform fee transaction
+        const feeTransaction = new Transaction({
+          type: 'platform_fee',
+          amount: subscription.platformFee,
+          from: subscription.subscriber,
+          to: 'platform',
+          fromRole: 'buyer',
+          toRole: 'admin',
+          description: `Platform fee (25%) for renewal to ${subscription.creator}`,
+          status: 'completed',
+          completedAt: new Date(),
+          metadata: {
+            subscriptionId: subscription._id.toString(),
+            percentage: 25,
+            renewal: true
+          }
+        });
+        await feeTransaction.save();
         
         // Update subscription
         await subscription.processRenewal();
@@ -461,8 +569,18 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
           'subscription'
         );
         
-        // WEBSOCKET: Emit transaction event
+        // 🔧 FIXED: Emit admin balance update
+        webSocketService.emitBalanceUpdate(
+          'platform',
+          'admin',
+          adminPreviousBalance,
+          adminWallet.balance,
+          'platform_fee'
+        );
+        
+        // WEBSOCKET: Emit transaction events
         webSocketService.emitTransaction(paymentTransaction);
+        webSocketService.emitTransaction(feeTransaction);
         
       } catch (error) {
         await subscription.handleFailedPayment();

@@ -77,6 +77,7 @@ type WalletContextType = {
   purchaseListing: (listing: Listing, buyerUsername: string) => Promise<boolean>;
   purchaseCustomRequest: (customRequest: CustomRequestPurchase) => Promise<boolean>;
   subscribeToSellerWithPayment: (buyer: string, seller: string, amount: number) => Promise<boolean>;
+  unsubscribeFromSeller: (buyer: string, seller: string) => Promise<boolean>;
   
   // Order management
   orderHistory: Order[];
@@ -1090,7 +1091,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.log('[WalletContext] Processing subscription via API:', { buyer, seller, amount });
       
       const response = await apiClient.post<any>('/subscriptions/subscribe', {
-        buyer, 
         seller, 
         price: amount
       });
@@ -1110,6 +1110,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [apiClient, fetchBalance]);
+
+  // 🔧 NEW: Unsubscribe from seller via API
+  const unsubscribeFromSeller = useCallback(async (
+    buyer: string,
+    seller: string
+  ): Promise<boolean> => {
+    try {
+      console.log('[WalletContext] Processing unsubscribe via API:', { buyer, seller });
+      
+      const response = await apiClient.post<any>('/subscriptions/unsubscribe', {
+        seller  // The backend gets buyer from auth token
+      });
+      
+      console.log('[WalletContext] Unsubscribe response:', response);
+      
+      if (response.success) {
+        console.log('[WalletContext] Successfully unsubscribed');
+        
+        // Optionally refresh buyer balance to reflect any changes
+        if (buyer === user?.username) {
+          const newBalance = await fetchBalance(buyer);
+          setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
+        }
+        
+        return true;
+      }
+      
+      console.error('[WalletContext] Unsubscribe failed:', response.error);
+      return false;
+    } catch (error) {
+      console.error('[WalletContext] Unsubscribe error:', error);
+      return false;
+    }
+  }, [apiClient, fetchBalance, user]);
 
   // Stub implementations for features not yet in API
   const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
@@ -1214,6 +1248,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     purchaseListing,
     purchaseCustomRequest,
     subscribeToSellerWithPayment,
+    unsubscribeFromSeller,
     orderHistory,
     addOrder,
     sellerWithdrawals,

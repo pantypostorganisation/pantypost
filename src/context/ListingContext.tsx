@@ -215,7 +215,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     subscribeToSellerWithPayment, 
     setAddSellerNotificationCallback, 
     purchaseListing, 
-    orderHistory
+    orderHistory,
+    unsubscribeFromSeller: walletUnsubscribeFromSeller
   } = useWallet();
 
   // Get auction functions from AuctionContext
@@ -902,26 +903,60 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return success;
   };
 
+  // 🔧 UPDATED: Unsubscribe from seller with API support
   const unsubscribeFromSeller = async (buyer: string, seller: string): Promise<void> => {
-    // Sanitize usernames
-    const sanitizedBuyer = sanitize.username(buyer);
-    const sanitizedSeller = sanitize.username(seller);
-
-    setSubscriptions((prev) => {
-      const updated = {
-        ...prev,
-        [sanitizedBuyer]: (prev[sanitizedBuyer] || []).filter((s) => s !== sanitizedSeller),
-      };
-      storageService.setItem('subscriptions', updated);
-      return updated;
-    });
-    
-    // NEW: Also remove from subscription details
-    const subscriptionDetails = await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
-    const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
-    const filteredSubs = buyerSubs.filter(sub => sub.seller !== sanitizedSeller);
-    subscriptionDetails[sanitizedBuyer] = filteredSubs;
-    await storageService.setItem('subscription_details', subscriptionDetails);
+    try {
+      // Sanitize usernames
+      const sanitizedBuyer = sanitize.username(buyer);
+      const sanitizedSeller = sanitize.username(seller);
+      
+      console.log('[ListingContext] Unsubscribing from seller:', { buyer: sanitizedBuyer, seller: sanitizedSeller });
+      
+      // First, call the wallet context's unsubscribe method to handle the backend API call
+      let success = false;
+      
+      // Check if the unsubscribeFromSeller method exists in wallet context
+      if (walletUnsubscribeFromSeller && typeof walletUnsubscribeFromSeller === 'function') {
+        success = await walletUnsubscribeFromSeller(sanitizedBuyer, sanitizedSeller);
+        console.log('[ListingContext] Wallet unsubscribe result:', success);
+      } else {
+        console.warn('[ListingContext] Wallet unsubscribeFromSeller method not available, updating local state only');
+        success = true; // Allow local state update even if wallet method isn't available
+      }
+      
+      if (success) {
+        // Update local subscriptions state
+        setSubscriptions((prev) => {
+          const updated = {
+            ...prev,
+            [sanitizedBuyer]: (prev[sanitizedBuyer] || []).filter((s) => s !== sanitizedSeller),
+          };
+          storageService.setItem('subscriptions', updated);
+          return updated;
+        });
+        
+        // Also remove from subscription details
+        const subscriptionDetails = await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
+        const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
+        const filteredSubs = buyerSubs.filter(sub => sub.seller !== sanitizedSeller);
+        subscriptionDetails[sanitizedBuyer] = filteredSubs;
+        await storageService.setItem('subscription_details', subscriptionDetails);
+        
+        // Add notification to seller
+        addSellerNotification(
+          sanitizedSeller,
+          `${sanitizedBuyer} unsubscribed from your content`
+        );
+        
+        console.log('[ListingContext] Successfully unsubscribed and updated local state');
+      } else {
+        console.error('[ListingContext] Failed to unsubscribe from seller');
+        throw new Error('Failed to unsubscribe. Please try again.');
+      }
+    } catch (error) {
+      console.error('[ListingContext] Error in unsubscribeFromSeller:', error);
+      throw error;
+    }
   };
 
   const isSubscribed = (buyer: string, seller: string): boolean => {
