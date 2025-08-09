@@ -14,7 +14,7 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 export { isDevelopment };
 export const isProduction = !isDevelopment();
 
-// 🔧 FIXED: Use environment configuration correctly
+// Use environment configuration correctly
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 export const FEATURES = {
   USE_API_AUTH: process.env.NEXT_PUBLIC_USE_API_AUTH !== 'false',
@@ -26,7 +26,7 @@ export const FEATURES = {
   USE_MOCK_API: false, // Always false - no mocks!
 };
 
-// 🔧 CRITICAL FIX: Remove /api prefix from endpoints since API_BASE_URL already includes it
+// API endpoints with parameter placeholders
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
@@ -178,57 +178,128 @@ export const getDefaultHeaders = (): HeadersInit => {
 export const AUTH_TOKEN_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 
-// Helper to build full API URL with validation
+/**
+ * Helper to build full API URL with validation
+ * Properly handles parameter replacement and validation
+ */
 export const buildApiUrl = (endpoint: string, params?: Record<string, string>): string => {
+  console.log('[buildApiUrl] Called with:', { endpoint, params });
+  
+  // If endpoint is already a full URL (for direct calls), return it
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    console.log('[buildApiUrl] Endpoint is already a full URL, returning as-is');
+    return endpoint;
+  }
+  
   let url = endpoint;
   
-  // Validate and sanitize path parameters
-  if (params) {
+  // Find all parameters that need to be replaced in the URL
+  const requiredParams = (endpoint.match(/:(\w+)/g) || []).map(p => p.substring(1));
+  console.log('[buildApiUrl] Required params in endpoint:', requiredParams);
+  
+  // If URL has parameters that need to be replaced
+  if (requiredParams.length > 0) {
+    // Check if params object was provided
+    if (!params) {
+      console.error('[buildApiUrl] ERROR: No params object provided for endpoint:', endpoint);
+      console.error('[buildApiUrl] Required params:', requiredParams);
+      throw new Error(`Missing required URL parameters for endpoint: ${endpoint}. Required: ${requiredParams.join(', ')}`);
+    }
+    
+    // Check each required parameter
+    for (const param of requiredParams) {
+      const value = params[param];
+      
+      // Check if parameter exists and is not empty
+      if (value === undefined || value === null || value === '') {
+        console.error(`[buildApiUrl] ERROR: Missing required parameter: ${param}`);
+        console.error('[buildApiUrl] Endpoint:', endpoint);
+        console.error('[buildApiUrl] Provided params:', params);
+        console.error('[buildApiUrl] Required params:', requiredParams);
+        throw new Error(`Missing required URL parameter: ${param} for endpoint: ${endpoint}`);
+      }
+      
+      // Log the parameter being replaced
+      console.log(`[buildApiUrl] Replacing :${param} with "${value}"`);
+    }
+    
+    // Replace all parameters in the URL
     Object.entries(params).forEach(([key, value]) => {
-      // Validate parameter key
+      // Skip if value is undefined or null
+      if (value === undefined || value === null) {
+        console.warn(`[buildApiUrl] Skipping undefined/null parameter: ${key}`);
+        return;
+      }
+      
+      // Validate parameter key (no special characters that could break URLs)
       const sanitizedKey = sanitizeStrict(key);
       if (sanitizedKey !== key) {
+        console.error(`[buildApiUrl] Invalid parameter key: ${key}`);
         throw new Error(`Invalid parameter key: ${key}`);
       }
       
-      // Sanitize parameter value
-      const sanitizedValue = encodeURIComponent(sanitizeStrict(String(value).trim()));
+      // Convert value to string and sanitize
+      const stringValue = String(value).trim();
+      if (stringValue === '') {
+        console.warn(`[buildApiUrl] Empty parameter value for key: ${key}`);
+        return;
+      }
+      
+      // Sanitize and encode parameter value
+      const sanitizedValue = encodeURIComponent(sanitizeStrict(stringValue));
       
       // Check for path traversal attempts
       if (sanitizedValue.includes('..') || sanitizedValue.includes('//')) {
+        console.error(`[buildApiUrl] Invalid parameter value (possible path traversal): ${value}`);
         throw new Error(`Invalid parameter value: ${value}`);
       }
       
-      url = url.replace(`:${key}`, sanitizedValue);
+      // Replace the parameter in the URL
+      const placeholder = `:${key}`;
+      if (url.includes(placeholder)) {
+        url = url.replace(placeholder, sanitizedValue);
+        console.log(`[buildApiUrl] Replaced ${placeholder} -> ${sanitizedValue}`);
+      }
     });
   }
   
   // Check if all parameters were replaced
-  if (url.includes(':')) {
-    throw new Error('Missing required URL parameters');
+  const unreplacedParams = url.match(/:(\w+)/g);
+  if (unreplacedParams && unreplacedParams.length > 0) {
+    console.error('[buildApiUrl] ERROR: Unreplaced parameters found:', unreplacedParams);
+    console.error('[buildApiUrl] Final URL:', url);
+    console.error('[buildApiUrl] Original endpoint:', endpoint);
+    console.error('[buildApiUrl] Provided params:', params);
+    throw new Error(`Missing required URL parameters: ${unreplacedParams.join(', ')}`);
   }
   
-  // 🔧 CRITICAL FIX: Build URL correctly
-  // API_BASE_URL = http://localhost:5000 (no /api)
-  // Endpoint = /listings (no /api prefix)
-  // Final URL = http://localhost:5000/api/listings (add /api here)
+  // Build full URL with base URL
   if (API_BASE_URL) {
-    const fullUrl = `${API_BASE_URL}/api${url}`;
+    // Ensure API_BASE_URL doesn't end with a slash
+    const baseUrl = API_BASE_URL.replace(/\/$/, '');
+    
+    // Build the full URL (add /api prefix to the endpoint)
+    const fullUrl = `${baseUrl}/api${url}`;
+    
+    // Sanitize the final URL
     const sanitizedUrl = sanitizeUrl(fullUrl);
     
     if (!sanitizedUrl) {
+      console.error('[buildApiUrl] ERROR: Failed to sanitize URL:', fullUrl);
       throw new Error('Invalid API URL');
     }
     
     // Check URL length
     if (sanitizedUrl.length > REQUEST_CONFIG.MAX_URL_LENGTH) {
+      console.error('[buildApiUrl] ERROR: URL too long:', sanitizedUrl.length);
       throw new Error('URL too long');
     }
     
-    console.log(`[API Config] Built URL: ${sanitizedUrl}`);
+    console.log('[buildApiUrl] SUCCESS: Built URL:', sanitizedUrl);
     return sanitizedUrl;
   }
   
+  console.log('[buildApiUrl] No API_BASE_URL, returning modified endpoint:', url);
   return url;
 };
 
@@ -454,8 +525,11 @@ class ApiClient {
     const requestId = generateRequestId();
     const startTime = Date.now();
     
+    console.log('[ApiClient.call] Starting request:', { endpoint, method: options.method || 'GET', requestId });
+    
     // Check for duplicate requests
     if (requestKey && this.pendingRequests.has(requestKey)) {
+      console.warn('[ApiClient.call] Duplicate request detected:', requestKey);
       return {
         success: false,
         error: {
@@ -474,6 +548,7 @@ class ApiClient {
     const rateLimitResult = this.checkRateLimit();
     if (!rateLimitResult.allowed) {
       this.pendingRequests.delete(requestKey || '');
+      console.warn('[ApiClient.call] Rate limit exceeded');
       return {
         success: false,
         error: {
@@ -489,6 +564,7 @@ class ApiClient {
       this.validateRequestOptions(options);
     } catch (error) {
       this.pendingRequests.delete(requestKey || '');
+      console.error('[ApiClient.call] Invalid request options:', error);
       return {
         success: false,
         error: {
@@ -512,12 +588,27 @@ class ApiClient {
 
     // Set timeout
     const timeoutId = setTimeout(() => {
+      console.warn('[ApiClient.call] Request timeout:', endpoint);
       abortController.abort();
     }, REQUEST_CONFIG.TIMEOUT);
 
     try {
-      // 🔧 CRITICAL FIX: Build URL using buildApiUrl helper
-      const url = buildApiUrl(endpoint);
+      // Handle URL - if it's already a full URL, use it directly, otherwise build it
+      let url: string;
+      if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+        // Already a full URL (from buildApiUrl or direct call)
+        url = endpoint;
+        console.log('[ApiClient.call] Using full URL:', url);
+      } else if (endpoint.startsWith('/')) {
+        // Relative endpoint, build full URL
+        url = buildApiUrl(endpoint);
+        console.log('[ApiClient.call] Built URL from endpoint:', url);
+      } else {
+        // Invalid endpoint format
+        console.error('[ApiClient.call] Invalid endpoint format:', endpoint);
+        throw new Error('Invalid endpoint format - must start with / or be a full URL');
+      }
+      
       const token = this.getAuthToken();
       
       const headers: Record<string, string> = {
@@ -532,9 +623,8 @@ class ApiClient {
       // Add request ID to headers
       headers['X-Request-ID'] = requestId;
       
-      console.log(`[ApiClient] Making request to: ${url}`);
-      console.log(`[ApiClient] Method: ${options.method || 'GET'}`);
-      console.log(`[ApiClient] Headers:`, headers);
+      console.log(`[ApiClient.call] Making request to: ${url}`);
+      console.log(`[ApiClient.call] Method: ${options.method || 'GET'}`);
       
       const response = await fetch(url, {
         ...options,
@@ -565,7 +655,7 @@ class ApiClient {
       } else {
         // Handle non-JSON responses
         const text = await response.text();
-        console.warn('Non-JSON response:', text);
+        console.warn('[ApiClient.call] Non-JSON response:', text);
         return {
           success: false,
           error: { message: 'Invalid response format', code: 'INVALID_CONTENT_TYPE' },
@@ -573,11 +663,12 @@ class ApiClient {
         };
       }
       
-      console.log(`[ApiClient] Response [${response.status}]:`, data);
+      const elapsed = Date.now() - startTime;
+      console.log(`[ApiClient.call] Response [${response.status}] in ${elapsed}ms:`, data);
       
       if (!response.ok) {
         // Log error for monitoring
-        console.error(`API Error [${response.status}]:`, data.error || data);
+        console.error(`[ApiClient.call] API Error [${response.status}]:`, data.error || data);
         
         return {
           success: false,
@@ -626,6 +717,7 @@ class ApiClient {
 
       // Handle abort errors
       if (error instanceof Error && error.name === 'AbortError') {
+        console.warn('[ApiClient.call] Request aborted:', endpoint);
         return {
           success: false,
           error: { message: 'Request timeout or cancelled', code: 'REQUEST_ABORTED' },
@@ -633,7 +725,7 @@ class ApiClient {
         };
       }
 
-      console.error('API call error:', error);
+      console.error('[ApiClient.call] API call error:', error);
       
       // Check for network errors
       if (error instanceof TypeError && error.message === 'Failed to fetch') {

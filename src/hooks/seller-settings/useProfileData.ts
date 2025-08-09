@@ -118,23 +118,42 @@ export function useProfileData(): UseProfileDataReturn {
 
   // Load profile data
   const loadProfileData = useCallback(async () => {
-    if (!user?.username) return;
+    // Check if user exists and has username
+    if (!user?.username) {
+      console.warn('[useProfileData] No username available, skipping profile load');
+      setIsLoadingProfile(false);
+      return;
+    }
 
+    // Ensure username is defined and valid
+    const username = user.username.trim();
+    if (!username) {
+      console.error('[useProfileData] Username is empty after trim');
+      setIsLoadingProfile(false);
+      return;
+    }
+
+    console.log(`[useProfileData] Loading profile data for username: "${username}"`);
     setIsLoadingProfile(true);
+    
     try {
-      // Get profile data
-      const profileResult = await usersService.getUserProfile(user.username);
+      // Get profile data with proper username
+      console.log(`[useProfileData] Calling getUserProfile with username: "${username}"`);
+      const profileResult = await usersService.getUserProfile(username);
       
-      if (profileResult.success && profileResult.data) {
+      if (!profileResult.success) {
+        console.error('[useProfileData] Failed to get user profile:', profileResult.error);
+      } else if (profileResult.data) {
         const profile = profileResult.data;
+        console.log('[useProfileData] Profile data loaded successfully:', profile);
         
         // Sanitize loaded data
-        const sanitizedBio = sanitizeStrict(profile.bio);
+        const sanitizedBio = sanitizeStrict(profile.bio || '');
         const sanitizedProfilePic = profile.profilePic ? sanitizeUrl(profile.profilePic) : null;
         
         setBio(sanitizedBio);
         setProfilePic(sanitizedProfilePic);
-        setSubscriptionPrice(profile.subscriptionPrice);
+        setSubscriptionPrice(profile.subscriptionPrice || '0');
         
         // Sanitize gallery URLs
         const sanitizedGallery = (profile.galleryImages || [])
@@ -146,38 +165,51 @@ export function useProfileData(): UseProfileDataReturn {
         originalData.current = {
           bio: sanitizedBio,
           profilePic: sanitizedProfilePic,
-          subscriptionPrice: profile.subscriptionPrice,
+          subscriptionPrice: profile.subscriptionPrice || '0',
           galleryImages: sanitizedGallery,
         };
+      } else {
+        console.warn('[useProfileData] No profile data returned');
       }
 
-      // Calculate completeness
-      const userResult = await usersService.getUser(user.username);
-      if (userResult.success && userResult.data && profileResult.data) {
+      // Calculate completeness - ensure username is passed
+      console.log(`[useProfileData] Calling getUser with username: "${username}"`);
+      const userResult = await usersService.getUser(username);
+      
+      if (!userResult.success) {
+        console.error('[useProfileData] Failed to get user:', userResult.error);
+      } else if (userResult.data && profileResult.data) {
         const comp = calculateProfileCompleteness(userResult.data, profileResult.data);
         setCompleteness(comp);
+        console.log('[useProfileData] Profile completeness calculated:', comp);
       }
 
-      // Load preferences
-      const prefsResult = await usersService.getUserPreferences(user.username);
-      if (prefsResult.success) {
+      // Load preferences - ensure username is passed
+      console.log(`[useProfileData] Calling getUserPreferences with username: "${username}"`);
+      const prefsResult = await usersService.getUserPreferences(username);
+      
+      if (!prefsResult.success) {
+        console.error('[useProfileData] Failed to get user preferences:', prefsResult.error);
+      } else if (prefsResult.data) {
         setPreferences(prefsResult.data);
+        console.log('[useProfileData] User preferences loaded:', prefsResult.data);
       }
 
       // Track profile view activity
       await usersService.trackActivity({
-        userId: user.username,
+        userId: username,
         type: 'profile_update',
         details: { action: 'profile_settings_viewed' },
       });
     } catch (error) {
-      console.error('Error loading profile data:', error);
+      console.error('[useProfileData] Error loading profile data:', error);
+      // Don't throw - just log the error and continue
     } finally {
       setIsLoadingProfile(false);
     }
   }, [user?.username]);
 
-  // Load profile data on mount
+  // Load profile data on mount and when user changes
   useEffect(() => {
     loadProfileData();
   }, [loadProfileData]);
@@ -196,17 +228,21 @@ export function useProfileData(): UseProfileDataReturn {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check rate limit
-    if (user?.username) {
-      const rateLimitResult = rateLimiter.check('IMAGE_UPLOAD', {
-        ...RATE_LIMITS.IMAGE_UPLOAD,
-        identifier: user.username
-      });
+    // Check if user exists
+    if (!user?.username) {
+      alert('Please log in to upload images');
+      return;
+    }
 
-      if (!rateLimitResult.allowed) {
-        alert(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
-        return;
-      }
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('IMAGE_UPLOAD', {
+      ...RATE_LIMITS.IMAGE_UPLOAD,
+      identifier: user.username
+    });
+
+    if (!rateLimitResult.allowed) {
+      alert(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return;
     }
 
     // Validate file with security service
@@ -226,7 +262,7 @@ export function useProfileData(): UseProfileDataReturn {
       
       // Upload to Cloudinary
       const result = await uploadToCloudinary(file);
-      console.log('Profile pic uploaded successfully:', result);
+      console.log('[useProfileData] Profile pic uploaded successfully:', result);
       
       // Validate uploaded URL
       const sanitizedUrl = sanitizeUrl(result.url);
@@ -239,12 +275,12 @@ export function useProfileData(): UseProfileDataReturn {
       
       // Track upload activity
       await usersService.trackActivity({
-        userId: user?.username || '',
+        userId: user.username,
         type: 'profile_update',
         details: { action: 'profile_picture_uploaded' },
       });
     } catch (error) {
-      console.error("Error uploading profile image:", error);
+      console.error("[useProfileData] Error uploading profile image:", error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       alert(`Failed to upload image: ${errorMessage}`);
     } finally {
@@ -260,7 +296,17 @@ export function useProfileData(): UseProfileDataReturn {
 
   // Save profile with optimistic update and security
   const saveProfile = async (): Promise<boolean> => {
-    if (!user?.username) return false;
+    if (!user?.username) {
+      console.error('[useProfileData] Cannot save profile: no username');
+      alert('Please log in to save your profile');
+      return false;
+    }
+
+    const username = user.username.trim();
+    if (!username) {
+      console.error('[useProfileData] Cannot save profile: username is empty');
+      return false;
+    }
 
     // Validate all fields
     const isBioValid = validateBio(bio);
@@ -274,7 +320,7 @@ export function useProfileData(): UseProfileDataReturn {
     const rateLimitResult = rateLimiter.check('PROFILE_UPDATE', {
       maxAttempts: 10,
       windowMs: 60 * 60 * 1000, // 1 hour
-      identifier: user.username
+      identifier: username
     });
 
     if (!rateLimitResult.allowed) {
@@ -302,10 +348,14 @@ export function useProfileData(): UseProfileDataReturn {
         galleryImages: sanitizedGallery,
       };
 
+      console.log(`[useProfileData] Saving profile for username: "${username}"`, updates);
+
       // Update profile
-      const result = await usersService.updateUserProfile(user.username, updates);
+      const result = await usersService.updateUserProfile(username, updates);
       
       if (result.success) {
+        console.log('[useProfileData] Profile saved successfully');
+        
         // Update auth context if profile pic changed
         if (sanitizedProfilePic && sanitizedProfilePic !== user.profilePicture) {
           await updateUser({ profilePicture: sanitizedProfilePic });
@@ -322,7 +372,7 @@ export function useProfileData(): UseProfileDataReturn {
         }
 
         // Recalculate completeness
-        const userResult = await usersService.getUser(user.username);
+        const userResult = await usersService.getUser(username);
         if (userResult.success && userResult.data) {
           const comp = calculateProfileCompleteness(userResult.data, result.data!);
           setCompleteness(comp);
@@ -330,7 +380,7 @@ export function useProfileData(): UseProfileDataReturn {
 
         // Track save activity
         await usersService.trackActivity({
-          userId: user.username,
+          userId: username,
           type: 'profile_update',
           details: { 
             action: 'profile_saved',
@@ -340,11 +390,12 @@ export function useProfileData(): UseProfileDataReturn {
 
         return true;
       } else {
+        console.error('[useProfileData] Failed to save profile:', result.error);
         alert(result.error?.message || 'Failed to save profile');
         return false;
       }
     } catch (error) {
-      console.error('Error saving profile:', error);
+      console.error('[useProfileData] Error saving profile:', error);
       alert('Failed to save profile');
       return false;
     } finally {
@@ -354,23 +405,38 @@ export function useProfileData(): UseProfileDataReturn {
 
   // Update preferences with sanitization
   const updatePreferences = async (updates: any) => {
-    if (!user?.username) return;
+    if (!user?.username) {
+      console.error('[useProfileData] Cannot update preferences: no username');
+      return;
+    }
+
+    const username = user.username.trim();
+    if (!username) {
+      console.error('[useProfileData] Cannot update preferences: username is empty');
+      return;
+    }
 
     try {
       // Sanitize preference updates
       const sanitizedUpdates = securityService.sanitizeForAPI(updates);
       
-      const result = await usersService.updateUserPreferences(user.username, sanitizedUpdates);
+      console.log(`[useProfileData] Updating preferences for username: "${username}"`, sanitizedUpdates);
+      
+      const result = await usersService.updateUserPreferences(username, sanitizedUpdates);
       if (result.success) {
         setPreferences(result.data);
+        console.log('[useProfileData] Preferences updated successfully');
+      } else {
+        console.error('[useProfileData] Failed to update preferences:', result.error);
       }
     } catch (error) {
-      console.error('Error updating preferences:', error);
+      console.error('[useProfileData] Error updating preferences:', error);
     }
   };
 
   // Refresh profile data
   const refreshProfile = async () => {
+    console.log('[useProfileData] Refreshing profile data');
     // Clear cache to force fresh data
     usersService.clearCache();
     await loadProfileData();

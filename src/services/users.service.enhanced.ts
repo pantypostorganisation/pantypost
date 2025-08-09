@@ -2,7 +2,7 @@
 
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
-import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient } from './api.config';
+import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient, API_BASE_URL } from './api.config';
 import { securityService } from './security.service';
 import { sanitizeStrict, sanitizeUsername, sanitizeUrl, sanitizeEmail } from '@/utils/security/sanitization';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
@@ -144,7 +144,8 @@ export class EnhancedUsersService {
   async getUser(username: string): Promise<ApiResponse<User | null>> {
     try {
       // Validate username
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
+        console.error('[EnhancedUsersService.getUser] Invalid username:', username);
         return {
           success: false,
           error: {
@@ -157,16 +158,19 @@ export class EnhancedUsersService {
 
       // Sanitize username
       const sanitizedUsername = sanitizeUsername(username);
+      console.log('[EnhancedUsersService.getUser] Getting user:', sanitizedUsername);
 
       // Check cache first
       const cached = this.userCache.get(sanitizedUsername);
       if (cached && cached.expiresAt > Date.now()) {
+        console.log('[EnhancedUsersService.getUser] Returning cached user');
         return { success: true, data: cached.data };
       }
 
       // Check for pending request
       const pendingKey = `user:${sanitizedUsername}`;
       if (this.pendingRequests.has(pendingKey)) {
+        console.log('[EnhancedUsersService.getUser] Awaiting pending request');
         return await this.pendingRequests.get(pendingKey);
       }
 
@@ -183,7 +187,7 @@ export class EnhancedUsersService {
         throw error;
       }
     } catch (error) {
-      console.error('Get user error:', error);
+      console.error('[EnhancedUsersService.getUser] Error:', error);
       return {
         success: false,
         error: {
@@ -195,10 +199,25 @@ export class EnhancedUsersService {
   }
 
   private async _fetchUser(username: string): Promise<ApiResponse<User | null>> {
+    console.log('[EnhancedUsersService._fetchUser] Fetching user:', username);
+    
+    if (!username) {
+      console.error('[EnhancedUsersService._fetchUser] Username is empty');
+      return {
+        success: false,
+        error: {
+          code: UserErrorCode.INVALID_USERNAME,
+          message: 'Username is required',
+        },
+      };
+    }
+
     if (FEATURES.USE_API_USERS) {
-      const response = await apiCall<User>(
-        buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username })
-      );
+      // Build URL directly to avoid parameter issues
+      const url = `${API_BASE_URL}/api/users/${encodeURIComponent(username)}/profile`;
+      console.log('[EnhancedUsersService._fetchUser] API URL:', url);
+      
+      const response = await apiCall<User>(url);
       
       if (response.success && response.data) {
         // Sanitize user data
@@ -451,8 +470,11 @@ export class EnhancedUsersService {
    */
   async getUserProfile(username: string): Promise<ApiResponse<ProfileResponse | null>> {
     try {
+      console.log('[EnhancedUsersService.getUserProfile] Getting profile for:', username);
+      
       // Validate username
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
+        console.error('[EnhancedUsersService.getUserProfile] Invalid username:', username);
         return {
           success: false,
           error: {
@@ -482,26 +504,55 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        const response = await apiCall<ProfileResponse>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username: sanitizedUsername })}/full`
-        );
+        // Build the full profile URL directly
+        const fullUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile/full`;
+        console.log('[EnhancedUsersService.getUserProfile] API URL:', fullUrl);
+        
+        const response = await apiCall<ProfileResponse>(fullUrl);
         
         if (response.success && response.data) {
-          // Sanitize profile data
-          const sanitizedProfile = this.sanitizeProfileData(response.data.profile);
+          // Handle both possible response formats
+          let profileData: UserProfile;
+          let userData: User;
+          
+          // Check if response.data has the expected structure
+          if (response.data.profile !== undefined && response.data.user !== undefined) {
+            // Backend returns { profile, user } format
+            profileData = this.sanitizeProfileData(response.data.profile);
+            userData = response.data.user;
+          } else if ((response.data as any).username) {
+            // Backend might return just user data, create empty profile
+            userData = response.data as any;
+            profileData = {
+              bio: userData.bio || '',
+              profilePic: null,
+              subscriptionPrice: '0',
+              galleryImages: [],
+            };
+          } else {
+            // Unexpected format, create defaults
+            console.warn('[EnhancedUsersService.getUserProfile] Unexpected response format:', response.data);
+            profileData = {
+              bio: '',
+              profilePic: null,
+              subscriptionPrice: '0',
+              galleryImages: [],
+            };
+            userData = response.data as any;
+          }
           
           // Cache the profile
           this.profileCache.set(sanitizedUsername, {
-            data: sanitizedProfile,
+            data: profileData,
             timestamp: Date.now(),
             expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
           });
           
           return {
-            ...response,
+            success: true,
             data: {
-              ...response.data,
-              profile: sanitizedProfile,
+              profile: profileData,
+              user: userData,
             },
           };
         }
@@ -568,7 +619,7 @@ export class EnhancedUsersService {
         },
       };
     } catch (error) {
-      console.error('Get user profile error:', error);
+      console.error('[EnhancedUsersService.getUserProfile] Error:', error);
       return {
         success: false,
         error: {
@@ -603,7 +654,7 @@ export class EnhancedUsersService {
       }
 
       // Validate inputs
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
         return {
           success: false,
           error: {
@@ -665,13 +716,12 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        const response = await apiCall<UserProfile>(
-          buildApiUrl(API_ENDPOINTS.USERS.UPDATE_PROFILE, { username: sanitizedUsername }),
-          {
-            method: 'PATCH',
-            body: JSON.stringify(sanitizedUpdates),
-          }
-        );
+        // Build URL directly
+        const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile`;
+        const response = await apiCall<UserProfile>(url, {
+          method: 'PATCH',
+          body: JSON.stringify(sanitizedUpdates),
+        });
         
         if (!response.success) {
           // Revert optimistic update
@@ -794,8 +844,11 @@ export class EnhancedUsersService {
    */
   async getUserPreferences(username: string): Promise<ApiResponse<UserPreferences>> {
     try {
+      console.log('[EnhancedUsersService.getUserPreferences] Getting preferences for:', username);
+      
       // Validate username
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
+        console.error('[EnhancedUsersService.getUserPreferences] Invalid username:', username);
         return {
           success: false,
           error: {
@@ -806,18 +859,6 @@ export class EnhancedUsersService {
       }
 
       const sanitizedUsername = sanitizeUsername(username);
-
-      if (FEATURES.USE_API_USERS) {
-        return await apiCall<UserPreferences>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.SETTINGS, { username: sanitizedUsername })}/preferences`
-        );
-      }
-
-      // LocalStorage implementation
-      const preferencesData = await storageService.getItem<Record<string, UserPreferences>>(
-        'user_preferences',
-        {}
-      );
 
       const defaultPreferences: UserPreferences = {
         notifications: {
@@ -836,17 +877,52 @@ export class EnhancedUsersService {
         timezone: 'UTC',
       };
 
+      if (FEATURES.USE_API_USERS) {
+        // Build the preferences URL directly
+        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/settings/preferences`;
+        console.log('[EnhancedUsersService.getUserPreferences] API URL:', preferencesUrl);
+        
+        const response = await apiCall<UserPreferences>(preferencesUrl);
+        
+        // If endpoint doesn't exist (404), return default preferences
+        if (!response.success && (response.error?.code === '404' || response.error?.code === 'INVALID_CONTENT_TYPE')) {
+          console.log('[EnhancedUsersService.getUserPreferences] Endpoint not found, using defaults');
+          return { success: true, data: defaultPreferences };
+        }
+        
+        return response;
+      }
+
+      // LocalStorage implementation
+      const preferencesData = await storageService.getItem<Record<string, UserPreferences>>(
+        'user_preferences',
+        {}
+      );
+
       const preferences = preferencesData[sanitizedUsername] || defaultPreferences;
 
       return { success: true, data: preferences };
     } catch (error) {
-      console.error('Get user preferences error:', error);
+      console.error('[EnhancedUsersService.getUserPreferences] Error:', error);
+      // Return default preferences on error
       return {
-        success: false,
-        error: {
-          code: UserErrorCode.NETWORK_ERROR,
-          message: 'Failed to get preferences',
-        },
+        success: true,
+        data: {
+          notifications: {
+            messages: true,
+            orders: true,
+            promotions: false,
+            newsletters: false,
+          },
+          privacy: {
+            showOnlineStatus: true,
+            allowDirectMessages: true,
+            profileVisibility: 'public',
+          },
+          language: 'en',
+          currency: 'USD',
+          timezone: 'UTC',
+        }
       };
     }
   }
@@ -860,7 +936,7 @@ export class EnhancedUsersService {
   ): Promise<ApiResponse<UserPreferences>> {
     try {
       // Validate username
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
         return {
           success: false,
           error: {
@@ -887,13 +963,13 @@ export class EnhancedUsersService {
       const sanitizedUpdates = validation.data!;
 
       if (FEATURES.USE_API_USERS) {
-        return await apiCall<UserPreferences>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.SETTINGS, { username: sanitizedUsername })}/preferences`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify(sanitizedUpdates),
-          }
-        );
+        // Build the preferences URL directly
+        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/settings/preferences`;
+        
+        return await apiCall<UserPreferences>(preferencesUrl, {
+          method: 'PATCH',
+          body: JSON.stringify(sanitizedUpdates),
+        });
       }
 
       // LocalStorage implementation
@@ -962,10 +1038,17 @@ export class EnhancedUsersService {
       const sanitizedActivity = validation.data!;
 
       if (FEATURES.USE_API_USERS) {
-        return await apiCall<void>('/users/activity', {
+        const response = await apiCall<void>('/users/activity', {
           method: 'POST',
           body: JSON.stringify(sanitizedActivity),
         });
+        
+        // Silently fail if endpoint doesn't exist
+        if (!response.success && (response.error?.code === '404' || response.error?.code === 'INVALID_CONTENT_TYPE')) {
+          return { success: true };
+        }
+        
+        return response;
       }
 
       // LocalStorage implementation
@@ -1003,7 +1086,7 @@ export class EnhancedUsersService {
   ): Promise<ApiResponse<UserActivity[]>> {
     try {
       // Validate username
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
         return {
           success: false,
           error: {
@@ -1017,9 +1100,10 @@ export class EnhancedUsersService {
       const sanitizedLimit = Math.min(Math.max(1, limit), SECURITY_LIMITS.MAX_PAGE_SIZE);
 
       if (FEATURES.USE_API_USERS) {
-        return await apiCall<UserActivity[]>(
-          `${buildApiUrl(API_ENDPOINTS.USERS.PROFILE, { username: sanitizedUsername })}/activity?limit=${sanitizedLimit}`
-        );
+        // Build the activity URL directly
+        const activityUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile/activity?limit=${sanitizedLimit}`;
+        
+        return await apiCall<UserActivity[]>(activityUrl);
       }
 
       // LocalStorage implementation
@@ -1175,7 +1259,7 @@ export class EnhancedUsersService {
       }
 
       // Validate username
-      if (!isValidUsername(username)) {
+      if (!username || !isValidUsername(username)) {
         return {
           success: false,
           error: {
@@ -1223,13 +1307,13 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        return await apiCall<void>(
-          buildApiUrl(API_ENDPOINTS.USERS.VERIFICATION, { username: sanitizedUsername }),
-          {
-            method: 'POST',
-            body: JSON.stringify(sanitizedDocs),
-          }
-        );
+        // Build verification URL directly
+        const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/verification`;
+        
+        return await apiCall<void>(url, {
+          method: 'POST',
+          body: JSON.stringify(sanitizedDocs),
+        });
       }
 
       // LocalStorage implementation
@@ -1384,19 +1468,30 @@ export class EnhancedUsersService {
   /**
    * Sanitize profile data
    */
-  private sanitizeProfileData(profile: UserProfile): UserProfile {
+  private sanitizeProfileData(profile: any): UserProfile {
+    // Handle undefined or null profile
+    if (!profile) {
+      return {
+        bio: '',
+        profilePic: null,
+        subscriptionPrice: '0',
+        galleryImages: [],
+      };
+    }
+
     return {
-      ...profile,
-      bio: sanitizeStrict(profile.bio),
+      bio: sanitizeStrict(profile.bio || ''),
       profilePic: profile.profilePic ? sanitizeUrl(profile.profilePic) : null,
-      subscriptionPrice: profile.subscriptionPrice,
-      galleryImages: profile.galleryImages?.map(url => sanitizeUrl(url)),
+      subscriptionPrice: profile.subscriptionPrice || '0',
+      galleryImages: profile.galleryImages?.map((url: string) => sanitizeUrl(url)).filter(Boolean) as string[] || [],
       socialLinks: profile.socialLinks ? {
         twitter: profile.socialLinks.twitter ? sanitizeUrl(profile.socialLinks.twitter) : undefined,
         instagram: profile.socialLinks.instagram ? sanitizeUrl(profile.socialLinks.instagram) : undefined,
         tiktok: profile.socialLinks.tiktok ? sanitizeUrl(profile.socialLinks.tiktok) : undefined,
         website: profile.socialLinks.website ? sanitizeUrl(profile.socialLinks.website) : undefined,
       } : undefined,
+      completeness: profile.completeness,
+      lastUpdated: profile.lastUpdated,
     };
   }
 }
