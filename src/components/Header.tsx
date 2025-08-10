@@ -1,4 +1,3 @@
-// src/components/Header.tsx
 'use client';
 
 import Link from 'next/link';
@@ -94,7 +93,13 @@ export default function Header() {
     listings, 
     checkEndedAuctions 
   } = useListings();
-  const { getBuyerBalance, getSellerBalance, orderHistory } = useWallet();
+  const { 
+    getBuyerBalance, 
+    getSellerBalance, 
+    adminBalance,  // Direct access to admin balance from context
+    orderHistory,
+    refreshAdminData  // Use this to refresh admin data
+  } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
   
@@ -106,7 +111,6 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
-  const [platformBalance, setPlatformBalance] = useState(0);
   
   // ✅ Button loading states to prevent double-clicks
   const [clearingNotifications, setClearingNotifications] = useState(false);
@@ -215,38 +219,6 @@ export default function Header() {
     }
   }, [user?.username, user?.role, sellerNotifications]);
 
-  // ✅ FIXED: Function to fetch platform balance without causing loops
-  const fetchPlatformBalance = useCallback(async () => {
-    if (!isAdminUser || !user || !isMountedRef.current) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/wallet/admin/platform`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && typeof data.data.balance === 'number') {
-          setPlatformBalance(prevBalance => {
-            // Only update if actually changed to prevent re-renders
-            if (Math.abs(prevBalance - data.data.balance) > 0.01) {
-              console.log('[Header] Platform balance updated:', data.data.balance);
-              return data.data.balance;
-            }
-            return prevBalance;
-          });
-        }
-      }
-    } catch (error) {
-      console.error('[Header] Error fetching platform balance:', error);
-    }
-  }, [isAdminUser, user]);
-
   // ✅ Enhanced balance memoization
   const buyerBalance = useMemo(() => {
     if (!username || typeof getBuyerBalance !== 'function') return 0;
@@ -272,14 +244,51 @@ export default function Header() {
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
 
-  // ✅ FIXED: Removed the problematic balance checking effect that was causing infinite loops
-
-  // ✅ FIXED: Fetch platform balance when admin user logs in or balance updates
-  useEffect(() => {
-    if (isAdminUser && user && isMountedRef.current) {
-      fetchPlatformBalance();
+  // ✅ FIXED: Use adminBalance directly from context instead of fetching separately
+  const platformBalance = useMemo(() => {
+    if (isAdminUser && user) {
+      console.log('[Header] Admin balance from context:', adminBalance);
+      return adminBalance;
     }
-  }, [isAdminUser, user, balanceUpdateTrigger]); // Removed fetchPlatformBalance from deps to prevent loops
+    return 0;
+  }, [isAdminUser, user, adminBalance]);
+
+  // ✅ Listen for wallet balance update events
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleAdminBalanceUpdate = (event: CustomEvent) => {
+      if (isAdminUser && user) {
+        console.log('[Header] Admin balance update event received:', event.detail.balance);
+        // Force re-render to update displayed balance
+        setBalanceUpdateTrigger(prev => prev + 1);
+      }
+    };
+
+    const handleBuyerBalanceUpdate = (event: CustomEvent) => {
+      if (user?.role === 'buyer') {
+        console.log('[Header] Buyer balance update event received:', event.detail.balance);
+        setBalanceUpdateTrigger(prev => prev + 1);
+      }
+    };
+
+    const handleSellerBalanceUpdate = (event: CustomEvent) => {
+      if (user?.role === 'seller') {
+        console.log('[Header] Seller balance update event received:', event.detail.balance);
+        setBalanceUpdateTrigger(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('wallet:admin-balance-updated', handleAdminBalanceUpdate as EventListener);
+    window.addEventListener('wallet:buyer-balance-updated', handleBuyerBalanceUpdate as EventListener);
+    window.addEventListener('wallet:seller-balance-updated', handleSellerBalanceUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('wallet:admin-balance-updated', handleAdminBalanceUpdate as EventListener);
+      window.removeEventListener('wallet:buyer-balance-updated', handleBuyerBalanceUpdate as EventListener);
+      window.removeEventListener('wallet:seller-balance-updated', handleSellerBalanceUpdate as EventListener);
+    };
+  }, [isAdminUser, user]);
 
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
@@ -313,7 +322,7 @@ export default function Header() {
     }
   }, [user?.username, messages]);
 
-  // ✅ FIXED: Rate-limited balance update function without circular dependencies
+  // ✅ FIXED: Rate-limited balance update function
   const forceUpdateBalances = useCallback(() => {
     if (!isMountedRef.current) return;
     
@@ -324,16 +333,11 @@ export default function Header() {
     console.log('[Header] Force updating balances');
     setBalanceUpdateTrigger(prev => prev + 1);
     
-    // Fetch platform balance for admins without causing loops
-    if (isAdminUser && user) {
-      // Use setTimeout to prevent synchronous loops
-      setTimeout(() => {
-        if (isMountedRef.current) {
-          fetchPlatformBalance();
-        }
-      }, 100);
+    // Refresh admin data if admin user
+    if (isAdminUser && user && refreshAdminData) {
+      refreshAdminData();
     }
-  }, [isAdminUser, user]); // Removed fetchPlatformBalance from deps
+  }, [isAdminUser, user, refreshAdminData]);
 
   // Rate-limited auction check function
   const checkAuctionsWithRateLimit = useCallback(() => {
@@ -438,7 +442,7 @@ export default function Header() {
   // ✅ FIXED: Setup intervals using custom hook with longer intervals
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
-  }, 15000); // Changed to 15 seconds to reduce load
+  }, 30000); // Changed to 30 seconds to reduce load
 
   const clearAuctionInterval = useInterval(() => {
     if (isMountedRef.current) checkAuctionsWithRateLimit();
@@ -499,10 +503,6 @@ export default function Header() {
     window.addEventListener('auctionEnded', handleAuctionEnd);
     window.addEventListener('walletUpdated', handleWalletUpdate as EventListener);
     
-    // ✅ Secure context-based balance updates
-    const balanceUpdateContext = { forceUpdate: forceUpdateBalances };
-    (window as any).__pantypost_balance_context = balanceUpdateContext;
-    
     return () => {
       isMountedRef.current = false;
       
@@ -517,11 +517,6 @@ export default function Header() {
       window.removeEventListener('updateReports', handleUpdateReports);
       window.removeEventListener('auctionEnd', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
-      
-      // Clean up context
-      if (typeof window !== 'undefined') {
-        delete (window as any).__pantypost_balance_context;
-      }
     };
   }, []); // Empty deps to run only once on mount
 
@@ -720,7 +715,7 @@ export default function Header() {
                 <span>Wallets</span>
               </Link>
               
-              {/* Display platform balance for admins */}
+              {/* Display platform balance for admins - FIXED to use context value */}
               <Link 
                 href="/wallet/admin" 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"

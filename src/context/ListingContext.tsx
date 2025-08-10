@@ -8,13 +8,15 @@ import {
   useEffect,
   ReactNode,
   useCallback,
+  useRef,
 } from 'react';
 import { useWallet } from './WalletContext';
 import { useAuth } from './AuthContext';
 import { useAuction } from './AuctionContext';
+import { useWebSocket } from './WebSocketContext';
+import { WebSocketEvent } from '@/types/websocket';
 import type { Order } from '@/types/order';
 import { v4 as uuidv4 } from 'uuid';
-// Removed getSellerTierMemoized import to avoid circular dependency
 import { listingsService, usersService, storageService, ordersService } from '@/services';
 import { ListingDraft } from '@/types/myListings';
 import { securityService, sanitize } from '@/services/security.service';
@@ -98,6 +100,50 @@ interface SubscriptionData {
   subscribedAt: string;
 }
 
+// FIX 2: Add deduplication manager for sold listings
+class SoldListingDeduplicationManager {
+  private processedListings: Map<string, number> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private expiryMs: number;
+
+  constructor(expiryMs: number = 60000) { // 60 second expiry for sold listings
+    this.expiryMs = expiryMs;
+    this.startCleanup();
+  }
+
+  private startCleanup() {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const expiredKeys: string[] = [];
+      
+      this.processedListings.forEach((timestamp, listingId) => {
+        if (now - timestamp > this.expiryMs) {
+          expiredKeys.push(listingId);
+        }
+      });
+      
+      expiredKeys.forEach(key => this.processedListings.delete(key));
+    }, 30000); // Cleanup every 30 seconds
+  }
+
+  isDuplicate(listingId: string): boolean {
+    if (this.processedListings.has(listingId)) {
+      return true;
+    }
+    
+    this.processedListings.set(listingId, Date.now());
+    return false;
+  }
+
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.processedListings.clear();
+  }
+}
+
 type ListingContextType = {
   isAuthReady: boolean;
   listings: Listing[];
@@ -153,6 +199,7 @@ const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, updateUser } = useAuth();
+  const { subscribe, isConnected } = useWebSocket();
   
   const [users, setUsers] = useState<{ [username: string]: any }>({});
   const [listings, setListings] = useState<Listing[]>([]);
@@ -161,6 +208,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // FIX 2: Add ref for deduplication manager
+  const soldListingDeduplicator = useRef(new SoldListingDeduplicationManager());
 
   // Helper function to normalize notification items to the new format
   const normalizeNotification = (item: NotificationItem): Notification => {
@@ -232,6 +282,61 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       setAddSellerNotificationCallback(addSellerNotification);
     }
   }, [setAddSellerNotificationCallback, addSellerNotification]);
+
+  // FIX 2: Subscribe to listing:sold WebSocket events
+  useEffect(() => {
+    if (!isConnected) return;
+
+    console.log('[ListingContext] Setting up WebSocket subscription for listing:sold events');
+
+    const unsubscribe = subscribe('listing:sold' as WebSocketEvent, (data: { listingId?: string; id?: string }) => {
+      console.log('[ListingContext] Received listing:sold event:', data);
+      
+      // Handle both possible field names for the listing ID
+      const id = data.listingId ?? data.id;
+      if (!id) {
+        console.error('[ListingContext] No listing ID in sold event:', data);
+        return;
+      }
+      
+      // Check if we've already processed this sold listing
+      if (soldListingDeduplicator.current.isDuplicate(id)) {
+        console.log('[ListingContext] Skipping duplicate sold listing:', id);
+        return;
+      }
+      
+      // Remove the sold listing from state
+      setListings(prev => {
+        const filtered = prev.filter(listing => listing.id !== id);
+        
+        if (filtered.length < prev.length) {
+          console.log('[ListingContext] Removed sold listing:', id);
+          
+          // Fire custom event for any components that need to know
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('listing:removed', {
+              detail: { listingId: id, reason: 'sold' }
+            }));
+          }
+        } else {
+          console.log('[ListingContext] Listing not found in current state:', id);
+        }
+        
+        return filtered;
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isConnected, subscribe]);
+
+  // Cleanup deduplication manager on unmount
+  useEffect(() => {
+    return () => {
+      soldListingDeduplicator.current.destroy();
+    };
+  }, []);
 
   // Listen for notification changes in localStorage (for header live updates)
   useEffect(() => {
@@ -553,6 +658,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await listingsService.deleteListing(id);
       if (result.success) {
         setListings(prev => prev.filter(listing => listing.id !== id));
+        
+        // FIX 2: Fire event when listing is removed
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('listing:removed', {
+            detail: { listingId: id, reason: 'deleted' }
+          }));
+        }
+        
         window.dispatchEvent(new CustomEvent('listingDeleted', { detail: { listingId: id } }));
       } else {
         throw new Error(result.error?.message || 'Failed to delete listing');
@@ -603,6 +716,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       
       if (success) {
         // If purchase was successful, remove the listing
+        // FIX 2: Add to deduplication manager before removing
+        soldListingDeduplicator.current.isDuplicate(listing.id);
+        
         await removeListing(listing.id);
         
         console.log('✅ Listing purchased and removed:', listing.id);
@@ -711,7 +827,17 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           
           // Remove the listing if it was sold
           if (listing.auction.highestBidder) {
+            // FIX 2: Add to deduplication manager before removing
+            soldListingDeduplicator.current.isDuplicate(listing.id);
+            
             setListings(prev => prev.filter(l => l.id !== listing.id));
+            
+            // FIX 2: Fire event for sold auction
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('listing:removed', {
+                detail: { listingId: listing.id, reason: 'auction-sold' }
+              }));
+            }
           }
           
           // Notify seller
