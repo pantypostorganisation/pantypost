@@ -1,4 +1,3 @@
-// src/app/admin/messages/page.tsx
 'use client';
 
 import RequireAuth from '@/components/RequireAuth';
@@ -12,11 +11,13 @@ import { AlertTriangle } from 'lucide-react';
 export default function AdminMessagesPage() {
   const {
     // Auth & Users
-    user,
+    // user, // unused
     isAdmin,
     username,
+
+    // Collections
     allUsers,
-    
+
     // Messages & Threads
     threads,
     unreadCounts,
@@ -24,7 +25,7 @@ export default function AdminMessagesPage() {
     userProfiles,
     activeMessages,
     totalUnreadCount,
-    
+
     // State
     content,
     setContent,
@@ -39,11 +40,11 @@ export default function AdminMessagesPage() {
     setShowUserDirectory,
     directorySearchQuery,
     setDirectorySearchQuery,
-    
+
     // Computed
     isUserBlocked,
     isUserReported,
-    
+
     // Handlers
     handleSend,
     handleBlockToggle,
@@ -70,10 +71,19 @@ export default function AdminMessagesPage() {
     );
   }
 
+  // Defensive fallbacks to prevent undefined-prop crashes in child components
+  const safeThreads = threads ?? [];
+  const safeUnreadCounts = unreadCounts ?? {};
+  const safeLastMessages = lastMessages ?? {};
+  const safeUserProfiles = userProfiles ?? {};
+  const safeActiveMessages = activeMessages ?? [];
+  const safeUsername = username ?? '';
+  const safeAllUsers = allUsers ?? [];
+
   return (
     <RequireAuth role="admin">
       <div className="py-3 bg-black"></div>
-      
+
       <div className="h-screen bg-black flex flex-col overflow-hidden">
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
           {/* Left column - Message threads and User Directory */}
@@ -81,21 +91,21 @@ export default function AdminMessagesPage() {
             <MessagesHeader
               filterBy={filterBy}
               setFilterBy={setFilterBy}
-              totalUnreadCount={totalUnreadCount}
+              totalUnreadCount={totalUnreadCount ?? 0}
               showUserDirectory={showUserDirectory}
               setShowUserDirectory={setShowUserDirectory}
-              searchQuery={searchQuery}
+              searchQuery={searchQuery ?? ''}
               setSearchQuery={setSearchQuery}
-              directorySearchQuery={directorySearchQuery}
+              directorySearchQuery={directorySearchQuery ?? ''}
               setDirectorySearchQuery={setDirectorySearchQuery}
             />
-            
+
             {/* Content Area - Either Conversations or User Directory */}
             <div className="flex-1 overflow-y-auto bg-[#121212]">
               {showUserDirectory ? (
                 <UserDirectoryContent
-                  allUsers={allUsers}
-                  directorySearchQuery={directorySearchQuery}
+                  allUsers={safeAllUsers}
+                  directorySearchQuery={directorySearchQuery ?? ''}
                   filterBy={filterBy}
                   onStartConversation={handleStartConversation}
                   onClearFilters={() => {
@@ -105,12 +115,12 @@ export default function AdminMessagesPage() {
                 />
               ) : (
                 <ConversationsContent
-                  threads={threads}
-                  lastMessages={lastMessages}
-                  unreadCounts={unreadCounts}
-                  userProfiles={userProfiles}
+                  threads={safeThreads}
+                  lastMessages={safeLastMessages}
+                  unreadCounts={safeUnreadCounts}
+                  userProfiles={safeUserProfiles}
                   activeThread={activeThread}
-                  searchQuery={searchQuery}
+                  searchQuery={searchQuery ?? ''}
                   filterBy={filterBy}
                   onThreadSelect={handleThreadSelect}
                   onStartNewConversation={() => setShowUserDirectory(true)}
@@ -118,13 +128,13 @@ export default function AdminMessagesPage() {
               )}
             </div>
           </div>
-          
+
           {/* Right column - Active conversation */}
           <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
             <ChatContent
               activeThread={activeThread}
-              activeMessages={activeMessages}
-              userProfiles={userProfiles}
+              activeMessages={safeActiveMessages}
+              userProfiles={safeUserProfiles}
               content={content}
               setContent={setContent}
               selectedImage={selectedImage}
@@ -135,11 +145,11 @@ export default function AdminMessagesPage() {
               onBlockToggle={handleBlockToggle}
               onReport={handleReport}
               onStartNewConversation={() => setShowUserDirectory(true)}
-              username={username}
+              username={safeUsername}
             />
           </div>
         </div>
-        
+
         {/* Bottom Padding */}
         <div className="py-6 bg-black"></div>
       </div>

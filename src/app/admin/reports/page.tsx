@@ -1,17 +1,16 @@
-// src/app/admin/reports/page.tsx
 'use client';
 
-import { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useBans } from '@/context/BanContext';
 import RequireAuth from '@/components/RequireAuth';
 import { storageService } from '@/services';
-import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import type { ReportLog, BanFormData, ReportStats, UserReportStats } from '@/components/admin/reports/types';
-import { 
-  ReportListSkeleton, 
-  AdminStatsSkeleton 
+import {
+  ReportListSkeleton,
+  AdminStatsSkeleton
 } from '@/components/skeletons/AdminSkeletons';
 
 // Lazy load heavy components
@@ -50,13 +49,44 @@ function ModalSkeleton() {
   );
 }
 
+// ---- Mock data detection (conservative) ----
+const isMockString = (val?: string) => {
+  if (!val) return false;
+  const v = String(val).trim().toLowerCase();
+  // Avoid over-aggressive removal; only common dev-demo patterns
+  const patterns = [
+    'spammer',       // e.g., spammer999
+    'spam_bot',      // explicit mock
+    'test',          // test, testuser, etc.
+    'demo',          // demo accounts
+    'sample',        // sample data
+    'mock',          // mock entries
+    'lorem', 'ipsum',
+    'john_doe', 'jane_doe'
+  ];
+  // exact dev junk or clear substrings
+  return patterns.some(p => v.includes(p));
+};
+
+const isMockReport = (r: ReportLog) => {
+  return (
+    isMockString(r.reporter) ||
+    isMockString(r.reportee) ||
+    isMockString(r.adminNotes) ||
+    (r.category && isMockString(r.category)) ||
+    (r.severity && isMockString(r.severity)) ||
+    (r.id && (r.id.startsWith('mock_') || r.id.includes('sample') || r.id.includes('test')))
+  );
+};
+// -------------------------------------------
+
 export default function AdminReportsPage() {
   const { user } = useAuth();
-  
+
   // Safely handle the ban context with try-catch
   let banContext: any = null;
   let banContextError: string | null = null;
-  
+
   try {
     banContext = useBans();
   } catch (error) {
@@ -101,13 +131,15 @@ export default function AdminReportsPage() {
     notes: ''
   });
   const [isProcessingBan, setIsProcessingBan] = useState(false);
-  const [reportBanInfo, setReportBanInfo] = useState<{[key: string]: any}>({});
+  const [reportBanInfo, setReportBanInfo] = useState<{ [key: string]: any }>({});
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isLoadingReports, setIsLoadingReports] = useState(true);
+  const [mockRemovalCount, setMockRemovalCount] = useState<number>(0);
 
-  // Load reports
+  // Load reports (and cleanse mock data)
   useEffect(() => {
     loadReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadReports = async () => {
@@ -115,7 +147,7 @@ export default function AdminReportsPage() {
     if (typeof window !== 'undefined') {
       try {
         const stored = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
-        // Sanitize stored reports
+        // Sanitize stored reports and normalize
         const enhancedReports = stored.map((report, index) => ({
           ...report,
           id: report.id || `report_${Date.now()}_${index}`,
@@ -128,8 +160,23 @@ export default function AdminReportsPage() {
           adminNotes: sanitizeStrict(report.adminNotes || ''),
           processedBy: report.processedBy ? sanitizeStrict(report.processedBy) : undefined
         }));
-        enhancedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setReports(enhancedReports);
+
+        // Remove any mock/dev data
+        const cleansed = enhancedReports.filter(r => !isMockReport(r));
+        const removedCount = enhancedReports.length - cleansed.length;
+
+        // Sort newest → oldest
+        cleansed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        // Persist the cleansed list if anything was removed
+        if (removedCount > 0) {
+          await storageService.setItem('panty_report_logs', cleansed);
+          setMockRemovalCount(removedCount);
+        } else {
+          setMockRemovalCount(0);
+        }
+
+        setReports(cleansed);
         setLastRefresh(new Date());
       } catch (error) {
         console.error('Error loading reports:', error);
@@ -143,22 +190,25 @@ export default function AdminReportsPage() {
   // Calculate user report statistics
   const getUserReportStats = (username: string): UserReportStats => {
     const sanitizedUsername = sanitizeStrict(username);
-    const userReports = reports.filter(report => report.reportee === sanitizedUsername);
-    const activeReports = userReports.filter(report => !report.processed);
+    const userReports = reports.filter((report) => report.reportee === sanitizedUsername);
+    const activeReports = userReports.filter((report) => !report.processed);
     const totalReports = userReports.length;
-    
+
     // Get current ban status
-    const banInfo = banContext && typeof banContext.getBanInfo === 'function' 
-      ? banContext.getBanInfo(sanitizedUsername) 
-      : null;
-    
+    const banInfo =
+      banContext && typeof banContext.getBanInfo === 'function'
+        ? banContext.getBanInfo(sanitizedUsername)
+        : null;
+
     return {
       totalReports,
       activeReports: activeReports.length,
       processedReports: totalReports - activeReports.length,
       isBanned: !!banInfo,
       banInfo,
-      reportHistory: userReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      reportHistory: userReports.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
     };
   };
 
@@ -170,37 +220,38 @@ export default function AdminReportsPage() {
 
   // Calculate filtered and sorted reports
   const filteredAndSortedReports = (() => {
-    let filtered = reports.filter(report => {
+    let filtered = reports.filter((report) => {
       if (!report) return false;
-      
+
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = searchTerm ? 
-        (report.reporter && report.reporter.toLowerCase().includes(searchLower)) ||
-        (report.reportee && report.reportee.toLowerCase().includes(searchLower)) ||
-        (report.adminNotes && report.adminNotes.toLowerCase().includes(searchLower)) : true;
-      
-      const matchesFilter = filterBy === 'all' ? true :
-        filterBy === 'processed' ? report.processed :
-        !report.processed;
-      
-      const matchesSeverity = severityFilter === 'all' ? true :
-        report.severity === severityFilter;
-        
-      const matchesCategory = categoryFilter === 'all' ? true :
-        report.category === categoryFilter;
-      
+      const matchesSearch = searchTerm
+        ? (report.reporter && report.reporter.toLowerCase().includes(searchLower)) ||
+          (report.reportee && report.reportee.toLowerCase().includes(searchLower)) ||
+          (report.adminNotes && report.adminNotes.toLowerCase().includes(searchLower))
+        : true;
+
+      const matchesFilter =
+        filterBy === 'all' ? true : filterBy === 'processed' ? report.processed : !report.processed;
+
+      const matchesSeverity = severityFilter === 'all' ? true : report.severity === severityFilter;
+
+      const matchesCategory = categoryFilter === 'all' ? true : report.category === categoryFilter;
+
       return matchesSearch && matchesFilter && matchesSeverity && matchesCategory;
     });
 
     // Sort
     filtered.sort((a, b) => {
       let comparison = 0;
-      
+
       switch (sortBy) {
-        case 'severity':
-          const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
-          comparison = (severityOrder[a.severity || 'medium'] || 2) - (severityOrder[b.severity || 'medium'] || 2);
+        case 'severity': {
+          const severityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+          comparison =
+            (severityOrder[a.severity || 'medium'] || 2) -
+            (severityOrder[b.severity || 'medium'] || 2);
           break;
+        }
         case 'reporter':
           comparison = (a.reporter || '').localeCompare(b.reporter || '');
           break;
@@ -209,23 +260,23 @@ export default function AdminReportsPage() {
           comparison = new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
           break;
       }
-      
+
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-    
+
     return filtered;
   })();
 
   // Update ban info
   useEffect(() => {
     if (!banContext || !filteredAndSortedReports.length) return;
-    
+
     const updateBanInfo = () => {
       try {
-        const newBanInfo: {[key: string]: any} = {};
-        const uniqueReportees = [...new Set(filteredAndSortedReports.map(r => r.reportee))];
-        
-        uniqueReportees.forEach(reportee => {
+        const newBanInfo: { [key: string]: any } = {};
+        const uniqueReportees = [...new Set(filteredAndSortedReports.map((r) => r.reportee))];
+
+        uniqueReportees.forEach((reportee) => {
           if (reportee && typeof banContext.getBanInfo === 'function') {
             try {
               const banInfo = banContext.getBanInfo(reportee);
@@ -236,7 +287,7 @@ export default function AdminReportsPage() {
             }
           }
         });
-        
+
         setReportBanInfo(newBanInfo);
       } catch (error) {
         console.error('Error updating ban info:', error);
@@ -250,14 +301,16 @@ export default function AdminReportsPage() {
   // Save reports with sanitization
   const saveReports = async (newReports: ReportLog[]) => {
     // Sanitize before saving
-    const sanitizedReports = newReports.map(report => ({
+    const sanitizedReports = newReports.map((report) => ({
       ...report,
       reporter: sanitizeStrict(report.reporter || ''),
       reportee: sanitizeStrict(report.reportee || ''),
       adminNotes: sanitizeStrict(report.adminNotes || ''),
       processedBy: report.processedBy ? sanitizeStrict(report.processedBy) : undefined
-    }));
-    
+    }))
+    // Also ensure we never save mock entries
+    .filter(r => !isMockReport(r));
+
     setReports(sanitizedReports);
     await storageService.setItem('panty_report_logs', sanitizedReports);
     if (typeof window !== 'undefined') {
@@ -267,7 +320,7 @@ export default function AdminReportsPage() {
 
   // Toggle expanded state
   const toggleExpanded = (reportId: string) => {
-    setExpandedReports(prev => {
+    setExpandedReports((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(reportId)) {
         newSet.delete(reportId);
@@ -284,19 +337,27 @@ export default function AdminReportsPage() {
       alert('Ban system not available');
       return;
     }
-    
+
     setIsProcessingBan(true);
-    
+
     try {
-      const duration = banForm.banType === 'permanent' ? 'permanent' : parseInt(banForm.hours);
       const adminUsername = user?.username || 'admin';
       const reportIds = selectedReport ? [selectedReport.id!] : [];
-      
+
       // Sanitize form inputs
       const sanitizedUsername = sanitizeStrict(banForm.username);
       const sanitizedNotes = sanitizeStrict(banForm.notes);
       const sanitizedCustomReason = sanitizeStrict(banForm.customReason);
-      
+
+      // Robust duration parsing
+      const parsed = parseInt(String(banForm.hours), 10);
+      const duration =
+        banForm.banType === 'permanent'
+          ? 'permanent'
+          : Number.isFinite(parsed) && parsed > 0
+          ? parsed
+          : 24;
+
       const success = await banContext.banUser(
         sanitizedUsername,
         duration,
@@ -306,26 +367,28 @@ export default function AdminReportsPage() {
         reportIds,
         sanitizedCustomReason
       );
-      
+
       if (success) {
         // Update report if it was from a report
         if (selectedReport) {
-          const updatedReports = reports.map(r =>
-            r.id === selectedReport.id ? {
-              ...r,
-              processed: true,
-              banApplied: true,
-              processedBy: adminUsername,
-              processedAt: new Date().toISOString()
-            } : r
+          const updatedReports = reports.map((r) =>
+            r.id === selectedReport.id
+              ? {
+                  ...r,
+                  processed: true,
+                  banApplied: true,
+                  processedBy: adminUsername,
+                  processedAt: new Date().toISOString()
+                }
+              : r
           );
           await saveReports(updatedReports);
         }
-        
+
         setShowBanModal(false);
         setSelectedReport(null);
         resetBanForm();
-        
+
         const durationText = banForm.banType === 'permanent' ? 'permanently' : `for ${duration} hours`;
         alert(`Successfully banned ${sanitizedUsername} ${durationText}`);
       } else {
@@ -341,9 +404,9 @@ export default function AdminReportsPage() {
 
   // Update ban form with sanitization
   const updateBanForm = (form: BanFormData | ((prev: BanFormData) => BanFormData)) => {
-    setBanForm(prev => {
+    setBanForm((prev) => {
       const newForm = typeof form === 'function' ? form(prev) : form;
-      
+
       // Sanitize text fields
       return {
         ...newForm,
@@ -374,23 +437,25 @@ export default function AdminReportsPage() {
 
   const confirmResolve = async () => {
     if (!selectedReport) return;
-    
+
     const adminUsername = user?.username || 'admin';
-    
+
     // Update report as processed
-    const updatedReports = reports.map(r => 
-      r.id === selectedReport.id ? {
-        ...r,
-        processed: true,
-        banApplied: false,
-        processedBy: adminUsername,
-        processedAt: new Date().toISOString(),
-        adminNotes: sanitizeStrict((r.adminNotes || '') + '\n[Resolved without ban]')
-      } : r
+    const updatedReports = reports.map((r) =>
+      r.id === selectedReport.id
+        ? {
+            ...r,
+            processed: true,
+            banApplied: false,
+            processedBy: adminUsername,
+            processedAt: new Date().toISOString(),
+            adminNotes: sanitizeStrict((r.adminNotes || '') + '\n[Resolved without ban]')
+          }
+        : r
     );
     await saveReports(updatedReports);
-    
-    // Add to resolved reports with sanitization
+
+    // Add to resolved reports with sanitization (and never save mock)
     const resolvedEntry = {
       reporter: sanitizeStrict(selectedReport.reporter),
       reportee: sanitizeStrict(selectedReport.reportee),
@@ -400,11 +465,12 @@ export default function AdminReportsPage() {
       banApplied: false,
       notes: sanitizeStrict(selectedReport.adminNotes || 'No admin notes')
     };
-    
-    const existingResolved = await storageService.getItem<any[]>('panty_report_resolved', []);
-    existingResolved.push(resolvedEntry);
-    await storageService.setItem('panty_report_resolved', existingResolved);
-    
+    if (!(isMockString(resolvedEntry.reporter) || isMockString(resolvedEntry.reportee))) {
+      const existingResolved = await storageService.getItem<any[]>('panty_report_resolved', []);
+      existingResolved.push(resolvedEntry);
+      await storageService.setItem('panty_report_resolved', existingResolved);
+    }
+
     setShowResolveModal(false);
     setSelectedReport(null);
     alert(`Report marked as resolved without ban`);
@@ -413,7 +479,7 @@ export default function AdminReportsPage() {
   // Delete report
   const handleDeleteReport = async (reportId: string) => {
     if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
-      const updatedReports = reports.filter(r => r.id !== reportId);
+      const updatedReports = reports.filter((r) => r.id !== reportId);
       await saveReports(updatedReports);
       alert('Report deleted');
     }
@@ -421,24 +487,20 @@ export default function AdminReportsPage() {
 
   // Update report severity
   const updateReportSeverity = async (reportId: string, severity: ReportLog['severity']) => {
-    const updatedReports = reports.map(r => 
-      r.id === reportId ? { ...r, severity } : r
-    );
+    const updatedReports = reports.map((r) => (r.id === reportId ? { ...r, severity } : r));
     await saveReports(updatedReports);
   };
 
   // Update report category
   const updateReportCategory = async (reportId: string, category: ReportLog['category']) => {
-    const updatedReports = reports.map(r => 
-      r.id === reportId ? { ...r, category } : r
-    );
+    const updatedReports = reports.map((r) => (r.id === reportId ? { ...r, category } : r));
     await saveReports(updatedReports);
   };
 
   // Update admin notes with sanitization
   const updateAdminNotes = async (reportId: string, notes: string) => {
     const sanitizedNotes = sanitizeStrict(notes);
-    const updatedReports = reports.map(report => 
+    const updatedReports = reports.map((report) =>
       report.id === reportId ? { ...report, adminNotes: sanitizedNotes } : report
     );
     await saveReports(updatedReports);
@@ -461,26 +523,29 @@ export default function AdminReportsPage() {
   // Calculate report stats
   const reportStats: ReportStats = {
     total: reports.length,
-    unprocessed: reports.filter(r => !r.processed).length,
-    processed: reports.filter(r => r.processed).length,
-    critical: reports.filter(r => r.severity === 'critical' && !r.processed).length,
-    today: reports.filter(r => {
+    unprocessed: reports.filter((r) => !r.processed).length,
+    processed: reports.filter((r) => r.processed).length,
+    critical: reports.filter((r) => r.severity === 'critical' && !r.processed).length,
+    today: reports.filter((r) => {
       const reportDate = new Date(r.date);
       const today = new Date();
       return reportDate.toDateString() === today.toDateString();
     }).length,
-    withBans: reports.filter(r => r.banApplied).length
+    withBans: reports.filter((r) => r.banApplied).length
   };
 
   return (
     <RequireAuth role="admin">
       <main className="p-8 max-w-7xl mx-auto">
+        {/* Optional banner if we cleaned mock entries */}
+        {mockRemovalCount > 0 && (
+          <div className="mb-4 p-3 rounded border border-yellow-600/30 bg-yellow-600/10 text-yellow-300 text-sm">
+            Removed {mockRemovalCount} mock report{mockRemovalCount === 1 ? '' : 's'} from storage.
+          </div>
+        )}
+
         <Suspense fallback={<div className="h-20 bg-gray-800 rounded mb-6 animate-pulse" />}>
-          <ReportsHeader 
-            banContextError={banContextError}
-            lastRefresh={lastRefresh}
-            onRefresh={loadReports}
-          />
+          <ReportsHeader banContextError={banContextError} lastRefresh={lastRefresh} onRefresh={loadReports} />
         </Suspense>
 
         <Suspense fallback={<AdminStatsSkeleton />}>

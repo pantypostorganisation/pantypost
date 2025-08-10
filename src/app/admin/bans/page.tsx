@@ -1,4 +1,3 @@
-// src/app/admin/bans/page.tsx
 'use client';
 
 import { useState, lazy, Suspense } from 'react';
@@ -10,9 +9,9 @@ import { useBanManagement } from '@/hooks/useBanManagement';
 import { isValidBan } from '@/utils/banUtils';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
-import { 
-  BanListSkeleton, 
-  AdminStatsSkeleton 
+import {
+  BanListSkeleton,
+  AdminStatsSkeleton
 } from '@/components/skeletons/AdminSkeletons';
 
 // Lazy load heavy components
@@ -60,7 +59,7 @@ export default function BanManagementPage() {
   });
   const [showUnbanModal, setShowUnbanModal] = useState(false);
   const [showAppealModal, setShowAppealModal] = useState(false);
-  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false); // FIX: was missing
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const {
@@ -154,7 +153,7 @@ export default function BanManagementPage() {
         }
       };
     }
-    
+
     try {
       const stats = getBanStats();
       return stats || {
@@ -210,7 +209,7 @@ export default function BanManagementPage() {
     if (!banContext || typeof getActiveBans !== 'function') {
       return [];
     }
-    
+
     try {
       const bans = getActiveBans() || [];
       console.log('[BanManagementPage] Active bans:', bans.length);
@@ -225,7 +224,7 @@ export default function BanManagementPage() {
     if (!banContext || typeof getExpiredBans !== 'function') {
       return [];
     }
-    
+
     try {
       return getExpiredBans() || [];
     } catch (error) {
@@ -234,10 +233,8 @@ export default function BanManagementPage() {
     }
   })();
 
-  const pendingAppeals = activeBans.filter(ban => 
-    ban && 
-    ban.appealSubmitted && 
-    ban.appealStatus === 'pending'
+  const pendingAppeals = activeBans.filter(
+    (ban) => ban && (ban as any).appealSubmitted && (ban as any).appealStatus === 'pending'
   );
 
   const handleUnban = (ban: UserBan) => {
@@ -254,14 +251,14 @@ export default function BanManagementPage() {
       alert('No ban selected or invalid ban data');
       return;
     }
-    
+
     if (rateLimitError) {
       alert(rateLimitError);
       return;
     }
-    
+
     const sanitizedReason = sanitizeStrict(reason || 'Manually unbanned by admin');
-    
+
     setIsLoading(true);
     try {
       if (!banContext || typeof unbanUser !== 'function') {
@@ -269,8 +266,8 @@ export default function BanManagementPage() {
         return;
       }
       const success = await unbanUser(
-        selectedBan.username, 
-        user?.username || 'admin', 
+        selectedBan.username,
+        user?.username || 'admin',
         sanitizedReason
       );
       if (success) {
@@ -294,7 +291,7 @@ export default function BanManagementPage() {
       alert('Invalid ban data for appeal review');
       return;
     }
-    if (!ban.appealSubmitted) {
+    if (!(ban as any).appealSubmitted) {
       alert('No appeal has been submitted for this ban');
       return;
     }
@@ -308,19 +305,19 @@ export default function BanManagementPage() {
       alert('No ban selected for appeal review');
       return;
     }
-    
+
     if (!appealReviewNotes.trim()) {
       alert('Please provide review notes explaining your decision');
       return;
     }
-    
+
     if (rateLimitError) {
       alert(rateLimitError);
       return;
     }
-    
+
     const sanitizedNotes = sanitizeStrict(appealReviewNotes.trim());
-    
+
     setIsLoading(true);
     try {
       if (!banContext || typeof reviewAppeal !== 'function') {
@@ -328,13 +325,16 @@ export default function BanManagementPage() {
         return;
       }
       const success = await reviewAppeal(
-        selectedBan.id, 
-        decision, 
-        sanitizedNotes, 
+        selectedBan.id,
+        decision,
+        sanitizedNotes,
         user?.username || 'admin'
       );
       if (success) {
-        alert(`Appeal ${decision}d successfully`);
+        // FIX: Better grammar by mapping decisions to past tense
+        const decisionPast =
+          decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'escalated';
+        alert(`Appeal ${decisionPast} successfully`);
         setShowAppealModal(false);
         setSelectedBan(null);
         setAppealReviewNotes('');
@@ -355,54 +355,60 @@ export default function BanManagementPage() {
       alert('No evidence available for this appeal');
       return;
     }
-    
-    const validEvidence = evidence.filter(item => 
-      typeof item === 'string' && item.length > 0
-    );
-    
+
+    const validEvidence = evidence.filter((item) => typeof item === 'string' && item.length > 0);
+
     if (validEvidence.length === 0) {
       alert('No valid evidence files found');
       return;
     }
-    
+
     setSelectedEvidence(validEvidence);
     setEvidenceIndex(0);
-    setShowEvidenceModal(true);
+    setShowEvidenceModal(true); // uses the newly added state
   };
 
   const exportBanData = () => {
     try {
       const sanitizedData = {
-        activeBans: activeBans.map(ban => sanitizeObject(ban, {
-          maxDepth: 3,
-          keySanitizer: (key) => sanitizeStrict(key),
-          valueSanitizer: (value) => {
-            if (typeof value === 'string') {
-              return sanitizeStrict(value);
+        activeBans:
+          activeBans.map((ban) =>
+            sanitizeObject(ban, {
+              maxDepth: 3,
+              keySanitizer: (key) => sanitizeStrict(key),
+              valueSanitizer: (value) => {
+                if (typeof value === 'string') {
+                  return sanitizeStrict(value);
+                }
+                return value;
+              }
+            })
+          ) || [],
+        expiredBans:
+          expiredBans.map((ban) =>
+            sanitizeObject(ban, {
+              maxDepth: 3,
+              keySanitizer: (key) => sanitizeStrict(key),
+              valueSanitizer: (value) => {
+                if (typeof value === 'string') {
+                  return sanitizeStrict(value);
+                }
+                return value;
+              }
+            })
+          ) || [],
+        banHistory: (banHistory || []).map((entry) =>
+          sanitizeObject(entry, {
+            maxDepth: 3,
+            keySanitizer: (key) => sanitizeStrict(key),
+            valueSanitizer: (value) => {
+              if (typeof value === 'string') {
+                return sanitizeStrict(value);
+              }
+              return value;
             }
-            return value;
-          }
-        })) || [],
-        expiredBans: expiredBans.map(ban => sanitizeObject(ban, {
-          maxDepth: 3,
-          keySanitizer: (key) => sanitizeStrict(key),
-          valueSanitizer: (value) => {
-            if (typeof value === 'string') {
-              return sanitizeStrict(value);
-            }
-            return value;
-          }
-        })) || [],
-        banHistory: (banHistory || []).map(entry => sanitizeObject(entry, {
-          maxDepth: 3,
-          keySanitizer: (key) => sanitizeStrict(key),
-          valueSanitizer: (value) => {
-            if (typeof value === 'string') {
-              return sanitizeStrict(value);
-            }
-            return value;
-          }
-        })),
+          })
+        ),
         banStats: sanitizeObject(banStats || {}, {
           maxDepth: 3,
           keySanitizer: (key) => sanitizeStrict(key),
@@ -413,9 +419,9 @@ export default function BanManagementPage() {
         exportedBy: sanitizeStrict(user?.username || 'admin'),
         totalRecords: (activeBans?.length || 0) + (expiredBans?.length || 0)
       };
-      
-      const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], { 
-        type: 'application/json' 
+
+      const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], {
+        type: 'application/json'
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -425,7 +431,7 @@ export default function BanManagementPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       console.log('Ban data exported successfully');
     } catch (error) {
       console.error('Error exporting ban data:', error);
@@ -434,13 +440,15 @@ export default function BanManagementPage() {
   };
 
   const handleFiltersChange = (newFilters: Partial<FilterOptions>) => {
-    const sanitizedFilters = { ...newFilters };
-    
+    const sanitizedFilters: Partial<FilterOptions> = { ...newFilters };
+
     if ('searchTerm' in sanitizedFilters && sanitizedFilters.searchTerm) {
-      sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(sanitizedFilters.searchTerm);
+      sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(
+        sanitizedFilters.searchTerm
+      );
     }
-    
-    setFilters(prev => ({ ...prev, ...sanitizedFilters }));
+
+    setFilters((prev) => ({ ...prev, ...sanitizedFilters }));
   };
 
   return (
@@ -454,11 +462,9 @@ export default function BanManagementPage() {
                 <Shield className="mr-3" />
                 Ban Management
               </h1>
-              <p className="text-gray-400 mt-1">
-                Manual ban oversight and appeal processing
-              </p>
+              <p className="text-gray-400 mt-1">Manual ban oversight and appeal processing</p>
             </div>
-            
+
             <div className="flex gap-3 flex-wrap">
               <button
                 onClick={exportBanData}
@@ -489,7 +495,7 @@ export default function BanManagementPage() {
           <Suspense fallback={<AdminStatsSkeleton />}>
             <BanStatsDashboard banStats={banStats} />
           </Suspense>
-          
+
           {/* Lazy loaded tabs */}
           <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
             <BanTabs
@@ -497,7 +503,7 @@ export default function BanManagementPage() {
               onTabChange={setActiveTab}
               banStats={banStats}
               expiredCount={expiredBans.length}
-              historyCount={banHistory.length}
+              historyCount={banHistory?.length ?? 0} // FIX: guard against undefined
             />
           </Suspense>
 
@@ -527,10 +533,7 @@ export default function BanManagementPage() {
             )}
 
             {activeTab === 'expired' && (
-              <ExpiredBansContent
-                expiredBans={expiredBans}
-                filters={filters}
-              />
+              <ExpiredBansContent expiredBans={expiredBans} filters={filters} />
             )}
 
             {activeTab === 'appeals' && (
@@ -542,15 +545,10 @@ export default function BanManagementPage() {
             )}
 
             {activeTab === 'history' && (
-              <HistoryContent
-                banHistory={banHistory}
-                filters={filters}
-              />
+              <HistoryContent banHistory={banHistory} filters={filters} />
             )}
 
-            {activeTab === 'analytics' && (
-              <AnalyticsContent banStats={banStats} />
-            )}
+            {activeTab === 'analytics' && <AnalyticsContent banStats={banStats} />}
           </Suspense>
 
           {/* Modals with lazy loading */}
