@@ -91,6 +91,7 @@ export const useBrowseDetail = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [isPurchaseInProgress, setIsPurchaseInProgress] = useState(false); // NEW: Track purchase state
   
   // Refs
   const lastProcessedPaymentRef = useRef<string | null>(null);
@@ -166,6 +167,37 @@ export const useBrowseDetail = () => {
 
     loadListing();
   }, [listingId, listings, refreshListings]);
+
+  // NEW: Check if purchase is in progress via sessionStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && listing && user) {
+      const checkPurchaseStatus = () => {
+        const purchaseKey = `purchase_active_${listing.id}_${user.username}`;
+        const stored = sessionStorage.getItem(purchaseKey);
+        if (stored) {
+          const timestamp = parseInt(stored, 10);
+          // Consider purchase active for 30 seconds
+          const isActive = Date.now() - timestamp < 30000;
+          setIsPurchaseInProgress(isActive);
+          
+          // Clean up old purchase marker
+          if (!isActive) {
+            sessionStorage.removeItem(purchaseKey);
+          }
+        } else {
+          setIsPurchaseInProgress(false);
+        }
+      };
+      
+      // Check initially and on interval
+      checkPurchaseStatus();
+      const interval = setInterval(checkPurchaseStatus, 1000);
+      
+      return () => clearInterval(interval);
+    }
+    // Return cleanup function for all code paths
+    return undefined;
+  }, [listing?.id, user?.username]);
 
   // Load additional data
   useEffect(() => {
@@ -256,8 +288,30 @@ export const useBrowseDetail = () => {
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuctionListing, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
+  // FIXED: Only check funds for auctions and skip if purchase is in progress
   const checkCurrentUserFunds = useCallback(() => {
-    if (!user || user.role !== "buyer" || !isAuctionListing || !listing?.auction) return;
+    // Skip if not an auction listing - CRITICAL: Don't set any bid status for non-auctions
+    if (!isAuctionListing || !listing?.auction) {
+      // Ensure bid status is clear for non-auction listings
+      updateState({ 
+        biddingEnabled: true,
+        bidStatus: {}
+      });
+      return;
+    }
+    
+    // Skip if not a buyer
+    if (!user || user.role !== "buyer") return;
+    
+    // IMPORTANT: Skip if a purchase is in progress
+    if (isPurchaseInProgress || state.isProcessing) {
+      // Clear any existing bid status message during purchase
+      updateState({ 
+        biddingEnabled: true,
+        bidStatus: {}
+      });
+      return;
+    }
 
     const balance = getBuyerBalance(user.username);
     const startingBid = listing.auction.startingPrice || 0;
@@ -269,10 +323,10 @@ export const useBrowseDetail = () => {
       biddingEnabled: hasEnoughFunds,
       bidStatus: hasEnoughFunds ? {} : {
         success: false,
-        message: `Insufficient funds. You need $${totalRequired.toFixed(2)} to place this bid.`
+        message: `Insufficient funds. You need ${totalRequired.toFixed(2)} to place this bid.`
       }
     });
-  }, [user, isAuctionListing, listing?.auction, getBuyerBalance, updateState]);
+  }, [user, isAuctionListing, listing?.auction, getBuyerBalance, updateState, isPurchaseInProgress, state.isProcessing]);
 
   const formatBidDate = useCallback((date: string) => formatRelativeTime(date), []);
 
@@ -338,7 +392,22 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    updateState({ isProcessing: true, purchaseStatus: 'Processing...' });
+    // IMMEDIATELY clear bid status and mark purchase as in progress
+    updateState({ 
+      isProcessing: true, 
+      purchaseStatus: 'Processing...', 
+      bidStatus: {},  // Clear any bid status
+      biddingEnabled: true  // Reset bidding state
+    });
+    
+    // Mark purchase as in progress
+    setIsPurchaseInProgress(true);
+    
+    // Store in sessionStorage to persist across re-renders
+    if (typeof window !== 'undefined') {
+      const purchaseKey = `purchase_active_${listing.id}_${user.username}`;
+      sessionStorage.setItem(purchaseKey, Date.now().toString());
+    }
 
     try {
       // Use the new purchaseListingAndRemove method that handles both purchase and removal
@@ -348,7 +417,9 @@ export const useBrowseDetail = () => {
         updateState({ 
           showPurchaseSuccess: true,
           purchaseStatus: 'Purchase successful!',
-          isProcessing: false 
+          isProcessing: false,
+          bidStatus: {}, // Keep bid status clear
+          biddingEnabled: true
         });
         
         if (navigationTimeoutRef.current) {
@@ -357,6 +428,11 @@ export const useBrowseDetail = () => {
         
         navigationTimeoutRef.current = setTimeout(() => {
           if (mountedRef.current) {
+            // Clean up purchase marker before navigation
+            if (typeof window !== 'undefined') {
+              const purchaseKey = `purchase_active_${listing.id}_${user.username}`;
+              sessionStorage.removeItem(purchaseKey);
+            }
             router.push('/buyers/my-orders');
           }
         }, 3000);
@@ -365,6 +441,13 @@ export const useBrowseDetail = () => {
           purchaseStatus: 'Purchase failed. Please check your wallet balance.',
           isProcessing: false 
         });
+        setIsPurchaseInProgress(false);
+        
+        // Clean up purchase marker on failure
+        if (typeof window !== 'undefined') {
+          const purchaseKey = `purchase_active_${listing.id}_${user.username}`;
+          sessionStorage.removeItem(purchaseKey);
+        }
       }
     } catch (error) {
       console.error('Purchase error:', error);
@@ -372,6 +455,13 @@ export const useBrowseDetail = () => {
         purchaseStatus: 'An error occurred. Please try again.',
         isProcessing: false 
       });
+      setIsPurchaseInProgress(false);
+      
+      // Clean up purchase marker on error
+      if (typeof window !== 'undefined') {
+        const purchaseKey = `purchase_active_${listing.id}_${user.username}`;
+        sessionStorage.removeItem(purchaseKey);
+      }
     }
   }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState, rateLimiter]);
 
@@ -537,14 +627,35 @@ export const useBrowseDetail = () => {
     }
   }, [isAuctionListing, isAuctionEnded, user?.role, isUserHighestBidder, state.showAuctionSuccess, router, updateState]);
 
+  // FIXED: Only check funds for auctions and skip during purchases
   useEffect(() => {
-    if (!isAuctionListing || isAuctionEnded) return;
+    // Clear bid status immediately for non-auction listings
+    if (!isAuctionListing) {
+      updateState({ 
+        biddingEnabled: true,
+        bidStatus: {}
+      });
+      return;
+    }
+    
+    // Skip if auction has ended
+    if (isAuctionEnded) return;
+    
+    // Skip if purchase is in progress or processing
+    if (isPurchaseInProgress || state.isProcessing) {
+      updateState({ 
+        biddingEnabled: true,
+        bidStatus: {}
+      });
+      return;
+    }
+    
     checkCurrentUserFunds();
     const interval = setInterval(() => {
       checkCurrentUserFunds();
-    }, 10000);
+    }, FUNDING_CHECK_INTERVAL);
     return () => clearInterval(interval);
-  }, [isAuctionListing, isAuctionEnded, checkCurrentUserFunds]);
+  }, [isAuctionListing, isAuctionEnded, isPurchaseInProgress, state.isProcessing, checkCurrentUserFunds, updateState]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -600,8 +711,13 @@ export const useBrowseDetail = () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      // Clean up purchase marker on unmount
+      if (typeof window !== 'undefined' && listing && user) {
+        const purchaseKey = `purchase_active_${listing?.id}_${user?.username}`;
+        sessionStorage.removeItem(purchaseKey);
+      }
     };
-  }, []);
+  }, [listing?.id, user?.username]);
 
   // Extract seller info
   const sellerInfo = useMemo(() => {
@@ -681,7 +797,8 @@ export const useBrowseDetail = () => {
     sellerProfile: state.sellerProfile,
     showStickyBuy: state.showStickyBuy,
     bidAmount: state.bidAmount,
-    bidStatus: state.bidStatus,
+    // CRITICAL: Only pass bidStatus for auction listings, and clear during processing
+    bidStatus: (isAuctionListing && !state.isProcessing && !isPurchaseInProgress) ? state.bidStatus : {},
     biddingEnabled: state.biddingEnabled,
     bidsHistory: state.bidsHistory,
     showBidHistory: state.showBidHistory,
