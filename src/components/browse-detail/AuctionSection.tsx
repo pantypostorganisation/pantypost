@@ -30,7 +30,17 @@ export default function AuctionSection({
   bidInputRef,
   bidButtonRef
 }: AuctionSectionProps) {
+  // DEFENSIVE CHECK 1: Return null if no auction data
   if (!listing.auction) return null;
+
+  // DEFENSIVE CHECK 2: Verify this is actually an auction listing
+  const isActualAuction = !!(
+    listing.auction.isAuction || 
+    listing.auction.startingPrice !== undefined
+  );
+  
+  // Return null if not actually an auction
+  if (!isActualAuction) return null;
 
   const isUserSeller = username === listing.seller;
   const canBid = !isAuctionEnded && userRole === 'buyer' && !isUserSeller;
@@ -155,20 +165,21 @@ export default function AuctionSection({
             </button>
           </div>
           
-          {/* Status Messages */}
-          {bidError && (
+          {/* Status Messages - DEFENSIVE: Only show for actual auctions */}
+          {bidError && isActualAuction && (
             <div className="bg-red-900/30 border border-red-800 text-red-400 p-3 rounded text-sm">
               {bidError}
             </div>
           )}
           
-          {bidSuccess && (
+          {bidSuccess && isActualAuction && (
             <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded text-sm">
               {bidSuccess}
             </div>
           )}
           
-          {bidStatus.message && (
+          {/* DEFENSIVE: Only show bidStatus messages for actual auctions */}
+          {bidStatus?.message && isActualAuction && (
             <div className={`p-3 rounded text-sm border ${
               bidStatus.success 
                 ? 'bg-green-900/20 border-green-800/40 text-green-400' 

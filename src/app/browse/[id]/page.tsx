@@ -96,6 +96,14 @@ export default function ListingDetailPage() {
   const sellerId = listing?.seller ? `seller_${listing.seller}` : null;
   const isFavorited = sellerId ? checkIsFavorited(sellerId) : false;
 
+  // CRITICAL FIX: Properly determine if this is an auction
+  // Check both auction.isAuction flag and presence of auction properties
+  const isActualAuction = !!(
+    isAuctionListing && 
+    listing?.auction && 
+    (listing.auction.isAuction || listing.auction.startingPrice !== undefined)
+  );
+
   // Track component mount/unmount
   useEffect(() => {
     isMountedRef.current = true;
@@ -121,14 +129,14 @@ export default function ListingDetailPage() {
             seller_name: listing.seller || 'Unknown',
             seller_verified: listing.isSellerVerified || false,
             is_premium: listing.isPremium || false,
-            is_auction: isAuctionListing || false
+            is_auction: isActualAuction || false
           }
         });
       } catch (error) {
         console.error('Failed to track view event:', error);
       }
     }
-  }, [listing, listingId, isAuctionListing, trackEvent]);
+  }, [listing, listingId, isActualAuction, trackEvent]);
 
   // Track purchase success (with deduplication)
   useEffect(() => {
@@ -375,7 +383,7 @@ export default function ListingDetailPage() {
                 listing={listing}
                 isLockedPremium={isLockedPremium}
                 viewCount={viewCount}
-                isAuctionListing={isAuctionListing}
+                isAuctionListing={isActualAuction}
                 isAuctionEnded={isAuctionEnded}
                 formatTimeRemaining={formatTimeRemaining}
                 forceUpdateTimer={forceUpdateTimer}
@@ -386,8 +394,8 @@ export default function ListingDetailPage() {
             <div className="space-y-4">
               <ProductInfo listing={listing} />
 
-              {/* Auction Details */}
-              {isAuctionListing && listing.auction && (
+              {/* CRITICAL FIX: Only render AuctionSection for ACTUAL auctions */}
+              {isActualAuction && listing.auction && (
                 <AuctionSection
                   listing={listing}
                   isAuctionEnded={isAuctionEnded}
@@ -414,8 +422,8 @@ export default function ListingDetailPage() {
                 />
               )}
 
-              {/* Price & Actions for Standard Listings */}
-              {!isAuctionListing && (
+              {/* Price & Actions for Standard Listings - Show for non-auctions */}
+              {!isActualAuction && (
                 <PurchaseSection
                   listing={listing}
                   user={user}
@@ -473,7 +481,7 @@ export default function ListingDetailPage() {
           <PurchaseSuccessModal
             showPurchaseSuccess={showPurchaseSuccess}
             showAuctionSuccess={showAuctionSuccess}
-            isAuctionListing={isAuctionListing}
+            isAuctionListing={isActualAuction}
             listing={listing}
             isUserHighestBidder={isUserHighestBidder}
             userRole={user?.role}
@@ -482,7 +490,7 @@ export default function ListingDetailPage() {
           />
 
           <AuctionEndedModal
-            isAuctionListing={isAuctionListing}
+            isAuctionListing={isActualAuction}
             isAuctionEnded={isAuctionEnded}
             listing={listing}
             isUserHighestBidder={isUserHighestBidder}
@@ -499,7 +507,7 @@ export default function ListingDetailPage() {
             listing={listing}
             isProcessing={isProcessing}
             needsSubscription={needsSubscription}
-            isAuctionListing={isAuctionListing}
+            isAuctionListing={isActualAuction}
             userRole={user?.role}
             onPurchase={handlePurchaseWithAnalytics}
           />

@@ -54,9 +54,9 @@ export default function OrdersSection({
         </div>
       ) : (
         <ul className="space-y-6">
-          {orders.map((order) => (
+          {orders.map((order, index) => (
             <OrderCard
-              key={order.id}
+              key={order.id || `${type}-order-${index}`}
               order={order}
               type={type}
               isExpanded={expandedOrder === order.id}
