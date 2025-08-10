@@ -30,7 +30,8 @@ router.post('/', authMiddleware, async (req, res) => {
       buyer,
       seller,
       price,
-      markedUpPrice
+      markedUpPrice,
+      listingId
     });
 
     // Validate buyer is the authenticated user
@@ -133,6 +134,50 @@ router.post('/', authMiddleware, async (req, res) => {
       // 3. Credit platform fee to platform wallet
       await platformWallet.deposit(totalPlatformFee);
       console.log('[Order] Credited', totalPlatformFee, 'to platform wallet');
+
+      // ================== CRITICAL FIX: UPDATE LISTING STATUS ==================
+      // Update the listing status to 'sold' if listingId is provided
+      if (listingId) {
+        console.log('[Order] Updating listing status for ID:', listingId);
+        
+        const listing = await Listing.findById(listingId);
+        if (listing) {
+          // Update listing to sold status
+          listing.status = 'sold';
+          listing.soldAt = new Date();
+          listing.soldTo = buyer;
+          await listing.save();
+          
+          console.log('[Order] Successfully updated listing status to sold:', listingId);
+          
+          // Emit WebSocket event for real-time update
+          if (global.webSocketService) {
+            // Emit listing sold event
+            if (global.webSocketService.emitListingSold) {
+              global.webSocketService.emitListingSold({
+                _id: listing._id,
+                id: listing._id.toString(),
+                title: listing.title,
+                seller: listing.seller,
+                buyer: buyer,
+                status: 'sold'
+              });
+            }
+            
+            // Also emit a generic listing update event using io.emit if available
+            if (global.webSocketService.io && global.webSocketService.io.emit) {
+              global.webSocketService.io.emit('listing:sold', {
+                listingId: listing._id.toString(),
+                seller: listing.seller,
+                buyer: buyer
+              });
+            }
+          }
+        } else {
+          console.warn('[Order] Warning: Listing not found for ID:', listingId);
+        }
+      }
+      // ========================================================================
 
       // Create the order
       const order = new Order({
@@ -238,7 +283,7 @@ router.post('/', authMiddleware, async (req, res) => {
           'sale'
         );
 
-        // Platform balance update
+        // Platform balance update - emit both regular and platform-specific events
         global.webSocketService.emitBalanceUpdate(
           'platform',
           'admin',
@@ -246,21 +291,28 @@ router.post('/', authMiddleware, async (req, res) => {
           platformWallet.balance,
           'platform_fee'
         );
+        
+        // Also emit platform-specific balance update for admin users
+        if (global.webSocketService.emitPlatformBalanceUpdate) {
+          global.webSocketService.emitPlatformBalanceUpdate(platformWallet.balance);
+        }
 
         // Emit transaction events
         global.webSocketService.emitTransaction(purchaseTransaction.toObject());
         global.webSocketService.emitTransaction(feeTransaction.toObject());
 
         // Emit order created event
-        global.webSocketService.emitOrderCreated({
-          _id: order._id,
-          id: order._id.toString(),
-          title: order.title,
-          seller: order.seller,
-          buyer: order.buyer,
-          price: order.price,
-          markedUpPrice: order.markedUpPrice
-        });
+        if (global.webSocketService.emitOrderCreated) {
+          global.webSocketService.emitOrderCreated({
+            _id: order._id,
+            id: order._id.toString(),
+            title: order.title,
+            seller: order.seller,
+            buyer: order.buyer,
+            price: order.price,
+            markedUpPrice: order.markedUpPrice
+          });
+        }
       }
 
       console.log('[Order] Order processing complete');

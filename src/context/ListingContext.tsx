@@ -9,6 +9,7 @@ import {
   ReactNode,
   useCallback,
   useRef,
+  useMemo,
 } from 'react';
 import { useWallet } from './WalletContext';
 import { useAuth } from './AuthContext';
@@ -188,6 +189,7 @@ type ListingContextType = {
   users: { [username: string]: any };
   
   orderHistory: Order[];
+  latestOrder: Order | null;
   
   // Loading and error states
   isLoading: boolean;
@@ -208,9 +210,18 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [latestOrder, setLatestOrder] = useState<Order | null>(null);
 
   // FIX 2: Add ref for deduplication manager
   const soldListingDeduplicator = useRef(new SoldListingDeduplicationManager());
+  
+  // Add deduplication mechanism for listing updates
+  const listingUpdateDeduplicator = useRef(new Map<string, number>());
+  const DEBOUNCE_TIME = 500; // 500ms debounce
+  
+  // Add request deduplication for API calls
+  const apiRequestCache = useRef(new Map<string, { timestamp: number; promise: Promise<any> }>());
+  const API_CACHE_TIME = 1000; // Cache API responses for 1 second
 
   // Helper function to normalize notification items to the new format
   const normalizeNotification = (item: NotificationItem): Notification => {
@@ -283,7 +294,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [setAddSellerNotificationCallback, addSellerNotification]);
 
-  // FIX 2: Subscribe to listing:sold WebSocket events
+  // FIX: Optimized WebSocket subscription with debouncing
   useEffect(() => {
     if (!isConnected) return;
 
@@ -299,31 +310,76 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
       
+      // Debounce duplicate events
+      const now = Date.now();
+      const lastUpdate = listingUpdateDeduplicator.current.get(id);
+      if (lastUpdate && now - lastUpdate < DEBOUNCE_TIME) {
+        console.log('[ListingContext] Skipping duplicate sold event (debounced):', id);
+        return;
+      }
+      listingUpdateDeduplicator.current.set(id, now);
+      
       // Check if we've already processed this sold listing
       if (soldListingDeduplicator.current.isDuplicate(id)) {
         console.log('[ListingContext] Skipping duplicate sold listing:', id);
         return;
       }
       
-      // Remove the sold listing from state
+      // Use setState with callback to prevent multiple state updates
       setListings(prev => {
+        // Check if listing exists before filtering
+        const exists = prev.some(listing => listing.id === id);
+        if (!exists) {
+          console.log('[ListingContext] Listing not found in current state:', id);
+          return prev;
+        }
+        
         const filtered = prev.filter(listing => listing.id !== id);
         
-        if (filtered.length < prev.length) {
-          console.log('[ListingContext] Removed sold listing:', id);
-          
-          // Fire custom event for any components that need to know
-          if (typeof window !== 'undefined') {
+        console.log('[ListingContext] Removed sold listing:', id);
+        
+        // Fire custom event for any components that need to know
+        if (typeof window !== 'undefined') {
+          // Debounce the custom event as well
+          setTimeout(() => {
             window.dispatchEvent(new CustomEvent('listing:removed', {
               detail: { listingId: id, reason: 'sold' }
             }));
-          }
-        } else {
-          console.log('[ListingContext] Listing not found in current state:', id);
+          }, 100);
         }
         
         return filtered;
       });
+    });
+
+    return () => {
+      unsubscribe();
+      // Clean up deduplicator on unmount
+      listingUpdateDeduplicator.current.clear();
+    };
+  }, [isConnected, subscribe]);
+
+  // Subscribe to order:created events
+  useEffect(() => {
+    if (!isConnected) return;
+
+    console.log('[ListingContext] Setting up WebSocket subscription for order:created events');
+
+    const unsubscribe = subscribe('order:created' as WebSocketEvent, (data: any) => {
+      console.log('[ListingContext] Received order:created event:', data);
+      
+      // Store the latest order so it's immediately available
+      if (data.order || data) {
+        const order = data.order || data;
+        setLatestOrder(order);
+        
+        // Fire custom event for any components that need to know
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('order:created', {
+            detail: { order }
+          }));
+        }
+      }
     });
 
     return () => {
@@ -358,9 +414,43 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return notifications.map(normalizeNotification);
   };
 
-  // Load initial data using services
+  // Cached fetch function for individual listings
+  const fetchListingWithCache = useCallback(async (listingId: string) => {
+    const now = Date.now();
+    const cached = apiRequestCache.current.get(listingId);
+    
+    // Return cached promise if it's still fresh
+    if (cached && now - cached.timestamp < API_CACHE_TIME) {
+      console.log('[ListingContext] Using cached listing request for:', listingId);
+      return cached.promise;
+    }
+    
+    // Create new request
+    const promise = listingsService.getListing(listingId);
+    apiRequestCache.current.set(listingId, { timestamp: now, promise });
+    
+    // Clean up old cache entries
+    setTimeout(() => {
+      const cleanupTime = Date.now();
+      for (const [key, value] of apiRequestCache.current.entries()) {
+        if (cleanupTime - value.timestamp > API_CACHE_TIME * 2) {
+          apiRequestCache.current.delete(key);
+        }
+      }
+    }, API_CACHE_TIME * 2);
+    
+    return promise;
+  }, []);
+
+  // Load initial data using services with caching
   const loadData = useCallback(async () => {
     if (typeof window === 'undefined') return;
+
+    // Check if we're already loading to prevent duplicate calls
+    if (isLoading) {
+      console.log('[ListingContext] Already loading, skipping duplicate call');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -389,8 +479,19 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         setUsers(usersMap);
       }
 
-      // Load listings using the service
-      const listingsResult = await listingsService.getListings();
+      // Load listings using the service with caching
+      const now = Date.now();
+      let listingsResult;
+      
+      if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
+        console.log('[ListingContext] Using cached listings for initial load');
+        listingsResult = await listingsCache.current.promise;
+      } else {
+        const promise = listingsService.getListings();
+        listingsCache.current = { timestamp: now, promise };
+        listingsResult = await promise;
+      }
+      
       if (listingsResult.success && listingsResult.data) {
         setListings(listingsResult.data);
       } else {
@@ -417,22 +518,77 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.error('Error loading ListingContext data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load data');
       setIsAuthReady(true);
+      listingsCache.current = null; // Clear cache on error
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isLoading]); // Add isLoading as dependency to prevent duplicate calls
 
-  useEffect(() => {
-    loadData();
+  // Debounced load listings function
+  const loadListingsDebounced = useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        loadData();
+      }, 300);
+    };
   }, [loadData]);
 
-  // Refresh listings
+  // Load data on mount with proper cleanup
+  useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+    
+    // Debounce the initial load slightly to prevent multiple rapid calls
+    timeoutId = setTimeout(() => {
+      if (mounted && !isAuthReady && !isLoading) {
+        loadData();
+      }
+    }, 100);
+    
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []); // Empty dependency array - only run once on mount
+
+  const persistUsers = async (updated: { [username: string]: any }) => {
+    setUsers(updated);
+    await storageService.setItem('all_users_v2', updated);
+  };
+
+  // Add a cache for the getListings API call
+  const listingsCache = useRef<{ timestamp: number; promise: Promise<any> } | null>(null);
+  const LISTINGS_CACHE_TIME = 1000; // Cache for 1 second
+
+  // Refresh listings with caching
   const refreshListings = useCallback(async () => {
+    const now = Date.now();
+    
+    // Return cached promise if it's still fresh
+    if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
+      console.log('[ListingContext] Using cached listings request');
+      try {
+        const result = await listingsCache.current.promise;
+        if (result.success && result.data) {
+          setListings(result.data);
+        }
+        return;
+      } catch (error) {
+        // If cached request failed, continue with new request
+      }
+    }
+    
     setIsLoading(true);
     setError(null);
     
     try {
-      const listingsResult = await listingsService.getListings();
+      // Create and cache the new promise
+      const promise = listingsService.getListings();
+      listingsCache.current = { timestamp: now, promise };
+      
+      const listingsResult = await promise;
       if (listingsResult.success && listingsResult.data) {
         setListings(listingsResult.data);
       } else {
@@ -441,6 +597,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error) {
       console.error('Error refreshing listings:', error);
       setError(error instanceof Error ? error.message : 'Failed to refresh listings');
+      listingsCache.current = null; // Clear cache on error
     } finally {
       setIsLoading(false);
     }
@@ -456,11 +613,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     return () => clearInterval(interval);
   }, [listings]);
-
-  const persistUsers = async (updated: { [username: string]: any }) => {
-    setUsers(updated);
-    await storageService.setItem('all_users_v2', updated);
-  };
 
   // Use listings service for adding listings
   const addListing = async (listing: NewListingInput): Promise<void> => {
@@ -1324,6 +1476,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         setVerificationStatus,
         users,
         orderHistory,
+        latestOrder,
         isLoading,
         error,
         refreshListings,

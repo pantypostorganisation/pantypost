@@ -1,3 +1,4 @@
+// src/components/Header.tsx
 'use client';
 
 import Link from 'next/link';
@@ -96,9 +97,9 @@ export default function Header() {
   const { 
     getBuyerBalance, 
     getSellerBalance, 
-    adminBalance,  // Direct access to admin balance from context
+    adminBalance,
     orderHistory,
-    refreshAdminData  // Use this to refresh admin data
+    refreshAdminData
   } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
@@ -124,7 +125,10 @@ export default function Header() {
   const lastAuctionCheck = useRef(0);
 
   // Derived values with sanitization
-  const isAdminUser = user?.username === 'oakley' || user?.username === 'gerome';
+  const isAdminUser = user?.role === 'admin' || 
+                     user?.username === 'oakley' || 
+                     user?.username === 'gerome' ||
+                     user?.username === 'platform';
   const role = user?.role ?? null;
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
@@ -244,14 +248,16 @@ export default function Header() {
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
 
-  // ✅ FIXED: Use adminBalance directly from context instead of fetching separately
+  // ✅ FIXED: Properly get platform balance for admin users
   const platformBalance = useMemo(() => {
     if (isAdminUser && user) {
-      console.log('[Header] Admin balance from context:', adminBalance);
-      return adminBalance;
+      // Use adminBalance directly from context for admin users
+      const balance = adminBalance || 0;
+      console.log('[Header] Platform balance from context:', balance);
+      return balance;
     }
     return 0;
-  }, [isAdminUser, user, adminBalance]);
+  }, [isAdminUser, user, adminBalance, balanceUpdateTrigger]);
 
   // ✅ Listen for wallet balance update events
   useEffect(() => {
@@ -259,36 +265,64 @@ export default function Header() {
 
     const handleAdminBalanceUpdate = (event: CustomEvent) => {
       if (isAdminUser && user) {
-        console.log('[Header] Admin balance update event received:', event.detail.balance);
+        console.log('[Header] Admin balance update event received:', event.detail);
         // Force re-render to update displayed balance
+        setBalanceUpdateTrigger(prev => prev + 1);
+      }
+    };
+
+    const handlePlatformBalanceUpdate = (event: CustomEvent) => {
+      if (isAdminUser && user) {
+        console.log('[Header] Platform balance update event received:', event.detail);
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
 
     const handleBuyerBalanceUpdate = (event: CustomEvent) => {
       if (user?.role === 'buyer') {
-        console.log('[Header] Buyer balance update event received:', event.detail.balance);
+        console.log('[Header] Buyer balance update event received:', event.detail);
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
 
     const handleSellerBalanceUpdate = (event: CustomEvent) => {
       if (user?.role === 'seller') {
-        console.log('[Header] Seller balance update event received:', event.detail.balance);
+        console.log('[Header] Seller balance update event received:', event.detail);
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
 
     window.addEventListener('wallet:admin-balance-updated', handleAdminBalanceUpdate as EventListener);
+    window.addEventListener('wallet:platform-balance-updated', handlePlatformBalanceUpdate as EventListener);
+    window.addEventListener('platform:balance_update', handlePlatformBalanceUpdate as EventListener);
     window.addEventListener('wallet:buyer-balance-updated', handleBuyerBalanceUpdate as EventListener);
     window.addEventListener('wallet:seller-balance-updated', handleSellerBalanceUpdate as EventListener);
 
     return () => {
       window.removeEventListener('wallet:admin-balance-updated', handleAdminBalanceUpdate as EventListener);
+      window.removeEventListener('wallet:platform-balance-updated', handlePlatformBalanceUpdate as EventListener);
+      window.removeEventListener('platform:balance_update', handlePlatformBalanceUpdate as EventListener);
       window.removeEventListener('wallet:buyer-balance-updated', handleBuyerBalanceUpdate as EventListener);
       window.removeEventListener('wallet:seller-balance-updated', handleSellerBalanceUpdate as EventListener);
     };
   }, [isAdminUser, user]);
+
+  // ✅ Refresh admin data on mount if admin user
+  useEffect(() => {
+    if (isAdminUser && user) {
+      console.log('[Header] Admin user detected, refreshing admin data...');
+      
+      // Refresh admin data if available
+      if (typeof refreshAdminData === 'function') {
+        refreshAdminData().then(() => {
+          console.log('[Header] Admin data refreshed');
+          setBalanceUpdateTrigger(prev => prev + 1);
+        }).catch((error: any) => {
+          console.error('[Header] Error refreshing admin data:', error);
+        });
+      }
+    }
+  }, [isAdminUser, user, refreshAdminData]);
 
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
@@ -581,7 +615,7 @@ export default function Header() {
                 <span className="text-purple-300 font-bold">ADMIN</span>
               </div>
               {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
-              {renderMobileLink('/wallet/admin', <Wallet className="w-5 h-5" />, `Platform: $${platformBalance.toFixed(2)}`)}
+              {renderMobileLink('/wallet/admin', <Wallet className="w-5 h-5" />, `Wallet: $${platformBalance.toFixed(2)}`)}
             </>
           )}
           
@@ -715,7 +749,7 @@ export default function Header() {
                 <span>Wallets</span>
               </Link>
               
-              {/* Display platform balance for admins - FIXED to use context value */}
+              {/* ✅ FIXED: Display platform wallet balance for admins without "Platform" text */}
               <Link 
                 href="/wallet/admin" 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
@@ -1012,7 +1046,7 @@ export default function Header() {
                 {role === 'buyer' && <ShoppingBag className="w-3.5 h-3.5 text-[#ff950e]" />}
                 {isAdminUser && <Crown className="w-3.5 h-3.5 text-purple-400" />}
                 <span className="text-[#ff950e] font-bold text-xs">{username}</span>
-                <span className="text-gray-400 text-[10px]">({role})</span>
+                <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
               </div>
               <button
                 onClick={logout}
