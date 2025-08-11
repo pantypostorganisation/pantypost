@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useRef, useEffect, useMemo } from 'react';
+import { useWebSocket } from '@/context/WebSocketContext';
 import ChatHeader from './ChatHeader';
 import MessagesList from './MessagesList';
 import MessageInputContainer from './MessageInputContainer';
@@ -26,6 +27,11 @@ interface User {
 interface Threads {
   [key: string]: Message[];
 }
+
+// Helper to get conversation key
+const getConversationKey = (userA: string, userB: string): string => {
+  return [userA, userB].sort().join('-');
+};
 
 // Group edit-related props
 interface EditRequestControls {
@@ -101,6 +107,36 @@ export default function ConversationView({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Get WebSocket context for thread focus/blur
+  const wsContext = useWebSocket();
+  
+  // ADDED: Handle thread focus/blur for auto-read functionality
+  useEffect(() => {
+    if (activeThread && user && wsContext?.sendMessage) {
+      const threadId = getConversationKey(user.username, activeThread);
+      
+      console.log('[ConversationView Seller] Focusing on thread:', threadId);
+      
+      // Notify backend that seller is viewing this thread
+      wsContext.sendMessage('thread:focus', {
+        threadId,
+        otherUser: activeThread
+      });
+
+      return () => {
+        console.log('[ConversationView Seller] Leaving thread:', threadId);
+        
+        // Notify backend when seller leaves the thread
+        wsContext.sendMessage('thread:blur', {
+          threadId,
+          otherUser: activeThread
+        });
+      };
+    }
+    // Add void return for consistent return type
+    return;
+  }, [activeThread, user, wsContext]);
   
   // Get messages for the active thread with validation
   const threadMessages = useMemo(() => {

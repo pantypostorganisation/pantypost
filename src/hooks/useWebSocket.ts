@@ -39,15 +39,38 @@ const OnlineStatusDataSchema = z.object({
   timestamp: z.number().optional()
 });
 
+// Helper function to get safe WebSocket context
+function useSafeWebSocketContext() {
+  const context = useWebSocketContext();
+  
+  // Return safe defaults when context is null
+  if (!context) {
+    return {
+      subscribe: (() => () => {}) as <T = any>(event: WebSocketEvent | string, handler: WebSocketHandler<T>) => () => void,
+      sendMessage: (() => {}) as (event: WebSocketEvent | string, data: any) => void,
+      sendTyping: (() => {}) as (conversationId: string, isTyping: boolean) => void,
+      typingUsers: new Map<string, TypingData>(),
+      isConnected: false,
+      onlineUsers: new Set<string>(),
+      notifications: [] as RealtimeNotification[],
+      markNotificationRead: (() => {}) as (notificationId: string) => void,
+      clearNotifications: () => {},
+    };
+  }
+  
+  return context;
+}
+
 // Specific hook for message-related WebSocket events
 export function useMessageWebSocket(conversationId?: string) {
+  const context = useSafeWebSocketContext();
   const { 
     subscribe, 
     sendMessage, 
     sendTyping, 
     typingUsers,
     isConnected 
-  } = useWebSocketContext();
+  } = context;
   
   const [typingUsersList, setTypingUsersList] = useState<TypingData[]>([]);
   const [validConversationId, setValidConversationId] = useState<string | null>(null);
@@ -150,17 +173,20 @@ export function useMessageWebSocket(conversationId?: string) {
   }, [validConversationId, subscribe]);
 
   // Secure sendMessage with rate limiting
-  const secureSendMessage = useCallback((event: WebSocketEvent, data: any) => {
+  const secureSendMessage = useCallback((event: WebSocketEvent | string, data: any) => {
     const rateLimitResult = checkMessageLimit();
     if (!rateLimitResult.allowed) {
       console.error(`Message rate limit exceeded. Wait ${rateLimitResult.waitTime}s`);
       throw new Error('Too many messages. Please slow down.');
     }
     
-    // Validate event type
-    if (!Object.values(WebSocketEvent).includes(event)) {
-      console.error('Invalid WebSocket event type');
-      return;
+    // Validate event type if it's a WebSocketEvent enum value
+    if (typeof event === 'string' && !event.includes(':')) {
+      // If it's a string without ':', check if it's a valid WebSocketEvent
+      if (!Object.values(WebSocketEvent).includes(event as WebSocketEvent)) {
+        console.error('Invalid WebSocket event type');
+        return;
+      }
     }
     
     sendMessage(event, data);
@@ -178,7 +204,8 @@ export function useMessageWebSocket(conversationId?: string) {
 
 // Hook for online status tracking with security
 export function useOnlineStatus(userIds: string[]) {
-  const { onlineUsers, subscribe } = useWebSocketContext();
+  const context = useSafeWebSocketContext();
+  const { onlineUsers, subscribe } = context;
   const [onlineStatusMap, setOnlineStatusMap] = useState<Map<string, boolean>>(new Map());
   const [validUserIds, setValidUserIds] = useState<string[]>([]);
 
@@ -266,12 +293,13 @@ export function useOnlineStatus(userIds: string[]) {
 
 // Hook for real-time notifications with security
 export function useRealtimeNotifications() {
+  const context = useSafeWebSocketContext();
   const { 
     notifications, 
     markNotificationRead, 
     clearNotifications,
     subscribe 
-  } = useWebSocketContext();
+  } = context;
   
   const [unreadCount, setUnreadCount] = useState(0);
   const [filteredNotifications, setFilteredNotifications] = useState<RealtimeNotification[]>([]);
@@ -341,7 +369,8 @@ export function useRealtimeNotifications() {
 
 // Hook for order updates with validation
 export function useOrderUpdates(orderId?: string) {
-  const { subscribe, isConnected } = useWebSocketContext();
+  const context = useSafeWebSocketContext();
+  const { subscribe, isConnected } = context;
   const [lastUpdate, setLastUpdate] = useState<any>(null);
   const [validOrderId, setValidOrderId] = useState<string | null>(null);
 
@@ -420,7 +449,8 @@ export function useOrderUpdates(orderId?: string) {
 
 // Hook for wallet balance updates with security
 export function useWalletUpdates() {
-  const { subscribe, isConnected } = useWebSocketContext();
+  const context = useSafeWebSocketContext();
+  const { subscribe, isConnected } = context;
   const [lastBalanceUpdate, setLastBalanceUpdate] = useState<any>(null);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
 
@@ -490,7 +520,8 @@ export function useWebSocketEvent<T = any>(
     rateLimit?: { maxAttempts: number; windowMs: number };
   }
 ) {
-  const { subscribe, isConnected } = useWebSocketContext();
+  const context = useSafeWebSocketContext();
+  const { subscribe, isConnected } = context;
   const handlerRef = useRef(handler);
   
   // Update handler ref
@@ -544,3 +575,6 @@ export function useWebSocketEvent<T = any>(
 
 // Re-export the context hook for convenience
 export { useWebSocket } from '@/context/WebSocketContext';
+
+// Export the safe version as well for direct usage
+export { useSafeWebSocketContext };

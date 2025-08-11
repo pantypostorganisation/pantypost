@@ -199,7 +199,11 @@ const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, updateUser } = useAuth();
-  const { subscribe, isConnected } = useWebSocket();
+  const webSocketContext = useWebSocket();
+  
+  // Extract properties from WebSocket context safely
+  const subscribe = webSocketContext?.subscribe;
+  const isConnected = webSocketContext?.isConnected || false;
   
   const [users, setUsers] = useState<{ [username: string]: any }>({});
   const [listings, setListings] = useState<Listing[]>([]);
@@ -294,7 +298,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // FIX: Optimized WebSocket subscription with debouncing
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !subscribe) return;
 
     console.log('[ListingContext] Setting up WebSocket subscription for listing:sold events');
 
@@ -359,7 +363,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // Subscribe to order:created events
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !subscribe) return;
 
     console.log('[ListingContext] Setting up WebSocket subscription for order:created events');
 
@@ -439,6 +443,10 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     return promise;
   }, []);
+
+  // Add a cache for the getListings API call
+  const listingsCache = useRef<{ timestamp: number; promise: Promise<any> } | null>(null);
+  const LISTINGS_CACHE_TIME = 1000; // Cache for 1 second
 
   // Load initial data using services with caching
   const loadData = useCallback(async () => {
@@ -544,10 +552,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setUsers(updated);
     await storageService.setItem('all_users_v2', updated);
   };
-
-  // Add a cache for the getListings API call
-  const listingsCache = useRef<{ timestamp: number; promise: Promise<any> } | null>(null);
-  const LISTINGS_CACHE_TIME = 1000; // Cache for 1 second
 
   // Refresh listings with caching
   const refreshListings = useCallback(async () => {
