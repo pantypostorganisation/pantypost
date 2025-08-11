@@ -48,8 +48,26 @@ const userSchema = new mongoose.Schema({
   // SELLER-SPECIFIC FIELDS
   tier: {
     type: String,
-    enum: ['Tease', 'Tempt', 'Indulge', 'Crave'],
-    default: 'Tease'
+    enum: ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess', 'Tempt', 'Indulge', 'Crave'], // Include old names for compatibility
+    default: 'Tease',
+    get: function(value) {
+      // Automatically convert old tier names to new ones when reading
+      const tierMapping = {
+        'Tempt': 'Flirt',
+        'Indulge': 'Obsession',
+        'Crave': 'Desire'
+      };
+      return tierMapping[value] || value;
+    },
+    set: function(value) {
+      // Automatically convert old tier names to new ones when setting
+      const tierMapping = {
+        'Tempt': 'Flirt',
+        'Indulge': 'Obsession',
+        'Crave': 'Desire'
+      };
+      return tierMapping[value] || value;
+    }
   },
   subscriptionPrice: {
     type: Number,
@@ -147,6 +165,10 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Enable getters for tier field
+userSchema.set('toObject', { getters: true });
+userSchema.set('toJSON', { getters: true });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

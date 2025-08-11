@@ -32,14 +32,14 @@ class TierService {
   }
   
   /**
-   * Update seller's tier based on their stats
+   * Update seller's tier based on their stats - USES OR LOGIC (matches frontend)
    */
   async updateSellerTier(username) {
     try {
       // Get seller stats
       const stats = await this.calculateSellerStats(username);
       
-      // Determine new tier
+      // Determine new tier using OR logic (matches frontend)
       const newTier = TIER_CONFIG.getTierByStats(stats.totalSales, stats.totalRevenue);
       
       // Get current user
@@ -48,7 +48,8 @@ class TierService {
         throw new Error('User not found');
       }
       
-      const oldTier = user.tier || 'Tease';
+      // Fix old tier name if needed
+      const oldTier = TIER_CONFIG.fixTierName(user.tier || 'Tease');
       
       // Update if tier changed
       if (oldTier !== newTier) {
@@ -57,7 +58,7 @@ class TierService {
         await user.save();
         
         // Log tier change
-        console.log(`[TierService] Tier updated for ${username}: ${oldTier} -> ${newTier}`);
+        console.log(`[TierService] Tier updated for ${username}: ${oldTier} -> ${newTier} (${stats.totalSales} sales OR $${stats.totalRevenue} revenue)`);
         
         // Create audit log
         await this.logTierChange(username, oldTier, newTier, 'Automatic progression');
@@ -98,12 +99,14 @@ class TierService {
    */
   async applyTierRevenue(order, sellerTier) {
     try {
-      const tier = TIER_CONFIG.getTierByName(sellerTier);
+      // Fix old tier name if needed
+      const fixedTier = TIER_CONFIG.fixTierName(sellerTier);
+      const tier = TIER_CONFIG.getTierByName(fixedTier);
       const price = order.price;
       
       // Calculate with tier bonus
-      const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(price, sellerTier);
-      const platformFee = TIER_CONFIG.calculatePlatformFee(price, sellerTier);
+      const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(price, fixedTier);
+      const platformFee = TIER_CONFIG.calculatePlatformFee(price, fixedTier);
       const tierBonus = Math.round((price * tier.bonusPercentage) * 100) / 100;
       
       // Update order with tier information
@@ -164,14 +167,15 @@ class TierService {
       if (!user) throw new Error('User not found');
       
       const stats = await this.calculateSellerStats(username);
-      const currentTier = user.tier || 'Tease';
+      const currentTier = TIER_CONFIG.fixTierName(user.tier || 'Tease');
       const nextTier = TIER_CONFIG.getNextTier(currentTier);
       
       if (!nextTier) {
         return {
           currentTier,
           nextTier: null,
-          progress: 100,
+          salesProgress: 100,
+          revenueProgress: 100,
           stats
         };
       }
@@ -209,7 +213,7 @@ class TierService {
       const sellerUser = await User.findOne({ username: seller });
       if (!sellerUser) throw new Error('Seller not found');
       
-      const sellerTier = sellerUser.tier || 'Tease';
+      const sellerTier = TIER_CONFIG.fixTierName(sellerUser.tier || 'Tease');
       
       // Calculate tier-based revenue
       const tier = TIER_CONFIG.getTierByName(sellerTier);
@@ -333,6 +337,41 @@ class TierService {
       return logEntry;
     } catch (error) {
       console.error('[TierAudit] Error logging tier change:', error);
+    }
+  }
+  
+  /**
+   * Fix all sellers with old tier names
+   */
+  async fixAllSellerTiers() {
+    try {
+      console.log('[TierService] Fixing all seller tiers...');
+      
+      const sellers = await User.find({ role: 'seller' });
+      let updated = 0;
+      
+      for (const seller of sellers) {
+        // Calculate correct tier based on stats
+        const stats = await this.calculateSellerStats(seller.username);
+        const correctTier = TIER_CONFIG.getTierByStats(stats.totalSales, stats.totalRevenue);
+        
+        // Fix old tier name if needed
+        const currentTier = TIER_CONFIG.fixTierName(seller.tier || 'Tease');
+        
+        if (currentTier !== correctTier || seller.tier !== correctTier) {
+          seller.tier = correctTier;
+          seller.totalSales = stats.totalSales;
+          await seller.save();
+          updated++;
+          console.log(`[TierService] Fixed tier for ${seller.username}: ${currentTier} -> ${correctTier}`);
+        }
+      }
+      
+      console.log(`[TierService] Fixed ${updated} seller tiers`);
+      return updated;
+    } catch (error) {
+      console.error('[TierService] Error fixing seller tiers:', error);
+      throw error;
     }
   }
 }

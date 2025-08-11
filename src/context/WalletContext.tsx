@@ -42,15 +42,17 @@ type Withdrawal = {
 };
 
 type AdminAction = {
-  id: string;
+  id?: string;
+  _id?: string;
   type: 'credit' | 'debit';
   amount: number;
   targetUser?: string;
   username?: string;
-  adminUser: string;
+  adminUser?: string;
   reason: string;
   date: string;
-  role: 'buyer' | 'seller';
+  role?: 'buyer' | 'seller';
+  metadata?: any;
 };
 
 // Validation schemas for wallet operations
@@ -310,6 +312,46 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // CRITICAL FIX: Fetch admin actions from API
+  const fetchAdminActions = useCallback(async (): Promise<void> => {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
+      debugLog('Not admin user, skipping admin actions fetch');
+      return;
+    }
+
+    try {
+      debugLog('Fetching admin actions...');
+      
+      const response = await apiClient.get<any>('/admin/actions?limit=100');
+      
+      debugLog('Admin actions response:', response);
+      
+      if (response.success && response.data) {
+        // Normalize the admin actions data
+        const normalizedActions = response.data.map((action: any) => ({
+          id: action._id || action.id,
+          _id: action._id || action.id,
+          type: action.type,
+          amount: action.amount,
+          reason: action.reason,
+          date: action.date,
+          metadata: action.metadata || {},
+          targetUser: action.metadata?.seller || action.metadata?.username,
+          username: action.metadata?.seller || action.metadata?.username,
+          adminUser: action.adminUser || 'platform',
+          role: action.metadata?.role
+        }));
+        
+        setAdminActions(normalizedActions);
+        debugLog('Admin actions loaded:', normalizedActions.length);
+      } else {
+        console.warn('[WalletContext] Admin actions fetch failed:', response.error);
+      }
+    } catch (error) {
+      console.error('[WalletContext] Error fetching admin actions:', error);
+    }
+  }, [user, apiClient]);
+
   // WebSocket event handlers (extracted from useEffect for readability)
   const handleWalletBalanceUpdate = useCallback((data: any) => {
     debugLog('Received wallet:balance_update:', data);
@@ -480,6 +522,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           user && (user.role === 'admin' || isAdminUser(user.username))) {
         if (!throttleManager.current.shouldThrottle('admin_platform_balance', 3000)) {
           await fetchAdminPlatformBalance();
+          // CRITICAL: Also refresh admin actions to get tier credit updates
+          await fetchAdminActions();
         } else {
           debugLog('Throttled admin platform balance refresh');
         }
@@ -649,7 +693,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, apiClient]);
 
-  // Fetch complete admin analytics data
+  // Fetch complete admin analytics data - UPDATED TO INCLUDE ADMIN ACTIONS
   const fetchAdminAnalytics = useCallback(async (timeFilter: string = 'all'): Promise<any> => {
     if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       debugLog('Not admin user, skipping analytics fetch');
@@ -677,7 +721,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setDepositLogs(data.depositLogs);
         setSellerWithdrawals(data.sellerWithdrawals);
         setAdminWithdrawals(data.adminWithdrawals);
-        setAdminActions(data.adminActions);
+        
+        // CRITICAL: If adminActions are included in the response, use them
+        // Otherwise, fetch them separately
+        if (data.adminActions && data.adminActions.length > 0) {
+          setAdminActions(data.adminActions);
+        } else {
+          // Fetch admin actions separately if not included
+          await fetchAdminActions();
+        }
         
         // Update wallet balances
         if (data.wallet) {
@@ -701,7 +753,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           adminBalance: data.adminBalance,
           orders: data.orderHistory.length,
           deposits: data.depositLogs.length,
-          adminActions: data.adminActions.length,
+          adminActions: adminActions.length,
           summary: data.summary
         });
         
@@ -714,7 +766,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[WalletContext] Error fetching analytics:', error);
       return null;
     }
-  }, [user, apiClient, fireAdminBalanceUpdateEvent]);
+  }, [user, apiClient, fireAdminBalanceUpdateEvent, fetchAdminActions]);
 
   // Get analytics data with time filter
   const getAnalyticsData = useCallback(async (timeFilter: string = 'all') => {
@@ -752,6 +804,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             seller: tx.toRole === 'seller' ? tx.to : tx.from,
             buyer: tx.fromRole === 'buyer' ? tx.from : tx.to,
             shippingStatus: tx.status === 'completed' ? 'pending' : 'pending-auction',
+            // CRITICAL: Include tier information if available
+            sellerTier: tx.metadata?.sellerTier,
+            tierCreditAmount: tx.metadata?.tierBonus || 0
           }));
         
         setOrderHistory(orders);
@@ -762,7 +817,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient]);
 
-  // Load all data from API with admin analytics support - UPDATED FOR UNIFIED WALLET
+  // Load all data from API with admin analytics support - UPDATED FOR UNIFIED WALLET AND ADMIN ACTIONS
   const loadAllData = useCallback(async () => {
     if (!user) {
       debugLog('No user, skipping data load');
@@ -778,6 +833,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         // Fetch unified platform balance
         const platformBalance = await fetchAdminPlatformBalance();
+        
+        // CRITICAL: Fetch admin actions for tier credit tracking
+        await fetchAdminActions();
         
         // Also fetch analytics data if needed
         const analyticsData = await fetchAdminAnalytics('all');
@@ -815,9 +873,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInitializationError('Failed to load wallet data');
       return false;
     }
-  }, [user, fetchBalance, fetchAdminPlatformBalance, fetchAdminAnalytics, fetchTransactionHistory, fireAdminBalanceUpdateEvent]);
+  }, [user, fetchBalance, fetchAdminPlatformBalance, fetchAdminAnalytics, fetchTransactionHistory, fireAdminBalanceUpdateEvent, fetchAdminActions]);
 
-  // Refresh admin data specifically using analytics endpoint
+  // Refresh admin data specifically using analytics endpoint - UPDATED TO INCLUDE ADMIN ACTIONS
   const refreshAdminData = useCallback(async () => {
     if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
       debugLog('Not admin, skipping admin data refresh');
@@ -829,6 +887,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       // Fetch unified platform balance
       const platformBalance = await fetchAdminPlatformBalance();
+      
+      // CRITICAL: Fetch admin actions including tier credits
+      await fetchAdminActions();
       
       // Fetch complete analytics data
       const analyticsData = await fetchAdminAnalytics('all');
@@ -847,7 +908,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('[WalletContext] Error refreshing admin data:', error);
     }
-  }, [user, fetchAdminPlatformBalance, fetchAdminAnalytics, fireAdminBalanceUpdateEvent]);
+  }, [user, fetchAdminPlatformBalance, fetchAdminAnalytics, fireAdminBalanceUpdateEvent, fetchAdminActions]);
 
   // Initialize wallet when user logs in
   useEffect(() => {
@@ -996,7 +1057,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     emitBalanceUpdate('platform', 'admin', balance);
   }, [emitBalanceUpdate, fireAdminBalanceUpdateEvent]);
 
-  // Create order via API
+  // Create order via API - UPDATED TO REFRESH ADMIN ACTIONS
   const addOrder = useCallback(async (order: Order) => {
     try {
       debugLog('Creating order via API:', order);
@@ -1029,7 +1090,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       debugLog('Order creation response:', response);
 
       if (response.success && response.data) {
-        setOrderHistory((prev) => [...prev, response.data]);
+        // Include tier information in the order
+        const orderWithTier = {
+          ...response.data,
+          sellerTier: response.data.sellerTier,
+          tierCreditAmount: response.data.tierCreditAmount || 0
+        };
+        
+        setOrderHistory((prev) => [...prev, orderWithTier]);
         
         // Only fetch current user's balance after order creation
         if (user?.username) {
@@ -1040,9 +1108,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           } else if (user.role === 'seller') {
             setSellerBalancesState(prev => ({ ...prev, [user.username]: newBalance }));
           } else if (user.role === 'admin' || isAdminUser(user.username)) {
-            // For admin users, refresh platform balance
+            // For admin users, refresh platform balance AND admin actions
             await refreshAdminData();
           }
+        }
+        
+        // CRITICAL: If current user is admin, refresh admin actions to get tier credits
+        if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
+          await fetchAdminActions();
         }
         
         // Refresh transaction history for current user only
@@ -1062,7 +1135,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[WalletContext] Failed to create order:', error);
       throw error;
     }
-  }, [apiClient, fetchBalance, fetchTransactionHistory, refreshAdminData, user]);
+  }, [apiClient, fetchBalance, fetchTransactionHistory, refreshAdminData, user, fetchAdminActions]);
 
   // Rest of the implementation remains the same...
   // (All other methods continue as before)
@@ -1304,9 +1377,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Refresh platform balance after admin action
         if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
           await fetchAdminPlatformBalance();
+          // CRITICAL: Refresh admin actions after credit
+          await fetchAdminActions();
         }
         
-        // Update admin actions
+        // Update admin actions locally
         const action: AdminAction = {
           id: response.data?.id || uuidv4(),
           type: 'credit',
@@ -1331,7 +1406,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin credit error:', error);
       return false;
     }
-  }, [user, apiClient, fetchBalance, fetchAdminPlatformBalance]);
+  }, [user, apiClient, fetchBalance, fetchAdminPlatformBalance, fetchAdminActions]);
 
   // Admin debit via API - ALWAYS USES PLATFORM WALLET
   const adminDebitUser = useCallback(async (
@@ -1377,9 +1452,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // Refresh platform balance after admin action
         if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
           await fetchAdminPlatformBalance();
+          // CRITICAL: Refresh admin actions after debit
+          await fetchAdminActions();
         }
         
-        // Update admin actions
+        // Update admin actions locally
         const action: AdminAction = {
           id: response.data?.id || uuidv4(),
           type: 'debit',
@@ -1404,7 +1481,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('Admin debit error:', error);
       return false;
     }
-  }, [user, apiClient, fetchBalance, fetchAdminPlatformBalance]);
+  }, [user, apiClient, fetchBalance, fetchAdminPlatformBalance, fetchAdminActions]);
 
   // Get transaction history from API
   const getTransactionHistory = useCallback(async (username?: string, limit?: number) => {
@@ -1436,7 +1513,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, user]);
 
-  // Reload all data
+  // Reload all data - UPDATED TO INCLUDE ADMIN ACTIONS
   const reloadData = useCallback(async () => {
     if (isLoading) {
       debugLog('Already loading, skipping reload');
@@ -1446,10 +1523,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       await loadAllData();
+      // CRITICAL: For admin users, also refresh admin actions
+      if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
+        await fetchAdminActions();
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [loadAllData, isLoading]);
+  }, [loadAllData, isLoading, user, fetchAdminActions]);
 
   // Subscription payment via API
   const subscribeToSellerWithPayment = useCallback(async (
@@ -1584,118 +1665,118 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         debugLog('Admin withdrawal successful');
       } else {
         console.error('[WalletContext] Admin withdrawal failed:', response.error);
-        throw new Error(response.error?.message || 'Withdrawal failed');
-      }
-    } catch (error) {
-      console.error('[WalletContext] Admin withdrawal error:', error);
-      throw error;
-    }
-  }, [apiClient, fetchAdminPlatformBalance, user]);
+       throw new Error(response.error?.message || 'Withdrawal failed');
+     }
+   } catch (error) {
+     console.error('[WalletContext] Admin withdrawal error:', error);
+     throw error;
+   }
+ }, [apiClient, fetchAdminPlatformBalance, user]);
 
-  // Auction-related stubs
-  const holdBidFunds = useCallback(async (): Promise<boolean> => {
-    debugLog('Auction features not fully implemented in API yet');
-    return false;
-  }, []);
+ // Auction-related stubs
+ const holdBidFunds = useCallback(async (): Promise<boolean> => {
+   debugLog('Auction features not fully implemented in API yet');
+   return false;
+ }, []);
 
-  const refundBidFunds = useCallback(async (): Promise<boolean> => {
-    debugLog('Auction features not fully implemented in API yet');
-    return false;
-  }, []);
+ const refundBidFunds = useCallback(async (): Promise<boolean> => {
+   debugLog('Auction features not fully implemented in API yet');
+   return false;
+ }, []);
 
-  const placeBid = useCallback(async (): Promise<boolean> => {
-    debugLog('Auction features not fully implemented in API yet');
-    return false;
-  }, []);
+ const placeBid = useCallback(async (): Promise<boolean> => {
+   debugLog('Auction features not fully implemented in API yet');
+   return false;
+ }, []);
 
-  const finalizeAuctionPurchase = useCallback(async (): Promise<boolean> => {
-    debugLog('Auction features not fully implemented in API yet');
-    return false;
-  }, []);
+ const finalizeAuctionPurchase = useCallback(async (): Promise<boolean> => {
+   debugLog('Auction features not fully implemented in API yet');
+   return false;
+ }, []);
 
-  // Enhanced features stubs
-  const checkSuspiciousActivity = useCallback(async (username: string) => {
-    return { suspicious: false, reasons: [] };
-  }, []);
+ // Enhanced features stubs
+ const checkSuspiciousActivity = useCallback(async (username: string) => {
+   return { suspicious: false, reasons: [] };
+ }, []);
 
-  const reconcileBalance = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin') => {
-    return null;
-  }, []);
+ const reconcileBalance = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin') => {
+   return null;
+ }, []);
 
-  const contextValue: WalletContextType = {
-    // Loading state
-    isLoading,
-    isInitialized,
-    initializationError,
-    
-    // Core functionality
-    buyerBalances,
-    adminBalance,
-    sellerBalances,
-    setBuyerBalance,
-    getBuyerBalance,
-    setAdminBalance,
-    setSellerBalance,
-    getSellerBalance,
-    purchaseListing,
-    purchaseCustomRequest,
-    subscribeToSellerWithPayment,
-    unsubscribeFromSeller,
-    orderHistory,
-    addOrder,
-    sellerWithdrawals,
-    adminWithdrawals,
-    addSellerWithdrawal,
-    addAdminWithdrawal,
-    wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
-    updateWallet: () => { console.warn('updateWallet is deprecated - use API methods instead'); },
-    sendTip,
-    setAddSellerNotificationCallback,
-    adminCreditUser,
-    adminDebitUser,
-    adminActions,
-    updateOrderAddress: async () => { debugLog('Order address update not implemented yet'); },
-    updateShippingStatus: async () => { debugLog('Shipping status update not implemented yet'); },
-    depositLogs,
-    addDeposit,
-    getDepositsForUser: (username: string) => depositLogs.filter(log => log.username === username),
-    getTotalDeposits: () => depositLogs.reduce((sum, log) => sum + log.amount, 0),
-    getDepositsByTimeframe: () => depositLogs,
-    
-    // Auction methods (stubs for now)
-    holdBidFunds,
-    refundBidFunds,
-    finalizeAuctionPurchase,
-    placeBid,
-    chargeIncrementalBid: async () => false,
-    getAuctionBidders: async () => [],
-    cleanupAuctionTracking: async () => {},
-    
-    // Enhanced features
-    checkSuspiciousActivity,
-    reconcileBalance,
-    getTransactionHistory,
-    
-    // Admin-specific methods
-    refreshAdminData,
-    getPlatformTransactions,
-    getAnalyticsData,
-    
-    // Data management
-    reloadData,
-  };
+ const contextValue: WalletContextType = {
+   // Loading state
+   isLoading,
+   isInitialized,
+   initializationError,
+   
+   // Core functionality
+   buyerBalances,
+   adminBalance,
+   sellerBalances,
+   setBuyerBalance,
+   getBuyerBalance,
+   setAdminBalance,
+   setSellerBalance,
+   getSellerBalance,
+   purchaseListing,
+   purchaseCustomRequest,
+   subscribeToSellerWithPayment,
+   unsubscribeFromSeller,
+   orderHistory,
+   addOrder,
+   sellerWithdrawals,
+   adminWithdrawals,
+   addSellerWithdrawal,
+   addAdminWithdrawal,
+   wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
+   updateWallet: () => { console.warn('updateWallet is deprecated - use API methods instead'); },
+   sendTip,
+   setAddSellerNotificationCallback,
+   adminCreditUser,
+   adminDebitUser,
+   adminActions,
+   updateOrderAddress: async () => { debugLog('Order address update not implemented yet'); },
+   updateShippingStatus: async () => { debugLog('Shipping status update not implemented yet'); },
+   depositLogs,
+   addDeposit,
+   getDepositsForUser: (username: string) => depositLogs.filter(log => log.username === username),
+   getTotalDeposits: () => depositLogs.reduce((sum, log) => sum + log.amount, 0),
+   getDepositsByTimeframe: () => depositLogs,
+   
+   // Auction methods (stubs for now)
+   holdBidFunds,
+   refundBidFunds,
+   finalizeAuctionPurchase,
+   placeBid,
+   chargeIncrementalBid: async () => false,
+   getAuctionBidders: async () => [],
+   cleanupAuctionTracking: async () => {},
+   
+   // Enhanced features
+   checkSuspiciousActivity,
+   reconcileBalance,
+   getTransactionHistory,
+   
+   // Admin-specific methods
+   refreshAdminData,
+   getPlatformTransactions,
+   getAnalyticsData,
+   
+   // Data management
+   reloadData,
+ };
 
-  return (
-    <WalletContext.Provider value={contextValue}>
-      {children}
-    </WalletContext.Provider>
-  );
+ return (
+   <WalletContext.Provider value={contextValue}>
+     {children}
+   </WalletContext.Provider>
+ );
 }
 
 export const useWallet = () => {
-  const context = useContext(WalletContext);
-  if (!context) {
-    throw new Error("useWallet must be used within a WalletProvider");
-  }
-  return context;
+ const context = useContext(WalletContext);
+ if (!context) {
+   throw new Error("useWallet must be used within a WalletProvider");
+ }
+ return context;
 };

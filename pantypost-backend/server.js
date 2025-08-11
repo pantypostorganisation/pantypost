@@ -30,10 +30,10 @@ const walletRoutes = require('./routes/wallet.routes');
 const subscriptionRoutes = require('./routes/subscription.routes');
 const reviewRoutes = require('./routes/review.routes');
 const uploadRoutes = require('./routes/upload.routes');
-const tierRoutes = require('./routes/tier.routes'); // NEW: Tier routes
+const tierRoutes = require('./routes/tier.routes');
 
 // Import tier service for initialization
-const tierService = require('./services/tierService'); // NEW: Tier service
+const tierService = require('./services/tierService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -86,7 +86,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok', 
     timestamp: new Date(),
     features: {
-      tiers: true, // NEW: Indicate tier feature is enabled
+      tiers: true,
       websocket: true
     }
   });
@@ -102,7 +102,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/tiers', tierRoutes); // NEW: Tier routes
+app.use('/api/tiers', tierRoutes);
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -119,7 +119,7 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
   });
 });
 
-// NEW: Tier system status endpoint (admin only)
+// Tier system status endpoint (admin only)
 app.get('/api/tiers/system-status', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({
@@ -183,7 +183,7 @@ app.post('/api/test/create-user', async (req, res) => {
       email: email || 'test@example.com',
       password: 'testpassword',
       role: role || 'buyer',
-      tier: role === 'seller' ? 'Tease' : undefined // NEW: Set default tier for sellers
+      tier: role === 'seller' ? 'Tease' : undefined
     });
     
     await newUser.save();
@@ -195,7 +195,7 @@ app.post('/api/test/create-user', async (req, res) => {
         username: newUser.username,
         email: newUser.email,
         role: newUser.role,
-        tier: newUser.tier // NEW: Include tier in response
+        tier: newUser.tier
       }
     });
   } catch (error) {
@@ -206,7 +206,7 @@ app.post('/api/test/create-user', async (req, res) => {
   }
 });
 
-// NEW: Test endpoint to check tier for a seller
+// Test endpoint to check tier for a seller
 app.get('/api/test/check-tier/:username', async (req, res) => {
   try {
     const { username } = req.params;
@@ -249,7 +249,7 @@ app.get('/api/test/check-tier/:username', async (req, res) => {
   }
 });
 
-// NEW: Admin endpoint to manually update all seller tiers
+// Admin endpoint to manually update all seller tiers
 app.post('/api/admin/recalculate-all-tiers', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({
@@ -286,6 +286,33 @@ app.post('/api/admin/recalculate-all-tiers', authMiddleware, async (req, res) =>
   }
 });
 
+// Admin endpoint to fix all tier names
+app.post('/api/admin/fix-tier-names', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+  
+  try {
+    const updated = await tierService.fixAllSellerTiers();
+    
+    res.json({
+      success: true,
+      data: {
+        message: `Fixed ${updated} seller tiers`,
+        updated
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware (should be last)
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
@@ -312,15 +339,11 @@ async function initializeTierSystem() {
     const TIER_CONFIG = require('./config/tierConfig');
     console.log('✅ Tier system initialized with levels:', Object.keys(TIER_CONFIG.tiers));
     
-    // Optional: Update all seller tiers on startup (for production, you might want to do this via a scheduled job instead)
-    if (process.env.UPDATE_TIERS_ON_STARTUP === 'true') {
-      console.log('📊 Updating all seller tiers...');
-      const sellers = await User.find({ role: 'seller' });
-      for (const seller of sellers) {
-        await tierService.updateSellerTier(seller.username);
-      }
-      console.log(`✅ Updated tiers for ${sellers.length} sellers`);
-    }
+    // Fix all seller tiers on startup
+    console.log('📊 Fixing all seller tiers...');
+    const fixedCount = await tierService.fixAllSellerTiers();
+    console.log(`✅ Fixed ${fixedCount} seller tiers`);
+    
   } catch (error) {
     console.error('⚠️ Error initializing tier system:', error);
   }

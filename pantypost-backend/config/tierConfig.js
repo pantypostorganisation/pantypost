@@ -20,7 +20,7 @@ const TIER_CONFIG = {
       name: 'Flirt',
       level: 2,
       minSales: 10,
-      minRevenue: 100,
+      minRevenue: 5000,
       sellerPercentage: 0.91, // Seller gets 91% (platform gets 9%)
       bonusPercentage: 0.01,  // 1% bonus
       color: '#F97316',       // Orange
@@ -34,8 +34,8 @@ const TIER_CONFIG = {
     Obsession: {
       name: 'Obsession',
       level: 3,
-      minSales: 50,
-      minRevenue: 500,
+      minSales: 101,
+      minRevenue: 12500,
       sellerPercentage: 0.92, // Seller gets 92% (platform gets 8%)
       bonusPercentage: 0.02,  // 2% bonus
       color: '#06B6D4',       // Cyan
@@ -50,8 +50,8 @@ const TIER_CONFIG = {
     Desire: {
       name: 'Desire',
       level: 4,
-      minSales: 100,
-      minRevenue: 1000,
+      minSales: 251,
+      minRevenue: 75000,
       sellerPercentage: 0.93, // Seller gets 93% (platform gets 7%)
       bonusPercentage: 0.03,  // 3% bonus
       color: '#DC2626',       // Red
@@ -66,8 +66,8 @@ const TIER_CONFIG = {
     Goddess: {
       name: 'Goddess',
       level: 5,
-      minSales: 500,
-      minRevenue: 10000,
+      minSales: 1001,
+      minRevenue: 150000,
       sellerPercentage: 0.95, // Seller gets 95% (platform gets 5%)
       bonusPercentage: 0.05,  // 5% bonus
       color: '#FBBF24',       // Gold
@@ -89,11 +89,19 @@ const TIER_CONFIG = {
    * Get tier by name
    */
   getTierByName(tierName) {
-    return this.tiers[tierName] || this.tiers.Tease;
+    // Handle old tier names for backwards compatibility
+    const tierMapping = {
+      'Tempt': 'Flirt',
+      'Indulge': 'Obsession',
+      'Crave': 'Desire'
+    };
+    
+    const mappedTier = tierMapping[tierName] || tierName;
+    return this.tiers[mappedTier] || this.tiers.Tease;
   },
   
   /**
-   * Get tier by seller stats
+   * Get tier by seller stats - USES OR LOGIC (matches frontend)
    */
   getTierByStats(totalSales, totalRevenue) {
     // Check tiers in reverse order (highest first)
@@ -101,7 +109,8 @@ const TIER_CONFIG = {
     
     for (const tierName of reversedTiers) {
       const tier = this.tiers[tierName];
-      if (totalSales >= tier.minSales && totalRevenue >= tier.minRevenue) {
+      // IMPORTANT: OR logic - meet EITHER sales OR revenue requirement
+      if (totalSales >= tier.minSales || totalRevenue >= tier.minRevenue) {
         return tierName;
       }
     }
@@ -113,7 +122,16 @@ const TIER_CONFIG = {
    * Get next tier
    */
   getNextTier(currentTier) {
-    const currentIndex = this.tierOrder.indexOf(currentTier);
+    // Handle old tier names
+    const tierMapping = {
+      'Tempt': 'Flirt',
+      'Indulge': 'Obsession',
+      'Crave': 'Desire'
+    };
+    
+    const mappedTier = tierMapping[currentTier] || currentTier;
+    const currentIndex = this.tierOrder.indexOf(mappedTier);
+    
     if (currentIndex === -1 || currentIndex === this.tierOrder.length - 1) {
       return null; // No next tier
     }
@@ -124,7 +142,16 @@ const TIER_CONFIG = {
    * Get previous tier
    */
   getPreviousTier(currentTier) {
-    const currentIndex = this.tierOrder.indexOf(currentTier);
+    // Handle old tier names
+    const tierMapping = {
+      'Tempt': 'Flirt',
+      'Indulge': 'Obsession',
+      'Crave': 'Desire'
+    };
+    
+    const mappedTier = tierMapping[currentTier] || currentTier;
+    const currentIndex = this.tierOrder.indexOf(mappedTier);
+    
     if (currentIndex <= 0) {
       return null; // No previous tier
     }
@@ -173,6 +200,19 @@ const TIER_CONFIG = {
     }
     
     return publicConfig;
+  },
+  
+  /**
+   * Fix old tier name to new tier name
+   */
+  fixTierName(tierName) {
+    const tierMapping = {
+      'Tempt': 'Flirt',
+      'Indulge': 'Obsession',
+      'Crave': 'Desire'
+    };
+    
+    return tierMapping[tierName] || tierName;
   }
 };
 

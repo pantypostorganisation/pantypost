@@ -143,9 +143,10 @@ router.post('/', authMiddleware, async (req, res) => {
       await sellerWallet.deposit(sellerEarnings);
       console.log('[Order] Credited', sellerEarnings, 'to seller', seller, '(includes', tierBonus, 'tier bonus)');
 
-      // 3. Credit platform fee to platform wallet
-      await platformWallet.deposit(totalPlatformRevenue);
-      console.log('[Order] Credited', totalPlatformRevenue, 'to platform wallet');
+      // 3. Credit platform fee to platform wallet (MINUS tier bonus that goes to seller)
+      const netPlatformRevenue = totalPlatformRevenue - tierBonus;
+      await platformWallet.deposit(netPlatformRevenue);
+      console.log('[Order] Credited', netPlatformRevenue, 'to platform wallet (after', tierBonus, 'tier bonus to seller)');
 
       // Update listing status
       if (listingId) {
@@ -208,7 +209,8 @@ router.post('/', authMiddleware, async (req, res) => {
         buyerMarkupFee,
         sellerPlatformFee: platformFee,
         sellerEarnings,
-        tierCreditAmount: tierBonus
+        tierCreditAmount: tierBonus,
+        sellerTier: sellerTier // ADD THIS: Store the seller's tier with the order
       });
 
       await order.save();
@@ -291,6 +293,25 @@ router.post('/', authMiddleware, async (req, res) => {
         });
         await tierCreditTransaction.save();
         console.log('[Order] Created tier credit transaction:', tierBonus);
+
+        // CRITICAL: Create admin action to track tier credit payout
+        // This will show up in the admin dashboard
+        const AdminAction = require('../models/AdminAction');
+        const tierCreditAction = new AdminAction({
+          type: 'debit',
+          amount: tierBonus,
+          reason: `Tier bonus paid to ${seller} (${sellerTier} tier - ${(tierInfo.bonusPercentage * 100).toFixed(0)}%)`,
+          date: new Date(),
+          metadata: {
+            orderId: order._id.toString(),
+            seller,
+            sellerTier,
+            bonusPercentage: tierInfo.bonusPercentage,
+            orderTitle: title
+          }
+        });
+        await tierCreditAction.save();
+        console.log('[Order] Created admin action for tier credit payout');
       }
 
       // Update order with transaction references
@@ -488,7 +509,8 @@ router.get('/', authMiddleware, async (req, res) => {
       paymentStatus: order.paymentStatus,
       platformFee: order.platformFee,
       sellerEarnings: order.sellerEarnings,
-      tierCreditAmount: order.tierCreditAmount
+      tierCreditAmount: order.tierCreditAmount,
+      sellerTier: order.sellerTier
     }));
 
     res.json({
@@ -557,7 +579,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
         paymentStatus: order.paymentStatus,
         platformFee: order.platformFee,
         sellerEarnings: order.sellerEarnings,
-        tierCreditAmount: order.tierCreditAmount
+        tierCreditAmount: order.tierCreditAmount,
+        sellerTier: order.sellerTier
       }
     });
 

@@ -1,7 +1,7 @@
 // src/components/admin/wallet/AdminRecentActivity.tsx
 'use client';
 
-import { Clock, Download, Upload, Wallet, Activity, TrendingUp, Gavel, ShoppingBag } from 'lucide-react';
+import { Clock, Download, Upload, Wallet, Activity, TrendingUp, Gavel, ShoppingBag, Award } from 'lucide-react';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface AdminRecentActivityProps {
@@ -70,6 +70,15 @@ export default function AdminRecentActivity({
     action.reason.toLowerCase().includes('revenue')
   );
 
+  // Get tier credit actions (debit from admin for tier bonuses paid out)
+  const tierCreditActions = safeActions.filter(action => 
+    action && 
+    action.type === 'debit' && 
+    action.reason && 
+    (action.reason.toLowerCase().includes('tier') || 
+     action.reason.toLowerCase().includes('bonus'))
+  );
+
   // Get auction completions (not pending auction orders) with null checks
   const auctionCompletions = safeOrders.filter(order => 
     order && 
@@ -111,6 +120,13 @@ export default function AdminRecentActivity({
       .filter(action => action && action.date)
       .map(action => ({
         type: 'subscription' as const,
+        data: action,
+        date: action.date
+      })),
+    ...tierCreditActions
+      .filter(action => action && action.date)
+      .map(action => ({
+        type: 'tier_credit' as const,
         data: action,
         date: action.date
       })),
@@ -280,6 +296,52 @@ export default function AdminRecentActivity({
                       <div className="text-right flex-shrink-0 ml-4">
                         <p className="font-bold text-pink-400">
                           +{formatCurrency(action.amount)}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
+                      </div>
+                    </div>
+                  );
+                } else if (item.type === 'tier_credit') {
+                  const action = item.data;
+                  // Extract seller from the reason (e.g., "Tier bonus paid to seller123")
+                  const sellerMatch = action.reason?.match(/to\s+(\S+)/i) || 
+                                     action.reason?.match(/for\s+(\S+)/i) ||
+                                     action.reason?.match(/seller:\s*(\S+)/i);
+                  const seller = sellerMatch ? sellerMatch[1] : 'seller';
+                  
+                  // Extract tier info from reason if available
+                  const tierMatch = action.reason?.match(/(Tease|Flirt|Obsession|Desire|Goddess)/i);
+                  const tierName = tierMatch ? tierMatch[1] : '';
+                  
+                  // Extract percentage from reason if available
+                  const percentMatch = action.reason?.match(/(\d+)%/);
+                  const bonusPercent = percentMatch ? percentMatch[1] : '';
+                  
+                  return (
+                    <div key={`tier-credit-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-yellow-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-yellow-500/20 text-yellow-400">
+                          <Award className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-white truncate">
+                            🏆 Tier Credit Paid Out
+                          </p>
+                          <div className="text-sm text-gray-400 truncate">
+                            <span>To </span>
+                            <SecureMessageDisplay 
+                              content={seller} 
+                              allowBasicFormatting={false}
+                              className="inline"
+                            />
+                            {tierName && <span> ({tierName} tier)</span>}
+                            {bonusPercent && <span> • {bonusPercent}% bonus</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-yellow-400">
+                          -{formatCurrency(Math.abs(action.amount))}
                         </p>
                         <p className="text-xs text-gray-500">{formatDate(action.date)}</p>
                       </div>

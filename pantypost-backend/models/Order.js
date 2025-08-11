@@ -100,6 +100,13 @@ const orderSchema = new mongoose.Schema({
   shippedDate: Date,
   deliveredDate: Date,
   
+  // TIER INFORMATION - THIS IS THE CRITICAL MISSING FIELD
+  sellerTier: {
+    type: String,
+    enum: ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'],
+    default: 'Tease'
+  },
+  
   // 🔧 ENHANCED FINANCIAL FIELDS FOR DOUBLE 10% FEE MODEL
   tierCreditAmount: {
     type: Number,
@@ -157,6 +164,10 @@ const orderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
   },
+  tierCreditTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction'
+  },
   buyerFeeTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
@@ -172,11 +183,12 @@ orderSchema.index({ buyer: 1, date: -1 });
 orderSchema.index({ seller: 1, date: -1 });
 orderSchema.index({ shippingStatus: 1 });
 orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ sellerTier: 1 });
 
 // Calculate tier credit (difference between marked up price and original price)
 orderSchema.methods.calculateTierCredit = function() {
-  if (this.markedUpPrice && this.price) {
-    return Math.round((this.markedUpPrice - this.price) * 100) / 100;
+  if (this.tierCreditAmount) {
+    return this.tierCreditAmount;
   }
   return 0;
 };
@@ -185,7 +197,9 @@ orderSchema.methods.calculateTierCredit = function() {
 orderSchema.methods.calculatePlatformProfit = function() {
   const buyerFee = this.buyerMarkupFee || Math.round((this.markedUpPrice - this.price) * 100) / 100;
   const sellerFee = this.sellerPlatformFee || Math.round(this.price * 0.1 * 100) / 100;
-  return Math.round((buyerFee + sellerFee) * 100) / 100;
+  const tierCredit = this.tierCreditAmount || 0;
+  // Platform profit is fees minus tier credits paid out
+  return Math.round((buyerFee + sellerFee - tierCredit) * 100) / 100;
 };
 
 const Order = mongoose.model('Order', orderSchema);
