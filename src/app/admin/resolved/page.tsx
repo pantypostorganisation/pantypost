@@ -1,4 +1,3 @@
-// src/app/admin/resolved/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -15,6 +14,29 @@ import { storageService } from '@/services';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import type { ResolvedReport, FilterOptions, ResolvedStats as StatsType } from '@/types/resolved';
+
+// --- Conservative mock data detector ---
+const isMockString = (val?: string) => {
+  if (!val) return false;
+  const v = String(val).trim().toLowerCase();
+  // Obvious dev/demo patterns only (avoid nuking real data)
+  const patterns = [
+    'spammer', 'scammer', 'troublemaker', 'oldbanner',
+    'mock', 'sample', 'demo', 'test',
+    'lorem', 'ipsum', 'john_doe', 'jane_doe'
+  ];
+  return patterns.some(p => v.includes(p));
+};
+
+const isMockResolved = (r: ResolvedReport) =>
+  isMockString(r.reporter) ||
+  isMockString(r.reportee) ||
+  isMockString(r.resolvedBy) ||
+  isMockString(r.resolvedReason) ||
+  isMockString(r.notes) ||
+  isMockString(r.adminNotes) ||
+  (r.id && (r.id.startsWith?.('mock_') || r.id.includes('sample') || r.id.includes('test')));
+// --------------------------------------
 
 export default function ResolvedReportsPage() {
   const { user } = useAuth();
@@ -33,6 +55,7 @@ export default function ResolvedReportsPage() {
 
   useEffect(() => {
     loadResolvedReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadResolvedReports = async () => {
@@ -40,10 +63,9 @@ export default function ResolvedReportsPage() {
       try {
         const stored = await storageService.getItem<ResolvedReport[]>('panty_report_resolved', []);
         // Add IDs if missing and sanitize text fields
-        const reportsWithIds = stored.map((report, index) => ({
+        const reportsWithIds = (stored || []).map((report, index) => ({
           ...report,
           id: report.id || `${report.reporter}-${report.reportee}-${report.date}-${index}`,
-          // Sanitize text fields
           reporter: sanitizeStrict(report.reporter || ''),
           reportee: sanitizeStrict(report.reportee || ''),
           resolvedBy: sanitizeStrict(report.resolvedBy || ''),
@@ -51,7 +73,12 @@ export default function ResolvedReportsPage() {
           notes: sanitizeStrict(report.notes || ''),
           adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
         }));
-        setResolved(reportsWithIds);
+        // Remove any obvious mock/dev entries
+        const cleansed = reportsWithIds.filter(r => !isMockResolved(r));
+        if (cleansed.length !== reportsWithIds.length) {
+          await storageService.setItem('panty_report_resolved', cleansed);
+        }
+        setResolved(cleansed);
         setLastRefresh(new Date());
       } catch (error) {
         console.error('Error loading resolved reports:', error);
@@ -61,17 +88,19 @@ export default function ResolvedReportsPage() {
   };
 
   const saveResolved = async (newResolved: ResolvedReport[]) => {
-    // Sanitize before saving
-    const sanitizedResolved = newResolved.map(report => ({
-      ...report,
-      reporter: sanitizeStrict(report.reporter || ''),
-      reportee: sanitizeStrict(report.reportee || ''),
-      resolvedBy: sanitizeStrict(report.resolvedBy || ''),
-      resolvedReason: sanitizeStrict(report.resolvedReason || ''),
-      notes: sanitizeStrict(report.notes || ''),
-      adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
-    }));
-    
+    // Sanitize before saving and never persist mock entries
+    const sanitizedResolved = newResolved
+      .map(report => ({
+        ...report,
+        reporter: sanitizeStrict(report.reporter || ''),
+        reportee: sanitizeStrict(report.reportee || ''),
+        resolvedBy: sanitizeStrict(report.resolvedBy || ''),
+        resolvedReason: sanitizeStrict(report.resolvedReason || ''),
+        notes: sanitizeStrict(report.notes || ''),
+        adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
+      }))
+      .filter(r => !isMockResolved(r));
+
     setResolved(sanitizedResolved);
     await storageService.setItem('panty_report_resolved', sanitizedResolved);
   };
@@ -119,13 +148,12 @@ export default function ResolvedReportsPage() {
 
   // Handle filter changes with sanitization
   const handleFiltersChange = (newFilters: Partial<FilterOptions>) => {
-    const sanitizedFilters = { ...newFilters };
-    
-    // Sanitize search term if present
+    const sanitizedFilters: Partial<FilterOptions> = { ...newFilters };
+
     if ('searchTerm' in sanitizedFilters && sanitizedFilters.searchTerm) {
       sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(sanitizedFilters.searchTerm);
     }
-    
+
     setFilters(prev => ({ ...prev, ...sanitizedFilters }));
   };
 
@@ -137,13 +165,20 @@ export default function ResolvedReportsPage() {
 
   const confirmRestore = async () => {
     if (!reportToRestore) return;
+    // Don't restore obvious mock rows
+    if (isMockResolved(reportToRestore)) {
+      setShowRestoreModal(false);
+      setReportToRestore(null);
+      alert('Cannot restore mock/demo report.');
+      return;
+    }
 
     // Generate a new report entry for active reports with sanitized data
     const newReport = {
       id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       reporter: sanitizeStrict(reportToRestore.reporter),
       reportee: sanitizeStrict(reportToRestore.reportee),
-      messages: reportToRestore.messages || [],
+      messages: Array.isArray(reportToRestore.messages) ? reportToRestore.messages : [],
       date: reportToRestore.originalReportDate || reportToRestore.date,
       processed: false,
       severity: reportToRestore.severity,
@@ -155,19 +190,23 @@ export default function ResolvedReportsPage() {
 
     // Add to active reports
     const existingReports = await storageService.getItem<any[]>('panty_report_logs', []);
-    existingReports.push(newReport);
-    await storageService.setItem('panty_report_logs', existingReports);
+    // Avoid restoring into mock space too
+    const cleanedExisting = (existingReports || []).filter((r) => !isMockString(r?.reporter) && !isMockString(r?.reportee));
+    cleanedExisting.push(newReport);
+    await storageService.setItem('panty_report_logs', cleanedExisting);
 
     // Remove from resolved
     const reportId = reportToRestore.id || `${reportToRestore.reporter}-${reportToRestore.reportee}-${reportToRestore.date}`;
     await handleDelete(reportId);
 
     // Dispatch event to update report counter
-    window.dispatchEvent(new Event('updateReports'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('updateReports'));
+    }
 
     setShowRestoreModal(false);
     setReportToRestore(null);
-    alert(`Restored report from ${sanitizeStrict(reportToRestore.reporter)} about ${sanitizeStrict(reportToRestore.reportee)}.`);
+    alert(`Restored report from ${sanitizeStrict(newReport.reporter)} about ${sanitizeStrict(newReport.reportee)}.`);
   };
 
   // Handle delete
@@ -177,7 +216,7 @@ export default function ResolvedReportsPage() {
       return rId !== reportId;
     });
     await saveResolved(updatedResolved);
-    
+
     // Remove from selection if selected
     setSelectedReports(prev => {
       const newSet = new Set(prev);
@@ -189,23 +228,23 @@ export default function ResolvedReportsPage() {
   // Bulk actions
   const handleBulkRestore = async () => {
     if (selectedReports.size === 0) return;
-    
+
     if (confirm(`Are you sure you want to restore ${selectedReports.size} reports?`)) {
       const toRestore = resolved.filter(r => {
         const rId = r.id || `${r.reporter}-${r.reportee}-${r.date}`;
         return selectedReports.has(rId);
-      });
-      
+      }).filter(r => !isMockResolved(r)); // never restore mock
+
       // Get existing reports
       const existingReports = await storageService.getItem<any[]>('panty_report_logs', []);
-      
+      const cleanedExisting = (existingReports || []).filter((r) => !isMockString(r?.reporter) && !isMockString(r?.reportee));
+
       toRestore.forEach(report => {
-        // Add to active reports with sanitized data
         const newReport = {
           id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           reporter: sanitizeStrict(report.reporter),
           reportee: sanitizeStrict(report.reportee),
-          messages: report.messages || [],
+          messages: Array.isArray(report.messages) ? report.messages : [],
           date: report.originalReportDate || report.date,
           processed: false,
           severity: report.severity,
@@ -214,11 +253,11 @@ export default function ResolvedReportsPage() {
             `[Restored from resolved on ${new Date().toLocaleString()}]\n${report.adminNotes || report.notes || ''}`
           )
         };
-        existingReports.push(newReport);
+        cleanedExisting.push(newReport);
       });
-      
+
       // Save updated reports
-      await storageService.setItem('panty_report_logs', existingReports);
+      await storageService.setItem('panty_report_logs', cleanedExisting);
 
       // Remove from resolved
       const updatedResolved = resolved.filter(r => {
@@ -226,8 +265,10 @@ export default function ResolvedReportsPage() {
         return !selectedReports.has(rId);
       });
       await saveResolved(updatedResolved);
-      
-      window.dispatchEvent(new Event('updateReports'));
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('updateReports'));
+      }
       clearSelection();
       alert(`${toRestore.length} reports restored.`);
     }
@@ -235,7 +276,7 @@ export default function ResolvedReportsPage() {
 
   const handleBulkDelete = async () => {
     if (selectedReports.size === 0) return;
-    
+
     if (confirm(`Are you sure you want to permanently delete ${selectedReports.size} reports? This cannot be undone.`)) {
       const updatedResolved = resolved.filter(r => {
         const rId = r.id || `${r.reporter}-${r.reportee}-${r.date}`;
@@ -249,7 +290,6 @@ export default function ResolvedReportsPage() {
 
   // Export data with sanitization
   const exportData = () => {
-    // Sanitize data before export
     const sanitizedData = {
       resolvedReports: resolved.map(report => sanitizeObject(report, {
         maxDepth: 3,
@@ -265,9 +305,9 @@ export default function ResolvedReportsPage() {
       exportedBy: sanitizeStrict(user?.username || 'admin'),
       totalRecords: resolved.length
     };
-    
-    const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], { 
-      type: 'application/json' 
+
+    const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], {
+      type: 'application/json'
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -283,26 +323,26 @@ export default function ResolvedReportsPage() {
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
+
     // Validate file type
     const validationResult = securityService.validateFileUpload(file, {
       maxSize: 10 * 1024 * 1024, // 10MB
       allowedTypes: ['application/json'],
       allowedExtensions: ['json']
     });
-    
+
     if (!validationResult.valid) {
       alert(validationResult.error || 'Invalid file');
       return;
     }
-    
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
         if (data.resolvedReports && Array.isArray(data.resolvedReports)) {
           const imported = data.resolvedReports as ResolvedReport[];
-          
+
           // Sanitize imported data
           const sanitizedImports = imported.map((report, index) => ({
             ...report,
@@ -313,8 +353,10 @@ export default function ResolvedReportsPage() {
             resolvedReason: sanitizeStrict(report.resolvedReason || ''),
             notes: sanitizeStrict(report.notes || ''),
             adminNotes: report.adminNotes ? sanitizeStrict(report.adminNotes) : undefined
-          }));
-          
+          }))
+          // Never import mock entries
+          .filter(r => !isMockResolved(r));
+
           const merged = [...resolved, ...sanitizedImports];
           // Remove duplicates based on reporter + reportee + date
           const unique = merged.filter((report, index, self) =>
@@ -335,7 +377,7 @@ export default function ResolvedReportsPage() {
       }
     };
     reader.readAsText(file);
-    
+
     // Reset input
     event.target.value = '';
   };
@@ -382,7 +424,7 @@ export default function ResolvedReportsPage() {
   return (
     <RequireAuth role="admin">
       <main className="p-8 max-w-7xl mx-auto">
-        <ResolvedHeader 
+        <ResolvedHeader
           lastRefresh={lastRefresh}
           onRefresh={loadResolvedReports}
           onExport={exportData}
@@ -391,7 +433,7 @@ export default function ResolvedReportsPage() {
 
         <ResolvedStats stats={stats} />
 
-        <ResolvedFilters 
+        <ResolvedFilters
           filters={filters}
           onFiltersChange={handleFiltersChange}
         />

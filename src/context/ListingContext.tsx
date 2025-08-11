@@ -1,4 +1,3 @@
-// src/context/ListingContext.tsx
 'use client';
 
 import {
@@ -9,7 +8,6 @@ import {
   ReactNode,
   useCallback,
   useRef,
-  useMemo,
 } from 'react';
 import { useWallet } from './WalletContext';
 import { useAuth } from './AuthContext';
@@ -18,10 +16,10 @@ import { useWebSocket } from './WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 import type { Order } from '@/types/order';
 import { v4 as uuidv4 } from 'uuid';
-import { listingsService, usersService, storageService, ordersService } from '@/services';
+import { listingsService, usersService, storageService } from '@/services';
 import { ListingDraft } from '@/types/myListings';
 import { securityService, sanitize } from '@/services/security.service';
-import { listingSchemas, financialSchemas, fileSchemas } from '@/utils/validation/schemas';
+import { listingSchemas } from '@/utils/validation/schemas';
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -524,17 +522,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [isLoading]); // Add isLoading as dependency to prevent duplicate calls
 
-  // Debounced load listings function
-  const loadListingsDebounced = useMemo(() => {
-    let timeoutId: NodeJS.Timeout;
-    return () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        loadData();
-      }, 300);
-    };
-  }, [loadData]);
-
   // Load data on mount with proper cleanup
   useEffect(() => {
     let mounted = true;
@@ -631,14 +618,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         description: listing.description,
         price: listing.price,
         tags: listing.tags,
-        hoursWorn: listing.hoursWorn
+        wearDuration: listing.hoursWorn, // ✅ validate via schema key
       },
       listingSchemas.createListingSchema.pick({
         title: true,
         description: true,
         price: true,
         tags: true,
-        wearDuration: true
+        wearDuration: true, // ✅ schema expects wearDuration
       }),
       {
         title: sanitize.strict,
@@ -680,7 +667,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         description: validationResult.data!.description,
         price: validationResult.data!.price,
         tags: validationResult.data!.tags,
-        hoursWorn: validationResult.data!.wearDuration,
+        hoursWorn: validationResult.data!.wearDuration, // ✅ map back to hoursWorn
         seller: user.username,
         isVerified: isVerified,
       };
@@ -715,14 +702,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         description: listing.description,
         price: listing.price,
         tags: listing.tags,
-        hoursWorn: listing.hoursWorn
+        wearDuration: listing.hoursWorn, // ✅ validate with schema key
       },
       listingSchemas.createListingSchema.pick({
         title: true,
         description: true,
         price: true,
         tags: true,
-        wearDuration: true
+        wearDuration: true, // ✅
       }),
       {
         title: sanitize.strict,
@@ -780,7 +767,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         description: listingValidation.data!.description,
         price: listingValidation.data!.price,
         tags: listingValidation.data!.tags,
-        hoursWorn: listingValidation.data!.wearDuration,
+        hoursWorn: listingValidation.data!.wearDuration, // ✅ map back
         seller: user.username,
         isVerified: isVerified,
         auction: auctionSettings,

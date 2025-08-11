@@ -17,13 +17,10 @@ export default function BuyerMessagesPage() {
   const {
     // Auth & context
     user,
-    users,
     wallet,
-    isAdmin,
-    
+
     // Messages & threads
     threads,
-    unreadCounts,
     uiUnreadCounts,
     lastMessages,
     sellerProfiles,
@@ -45,7 +42,6 @@ export default function BuyerMessagesPage() {
     showEmojiPicker,
     setShowEmojiPicker,
     recentEmojis,
-    observerReadMessages,
     setObserverReadMessages,
     
     // Message input
@@ -54,9 +50,7 @@ export default function BuyerMessagesPage() {
     selectedImage,
     setSelectedImage,
     isImageLoading,
-    setIsImageLoading,
     imageError,
-    setImageError,
     
     // Custom requests
     showCustomRequestModal,
@@ -126,33 +120,41 @@ export default function BuyerMessagesPage() {
   
   // Handle edit price conversion properly
   const handleEditPriceChange = useCallback((value: string | number) => {
-    const numValue = typeof value === 'string' ? value : value.toString();
-    setEditPrice(numValue);
+    const str = String(value);
+    // Only accept numbers and a single dot; avoid passing NaN later
+    const cleaned = str.replace(/[^\d.]/g, '');
+    setEditPrice(cleaned);
   }, [setEditPrice]);
 
-  // Get numeric edit price for component props
-  const numericEditPrice = editPrice ? parseFloat(editPrice) : '';
+  // Get numeric edit price for component props (never NaN)
+  const numericEditPrice =
+    editPrice !== undefined &&
+    editPrice !== null &&
+    editPrice !== '' &&
+    !Number.isNaN(Number(editPrice))
+      ? Number(editPrice)
+      : '';
 
-  // Simplified custom request form setter
+  // Safer custom request form setter (preserve 0/'' with nullish coalescing)
   const handleCustomRequestFormChange = useCallback((update: any) => {
     if (typeof update === 'function') {
       setCustomRequestForm(prev => {
-        const newForm = update(prev);
+        const newForm = update(prev) || {};
         return {
-          title: newForm.title || prev.title || '',
-          price: newForm.price || prev.price || '',
-          description: newForm.description || prev.description || '',
-          tags: newForm.tags || prev.tags || [],
-          hoursWorn: newForm.hoursWorn || prev.hoursWorn || 0
+          title: newForm.title ?? prev.title ?? '',
+          price: newForm.price ?? prev.price ?? '',
+          description: newForm.description ?? prev.description ?? '',
+          tags: newForm.tags ?? prev.tags ?? [],
+          hoursWorn: newForm.hoursWorn ?? prev.hoursWorn ?? 0
         };
       });
     } else {
       setCustomRequestForm(prev => ({
-        title: update.title || prev.title || '',
-        price: update.price || prev.price || '',
-        description: update.description || prev.description || '',
-        tags: update.tags || prev.tags || [],
-        hoursWorn: update.hoursWorn || prev.hoursWorn || 0
+        title: update.title ?? prev.title ?? '',
+        price: update.price ?? prev.price ?? '',
+        description: update.description ?? prev.description ?? '',
+        tags: update.tags ?? prev.tags ?? [],
+        hoursWorn: update.hoursWorn ?? prev.hoursWorn ?? 0
       }));
     }
   }, [setCustomRequestForm]);
@@ -276,9 +278,9 @@ export default function BuyerMessagesPage() {
             activeThread={activeThread}
             onSubmit={handleCustomRequestSubmit}
             customRequestForm={{
-              title: customRequestForm.title || '',
-              price: customRequestForm.price || '',
-              description: customRequestForm.description || ''
+              title: customRequestForm.title ?? '',
+              price: customRequestForm.price ?? '',
+              description: customRequestForm.description ?? ''
             }}
             setCustomRequestForm={handleCustomRequestFormChange}
             customRequestErrors={customRequestErrors}

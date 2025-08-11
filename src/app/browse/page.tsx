@@ -14,8 +14,8 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 
 export default function BrowsePage() {
   const { trackEvent, trackSearch } = useAnalytics();
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const previousFiltersRef = useRef<string>('');
   
@@ -96,13 +96,10 @@ export default function BrowsePage() {
   // Track search with debouncing
   useEffect(() => {
     if (searchTerm && isMountedRef.current) {
-      // Clear existing timeout
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
-      
-      // Set new timeout to track search after user stops typing
       searchTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {
           try {
@@ -111,10 +108,8 @@ export default function BrowsePage() {
             console.error('Failed to track search:', error);
           }
         }
-      }, 1000); // Wait 1 second after user stops typing
+      }, 1000);
     }
-    
-    // Cleanup function
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -125,7 +120,6 @@ export default function BrowsePage() {
 
   // Track filter changes with debouncing
   useEffect(() => {
-    // Create a unique filter signature to detect changes
     const currentFilterSignature = JSON.stringify({
       filter,
       searchTerm,
@@ -135,17 +129,12 @@ export default function BrowsePage() {
       sortBy
     });
     
-    // Only track if filters actually changed and there are active filters
     if (hasActiveFilters && currentFilterSignature !== previousFiltersRef.current && isMountedRef.current) {
       previousFiltersRef.current = currentFilterSignature;
-      
-      // Clear existing timeout
       if (filterTimeoutRef.current) {
         clearTimeout(filterTimeoutRef.current);
         filterTimeoutRef.current = null;
       }
-      
-      // Set new timeout to track filters after changes settle
       filterTimeoutRef.current = setTimeout(() => {
         if (isMountedRef.current) {
           try {
@@ -167,10 +156,8 @@ export default function BrowsePage() {
             console.error('Failed to track filter change:', error);
           }
         }
-      }, 1500); // Wait 1.5 seconds after filter changes
+      }, 1500);
     }
-    
-    // Cleanup function
     return () => {
       if (filterTimeoutRef.current) {
         clearTimeout(filterTimeoutRef.current);
@@ -185,17 +172,28 @@ export default function BrowsePage() {
     
     const listing = filteredListings.find(l => l.id === listingId);
     if (listing) {
+      // Robust auction detection (matches detail page logic)
+      const isActualAuction = !!(
+        listing.auction &&
+        (listing.auction.isAuction || listing.auction.startingPrice !== undefined)
+      );
+      const price =
+        typeof listing.price === 'number'
+          ? listing.price
+          : parseFloat(String(listing.price)) || 0;
+
       try {
         trackEvent({
           action: 'select_item',
           category: 'browse',
           label: listingId,
-          value: listing.price || 0,
+          value: price,
           customData: {
             item_name: listing.title || 'Unknown',
-            item_category: listing.isPremium ? 'premium' : (listing.auction ? 'auction' : 'standard'),
+            item_category: listing.isPremium ? 'premium' : (isActualAuction ? 'auction' : 'standard'),
             seller_name: listing.seller || 'Unknown',
-            position: paginatedListings.findIndex(l => l.id === listingId) + 1
+            seller_verified: (listing as any).isSellerVerified ?? (listing as any).isVerified ?? false,
+            position: Math.max(1, paginatedListings.findIndex(l => l.id === listingId) + 1)
           }
         });
       } catch (error) {
@@ -247,10 +245,7 @@ export default function BrowsePage() {
     } catch (error) {
       console.error('Failed to track filter reset:', error);
     }
-    
-    // Reset the filter signature
     previousFiltersRef.current = '';
-    
     resetFilters();
   }, [trackEvent, resetFilters]);
 

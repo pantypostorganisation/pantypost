@@ -1,4 +1,3 @@
-// src/app/admin/wallet-management/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -12,7 +11,7 @@ import WalletActionPanel from '@/components/admin/wallet/WalletActionPanel';
 import BulkActionModal from '@/components/admin/wallet/BulkActionModal';
 import ConfirmationModal from '@/components/admin/wallet/ConfirmationModal';
 import WalletToast from '@/components/admin/wallet/WalletToast';
-import { Shield, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { WalletProvider, useWallet } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { subscribeToWalletUpdates, getWalletBalanceListener } from '@/utils/walletSync';
@@ -73,9 +72,6 @@ function AdminWalletContent() {
   
   // Advanced features
   const [showBalances, setShowBalances] = useState(true);
-
-  // Check if user is admin
-  const isAdmin = user && (user.username === 'oakley' || user.username === 'gerome');
 
   // Cleanup on unmount
   useEffect(() => {
@@ -505,6 +501,11 @@ function AdminWalletContent() {
 
   // Export user data to CSV
   const exportUserData = () => {
+    if (!displayedUsers || displayedUsers.length === 0) {
+      showMessageHelper('No users to export');
+      return;
+    }
+
     const csvData = displayedUsers.map(user => ({
       Username: sanitizeStrict(user.username),
       Role: user.role,
@@ -512,10 +513,13 @@ function AdminWalletContent() {
       'Last Activity': 'N/A'
     }));
 
-    const csvContent = [
-      Object.keys(csvData[0]).join(','),
-      ...csvData.map(row => Object.values(row).join(','))
-    ].join('\n');
+    const headers = Object.keys(csvData[0]);
+    const rows = csvData.map(row =>
+      headers
+        .map(h => `"${String((row as any)[h]).replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csvContent = [headers.join(','), ...rows].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -560,20 +564,6 @@ function AdminWalletContent() {
   const formatRole = (role: string) => {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
-
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="bg-[#1a1a1a] p-8 rounded-xl shadow-xl max-w-md w-full border border-gray-800">
-          <div className="text-center">
-            <Shield className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
-            <p className="text-gray-400">Only admin accounts can access this page.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6">

@@ -1,12 +1,13 @@
 // src/app/forgot-password/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
 import { authService } from '@/services/auth.service';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -14,18 +15,31 @@ export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const redirectTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Cleanup any pending timer on unmount so we don't push after unmounting
+    return () => {
+      if (redirectTimerRef.current) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    // Sanitize & normalize email before validating/sending
+    const cleanedEmail = sanitizeStrict(email).trim().toLowerCase();
+
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email) {
+    if (!cleanedEmail) {
       setError('Please enter your email address');
       return;
     }
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(cleanedEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -33,20 +47,24 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await authService.forgotPassword(email);
-      
+      const response = await authService.forgotPassword(cleanedEmail);
+
       if (response.success) {
         setSuccess(true);
         // Store email in session storage for the next step
-        sessionStorage.setItem('resetEmail', email);
+        try {
+          sessionStorage.setItem('resetEmail', cleanedEmail);
+        } catch {
+          // ignore storage errors (private mode, etc.)
+        }
         // Navigate to code verification page after 2 seconds
-        setTimeout(() => {
+        redirectTimerRef.current = window.setTimeout(() => {
           router.push('/verify-reset-code');
         }, 2000);
       } else {
-        setError(response.error?.message || 'Failed to send reset code');
+        setError(response.error?.message || 'Failed to send reset code. Please try again.');
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
@@ -74,12 +92,11 @@ export default function ForgotPasswordPage() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Verification Code Sent!</h2>
           <p className="text-gray-400 mb-6">
-            We've sent a 6-digit verification code to <span className="text-[#ff950e] font-medium">{email}</span>
+            We've sent a 6-digit verification code to{' '}
+            <span className="text-[#ff950e] font-medium">{email}</span>
           </p>
-          <p className="text-sm text-gray-500 mb-4">
-            Please check your email inbox for the code.
-          </p>
-          <p className="text-xs text-gray-600">
+          <p className="text-sm text-gray-500 mb-4">Please check your email inbox for the code.</p>
+          <p className="text-xs text-gray-600" aria-live="polite">
             Redirecting to verification page...
           </p>
         </div>
@@ -106,26 +123,28 @@ export default function ForgotPasswordPage() {
           {/* Header - matching login page exactly */}
           <div className="text-center mb-4">
             <div className="flex justify-center mb-3">
-              <img 
-                src="/logo.png" 
-                alt="PantyPost" 
+              <img
+                src="/logo.png"
+                alt="PantyPost"
                 className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
                 style={{ width: '220px', height: '220px' }}
                 onClick={() => router.push('/')}
               />
             </div>
             <h1 className="text-2xl font-bold text-white mb-1">Forgot Your Password?</h1>
-            <p className="text-gray-400 text-sm">
-              No worries! We'll send you a verification code.
-            </p>
+            <p className="text-gray-400 text-sm">No worries! We'll send you a verification code.</p>
           </div>
 
           {/* Form Card - matching login page */}
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               {/* Error display */}
               {error && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
+                <div
+                  className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   <div className="flex items-center gap-2 text-sm text-red-400">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{error}</span>
@@ -135,11 +154,12 @@ export default function ForgotPasswordPage() {
 
               {/* Email Field */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="email">
                   Email Address
                 </label>
                 <div className="relative">
                   <input
+                    id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -147,6 +167,8 @@ export default function ForgotPasswordPage() {
                     className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors pl-10"
                     disabled={isLoading}
                     autoFocus
+                    autoComplete="email"
+                    inputMode="email"
                   />
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 </div>
@@ -161,10 +183,11 @@ export default function ForgotPasswordPage() {
                 disabled={isLoading || !email}
                 className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
                 style={{ color: isLoading || !email ? undefined : '#000' }}
+                aria-busy={isLoading}
               >
                 {isLoading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                     Sending Code...
                   </>
                 ) : (
@@ -184,7 +207,7 @@ export default function ForgotPasswordPage() {
                 Back to Login
               </Link>
             </p>
-            
+
             <p className="text-base text-gray-500">
               Don't have an account?{' '}
               <Link href="/signup" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">

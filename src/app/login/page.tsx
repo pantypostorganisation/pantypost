@@ -15,27 +15,24 @@ import { User, ShoppingBag, Shield } from 'lucide-react';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 
-// Add this at the very top of the component
-console.log('[Login] LoginPage component loading...');
+const isDev = process.env.NODE_ENV !== 'production';
 
 export default function LoginPage() {
-  console.log('[Login] LoginPage component rendering...');
-  
+  if (isDev) console.log('[Login] LoginPage component render');
+
   const router = useRouter();
   const authData = useAuth();
-  console.log('[Login] useAuth returned:', authData);
-  
   const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = authData;
-  
-  // Debug: Check if login function exists
-  console.log('[Login] useAuth hook returned:', { 
-    hasLogin: !!login, 
-    loginType: typeof login,
-    isAuthReady,
-    hasUser: !!user,
-    authData: authData
-  });
-  
+
+  if (isDev) {
+    console.log('[Login] useAuth snapshot:', {
+      hasLogin: !!login,
+      loginType: typeof login,
+      isAuthReady,
+      hasUser: !!user,
+    });
+  }
+
   // State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -45,14 +42,13 @@ export default function LoginPage() {
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
   const [showAdminMode, setShowAdminMode] = useState(false);
-  
-  // Track rate limit state
+
+  // Rate limiting
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [rateLimitWaitTime, setRateLimitWaitTime] = useState(0);
-  
-  // Use ref to store interval ID for cleanup
+
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isMountedRef = useRef(false); // Changed to false initially
+  const isMountedRef = useRef(false);
 
   // Role options configuration
   const roleOptions = [
@@ -68,32 +64,38 @@ export default function LoginPage() {
       description: 'List and manage products',
       icon: User,
     },
-    ...(showAdminMode ? [{
-      key: 'admin',
-      label: 'Administrator',
-      description: 'Full system access',
-      icon: Shield,
-    }] : [])
+    ...(showAdminMode
+      ? [
+          {
+            key: 'admin',
+            label: 'Administrator',
+            description: 'Full system access',
+            icon: Shield,
+          },
+        ]
+      : []),
   ];
 
-  // Set mounted state
+  // Mounted state
   useEffect(() => {
-    console.log('[Login] Mount effect running...');
+    if (isDev) console.log('[Login] Mount effect');
     setMounted(true);
-    isMountedRef.current = true; // Set to true when mounted
-    
+    isMountedRef.current = true;
+
     return () => {
-      console.log('[Login] Unmount effect running...');
+      if (isDev) console.log('[Login] Unmount cleanup');
       isMountedRef.current = false;
-      clearCountdownInterval();
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
     };
   }, []);
 
   // Redirect if already logged in
   useEffect(() => {
-    console.log('[Login] Checking if user logged in:', { isAuthReady, user });
+    if (isDev) console.log('[Login] Auth check:', { isAuthReady, hasUser: !!user });
     if (isAuthReady && user) {
-      console.log('[Login] User already logged in, redirecting...');
       router.replace('/');
     }
   }, [isAuthReady, user, router]);
@@ -101,13 +103,12 @@ export default function LoginPage() {
   // Sync auth errors
   useEffect(() => {
     if (authError) {
-      console.log('[Login] Auth error detected:', authError);
+      if (isDev) console.log('[Login] Auth error:', authError);
       setError(authError);
       setIsLoading(false);
     }
   }, [authError]);
 
-  // Cleanup function to prevent memory leaks
   const clearCountdownInterval = useCallback(() => {
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
@@ -115,15 +116,15 @@ export default function LoginPage() {
     }
   }, []);
 
-  // Check rate limit status on component mount and when username changes
+  // Check rate limit status on step 2 & username changes
   useEffect(() => {
     if (step === 2 && username && isMountedRef.current) {
       try {
         const limiter = getRateLimiter();
         const result = limiter.check(`LOGIN:${username}`, RATE_LIMITS.LOGIN);
-        
+
         if (!isMountedRef.current) return;
-        
+
         if (!result.allowed && result.waitTime && result.waitTime > 0) {
           setIsRateLimited(true);
           setRateLimitWaitTime(result.waitTime);
@@ -131,8 +132,8 @@ export default function LoginPage() {
           setIsRateLimited(false);
           setRateLimitWaitTime(0);
         }
-      } catch (error) {
-        console.error('Error checking rate limit:', error);
+      } catch (e) {
+        if (isDev) console.error('[Login] Rate limit check failed:', e);
         if (isMountedRef.current) {
           setIsRateLimited(false);
           setRateLimitWaitTime(0);
@@ -141,10 +142,10 @@ export default function LoginPage() {
     }
   }, [step, username]);
 
-  // Update rate limit status when error changes
+  // Update rate limit state based on error message
   useEffect(() => {
     if (!isMountedRef.current) return;
-    
+
     if (error && error.includes('Too many login attempts')) {
       setIsRateLimited(true);
       const match = error.match(/Please wait (\d+) seconds/);
@@ -160,7 +161,7 @@ export default function LoginPage() {
     }
   }, [error]);
 
-  // Countdown timer for rate limit with proper cleanup
+  // Countdown timer for rate limit
   useEffect(() => {
     clearCountdownInterval();
 
@@ -170,7 +171,7 @@ export default function LoginPage() {
           clearCountdownInterval();
           return;
         }
-        
+
         setRateLimitWaitTime((prev) => {
           if (prev <= 1) {
             setIsRateLimited(false);
@@ -185,159 +186,121 @@ export default function LoginPage() {
     return clearCountdownInterval;
   }, [isRateLimited, rateLimitWaitTime, clearCountdownInterval]);
 
-  // Handle username submit
   const handleUsernameSubmit = useCallback(() => {
-    console.log('[Login] Username submit:', username);
+    if (isDev) console.log('[Login] Username submit:', username);
     if (!username.trim()) {
       setError('Please enter your username');
       return;
     }
-    
+
     setError('');
-    if (clearError) {
-      clearError();
-    }
+    clearError?.();
     setStep(2);
   }, [username, clearError]);
 
-  // Handle login - UPDATED VERSION WITHOUT DEMO MODE
-  const handleLogin = useCallback(async (e?: React.FormEvent) => {
-    console.log('[Login] handleLogin called', {
-      hasEvent: !!e,
-      username,
-      role,
-      isRateLimited,
-      isMounted: isMountedRef.current,
-      isLoading,
-      hasPassword: !!password,
-      loginFunction: !!login,
-      loginType: typeof login
-    });
+  const handleLogin = useCallback(
+    async (e?: React.FormEvent) => {
+      if (isDev)
+        console.log('[Login] handleLogin', {
+          hasEvent: !!e,
+          username,
+          role,
+          isRateLimited,
+          mounted: isMountedRef.current,
+          isLoading,
+          hasPassword: !!password,
+          loginExists: !!login,
+          loginType: typeof login,
+        });
 
-    if (e) {
-      e.preventDefault();
-    }
-    
-    // Don't proceed if rate limited or not mounted
-    if (isRateLimited || !isMountedRef.current) {
-      console.log('[Login] Blocked by rate limit or unmounted');
-      return;
-    }
-    
-    // Validation
-    if (!username.trim()) {
-      setError('Please enter your username');
-      return;
-    }
-    
-    // UPDATED: Require password
-    if (!password.trim()) {
-      setError('Please enter your password');
-      return;
-    }
-    
-    if (!role) {
-      setError('Please select a role');
-      return;
-    }
-    
-    // Check if login function exists
-    if (!login || typeof login !== 'function') {
-      console.error('[Login] Login function not available!', { login, type: typeof login });
-      setError('Authentication system not ready. Please refresh the page.');
-      return;
-    }
-    
-    console.log('[Login] Validation passed, setting loading state');
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      console.log('[Login] Calling auth login function with:', {
-        username: username.trim(),
-        passwordLength: password.length,
-        role
-      });
-      
-      // UPDATED: Use actual password
-      const success = await login(username.trim(), password, role);
-      
-      console.log('[Login] Auth login returned:', success);
-      
-      if (success) {
-        console.log('[Login] Success! Redirecting to home...');
-        // The auth context will handle the redirect
-      } else {
-        // Error will be set by auth context
-        console.log('[Login] Login failed, error should be set by auth context');
+      if (e) e.preventDefault();
+
+      if (isRateLimited || !isMountedRef.current) return;
+
+      if (!username.trim()) {
+        setError('Please enter your username');
+        return;
+      }
+      if (!password.trim()) {
+        setError('Please enter your password');
+        return;
+      }
+      if (!role) {
+        setError('Please select a role');
+        return;
+      }
+      if (!login || typeof login !== 'function') {
+        if (isDev) console.error('[Login] login() unavailable');
+        setError('Authentication system not ready. Please refresh the page.');
+        return;
+      }
+
+      setIsLoading(true);
+      setError('');
+      try {
+        const success = await login(username.trim(), password, role);
+        if (!success) {
+          // Auth context should set the error
+          setIsLoading(false);
+        }
+      } catch (err) {
+        if (isDev) console.error('[Login] login() error:', err);
+        setError('An unexpected error occurred');
         setIsLoading(false);
       }
-    } catch (err) {
-      console.error('[Login] Caught error:', err);
-      setError('An unexpected error occurred');
-      setIsLoading(false);
-    }
-  }, [username, password, role, login, isRateLimited]);
+    },
+    [username, password, role, login, isRateLimited, isLoading]
+  );
 
-  // Add debug log after handleLogin function
-  console.log('[Login] handleLogin function created:', {
-    handleLogin,
-    isFunction: typeof handleLogin === 'function'
-  });
-
-  // Handle key press
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !isLoading) {
-      if (step === 1) {
-        handleUsernameSubmit();
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !isLoading) {
+        if (step === 1) {
+          handleUsernameSubmit();
+        }
       }
-    }
-  }, [isLoading, step, handleUsernameSubmit]);
+    },
+    [isLoading, step, handleUsernameSubmit]
+  );
 
-  // Handle going back
   const goBack = useCallback(() => {
-    console.log('[Login] Going back to step 1');
+    if (isDev) console.log('[Login] Back to step 1');
     setStep(1);
     setPassword('');
     setRole(null);
     setError('');
-    if (clearError) {
-      clearError();
-    }
+    clearError?.();
   }, [clearError]);
 
-  // Handle crown click
   const handleCrownClick = useCallback(() => {
-    setShowAdminMode(!showAdminMode);
+    setShowAdminMode((prev) => !prev);
     if (showAdminMode && role === 'admin') {
       setRole('buyer');
     }
   }, [showAdminMode, role]);
 
-  // Update state helper
-  const updateState = useCallback((updates: Partial<{ username: string; password: string; role: 'buyer' | 'seller' | 'admin' | null }>) => {
-    if (updates.username !== undefined) {
-      setUsername(updates.username);
-      setError('');
-      if (clearError) {
-        clearError();
+  const updateState = useCallback(
+    (updates: Partial<{ username: string; password: string; role: 'buyer' | 'seller' | 'admin' | null }>) => {
+      if (updates.username !== undefined) {
+        setUsername(updates.username);
+        setError('');
+        clearError?.();
       }
-    }
-    if (updates.password !== undefined) {
-      setPassword(updates.password);
-      setError('');
-      if (clearError) {
-        clearError();
+      if (updates.password !== undefined) {
+        setPassword(updates.password);
+        setError('');
+        clearError?.();
       }
-    }
-    if (updates.role !== undefined) {
-      setRole(updates.role);
-    }
-  }, [clearError]);
+      if (updates.role !== undefined) {
+        setRole(updates.role);
+      }
+    },
+    [clearError]
+  );
 
-  // Early return for unmounted state
+  // Early wait UI
   if (!mounted || !isAuthReady) {
-    console.log('[Login] Not ready yet:', { mounted, isAuthReady });
+    if (isDev) console.log('[Login] waiting...', { mounted, isAuthReady });
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin"></div>
@@ -345,18 +308,14 @@ export default function LoginPage() {
     );
   }
 
-  console.log('[Login] Rendering main content, step:', step);
+  if (isDev) console.log('[Login] render body step=', step);
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
       {/* Enhanced Floating Particles Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {Array.from({ length: 35 }).map((_, i) => (
-          <FloatingParticle 
-            key={i} 
-            delay={0}
-            index={i}
-          />
+          <FloatingParticle key={i} delay={0} index={i} />
         ))}
       </div>
 
@@ -364,24 +323,20 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
       {/* Secret Admin Crown - Bottom Right */}
-      <AdminCrownButton 
-        showAdminMode={showAdminMode} 
-        onToggle={handleCrownClick} 
-      />
+      <AdminCrownButton showAdminMode={showAdminMode} onToggle={handleCrownClick} />
 
       {/* Main Content */}
-      <div className={`relative z-10 flex items-center justify-center p-4 ${step === 1 ? 'min-h-[90vh] pt-4' : 'min-h-screen py-4'}`}>
+      <div
+        className={`relative z-10 flex items-center justify-center p-4 ${
+          step === 1 ? 'min-h-[90vh] pt-4' : 'min-h-screen py-4'
+        }`}
+      >
         <div className="w-full max-w-md">
           {/* Header */}
-          <LoginHeader 
-            step={step} 
-            showAdminMode={showAdminMode} 
-            onLogoClick={() => router?.push?.('/')} 
-          />
+          <LoginHeader step={step} showAdminMode={showAdminMode} onLogoClick={() => router.push('/')} />
 
           {/* Form Card */}
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
-            {/* Step Content */}
             <div className="transition-all duration-300">
               {step === 1 && (
                 <UsernameStep

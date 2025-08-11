@@ -1,4 +1,3 @@
-// src/app/browse/[id]/page.tsx
 'use client';
 
 import React, { useEffect, useCallback, useRef } from 'react';
@@ -127,7 +126,7 @@ export default function ListingDetailPage() {
           customData: {
             item_name: listing.title || 'Unknown',
             seller_name: listing.seller || 'Unknown',
-            seller_verified: listing.isSellerVerified || false,
+            seller_verified: (listing.isSellerVerified ?? listing.isVerified) || false,
             is_premium: listing.isPremium || false,
             is_auction: isActualAuction || false
           }
@@ -194,7 +193,7 @@ export default function ListingDetailPage() {
         username: listing.seller,
         profilePicture: sellerProfile?.pic || undefined,
         tier: sellerTier,
-        isVerified: listing.isSellerVerified || false,
+        isVerified: (listing.isSellerVerified ?? listing.isVerified) || false,
       });
       
       if (success && isMountedRef.current) {
@@ -459,7 +458,7 @@ export default function ListingDetailPage() {
                   sellerTierInfo={listing.sellerTierInfo}
                   sellerAverageRating={listing.sellerAverageRating}
                   sellerReviewCount={listing.sellerReviewCount || 0}
-                  isVerified={listing.isSellerVerified || false}
+                  isVerified={(listing.isSellerVerified ?? listing.isVerified) || false}
                 />
               )}
 

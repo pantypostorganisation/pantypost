@@ -48,10 +48,6 @@ function OrdersLoading() {
 
 // Inner component that uses the hooks after providers are ready
 function MyOrdersContent() {
-  const [retryCount, setRetryCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
   const {
     // Data
     user,
@@ -60,7 +56,7 @@ function MyOrdersContent() {
     customRequestOrders,
     auctionOrders,
     stats,
-    
+
     // UI State
     searchQuery,
     setSearchQuery,
@@ -74,7 +70,7 @@ function MyOrdersContent() {
     addressModalOpen,
     setAddressModalOpen,
     selectedOrder,
-    
+
     // Handlers
     handleOpenAddressModal,
     handleConfirmAddress,
@@ -82,36 +78,26 @@ function MyOrdersContent() {
     getSelectedOrderAddress,
   } = useMyOrders();
 
-  const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
-    // Force re-render to retry data fetching
-    window.location.reload();
-  };
-
-  // Show error state
-  if (error && !isLoading) {
-    return <OrdersError error={error} onRetry={handleRetry} />;
-  }
-
-  // Show loading state
-  if (isLoading) {
-    return <OrdersLoading />;
-  }
+  // Safe arrays to avoid undefined checks everywhere
+  const safeUserOrders = userOrders ?? [];
+  const safeDirectOrders = directOrders ?? [];
+  const safeCustomRequestOrders = customRequestOrders ?? [];
+  const safeAuctionOrders = auctionOrders ?? [];
 
   // Safe default values for stats
   const safeStats = {
     totalSpent: stats?.totalSpent ?? 0,
     pendingOrders: stats?.pendingOrders ?? 0,
-    shippedOrders: stats?.shippedOrders ?? 0
+    shippedOrders: stats?.shippedOrders ?? 0,
   };
 
   return (
     <main className="min-h-screen bg-black p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
         <OrdersHeader />
-        
+
         <OrderStats stats={safeStats} />
-        
+
         <OrderFilters
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -121,20 +107,20 @@ function MyOrdersContent() {
           sortOrder={sortOrder}
           onToggleSort={toggleSort}
         />
-        
-        {!userOrders || userOrders.length === 0 ? (
+
+        {safeUserOrders.length === 0 ? (
           <EmptyOrdersState />
         ) : (
           <OrderSections
-            directOrders={directOrders || []}
-            customRequestOrders={customRequestOrders || []}
-            auctionOrders={auctionOrders || []}
+            directOrders={safeDirectOrders}
+            customRequestOrders={safeCustomRequestOrders}
+            auctionOrders={safeAuctionOrders}
             expandedOrder={expandedOrder}
             onToggleExpanded={setExpandedOrder}
             onOpenAddressModal={handleOpenAddressModal}
           />
         )}
-        
+
         <AddressConfirmationModal
           isOpen={addressModalOpen}
           onClose={() => {
@@ -176,7 +162,7 @@ export default function MyOrdersPage() {
     };
 
     window.addEventListener('error', handleError);
-    
+
     return () => {
       window.removeEventListener('error', handleError);
     };
@@ -186,13 +172,13 @@ export default function MyOrdersPage() {
     return (
       <BanCheck>
         <RequireAuth role="buyer">
-          <OrdersError 
-            error={error.message || 'An unexpected error occurred'} 
+          <OrdersError
+            error={error.message || 'An unexpected error occurred'}
             onRetry={() => {
               setHasError(false);
               setError(null);
               window.location.reload();
-            }} 
+            }}
           />
         </RequireAuth>
       </BanCheck>
