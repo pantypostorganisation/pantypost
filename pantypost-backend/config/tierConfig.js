@@ -1,0 +1,179 @@
+// pantypost-backend/config/tierConfig.js
+const TIER_CONFIG = {
+  tiers: {
+    Tease: {
+      name: 'Tease',
+      level: 1,
+      minSales: 0,
+      minRevenue: 0,
+      sellerPercentage: 0.90, // Seller gets 90% (platform gets 10%)
+      bonusPercentage: 0.00,  // No bonus at this tier
+      color: '#EC4899',       // Pink
+      icon: '💋',
+      benefits: [
+        'Base 90% commission on all sales',
+        'Access to basic seller tools',
+        'Standard listing features'
+      ]
+    },
+    Flirt: {
+      name: 'Flirt',
+      level: 2,
+      minSales: 10,
+      minRevenue: 100,
+      sellerPercentage: 0.91, // Seller gets 91% (platform gets 9%)
+      bonusPercentage: 0.01,  // 1% bonus
+      color: '#F97316',       // Orange
+      icon: '😘',
+      benefits: [
+        '91% commission on all sales (+1% bonus)',
+        'Priority in search results',
+        'Featured seller badge'
+      ]
+    },
+    Obsession: {
+      name: 'Obsession',
+      level: 3,
+      minSales: 50,
+      minRevenue: 500,
+      sellerPercentage: 0.92, // Seller gets 92% (platform gets 8%)
+      bonusPercentage: 0.02,  // 2% bonus
+      color: '#06B6D4',       // Cyan
+      icon: '💎',
+      benefits: [
+        '92% commission on all sales (+2% bonus)',
+        'Premium seller badge',
+        'Access to exclusive features',
+        'Priority customer support'
+      ]
+    },
+    Desire: {
+      name: 'Desire',
+      level: 4,
+      minSales: 100,
+      minRevenue: 1000,
+      sellerPercentage: 0.93, // Seller gets 93% (platform gets 7%)
+      bonusPercentage: 0.03,  // 3% bonus
+      color: '#DC2626',       // Red
+      icon: '❤️',
+      benefits: [
+        '93% commission on all sales (+3% bonus)',
+        'Top tier visibility',
+        'Advanced analytics',
+        'Custom profile features'
+      ]
+    },
+    Goddess: {
+      name: 'Goddess',
+      level: 5,
+      minSales: 500,
+      minRevenue: 10000,
+      sellerPercentage: 0.95, // Seller gets 95% (platform gets 5%)
+      bonusPercentage: 0.05,  // 5% bonus
+      color: '#FBBF24',       // Gold
+      icon: '👑',
+      benefits: [
+        '95% commission on all sales (+5% bonus)',
+        'Highest tier status',
+        'VIP support',
+        'All premium features unlocked',
+        'Special recognition badge'
+      ]
+    }
+  },
+  
+  // Tier order for progression
+  tierOrder: ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'],
+  
+  /**
+   * Get tier by name
+   */
+  getTierByName(tierName) {
+    return this.tiers[tierName] || this.tiers.Tease;
+  },
+  
+  /**
+   * Get tier by seller stats
+   */
+  getTierByStats(totalSales, totalRevenue) {
+    // Check tiers in reverse order (highest first)
+    const reversedTiers = [...this.tierOrder].reverse();
+    
+    for (const tierName of reversedTiers) {
+      const tier = this.tiers[tierName];
+      if (totalSales >= tier.minSales && totalRevenue >= tier.minRevenue) {
+        return tierName;
+      }
+    }
+    
+    return 'Tease'; // Default tier
+  },
+  
+  /**
+   * Get next tier
+   */
+  getNextTier(currentTier) {
+    const currentIndex = this.tierOrder.indexOf(currentTier);
+    if (currentIndex === -1 || currentIndex === this.tierOrder.length - 1) {
+      return null; // No next tier
+    }
+    return this.tierOrder[currentIndex + 1];
+  },
+  
+  /**
+   * Get previous tier
+   */
+  getPreviousTier(currentTier) {
+    const currentIndex = this.tierOrder.indexOf(currentTier);
+    if (currentIndex <= 0) {
+      return null; // No previous tier
+    }
+    return this.tierOrder[currentIndex - 1];
+  },
+  
+  /**
+   * Calculate seller earnings based on tier
+   */
+  calculateSellerEarnings(price, tierName) {
+    const tier = this.getTierByName(tierName);
+    const earnings = price * tier.sellerPercentage;
+    return Math.round(earnings * 100) / 100;
+  },
+  
+  /**
+   * Calculate platform fee based on tier
+   */
+  calculatePlatformFee(price, tierName) {
+    const tier = this.getTierByName(tierName);
+    const platformPercentage = 1 - tier.sellerPercentage;
+    const fee = price * platformPercentage;
+    return Math.round(fee * 100) / 100;
+  },
+  
+  /**
+   * Get public configuration (safe to send to frontend)
+   */
+  getPublicConfig() {
+    const publicConfig = {
+      tiers: {},
+      tierOrder: this.tierOrder
+    };
+    
+    for (const [key, tier] of Object.entries(this.tiers)) {
+      publicConfig.tiers[key] = {
+        name: tier.name,
+        level: tier.level,
+        minSales: tier.minSales,
+        minRevenue: tier.minRevenue,
+        bonusPercentage: tier.bonusPercentage,
+        color: tier.color,
+        icon: tier.icon,
+        benefits: tier.benefits
+      };
+    }
+    
+    return publicConfig;
+  }
+};
+
+module.exports = TIER_CONFIG;

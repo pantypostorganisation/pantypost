@@ -7,8 +7,10 @@ const Transaction = require('../models/Transaction');
 const Listing = require('../models/Listing');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
+const tierService = require('../services/tierService');
+const TIER_CONFIG = require('../config/tierConfig');
 
-// POST /api/orders - Create new order with proper fee tracking
+// POST /api/orders - Create new order with proper fee tracking and TIER SUPPORT
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const {
@@ -25,7 +27,7 @@ router.post('/', authMiddleware, async (req, res) => {
       deliveryAddress
     } = req.body;
 
-    console.log('[Order] Creating order:', {
+    console.log('[Order] Creating order with tier support:', {
       title,
       buyer,
       seller,
@@ -50,21 +52,40 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    // Calculate fees
+    // Get seller's current tier
+    const sellerUser = await User.findOne({ username: seller });
+    if (!sellerUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Seller not found'
+      });
+    }
+    
+    const sellerTier = sellerUser.tier || 'Tease';
+    const tierInfo = TIER_CONFIG.getTierByName(sellerTier);
+    
+    console.log('[Order] Seller tier:', sellerTier, 'Bonus:', (tierInfo.bonusPercentage * 100).toFixed(0) + '%');
+
+    // Calculate fees with tier bonus
     const actualPrice = Number(price) || 0;
     const actualMarkedUpPrice = Number(markedUpPrice) || Math.round(actualPrice * 1.1 * 100) / 100;
+    
+    // Calculate tier-based earnings
+    const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(actualPrice, sellerTier);
+    const platformFee = TIER_CONFIG.calculatePlatformFee(actualPrice, sellerTier);
+    const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
     const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
-    const sellerPlatformFee = Math.round(actualPrice * 0.1 * 100) / 100;
-    const totalPlatformFee = Math.round((buyerMarkupFee + sellerPlatformFee) * 100) / 100;
-    const sellerEarnings = Math.round((actualPrice - sellerPlatformFee) * 100) / 100;
+    const totalPlatformRevenue = Math.round((platformFee + buyerMarkupFee) * 100) / 100;
 
-    console.log('[Order] Fee calculation:', {
+    console.log('[Order] Tier-based calculation:', {
       price: actualPrice,
       markedUpPrice: actualMarkedUpPrice,
+      sellerTier,
+      tierBonus,
+      sellerEarnings,
+      platformFee,
       buyerMarkupFee,
-      sellerPlatformFee,
-      totalPlatformFee,
-      sellerEarnings
+      totalPlatformRevenue
     });
 
     // Get buyer wallet
@@ -87,15 +108,6 @@ router.post('/', authMiddleware, async (req, res) => {
     // Get or create seller wallet
     let sellerWallet = await Wallet.findOne({ username: seller });
     if (!sellerWallet) {
-      // Get seller user to know their role
-      const sellerUser = await User.findOne({ username: seller });
-      if (!sellerUser) {
-        return res.status(404).json({
-          success: false,
-          error: 'Seller not found'
-        });
-      }
-      
       sellerWallet = new Wallet({
         username: seller,
         role: 'seller',
@@ -127,22 +139,20 @@ router.post('/', authMiddleware, async (req, res) => {
       await buyerWallet.withdraw(actualMarkedUpPrice);
       console.log('[Order] Deducted', actualMarkedUpPrice, 'from buyer', buyer);
 
-      // 2. Credit to seller (price minus their 10% fee)
+      // 2. Credit to seller (with tier bonus)
       await sellerWallet.deposit(sellerEarnings);
-      console.log('[Order] Credited', sellerEarnings, 'to seller', seller);
+      console.log('[Order] Credited', sellerEarnings, 'to seller', seller, '(includes', tierBonus, 'tier bonus)');
 
       // 3. Credit platform fee to platform wallet
-      await platformWallet.deposit(totalPlatformFee);
-      console.log('[Order] Credited', totalPlatformFee, 'to platform wallet');
+      await platformWallet.deposit(totalPlatformRevenue);
+      console.log('[Order] Credited', totalPlatformRevenue, 'to platform wallet');
 
-      // ================== CRITICAL FIX: UPDATE LISTING STATUS ==================
-      // Update the listing status to 'sold' if listingId is provided
+      // Update listing status
       if (listingId) {
         console.log('[Order] Updating listing status for ID:', listingId);
         
         const listing = await Listing.findById(listingId);
         if (listing) {
-          // Update listing to sold status
           listing.status = 'sold';
           listing.soldAt = new Date();
           listing.soldTo = buyer;
@@ -152,7 +162,6 @@ router.post('/', authMiddleware, async (req, res) => {
           
           // Emit WebSocket event for real-time update
           if (global.webSocketService) {
-            // Emit listing sold event
             if (global.webSocketService.emitListingSold) {
               global.webSocketService.emitListingSold({
                 _id: listing._id,
@@ -164,7 +173,6 @@ router.post('/', authMiddleware, async (req, res) => {
               });
             }
             
-            // Also emit a generic listing update event using io.emit if available
             if (global.webSocketService.io && global.webSocketService.io.emit) {
               global.webSocketService.io.emit('listing:sold', {
                 listingId: listing._id.toString(),
@@ -177,9 +185,8 @@ router.post('/', authMiddleware, async (req, res) => {
           console.warn('[Order] Warning: Listing not found for ID:', listingId);
         }
       }
-      // ========================================================================
 
-      // Create the order
+      // Create the order with tier information
       const order = new Order({
         title,
         description,
@@ -196,19 +203,19 @@ router.post('/', authMiddleware, async (req, res) => {
         shippingStatus: 'pending',
         paymentStatus: 'completed',
         paymentCompletedAt: new Date(),
-        // Fee tracking
-        platformFee: totalPlatformFee,
+        // Tier-based fee tracking
+        platformFee: platformFee,
         buyerMarkupFee,
-        sellerPlatformFee,
+        sellerPlatformFee: platformFee,
         sellerEarnings,
-        tierCreditAmount: 0
+        tierCreditAmount: tierBonus
       });
 
       await order.save();
-      console.log('[Order] Order created:', order._id);
+      console.log('[Order] Order created with tier:', order._id);
 
       // Create transaction records
-      // 1. Main purchase transaction
+      // 1. Main purchase transaction with tier info
       const purchaseTransaction = new Transaction({
         type: 'purchase',
         amount: actualMarkedUpPrice,
@@ -216,7 +223,7 @@ router.post('/', authMiddleware, async (req, res) => {
         to: seller,
         fromRole: 'buyer',
         toRole: 'seller',
-        description: `Purchase: ${title}`,
+        description: `Purchase: ${title} (${sellerTier} tier)`,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
@@ -227,7 +234,9 @@ router.post('/', authMiddleware, async (req, res) => {
           buyerPayment: actualMarkedUpPrice,
           sellerEarnings,
           seller,
-          buyer
+          buyer,
+          sellerTier,
+          tierBonus
         }
       });
       await purchaseTransaction.save();
@@ -235,7 +244,7 @@ router.post('/', authMiddleware, async (req, res) => {
       // 2. Platform fee transaction
       const feeTransaction = new Transaction({
         type: 'platform_fee',
-        amount: totalPlatformFee,
+        amount: totalPlatformRevenue,
         from: buyer,
         to: 'platform',
         fromRole: 'buyer',
@@ -248,20 +257,53 @@ router.post('/', authMiddleware, async (req, res) => {
           listingId,
           listingTitle: title,
           buyerFee: buyerMarkupFee,
-          sellerFee: sellerPlatformFee,
-          totalFee: totalPlatformFee,
+          sellerFee: platformFee,
+          totalFee: totalPlatformRevenue,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
           seller,
-          buyer
+          buyer,
+          sellerTier,
+          tierAdjustedFee: platformFee
         }
       });
       await feeTransaction.save();
+
+      // 3. Create tier credit transaction if there's a bonus
+      if (tierBonus > 0) {
+        const tierCreditTransaction = new Transaction({
+          type: 'tier_credit',
+          amount: tierBonus,
+          from: 'platform',
+          to: seller,
+          fromRole: 'admin',
+          toRole: 'seller',
+          description: `Tier bonus (${sellerTier}): +${(tierInfo.bonusPercentage * 100).toFixed(0)}%`,
+          status: 'completed',
+          completedAt: new Date(),
+          metadata: {
+            orderId: order._id.toString(),
+            listingTitle: title,
+            tierBonus,
+            sellerTier,
+            bonusPercentage: tierInfo.bonusPercentage
+          }
+        });
+        await tierCreditTransaction.save();
+        console.log('[Order] Created tier credit transaction:', tierBonus);
+      }
 
       // Update order with transaction references
       order.paymentTransactionId = purchaseTransaction._id;
       order.feeTransactionId = feeTransaction._id;
       await order.save();
+
+      // UPDATE SELLER TIER after successful sale
+      console.log('[Order] Updating seller tier after sale...');
+      const tierUpdateResult = await tierService.updateSellerTier(seller);
+      if (tierUpdateResult.changed) {
+        console.log('[Order] Seller tier updated:', tierUpdateResult.oldTier, '->', tierUpdateResult.newTier);
+      }
 
       // Emit WebSocket events using global webSocketService
       if (global.webSocketService) {
@@ -283,7 +325,7 @@ router.post('/', authMiddleware, async (req, res) => {
           'sale'
         );
 
-        // Platform balance update - emit both regular and platform-specific events
+        // Platform balance update
         global.webSocketService.emitBalanceUpdate(
           'platform',
           'admin',
@@ -292,7 +334,6 @@ router.post('/', authMiddleware, async (req, res) => {
           'platform_fee'
         );
         
-        // Also emit platform-specific balance update for admin users
         if (global.webSocketService.emitPlatformBalanceUpdate) {
           global.webSocketService.emitPlatformBalanceUpdate(platformWallet.balance);
         }
@@ -310,14 +351,24 @@ router.post('/', authMiddleware, async (req, res) => {
             seller: order.seller,
             buyer: order.buyer,
             price: order.price,
-            markedUpPrice: order.markedUpPrice
+            markedUpPrice: order.markedUpPrice,
+            sellerTier,
+            tierBonus
+          });
+        }
+
+        // Emit user update if tier changed
+        if (tierUpdateResult && tierUpdateResult.changed) {
+          global.webSocketService.emitUserUpdate(seller, {
+            tier: tierUpdateResult.newTier,
+            totalSales: tierUpdateResult.stats.totalSales
           });
         }
       }
 
-      console.log('[Order] Order processing complete');
+      console.log('[Order] Order processing complete with tier support');
 
-      // Return order data
+      // Return order data with tier info
       res.json({
         success: true,
         data: {
@@ -337,7 +388,9 @@ router.post('/', authMiddleware, async (req, res) => {
           shippingStatus: order.shippingStatus,
           paymentStatus: order.paymentStatus,
           platformFee: order.platformFee,
-          sellerEarnings: order.sellerEarnings
+          sellerEarnings: order.sellerEarnings,
+          tierCreditAmount: order.tierCreditAmount,
+          sellerTier
         }
       });
 
@@ -346,19 +399,16 @@ router.post('/', authMiddleware, async (req, res) => {
       
       // Attempt to rollback (best effort)
       try {
-        // Refund buyer if their balance was deducted
         if (buyerWallet.balance < previousBuyerBalance) {
           buyerWallet.balance = previousBuyerBalance;
           await buyerWallet.save();
         }
         
-        // Revert seller balance if it was credited
         if (sellerWallet.balance > previousSellerBalance) {
           sellerWallet.balance = previousSellerBalance;
           await sellerWallet.save();
         }
         
-        // Revert platform balance if it was credited
         if (platformWallet.balance > previousPlatformBalance) {
           platformWallet.balance = previousPlatformBalance;
           await platformWallet.save();
@@ -437,7 +487,8 @@ router.get('/', authMiddleware, async (req, res) => {
       deliveredDate: order.deliveredDate,
       paymentStatus: order.paymentStatus,
       platformFee: order.platformFee,
-      sellerEarnings: order.sellerEarnings
+      sellerEarnings: order.sellerEarnings,
+      tierCreditAmount: order.tierCreditAmount
     }));
 
     res.json({
@@ -505,7 +556,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
         deliveredDate: order.deliveredDate,
         paymentStatus: order.paymentStatus,
         platformFee: order.platformFee,
-        sellerEarnings: order.sellerEarnings
+        sellerEarnings: order.sellerEarnings,
+        tierCreditAmount: order.tierCreditAmount
       }
     });
 

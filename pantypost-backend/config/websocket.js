@@ -144,6 +144,25 @@ class WebSocketService {
     this.io.to(`${roomType}:${roomId}`).emit(event, data);
   }
 
+  // User update event (ADDED FOR TIER SYSTEM)
+  emitUserUpdate(username, updateData) {
+    // Emit to the user themselves
+    this.emitToUser(username, 'user:updated', {
+      username,
+      ...updateData,
+      timestamp: new Date()
+    });
+    
+    // Also broadcast to all connected clients if tier changed
+    if (updateData.tier) {
+      this.io.emit('seller:tier_updated', {
+        username,
+        tier: updateData.tier,
+        timestamp: new Date()
+      });
+    }
+  }
+
   // Message events
   emitNewMessage(message) {
     this.emitToUser(message.sender, 'message:new', message);
@@ -320,12 +339,20 @@ class WebSocketService {
   }
 
   emitListingSold(listing, buyer) {
+    // Emit with both formats for compatibility
     this.io.emit('listing:sold', {
       id: listing._id,
       title: listing.title,
       soldTo: buyer,
       price: listing.price,
       soldAt: new Date()
+    });
+    
+    // Also emit with listingId format for consistency
+    this.io.emit('listing:sold', {
+      listingId: listing._id,
+      seller: listing.seller,
+      buyer: buyer
     });
   }
 

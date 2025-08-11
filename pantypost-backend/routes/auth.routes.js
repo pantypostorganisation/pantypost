@@ -33,12 +33,13 @@ router.post('/signup', async (req, res) => {
       });
     }
     
-    // Create new user
+    // Create new user - set default tier for sellers
     const newUser = new User({
       username,
       email,
       password, // Will be hashed automatically by the model
-      role: role || 'buyer'
+      role: role || 'buyer',
+      tier: role === 'seller' ? 'Tease' : undefined
     });
     
     await newUser.save();
@@ -57,7 +58,8 @@ router.post('/signup', async (req, res) => {
           id: newUser._id,
           username: newUser.username,
           email: newUser.email,
-          role: newUser.role
+          role: newUser.role,
+          tier: newUser.tier
         },
         token,
         refreshToken: token // For now, same as token
@@ -131,7 +133,8 @@ router.post('/login', async (req, res) => {
           username: user.username,
           email: user.email,
           role: user.role,
-          isVerified: user.isVerified || false
+          isVerified: user.isVerified || false,
+          tier: user.tier || 'Tease'
         },
         token,
         refreshToken: token // For now, same as token
@@ -156,7 +159,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
   });
 });
 
-// GET /api/auth/me - Get current user (requires authentication)
+// GET /api/auth/me - Get current user with TIER INFORMATION
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -171,6 +174,30 @@ router.get('/me', authMiddleware, async (req, res) => {
       });
     }
     
+    // Get tier information for sellers
+    let tierInfo = null;
+    if (user.role === 'seller') {
+      const TIER_CONFIG = require('../config/tierConfig');
+      const tierService = require('../services/tierService');
+      
+      const currentTier = user.tier || 'Tease';
+      const tierConfig = TIER_CONFIG.getTierByName(currentTier);
+      const stats = await tierService.calculateSellerStats(user.username);
+      
+      tierInfo = {
+        tier: currentTier,
+        level: tierConfig.level,
+        bonusPercentage: tierConfig.bonusPercentage,
+        color: tierConfig.color,
+        benefits: tierConfig.benefits,
+        stats: {
+          totalSales: stats.totalSales,
+          totalRevenue: stats.totalRevenue
+        },
+        nextTier: TIER_CONFIG.getNextTier(currentTier)
+      };
+    }
+    
     res.json({
       success: true,
       data: {
@@ -180,13 +207,22 @@ router.get('/me', authMiddleware, async (req, res) => {
         email: user.email,
         isVerified: user.isVerified || false,
         tier: user.tier || 'Tease',
+        tierInfo: tierInfo,
         subscriberCount: user.subscriberCount || 0,
         totalSales: user.totalSales || 0,
         rating: user.rating || 0,
-        reviewCount: user.reviewCount || 0
+        reviewCount: user.reviewCount || 0,
+        profilePic: user.profilePic,
+        bio: user.bio,
+        subscriptionPrice: user.subscriptionPrice,
+        galleryImages: user.galleryImages || [],
+        settings: user.settings,
+        joinedDate: user.joinedDate,
+        lastActive: user.lastActive
       }
     });
   } catch (error) {
+    console.error('[Auth] Error fetching user data:', error);
     res.status(500).json({
       success: false,
       error: {
