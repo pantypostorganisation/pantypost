@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { apiConfig } from '@/config/environment';
 
 // ==================== TYPES ====================
 
@@ -70,6 +71,27 @@ class ApiClient {
     this.authContext = authContext;
   }
 
+  /**
+   * Build full API URL - handles both relative and absolute endpoints
+   */
+  private buildUrl(endpoint: string): string {
+    // If endpoint already starts with http/https, return as is
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      return endpoint;
+    }
+    
+    // Ensure endpoint starts with /
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    
+    // If baseURL already ends with /api, don't add it again
+    if (this.baseURL.endsWith('/api')) {
+      return `${this.baseURL}${path}`;
+    }
+    
+    // Otherwise, add /api prefix to the path
+    return `${this.baseURL}/api${path}`;
+  }
+
   private async refreshTokens(): Promise<AuthTokens | null> {
     // Prevent multiple simultaneous refresh attempts
     if (this.refreshPromise) {
@@ -83,7 +105,7 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        const response = await fetch(this.buildUrl('/auth/refresh'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -103,7 +125,7 @@ class ApiClient {
           
           this.authContext.setTokens(newTokens);
           
-          // 🔧 FIRE TOKEN UPDATE EVENT for WebSocket
+          // Fire token update event for WebSocket
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('auth-token-updated', { 
               detail: { token: newTokens.token } 
@@ -184,9 +206,9 @@ class ApiClient {
     }
 
     try {
-      const fullEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const url = this.buildUrl(endpoint);
       
-      const response = await fetch(`${this.baseURL}${fullEndpoint}`, {
+      const response = await fetch(url, {
         ...options,
         headers: headerObj,
       });
@@ -199,7 +221,7 @@ class ApiClient {
         if (newTokens) {
           // Retry request with new token
           headerObj['Authorization'] = `Bearer ${newTokens.token}`;
-          const retryResponse = await fetch(`${this.baseURL}${fullEndpoint}`, {
+          const retryResponse = await fetch(url, {
             ...options,
             headers: headerObj,
           });
@@ -250,9 +272,10 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+// Get API base URL from environment config
+const API_BASE_URL = apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// 🔧 ENHANCED: Token storage with WebSocket event support
+// Enhanced Token storage with WebSocket event support
 class TokenStorage {
   private memoryTokens: AuthTokens | null = null;
 
@@ -400,31 +423,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: 'buyer' | 'seller' | 'admin' = 'buyer'
   ): Promise<boolean> => {
     console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
-    console.log('[Auth] API endpoint:', `${API_BASE_URL}/auth/login`);
     
     setLoading(true);
     setError(null);
 
     try {
-      console.log('[Auth] Making login request...');
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role }),
+      // Use the API client which handles URL construction properly
+      const response = await apiClientRef.current!.post('/auth/login', {
+        username,
+        password,
+        role
       });
 
-      const data = await response.json();
       console.log('[Auth] Login response:', { 
-        status: response.status, 
-        success: data.success, 
-        hasUser: !!data.data?.user 
+        success: response.success, 
+        hasUser: !!response.data?.user 
       });
 
-      if (data.success && data.data) {
+      if (response.success && response.data) {
         // Calculate token expiration (7 days as per backend)
         const tokens: AuthTokens = {
-          token: data.data.token,
-          refreshToken: data.data.refreshToken,
+          token: response.data.token,
+          refreshToken: response.data.refreshToken,
           expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
         };
         
@@ -432,13 +452,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tokenStorageRef.current.setTokens(tokens);
         
         // Set user state
-        setUser(data.data.user);
+        setUser(response.data.user);
         
         console.log('[Auth] Login successful');
         setLoading(false);
         return true;
       } else {
-        const errorMessage = data.error?.message || 'Login failed';
+        const errorMessage = response.error?.message || 'Login failed';
         setError(errorMessage);
         setLoading(false);
         return false;
@@ -483,7 +503,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const response = await apiClientRef.current!.patch<User>(
-        `/users/${user.username}`,
+        `/users/${user.username}/profile`,
         updates
       );
 
@@ -528,7 +548,7 @@ export function useAuth() {
   return context;
 }
 
-// 🔧 NEW: Export getAuthToken globally for WebSocket access
+// Export getAuthToken globally for WebSocket access
 export const getGlobalAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
   

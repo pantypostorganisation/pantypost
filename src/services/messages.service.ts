@@ -28,6 +28,7 @@ export interface Message {
     tipAmount?: number;
   };
   attachments?: MessageAttachment[];
+  threadId?: string;
 }
 
 export interface MessageAttachment {
@@ -343,15 +344,34 @@ export class MessagesService {
         };
       }
 
+      const conversationKey = this.getConversationKey(sanitizedRequest.sender, sanitizedRequest.receiver);
+
       if (FEATURES.USE_API_MESSAGES) {
-        return await apiCall<Message>(API_ENDPOINTS.MESSAGES.SEND, {
+        const response = await apiCall<Message>(API_ENDPOINTS.MESSAGES.SEND, {
           method: 'POST',
           body: JSON.stringify(sanitizedRequest),
         });
+
+        if (response.success && response.data) {
+          // Update local cache
+          const messages = await this.getAllMessages();
+          if (!messages[conversationKey]) {
+            messages[conversationKey] = [];
+          }
+          messages[conversationKey].push(response.data);
+          await storageService.setItem('panty_messages', messages);
+          
+          // Update cache
+          this.messageCache.set(conversationKey, messages[conversationKey]);
+          
+          // Notify listeners
+          this.notifyMessageListeners(conversationKey, response.data);
+        }
+
+        return response;
       }
 
       // LocalStorage implementation
-      const conversationKey = this.getConversationKey(sanitizedRequest.sender, sanitizedRequest.receiver);
       const messages = await this.getAllMessages();
       
       const newMessage: Message = {
@@ -365,6 +385,7 @@ export class MessagesService {
         type: sanitizedRequest.type || 'normal',
         meta: sanitizedRequest.meta,
         attachments: sanitizedRequest.attachments,
+        threadId: conversationKey,
       };
 
       if (!messages[conversationKey]) {
@@ -450,7 +471,7 @@ export class MessagesService {
   }
 
   /**
-   * Mark messages as read
+   * Mark messages as read - FIXED VERSION
    */
   async markMessagesAsRead(
     username: string,
@@ -469,18 +490,52 @@ export class MessagesService {
         };
       }
 
+      const conversationKey = this.getConversationKey(sanitizedUsername, sanitizedOtherParty);
+      
       if (FEATURES.USE_API_MESSAGES) {
-        return await apiCall<void>(API_ENDPOINTS.MESSAGES.MARK_READ, {
+        // Get messages first to get their IDs
+        const messages = await this.getAllMessages();
+        const threadMessages = messages[conversationKey] || [];
+        
+        // Get IDs of unread messages where current user is receiver
+        const messageIds = threadMessages
+          .filter(msg => msg.receiver === sanitizedUsername && !msg.isRead && !msg.read)
+          .map(msg => msg.id)
+          .filter((id): id is string => id !== undefined);
+        
+        if (messageIds.length === 0) {
+          return { success: true }; // No messages to mark as read
+        }
+        
+        // Send the messageIds array that backend expects
+        const response = await apiCall<void>(API_ENDPOINTS.MESSAGES.MARK_READ, {
           method: 'POST',
-          body: JSON.stringify({ 
-            username: sanitizedUsername, 
-            otherParty: sanitizedOtherParty 
-          }),
+          body: JSON.stringify({ messageIds }),
         });
+
+        if (response.success) {
+          // Update local storage after successful API call
+          const updatedMessages = await this.getAllMessages();
+          if (updatedMessages[conversationKey]) {
+            updatedMessages[conversationKey] = updatedMessages[conversationKey].map(msg => {
+              if (msg.receiver === sanitizedUsername && msg.sender === sanitizedOtherParty) {
+                return { ...msg, isRead: true, read: true };
+              }
+              return msg;
+            });
+            
+            await storageService.setItem('panty_messages', updatedMessages);
+            this.messageCache.set(conversationKey, updatedMessages[conversationKey]);
+          }
+          
+          // Clear notifications
+          await this.clearMessageNotifications(sanitizedUsername, sanitizedOtherParty);
+        }
+
+        return response;
       }
 
       // LocalStorage implementation
-      const conversationKey = this.getConversationKey(sanitizedUsername, sanitizedOtherParty);
       const messages = await this.getAllMessages();
       
       if (messages[conversationKey]) {

@@ -1,10 +1,19 @@
-// src/context/MessageContext.tsx - COMPLETE FIXED VERSION
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// src/context/MessageContext.tsx - FIXED VERSION WITHOUT HOOKS ERRORS
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { v4 as uuidv4 } from 'uuid';
 import { messagesService, storageService } from '@/services';
 import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
+
+// Try to import WebSocket context - but don't use it inside useMemo
+let WebSocketContext: React.Context<any> | undefined;
+try {
+  const module = require('@/context/WebSocketContext');
+  WebSocketContext = module.WebSocketContext;
+} catch (e) {
+  console.log('WebSocket context not available');
+}
 
 // Enhanced Message type with id and isRead
 type Message = {
@@ -25,6 +34,7 @@ type Message = {
     imageUrl?: string;
     tipAmount?: number;
   };
+  threadId?: string;
 };
 
 // Enhanced ReportLog type with processing status
@@ -80,7 +90,7 @@ type MessageNotification = {
 // Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
-  isLoading: boolean; // Add loading state
+  isLoading: boolean;
   sendMessage: (
     sender: string,
     receiver: string,
@@ -134,7 +144,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
-  const [isLoading, setIsLoading] = useState(true); // Add loading state
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Get WebSocket context properly at the top level
+  const webSocket = WebSocketContext ? useContext(WebSocketContext) : null;
 
   // Initialize service on mount
   useEffect(() => {
@@ -152,7 +165,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       try {
         setIsLoading(true);
 
-        // Load messages - using storageService since messagesService doesn't have a getAllMessages method
+        // Load messages
         const storedMessages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
 
         // Ensure we have a valid object
@@ -174,7 +187,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
                     if (!migrated[conversationKey]) {
                       migrated[conversationKey] = [];
                     }
-                    // Sanitize content when migrating
                     migrated[conversationKey].push({
                       ...msg,
                       content: sanitizeStrict(msg.content || '')
@@ -223,7 +235,123 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
 
     loadData();
-  }, []); // Only run once on mount
+  }, []);
+
+  // WebSocket listener for new messages
+  useEffect(() => {
+    if (!webSocket) return;
+
+    // Subscribe to new message events
+    const unsubscribe = webSocket.subscribe && webSocket.subscribe('message:new' as any, (data: any) => {
+      console.log('New message received via WebSocket:', data);
+      
+      if (data && data.sender && data.receiver) {
+        const conversationKey = getConversationKey(data.sender, data.receiver);
+        
+        setMessages(prev => {
+          const existingMessages = prev[conversationKey] || [];
+          
+          // Check if message already exists (by ID)
+          if (data.id && existingMessages.some(m => m.id === data.id)) {
+            return prev;
+          }
+          
+          const newMessage: Message = {
+            id: data.id,
+            sender: data.sender,
+            receiver: data.receiver,
+            content: data.content,
+            date: data.date || data.createdAt || new Date().toISOString(),
+            isRead: false,
+            read: false,
+            type: data.type,
+            meta: data.meta,
+            threadId: data.threadId || conversationKey,
+          };
+          
+          return {
+            ...prev,
+            [conversationKey]: [...existingMessages, newMessage],
+          };
+        });
+
+        // Update notifications if it's not a custom request
+        if (data.type !== 'customRequest') {
+          setMessageNotifications(prev => {
+            const sellerNotifs = prev[data.receiver] || [];
+            const existingIndex = sellerNotifs.findIndex((n: MessageNotification) => n.buyer === data.sender);
+
+            if (existingIndex >= 0) {
+              const updated = [...sellerNotifs];
+              updated[existingIndex] = {
+                buyer: data.sender,
+                messageCount: updated[existingIndex].messageCount + 1,
+                lastMessage: data.content.substring(0, 50) + (data.content.length > 50 ? '...' : ''),
+                timestamp: new Date().toISOString()
+              };
+              return {
+                ...prev,
+                [data.receiver]: updated
+              };
+            } else {
+              return {
+                ...prev,
+                [data.receiver]: [...sellerNotifs, {
+                  buyer: data.sender,
+                  messageCount: 1,
+                  lastMessage: data.content.substring(0, 50) + (data.content.length > 50 ? '...' : ''),
+                  timestamp: new Date().toISOString()
+                }]
+              };
+            }
+          });
+        }
+      }
+    });
+
+    // Also listen for custom DOM events as fallback
+    const handleNewMessage = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const data = customEvent.detail;
+      
+      if (data && data.sender && data.receiver) {
+        const conversationKey = getConversationKey(data.sender, data.receiver);
+        
+        setMessages(prev => {
+          const existingMessages = prev[conversationKey] || [];
+          
+          if (data.id && existingMessages.some(m => m.id === data.id)) {
+            return prev;
+          }
+          
+          const newMessage: Message = {
+            id: data.id,
+            sender: data.sender,
+            receiver: data.receiver,
+            content: data.content,
+            date: data.date || data.createdAt || new Date().toISOString(),
+            isRead: false,
+            read: false,
+            type: data.type,
+            meta: data.meta,
+            threadId: data.threadId || conversationKey,
+          };
+          
+          return {
+            ...prev,
+            [conversationKey]: [...existingMessages, newMessage],
+          };
+        });
+      }
+    };
+
+    window.addEventListener('message:new', handleNewMessage);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('message:new', handleNewMessage);
+    };
+  }, [webSocket]);
 
   // Save data whenever it changes
   useEffect(() => {
@@ -256,8 +384,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [messageNotifications, isLoading]);
 
-  // FIXED: Send message with proper image handling
-  const sendMessage = async (
+  // Send message with proper image handling
+  const sendMessage = useCallback(async (
     sender: string,
     receiver: string,
     content: string,
@@ -277,7 +405,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     // For image messages, allow empty content or provide default
     let sanitizedContent = content;
     if (options?.type === 'image' && !content.trim() && options?.meta?.imageUrl) {
-      // If it's an image message with no text, use a default message
       sanitizedContent = 'Image shared';
     }
 
@@ -323,6 +450,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           read: result.data.read,
           type: result.data.type,
           meta: result.data.meta,
+          threadId: result.data.threadId || conversationKey,
         };
 
         // For image messages, ensure we have the image URL in meta
@@ -376,9 +504,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error) {
       console.error('Error sending message:', error);
     }
-  };
+  }, []);
 
-  const sendCustomRequest = (
+  const sendCustomRequest = useCallback((
     buyer: string,
     seller: string,
     content: string,
@@ -409,14 +537,14 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         message: validation.data.message,
       },
     });
-  };
+  }, [sendMessage]);
 
-  const getMessagesForUsers = (userA: string, userB: string): Message[] => {
+  const getMessagesForUsers = useCallback((userA: string, userB: string): Message[] => {
     const conversationKey = getConversationKey(userA, userB);
     return messages[conversationKey] || [];
-  };
+  }, [messages]);
 
-  const getThreadsForUser = (username: string, role?: 'buyer' | 'seller'): MessageThread => {
+  const getThreadsForUser = useCallback((username: string, role?: 'buyer' | 'seller'): MessageThread => {
     const threads: MessageThread = {};
 
     Object.entries(messages).forEach(([key, msgs]) => {
@@ -436,9 +564,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     return threads;
-  };
+  }, [messages]);
 
-  const getThreadInfo = (username: string, otherParty: string): ThreadInfo => {
+  const getThreadInfo = useCallback((username: string, otherParty: string): ThreadInfo => {
     const conversationKey = getConversationKey(username, otherParty);
     const threadMessages = messages[conversationKey] || [];
 
@@ -454,9 +582,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       lastMessage,
       otherParty
     };
-  };
+  }, [messages]);
 
-  const getAllThreadsInfo = (username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
+  const getAllThreadsInfo = useCallback((username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
     const threads = getThreadsForUser(username, role);
     const threadInfos: { [otherParty: string]: ThreadInfo } = {};
 
@@ -465,9 +593,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     return threadInfos;
-  };
+  }, [getThreadsForUser, getThreadInfo]);
 
-  const markMessagesAsRead = async (userA: string, userB: string) => {
+  const markMessagesAsRead = useCallback(async (userA: string, userB: string) => {
     try {
       const result = await messagesService.markMessagesAsRead(userA, userB);
       if (result.success) {
@@ -491,9 +619,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
-  };
+  }, []);
 
-  const clearMessageNotifications = (seller: string, buyer: string) => {
+  const clearMessageNotifications = useCallback((seller: string, buyer: string) => {
     setMessageNotifications(prev => {
       const sellerNotifs = prev[seller] || [];
       const filtered = sellerNotifs.filter(n => n.buyer !== buyer);
@@ -507,9 +635,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         [seller]: filtered
       };
     });
-  };
+  }, []);
 
-  const blockUser = async (blocker: string, blockee: string) => {
+  const blockUser = useCallback(async (blocker: string, blockee: string) => {
     try {
       const result = await messagesService.blockUser({
         blocker,
@@ -531,9 +659,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error) {
       console.error('Error blocking user:', error);
     }
-  };
+  }, []);
 
-  const unblockUser = async (blocker: string, blockee: string) => {
+  const unblockUser = useCallback(async (blocker: string, blockee: string) => {
     try {
       const result = await messagesService.unblockUser({
         blocker,
@@ -552,9 +680,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error) {
       console.error('Error unblocking user:', error);
     }
-  };
+  }, []);
 
-  const reportUser = async (reporter: string, reportee: string) => {
+  const reportUser = useCallback(async (reporter: string, reportee: string) => {
     const conversationKey = getConversationKey(reporter, reportee);
     const reportMessages = messages[conversationKey] || [];
 
@@ -592,25 +720,25 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     } catch (error) {
       console.error('Error reporting user:', error);
     }
-  };
+  }, [messages]);
 
-  const isBlocked = (blocker: string, blockee: string): boolean => {
+  const isBlocked = useCallback((blocker: string, blockee: string): boolean => {
     return blockedUsers[blocker]?.includes(blockee) ?? false;
-  };
+  }, [blockedUsers]);
 
-  const hasReported = (reporter: string, reportee: string): boolean => {
+  const hasReported = useCallback((reporter: string, reportee: string): boolean => {
     return reportedUsers[reporter]?.includes(reportee) ?? false;
-  };
+  }, [reportedUsers]);
 
-  const getReportCount = (): number => {
+  const getReportCount = useCallback((): number => {
     return reportLogs.filter(report => !report.processed).length;
-  };
+  }, [reportLogs]);
 
   return (
     <MessageContext.Provider
       value={{
         messages,
-        isLoading, // Include loading state
+        isLoading,
         sendMessage,
         sendCustomRequest,
         getMessagesForUsers,

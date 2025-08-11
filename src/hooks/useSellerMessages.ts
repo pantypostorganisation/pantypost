@@ -28,11 +28,12 @@ const MessageSchema = z.object({
   sender: z.string().min(1).max(100),
   receiver: z.string().min(1).max(100),
   content: z.string().min(0).max(5000),
-  date: z.string().datetime(),
+  date: z.string(),
   read: z.boolean().optional(),
+  isRead: z.boolean().optional(),
   type: z.enum(['normal', 'customRequest', 'image', 'tip']).optional(),
   meta: z.object({
-    id: z.string().uuid().optional(),
+    id: z.string().optional(),
     title: z.string().max(200).optional(),
     price: z.number().min(0).max(10000).optional(),
     tags: z.array(z.string().max(50)).max(20).optional(),
@@ -40,7 +41,7 @@ const MessageSchema = z.object({
     imageUrl: z.string().url().optional(),
     tipAmount: z.number().min(1).max(500).optional(),
   }).optional(),
-});
+}).passthrough(); // Allow additional fields like id
 
 type Message = z.infer<typeof MessageSchema>;
 
@@ -153,9 +154,9 @@ export function useSellerMessages() {
         setActiveThread(sanitizedThread);
       }
     }
-  }, [searchParams, user]);
+  }, [searchParams, user, activeThread]);
   
-  // Process messages into threads with validation
+  // FIXED: Process messages into threads with proper conversation retrieval
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
@@ -167,90 +168,82 @@ export function useSellerMessages() {
       return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
     }
     
-    // Process all messages to find conversations where the seller is involved
+    console.log('[SellerMessages] Processing messages for seller:', user.username);
+    console.log('[SellerMessages] Available message keys:', Object.keys(messages));
+    
+    // Process all conversations to find ones involving the seller
     Object.entries(messages).forEach(([conversationKey, msgs]) => {
       if (!Array.isArray(msgs) || msgs.length === 0) return;
       
-      // Validate and sanitize messages
+      // Check if this conversation involves the current seller
+      const participants = conversationKey.split('-');
+      const involvesCurrentSeller = participants.includes(user.username);
+      
+      if (!involvesCurrentSeller) return;
+      
+      console.log('[SellerMessages] Found conversation involving seller:', conversationKey);
+      
+      // Determine the other party
+      const otherParty = participants.find(p => p !== user.username);
+      if (!otherParty) return;
+      
+      // Check if other party is a buyer (skip seller-to-seller conversations)
+      const otherUser = users?.[otherParty];
+      if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
+        console.log('[SellerMessages] Skipping conversation with non-buyer:', otherParty, otherUser?.role);
+        return;
+      }
+      
+      // Validate messages
       const validMessages = msgs.filter(msg => {
         try {
-          // Validate message structure
-          MessageSchema.parse(msg);
-          return true;
+          // Basic validation - don't be too strict
+          return msg && msg.sender && msg.receiver && msg.content !== undefined && msg.date;
         } catch (error) {
           console.warn('Invalid message skipped:', error);
           return false;
         }
       });
       
-      // Check each message to see if our seller is involved
-      validMessages.forEach((msg) => {
-        // Only process if the current user (seller) is either sender or receiver
-        if (msg.sender === user.username || msg.receiver === user.username) {
-          // Determine the other party
-          const otherParty = msg.sender === user.username ? msg.receiver : msg.sender;
-          
-          // Skip if other party is also a seller/admin
-          const otherUser = users?.[otherParty];
-          if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
-            return;
-          }
-          
-          // Initialize thread if not exists
-          if (!threads[otherParty]) {
-            threads[otherParty] = [];
-            
-            // Get buyer profile
-            const buyerInfo = users?.[otherParty];
-            const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
-            
-            buyerProfiles[otherParty] = { 
-              pic: null,
-              verified: isVerified
-            };
-          }
-        }
-      });
+      if (validMessages.length === 0) return;
+      
+      // Sort messages by date
+      const sortedMessages = validMessages.sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      
+      // Add to threads
+      threads[otherParty] = sortedMessages;
+      
+      // Get last message
+      lastMessages[otherParty] = sortedMessages[sortedMessages.length - 1];
+      
+      // Count unread messages (messages FROM buyer TO seller that are unread)
+      const threadUnreadCount = sortedMessages.filter(
+        (msg) => msg.receiver === user.username && msg.sender === otherParty && !msg.read && !msg.isRead
+      ).length;
+      
+      unreadCounts[otherParty] = threadUnreadCount;
+      
+      // Add to total if not already marked as read
+      if (!readThreadsRef.current.has(otherParty) && threadUnreadCount > 0) {
+        totalUnreadCount += threadUnreadCount;
+      }
+      
+      // Get buyer profile
+      const buyerInfo = users?.[otherParty];
+      const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+      
+      buyerProfiles[otherParty] = { 
+        pic: null, // This would need to be loaded separately
+        verified: isVerified || false
+      };
+      
+      console.log(`[SellerMessages] Thread with ${otherParty}: ${sortedMessages.length} messages, ${threadUnreadCount} unread`);
     });
     
-    // Now populate the threads with actual messages
-    Object.keys(threads).forEach(buyer => {
-      const conversationKey = getConversationKey(user.username, buyer);
-      const conversationMessages = messages[conversationKey] || [];
-      
-      if (conversationMessages.length > 0) {
-        // Validate and sort messages by date
-        const validMessages = conversationMessages.filter(msg => {
-          try {
-            MessageSchema.parse(msg);
-            return true;
-          } catch {
-            return false;
-          }
-        });
-        
-        threads[buyer] = validMessages.sort((a, b) => 
-          new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-        
-        // Get last message
-        if (threads[buyer].length > 0) {
-          lastMessages[buyer] = threads[buyer][threads[buyer].length - 1];
-        }
-        
-        // Count unread messages (messages FROM buyer TO seller)
-        const threadUnreadCount = threads[buyer].filter(
-          (msg) => !msg.read && msg.sender === buyer && msg.receiver === user.username
-        ).length;
-        
-        unreadCounts[buyer] = threadUnreadCount;
-        
-        // Add to total if not already marked as read
-        if (!readThreadsRef.current.has(buyer) && threadUnreadCount > 0) {
-          totalUnreadCount += threadUnreadCount;
-        }
-      }
-    });
+    console.log('[SellerMessages] Total threads found:', Object.keys(threads).length);
+    console.log('[SellerMessages] Thread buyers:', Object.keys(threads));
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
   }, [user?.username, messages, users]);
@@ -301,11 +294,10 @@ export function useSellerMessages() {
     clearMessageNotifications(user.username, activeThread);
     
     // Check if there are unread messages
-    const conversationKey = getConversationKey(user.username, activeThread);
-    const threadMessages = messages[conversationKey] || [];
+    const threadMessages = threads[activeThread] || [];
     
     const hasUnread = threadMessages.some(
-      msg => msg.receiver === user.username && msg.sender === activeThread && !msg.read
+      msg => msg.receiver === user.username && msg.sender === activeThread && !msg.read && !msg.isRead
     );
     
     if (hasUnread) {
@@ -323,11 +315,11 @@ export function useSellerMessages() {
     }
     
     return;
-  }, [activeThread, user?.username, markMessagesAsRead, messages, clearMessageNotifications]);
+  }, [activeThread, user?.username, markMessagesAsRead, threads, clearMessageNotifications]);
   
   // Handle message visibility for marking as read
   const handleMessageVisible = useCallback((msg: any) => {
-    if (!user || msg.sender === user.username || msg.read) return;
+    if (!user || msg.sender === user.username || msg.read || msg.isRead) return;
     
     const messageId = `${msg.sender}-${msg.receiver}-${msg.date}`;
     
@@ -344,11 +336,10 @@ export function useSellerMessages() {
       });
       
       // Update read threads if all messages are read
-      const conversationKey = getConversationKey(user.username, msg.sender);
-      const threadMessages = messages[conversationKey] || [];
+      const threadMessages = threads[msg.sender] || [];
       
       const remainingUnread = threadMessages.filter(
-        m => !m.read && m.sender === msg.sender && m.receiver === user.username && 
+        m => !m.read && !m.isRead && m.sender === msg.sender && m.receiver === user.username && 
         `${m.sender}-${m.receiver}-${m.date}` !== messageId
       ).length;
       
@@ -356,7 +347,7 @@ export function useSellerMessages() {
         readThreadsRef.current.add(msg.sender);
       }
     });
-  }, [user, markMessagesAsRead, messages]);
+  }, [user, markMessagesAsRead, threads]);
   
   // Handle sending reply with validation and rate limiting
   const handleReply = useCallback(() => {
@@ -373,12 +364,12 @@ export function useSellerMessages() {
       // Validate and sanitize message content
       const validationResult = messageSchemas.messageContent.safeParse(replyMessage);
       
-      if (!validationResult.success) {
+      if (!validationResult.success && replyMessage.trim()) {
         setValidationErrors({ message: validationResult.error.errors[0].message });
         return;
       }
 
-      const sanitizedContent = sanitizeHtml(validationResult.data);
+      const sanitizedContent = replyMessage ? sanitizeHtml(validationResult.data || replyMessage) : '';
 
       // For image messages, validate URL
       if (selectedImage) {
@@ -389,14 +380,14 @@ export function useSellerMessages() {
         }
       }
 
-      console.log('Sending message:', {
+      console.log('[SellerMessages] Sending message:', {
         text: sanitizedContent,
         imageUrl: selectedImage,
         receiver: activeThread
       });
 
-      // For image messages, ensure we have content even if text is empty
-      const messageContent = sanitizedContent || (selectedImage ? '' : '');
+      // For image messages, allow empty text
+      const messageContent = sanitizedContent || (selectedImage ? 'Image shared' : '');
 
       sendMessage(user.username, activeThread, messageContent, {
         type: selectedImage ? 'image' : 'normal',
@@ -408,6 +399,11 @@ export function useSellerMessages() {
       setImageError(null);
       setShowEmojiPicker(false);
       setValidationErrors({});
+      
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     } catch (error) {
       console.error('Failed to send message:', error);
       setValidationErrors({ message: 'Failed to send message' });
@@ -439,8 +435,11 @@ export function useSellerMessages() {
     if (!user) return;
     
     // Validate request ID
-    if (!z.string().uuid().safeParse(customRequestId).success) {
-      console.error('Invalid request ID');
+    const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(customRequestId) ||
+                       /^req_\d+_[a-z0-9]+$/i.test(customRequestId);
+    
+    if (!isValidUuid) {
+      console.error('Invalid request ID format');
       return;
     }
     
@@ -510,8 +509,11 @@ export function useSellerMessages() {
     if (!user) return;
     
     // Validate request ID
-    if (!z.string().uuid().safeParse(customRequestId).success) {
-      console.error('Invalid request ID');
+    const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(customRequestId) ||
+                       /^req_\d+_[a-z0-9]+$/i.test(customRequestId);
+    
+    if (!isValidUuid) {
+      console.error('Invalid request ID format');
       return;
     }
     
@@ -528,8 +530,11 @@ export function useSellerMessages() {
   // Handle custom request editing with validation
   const handleEditRequest = useCallback((requestId: string, title: string, price: number, message: string) => {
     // Validate inputs
-    if (!z.string().uuid().safeParse(requestId).success) {
-      console.error('Invalid request ID');
+    const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId) ||
+                       /^req_\d+_[a-z0-9]+$/i.test(requestId);
+    
+    if (!isValidUuid) {
+      console.error('Invalid request ID format');
       return;
     }
     
@@ -648,52 +653,25 @@ export function useSellerMessages() {
         throw new Error(validation.error || 'Invalid file');
       }
       
-      // Additional security check for file content
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const dataUrl = reader.result as string;
-          
-          // Check if it's actually an image
-          if (!dataUrl.startsWith('data:image/')) {
-            throw new Error('File is not a valid image');
-          }
-          
-          // Upload to Cloudinary
-          console.log('Uploading image to Cloudinary...');
-          const uploadResult = await uploadToCloudinary(file);
-          
-          // Validate returned URL
-          const urlValidation = z.string().url().safeParse(uploadResult.url);
-          if (!urlValidation.success) {
-            throw new Error('Invalid upload URL received');
-          }
-          
-          // Set the Cloudinary URL
-          setSelectedImage(uploadResult.url);
-          console.log('Image uploaded successfully:', uploadResult.url);
-        } catch (error) {
-          console.error('Image validation error:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to validate image';
-          setImageError(errorMessage);
-          setSelectedImage(null);
-        } finally {
-          setIsImageLoading(false);
-        }
-      };
+      // Upload to Cloudinary
+      console.log('Uploading image to Cloudinary...');
+      const uploadResult = await uploadToCloudinary(file);
       
-      reader.onerror = () => {
-        setImageError('Failed to read file');
-        setIsImageLoading(false);
-      };
+      // Validate returned URL
+      const urlValidation = z.string().url().safeParse(uploadResult.url);
+      if (!urlValidation.success) {
+        throw new Error('Invalid upload URL received');
+      }
       
-      reader.readAsDataURL(file);
-      
+      // Set the Cloudinary URL
+      setSelectedImage(uploadResult.url);
+      console.log('Image uploaded successfully:', uploadResult.url);
     } catch (error) {
       console.error('Image upload error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to upload image';
       setImageError(errorMessage);
       setSelectedImage(null);
+    } finally {
       setIsImageLoading(false);
     }
   }, [checkImageLimit]);
