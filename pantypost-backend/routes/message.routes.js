@@ -89,16 +89,8 @@ router.post('/send', authMiddleware, async (req, res) => {
     
     await message.save();
     
-    // CRITICAL FIX: Add logging and ensure emission happens
-    console.log('WEBSOCKET: Emitting new message event for message:', {
-      id: message._id.toString(),
-      sender: message.sender,
-      receiver: message.receiver,
-      threadId: message.threadId
-    });
-    
     // WEBSOCKET: Emit new message event with all required fields
-    const messageData = {
+    webSocketService.emitNewMessage({
       id: message._id.toString(),
       sender: message.sender,
       receiver: message.receiver,
@@ -110,17 +102,23 @@ router.post('/send', authMiddleware, async (req, res) => {
       meta: message.meta,
       isRead: false,
       read: false
-    };
-    
-    // Emit to both sender and receiver
-    webSocketService.emitNewMessage(messageData);
-    
-    console.log('WEBSOCKET: Message emission completed');
+    });
     
     // Return the complete message object
     res.json({
       success: true,
-      data: messageData
+      data: {
+        id: message._id.toString(),
+        sender: message.sender,
+        receiver: message.receiver,
+        content: message.content,
+        type: message.type,
+        date: message.createdAt,
+        threadId: message.threadId,
+        meta: message.meta,
+        isRead: false,
+        read: false
+      }
     });
   } catch (error) {
     console.error('Send message error:', error);
@@ -203,7 +201,6 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     
     // WEBSOCKET: Emit message read event if we have a threadId
     if (threadId && result.modifiedCount > 0) {
-      console.log('WEBSOCKET: Emitting message:read event');
       webSocketService.emitMessageRead(messageIds, threadId, currentUser);
     }
     

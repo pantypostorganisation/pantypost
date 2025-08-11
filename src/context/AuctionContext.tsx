@@ -88,11 +88,7 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
 
 export function AuctionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  
-  // Fix: Handle nullable WebSocket context
-  const wsContext = useWebSocket();
-  const subscribe = wsContext?.subscribe || (() => () => {});
-  const isConnected = wsContext?.isConnected || false;
+  const { subscribe, isConnected } = useWebSocket();
   
   const [auctions, setAuctions] = useState<Record<string, AuctionData>>({});
   const [userBids, setUserBids] = useState<Record<string, Bid[]>>({});

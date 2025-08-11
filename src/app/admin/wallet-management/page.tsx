@@ -31,11 +31,7 @@ function AdminWalletContent() {
   } = useWallet();
   const { user } = useAuth();
   const { users: listingUsers } = useListings();
-  
-  // Fix: Handle nullable WebSocket context
-  const wsContext = useWebSocket();
-  const subscribe = wsContext?.subscribe || (() => () => {});
-  const isConnected = wsContext?.isConnected || false;
+  const { subscribe, isConnected } = useWebSocket();
   
   // Force re-render hook
   const [, forceUpdate] = useState({});

@@ -1,14 +1,19 @@
-// src/context/MessageContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+// src/context/MessageContext.tsx - FIXED VERSION WITHOUT HOOKS ERRORS
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { v4 as uuidv4 } from 'uuid';
 import { messagesService, storageService } from '@/services';
 import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
 
-// Import WebSocket context
-import { useWebSocket } from '@/context/WebSocketContext';
-import { WebSocketEvent } from '@/types/websocket';
+// Try to import WebSocket context - but don't use it inside useMemo
+let WebSocketContext: React.Context<any> | undefined;
+try {
+  const module = require('@/context/WebSocketContext');
+  WebSocketContext = module.WebSocketContext;
+} catch (e) {
+  console.log('WebSocket context not available');
+}
 
 // Enhanced Message type with id and isRead
 type Message = {
@@ -117,7 +122,6 @@ type MessageContextType = {
   reportLogs: ReportLog[];
   messageNotifications: { [seller: string]: MessageNotification[] };
   clearMessageNotifications: (seller: string, buyer: string) => void;
-  refreshMessages: () => void;
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -141,15 +145,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [updateTrigger, setUpdateTrigger] = useState(0);
 
-  // Use WebSocket context - with safe fallback
-  const wsContext = useWebSocket ? useWebSocket() : null;
-  const { subscribe, isConnected } = wsContext || { subscribe: null, isConnected: false };
-  
-  // Track processed message IDs to prevent duplicates
-  const processedMessageIds = useRef<Set<string>>(new Set());
-  const subscriptionsRef = useRef<(() => void)[]>([]);
+  // Get WebSocket context properly at the top level
+  const webSocket = WebSocketContext ? useContext(WebSocketContext) : null;
 
   // Initialize service on mount
   useEffect(() => {
@@ -239,94 +237,44 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     loadData();
   }, []);
 
-  // FIXED: WebSocket listener for new messages
+  // WebSocket listener for new messages
   useEffect(() => {
-    // Clean up previous subscriptions
-    subscriptionsRef.current.forEach(unsub => unsub());
-    subscriptionsRef.current = [];
+    if (!webSocket) return;
 
-    if (!subscribe) {
-      console.log('[MessageContext] WebSocket subscribe not available');
-      return;
-    }
-
-    console.log('[MessageContext] Setting up WebSocket listeners, connected:', isConnected);
-
-    // Subscribe to new message events - use the correct event name
-    const unsubscribeNewMessage = subscribe('message:new' as WebSocketEvent, (data: any) => {
-      console.log('[MessageContext] New message received via WebSocket:', data);
+    // Subscribe to new message events
+    const unsubscribe = webSocket.subscribe && webSocket.subscribe('message:new' as any, (data: any) => {
+      console.log('New message received via WebSocket:', data);
       
       if (data && data.sender && data.receiver) {
         const conversationKey = getConversationKey(data.sender, data.receiver);
         
-        // Check if we've already processed this message ID
-        if (data.id && processedMessageIds.current.has(data.id)) {
-          console.log('[MessageContext] Message already processed, skipping:', data.id);
-          return;
-        }
-        
-        if (data.id) {
-          processedMessageIds.current.add(data.id);
-          // Clean up old IDs to prevent memory leak
-          if (processedMessageIds.current.size > 1000) {
-            const idsArray = Array.from(processedMessageIds.current);
-            processedMessageIds.current = new Set(idsArray.slice(-500));
-          }
-        }
-        
-        const newMessage: Message = {
-          id: data.id || uuidv4(),
-          sender: data.sender,
-          receiver: data.receiver,
-          content: data.content || '',
-          date: data.date || data.createdAt || new Date().toISOString(),
-          isRead: data.isRead || false,
-          read: data.read || false,
-          type: data.type || 'normal',
-          meta: data.meta,
-          threadId: data.threadId || conversationKey,
-        };
-        
-        console.log('[MessageContext] Adding new message to conversation:', conversationKey);
-        
-        // Update messages state
         setMessages(prev => {
           const existingMessages = prev[conversationKey] || [];
           
-          // Check if message already exists (by ID or by content+timestamp)
-          const isDuplicate = existingMessages.some(m => 
-            (m.id && m.id === newMessage.id) ||
-            (m.sender === newMessage.sender && 
-             m.content === newMessage.content && 
-             Math.abs(new Date(m.date).getTime() - new Date(newMessage.date).getTime()) < 1000)
-          );
-          
-          if (isDuplicate) {
-            console.log('[MessageContext] Duplicate message detected, skipping');
+          // Check if message already exists (by ID)
+          if (data.id && existingMessages.some(m => m.id === data.id)) {
             return prev;
           }
           
-          const updatedMessages = {
+          const newMessage: Message = {
+            id: data.id,
+            sender: data.sender,
+            receiver: data.receiver,
+            content: data.content,
+            date: data.date || data.createdAt || new Date().toISOString(),
+            isRead: false,
+            read: false,
+            type: data.type,
+            meta: data.meta,
+            threadId: data.threadId || conversationKey,
+          };
+          
+          return {
             ...prev,
             [conversationKey]: [...existingMessages, newMessage],
           };
-          
-          console.log('[MessageContext] Updated messages state with new message');
-          
-          // Save to storage
-          storageService.setItem('panty_messages', updatedMessages).catch(err => 
-            console.error('[MessageContext] Failed to save messages:', err)
-          );
-          
-          return updatedMessages;
         });
-        
-        // Force a re-render to ensure UI updates
-        setUpdateTrigger(prev => {
-          console.log('[MessageContext] Triggering update:', prev + 1);
-          return prev + 1;
-        });
-        
+
         // Update notifications if it's not a custom request
         if (data.type !== 'customRequest') {
           setMessageNotifications(prev => {
@@ -358,112 +306,52 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
           });
         }
-        
-        // Emit a custom event for components to listen to
-        if (typeof window !== 'undefined') {
-          console.log('[MessageContext] Dispatching DOM event for new message');
-          window.dispatchEvent(new CustomEvent('message:new', { detail: newMessage }));
-        }
       }
     });
 
-    // Also listen for message:read events
-    const unsubscribeRead = subscribe('message:read' as WebSocketEvent, (data: any) => {
-      console.log('[MessageContext] Messages marked as read via WebSocket:', data);
-      
-      if (data && data.threadId && data.messageIds) {
-        setMessages(prev => {
-          const updatedMessages = { ...prev };
-          if (updatedMessages[data.threadId]) {
-            updatedMessages[data.threadId] = updatedMessages[data.threadId].map(msg => {
-              if (data.messageIds.includes(msg.id)) {
-                return { ...msg, isRead: true, read: true };
-              }
-              return msg;
-            });
-          }
-          return updatedMessages;
-        });
-        
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
-      }
-    });
-
-    subscriptionsRef.current = [unsubscribeNewMessage, unsubscribeRead];
-
-    return () => {
-      console.log('[MessageContext] Cleaning up WebSocket listeners');
-      subscriptionsRef.current.forEach(unsub => unsub());
-      subscriptionsRef.current = [];
-    };
-  }, [subscribe, isConnected]);
-
-  // Also listen for custom DOM events as fallback
-  useEffect(() => {
+    // Also listen for custom DOM events as fallback
     const handleNewMessage = (event: Event) => {
       const customEvent = event as CustomEvent;
       const data = customEvent.detail;
       
-      console.log('[MessageContext] New message via DOM event:', data);
-      
       if (data && data.sender && data.receiver) {
         const conversationKey = getConversationKey(data.sender, data.receiver);
-        
-        // Check if we've already processed this message
-        if (data.id && processedMessageIds.current.has(data.id)) {
-          return;
-        }
-        
-        if (data.id) {
-          processedMessageIds.current.add(data.id);
-        }
         
         setMessages(prev => {
           const existingMessages = prev[conversationKey] || [];
           
-          // Check if message already exists
           if (data.id && existingMessages.some(m => m.id === data.id)) {
             return prev;
           }
           
           const newMessage: Message = {
-            id: data.id || uuidv4(),
+            id: data.id,
             sender: data.sender,
             receiver: data.receiver,
-            content: data.content || '',
+            content: data.content,
             date: data.date || data.createdAt || new Date().toISOString(),
-            isRead: data.isRead || false,
-            read: data.read || false,
-            type: data.type || 'normal',
+            isRead: false,
+            read: false,
+            type: data.type,
             meta: data.meta,
             threadId: data.threadId || conversationKey,
           };
           
-          const updated = {
+          return {
             ...prev,
             [conversationKey]: [...existingMessages, newMessage],
           };
-          
-          // Save to storage
-          storageService.setItem('panty_messages', updated).catch(err => 
-            console.error('[MessageContext] Failed to save messages:', err)
-          );
-          
-          return updated;
         });
-        
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
       }
     };
 
     window.addEventListener('message:new', handleNewMessage);
 
     return () => {
+      if (unsubscribe) unsubscribe();
       window.removeEventListener('message:new', handleNewMessage);
     };
-  }, []);
+  }, [webSocket]);
 
   // Save data whenever it changes
   useEffect(() => {
@@ -574,14 +462,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           };
         }
 
-        // Add to local state immediately for optimistic update
         setMessages(prev => ({
           ...prev,
           [conversationKey]: [...(prev[conversationKey] || []), newMessage],
         }));
-
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
 
         // Update notifications if needed
         if (options?.type !== 'customRequest') {
@@ -658,7 +542,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const getMessagesForUsers = useCallback((userA: string, userB: string): Message[] => {
     const conversationKey = getConversationKey(userA, userB);
     return messages[conversationKey] || [];
-  }, [messages, updateTrigger]); // Add updateTrigger to dependencies
+  }, [messages]);
 
   const getThreadsForUser = useCallback((username: string, role?: 'buyer' | 'seller'): MessageThread => {
     const threads: MessageThread = {};
@@ -680,7 +564,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     return threads;
-  }, [messages, updateTrigger]); // Add updateTrigger to dependencies
+  }, [messages]);
 
   const getThreadInfo = useCallback((username: string, otherParty: string): ThreadInfo => {
     const conversationKey = getConversationKey(username, otherParty);
@@ -698,7 +582,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       lastMessage,
       otherParty
     };
-  }, [messages, updateTrigger]); // Add updateTrigger to dependencies
+  }, [messages]);
 
   const getAllThreadsInfo = useCallback((username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
     const threads = getThreadsForUser(username, role);
@@ -731,9 +615,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
 
         clearMessageNotifications(userA, userB);
-        
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
       }
     } catch (error) {
       console.error('Error marking messages as read:', error);
@@ -853,12 +734,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return reportLogs.filter(report => !report.processed).length;
   }, [reportLogs]);
 
-  // Add a method to force refresh messages
-  const refreshMessages = useCallback(() => {
-    console.log('[MessageContext] Force refresh triggered');
-    setUpdateTrigger(prev => prev + 1);
-  }, []);
-
   return (
     <MessageContext.Provider
       value={{
@@ -881,8 +756,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         reportedUsers,
         reportLogs,
         messageNotifications,
-        clearMessageNotifications,
-        refreshMessages,
+        clearMessageNotifications
       }}
     >
       {children}

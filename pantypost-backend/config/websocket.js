@@ -7,8 +7,7 @@ class WebSocketService {
   constructor() {
     this.io = null;
     this.activeConnections = new Map();
-    this.userSockets = new Map(); // username -> [socketIds]
-    this.userThreads = new Map(); // username -> Set of active thread IDs
+    this.userSockets = new Map(); // userId -> [socketIds]
   }
 
   initialize(server) {
@@ -54,10 +53,6 @@ class WebSocketService {
       socket.on('room:join', (data) => this.handleJoinRoom(socket, data));
       socket.on('room:leave', (data) => this.handleLeaveRoom(socket, data));
       socket.on('user:online', () => this.handleUserOnline(socket));
-      
-      // NEW: Handle thread focus for auto-read functionality
-      socket.on('thread:focus', (data) => this.handleThreadFocus(socket, data));
-      socket.on('thread:blur', (data) => this.handleThreadBlur(socket, data));
     });
   }
 
@@ -74,11 +69,6 @@ class WebSocketService {
       this.userSockets.set(socket.username, []);
     }
     this.userSockets.get(socket.username).push(socket.id);
-
-    // Initialize user threads tracking
-    if (!this.userThreads.has(socket.username)) {
-      this.userThreads.set(socket.username, new Set());
-    }
 
     // Send connection confirmation
     socket.emit('connected', {
@@ -102,58 +92,11 @@ class WebSocketService {
     
     if (filtered.length === 0) {
       this.userSockets.delete(socket.username);
-      this.userThreads.delete(socket.username);
       // User has no more active connections
       this.broadcastUserStatus(socket.username, false);
     } else {
       this.userSockets.set(socket.username, filtered);
     }
-  }
-
-  // NEW: Handle when user focuses on a thread
-  handleThreadFocus(socket, data) {
-    const { threadId, otherUser } = data;
-    if (!threadId || !otherUser) return;
-
-    console.log(`[WebSocket] ${socket.username} focused on thread with ${otherUser}`);
-    
-    // Track which thread the user is viewing
-    const userThreads = this.userThreads.get(socket.username) || new Set();
-    userThreads.add(threadId);
-    this.userThreads.set(socket.username, userThreads);
-
-    // Join the conversation room
-    socket.join(`conversation:${threadId}`);
-
-    // Notify the other user that this user is viewing the thread
-    this.emitToUser(otherUser, 'thread:user_viewing', {
-      username: socket.username,
-      threadId,
-      viewing: true
-    });
-  }
-
-  // NEW: Handle when user leaves a thread
-  handleThreadBlur(socket, data) {
-    const { threadId, otherUser } = data;
-    if (!threadId || !otherUser) return;
-
-    console.log(`[WebSocket] ${socket.username} left thread with ${otherUser}`);
-    
-    // Remove from tracked threads
-    const userThreads = this.userThreads.get(socket.username) || new Set();
-    userThreads.delete(threadId);
-    this.userThreads.set(socket.username, userThreads);
-
-    // Leave the conversation room
-    socket.leave(`conversation:${threadId}`);
-
-    // Notify the other user that this user left the thread
-    this.emitToUser(otherUser, 'thread:user_viewing', {
-      username: socket.username,
-      threadId,
-      viewing: false
-    });
   }
 
   handleTyping(socket, data) {
@@ -192,8 +135,6 @@ class WebSocketService {
   // Emit events from other parts of the application
   emitToUser(username, event, data) {
     const socketIds = this.userSockets.get(username) || [];
-    console.log(`[WebSocket] Emitting ${event} to ${username} (${socketIds.length} sockets)`);
-    
     socketIds.forEach(socketId => {
       this.io.to(socketId).emit(event, data);
     });
@@ -201,12 +142,6 @@ class WebSocketService {
 
   emitToRoom(roomType, roomId, event, data) {
     this.io.to(`${roomType}:${roomId}`).emit(event, data);
-  }
-
-  // Check if a user is viewing a specific thread
-  isUserViewingThread(username, threadId) {
-    const userThreads = this.userThreads.get(username);
-    return userThreads ? userThreads.has(threadId) : false;
   }
 
   // User update event (ADDED FOR TIER SYSTEM)
@@ -228,84 +163,19 @@ class WebSocketService {
     }
   }
 
-  // ENHANCED: Message events with better logging and auto-read
+  // Message events
   emitNewMessage(message) {
-    console.log('[WebSocket] emitNewMessage called with:', {
-      id: message.id,
-      sender: message.sender,
-      receiver: message.receiver,
-      threadId: message.threadId
-    });
-
-    // Emit to sender
-    const senderSockets = this.userSockets.get(message.sender) || [];
-    console.log(`[WebSocket] Emitting to sender ${message.sender} (${senderSockets.length} sockets)`);
-    
-    if (senderSockets.length > 0) {
-      this.emitToUser(message.sender, 'message:new', message);
-      console.log(`[WebSocket] Successfully emitted to sender ${message.sender}`);
-    } else {
-      console.log(`[WebSocket] Sender ${message.sender} not connected`);
-    }
-    
-    // Emit to receiver
-    const receiverSockets = this.userSockets.get(message.receiver) || [];
-    console.log(`[WebSocket] Emitting to receiver ${message.receiver} (${receiverSockets.length} sockets)`);
-    
-    if (receiverSockets.length > 0) {
-      this.emitToUser(message.receiver, 'message:new', message);
-      console.log(`[WebSocket] Successfully emitted to receiver ${message.receiver}`);
-      
-      // NEW: Check if receiver is viewing this thread and auto-mark as read
-      if (this.isUserViewingThread(message.receiver, message.threadId)) {
-        console.log(`[WebSocket] Receiver ${message.receiver} is viewing thread, auto-marking as read`);
-        
-        // Emit read status immediately
-        setTimeout(() => {
-          this.emitMessageRead([message.id], message.threadId, message.receiver);
-          
-          // Also emit to sender that message was read
-          this.emitToUser(message.sender, 'message:read', {
-            messageIds: [message.id],
-            threadId: message.threadId,
-            readBy: message.receiver,
-            readAt: new Date()
-          });
-        }, 100); // Small delay to ensure message is processed first
-      }
-    } else {
-      console.log(`[WebSocket] Receiver ${message.receiver} not connected`);
-    }
-    
-    // Also emit to the conversation room
-    const conversationKey = [message.sender, message.receiver].sort().join('-');
-    this.emitToRoom('conversation', conversationKey, 'message:new', message);
-    console.log(`[WebSocket] Emitted to conversation room: conversation:${conversationKey}`);
+    this.emitToUser(message.sender, 'message:new', message);
+    this.emitToUser(message.receiver, 'message:new', message);
   }
 
   emitMessageRead(messageIds, threadId, readBy) {
-    console.log('[WebSocket] emitMessageRead called:', {
-      messageIds,
-      threadId,
-      readBy
-    });
-
-    const readData = {
+    this.emitToRoom('conversation', threadId, 'message:read', {
       messageIds,
       threadId,
       readBy,
       readAt: new Date()
-    };
-
-    // Emit to the conversation room
-    this.emitToRoom('conversation', threadId, 'message:read', readData);
-    
-    // Also emit directly to both users in the thread
-    const [user1, user2] = threadId.split('-');
-    this.emitToUser(user1, 'message:read', readData);
-    this.emitToUser(user2, 'message:read', readData);
-    
-    console.log(`[WebSocket] Emitted message:read to thread ${threadId} and users ${user1}, ${user2}`);
+    });
   }
 
   // Order events
@@ -491,10 +361,6 @@ class WebSocketService {
     return {
       totalConnections: this.activeConnections.size,
       uniqueUsers: this.userSockets.size,
-      activeThreads: Array.from(this.userThreads.entries()).map(([username, threads]) => ({
-        username,
-        viewingThreads: Array.from(threads)
-      })),
       connections: Array.from(this.activeConnections.entries()).map(([socketId, data]) => ({
         socketId,
         ...data

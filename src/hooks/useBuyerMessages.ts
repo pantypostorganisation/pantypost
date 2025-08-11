@@ -1,4 +1,4 @@
-// src/hooks/useBuyerMessages.ts - FIXED VERSION WITH REAL-TIME UPDATES
+// src/hooks/useBuyerMessages.ts
 // Declare global to prevent TypeScript errors
 declare global {
   interface Window {
@@ -41,17 +41,7 @@ export const useBuyerMessages = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { 
-    messages, 
-    sendMessage, 
-    blockedUsers, 
-    reportedUsers, 
-    blockUser, 
-    unblockUser, 
-    reportUser, 
-    markMessagesAsRead,
-    refreshMessages 
-  } = useMessages();
+  const { messages, sendMessage, blockedUsers, reportedUsers, blockUser, unblockUser, reportUser, markMessagesAsRead } = useMessages();
   
   // Use useContext directly to check if wallet context is available
   const walletContext = useContext(WalletContext);
@@ -62,9 +52,6 @@ export const useBuyerMessages = () => {
   const threadParam = searchParams.get('thread');
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  
-  // Add state to track message updates
-  const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,34 +154,7 @@ export const useBuyerMessages = () => {
     markMessageAsReadAndUpdateUI(message);
   }, [markMessageAsReadAndUpdateUI]);
   
-  // CRITICAL FIX: Listen for new messages and update the component
-  useEffect(() => {
-    const handleNewMessage = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const newMessage = customEvent.detail;
-      
-      console.log('[useBuyerMessages] New message event received:', newMessage);
-      
-      // Force a re-render by updating counter
-      setMessageUpdateCounter(prev => prev + 1);
-      
-      // If the message is for the active thread, scroll to bottom
-      if (activeThread && 
-          (newMessage.sender === activeThread || newMessage.receiver === activeThread)) {
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      }
-    };
-    
-    window.addEventListener('message:new', handleNewMessage);
-    
-    return () => {
-      window.removeEventListener('message:new', handleNewMessage);
-    };
-  }, [activeThread]);
-  
-  // Memoize threads to avoid circular dependency - FIXED to update on message changes
+  // Memoize threads to avoid circular dependency
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
     
@@ -216,10 +176,8 @@ export const useBuyerMessages = () => {
       );
     }
     
-    console.log('[useBuyerMessages] Threads updated, count:', Object.keys(result).length);
-    
     return result;
-  }, [messages, user, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [messages, user]);
   
   // Calculate other message data with async profile loading
   const [sellerProfiles, setSellerProfiles] = useState<{ [seller: string]: { pic: string | null, verified: boolean } }>({});
@@ -270,10 +228,8 @@ export const useBuyerMessages = () => {
       totalUnreadCount += unread;
     });
     
-    console.log('[useBuyerMessages] Unread counts updated, total:', totalUnreadCount);
-    
     return { unreadCounts, lastMessages, totalUnreadCount };
-  }, [threads, user?.username, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [threads, user?.username]);
   
   // Update UI unread counts based on actual unread counts
   useEffect(() => {
@@ -305,7 +261,7 @@ export const useBuyerMessages = () => {
       
       return hasChanged ? newUiUnreadCounts : prev;
     });
-  }, [user, threads, observerReadMessages, activeThread, messageUpdateCounter]);
+  }, [user, threads, observerReadMessages, activeThread]);
   
   // Mark all messages as read when opening a thread
   useEffect(() => {
@@ -355,23 +311,13 @@ export const useBuyerMessages = () => {
     };
   }, []);
   
-  // Auto-scroll to bottom when new messages arrive - IMPROVED
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     const timeSinceManualScroll = Date.now() - lastManualScrollTime.current;
     if (timeSinceManualScroll > 1000 && activeThread && threads[activeThread]) {
-      // Only auto-scroll if we're near the bottom already
-      if (messagesContainerRef.current) {
-        const { scrollHeight, scrollTop, clientHeight } = messagesContainerRef.current;
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-        
-        if (isNearBottom) {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-      } else {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [activeThread, threads, messageUpdateCounter]);
+  }, [activeThread, threads]);
   
   // Listen for storage changes to update profiles in real-time
   useEffect(() => {
@@ -426,14 +372,7 @@ export const useBuyerMessages = () => {
     setReplyMessage('');
     setSelectedImage(null);
     setImageError(null);
-    
-    // Force update to show the new message immediately
-    setMessageUpdateCounter(prev => prev + 1);
-    
-    // Scroll to bottom after sending
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThread, replyMessage, selectedImage, user, sendMessage]);
   
   const handleBlockToggle = useCallback(() => {
@@ -490,9 +429,6 @@ export const useBuyerMessages = () => {
           `✅ Accepted and paid for custom request: ${request.title}`,
           { type: 'normal' }
         );
-        
-        // Force update
-        setMessageUpdateCounter(prev => prev + 1);
       } else {
         alert('Payment failed. Please try again.');
       }
@@ -507,9 +443,6 @@ export const useBuyerMessages = () => {
         `✅ Accepted custom request: ${request.title} (payment pending - insufficient balance)`,
         { type: 'normal' }
       );
-      
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
     }
   }, [user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage, respondToRequest]);
   
@@ -526,9 +459,6 @@ export const useBuyerMessages = () => {
       `❌ Declined custom request: ${request.title}`,
       { type: 'normal' }
     );
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
   }, [user, sendMessage, respondToRequest]);
   
   const handleEditRequest = useCallback((request: any) => {
@@ -583,9 +513,6 @@ export const useBuyerMessages = () => {
     setEditTitle('');
     setEditTags('');
     setEditMessage('');
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
   }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
   
   // FIXED: Handle pay now with better error handling and debugging
@@ -700,9 +627,6 @@ export const useBuyerMessages = () => {
         setShowPayModal(false);
         setPayingRequest(null);
         
-        // Force update
-        setMessageUpdateCounter(prev => prev + 1);
-        
         // Scroll to bottom to show the new message
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -811,9 +735,6 @@ export const useBuyerMessages = () => {
         }
       );
       
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
-      
       setTimeout(() => {
         setShowTipModal(false);
         setTipAmount('');
@@ -885,10 +806,6 @@ export const useBuyerMessages = () => {
     );
     
     closeCustomRequestModal();
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
-    
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     setIsSubmittingRequest(false);
   }, [validateCustomRequest, activeThread, user, customRequestForm, addRequest, sendMessage]);

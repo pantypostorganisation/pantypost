@@ -1,4 +1,4 @@
-// src/hooks/useSellerMessages.ts
+// src/hooks/useSellerMessages.ts - COMPLETE FIXED VERSION
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -58,15 +58,11 @@ export function useSellerMessages() {
     isBlocked, 
     hasReported,
     clearMessageNotifications,
-    getMessagesForUsers,
-    refreshMessages
+    getMessagesForUsers
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest, markRequestAsPaid, getRequestById } = useRequests();
   const { getBuyerBalance, purchaseCustomRequest } = useWallet();
   const searchParams = useSearchParams();
-  
-  // Add state to track message updates
-  const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
   
   // Rate limiting
   const { checkLimit: checkMessageLimit } = useRateLimit('MESSAGE_SEND', {
@@ -115,33 +111,6 @@ export function useSellerMessages() {
   
   const isAdmin = user?.role === 'admin';
   
-  // CRITICAL FIX: Listen for new messages and update the component
-  useEffect(() => {
-    const handleNewMessage = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const newMessage = customEvent.detail;
-      
-      console.log('[useSellerMessages] New message event received:', newMessage);
-      
-      // Force a re-render by updating counter
-      setMessageUpdateCounter(prev => prev + 1);
-      
-      // If the message is for the active thread, scroll to bottom
-      if (activeThread && 
-          (newMessage.sender === activeThread || newMessage.receiver === activeThread)) {
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      }
-    };
-    
-    window.addEventListener('message:new', handleNewMessage);
-    
-    return () => {
-      window.removeEventListener('message:new', handleNewMessage);
-    };
-  }, [activeThread]);
-  
   // Load recent emojis once on mount
   useEffect(() => {
     const loadRecentEmojis = async () => {
@@ -187,7 +156,7 @@ export function useSellerMessages() {
     }
   }, [searchParams, user, activeThread]);
   
-  // FIXED: Process messages into threads with proper conversation retrieval - Now updates on message changes
+  // FIXED: Process messages into threads with proper conversation retrieval
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
@@ -277,7 +246,7 @@ export function useSellerMessages() {
     console.log('[SellerMessages] Thread buyers:', Object.keys(threads));
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user?.username, messages, users, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [user?.username, messages, users]);
   
   // Get seller's requests with validation
   const sellerRequests = useMemo(() => {
@@ -299,7 +268,7 @@ export function useSellerMessages() {
         return false;
       }
     });
-  }, [user?.username, getRequestsForUser, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [user?.username, getRequestsForUser]);
   
   // Compute UI unread counts
   const uiUnreadCounts = useMemo(() => {
@@ -310,7 +279,7 @@ export function useSellerMessages() {
       });
     }
     return counts;
-  }, [threads, unreadCounts, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [threads, unreadCounts]);
   
   // Mark messages as read when thread is selected AND clear notifications
   useEffect(() => {
@@ -340,9 +309,6 @@ export function useSellerMessages() {
         if (!readThreadsRef.current.has(activeThread)) {
           readThreadsRef.current.add(activeThread);
         }
-        
-        // Force update
-        setMessageUpdateCounter(prev => prev + 1);
       }, 100);
       
       return () => clearTimeout(timer);
@@ -380,9 +346,6 @@ export function useSellerMessages() {
       if (remainingUnread === 0 && !readThreadsRef.current.has(msg.sender)) {
         readThreadsRef.current.add(msg.sender);
       }
-      
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
     });
   }, [user, markMessagesAsRead, threads]);
   
@@ -437,9 +400,6 @@ export function useSellerMessages() {
       setShowEmojiPicker(false);
       setValidationErrors({});
       
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
-      
       // Scroll to bottom after sending
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -459,9 +419,6 @@ export function useSellerMessages() {
     } else {
       blockUser(user.username, activeThread);
     }
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
   }, [activeThread, user, isBlocked, unblockUser, blockUser]);
   
   // Handle report
@@ -471,9 +428,6 @@ export function useSellerMessages() {
     if (!hasReported(user.username, activeThread)) {
       reportUser(user.username, activeThread);
     }
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
   }, [activeThread, user, hasReported, reportUser]);
   
   // Handle accepting custom request with validation
@@ -548,9 +502,6 @@ export function useSellerMessages() {
         type: 'normal'
       });
     }
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
   }, [user, requests, getBuyerBalance, purchaseCustomRequest, markRequestAsPaid, addSellerNotification, sendMessage, respondToRequest, checkRequestLimit]);
   
   // Handle declining custom request
@@ -574,9 +525,6 @@ export function useSellerMessages() {
         type: 'normal'
       });
     }
-    
-    // Force update
-    setMessageUpdateCounter(prev => prev + 1);
   }, [user, respondToRequest, requests, sendMessage]);
   
   // Handle custom request editing with validation
@@ -653,9 +601,6 @@ export function useSellerMessages() {
       setEditPrice('');
       setEditMessage('');
       setValidationErrors({});
-      
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
       
       addSellerNotification(user.username, `Custom request modified and sent to buyer!`);
     } catch (error) {

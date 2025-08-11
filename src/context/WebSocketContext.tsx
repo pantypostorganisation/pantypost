@@ -30,10 +30,10 @@ interface WebSocketContextType {
   disconnect: () => void;
   
   // Event subscription
-  subscribe: <T = any>(event: WebSocketEvent | string, handler: WebSocketHandler<T>) => () => void;
+  subscribe: <T = any>(event: WebSocketEvent, handler: WebSocketHandler<T>) => () => void;
   
   // Sending events
-  sendMessage: (event: WebSocketEvent | string, data: any) => void;
+  sendMessage: (event: WebSocketEvent, data: any) => void;
   
   // Typing indicators
   sendTyping: (conversationId: string, isTyping: boolean) => void;
@@ -53,8 +53,10 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(undefin
 
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
-  // Return null instead of throwing to allow components to handle missing context gracefully
-  return context || null;
+  if (!context) {
+    throw new Error('useWebSocket must be used within WebSocketProvider');
+  }
+  return context;
 };
 
 export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -68,9 +70,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const typingTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const wsService = useRef(getWebSocketService());
   const currentToken = useRef<string | null>(null);
-  const hasInitialized = useRef(false);
 
-  // Listen for auth token events from AuthContext
+  // 🔧 FIX: Listen for auth token events from AuthContext
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -117,7 +118,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, [user]);
 
-  // Improved WebSocket initialization
+  // 🔧 FIX: Improved WebSocket initialization
   const initializeWebSocket = useCallback(async (): Promise<(() => void) | undefined> => {
     if (!user || !websocketConfig.enabled) {
       console.log('[WebSocket] User not available or WebSocket disabled');
@@ -157,6 +158,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           reconnectAttempts: 5,
           reconnectDelay: 3000
         });
+      } else {
+        // Update token if service exists - remove updateAuth call for now
+        // wsService.current.updateAuth({ token });
       }
 
       // Subscribe to connection events
@@ -203,18 +207,42 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         handleNewNotification
       );
 
-      // Subscribe to message events - FIXED to use string event names
-      const unsubMessageNew = wsService.current.on('message:new' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] New message received:', data);
+      // 🔧 NEW: Subscribe to auction events
+      const unsubAuctionBid = wsService.current.on(WebSocketEvent.AUCTION_BID, (data: any) => {
+        console.log('[WebSocket] New auction bid:', data);
+        // Dispatch custom event for auction components to listen to
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('message:new', { detail: data }));
+          window.dispatchEvent(new CustomEvent('auction:bid', { detail: data }));
         }
       });
 
-      const unsubMessageRead = wsService.current.on('message:read' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Message read event:', data);
+      const unsubAuctionEnd = wsService.current.on(WebSocketEvent.AUCTION_ENDED, (data: any) => {
+        console.log('[WebSocket] Auction ended:', data);
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
+          window.dispatchEvent(new CustomEvent('auction:end', { detail: data }));
+        }
+      });
+
+      // 🔧 NEW: Subscribe to wallet events - use string literals for custom events
+      const unsubWalletUpdate = wsService.current.on('wallet:balance_update' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket] Wallet balance updated:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('wallet:balance_update', { detail: data }));
+        }
+      });
+
+      const unsubWalletTransaction = wsService.current.on('wallet:transaction' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket] New wallet transaction:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('wallet:transaction', { detail: data }));
+        }
+      });
+
+      // 🔧 NEW: Subscribe to message events
+      const unsubMessageNew = wsService.current.on('message:new' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket] New message:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('message:new', { detail: data }));
         }
       });
 
@@ -230,8 +258,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         unsubUserOnline();
         unsubUserOffline();
         unsubNotification();
+        unsubAuctionBid();
+        unsubAuctionEnd();
+        unsubWalletUpdate();
+        unsubWalletTransaction();
         unsubMessageNew();
-        unsubMessageRead();
       };
     } catch (error) {
       console.error('[WebSocket] Initialization error:', error);
@@ -245,10 +276,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let cleanup: (() => void) | undefined;
 
     const init = async () => {
-      if (!hasInitialized.current) {
-        hasInitialized.current = true;
-        cleanup = await initializeWebSocket();
-      }
+      cleanup = await initializeWebSocket();
     };
 
     if (user && websocketConfig.enabled) {
@@ -256,12 +284,10 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } else if (wsService.current?.isConnected()) {
       // Disconnect if no user or WebSocket disabled
       wsService.current.disconnect();
-      hasInitialized.current = false;
     }
 
     return () => {
       cleanup?.();
-      hasInitialized.current = false;
     };
   }, [user, initializeWebSocket]);
 
@@ -347,17 +373,17 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, []);
 
   const subscribe = useCallback(<T = any>(
-    event: WebSocketEvent | string, 
+    event: WebSocketEvent, 
     handler: WebSocketHandler<T>
   ): (() => void) => {
     if (!wsService.current) {
       console.warn('[WebSocket] Service not initialized');
       return () => {};
     }
-    return wsService.current.on<T>(event as WebSocketEvent, handler);
+    return wsService.current.on<T>(event, handler);
   }, []);
 
-  const sendMessage = useCallback((event: WebSocketEvent | string, data: any) => {
+  const sendMessage = useCallback((event: WebSocketEvent, data: any) => {
     if (!wsService.current?.isConnected()) {
       console.warn('[WebSocket] Not connected, cannot send message');
       return;
