@@ -1035,8 +1035,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
      deliveryAddress: order.deliveryAddress,
      listingId: order.listingId,
      // Include tier information
-     sellerTier: order.sellerTier,
-     tierCreditAmount: order.tierCreditAmount || 0
+     
    }));
 
    // 15. Format admin withdrawals array
