@@ -1,8 +1,8 @@
 // src/app/signup/page.tsx
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
-import { Lock } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Lock, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSignup } from '@/hooks/useSignup';
 import FloatingParticle from '@/components/signup/FloatingParticle';
@@ -19,8 +19,6 @@ import { useValidation } from '@/hooks/useValidation';
 import { authSchemas } from '@/utils/validation/schemas';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { securityService } from '@/services/security.service';
-import { AlertCircle } from 'lucide-react';
-import { UserRole } from '@/types/signup';
 
 export default function SignupPage() {
   const {
@@ -32,18 +30,18 @@ export default function SignupPage() {
     role,
     termsAccepted,
     ageVerified,
-    
+
     // State
     errors,
     isSubmitting,
     isCheckingUsername,
     mounted,
     passwordStrength,
-    
+
     // Actions
     updateField,
     handleSubmit,
-    
+
     // Navigation
     router
   } = useSignup();
@@ -70,94 +68,126 @@ export default function SignupPage() {
   });
 
   // Memoized password security check to prevent unnecessary recalculations
-  const checkPasswordSecurity = useCallback((pwd: string) => {
-    if (!pwd || typeof pwd !== 'string') {
-      setPasswordWarnings([]);
-      return;
-    }
-    
-    try {
-      const result = securityService.checkPasswordVulnerabilities(pwd, {
-        username: username || '',
-        email: email || '',
-      });
-      setPasswordWarnings(result.warnings || []);
-    } catch (error) {
-      console.error('Error checking password security:', error);
-      setPasswordWarnings(['Unable to validate password security']);
-    }
-  }, [username, email]);
+  const checkPasswordSecurity = useCallback(
+    (pwd: string) => {
+      if (!pwd || typeof pwd !== 'string') {
+        setPasswordWarnings([]);
+        return;
+      }
+
+      try {
+        const result = securityService.checkPasswordVulnerabilities(pwd, {
+          username: username || '',
+          email: email || '',
+        });
+        setPasswordWarnings(result.warnings || []);
+      } catch (error) {
+        console.error('Error checking password security:', error);
+        setPasswordWarnings(['Unable to validate password security']);
+      }
+    },
+    [username, email]
+  );
 
   // Handle field updates with validation
-  const handleFieldUpdate = useCallback((field: string, value: any) => {
-    if (!field || value === undefined) {
-      console.warn('Invalid field update:', { field, value });
-      return;
-    }
-    
-    try {
-      // Update validation state
-      validation.handleChange(field as any, value);
-      
-      // Update form state in the hook
-      updateField(field as any, value);
-      
-      // Check password security if password field
-      if (field === 'password') {
-        checkPasswordSecurity(value);
+  const handleFieldUpdate = useCallback(
+    (field: string, value: unknown) => {
+      if (!field || value === undefined) {
+        console.warn('Invalid field update:', { field, value });
+        return;
       }
-    } catch (error) {
-      console.error('Error updating field:', error);
-    }
-  }, [validation, updateField, checkPasswordSecurity]);
+
+      try {
+        // Update validation state
+        validation.handleChange(field as any, value);
+
+        // Update form state in the hook
+        updateField(field as any, value);
+
+        // Check password security if password field
+        if (field === 'password' && typeof value === 'string') {
+          checkPasswordSecurity(value);
+        }
+      } catch (error) {
+        console.error('Error updating field:', error);
+      }
+    },
+    [validation, updateField, checkPasswordSecurity]
+  );
 
   // Handle secure form submission
-  const handleSecureSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (isSubmitting) {
-      console.warn('Form submission already in progress');
-      return;
-    }
-    
-    // Manual validation check before submitting
-    const hasErrors = !username || !email || !password || !confirmPassword || 
-                     !role || !termsAccepted || !ageVerified ||
-                     password !== confirmPassword;
-    
-    if (hasErrors) {
-      if (!username) updateField('username' as any, '');
-      if (!email) updateField('email' as any, '');
-      if (!password) updateField('password' as any, '');
-      if (!confirmPassword) updateField('confirmPassword' as any, '');
-      if (!role) updateField('form' as any, 'Please select a role');
-      if (!termsAccepted) updateField('form' as any, 'You must accept the terms');
-      if (!ageVerified) updateField('form' as any, 'You must confirm you are 18+');
-      if (password && confirmPassword && password !== confirmPassword) {
-        updateField('form' as any, 'Passwords do not match');
+  const handleSecureSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (isSubmitting) {
+        console.warn('Form submission already in progress');
+        return;
       }
-      return;
-    }
-    
-    try {
-      // Check for password warnings
-      if (passwordWarnings.length > 0) {
-        const warningMessage = 'Your password has some security concerns:\n\n' + 
-          passwordWarnings.join('\n') + 
-          '\n\nDo you want to continue anyway?';
-        
-        const confirmSubmit = window.confirm(warningMessage);
-        if (!confirmSubmit) return;
+
+      // Manual validation check before submitting
+      const hasErrors =
+        !username ||
+        !email ||
+        !password ||
+        !confirmPassword ||
+        !role ||
+        !termsAccepted ||
+        !ageVerified ||
+        password !== confirmPassword;
+
+      if (hasErrors) {
+        if (!username) updateField('username' as any, '');
+        if (!email) updateField('email' as any, '');
+        if (!password) updateField('password' as any, '');
+        if (!confirmPassword) updateField('confirmPassword' as any, '');
+        if (!role) updateField('form' as any, 'Please select a role');
+        if (!termsAccepted) updateField('form' as any, 'You must accept the terms');
+        if (!ageVerified) updateField('form' as any, 'You must confirm you are 18+');
+        if (password && confirmPassword && password !== confirmPassword) {
+          updateField('form' as any, 'Passwords do not match');
+        }
+        return;
       }
-      
-      // Call the handleSubmit from useSignup hook
-      await handleSubmit(e);
-    } catch (error) {
-      console.error('Error during form submission:', error);
-      updateField('form' as any, 'An error occurred during submission. Please try again.');
-    }
-  }, [isSubmitting, username, email, password, confirmPassword, role, 
-      termsAccepted, ageVerified, passwordWarnings, updateField, handleSubmit]);
+
+      try {
+        // Check for password warnings
+        if (passwordWarnings.length > 0) {
+          const warningMessage =
+            'Your password has some security concerns:\n\n' +
+            passwordWarnings.join('\n') +
+            '\n\nDo you want to continue anyway?';
+
+          // Browser confirm can be blocked by some environments; guard just in case
+          const confirmSubmit =
+            typeof window !== 'undefined' && typeof window.confirm === 'function'
+              ? window.confirm(warningMessage)
+              : true;
+
+          if (!confirmSubmit) return;
+        }
+
+        // Call the handleSubmit from useSignup hook
+        await handleSubmit(e);
+      } catch (error) {
+        console.error('Error during form submission:', error);
+        updateField('form' as any, 'An error occurred during submission. Please try again.');
+      }
+    },
+    [
+      isSubmitting,
+      username,
+      email,
+      password,
+      confirmPassword,
+      role,
+      termsAccepted,
+      ageVerified,
+      passwordWarnings,
+      updateField,
+      handleSubmit,
+    ]
+  );
 
   // Memoized navigation handler
   const handleLogoClick = useCallback(() => {
@@ -174,7 +204,7 @@ export default function SignupPage() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
       {/* Floating Particles */}
@@ -189,9 +219,9 @@ export default function SignupPage() {
         <div className="w-full max-w-md">
           {/* Header */}
           <SignupHeader onLogoClick={handleLogoClick} />
-          
+
           {/* Form Card */}
-          <motion.div 
+          <motion.div
             className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -246,18 +276,13 @@ export default function SignupPage() {
                 showConfirmPassword={showConfirmPassword}
                 onPasswordChange={(value) => handleFieldUpdate('password', value)}
                 onConfirmChange={(value) => handleFieldUpdate('confirmPassword', value)}
-                onTogglePassword={() => setShowPassword(!showPassword)}
-                onToggleConfirm={() => setShowConfirmPassword(!showConfirmPassword)}
+                onTogglePassword={() => setShowPassword((s) => !s)}
+                onToggleConfirm={() => setShowConfirmPassword((s) => !s)}
               />
 
               {/* Password Strength Indicator */}
-              {password && (
-                <PasswordStrength 
-                  password={password} 
-                  strength={passwordStrength} 
-                />
-              )}
-              
+              {password && <PasswordStrength password={password} strength={passwordStrength} />}
+
               {/* Password Security Warnings */}
               {passwordWarnings.length > 0 && password && (
                 <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
@@ -302,7 +327,7 @@ export default function SignupPage() {
               </SecureSubmitButton>
             </SecureForm>
           </motion.div>
-          
+
           {/* Footer */}
           <SignupFooter />
         </div>
