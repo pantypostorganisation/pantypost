@@ -131,7 +131,7 @@ router.post('/send', authMiddleware, async (req, res) => {
   }
 });
 
-// Mark messages as read - FIXED to handle both formats
+// Mark messages as read - FIXED to handle both formats and emit proper events
 router.post('/mark-read', authMiddleware, async (req, res) => {
   try {
     let { messageIds, username, otherParty } = req.body;
@@ -180,10 +180,13 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     
     // Get the thread ID from the first message to emit the right event
     let threadId = null;
+    let messageSender = null;
+    
     if (messageIds.length > 0) {
       const firstMessage = await Message.findById(messageIds[0]);
       if (firstMessage) {
         threadId = firstMessage.threadId;
+        messageSender = firstMessage.sender; // Get the sender of the messages being read
       }
     }
     
@@ -201,10 +204,25 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     
     console.log('Mark read result:', result);
     
-    // WEBSOCKET: Emit message read event if we have a threadId
+    // FIXED: Emit message read event to BOTH users if we have a threadId
     if (threadId && result.modifiedCount > 0) {
-      console.log('WEBSOCKET: Emitting message:read event');
+      console.log('WEBSOCKET: Emitting message:read event to both users');
+      
+      const readEventData = {
+        messageIds,
+        threadId,
+        readBy: currentUser,
+        readAt: new Date().toISOString()
+      };
+      
+      // Emit to the current user (reader)
       webSocketService.emitMessageRead(messageIds, threadId, currentUser);
+      
+      // FIXED: Also emit to the sender so they get the read receipt update
+      if (messageSender && messageSender !== currentUser) {
+        console.log('WEBSOCKET: Also emitting to sender:', messageSender);
+        webSocketService.emitToUser(messageSender, 'message:read', readEventData);
+      }
     }
     
     res.json({

@@ -239,7 +239,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     loadData();
   }, []);
 
-  // FIXED: WebSocket listener for new messages
+  // FIXED: WebSocket listener for new messages - prevent duplicates
   useEffect(() => {
     // Clean up previous subscriptions
     subscriptionsRef.current.forEach(unsub => unsub());
@@ -252,7 +252,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     console.log('[MessageContext] Setting up WebSocket listeners, connected:', isConnected);
 
-    // Subscribe to new message events - use the correct event name
+    // Subscribe to new message events
     const unsubscribeNewMessage = subscribe('message:new' as WebSocketEvent, (data: any) => {
       console.log('[MessageContext] New message received via WebSocket:', data);
       
@@ -293,12 +293,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         setMessages(prev => {
           const existingMessages = prev[conversationKey] || [];
           
-          // Check if message already exists (by ID or by content+timestamp)
+          // Check if message already exists (by ID)
           const isDuplicate = existingMessages.some(m => 
-            (m.id && m.id === newMessage.id) ||
-            (m.sender === newMessage.sender && 
-             m.content === newMessage.content && 
-             Math.abs(new Date(m.date).getTime() - new Date(newMessage.date).getTime()) < 1000)
+            (m.id && m.id === newMessage.id)
           );
           
           if (isDuplicate) {
@@ -382,6 +379,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
               return msg;
             });
           }
+          
+          // Save to storage
+          storageService.setItem('panty_messages', updatedMessages).catch(err => 
+            console.error('[MessageContext] Failed to save messages after read update:', err)
+          );
+          
           return updatedMessages;
         });
         
@@ -496,7 +499,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [messageNotifications, isLoading]);
 
-  // Send message with proper image handling
+  // FIXED: Send message without adding duplicate to local state
   const sendMessage = useCallback(async (
     sender: string,
     receiver: string,
@@ -551,39 +554,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       });
 
       if (result.success && result.data) {
-        const conversationKey = getConversationKey(sender, receiver);
-        const newMessage: Message = {
-          id: result.data.id,
-          sender: result.data.sender,
-          receiver: result.data.receiver,
-          content: result.data.content,
-          date: result.data.date,
-          isRead: result.data.isRead,
-          read: result.data.read,
-          type: result.data.type,
-          meta: result.data.meta,
-          threadId: result.data.threadId || conversationKey,
-        };
-
-        // For image messages, ensure we have the image URL in meta
-        if (options?.type === 'image' && options?.meta?.imageUrl) {
-          console.log('Sending image message with URL:', options.meta.imageUrl);
-          newMessage.meta = {
-            ...newMessage.meta,
-            imageUrl: options.meta.imageUrl
-          };
-        }
-
-        // Add to local state immediately for optimistic update
-        setMessages(prev => ({
-          ...prev,
-          [conversationKey]: [...(prev[conversationKey] || []), newMessage],
-        }));
-
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
-
-        // Update notifications if needed
+        // DON'T add the message to local state here - let WebSocket handle it
+        // This prevents duplicates
+        console.log('Message sent successfully, waiting for WebSocket confirmation');
+        
+        // Only update notifications locally since WebSocket won't handle this
         if (options?.type !== 'customRequest') {
           setMessageNotifications(prev => {
             const sellerNotifs = prev[receiver] || [];
@@ -614,8 +589,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
           });
         }
-
-        console.log('Message sent successfully:', newMessage);
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -724,10 +697,17 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
               : msg
           );
 
-          return {
+          const updated = {
             ...prev,
             [conversationKey]: updatedMessages,
           };
+          
+          // Save to storage
+          storageService.setItem('panty_messages', updated).catch(err => 
+            console.error('[MessageContext] Failed to save messages after marking read:', err)
+          );
+          
+          return updated;
         });
 
         clearMessageNotifications(userA, userB);
