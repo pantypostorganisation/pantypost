@@ -14,139 +14,156 @@ import AdminRevenueChart from '@/components/admin/wallet/AdminRevenueChart';
 import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
-import { getTimeFilteredData, getAllSellerWithdrawals } from '@/utils/admin/walletHelpers';
+import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
 
 function AdminProfitDashboardContent() {
   // All hooks must be called before any conditional returns
-  const { 
-    adminBalance, 
-    adminActions, 
-    orderHistory, 
-    wallet, 
-    depositLogs, 
-    getTotalDeposits, 
-    getDepositsByTimeframe,
+  const {
+    adminBalance,
+    adminActions,
+    orderHistory,
+    wallet,
+    depositLogs,
+    getTotalDeposits,
     sellerWithdrawals,
     adminWithdrawals,
     isLoading: walletLoading,
     isInitialized: walletInitialized,
     initializationError,
-    reloadData
+    reloadData,
   } = useWallet();
-  
+
   const { user } = useAuth();
-  const { users, listings, isAuthReady: listingsReady } = useListings();
-  
-  const [showDetails, setShowDetails] = useState(false);
+  const { users, listings } = useListings();
+
   const [isReloading, setIsReloading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  
+
   // Initialize time filter with proper error handling
   const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => {
-    // Only access localStorage on client side after mounting
     if (typeof window === 'undefined') return 'all';
-    
     try {
       const saved = localStorage.getItem('admin_dashboard_timefilter');
       if (saved && ['today', 'week', 'month', '3months', 'year', 'all'].includes(saved)) {
         return saved as TimeFilter;
       }
-    } catch (error) {
-      console.error('Error reading from localStorage:', error);
+    } catch {
+      // ignore
     }
     return 'all';
   });
 
-  // Component mount tracking
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
-  
-  // Save time filter when it changes (only after mounting)
+
   useEffect(() => {
     if (!mounted) return;
-    
     try {
       localStorage.setItem('admin_dashboard_timefilter', timeFilter);
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
+    } catch {
+      // ignore storage errors
     }
   }, [timeFilter, mounted]);
 
-  // Memoize admin status check
   const isAdmin = useMemo(() => {
     if (!user?.username) return false;
     return user.username === 'oakley' || user.username === 'gerome';
   }, [user?.username]);
 
-  // Memoize filtered data to prevent unnecessary recalculations
   const filteredData = useMemo(() => {
     if (!adminActions || !orderHistory || !depositLogs || !sellerWithdrawals || !adminWithdrawals) {
       return {
-        actions: [],
-        orders: [],
-        deposits: [],
-        sellerWithdrawals: [],
-        adminWithdrawals: []
+        actions: [] as any[],
+        orders: [] as any[],
+        deposits: [] as any[],
+        sellerWithdrawals: [] as any, // may come back as object map from helper
+        adminWithdrawals: [] as any,  // may come back as object map from helper
       };
     }
 
     try {
       return getTimeFilteredData(
-        timeFilter, 
-        adminActions, 
-        orderHistory, 
-        depositLogs, 
-        sellerWithdrawals, 
+        timeFilter,
+        adminActions,
+        orderHistory,
+        depositLogs,
+        sellerWithdrawals,
         adminWithdrawals
       );
     } catch (error) {
       console.error('Error filtering data:', error);
       return {
-        actions: [],
-        orders: [],
-        deposits: [],
-        sellerWithdrawals: [],
-        adminWithdrawals: []
+        actions: [] as any[],
+        orders: [] as any[],
+        deposits: [] as any[],
+        sellerWithdrawals: [] as any,
+        adminWithdrawals: [] as any,
       };
     }
   }, [timeFilter, adminActions, orderHistory, depositLogs, sellerWithdrawals, adminWithdrawals]);
-  
-  // Debug logging for deposits and orders with error handling
+
+  // --- NORMALIZERS: ensure arrays for components expecting arrays ---
+  const isMap = (val: unknown): val is Record<string, any[]> =>
+    !!val && !Array.isArray(val) && typeof val === 'object';
+
+  const normalizeWithdrawals = (val: any): any[] => {
+    if (Array.isArray(val)) return val;
+    if (isMap(val)) {
+      const result: any[] = [];
+      for (const [username, arr] of Object.entries(val)) {
+        if (Array.isArray(arr)) {
+          arr.forEach((w) => result.push({ username, ...w }));
+        }
+      }
+      return result;
+    }
+    return [];
+  };
+
+  const filteredSellerWithdrawalsArr = useMemo(
+    () => normalizeWithdrawals(filteredData.sellerWithdrawals),
+    [filteredData.sellerWithdrawals]
+  );
+
+  const filteredAdminWithdrawalsArr = useMemo(
+    () => normalizeWithdrawals(filteredData.adminWithdrawals),
+    [filteredData.adminWithdrawals]
+  );
+  // -----------------------------------------------------------------
+
   useEffect(() => {
     if (!mounted) return;
-    
     try {
       console.log('Admin Dashboard Data:', {
         timeFilter,
         allOrders: orderHistory?.length || 0,
         filteredOrders: filteredData.orders.length,
-        pendingAuctionOrders: orderHistory?.filter(o => o?.shippingStatus === 'pending-auction').length || 0,
-        completedAuctionOrders: orderHistory?.filter(o => o?.wasAuction && o?.shippingStatus !== 'pending-auction').length || 0,
+        pendingAuctionOrders:
+          orderHistory?.filter((o) => o?.shippingStatus === 'pending-auction').length || 0,
+        completedAuctionOrders:
+          orderHistory?.filter((o) => o?.wasAuction && o?.shippingStatus !== 'pending-auction')
+            .length || 0,
         allDeposits: depositLogs?.length || 0,
         filteredDeposits: filteredData.deposits.length,
-        totalDepositsAmount: getTotalDeposits ? getTotalDeposits() : 0
+        totalDepositsAmount: getTotalDeposits ? getTotalDeposits() : 0,
       });
     } catch (error) {
       console.error('Error logging dashboard data:', error);
     }
   }, [timeFilter, orderHistory, filteredData, depositLogs, getTotalDeposits, mounted]);
 
-  // Handle force reload with proper error handling
   const handleForceReload = useCallback(async () => {
     if (isReloading) return;
-    
     setIsReloading(true);
     try {
-      // Reload wallet data
       if (reloadData && typeof reloadData === 'function') {
         await reloadData();
       }
-      // Small delay to show loading state
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error) {
       console.error('Error during force reload:', error);
     } finally {
@@ -154,36 +171,29 @@ function AdminProfitDashboardContent() {
     }
   }, [isReloading, reloadData]);
 
-  // Memoized time filter change handler
   const handleTimeFilterChange = useCallback((filter: TimeFilter) => {
     setTimeFilter(filter);
   }, []);
 
-  // Show loading state while wallet is initializing
   if (!walletInitialized || walletLoading || !mounted) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
           <Loader2 className="w-16 h-16 text-[#ff950e] animate-spin mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-center mb-4">Loading Analytics</h1>
-          <p className="text-gray-400 text-center">
-            Initializing wallet data and calculating metrics...
-          </p>
+          <p className="text-gray-400 text-center">Initializing wallet data and calculating metrics...</p>
         </div>
       </main>
     );
   }
 
-  // Show error state if initialization failed
   if (initializationError) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-center mb-4">Initialization Error</h1>
-          <p className="text-gray-400 text-center mb-6">
-            {initializationError}
-          </p>
+          <p className="text-gray-400 text-center mb-6">{initializationError}</p>
           <button
             onClick={handleForceReload}
             disabled={isReloading}
@@ -196,16 +206,12 @@ function AdminProfitDashboardContent() {
     );
   }
 
-  // Access denied for non-admin users
   if (!isAdmin) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-center mb-4">Access Denied</h1>
-          <p className="text-gray-400 text-center">
-            Only platform administrators can view this page.
-          </p>
         </div>
       </main>
     );
@@ -213,7 +219,6 @@ function AdminProfitDashboardContent() {
 
   return (
     <main className="min-h-screen bg-black text-white py-6 px-4 sm:px-6 overflow-x-hidden">
-      {/* Loading overlay for reloads */}
       {isReloading && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 shadow-xl">
@@ -224,19 +229,15 @@ function AdminProfitDashboardContent() {
       )}
 
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-[#ff950e] flex items-center gap-3">
               <BarChart3 className="h-8 w-8" />
               Platform Analytics
             </h1>
-            <p className="text-gray-400 mt-1">
-              Your money-making machine dashboard 💰
-            </p>
+            <p className="text-gray-400 mt-1">Your money-making machine dashboard 💰</p>
           </div>
           <div className="flex items-center gap-4">
-            {/* Time Filter */}
             <div className="flex bg-[#1a1a1a] border border-gray-800 rounded-lg overflow-hidden">
               {[
                 { value: 'today', label: 'Today' },
@@ -244,7 +245,7 @@ function AdminProfitDashboardContent() {
                 { value: 'month', label: 'Month' },
                 { value: '3months', label: '3 Months' },
                 { value: 'year', label: 'Year' },
-                { value: 'all', label: 'All Time' }
+                { value: 'all', label: 'All Time' },
               ].map((filter) => (
                 <button
                   key={filter.value}
@@ -259,8 +260,7 @@ function AdminProfitDashboardContent() {
                 </button>
               ))}
             </div>
-            
-            {/* Force Reload button */}
+
             <button
               onClick={handleForceReload}
               disabled={isReloading}
@@ -272,30 +272,26 @@ function AdminProfitDashboardContent() {
           </div>
         </div>
 
-        {/* Data status indicator */}
         {walletInitialized && (
           <div className="mb-6 p-4 bg-[#1a1a1a] border border-gray-800 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-sm text-gray-400">Data synchronized</span>
               </div>
-              <div className="text-xs text-gray-500">
-                Last updated: {new Date().toLocaleTimeString()}
-              </div>
+              <div className="text-xs text-gray-500">Last updated: {new Date().toLocaleTimeString()}</div>
             </div>
           </div>
         )}
 
-        {/* Component sections with proper error boundaries */}
         {adminBalance !== undefined && (
           <AdminMetrics
             timeFilter={timeFilter}
             filteredActions={filteredData.actions}
             filteredOrders={filteredData.orders}
             filteredDeposits={filteredData.deposits}
-            filteredSellerWithdrawals={filteredData.sellerWithdrawals}
-            filteredAdminWithdrawals={filteredData.adminWithdrawals}
+            filteredSellerWithdrawals={filteredSellerWithdrawalsArr}
+            filteredAdminWithdrawals={filteredAdminWithdrawalsArr}
             adminBalance={adminBalance}
             orderHistory={orderHistory || []}
             adminActions={adminActions || []}
@@ -306,11 +302,7 @@ function AdminProfitDashboardContent() {
         )}
 
         {orderHistory && adminActions && (
-          <AdminRevenueChart
-            timeFilter={timeFilter}
-            orderHistory={orderHistory}
-            adminActions={adminActions}
-          />
+          <AdminRevenueChart timeFilter={timeFilter} orderHistory={orderHistory} adminActions={adminActions} />
         )}
 
         {users && listings && wallet && depositLogs && sellerWithdrawals && (
@@ -329,8 +321,8 @@ function AdminProfitDashboardContent() {
         <AdminRecentActivity
           timeFilter={timeFilter}
           filteredDeposits={filteredData.deposits}
-          filteredSellerWithdrawals={filteredData.sellerWithdrawals}
-          filteredAdminWithdrawals={filteredData.adminWithdrawals}
+          filteredSellerWithdrawals={filteredSellerWithdrawalsArr}
+          filteredAdminWithdrawals={filteredAdminWithdrawalsArr}
           filteredActions={filteredData.actions}
           filteredOrders={filteredData.orders}
         />
@@ -341,10 +333,7 @@ function AdminProfitDashboardContent() {
 
 export default function AdminProfitDashboard() {
   const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => setMounted(true), []);
 
   if (!mounted) {
     return (

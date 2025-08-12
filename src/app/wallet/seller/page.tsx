@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
@@ -26,14 +25,14 @@ function SellerWalletContent() {
     messageType,
     isLoading,
     showConfirmation,
-    
+
     // Computed values
     sortedWithdrawals,
     totalWithdrawn,
     totalEarnings,
     recentWithdrawals,
     sellerSales,
-    
+
     // Actions
     handleWithdrawClick,
     handleConfirmWithdraw,
@@ -41,8 +40,13 @@ function SellerWalletContent() {
     handleKeyPress,
     handleQuickAmountSelect,
     setShowConfirmation,
-    setWithdrawAmount
+    setWithdrawAmount,
   } = useSellerWallet();
+
+  // Guard against unexpected non-array values
+  const salesArray = Array.isArray(sellerSales) ? sellerSales : [];
+  const sortedArray = Array.isArray(sortedWithdrawals) ? sortedWithdrawals : [];
+  const recentArray = Array.isArray(recentWithdrawals) ? recentWithdrawals : [];
 
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-8">
@@ -53,10 +57,10 @@ function SellerWalletContent() {
         {/* Balance and Earnings Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <BalanceCard balance={balance} />
-          <EarningsCard 
-            totalEarnings={totalEarnings} 
+          <EarningsCard
+            totalEarnings={totalEarnings}
             totalWithdrawn={totalWithdrawn}
-            salesCount={sellerSales.length} 
+            salesCount={salesArray.length}
           />
         </div>
 
@@ -74,8 +78,8 @@ function SellerWalletContent() {
         />
 
         {/* Recent Withdrawals or Empty State */}
-        {sortedWithdrawals.length > 0 ? (
-          <RecentWithdrawals withdrawals={recentWithdrawals} />
+        {sortedArray.length > 0 ? (
+          <RecentWithdrawals withdrawals={recentArray} />
         ) : (
           <EmptyState showEmptyState={true} />
         )}
@@ -119,23 +123,34 @@ function SellerWalletWrapper() {
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center space-x-2">
           <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+          <div
+            className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"
+            style={{ animationDelay: '0.2s' }}
+          ></div>
+          <div
+            className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"
+            style={{ animationDelay: '0.4s' }}
+          ></div>
         </div>
       </div>
     );
   }
 
-  return <SellerWalletContent />;
+  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+  const roleForAuth = isAdmin ? 'admin' : 'seller';
+
+  return (
+    <RequireAuth role={roleForAuth as 'seller' | 'admin'}>
+      <SellerWalletContent />
+    </RequireAuth>
+  );
 }
 
-// Main page component with provider readiness check
+// Main page component
 export default function SellerWalletPage() {
   return (
     <BanCheck>
-      <RequireAuth role="seller">
-        <SellerWalletWrapper />
-      </RequireAuth>
+      <SellerWalletWrapper />
     </BanCheck>
   );
 }
