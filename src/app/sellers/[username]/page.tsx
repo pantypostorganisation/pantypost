@@ -15,6 +15,7 @@ import GalleryModal from '@/components/seller-profile/modals/GalleryModal';
 import { useSellerProfile } from '@/hooks/useSellerProfile';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 // Memoized components for better performance
 const MemoizedProfileHeader = React.memo(ProfileHeader);
@@ -23,14 +24,16 @@ const MemoizedProfileGallery = React.memo(ProfileGallery);
 const MemoizedReviewsSection = React.memo(ReviewsSection);
 
 export default function SellerProfilePage() {
-  const params = useParams<{ username: string }>();
-  const username = params?.username;
-  
+  const rawParams = useParams();
+  const rawUsername = (rawParams as any)?.username;
+  const usernameParam = Array.isArray(rawUsername) ? rawUsername[0] : rawUsername;
+  const safeUsername = typeof usernameParam === 'string' ? sanitizeStrict(usernameParam) : '';
+
   const { success: showSuccessToast, error: showErrorToast } = useToast();
   const { isFavorited: checkIsFavorited, toggleFavorite: toggleFav, error: favError } = useFavorites();
-  
+
   // Validate username parameter
-  if (!username || typeof username !== 'string') {
+  if (!safeUsername) {
     return (
       <BanCheck>
         <main className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -42,40 +45,40 @@ export default function SellerProfilePage() {
       </BanCheck>
     );
   }
-  
+
   const {
     // User data
     user,
     sellerUser,
     isVerified,
-    
+
     // Profile data
     bio,
     profilePic,
     subscriptionPrice,
     galleryImages,
     sellerTierInfo,
-    
+
     // Stats
     totalPhotos,
     totalVideos,
     followers,
     averageRating,
     reviews,
-    
+
     // Listings
     standardListings,
     premiumListings,
-    
+
     // Access control
     hasAccess,
     hasPurchased,
     alreadyReviewed,
-    
+
     // Slideshow
     slideIndex,
     isPaused,
-    
+
     // Modals
     showSubscribeModal,
     showUnsubscribeModal,
@@ -84,7 +87,7 @@ export default function SellerProfilePage() {
     selectedImage,
     currentImageIndex,
     showToast,
-    
+
     // Form state
     tipAmount,
     tipSuccess,
@@ -92,7 +95,7 @@ export default function SellerProfilePage() {
     rating,
     comment,
     submitted,
-    
+
     // Handlers
     setShowSubscribeModal,
     setShowUnsubscribeModal,
@@ -114,28 +117,28 @@ export default function SellerProfilePage() {
     togglePause,
     goToPrevSlide,
     goToNextSlide,
-  } = useSellerProfile(username);
+  } = useSellerProfile(safeUsername);
 
   // Memoize seller ID generation to prevent unnecessary recalculations
-  const sellerId = useMemo(() => `seller_${username}`, [username]);
-  
+  const sellerId = useMemo(() => (safeUsername ? `seller_${safeUsername}` : ''), [safeUsername]);
+
   // Memoize favorite status check
   const isFavorited = useMemo(() => {
     try {
-      return checkIsFavorited(sellerId);
+      return sellerId ? checkIsFavorited(sellerId) : false;
     } catch (error) {
       console.error('Error checking favorite status:', error);
       return false;
     }
   }, [checkIsFavorited, sellerId]);
-  
+
   // Memoized toggle favorite handler
   const toggleFavorite = useCallback(async () => {
     if (!sellerUser) {
       console.warn('Cannot toggle favorite: sellerUser not available');
       return;
     }
-    
+
     try {
       const success = await toggleFav({
         id: sellerId,
@@ -144,11 +147,9 @@ export default function SellerProfilePage() {
         tier: sellerTierInfo?.tier,
         isVerified: isVerified,
       });
-      
+
       if (success) {
-        showSuccessToast(
-          isFavorited ? 'Removed from favorites' : 'Added to favorites'
-        );
+        showSuccessToast(isFavorited ? 'Removed from favorites' : 'Added to favorites');
       } else if (favError) {
         showErrorToast(favError);
       } else {
@@ -168,22 +169,21 @@ export default function SellerProfilePage() {
     toggleFav,
     showSuccessToast,
     showErrorToast,
-    favError
+    favError,
   ]);
 
   // Memoized modal handlers to prevent unnecessary re-renders
-  const modalHandlers = useMemo(() => ({
-    onShowSubscribeModal: () => setShowSubscribeModal(true),
-    onShowUnsubscribeModal: () => setShowUnsubscribeModal(true),
-    onShowTipModal: () => setShowTipModal(true),
-    onCloseSubscribeModal: () => setShowSubscribeModal(false),
-    onCloseUnsubscribeModal: () => setShowUnsubscribeModal(false),
-    onCloseTipModal: () => setShowTipModal(false),
-  }), [
-    setShowSubscribeModal,
-    setShowUnsubscribeModal,
-    setShowTipModal
-  ]);
+  const modalHandlers = useMemo(
+    () => ({
+      onShowSubscribeModal: () => setShowSubscribeModal(true),
+      onShowUnsubscribeModal: () => setShowUnsubscribeModal(true),
+      onShowTipModal: () => setShowTipModal(true),
+      onCloseSubscribeModal: () => setShowSubscribeModal(false),
+      onCloseUnsubscribeModal: () => setShowUnsubscribeModal(false),
+      onCloseTipModal: () => setShowTipModal(false),
+    }),
+    [setShowSubscribeModal, setShowUnsubscribeModal, setShowTipModal]
+  );
 
   // Validate required data before rendering
   if (!user) {
@@ -205,13 +205,13 @@ export default function SellerProfilePage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           {showToast && (
             <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
-              ✅ Subscribed to {username} successfully!
+              ✅ Subscribed to {safeUsername} successfully!
             </div>
           )}
 
           {/* Profile Header */}
           <MemoizedProfileHeader
-            username={username}
+            username={safeUsername}
             profilePic={profilePic}
             bio={bio}
             isVerified={isVerified}
@@ -236,7 +236,7 @@ export default function SellerProfilePage() {
             standardListings={standardListings}
             premiumListings={premiumListings}
             hasAccess={hasAccess}
-            username={username}
+            username={safeUsername}
             user={user}
             onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
           />
@@ -267,11 +267,11 @@ export default function SellerProfilePage() {
             onSubmit={handleReviewSubmit}
           />
 
-          {/* Modals - These don't need memoization as they're conditionally rendered */}
+          {/* Modals */}
           {showTipModal && (
             <TipModal
               show={showTipModal}
-              username={username}
+              username={safeUsername}
               tipAmount={tipAmount}
               tipSuccess={tipSuccess}
               tipError={tipError}
@@ -284,7 +284,7 @@ export default function SellerProfilePage() {
           {showSubscribeModal && (
             <SubscribeModal
               show={showSubscribeModal}
-              username={username}
+              username={safeUsername}
               subscriptionPrice={subscriptionPrice}
               onClose={modalHandlers.onCloseSubscribeModal}
               onConfirm={handleConfirmSubscribe}
@@ -294,7 +294,7 @@ export default function SellerProfilePage() {
           {showUnsubscribeModal && (
             <UnsubscribeModal
               show={showUnsubscribeModal}
-              username={username}
+              username={safeUsername}
               onClose={modalHandlers.onCloseUnsubscribeModal}
               onConfirm={handleConfirmUnsubscribe}
             />

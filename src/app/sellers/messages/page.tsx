@@ -15,7 +15,7 @@ export default function SellerMessagesPage() {
     // Auth
     user,
     isAdmin,
-    
+
     // Messages & threads
     threads,
     unreadCounts,
@@ -25,7 +25,7 @@ export default function SellerMessagesPage() {
     totalUnreadCount,
     activeThread,
     setActiveThread,
-    
+
     // UI State
     previewImage,
     setPreviewImage,
@@ -35,7 +35,7 @@ export default function SellerMessagesPage() {
     setFilterBy,
     observerReadMessages,
     setObserverReadMessages,
-    
+
     // Message input
     replyMessage,
     setReplyMessage,
@@ -48,7 +48,7 @@ export default function SellerMessagesPage() {
     showEmojiPicker,
     setShowEmojiPicker,
     recentEmojis,
-    
+
     // Custom requests
     sellerRequests,
     editRequestId,
@@ -59,7 +59,7 @@ export default function SellerMessagesPage() {
     setEditTitle,
     editMessage,
     setEditMessage,
-    
+
     // Actions
     handleReply,
     handleBlockToggle,
@@ -71,7 +71,7 @@ export default function SellerMessagesPage() {
     handleImageSelect,
     handleMessageVisible,
     handleEmojiClick,
-    
+
     // Status
     isUserBlocked,
     isUserReported,
@@ -79,19 +79,22 @@ export default function SellerMessagesPage() {
 
   if (!user) {
     return (
-      <RequireAuth role="seller">
-        <div className="h-screen bg-black flex items-center justify-center">
-          <div className="text-white">Loading...</div>
-        </div>
-      </RequireAuth>
+      <BanCheck>
+        <RequireAuth role="seller">
+          <div className="h-screen bg-black flex items-center justify-center">
+            <div className="text-white">Loading...</div>
+          </div>
+        </RequireAuth>
+      </BanCheck>
     );
   }
 
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <div className="py-3 bg-black"></div>
-        
+        {/* Top Padding */}
+        <div className="py-3 bg-black" />
+
         <div className="h-screen bg-black flex flex-col overflow-hidden">
           <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
             {/* Left column - Message threads */}
@@ -110,7 +113,7 @@ export default function SellerMessagesPage() {
               setFilterBy={setFilterBy}
               setObserverReadMessages={setObserverReadMessages}
             />
-            
+
             {/* Right column - Active conversation */}
             <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
               {activeThread ? (
@@ -162,16 +165,18 @@ export default function SellerMessagesPage() {
               )}
             </div>
           </div>
-          
+
           {/* Bottom Padding */}
-          <div className="py-6 bg-black"></div>
-          
+          <div className="py-6 bg-black" />
+
           {/* Image Preview Modal */}
-          <ImagePreviewModal
-            imageUrl={previewImage || ''}
-            isOpen={!!previewImage}
-            onClose={() => setPreviewImage(null)}
-          />
+          {previewImage && (
+            <ImagePreviewModal
+              imageUrl={previewImage}
+              isOpen={true}
+              onClose={() => setPreviewImage(null)}
+            />
+          )}
         </div>
       </RequireAuth>
     </BanCheck>
