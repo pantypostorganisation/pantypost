@@ -4,6 +4,7 @@ const router = express.Router();
 const Message = require('../models/Message');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
+const { v4: uuidv4 } = require('uuid');
 
 // Get all threads for a user
 router.get('/threads', authMiddleware, async (req, res) => {
@@ -76,8 +77,10 @@ router.post('/send', authMiddleware, async (req, res) => {
     // Generate threadId
     const threadId = Message.getThreadId(sender, receiver);
     
-    // Create new message
+    // Create new message with a UUID
+    const messageId = uuidv4();
     const message = new Message({
+      _id: messageId, // Use UUID as _id
       sender,
       receiver,
       content,
@@ -114,6 +117,24 @@ router.post('/send', authMiddleware, async (req, res) => {
     
     // Emit to both sender and receiver
     webSocketService.emitNewMessage(messageData);
+    
+    // FIXED: Check if receiver is viewing the thread and auto-mark as read
+    if (webSocketService.isUserViewingThread(receiver, threadId)) {
+      console.log('WEBSOCKET: Receiver is viewing thread, auto-marking as read');
+      
+      // Update the message in database
+      message.isRead = true;
+      await message.save();
+      
+      // Update the messageData
+      messageData.isRead = true;
+      messageData.read = true;
+      
+      // Emit read event
+      setTimeout(() => {
+        webSocketService.emitMessageRead([messageData.id], threadId, receiver);
+      }, 100);
+    }
     
     console.log('WEBSOCKET: Message emission completed');
     
@@ -183,7 +204,14 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     let messageSender = null;
     
     if (messageIds.length > 0) {
-      const firstMessage = await Message.findById(messageIds[0]);
+      // FIXED: Handle both MongoDB ObjectId and UUID formats
+      const firstMessage = await Message.findOne({
+        $or: [
+          { _id: messageIds[0] },
+          { _id: { $in: messageIds } }
+        ]
+      }).catch(() => null);
+      
       if (firstMessage) {
         threadId = firstMessage.threadId;
         messageSender = firstMessage.sender; // Get the sender of the messages being read
@@ -191,9 +219,10 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     }
     
     // Update only messages where current user is receiver
+    // FIXED: Handle both ID formats in the update query
     const result = await Message.updateMany(
       {
-        _id: { $in: messageIds },
+        $or: messageIds.map(id => ({ _id: id })),
         receiver: currentUser,
         isRead: false
       },

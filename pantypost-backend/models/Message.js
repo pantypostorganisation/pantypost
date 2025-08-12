@@ -1,8 +1,12 @@
 // pantypost-backend/models/Message.js
 const mongoose = require('mongoose');
 
-// Create message schema
+// Create message schema - FIXED to handle UUID as _id
 const messageSchema = new mongoose.Schema({
+  _id: {
+    type: String, // Use String instead of ObjectId to support UUIDs
+    required: true
+  },
   sender: {
     type: String,
     required: true,
@@ -39,7 +43,10 @@ const messageSchema = new mongoose.Schema({
     tipAmount: Number,
     
     // Image details
-    imageUrl: String
+    imageUrl: String,
+    
+    // Request ID for custom requests
+    id: String
   },
   // Thread/conversation tracking
   threadId: {
@@ -50,6 +57,8 @@ const messageSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+}, {
+  _id: false // Disable automatic _id generation since we provide our own
 });
 
 // Indexes for better performance
@@ -118,6 +127,14 @@ messageSchema.statics.getThreads = async function(username) {
 
   return messages;
 };
+
+// Override the default toJSON to ensure _id is always returned as a string
+messageSchema.set('toJSON', {
+  transform: function(doc, ret) {
+    ret.id = ret._id;
+    return ret;
+  }
+});
 
 const Message = mongoose.model('Message', messageSchema);
 

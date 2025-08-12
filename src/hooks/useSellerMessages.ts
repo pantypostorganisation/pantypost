@@ -1,4 +1,4 @@
-// src/hooks/useSellerMessages.ts
+// src/hooks/useSellerMessages.ts - FIXED VERSION
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -68,6 +68,10 @@ export function useSellerMessages() {
   // Add state to track message updates
   const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
   
+  // Add a flag to track if we're waiting for WebSocket confirmation
+  const waitingForWebSocketRef = useRef(false);
+  const sentMessageIdsRef = useRef<Set<string>>(new Set());
+  
   // Rate limiting
   const { checkLimit: checkMessageLimit } = useRateLimit('MESSAGE_SEND', {
     maxAttempts: 30,
@@ -123,8 +127,21 @@ export function useSellerMessages() {
       
       console.log('[useSellerMessages] New message event received:', newMessage);
       
+      // Check if this is a message we just sent (to prevent duplicates)
+      if (newMessage.id && sentMessageIdsRef.current.has(newMessage.id)) {
+        console.log('[useSellerMessages] Skipping our own message to prevent duplicate');
+        sentMessageIdsRef.current.delete(newMessage.id);
+        return;
+      }
+      
       // Force a re-render by updating counter
       setMessageUpdateCounter(prev => prev + 1);
+      
+      // Clear waiting flag if this is from our activeThread
+      if (waitingForWebSocketRef.current && 
+          (newMessage.sender === user?.username || newMessage.receiver === user?.username)) {
+        waitingForWebSocketRef.current = false;
+      }
       
       // If the message is for the active thread, scroll to bottom
       if (activeThread && 
@@ -135,12 +152,35 @@ export function useSellerMessages() {
       }
     };
     
+    // Also listen for read events to update UI
+    const handleMessageRead = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('[useSellerMessages] Message read event received:', customEvent.detail);
+      
+      // Force a re-render to update read receipts
+      setMessageUpdateCounter(prev => prev + 1);
+    };
+    
     window.addEventListener('message:new', handleNewMessage);
+    window.addEventListener('message:read', handleMessageRead);
     
     return () => {
       window.removeEventListener('message:new', handleNewMessage);
+      window.removeEventListener('message:read', handleMessageRead);
     };
-  }, [activeThread]);
+  }, [activeThread, user?.username]);
+  
+  // Clean up sent message IDs periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Clear old message IDs to prevent memory leak
+      if (sentMessageIdsRef.current.size > 100) {
+        sentMessageIdsRef.current.clear();
+      }
+    }, 60000); // Every minute
+    
+    return () => clearInterval(interval);
+  }, []);
   
   // Load recent emojis once on mount
   useEffect(() => {
@@ -386,9 +426,15 @@ export function useSellerMessages() {
     });
   }, [user, markMessagesAsRead, threads]);
   
-  // Handle sending reply with validation and rate limiting
-  const handleReply = useCallback(() => {
+  // FIXED: Handle sending reply with validation and rate limiting - prevent duplicates
+  const handleReply = useCallback(async () => {
     if (!activeThread || !user || (!replyMessage.trim() && !selectedImage)) return;
+    
+    // Prevent sending if we're already waiting for WebSocket
+    if (waitingForWebSocketRef.current) {
+      console.log('[SellerMessages] Already waiting for WebSocket, skipping send');
+      return;
+    }
 
     // Check rate limit
     const rateLimitResult = checkMessageLimit();
@@ -426,19 +472,29 @@ export function useSellerMessages() {
       // For image messages, allow empty text
       const messageContent = sanitizedContent || (selectedImage ? 'Image shared' : '');
 
-      sendMessage(user.username, activeThread, messageContent, {
+      // Generate a temporary ID for this message to track it
+      const tempMessageId = uuidv4();
+      sentMessageIdsRef.current.add(tempMessageId);
+      
+      // Set waiting flag
+      waitingForWebSocketRef.current = true;
+      
+      // Send the message - it will be added via WebSocket, not locally
+      await sendMessage(user.username, activeThread, messageContent, {
         type: selectedImage ? 'image' : 'normal',
         meta: selectedImage ? { imageUrl: selectedImage } : undefined,
       });
+      
+      // Clear the flag after a timeout in case WebSocket doesn't respond
+      setTimeout(() => {
+        waitingForWebSocketRef.current = false;
+      }, 3000);
       
       setReplyMessage('');
       setSelectedImage(null);
       setImageError(null);
       setShowEmojiPicker(false);
       setValidationErrors({});
-      
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
       
       // Scroll to bottom after sending
       setTimeout(() => {
@@ -447,6 +503,7 @@ export function useSellerMessages() {
     } catch (error) {
       console.error('Failed to send message:', error);
       setValidationErrors({ message: 'Failed to send message' });
+      waitingForWebSocketRef.current = false;
     }
   }, [activeThread, user, replyMessage, selectedImage, sendMessage, checkMessageLimit]);
   
