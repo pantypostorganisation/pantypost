@@ -1,4 +1,4 @@
-// src/hooks/useSellerMessages.ts - FIXED VERSION
+// src/hooks/useSellerMessages.ts - OPTIMISTIC VERSION
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -45,6 +45,12 @@ const MessageSchema = z.object({
 
 type Message = z.infer<typeof MessageSchema>;
 
+// Optimistic message type - includes a temporary flag
+interface OptimisticMessage extends Message {
+  _optimistic?: boolean;
+  _tempId?: string;
+}
+
 export function useSellerMessages() {
   const { user } = useAuth();
   const { addSellerNotification, users } = useListings();
@@ -68,9 +74,9 @@ export function useSellerMessages() {
   // Add state to track message updates
   const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
   
-  // Add a flag to track if we're waiting for WebSocket confirmation
-  const waitingForWebSocketRef = useRef(false);
-  const sentMessageIdsRef = useRef<Set<string>>(new Set());
+  // Track optimistic messages locally
+  const [optimisticMessages, setOptimisticMessages] = useState<{ [threadId: string]: OptimisticMessage[] }>({});
+  const optimisticMessageIds = useRef<Map<string, string>>(new Map()); // tempId -> realId mapping
   
   // Rate limiting
   const { checkLimit: checkMessageLimit } = useRateLimit('MESSAGE_SEND', {
@@ -119,7 +125,7 @@ export function useSellerMessages() {
   
   const isAdmin = user?.role === 'admin';
   
-  // CRITICAL FIX: Listen for new messages and update the component
+  // CRITICAL: Listen for new messages and handle optimistic updates
   useEffect(() => {
     const handleNewMessage = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -127,21 +133,37 @@ export function useSellerMessages() {
       
       console.log('[useSellerMessages] New message event received:', newMessage);
       
-      // Check if this is a message we just sent (to prevent duplicates)
-      if (newMessage.id && sentMessageIdsRef.current.has(newMessage.id)) {
-        console.log('[useSellerMessages] Skipping our own message to prevent duplicate');
-        sentMessageIdsRef.current.delete(newMessage.id);
-        return;
+      // Check if this is a confirmation of an optimistic message
+      if (newMessage.sender === user?.username && newMessage.receiver === activeThread) {
+        // This is our message coming back from the server
+        const threadId = getConversationKey(newMessage.sender, newMessage.receiver);
+        
+        // Find matching optimistic message by content and approximate time
+        setOptimisticMessages(prev => {
+          const threadOptimistic = prev[threadId] || [];
+          const matchingOptimistic = threadOptimistic.find(msg => 
+            msg._optimistic && 
+            msg.content === newMessage.content &&
+            Math.abs(new Date(msg.date).getTime() - new Date(newMessage.date || newMessage.createdAt).getTime()) < 5000 // Within 5 seconds
+          );
+          
+          if (matchingOptimistic && matchingOptimistic._tempId) {
+            // Store the mapping
+            optimisticMessageIds.current.set(matchingOptimistic._tempId, newMessage.id);
+            
+            // Remove the optimistic message (real one will be in main messages now)
+            return {
+              ...prev,
+              [threadId]: threadOptimistic.filter(msg => msg._tempId !== matchingOptimistic._tempId)
+            };
+          }
+          
+          return prev;
+        });
       }
       
-      // Force a re-render by updating counter
+      // Force a re-render to show the new message
       setMessageUpdateCounter(prev => prev + 1);
-      
-      // Clear waiting flag if this is from our activeThread
-      if (waitingForWebSocketRef.current && 
-          (newMessage.sender === user?.username || newMessage.receiver === user?.username)) {
-        waitingForWebSocketRef.current = false;
-      }
       
       // If the message is for the active thread, scroll to bottom
       if (activeThread && 
@@ -157,6 +179,26 @@ export function useSellerMessages() {
       const customEvent = event as CustomEvent;
       console.log('[useSellerMessages] Message read event received:', customEvent.detail);
       
+      // Update optimistic messages' read status
+      if (customEvent.detail.messageIds) {
+        setOptimisticMessages(prev => {
+          const updated = { ...prev };
+          
+          Object.keys(updated).forEach(threadId => {
+            updated[threadId] = updated[threadId].map(msg => {
+              // Check if this message's real ID is in the read list
+              const realId = msg._tempId ? optimisticMessageIds.current.get(msg._tempId) : msg.id;
+              if (realId && customEvent.detail.messageIds.includes(realId)) {
+                return { ...msg, isRead: true, read: true };
+              }
+              return msg;
+            });
+          });
+          
+          return updated;
+        });
+      }
+      
       // Force a re-render to update read receipts
       setMessageUpdateCounter(prev => prev + 1);
     };
@@ -170,14 +212,32 @@ export function useSellerMessages() {
     };
   }, [activeThread, user?.username]);
   
-  // Clean up sent message IDs periodically
+  // Clean up old optimistic messages periodically
   useEffect(() => {
     const interval = setInterval(() => {
-      // Clear old message IDs to prevent memory leak
-      if (sentMessageIdsRef.current.size > 100) {
-        sentMessageIdsRef.current.clear();
+      setOptimisticMessages(prev => {
+        const updated = { ...prev };
+        const now = Date.now();
+        
+        Object.keys(updated).forEach(threadId => {
+          // Remove optimistic messages older than 10 seconds (they should have been confirmed by now)
+          updated[threadId] = updated[threadId].filter(msg => {
+            if (msg._optimistic) {
+              const messageTime = new Date(msg.date).getTime();
+              return now - messageTime < 10000; // Keep if less than 10 seconds old
+            }
+            return true;
+          });
+        });
+        
+        return updated;
+      });
+      
+      // Clean up ID mappings
+      if (optimisticMessageIds.current.size > 100) {
+        optimisticMessageIds.current.clear();
       }
-    }, 60000); // Every minute
+    }, 10000); // Every 10 seconds
     
     return () => clearInterval(interval);
   }, []);
@@ -227,7 +287,7 @@ export function useSellerMessages() {
     }
   }, [searchParams, user, activeThread]);
   
-  // FIXED: Process messages into threads with proper conversation retrieval - Now updates on message changes
+  // ENHANCED: Merge real messages with optimistic messages
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
@@ -240,7 +300,6 @@ export function useSellerMessages() {
     }
     
     console.log('[SellerMessages] Processing messages for seller:', user.username);
-    console.log('[SellerMessages] Available message keys:', Object.keys(messages));
     
     // Process all conversations to find ones involving the seller
     Object.entries(messages).forEach(([conversationKey, msgs]) => {
@@ -252,8 +311,6 @@ export function useSellerMessages() {
       
       if (!involvesCurrentSeller) return;
       
-      console.log('[SellerMessages] Found conversation involving seller:', conversationKey);
-      
       // Determine the other party
       const otherParty = participants.find(p => p !== user.username);
       if (!otherParty) return;
@@ -261,14 +318,12 @@ export function useSellerMessages() {
       // Check if other party is a buyer (skip seller-to-seller conversations)
       const otherUser = users?.[otherParty];
       if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
-        console.log('[SellerMessages] Skipping conversation with non-buyer:', otherParty, otherUser?.role);
         return;
       }
       
       // Validate messages
       const validMessages = msgs.filter(msg => {
         try {
-          // Basic validation - don't be too strict
           return msg && msg.sender && msg.receiver && msg.content !== undefined && msg.date;
         } catch (error) {
           console.warn('Invalid message skipped:', error);
@@ -276,21 +331,32 @@ export function useSellerMessages() {
         }
       });
       
-      if (validMessages.length === 0) return;
+      if (validMessages.length === 0 && !optimisticMessages[conversationKey]) return;
+      
+      // Combine real messages with optimistic ones for this thread
+      let combinedMessages = [...validMessages];
+      
+      // Add optimistic messages for this thread
+      const threadOptimistic = optimisticMessages[conversationKey] || [];
+      if (threadOptimistic.length > 0) {
+        combinedMessages = [...combinedMessages, ...threadOptimistic];
+      }
       
       // Sort messages by date
-      const sortedMessages = validMessages.sort((a, b) => 
+      combinedMessages.sort((a, b) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
       // Add to threads
-      threads[otherParty] = sortedMessages;
+      threads[otherParty] = combinedMessages;
       
       // Get last message
-      lastMessages[otherParty] = sortedMessages[sortedMessages.length - 1];
+      if (combinedMessages.length > 0) {
+        lastMessages[otherParty] = combinedMessages[combinedMessages.length - 1];
+      }
       
-      // Count unread messages (messages FROM buyer TO seller that are unread)
-      const threadUnreadCount = sortedMessages.filter(
+      // Count unread messages (only real messages, not optimistic)
+      const threadUnreadCount = validMessages.filter(
         (msg) => msg.receiver === user.username && msg.sender === otherParty && !msg.read && !msg.isRead
       ).length;
       
@@ -306,18 +372,13 @@ export function useSellerMessages() {
       const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
       
       buyerProfiles[otherParty] = { 
-        pic: null, // This would need to be loaded separately
+        pic: null,
         verified: isVerified || false
       };
-      
-      console.log(`[SellerMessages] Thread with ${otherParty}: ${sortedMessages.length} messages, ${threadUnreadCount} unread`);
     });
     
-    console.log('[SellerMessages] Total threads found:', Object.keys(threads).length);
-    console.log('[SellerMessages] Thread buyers:', Object.keys(threads));
-    
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user?.username, messages, users, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [user?.username, messages, users, optimisticMessages, messageUpdateCounter]);
   
   // Get seller's requests with validation
   const sellerRequests = useMemo(() => {
@@ -339,7 +400,7 @@ export function useSellerMessages() {
         return false;
       }
     });
-  }, [user?.username, getRequestsForUser, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [user?.username, getRequestsForUser, messageUpdateCounter]);
   
   // Compute UI unread counts
   const uiUnreadCounts = useMemo(() => {
@@ -350,7 +411,7 @@ export function useSellerMessages() {
       });
     }
     return counts;
-  }, [threads, unreadCounts, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [threads, unreadCounts, messageUpdateCounter]);
   
   // Mark messages as read when thread is selected AND clear notifications
   useEffect(() => {
@@ -368,7 +429,7 @@ export function useSellerMessages() {
     const threadMessages = threads[activeThread] || [];
     
     const hasUnread = threadMessages.some(
-      msg => msg.receiver === user.username && msg.sender === activeThread && !msg.read && !msg.isRead
+      msg => msg.receiver === user.username && msg.sender === activeThread && !msg.read && !msg.isRead && !msg._optimistic
     );
     
     if (hasUnread) {
@@ -393,7 +454,7 @@ export function useSellerMessages() {
   
   // Handle message visibility for marking as read
   const handleMessageVisible = useCallback((msg: any) => {
-    if (!user || msg.sender === user.username || msg.read || msg.isRead) return;
+    if (!user || msg.sender === user.username || msg.read || msg.isRead || msg._optimistic) return;
     
     const messageId = `${msg.sender}-${msg.receiver}-${msg.date}`;
     
@@ -413,7 +474,7 @@ export function useSellerMessages() {
       const threadMessages = threads[msg.sender] || [];
       
       const remainingUnread = threadMessages.filter(
-        m => !m.read && !m.isRead && m.sender === msg.sender && m.receiver === user.username && 
+        m => !m.read && !m.isRead && !m._optimistic && m.sender === msg.sender && m.receiver === user.username && 
         `${m.sender}-${m.receiver}-${m.date}` !== messageId
       ).length;
       
@@ -426,15 +487,9 @@ export function useSellerMessages() {
     });
   }, [user, markMessagesAsRead, threads]);
   
-  // FIXED: Handle sending reply with validation and rate limiting - prevent duplicates
+  // OPTIMISTIC: Handle sending reply with instant UI update
   const handleReply = useCallback(async () => {
     if (!activeThread || !user || (!replyMessage.trim() && !selectedImage)) return;
-    
-    // Prevent sending if we're already waiting for WebSocket
-    if (waitingForWebSocketRef.current) {
-      console.log('[SellerMessages] Already waiting for WebSocket, skipping send');
-      return;
-    }
 
     // Check rate limit
     const rateLimitResult = checkMessageLimit();
@@ -472,38 +527,63 @@ export function useSellerMessages() {
       // For image messages, allow empty text
       const messageContent = sanitizedContent || (selectedImage ? 'Image shared' : '');
 
-      // Generate a temporary ID for this message to track it
-      const tempMessageId = uuidv4();
-      sentMessageIdsRef.current.add(tempMessageId);
-      
-      // Set waiting flag
-      waitingForWebSocketRef.current = true;
-      
-      // Send the message - it will be added via WebSocket, not locally
-      await sendMessage(user.username, activeThread, messageContent, {
+      // Create optimistic message
+      const tempId = uuidv4();
+      const threadId = getConversationKey(user.username, activeThread);
+      const optimisticMsg: OptimisticMessage = {
+        id: tempId,
+        _tempId: tempId,
+        _optimistic: true,
+        sender: user.username,
+        receiver: activeThread,
+        content: messageContent,
+        date: new Date().toISOString(),
+        isRead: false,
+        read: false,
         type: selectedImage ? 'image' : 'normal',
         meta: selectedImage ? { imageUrl: selectedImage } : undefined,
-      });
+      };
       
-      // Clear the flag after a timeout in case WebSocket doesn't respond
-      setTimeout(() => {
-        waitingForWebSocketRef.current = false;
-      }, 3000);
+      // Add optimistic message to UI immediately
+      setOptimisticMessages(prev => ({
+        ...prev,
+        [threadId]: [...(prev[threadId] || []), optimisticMsg]
+      }));
       
+      // Clear input immediately for better UX
       setReplyMessage('');
       setSelectedImage(null);
       setImageError(null);
       setShowEmojiPicker(false);
       setValidationErrors({});
       
-      // Scroll to bottom after sending
+      // Scroll to bottom immediately
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      }, 0);
+      
+      // Send the actual message in the background
+      sendMessage(user.username, activeThread, messageContent, {
+        type: selectedImage ? 'image' : 'normal',
+        meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+      }).catch(error => {
+        console.error('Failed to send message:', error);
+        
+        // Remove optimistic message on error
+        setOptimisticMessages(prev => ({
+          ...prev,
+          [threadId]: prev[threadId]?.filter(msg => msg._tempId !== tempId) || []
+        }));
+        
+        // Restore input on error
+        setReplyMessage(messageContent);
+        setSelectedImage(selectedImage);
+        setValidationErrors({ message: 'Failed to send message. Please try again.' });
+      });
+      
     } catch (error) {
       console.error('Failed to send message:', error);
       setValidationErrors({ message: 'Failed to send message' });
-      waitingForWebSocketRef.current = false;
     }
   }, [activeThread, user, replyMessage, selectedImage, sendMessage, checkMessageLimit]);
   

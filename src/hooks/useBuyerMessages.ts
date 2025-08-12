@@ -1,4 +1,4 @@
-// src/hooks/useBuyerMessages.ts - FIXED VERSION WITH REAL-TIME UPDATES
+// src/hooks/useBuyerMessages.ts - OPTIMISTIC VERSION WITH REAL-TIME UPDATES
 // Declare global to prevent TypeScript errors
 declare global {
   interface Window {
@@ -37,6 +37,17 @@ interface CustomRequestForm {
   hoursWorn: string;
 }
 
+// Optimistic message type - includes a temporary flag
+interface OptimisticMessage extends Message {
+  _optimistic?: boolean;
+  _tempId?: string;
+}
+
+// Helper to get conversation key
+const getConversationKey = (userA: string, userB: string): string => {
+  return [userA, userB].sort().join('-');
+};
+
 export const useBuyerMessages = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,6 +76,10 @@ export const useBuyerMessages = () => {
   
   // Add state to track message updates
   const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
+  
+  // Track optimistic messages locally
+  const [optimisticMessages, setOptimisticMessages] = useState<{ [threadId: string]: OptimisticMessage[] }>({});
+  const optimisticMessageIds = useRef<Map<string, string>>(new Map()); // tempId -> realId mapping
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -164,16 +179,47 @@ export const useBuyerMessages = () => {
   }, []);
   
   const handleMessageVisible = useCallback((message: Message) => {
+    // Don't mark optimistic messages as read
+    if ((message as OptimisticMessage)._optimistic) return;
     markMessageAsReadAndUpdateUI(message);
   }, [markMessageAsReadAndUpdateUI]);
   
-  // CRITICAL FIX: Listen for new messages and update the component
+  // CRITICAL: Listen for new messages and handle optimistic updates
   useEffect(() => {
     const handleNewMessage = (event: Event) => {
       const customEvent = event as CustomEvent;
       const newMessage = customEvent.detail;
       
       console.log('[useBuyerMessages] New message event received:', newMessage);
+      
+      // Check if this is a confirmation of an optimistic message
+      if (newMessage.sender === user?.username && newMessage.receiver === activeThread) {
+        // This is our message coming back from the server
+        const threadId = getConversationKey(newMessage.sender, newMessage.receiver);
+        
+        // Find matching optimistic message by content and approximate time
+        setOptimisticMessages(prev => {
+          const threadOptimistic = prev[threadId] || [];
+          const matchingOptimistic = threadOptimistic.find(msg => 
+            msg._optimistic && 
+            msg.content === newMessage.content &&
+            Math.abs(new Date(msg.date).getTime() - new Date(newMessage.date || newMessage.createdAt).getTime()) < 5000 // Within 5 seconds
+          );
+          
+          if (matchingOptimistic && matchingOptimistic._tempId) {
+            // Store the mapping
+            optimisticMessageIds.current.set(matchingOptimistic._tempId, newMessage.id);
+            
+            // Remove the optimistic message (real one will be in main messages now)
+            return {
+              ...prev,
+              [threadId]: threadOptimistic.filter(msg => msg._tempId !== matchingOptimistic._tempId)
+            };
+          }
+          
+          return prev;
+        });
+      }
       
       // Force a re-render by updating counter
       setMessageUpdateCounter(prev => prev + 1);
@@ -187,14 +233,75 @@ export const useBuyerMessages = () => {
       }
     };
     
+    // Also listen for read events to update optimistic messages
+    const handleMessageRead = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('[useBuyerMessages] Message read event received:', customEvent.detail);
+      
+      // Update optimistic messages' read status
+      if (customEvent.detail.messageIds) {
+        setOptimisticMessages(prev => {
+          const updated = { ...prev };
+          
+          Object.keys(updated).forEach(threadId => {
+            updated[threadId] = updated[threadId].map(msg => {
+              // Check if this message's real ID is in the read list
+              const realId = msg._tempId ? optimisticMessageIds.current.get(msg._tempId) : msg.id;
+              if (realId && customEvent.detail.messageIds.includes(realId)) {
+                return { ...msg, isRead: true, read: true };
+              }
+              return msg;
+            });
+          });
+          
+          return updated;
+        });
+      }
+      
+      // Force a re-render to update read receipts
+      setMessageUpdateCounter(prev => prev + 1);
+    };
+    
     window.addEventListener('message:new', handleNewMessage);
+    window.addEventListener('message:read', handleMessageRead);
     
     return () => {
       window.removeEventListener('message:new', handleNewMessage);
+      window.removeEventListener('message:read', handleMessageRead);
     };
-  }, [activeThread]);
+  }, [activeThread, user?.username]);
   
-  // Memoize threads to avoid circular dependency - FIXED to update on message changes
+  // Clean up old optimistic messages periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setOptimisticMessages(prev => {
+        const updated = { ...prev };
+        const now = Date.now();
+        
+        Object.keys(updated).forEach(threadId => {
+          // Remove optimistic messages older than 10 seconds (they should have been confirmed by now)
+          updated[threadId] = updated[threadId].filter(msg => {
+            if (msg._optimistic) {
+              const messageTime = new Date(msg.date).getTime();
+              return now - messageTime < 10000; // Keep if less than 10 seconds old
+            }
+            return true;
+          });
+        });
+        
+        return updated;
+      });
+      
+      // Clean up ID mappings
+      if (optimisticMessageIds.current.size > 100) {
+        optimisticMessageIds.current.clear();
+      }
+    }, 10000); // Every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // ENHANCED: Merge real messages with optimistic messages
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
     
@@ -210,6 +317,18 @@ export const useBuyerMessages = () => {
         });
       });
       
+      // Add optimistic messages
+      Object.entries(optimisticMessages).forEach(([threadId, optMsgs]) => {
+        // Find the other party from threadId
+        const [party1, party2] = threadId.split('-');
+        const otherParty = party1 === user.username ? party2 : party1;
+        
+        if (otherParty && otherParty !== user.username) {
+          if (!result[otherParty]) result[otherParty] = [];
+          result[otherParty].push(...optMsgs);
+        }
+      });
+      
       // Sort messages in each thread by date
       Object.values(result).forEach((thread) =>
         thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -219,7 +338,7 @@ export const useBuyerMessages = () => {
     console.log('[useBuyerMessages] Threads updated, count:', Object.keys(result).length);
     
     return result;
-  }, [messages, user, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
   // Calculate other message data with async profile loading
   const [sellerProfiles, setSellerProfiles] = useState<{ [seller: string]: { pic: string | null, verified: boolean } }>({});
@@ -259,11 +378,21 @@ export const useBuyerMessages = () => {
     let totalUnreadCount = 0;
     
     Object.entries(threads).forEach(([seller, msgs]) => {
-      lastMessages[seller] = msgs[msgs.length - 1];
+      // Get last non-optimistic message for lastMessages
+      const realMessages = msgs.filter(m => !(m as OptimisticMessage)._optimistic);
+      if (realMessages.length > 0) {
+        lastMessages[seller] = realMessages[realMessages.length - 1];
+      } else if (msgs.length > 0) {
+        // If only optimistic messages, use the last one
+        lastMessages[seller] = msgs[msgs.length - 1];
+      }
       
-      // Count unread messages - use both isRead and read properties
+      // Count unread messages (exclude optimistic ones)
       const unread = msgs.filter(msg =>
-        msg.receiver === user?.username && !msg.isRead && !msg.read
+        !(msg as OptimisticMessage)._optimistic &&
+        msg.receiver === user?.username && 
+        !msg.isRead && 
+        !msg.read
       ).length;
       
       unreadCounts[seller] = unread;
@@ -273,7 +402,7 @@ export const useBuyerMessages = () => {
     console.log('[useBuyerMessages] Unread counts updated, total:', totalUnreadCount);
     
     return { unreadCounts, lastMessages, totalUnreadCount };
-  }, [threads, user?.username, messageUpdateCounter]); // Add messageUpdateCounter to dependencies
+  }, [threads, user?.username, messageUpdateCounter]);
   
   // Update UI unread counts based on actual unread counts
   useEffect(() => {
@@ -286,8 +415,9 @@ export const useBuyerMessages = () => {
       if (seller === activeThread) {
         newUiUnreadCounts[seller] = 0;
       } else {
-        // Otherwise, count unread messages
+        // Otherwise, count unread messages (exclude optimistic)
         const unreadMessages = msgs.filter(msg =>
+          !(msg as OptimisticMessage)._optimistic &&
           msg.receiver === user.username &&
           !msg.isRead &&
           !msg.read &&
@@ -403,7 +533,7 @@ export const useBuyerMessages = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [threads, users, sellerProfiles]);
   
-  // FIXED: Handle sending reply with proper image URL
+  // OPTIMISTIC: Handle sending reply with instant UI update
   const handleReply = useCallback(async () => {
     if (!activeThread || (!replyMessage.trim() && !selectedImage) || !user) return;
     
@@ -413,16 +543,32 @@ export const useBuyerMessages = () => {
       receiver: activeThread
     });
     
-    await sendMessage(
-      user.username,
-      activeThread,
-      replyMessage.trim(),
-      {
-        type: selectedImage ? 'image' : 'normal',
-        meta: selectedImage ? { imageUrl: selectedImage } : undefined
-      }
-    );
+    // Create optimistic message
+    const tempId = uuidv4();
+    const threadId = getConversationKey(user.username, activeThread);
+    const messageContent = replyMessage.trim() || (selectedImage ? 'Image shared' : '');
     
+    const optimisticMsg: OptimisticMessage = {
+      id: tempId,
+      _tempId: tempId,
+      _optimistic: true,
+      sender: user.username,
+      receiver: activeThread,
+      content: messageContent,
+      date: new Date().toISOString(),
+      isRead: false,
+      read: false,
+      type: selectedImage ? 'image' : 'normal',
+      meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+    };
+    
+    // Add optimistic message to UI immediately
+    setOptimisticMessages(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] || []), optimisticMsg]
+    }));
+    
+    // Clear input immediately for better UX
     setReplyMessage('');
     setSelectedImage(null);
     setImageError(null);
@@ -430,10 +576,39 @@ export const useBuyerMessages = () => {
     // Force update to show the new message immediately
     setMessageUpdateCounter(prev => prev + 1);
     
-    // Scroll to bottom after sending
+    // Scroll to bottom immediately
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    }, 0);
+    
+    // Send the actual message in the background
+    try {
+      await sendMessage(
+        user.username,
+        activeThread,
+        messageContent,
+        {
+          type: selectedImage ? 'image' : 'normal',
+          meta: selectedImage ? { imageUrl: selectedImage } : undefined
+        }
+      );
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      
+      // Remove optimistic message on error
+      setOptimisticMessages(prev => ({
+        ...prev,
+        [threadId]: prev[threadId]?.filter(msg => msg._tempId !== tempId) || []
+      }));
+      
+      // Restore input on error
+      setReplyMessage(messageContent);
+      setSelectedImage(selectedImage);
+      setImageError('Failed to send message. Please try again.');
+      
+      // Force update to remove optimistic message
+      setMessageUpdateCounter(prev => prev + 1);
+    }
   }, [activeThread, replyMessage, selectedImage, user, sendMessage]);
   
   const handleBlockToggle = useCallback(() => {
@@ -483,13 +658,31 @@ export const useBuyerMessages = () => {
           `💰 Custom request "${request.title}" has been paid! Check your orders to fulfill.`
         );
         
-        // Send confirmation message
-        await sendMessage(
-          user.username,
-          request.seller,
-          `✅ Accepted and paid for custom request: ${request.title}`,
-          { type: 'normal' }
-        );
+        // Send confirmation message (optimistically)
+        const tempId = uuidv4();
+        const threadId = getConversationKey(user.username, request.seller);
+        const confirmMessage = `✅ Accepted and paid for custom request: ${request.title}`;
+        
+        const optimisticMsg: OptimisticMessage = {
+          id: tempId,
+          _tempId: tempId,
+          _optimistic: true,
+          sender: user.username,
+          receiver: request.seller,
+          content: confirmMessage,
+          date: new Date().toISOString(),
+          isRead: false,
+          read: false,
+          type: 'normal'
+        };
+        
+        setOptimisticMessages(prev => ({
+          ...prev,
+          [threadId]: [...(prev[threadId] || []), optimisticMsg]
+        }));
+        
+        // Send actual message in background
+        sendMessage(user.username, request.seller, confirmMessage, { type: 'normal' });
         
         // Force update
         setMessageUpdateCounter(prev => prev + 1);
@@ -500,13 +693,31 @@ export const useBuyerMessages = () => {
       // Update status to accepted but not paid
       respondToRequest(request.id, 'accepted', undefined, undefined, user.username);
       
-      // Send message
-      await sendMessage(
-        user.username,
-        request.seller,
-        `✅ Accepted custom request: ${request.title} (payment pending - insufficient balance)`,
-        { type: 'normal' }
-      );
+      // Send message optimistically
+      const tempId = uuidv4();
+      const threadId = getConversationKey(user.username, request.seller);
+      const confirmMessage = `✅ Accepted custom request: ${request.title} (payment pending - insufficient balance)`;
+      
+      const optimisticMsg: OptimisticMessage = {
+        id: tempId,
+        _tempId: tempId,
+        _optimistic: true,
+        sender: user.username,
+        receiver: request.seller,
+        content: confirmMessage,
+        date: new Date().toISOString(),
+        isRead: false,
+        read: false,
+        type: 'normal'
+      };
+      
+      setOptimisticMessages(prev => ({
+        ...prev,
+        [threadId]: [...(prev[threadId] || []), optimisticMsg]
+      }));
+      
+      // Send actual message in background
+      sendMessage(user.username, request.seller, confirmMessage, { type: 'normal' });
       
       // Force update
       setMessageUpdateCounter(prev => prev + 1);
@@ -519,13 +730,31 @@ export const useBuyerMessages = () => {
     // Update status
     respondToRequest(request.id, 'rejected', undefined, undefined, user.username);
     
-    // Send decline message
-    await sendMessage(
-      user.username,
-      request.seller,
-      `❌ Declined custom request: ${request.title}`,
-      { type: 'normal' }
-    );
+    // Send decline message optimistically
+    const tempId = uuidv4();
+    const threadId = getConversationKey(user.username, request.seller);
+    const declineMessage = `❌ Declined custom request: ${request.title}`;
+    
+    const optimisticMsg: OptimisticMessage = {
+      id: tempId,
+      _tempId: tempId,
+      _optimistic: true,
+      sender: user.username,
+      receiver: request.seller,
+      content: declineMessage,
+      date: new Date().toISOString(),
+      isRead: false,
+      read: false,
+      type: 'normal'
+    };
+    
+    setOptimisticMessages(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] || []), optimisticMsg]
+    }));
+    
+    // Send actual message in background
+    sendMessage(user.username, request.seller, declineMessage, { type: 'normal' });
     
     // Force update
     setMessageUpdateCounter(prev => prev + 1);
@@ -539,7 +768,7 @@ export const useBuyerMessages = () => {
     setEditMessage(request.description || '');
   }, []);
   
-  // FIXED: Handle submitting edited request
+  // FIXED: Handle submitting edited request with optimistic updates
   const handleEditSubmit = useCallback(async () => {
     if (!editRequestId || !user || !activeThread) return;
     
@@ -560,20 +789,44 @@ export const useBuyerMessages = () => {
       user.username // Mark buyer as the one who edited
     );
     
-    // Send update message
-    await sendMessage(
+    // Send update message optimistically
+    const tempId = uuidv4();
+    const threadId = getConversationKey(user.username, activeThread);
+    const updateMessage = `📝 Updated custom request: ${editTitle} - $${editPrice}`;
+    
+    const optimisticMsg: OptimisticMessage = {
+      id: tempId,
+      _tempId: tempId,
+      _optimistic: true,
+      sender: user.username,
+      receiver: activeThread,
+      content: updateMessage,
+      date: new Date().toISOString(),
+      isRead: false,
+      read: false,
+      type: 'customRequest',
+      meta: {
+        id: editRequestId,
+        title: editTitle.trim(),
+        price: Number(editPrice),
+        tags: editTags.split(',').map(t => t.trim()).filter(Boolean),
+        message: editMessage.trim()
+      }
+    };
+    
+    setOptimisticMessages(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] || []), optimisticMsg]
+    }));
+    
+    // Send actual message in background
+    sendMessage(
       user.username,
       activeThread,
-      `📝 Updated custom request: ${editTitle} - $${editPrice}`,
+      updateMessage,
       {
         type: 'customRequest',
-        meta: {
-          id: editRequestId,
-          title: editTitle.trim(),
-          price: Number(editPrice),
-          tags: editTags.split(',').map(t => t.trim()).filter(Boolean),
-          message: editMessage.trim()
-        }
+        meta: optimisticMsg.meta
       }
     );
     
@@ -588,7 +841,7 @@ export const useBuyerMessages = () => {
     setMessageUpdateCounter(prev => prev + 1);
   }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
   
-  // FIXED: Handle pay now with better error handling and debugging
+  // Handle pay now with better error handling and debugging
   const handlePayNow = useCallback(async (request: any) => {
     console.log('handlePayNow called with request:', request);
     
@@ -619,7 +872,7 @@ export const useBuyerMessages = () => {
     }
   }, [walletContext]);
   
-  // FIXED: Complete the handleConfirmPay function
+  // Handle confirm payment
   const handleConfirmPay = useCallback(async () => {
     console.log('handleConfirmPay called');
     console.log('Current state:', {
@@ -687,13 +940,31 @@ export const useBuyerMessages = () => {
           `💰 Custom request "${payingRequest.title}" has been paid! Check your orders to fulfill.`
         );
         
-        // Send payment confirmation message
-        await sendMessage(
-          user.username,
-          payingRequest.seller,
-          `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`,
-          { type: 'normal' }
-        );
+        // Send payment confirmation message optimistically
+        const tempId = uuidv4();
+        const threadId = getConversationKey(user.username, payingRequest.seller);
+        const paymentMessage = `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`;
+        
+        const optimisticMsg: OptimisticMessage = {
+          id: tempId,
+          _tempId: tempId,
+          _optimistic: true,
+          sender: user.username,
+          receiver: payingRequest.seller,
+          content: paymentMessage,
+          date: new Date().toISOString(),
+          isRead: false,
+          read: false,
+          type: 'normal'
+        };
+        
+        setOptimisticMessages(prev => ({
+          ...prev,
+          [threadId]: [...(prev[threadId] || []), optimisticMsg]
+        }));
+        
+        // Send actual message in background
+        sendMessage(user.username, payingRequest.seller, paymentMessage, { type: 'normal' });
         
         // Close modal and clear state
         console.log('Closing modal...');
@@ -722,7 +993,7 @@ export const useBuyerMessages = () => {
     }
   }, [payingRequest, user, walletContext, getBuyerBalance, markRequestAsPaid, addSellerNotification, sendMessage, isProcessingPayment]);
   
-  // FIXED: Handle image selection with Cloudinary upload
+  // Handle image selection with Cloudinary upload
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -798,18 +1069,38 @@ export const useBuyerMessages = () => {
         message: `$${amount.toFixed(2)} tip sent successfully!`
       });
       
-      await sendMessage(
-        user.username,
-        activeThread,
-        `💰 Sent a $${amount.toFixed(2)} tip`,
-        {
-          type: 'normal',
-          meta: {
-            id: `tip_${Date.now()}`,
-            price: amount
-          }
+      // Send tip message optimistically
+      const tempId = uuidv4();
+      const threadId = getConversationKey(user.username, activeThread);
+      const tipMessage = `💰 Sent a $${amount.toFixed(2)} tip`;
+      
+      const optimisticMsg: OptimisticMessage = {
+        id: tempId,
+        _tempId: tempId,
+        _optimistic: true,
+        sender: user.username,
+        receiver: activeThread,
+        content: tipMessage,
+        date: new Date().toISOString(),
+        isRead: false,
+        read: false,
+        type: 'normal',
+        meta: {
+          id: `tip_${Date.now()}`,
+          price: amount
         }
-      );
+      };
+      
+      setOptimisticMessages(prev => ({
+        ...prev,
+        [threadId]: [...(prev[threadId] || []), optimisticMsg]
+      }));
+      
+      // Send actual message in background
+      sendMessage(user.username, activeThread, tipMessage, {
+        type: 'normal',
+        meta: optimisticMsg.meta
+      });
       
       // Force update
       setMessageUpdateCounter(prev => prev + 1);
@@ -868,21 +1159,41 @@ export const useBuyerMessages = () => {
     
     await addRequest(requestData);
     
-    await sendMessage(
-      user.username,
-      activeThread,
-      `📦 Custom Request: ${customRequestForm.title} - $${customRequestForm.price}`,
-      {
-        type: 'customRequest',
-        meta: {
-          id: requestData.id,
-          title: requestData.title,
-          price: requestData.price,
-          tags: requestData.tags,
-          message: requestData.description
-        }
+    // Send custom request message optimistically
+    const tempId = uuidv4();
+    const threadId = getConversationKey(user.username, activeThread);
+    const requestMessage = `📦 Custom Request: ${customRequestForm.title} - $${customRequestForm.price}`;
+    
+    const optimisticMsg: OptimisticMessage = {
+      id: tempId,
+      _tempId: tempId,
+      _optimistic: true,
+      sender: user.username,
+      receiver: activeThread,
+      content: requestMessage,
+      date: new Date().toISOString(),
+      isRead: false,
+      read: false,
+      type: 'customRequest',
+      meta: {
+        id: requestData.id,
+        title: requestData.title,
+        price: requestData.price,
+        tags: requestData.tags,
+        message: requestData.description
       }
-    );
+    };
+    
+    setOptimisticMessages(prev => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] || []), optimisticMsg]
+    }));
+    
+    // Send actual message in background
+    sendMessage(user.username, activeThread, requestMessage, {
+      type: 'customRequest',
+      meta: optimisticMsg.meta
+    });
     
     closeCustomRequestModal();
     
