@@ -151,12 +151,18 @@ const userSchema = new mongoose.Schema({
   banExpiry: Date,
   bannedBy: String,
   
-  // TIMESTAMPS
-  createdAt: {
+  // ACTIVITY TRACKING - NEW FIELDS
+  isOnline: {
+    type: Boolean,
+    default: false
+  },
+  lastActive: {
     type: Date,
     default: Date.now
   },
-  lastActive: {
+  
+  // TIMESTAMPS
+  createdAt: {
     type: Date,
     default: Date.now
   },
@@ -200,6 +206,14 @@ userSchema.methods.toSafeObject = function() {
 
 // Update lastActive timestamp
 userSchema.methods.updateLastActive = function() {
+  this.lastActive = new Date();
+  this.isOnline = true;
+  return this.save();
+};
+
+// Set user offline
+userSchema.methods.setOffline = function() {
+  this.isOnline = false;
   this.lastActive = new Date();
   return this.save();
 };

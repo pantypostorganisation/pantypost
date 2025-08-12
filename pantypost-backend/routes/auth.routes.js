@@ -7,6 +7,7 @@ const PasswordReset = require('../models/PasswordReset');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const { sendEmail, emailTemplates } = require('../config/email');
+const webSocketService = require('../config/websocket'); // ADDED: Direct import
 
 // Get JWT secret from environment
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -39,10 +40,18 @@ router.post('/signup', async (req, res) => {
       email,
       password, // Will be hashed automatically by the model
       role: role || 'buyer',
-      tier: role === 'seller' ? 'Tease' : undefined
+      tier: role === 'seller' ? 'Tease' : undefined,
+      isOnline: true, // ADDED: Set online on signup
+      lastActive: new Date() // ADDED: Set last active on signup
     });
     
     await newUser.save();
+    
+    // ADDED: Broadcast online status for new user
+    if (webSocketService && webSocketService.io) {
+      webSocketService.broadcastUserStatus(newUser.username, true);
+      console.log(`[Auth] Broadcasted online status for new user ${newUser.username}`);
+    }
     
     // Create token
     const token = jwt.sign(
@@ -118,6 +127,17 @@ router.post('/login', async (req, res) => {
       });
     }
     
+    // ADDED: Update user's online status and last active time
+    user.isOnline = true;
+    user.lastActive = new Date();
+    await user.save();
+    
+    // ADDED: Emit status update via WebSocket
+    if (webSocketService && webSocketService.io) {
+      webSocketService.broadcastUserStatus(user.username, true);
+      console.log(`[Auth] Broadcasted online status for ${user.username}`);
+    }
+    
     // Create token
     const token = jwt.sign(
       { id: user._id, username: user.username, role: user.role },
@@ -153,10 +173,64 @@ router.post('/login', async (req, res) => {
 
 // POST /api/auth/logout - Logout (requires authentication)
 router.post('/logout', authMiddleware, async (req, res) => {
-  // In a production app, you might blacklist the token here
-  res.json({
-    success: true
-  });
+  try {
+    console.log('[Auth] Logout request from:', req.user?.username);
+    
+    // Update user's offline status
+    if (req.user && req.user.username) {
+      // Update in database
+      const updatedUser = await User.findOneAndUpdate(
+        { username: req.user.username },
+        { 
+          isOnline: false,
+          lastActive: new Date()
+        },
+        { new: true } // Return the updated document
+      );
+      
+      console.log(`[Auth] Database updated for ${req.user.username}: isOnline=${updatedUser?.isOnline}, lastActive=${updatedUser?.lastActive}`);
+      
+      // CRITICAL: Broadcast status update via WebSocket
+      // Use the directly imported webSocketService
+      if (webSocketService && webSocketService.io) {
+        // Broadcast the offline status to ALL clients
+        const offlineData = {
+          username: req.user.username,
+          userId: req.user.id,
+          isOnline: false,
+          lastActive: updatedUser?.lastActive || new Date(),
+          timestamp: new Date()
+        };
+        
+        // Emit multiple events to ensure clients receive it
+        webSocketService.io.emit('user:offline', offlineData);
+        webSocketService.io.emit('user:status', offlineData);
+        
+        // Also use the broadcast method
+        webSocketService.broadcastUserStatus(req.user.username, false);
+        
+        console.log(`[Auth] Emitted offline status for ${req.user.username} to all clients`);
+        
+        // Log current connections for debugging
+        const stats = webSocketService.getConnectionStats();
+        console.log(`[Auth] Current WebSocket state: ${stats.totalConnections} connections, ${stats.uniqueUsers} users`);
+      } else {
+        console.error('[Auth] ERROR: WebSocket service not available for logout broadcast');
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('[Auth] Logout error:', error);
+    // Still return success even if update fails
+    res.json({
+      success: true,
+      message: 'Logged out'
+    });
+  }
 });
 
 // GET /api/auth/me - Get current user with TIER INFORMATION
@@ -173,6 +247,11 @@ router.get('/me', authMiddleware, async (req, res) => {
         }
       });
     }
+    
+    // ADDED: Update last active when fetching user data
+    user.lastActive = new Date();
+    user.isOnline = true;
+    await user.save();
     
     // Get tier information for sellers
     let tierInfo = null;
@@ -218,7 +297,8 @@ router.get('/me', authMiddleware, async (req, res) => {
         galleryImages: user.galleryImages || [],
         settings: user.settings,
         joinedDate: user.joinedDate,
-        lastActive: user.lastActive
+        lastActive: user.lastActive,
+        isOnline: user.isOnline // ADDED: Include online status
       }
     });
   } catch (error) {
@@ -250,6 +330,12 @@ router.post('/refresh', async (req, res) => {
     
     // Verify the refresh token
     const decoded = jwt.verify(refreshToken, JWT_SECRET);
+    
+    // ADDED: Update user's last active on token refresh
+    await User.findByIdAndUpdate(decoded.id, {
+      lastActive: new Date(),
+      isOnline: true
+    });
     
     // Generate new tokens
     const newToken = jwt.sign(

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeUsername } from '@/utils/security/sanitization';
+import { formatActivityStatus } from '@/utils/format';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 
 interface ChatHeaderProps {
   activeThread: string;
@@ -34,24 +36,45 @@ export default function ChatHeader({
 }: ChatHeaderProps) {
   const [showDropdown, setShowDropdown] = React.useState(false);
   const sanitizedUsername = sanitizeUsername(activeThread);
+  const { activityStatus, loading } = useUserActivityStatus(activeThread);
+  
+  // Format the activity status for display
+  const getActivityDisplay = () => {
+    if (isUserBlocked) {
+      return 'Blocked';
+    }
+    
+    if (loading) {
+      return '...';
+    }
+    
+    return formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
+  };
   
   return (
     <div className="bg-[#1a1a1a] border-b border-gray-800 px-4 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Seller Avatar */}
-          {sellerProfile.pic ? (
-            <SecureImage
-              src={sellerProfile.pic}
-              alt={activeThread}
-              className="w-10 h-10 rounded-full object-cover"
-              fallbackSrc="/placeholder-avatar.png"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-              {activeThread.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <div className="relative">
+            {sellerProfile.pic ? (
+              <SecureImage
+                src={sellerProfile.pic}
+                alt={activeThread}
+                className="w-10 h-10 rounded-full object-cover"
+                fallbackSrc="/placeholder-avatar.png"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+                {activeThread.charAt(0).toUpperCase()}
+              </div>
+            )}
+            
+            {/* Online indicator */}
+            {activityStatus.isOnline && !isUserBlocked && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+            )}
+          </div>
           
           {/* Seller Info */}
           <div>
@@ -65,8 +88,8 @@ export default function ChatHeader({
                 <CheckCircle className="w-4 h-4 text-blue-500" />
               )}
             </h3>
-            <p className="text-xs text-gray-400">
-              {isUserBlocked ? 'Blocked' : 'Active now'}
+            <p className={`text-xs ${activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'}`}>
+              {getActivityDisplay()}
             </p>
           </div>
         </div>

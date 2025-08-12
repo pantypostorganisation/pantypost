@@ -13,7 +13,7 @@ import {
 class WebSocketService {
   private state: WebSocketState = WebSocketState.DISCONNECTED;
   private options: WebSocketOptions;
-  private handlers: Map<WebSocketEvent, Set<WebSocketHandler>> = new Map();
+  private handlers: Map<WebSocketEvent | string, Set<WebSocketHandler>> = new Map();
   private socket: Socket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private reconnectAttempts = 0;
@@ -93,77 +93,125 @@ class WebSocketService {
     // Message events
     this.socket.on('message:new', (data: any) => {
       this.emit(WebSocketEvent.MESSAGE_NEW, data);
+      this.emit('message:new', data);
     });
 
     this.socket.on('message:typing', (data: any) => {
       this.emit(WebSocketEvent.MESSAGE_TYPING, data);
+      this.emit('message:typing', data);
     });
 
     this.socket.on('message:read', (data: any) => {
       this.emit(WebSocketEvent.MESSAGE_READ, data);
+      this.emit('message:read', data);
     });
 
     // Order events
     this.socket.on('order:new', (data: any) => {
       this.emit(WebSocketEvent.ORDER_NEW, data);
+      this.emit('order:new', data);
+    });
+    
+    this.socket.on('order:created', (data: any) => {
+      this.emit(WebSocketEvent.ORDER_NEW, data);
+      this.emit('order:created', data);
     });
 
     this.socket.on('order:status_change', (data: any) => {
       this.emit(WebSocketEvent.ORDER_STATUS_CHANGE, data);
+      this.emit('order:status_change', data);
     });
 
     // Wallet events
     this.socket.on('wallet:balance_update', (data: any) => {
       this.emit(WebSocketEvent.WALLET_BALANCE_UPDATE, data);
+      this.emit('wallet:balance_update', data);
     });
 
     this.socket.on('wallet:transaction', (data: any) => {
       this.emit(WebSocketEvent.WALLET_TRANSACTION, data);
+      this.emit('wallet:transaction', data);
     });
 
     // Auction events
     this.socket.on('auction:bid', (data: any) => {
       this.emit(WebSocketEvent.AUCTION_BID, data);
+      this.emit('auction:bid', data);
     });
 
     this.socket.on('auction:outbid', (data: any) => {
       this.emit(WebSocketEvent.AUCTION_OUTBID, data);
+      this.emit('auction:outbid', data);
     });
 
     this.socket.on('auction:ended', (data: any) => {
       this.emit(WebSocketEvent.AUCTION_ENDED, data);
+      this.emit('auction:ended', data);
     });
 
-    // User status events
+    // FIXED: User status events - handle all three event types properly
     this.socket.on('user:online', (data: any) => {
+      console.log('[WebSocket] Processing user:online event:', data);
+      this.emit(WebSocketEvent.USER_ONLINE, data);
+      this.emit('user:online', data);
+    });
+    
+    this.socket.on('user:offline', (data: any) => {
+      console.log('[WebSocket] Processing user:offline event:', data);
+      this.emit(WebSocketEvent.USER_OFFLINE, data);
+      this.emit('user:offline', data);
+    });
+    
+    this.socket.on('user:status', (data: any) => {
+      console.log('[WebSocket] Processing user:status event:', data);
+      this.emit('user:status', data);
+      
+      // Also emit as online/offline based on the status
       if (data.isOnline) {
         this.emit(WebSocketEvent.USER_ONLINE, data);
+        this.emit('user:online', data);
       } else {
         this.emit(WebSocketEvent.USER_OFFLINE, data);
+        this.emit('user:offline', data);
       }
     });
 
     // Notification events
     this.socket.on('notification:new', (data: any) => {
       this.emit(WebSocketEvent.NOTIFICATION_NEW, data);
+      this.emit('notification:new', data);
     });
 
     // Subscription events
     this.socket.on('subscription:new', (data: any) => {
       this.emit(WebSocketEvent.SUBSCRIPTION_NEW, data);
+      this.emit('subscription:new', data);
     });
 
     this.socket.on('subscription:cancelled', (data: any) => {
       this.emit(WebSocketEvent.SUBSCRIPTION_CANCELLED, data);
+      this.emit('subscription:cancelled', data);
     });
 
     // Listing events
     this.socket.on('listing:new', (data: any) => {
       this.emit(WebSocketEvent.LISTING_NEW, data);
+      this.emit('listing:new', data);
     });
 
     this.socket.on('listing:sold', (data: any) => {
       this.emit(WebSocketEvent.LISTING_SOLD, data);
+      this.emit('listing:sold', data);
+    });
+    
+    // Thread events
+    this.socket.on('thread:user_viewing', (data: any) => {
+      this.emit('thread:user_viewing', data);
+    });
+    
+    // Users online list
+    this.socket.on('users:online_list', (data: any) => {
+      this.emit('users:online_list', data);
     });
 
     // Generic event listener for debugging
@@ -189,8 +237,8 @@ class WebSocketService {
     this.setState(WebSocketState.DISCONNECTED);
   }
 
-  // Subscribe to WebSocket events
-  on<T = any>(event: WebSocketEvent, handler: WebSocketHandler<T>): () => void {
+  // Subscribe to WebSocket events (fixed to accept string events too)
+  on<T = any>(event: WebSocketEvent | string, handler: WebSocketHandler<T>): () => void {
     if (!this.handlers.has(event)) {
       this.handlers.set(event, new Set());
     }
@@ -209,8 +257,8 @@ class WebSocketService {
     };
   }
 
-  // Emit event to all handlers
-  private emit(event: WebSocketEvent, data: any): void {
+  // Emit event to all handlers (fixed to accept string events too)
+  private emit(event: WebSocketEvent | string, data: any): void {
     const handlers = this.handlers.get(event);
     if (handlers) {
       handlers.forEach(handler => {

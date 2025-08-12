@@ -2,9 +2,42 @@
 const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
+const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
 const { v4: uuidv4 } = require('uuid');
+
+// Get user status endpoint
+router.get('/user-status/:username', authMiddleware, async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    // Get user from database
+    const user = await User.findOne({ username }).select('isOnline lastActive');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        username,
+        isOnline: user.isOnline || false,
+        lastActive: user.lastActive
+      }
+    });
+  } catch (error) {
+    console.error('Get user status error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // Get all threads for a user
 router.get('/threads', authMiddleware, async (req, res) => {
@@ -91,6 +124,12 @@ router.post('/send', authMiddleware, async (req, res) => {
     });
     
     await message.save();
+    
+    // Update sender's last active time
+    await User.findOneAndUpdate(
+      { username: sender },
+      { lastActive: new Date(), isOnline: true }
+    );
     
     // CRITICAL FIX: Add logging and ensure emission happens
     console.log('WEBSOCKET: Emitting new message event for message:', {

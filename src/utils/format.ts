@@ -12,6 +12,43 @@ type TransactionStatus = Transaction['status'];
  */
 
 /**
+ * Format user activity status
+ * @param isOnline Whether user is currently online
+ * @param lastActive The last active timestamp
+ * @returns Formatted activity string
+ */
+export function formatActivityStatus(isOnline: boolean, lastActive: Date | null): string {
+  if (isOnline) {
+    return 'Active now';
+  }
+  
+  if (!lastActive) {
+    return 'Offline';
+  }
+  
+  const now = new Date();
+  const diffMs = now.getTime() - lastActive.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffMinutes < 1) {
+    return 'Active just now';
+  } else if (diffMinutes < 60) {
+    return `Active ${diffMinutes}m ago`;
+  } else if (diffHours < 24) {
+    return `Active ${diffHours}h ago`;
+  } else if (diffDays === 1) {
+    return 'Active yesterday';
+  } else if (diffDays < 7) {
+    return `Active ${diffDays}d ago`;
+  } else {
+    return 'Offline';
+  }
+}
+
+/**
  * Format Money type to currency string
  * @param amount The Money amount (in cents)
  * @param locale The locale to use (default: 'en-US')
@@ -397,5 +434,3 @@ export function formatTransactionSummary(
     averageSize: formatMoney(averageSize),
   };
 }
-
-// Re-export original format utilities

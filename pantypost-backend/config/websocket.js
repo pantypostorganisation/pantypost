@@ -9,6 +9,7 @@ class WebSocketService {
     this.activeConnections = new Map();
     this.userSockets = new Map(); // username -> [socketIds]
     this.userThreads = new Map(); // username -> Set of active thread IDs
+    this.userActivity = new Map(); // username -> last activity timestamp
   }
 
   initialize(server) {
@@ -54,14 +55,20 @@ class WebSocketService {
       socket.on('room:join', (data) => this.handleJoinRoom(socket, data));
       socket.on('room:leave', (data) => this.handleLeaveRoom(socket, data));
       socket.on('user:online', () => this.handleUserOnline(socket));
+      socket.on('user:activity', () => this.handleUserActivity(socket));
       
-      // NEW: Handle thread focus for auto-read functionality
+      // Handle thread focus for auto-read functionality
       socket.on('thread:focus', (data) => this.handleThreadFocus(socket, data));
       socket.on('thread:blur', (data) => this.handleThreadBlur(socket, data));
     });
+
+    // Periodically update user activity status
+    setInterval(() => {
+      this.updateAllUserActivityStatus();
+    }, 30000); // Every 30 seconds
   }
 
-  handleConnection(socket) {
+  async handleConnection(socket) {
     // Track connection
     this.activeConnections.set(socket.id, {
       userId: socket.userId,
@@ -80,17 +87,39 @@ class WebSocketService {
       this.userThreads.set(socket.username, new Set());
     }
 
+    // Update user activity
+    this.userActivity.set(socket.username, Date.now());
+    
+    // CRITICAL FIX: Always update user's online status when WebSocket connects
+    try {
+      const user = await User.findOne({ username: socket.username });
+      if (user) {
+        user.isOnline = true;
+        user.lastActive = new Date();
+        await user.save();
+        console.log(`[WebSocket] Updated ${socket.username} to online status (DB: isOnline=${user.isOnline})`);
+      }
+    } catch (error) {
+      console.error(`[WebSocket] Error updating user status for ${socket.username}:`, error);
+    }
+
     // Send connection confirmation
     socket.emit('connected', {
       connected: true,
       sessionId: socket.id
     });
 
-    // Notify user is online
+    // IMPORTANT: Broadcast user is online to ALL connected clients with fresh data
     this.broadcastUserStatus(socket.username, true);
+    
+    // Send list of online users to the newly connected user
+    const onlineUsers = await this.getOnlineUsers();
+    socket.emit('users:online_list', onlineUsers);
+    
+    console.log(`[WebSocket] User ${socket.username} connected and marked online`);
   }
 
-  handleDisconnect(socket) {
+  async handleDisconnect(socket) {
     console.log(`User ${socket.username} disconnected`);
     
     // Remove from active connections
@@ -101,16 +130,107 @@ class WebSocketService {
     const filtered = userSocketIds.filter(id => id !== socket.id);
     
     if (filtered.length === 0) {
+      // User has no more active connections
       this.userSockets.delete(socket.username);
       this.userThreads.delete(socket.username);
-      // User has no more active connections
+      this.userActivity.delete(socket.username);
+      
+      // Update database - user is now offline
+      await this.updateUserOnlineStatus(socket.username, false);
+      
+      // Broadcast user is offline
       this.broadcastUserStatus(socket.username, false);
     } else {
       this.userSockets.set(socket.username, filtered);
     }
   }
 
-  // NEW: Handle when user focuses on a thread
+  async handleUserActivity(socket) {
+    // Update last activity timestamp
+    this.userActivity.set(socket.username, Date.now());
+    
+    // Update database
+    try {
+      await User.findOneAndUpdate(
+        { username: socket.username },
+        { lastActive: new Date(), isOnline: true }
+      );
+    } catch (error) {
+      console.error('Error updating user activity:', error);
+    }
+  }
+
+  async updateUserOnlineStatus(username, isOnline) {
+    try {
+      const user = await User.findOne({ username });
+      if (user) {
+        if (isOnline) {
+          await user.updateLastActive();
+        } else {
+          await user.setOffline();
+        }
+        console.log(`[WebSocket] Database updated: ${username} is now ${isOnline ? 'online' : 'offline'}`);
+      }
+    } catch (error) {
+      console.error('Error updating user online status:', error);
+    }
+  }
+
+  async updateAllUserActivityStatus() {
+    // Check all tracked users and update their activity status
+    for (const [username, lastActivity] of this.userActivity.entries()) {
+      const timeSinceActivity = Date.now() - lastActivity;
+      
+      // If no activity for 5 minutes, consider them inactive
+      if (timeSinceActivity > 5 * 60 * 1000) {
+        // Check if they're still connected
+        const isConnected = this.userSockets.has(username);
+        
+        if (!isConnected) {
+          // Remove from activity tracking
+          this.userActivity.delete(username);
+        }
+      }
+    }
+  }
+
+  async getOnlineUsers() {
+    try {
+      const onlineUsers = await User.find({ isOnline: true })
+        .select('username lastActive')
+        .lean();
+      
+      return onlineUsers.map(user => ({
+        username: user.username,
+        lastActive: user.lastActive,
+        isOnline: true
+      }));
+    } catch (error) {
+      console.error('Error getting online users:', error);
+      return [];
+    }
+  }
+
+  async getUserActivityStatus(username) {
+    try {
+      const user = await User.findOne({ username })
+        .select('isOnline lastActive')
+        .lean();
+      
+      if (!user) return null;
+      
+      return {
+        username,
+        isOnline: user.isOnline,
+        lastActive: user.lastActive
+      };
+    } catch (error) {
+      console.error('Error getting user activity status:', error);
+      return null;
+    }
+  }
+
+  // Handle when user focuses on a thread
   handleThreadFocus(socket, data) {
     const { threadId, otherUser } = data;
     if (!threadId || !otherUser) return;
@@ -131,9 +251,12 @@ class WebSocketService {
       threadId,
       viewing: true
     });
+    
+    // Update user activity
+    this.handleUserActivity(socket);
   }
 
-  // NEW: Handle when user leaves a thread
+  // Handle when user leaves a thread
   handleThreadBlur(socket, data) {
     const { threadId, otherUser } = data;
     if (!threadId || !otherUser) return;
@@ -165,6 +288,9 @@ class WebSocketService {
       conversationId,
       isTyping
     });
+    
+    // Update user activity when typing
+    this.handleUserActivity(socket);
   }
 
   handleJoinRoom(socket, data) {
@@ -179,14 +305,29 @@ class WebSocketService {
 
   handleUserOnline(socket) {
     this.broadcastUserStatus(socket.username, true);
+    this.handleUserActivity(socket);
   }
 
   broadcastUserStatus(username, isOnline) {
-    this.io.emit('user:online', {
+    // Include last active time when broadcasting
+    const statusData = {
       username,
       isOnline,
+      lastActive: new Date(),
       timestamp: new Date()
-    });
+    };
+    
+    // Broadcast to ALL connected clients
+    this.io.emit('user:status', statusData);
+    
+    // Also emit specific online/offline events for backward compatibility
+    if (isOnline) {
+      this.io.emit('user:online', statusData);
+      console.log(`[WebSocket] Broadcasted ${username} is ONLINE to all clients`);
+    } else {
+      this.io.emit('user:offline', statusData);
+      console.log(`[WebSocket] Broadcasted ${username} is OFFLINE to all clients`);
+    }
   }
 
   // Emit events from other parts of the application
@@ -209,7 +350,7 @@ class WebSocketService {
     return userThreads ? userThreads.has(threadId) : false;
   }
 
-  // User update event (ADDED FOR TIER SYSTEM)
+  // User update event (for tier system)
   emitUserUpdate(username, updateData) {
     // Emit to the user themselves
     this.emitToUser(username, 'user:updated', {
@@ -228,7 +369,7 @@ class WebSocketService {
     }
   }
 
-  // ENHANCED: Message events with better logging and auto-read
+  // Message events with better logging and auto-read
   emitNewMessage(message) {
     console.log('[WebSocket] emitNewMessage called with:', {
       id: message.id,
@@ -256,7 +397,7 @@ class WebSocketService {
       this.emitToUser(message.receiver, 'message:new', message);
       console.log(`[WebSocket] Successfully emitted to receiver ${message.receiver}`);
       
-      // NEW: Check if receiver is viewing this thread and auto-mark as read
+      // Check if receiver is viewing this thread and auto-mark as read
       if (this.isUserViewingThread(message.receiver, message.threadId)) {
         console.log(`[WebSocket] Receiver ${message.receiver} is viewing thread, auto-marking as read`);
         
@@ -498,6 +639,11 @@ class WebSocketService {
       connections: Array.from(this.activeConnections.entries()).map(([socketId, data]) => ({
         socketId,
         ...data
+      })),
+      userActivity: Array.from(this.userActivity.entries()).map(([username, lastActivity]) => ({
+        username,
+        lastActivity: new Date(lastActivity),
+        minutesSinceActivity: Math.floor((Date.now() - lastActivity) / 60000)
       }))
     };
   }

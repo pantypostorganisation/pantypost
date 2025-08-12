@@ -1,3 +1,4 @@
+// src/components/buyers/messages/ConversationView.tsx
 import React, { useCallback, useContext, useEffect } from 'react';
 import { WalletContext } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
@@ -19,6 +20,8 @@ import MessageItem from './MessageItem';
 import { getLatestCustomRequestMessages, Message, CustomRequest, getInitial } from '@/utils/messageUtils';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { sanitizeStrict } from '@/utils/security/sanitization';
+import { formatActivityStatus } from '@/utils/format';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 
 // All emojis in a single flat array - ordered by likely usage for this platform
 const ALL_EMOJIS = [
@@ -212,6 +215,9 @@ export default function ConversationView({
  // Get WebSocket context for thread focus/blur
  const wsContext = useWebSocket();
  
+ // Get user activity status
+ const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
+ 
  // Get the messages for the active thread
  const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
  
@@ -288,6 +294,19 @@ export default function ConversationView({
  const stableSetReplyMessage = useCallback((value: string) => {
    setReplyMessage(value);
  }, [setReplyMessage]);
+ 
+ // Format the activity status for display
+ const getActivityDisplay = () => {
+   if (isUserBlocked) {
+     return 'Blocked';
+   }
+   
+   if (activityLoading) {
+     return '...';
+   }
+   
+   return formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
+ };
 
  return (
    <>
@@ -307,12 +326,19 @@ export default function ConversationView({
                <BadgeCheck size={12} className="text-[#ff950e]" />
              </div>
            )}
+           
+           {/* Online indicator */}
+           {activityStatus.isOnline && !isUserBlocked && (
+             <div className="absolute bottom-0 left-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+           )}
          </div>
          <div>
            <h2 className="font-bold text-lg text-white">{sanitizeStrict(activeThread)}</h2>
-           <p className="text-xs text-[#ff950e] flex items-center">
-             <Sparkles size={12} className="mr-1 text-[#ff950e]" />
-             Active now
+           <p className={`text-xs flex items-center ${activityStatus.isOnline && !isUserBlocked ? 'text-[#ff950e]' : 'text-gray-400'}`}>
+             {activityStatus.isOnline && !isUserBlocked && (
+               <Sparkles size={12} className="mr-1 text-[#ff950e]" />
+             )}
+             {getActivityDisplay()}
            </p>
          </div>
        </div>

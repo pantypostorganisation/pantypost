@@ -6,6 +6,8 @@ import { Lock, Mail, Gift, DollarSign, MessageCircle, Camera, Video, Users, Star
 import TierBadge from '@/components/TierBadge';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { formatActivityStatus } from '@/utils/format';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 
 interface ProfileHeaderProps {
   username: string;
@@ -59,6 +61,45 @@ export default function ProfileHeader({
     hasAccess;
 
   const sanitizedUsername = sanitizeStrict(username);
+  
+  // Get user activity status using the hook
+  const { activityStatus, loading: activityLoading } = useUserActivityStatus(username);
+  
+  // Format the activity status for display
+  const getActivityDisplay = () => {
+    if (activityLoading) {
+      return 'Loading...';
+    }
+    
+    return formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
+  };
+  
+  // Determine the status badge color and text based on activity
+  const getStatusBadge = () => {
+    if (activityLoading) {
+      return (
+        <span className="flex items-center gap-1 text-xs bg-gray-600 text-white px-2 py-1 rounded-full font-bold shadow">
+          Loading...
+        </span>
+      );
+    }
+    
+    if (activityStatus.isOnline) {
+      return (
+        <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
+          Active Now
+        </span>
+      );
+    }
+    
+    // For offline users, show when they were last active
+    const activityText = formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
+    return (
+      <span className="flex items-center gap-1 text-xs bg-gray-600 text-white px-2 py-1 rounded-full font-bold shadow">
+        {activityText}
+      </span>
+    );
+  };
 
   return (
     <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
@@ -79,7 +120,7 @@ export default function ProfileHeader({
       {/* Profile section with centered profile pic and badge to the right */}
       <div className="flex flex-col items-center relative mb-6 w-full">
         {/* Profile Picture - Centered */}
-        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg">
+        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative">
           {profilePic ? (
             <img
               src={profilePic}
@@ -90,6 +131,11 @@ export default function ProfileHeader({
             <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-6xl font-bold">
               {sanitizedUsername ? sanitizedUsername.charAt(0).toUpperCase() : '?'}
             </div>
+          )}
+          
+          {/* Online indicator - bottom left of profile picture */}
+          {activityStatus.isOnline && !activityLoading && (
+            <div className="absolute bottom-2 left-2 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
           )}
         </div>
         
@@ -121,11 +167,10 @@ export default function ProfileHeader({
               Unverified
             </span>
           )}
-          <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
-            Active Now
-          </span>
+          {getStatusBadge()}
         </div>
-        <div className="text-sm text-gray-400 mb-3">Location: Private</div>
+        <div className="text-sm text-gray-400 mb-1">Location: Private</div>
+        <div className="text-sm text-gray-400 mb-3">{getActivityDisplay()}</div>
         <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
           <SecureMessageDisplay 
             content={bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
