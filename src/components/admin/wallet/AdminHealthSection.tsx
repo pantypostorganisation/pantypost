@@ -19,6 +19,7 @@ interface User {
 }
 
 interface Listing {
+  seller?: string;
   [key: string]: any;
 }
 
@@ -54,42 +55,110 @@ export default function AdminHealthSection({
   filteredDeposits,
   sellerWithdrawals
 }: AdminHealthSectionProps) {
-  // Calculate metrics
-  const allUsers = Object.values(users).filter((u: User) => u.role !== 'admin');
-  const buyers = allUsers.filter((u: User) => u.role === 'buyer');
-  const sellers = allUsers.filter((u: User) => u.role === 'seller');
-  const verifiedSellers = sellers.filter(
-    (u: User) => u.verified || u.verificationStatus === 'verified'
+  // -------- Helpers --------
+  const isAdminName = (u?: string) => u === 'platform' || u === 'oakley' || u === 'gerome';
+  const clean = (u?: string) => (typeof u === 'string' ? u.trim() : '');
+
+  // Build a quick role map from users (if provided)
+  const userRoleMap: Record<string, 'buyer' | 'seller' | 'admin' | undefined> = {};
+  Object.entries(users || {}).forEach(([username, info]) => {
+    const uname = clean(username);
+    const role = (info?.role as any) || undefined;
+    if (uname) userRoleMap[uname] = role;
+  });
+
+  // Prefer backend-provided deposit.role; else infer buyer/admin
+  const depositorRole = (d: Deposit): 'buyer' | 'admin' => {
+    const r = d.role ?? (d.username === 'platform' ? 'admin' : 'buyer');
+    // Even if something upstream mislabeled as seller, treat depositors as buyers for this card.
+    return r === 'admin' ? 'admin' : 'buyer';
+  };
+
+  // -------- Sellers set (exclude admins) --------
+  const sellersFromUsers = new Set(
+    Object.entries(users || {})
+      .filter(([, info]) => info?.role === 'seller')
+      .map(([u]) => clean(u))
+      .filter((u) => u && !isAdminName(u))
   );
 
-  const activeListings = listings.length;
-  const avgListingsPerSeller =
-    sellers.length > 0 ? (activeListings / sellers.length).toFixed(1) : '0';
+  const sellersFromWithdrawals = new Set(
+    Object.keys(sellerWithdrawals || {})
+      .map((u) => clean(u))
+      .filter((u) => u && !isAdminName(u))
+  );
 
-  // Top sellers
-  const topSellers = Object.entries(wallet)
-    .filter(([username]: [string, number]) => users[username]?.role === 'seller')
+  const sellersFromListings = new Set(
+    (listings || [])
+      .map((l) => clean(l.seller))
+      .filter((u) => u && !isAdminName(u))
+  );
+
+  const sellersSet = new Set<string>([
+    ...Array.from(sellersFromUsers),
+    ...Array.from(sellersFromWithdrawals),
+    ...Array.from(sellersFromListings),
+  ]);
+
+  // -------- Buyers set (exclude admins) --------
+  const buyersFromUsers = new Set(
+    Object.entries(users || {})
+      .filter(([, info]) => info?.role === 'buyer')
+      .map(([u]) => clean(u))
+      .filter((u) => u && !isAdminName(u))
+  );
+
+  const buyersFromDeposits = new Set(
+    (filteredDeposits || [])
+      .filter((d) => d.status === 'completed')
+      .filter((d) => depositorRole(d) !== 'admin') // drop platform/admin
+      .map((d) => clean(d.username))
+      .filter((u) => u && !isAdminName(u))
+  );
+
+  const buyersSet = new Set<string>([
+    ...Array.from(buyersFromUsers),
+    ...Array.from(buyersFromDeposits),
+  ]);
+
+  // Final counts (buyers + sellers, admins excluded)
+  const totalUsersCount = new Set<string>([...Array.from(buyersSet), ...Array.from(sellersSet)]).size;
+  const buyersCount = buyersSet.size;
+  const sellersCount = sellersSet.size;
+
+  // Verified sellers (from users map only—verification is account-level)
+  const verifiedSellers = Object.values(users || {}).filter(
+    (u) => u.role === 'seller' && (u.verified || u.verificationStatus === 'verified')
+  );
+
+  // Active listings + average per seller (based on sellersSet)
+  const activeListings = (listings || []).length;
+  const avgListingsPerSeller = sellersCount > 0 ? (activeListings / sellersCount).toFixed(1) : '0';
+
+  // Top sellers by wallet balance (stable)
+  const topSellers = Object.entries(wallet || {})
+    .filter(([username]: [string, number]) => (users?.[username]?.role === 'seller'))
     .sort(([, a]: [string, number], [, b]: [string, number]) => b - a)
     .slice(0, 5);
 
-  // Build a quick map of depositor -> role using deposit rows themselves.
-  // Prefer the backend-provided deposit.role; otherwise infer:
-  // 'platform' => 'admin', everyone else => 'buyer'.
-  const depositorRoleByUser: Record<string, 'buyer' | 'seller' | 'admin'> =
-    filteredDeposits.reduce((acc, d) => {
-      const inferredRole =
-        d.role ?? (d.username === 'platform' ? 'admin' : 'buyer');
-      // Even if something upstream accidentally marked a deposit as 'seller',
-      // treat depositors as buyers in the dashboard context.
-      acc[d.username] = inferredRole === 'seller' ? 'buyer' : inferredRole;
+  // Role map for depositors (for label only)
+  const depositorRoleByUser: Record<string, 'buyer' | 'admin'> =
+    (filteredDeposits || []).reduce((acc, d) => {
+      const uname = clean(d.username);
+      if (!uname) return acc;
+      const r = depositorRole(d);
+      if (r === 'admin') acc[uname] = 'admin';
+      else acc[uname] = 'buyer';
       return acc;
-    }, {} as Record<string, 'buyer' | 'seller' | 'admin'>);
+    }, {} as Record<string, 'buyer' | 'admin'>);
 
-  // Top depositors - compute totals from filteredDeposits
-  const depositTotals: Record<string, number> = filteredDeposits
+  // Top depositors (sum completed deposits)
+  const depositTotals: Record<string, number> = (filteredDeposits || [])
     .filter((deposit) => deposit.status === 'completed')
     .reduce((acc: Record<string, number>, deposit: Deposit) => {
-      acc[deposit.username] = (acc[deposit.username] || 0) + deposit.amount;
+      const uname = clean(deposit.username);
+      if (!uname || isAdminName(uname)) return acc;
+      acc[uname] = (acc[uname] || 0) + (deposit.amount || 0);
       return acc;
     }, {});
 
@@ -97,15 +166,12 @@ export default function AdminHealthSection({
     .sort(([, a]: [string, number], [, b]: [string, number]) => b - a)
     .slice(0, 5);
 
-  // Top withdrawers
-  const topWithdrawers = Object.entries(sellerWithdrawals)
+  // Top withdrawers (unchanged)
+  const topWithdrawers = Object.entries(sellerWithdrawals || {})
     .map(([seller, withdrawals]: [string, Withdrawal[]]) => ({
       seller,
-      totalWithdrawn: withdrawals.reduce(
-        (sum: number, w: Withdrawal) => sum + w.amount,
-        0
-      ),
-      withdrawalCount: withdrawals.length
+      totalWithdrawn: (withdrawals || []).reduce((sum: number, w: Withdrawal) => sum + (w?.amount || 0), 0),
+      withdrawalCount: (withdrawals || []).length
     }))
     .sort((a, b) => b.totalWithdrawn - a.totalWithdrawn)
     .slice(0, 5);
@@ -116,7 +182,7 @@ export default function AdminHealthSection({
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(amount || 0);
   };
 
   const roleLabel = (username: string) => {
@@ -140,9 +206,9 @@ export default function AdminHealthSection({
               <span className="text-white">Total Users</span>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-white">{allUsers.length}</span>
+              <span className="text-2xl font-bold text-white">{totalUsersCount}</span>
               <p className="text-xs text-gray-400">
-                {buyers.length} buyers, {sellers.length} sellers
+                {buyersCount} buyers, {sellersCount} sellers
               </p>
             </div>
           </div>
@@ -153,14 +219,9 @@ export default function AdminHealthSection({
               <span className="text-white">Verified Sellers</span>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-white">
-                {verifiedSellers.length}
-              </span>
+              <span className="text-2xl font-bold text-white">{verifiedSellers.length}</span>
               <p className="text-xs text-gray-400">
-                {sellers.length > 0
-                  ? Math.round((verifiedSellers.length / sellers.length) * 100)
-                  : 0}
-                % verified
+                {sellersCount > 0 ? Math.round((verifiedSellers.length / sellersCount) * 100) : 0}% verified
               </p>
             </div>
           </div>
@@ -178,7 +239,7 @@ export default function AdminHealthSection({
         </div>
       </div>
 
-      {/* Top Sellers */}
+      {/* Top Earning Sellers */}
       <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
           <Star className="h-5 w-5 text-[#ff950e]" />
@@ -187,10 +248,7 @@ export default function AdminHealthSection({
         <div className="space-y-3">
           {topSellers.length > 0 ? (
             topSellers.map(([username, balance], index) => (
-              <div
-                key={username}
-                className="flex items-center justify-between p-3 bg-[#252525] rounded-lg"
-              >
+              <div key={username} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -236,10 +294,7 @@ export default function AdminHealthSection({
         <div className="space-y-3">
           {topDepositors.length > 0 ? (
             topDepositors.map(([username, totalDeposited], index) => (
-              <div
-                key={username}
-                className="flex items-center justify-between p-3 bg-[#252525] rounded-lg"
-              >
+              <div key={username} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -256,15 +311,11 @@ export default function AdminHealthSection({
                   </div>
                   <div>
                     <p className="font-medium text-white">{username}</p>
-                    <p className="text-xs text-gray-400">
-                      {roleLabel(username)}
-                    </p>
+                    <p className="text-xs text-gray-400">{depositorRoleByUser[username] === 'admin' ? '🛡️ Admin' : '💳 Buyer'}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-blue-400">
-                    {formatCurrency(totalDeposited)}
-                  </p>
+                  <p className="font-bold text-blue-400">{formatCurrency(totalDeposited)}</p>
                   <p className="text-xs text-gray-500">deposited</p>
                 </div>
               </div>
@@ -285,12 +336,9 @@ export default function AdminHealthSection({
           Top Withdrawers
         </h3>
         <div className="space-y-3">
-          {topWithdrawers.length > 0 ? (
+          {Object.keys(sellerWithdrawals || {}).length > 0 ? (
             topWithdrawers.map((withdrawer, index) => (
-              <div
-                key={withdrawer.seller}
-                className="flex items-center justify-between p-3 bg-[#252525] rounded-lg"
-              >
+              <div key={withdrawer.seller} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -308,15 +356,12 @@ export default function AdminHealthSection({
                   <div>
                     <p className="font-medium text-white">{withdrawer.seller}</p>
                     <p className="text-xs text-gray-400">
-                      {withdrawer.withdrawalCount} withdrawal
-                      {withdrawer.withdrawalCount !== 1 ? 's' : ''}
+                      {withdrawer.withdrawalCount} withdrawal{withdrawer.withdrawalCount !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-red-400">
-                    {formatCurrency(withdrawer.totalWithdrawn)}
-                  </p>
+                  <p className="font-bold text-red-400">{formatCurrency(withdrawer.totalWithdrawn)}</p>
                   <p className="text-xs text-gray-500">withdrawn</p>
                 </div>
               </div>
