@@ -414,6 +414,8 @@ export interface DepositLog {
   status: 'pending' | 'completed' | 'failed';
   transactionId?: string;
   notes?: string;
+  // NEW: role information from the backend analytics payload (non-breaking)
+  role?: 'buyer' | 'seller' | 'admin';
 }
 
 // Custom request purchase

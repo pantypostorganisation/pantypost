@@ -26,6 +26,8 @@ interface Deposit {
   amount: number;
   date: string;
   status: string;
+  // NEW: carry role info so UI shows Buyer for deposits
+  role?: 'buyer' | 'seller' | 'admin';
 }
 
 interface Withdrawal {
@@ -38,6 +40,16 @@ interface Withdrawal {
 const isValidRevenueOrder = (order: Order): boolean => {
   // Exclude orders that are pending auction bids
   return order.shippingStatus !== 'pending-auction';
+};
+
+// NEW: normalize each deposit with a correct role
+const normalizeDepositRole = (deposit: Deposit): Deposit => {
+  // Respect any role provided by the backend; otherwise default logically
+  const role =
+    deposit.role ??
+    (deposit.username === 'platform' ? 'admin' : 'buyer');
+
+  return { ...deposit, role };
 };
 
 // Export all the calculation functions from the original file
@@ -73,7 +85,8 @@ export const getTimeFilteredData = (
       return { 
         actions: adminActions, 
         orders: orderHistory.filter(isValidRevenueOrder), 
-        deposits: depositLogs,
+        // Ensure all deposits now carry role info (buyer/admin)
+        deposits: depositLogs.map(normalizeDepositRole),
         sellerWithdrawals: getAllSellerWithdrawals(sellerWithdrawals),
         adminWithdrawals: adminWithdrawals
       };
@@ -83,7 +96,9 @@ export const getTimeFilteredData = (
   const filteredOrders = orderHistory
     .filter(order => new Date(order.date) >= filterDate)
     .filter(isValidRevenueOrder); // Also filter out pending auction orders
-  const filteredDeposits = depositLogs.filter(deposit => new Date(deposit.date) >= filterDate);
+  const filteredDeposits = depositLogs
+    .filter(deposit => new Date(deposit.date) >= filterDate)
+    .map(normalizeDepositRole); // <- normalize here too
   
   const filteredSellerWithdrawals = getAllSellerWithdrawals(sellerWithdrawals).filter(
     withdrawal => new Date(withdrawal.date) >= filterDate
