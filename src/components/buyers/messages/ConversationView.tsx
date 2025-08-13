@@ -1,5 +1,5 @@
 // src/components/buyers/messages/ConversationView.tsx
-import React, { useCallback, useContext, useEffect } from 'react';
+import React, { useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { WalletContext } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import {
@@ -17,6 +17,7 @@ import {
   Package
 } from 'lucide-react';
 import MessageItem from './MessageItem';
+import TypingIndicator from '@/components/messaging/TypingIndicator';
 import { getLatestCustomRequestMessages, Message, CustomRequest, getInitial } from '@/utils/messageUtils';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -212,8 +213,19 @@ export default function ConversationView({
  // Get wallet context for fresh balance checks
  const walletContext = useContext(WalletContext);
  
- // Get WebSocket context for thread focus/blur
+ // Get WebSocket context for thread focus/blur and typing
  const wsContext = useWebSocket();
+ 
+ // State for typing indicator
+ const [isSellerTyping, setIsSellerTyping] = useState(false);
+ 
+ // Refs for typing management
+ const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+ const isTypingRef = useRef(false);
+ const lastTypingEmitRef = useRef(0);
+ const autoHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+ const hasScrolledForTypingRef = useRef(false); // Track if we've already scrolled for current typing session
+ const userHasScrolledRef = useRef(false); // Track if user has manually scrolled
  
  // Get user activity status
  const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
@@ -221,32 +233,174 @@ export default function ConversationView({
  // Get the messages for the active thread
  const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
  
- // ADDED: Handle thread focus/blur for auto-read functionality
+ // Handle thread focus/blur for auto-read functionality - FIXED: Always return cleanup or undefined
  useEffect(() => {
-   if (activeThread && user && wsContext?.sendMessage) {
-     const threadId = getConversationKey(user.username, activeThread);
+   if (!activeThread || !user || !wsContext?.sendMessage) {
+     return undefined; // Explicitly return undefined when conditions aren't met
+   }
+   
+   const threadId = getConversationKey(user.username, activeThread);
+   
+   console.log('[ConversationView] Focusing on thread:', threadId);
+   
+   // Notify backend that user is viewing this thread
+   wsContext.sendMessage('thread:focus', {
+     threadId,
+     otherUser: activeThread
+   });
+
+   return () => {
+     console.log('[ConversationView] Leaving thread:', threadId);
      
-     console.log('[ConversationView] Focusing on thread:', threadId);
-     
-     // Notify backend that user is viewing this thread
-     wsContext.sendMessage('thread:focus', {
+     // Notify backend when user leaves the thread
+     wsContext.sendMessage('thread:blur', {
        threadId,
        otherUser: activeThread
      });
-
-     return () => {
-       console.log('[ConversationView] Leaving thread:', threadId);
+   };
+ }, [activeThread, user, wsContext]); // Include all dependencies used in the effect
+ 
+ // Track manual scrolling
+ useEffect(() => {
+   const container = messagesContainerRef.current;
+   if (!container) return;
+   
+   const handleScroll = () => {
+     const { scrollHeight, scrollTop, clientHeight } = container;
+     const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+     
+     // If user scrolled up (not at bottom), mark as manually scrolled
+     if (!isAtBottom) {
+       userHasScrolledRef.current = true;
+       lastManualScrollTime.current = Date.now();
+     } else {
+       userHasScrolledRef.current = false;
+     }
+   };
+   
+   container.addEventListener('scroll', handleScroll);
+   return () => container.removeEventListener('scroll', handleScroll);
+ }, [activeThread]); // Reset when thread changes
+ 
+ // Listen for seller typing events - FIXED to prevent re-render loop
+ useEffect(() => {
+   if (!wsContext || !activeThread || !user) return;
+   
+   const conversationId = getConversationKey(user.username, activeThread);
+   
+   const handleTypingEvent = (data: any) => {
+     if (data.conversationId === conversationId && data.username === activeThread) {
+       // Clear any existing auto-hide timeout
+       if (autoHideTimeoutRef.current) {
+         clearTimeout(autoHideTimeoutRef.current);
+         autoHideTimeoutRef.current = null;
+       }
        
-       // Notify backend when user leaves the thread
-       wsContext.sendMessage('thread:blur', {
-         threadId,
-         otherUser: activeThread
-       });
-     };
+       setIsSellerTyping(data.isTyping);
+       
+       // Auto-scroll to bottom when typing starts
+       if (data.isTyping && messagesEndRef.current) {
+         messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+       }
+       
+       // Auto-hide after 5 seconds
+       if (data.isTyping) {
+         autoHideTimeoutRef.current = setTimeout(() => {
+           setIsSellerTyping(false);
+           autoHideTimeoutRef.current = null;
+         }, 5000);
+       }
+     }
+   };
+   
+   const unsubscribe = wsContext?.subscribe('message:typing', handleTypingEvent);
+   
+   return () => {
+     if (autoHideTimeoutRef.current) {
+       clearTimeout(autoHideTimeoutRef.current);
+       autoHideTimeoutRef.current = null;
+     }
+     unsubscribe?.();
+   };
+ }, [activeThread, user, wsContext]); // Include all dependencies
+ 
+ // Handle typing events when user types - FIXED dependencies
+ const handleTypingChange = useCallback((value: string) => {
+   setReplyMessage(value);
+   
+   // Emit typing event
+   if (wsContext && activeThread && user) {
+     const conversationId = getConversationKey(user.username, activeThread);
+     const now = Date.now();
+     
+     // Clear existing timeout
+     if (typingTimeoutRef.current) {
+       clearTimeout(typingTimeoutRef.current);
+     }
+     
+     // Send typing indicator
+     if (value.trim()) {
+       // Only send typing event if we haven't sent one recently (debounce)
+       // OR if we weren't typing before
+       if (!isTypingRef.current || now - lastTypingEmitRef.current > 1000) {
+         wsContext.sendMessage('message:typing', {
+           conversationId,
+           isTyping: true
+         });
+         lastTypingEmitRef.current = now;
+         isTypingRef.current = true;
+       }
+       
+       // Stop typing after 3 seconds of inactivity
+       typingTimeoutRef.current = setTimeout(() => {
+         isTypingRef.current = false;
+         wsContext.sendMessage('message:typing', {
+           conversationId,
+           isTyping: false
+         });
+       }, 3000);
+     } else {
+       // If input is empty, stop typing immediately
+       if (isTypingRef.current) {
+         isTypingRef.current = false;
+         wsContext.sendMessage('message:typing', {
+           conversationId,
+           isTyping: false
+         });
+       }
+     }
    }
-   // Add void return for consistent return type
-   return;
+ }, [activeThread, setReplyMessage, user, wsContext]); // Include all dependencies
+ 
+ // Stop typing when message is sent
+ const stopTyping = useCallback(() => {
+   if (wsContext && activeThread && user && isTypingRef.current) {
+     const conversationId = getConversationKey(user.username, activeThread);
+     
+     // Clear typing timeout
+     if (typingTimeoutRef.current) {
+       clearTimeout(typingTimeoutRef.current);
+       typingTimeoutRef.current = null;
+     }
+     
+     // Send stop typing event
+     isTypingRef.current = false;
+     wsContext.sendMessage('message:typing', {
+       conversationId,
+       isTyping: false
+     });
+   }
  }, [activeThread, user, wsContext]);
+ 
+ // Also scroll when typing indicator visibility changes
+ useEffect(() => {
+   if (isSellerTyping && messagesEndRef.current) {
+     // Small delay to ensure the typing indicator is rendered
+     setTimeout(() => {
+       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+     }, 100);
+   }
+ }, [isSellerTyping]);
  
  // Determine if the user is the last editor of a custom request
  function isLastEditor(customReq: CustomRequest | undefined) {
@@ -284,16 +438,13 @@ export default function ConversationView({
 
  // Add stable handlers to prevent re-renders
  const stableHandleReply = useCallback(() => {
+   stopTyping(); // Stop typing indicator when sending message
    handleReply();
- }, [handleReply]);
+ }, [handleReply, stopTyping]);
 
  const stableHandleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
    handleImageSelect(e);
  }, [handleImageSelect]);
-
- const stableSetReplyMessage = useCallback((value: string) => {
-   setReplyMessage(value);
- }, [setReplyMessage]);
  
  // Format the activity status for display
  const getActivityDisplay = () => {
@@ -435,6 +586,13 @@ export default function ConversationView({
            );
          })}
          
+         {/* Typing Indicator */}
+         <TypingIndicator 
+           username={activeThread} 
+           isTyping={isSellerTyping}
+           userPic={sellerProfiles[activeThread]?.pic}
+         />
+         
          {/* Auto-scroll anchor */}
          <div ref={messagesEndRef} />
        </div>
@@ -528,7 +686,7 @@ export default function ConversationView({
              <SecureTextarea
                ref={inputRef}
                value={replyMessage}
-               onChange={stableSetReplyMessage}
+               onChange={handleTypingChange}
                onKeyPress={handleKeyDown}
                placeholder={selectedImage ? "Add a caption..." : "Type a message"}
                className="w-full p-3 pr-12 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
