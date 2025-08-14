@@ -107,7 +107,7 @@ function SellerWalletWrapper() {
     if (!isAuthReady) return;
 
     // Check if user is authorized
-    const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+    const isAdmin = user?.role === 'admin';
     const canAccess = user && (user.role === 'seller' || isAdmin);
 
     if (!canAccess) {
@@ -136,7 +136,7 @@ function SellerWalletWrapper() {
     );
   }
 
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+  const isAdmin = user?.role === 'admin';
   const roleForAuth = isAdmin ? 'admin' : 'seller';
 
   return (

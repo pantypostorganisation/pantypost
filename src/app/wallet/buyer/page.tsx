@@ -95,7 +95,7 @@ function BuyerWalletWrapper() {
   useEffect(() => {
     if (!isAuthReady) return;
 
-    const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+    const isAdmin = user?.role === 'admin';
     const canAccess = user && (user.role === 'buyer' || isAdmin);
 
     if (!canAccess) {
@@ -124,7 +124,7 @@ function BuyerWalletWrapper() {
     );
   }
 
-  const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
+  const isAdmin = user?.role === 'admin';
   const roleForAuth = isAdmin ? 'admin' : 'buyer';
 
   return (
