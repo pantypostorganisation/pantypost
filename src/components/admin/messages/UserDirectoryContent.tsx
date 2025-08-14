@@ -1,4 +1,3 @@
-// src/components/admin/messages/UserDirectoryContent.tsx
 'use client';
 
 import { useMemo } from 'react';
@@ -8,7 +7,7 @@ import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface UserInfo {
   username: string;
-  role: string;
+  role: 'buyer' | 'seller' | string;
   verified: boolean;
   pic: string | null;
 }
@@ -28,41 +27,37 @@ export default function UserDirectoryContent({
   onStartConversation,
   onClearFilters
 }: UserDirectoryContentProps) {
-  const getInitial = (username: string) => {
-    return username.charAt(0).toUpperCase();
-  };
+  const getInitial = (username: string) => (username ? username.charAt(0).toUpperCase() : '?');
 
-  // Filter users for directory
   const filteredDirectoryUsers = useMemo(() => {
-    // Sanitize search query
     const sanitizedSearch = directorySearchQuery ? sanitizeSearchQuery(directorySearchQuery).toLowerCase() : '';
-    
-    return allUsers.filter(userInfo => {
-      const matchesSearch = sanitizedSearch ? 
-        userInfo.username.toLowerCase().includes(sanitizedSearch) : true;
-      
-      if (!matchesSearch) return false;
-      
-      if (filterBy === 'buyers' && userInfo.role !== 'buyer') return false;
-      if (filterBy === 'sellers' && userInfo.role !== 'seller') return false;
-      
-      return true;
-    }).sort((a, b) => a.username.localeCompare(b.username));
+
+    return (allUsers || [])
+      .filter((userInfo) => {
+        const matchesSearch = sanitizedSearch ? userInfo.username.toLowerCase().includes(sanitizedSearch) : true;
+        if (!matchesSearch) return false;
+
+        if (filterBy === 'buyers' && userInfo.role !== 'buyer') return false;
+        if (filterBy === 'sellers' && userInfo.role !== 'seller') return false;
+
+        return true;
+      })
+      .sort((a, b) => a.username.localeCompare(b.username));
   }, [allUsers, directorySearchQuery, filterBy]);
 
-  // UserListItem component
   const UserListItem = ({ userInfo }: { userInfo: UserInfo }) => (
-    <div 
+    <div
       onClick={() => onStartConversation(userInfo.username)}
       className="flex items-center p-3 cursor-pointer hover:bg-[#222] transition-all duration-200 border-b border-gray-800 group"
+      role="button"
+      aria-label={`Start conversation with ${userInfo.username}`}
     >
-      {/* User Avatar */}
       <div className="relative mr-3">
         <div className="w-12 h-12 rounded-full bg-[#333] flex items-center justify-center text-white font-bold overflow-hidden shadow-md border-2 border-gray-700 group-hover:border-[#ff950e]/50 transition-colors">
           {userInfo.pic ? (
-            <img 
-              src={sanitizeUrl(userInfo.pic)} 
-              alt="" 
+            <img
+              src={sanitizeUrl(userInfo.pic)}
+              alt=""
               className="w-full h-full object-cover"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
@@ -72,60 +67,45 @@ export default function UserDirectoryContent({
             <span className="text-lg">{getInitial(userInfo.username)}</span>
           )}
         </div>
-        
-        {/* Role indicator */}
-        <div className={`absolute -bottom-1 -right-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${
-          userInfo.role === 'buyer' 
-            ? 'bg-blue-500 text-white' 
-            : 'bg-green-500 text-white'
-        }`}>
+
+        <div
+          className={`absolute -bottom-1 -right-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${
+            userInfo.role === 'buyer' ? 'bg-blue-500 text-white' : 'bg-green-500 text-white'
+          }`}
+        >
           {userInfo.role === 'buyer' ? 'B' : 'S'}
         </div>
       </div>
-      
-      {/* User Info */}
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <h4 className="font-medium text-white truncate group-hover:text-[#ff950e] transition-colors">
-            <SecureMessageDisplay 
-              content={userInfo.username}
-              allowBasicFormatting={false}
-            />
+            <SecureMessageDisplay content={userInfo.username} allowBasicFormatting={false} />
           </h4>
-          {userInfo.verified && (
-            <BadgeCheck size={14} className="text-[#ff950e] flex-shrink-0" />
-          )}
+          {userInfo.verified && <BadgeCheck size={14} className="text-[#ff950e] flex-shrink-0" />}
         </div>
-        <p className="text-xs text-gray-400">
-          {userInfo.role === 'buyer' ? 'Buyer Account' : 'Seller Account'}
-        </p>
+        <p className="text-xs text-gray-400">{userInfo.role === 'buyer' ? 'Buyer Account' : 'Seller Account'}</p>
       </div>
-      
-      {/* Arrow Indicator */}
+
       <ChevronRight size={16} className="text-gray-500 group-hover:text-[#ff950e] transition-colors flex-shrink-0" />
     </div>
   );
 
   return (
     <div>
-      {/* User count header */}
       <div className="px-4 py-2 border-b border-gray-800 bg-[#1a1a1a]">
         <div className="flex justify-between items-center">
           <p className="text-sm text-gray-400">
             {filteredDirectoryUsers.length} user{filteredDirectoryUsers.length !== 1 ? 's' : ''} available
           </p>
           {(directorySearchQuery || filterBy !== 'all') && (
-            <button 
-              onClick={onClearFilters}
-              className="text-xs text-[#ff950e] hover:text-[#ffb04e] transition-colors"
-            >
+            <button onClick={onClearFilters} className="text-xs text-[#ff950e] hover:text-[#ffb04e] transition-colors">
               Clear filters
             </button>
           )}
         </div>
       </div>
-      
-      {/* User List */}
+
       {filteredDirectoryUsers.length === 0 ? (
         <div className="p-6 text-center text-gray-400">
           <Users size={48} className="mx-auto mb-3 text-gray-600" />
@@ -134,38 +114,35 @@ export default function UserDirectoryContent({
         </div>
       ) : (
         <div>
-          {/* Group users by role if showing all */}
           {filterBy === 'all' ? (
             <>
-              {/* Buyers Section */}
-              {filteredDirectoryUsers.filter(u => u.role === 'buyer').length > 0 && (
+              {filteredDirectoryUsers.filter((u) => u.role === 'buyer').length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-[#1a1a1a] border-b border-gray-800">
                     <h3 className="text-sm font-medium text-blue-400 flex items-center gap-2">
                       <User size={14} />
-                      Buyers ({filteredDirectoryUsers.filter(u => u.role === 'buyer').length})
+                      Buyers ({filteredDirectoryUsers.filter((u) => u.role === 'buyer').length})
                     </h3>
                   </div>
                   {filteredDirectoryUsers
-                    .filter(u => u.role === 'buyer')
+                    .filter((u) => u.role === 'buyer')
                     .sort((a, b) => a.username.localeCompare(b.username))
                     .map((userInfo) => (
                       <UserListItem key={`buyer-${userInfo.username}`} userInfo={userInfo} />
                     ))}
                 </>
               )}
-              
-              {/* Sellers Section */}
-              {filteredDirectoryUsers.filter(u => u.role === 'seller').length > 0 && (
+
+              {filteredDirectoryUsers.filter((u) => u.role === 'seller').length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-[#1a1a1a] border-b border-gray-800">
                     <h3 className="text-sm font-medium text-green-400 flex items-center gap-2">
                       <BellRing size={14} />
-                      Sellers ({filteredDirectoryUsers.filter(u => u.role === 'seller').length})
+                      Sellers ({filteredDirectoryUsers.filter((u) => u.role === 'seller').length})
                     </h3>
                   </div>
                   {filteredDirectoryUsers
-                    .filter(u => u.role === 'seller')
+                    .filter((u) => u.role === 'seller')
                     .sort((a, b) => a.username.localeCompare(b.username))
                     .map((userInfo) => (
                       <UserListItem key={`seller-${userInfo.username}`} userInfo={userInfo} />
@@ -174,12 +151,9 @@ export default function UserDirectoryContent({
               )}
             </>
           ) : (
-            /* Filtered view */
             filteredDirectoryUsers
               .sort((a, b) => a.username.localeCompare(b.username))
-              .map((userInfo) => (
-                <UserListItem key={userInfo.username} userInfo={userInfo} />
-              ))
+              .map((userInfo) => <UserListItem key={userInfo.username} userInfo={userInfo} />)
           )}
         </div>
       )}
