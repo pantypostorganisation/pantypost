@@ -1,4 +1,3 @@
-// src/components/admin/bans/UnbanModal.tsx
 'use client';
 
 import { useState } from 'react';
@@ -17,27 +16,26 @@ interface UnbanModalProps {
 
 export default function UnbanModal({ ban, isLoading, onClose, onConfirm }: UnbanModalProps) {
   const [unbanReason, setUnbanReason] = useState('');
-  
+
   if (!ban) return null;
-  
+
   const handleConfirm = () => {
-    onConfirm(unbanReason);
+    onConfirm(unbanReason.trim());
     setUnbanReason('');
   };
-  
+
   const handleClose = () => {
     onClose();
     setUnbanReason('');
   };
-  
+
   const handleReasonChange = (value: string) => {
-    // Sanitize unban reason
-    const sanitizedValue = sanitizeStrict(value);
-    setUnbanReason(sanitizedValue);
+    // Let SecureTextarea sanitize; additionally trim long runs of whitespace
+    setUnbanReason(sanitizeStrict(value));
   };
-  
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Unban user dialog">
       <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 max-w-md w-full">
         <h3 className="text-xl font-bold text-white mb-4 flex items-center">
           <UserCheck className="mr-2 text-green-400" />
@@ -62,9 +60,9 @@ export default function UnbanModal({ ban, isLoading, onClose, onConfirm }: Unban
             onChange={handleReasonChange}
             placeholder="Reason for lifting this ban..."
             maxLength={500}
-            characterCount={true}
+            characterCount
             rows={3}
-            sanitize={true}
+            sanitize
             sanitizer={sanitizeStrict}
           />
         </div>
@@ -84,7 +82,7 @@ export default function UnbanModal({ ban, isLoading, onClose, onConfirm }: Unban
           >
             {isLoading ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                 Unbanning...
               </>
             ) : (
