@@ -15,7 +15,7 @@ import {
   formatRelativeTime,
   extractSellerInfo 
 } from '@/utils/browseDetailUtils';
-import { getBuyerDebitAmount, hasSufficientBalance, getAmountNeeded } from '@/utils/pricing';
+import { getBuyerDebitAmount, hasSufficientBalance, getAmountNeeded, getAuctionTotalPayable } from '@/utils/pricing';
 import { DetailState, ListingWithDetails } from '@/types/browseDetail';
 import { securityService, sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
@@ -193,7 +193,8 @@ export const useBrowseDetail = () => {
   // Computed values
   const images = listing?.imageUrls || [];
   const currentHighestBid = listing?.auction?.highestBid || 0;
-  const currentTotalPayable = isAuction ? calculateTotalPayable(currentHighestBid) : 0;
+  // FIX: Use the updated pricing function that doesn't add 10% for auctions
+  const currentTotalPayable = isAuction ? getAuctionTotalPayable(currentHighestBid) : 0;
   const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
   const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
   const buyerBalance = user ? getBuyerBalance(user.username) : 0;
@@ -262,7 +263,7 @@ export const useBrowseDetail = () => {
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuction, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
-  // CRITICAL FIX: Only check funds for actual auctions
+  // FIX: Update fund checking to use the new pricing (no 10% fee for auctions)
   const checkCurrentUserFunds = useCallback(() => {
     // GATE 1: Not an auction? Clear bid status and return
     if (!isAuction || !listing?.auction) {
@@ -289,7 +290,8 @@ export const useBrowseDetail = () => {
     const balance = getBuyerBalance(user.username);
     const startingBid = listing.auction.startingPrice || 0;
     const minimumBid = (listing.auction.highestBid || startingBid) + 1;
-    const totalRequired = calculateTotalPayable(minimumBid);
+    // FIX: Use the new pricing function that doesn't add 10%
+    const totalRequired = getAuctionTotalPayable(minimumBid);
     const hasEnoughFunds = balance >= totalRequired;
 
     updateState({ 
@@ -707,6 +709,11 @@ export const useBrowseDetail = () => {
     } : null;
   }, [listing, users, orderHistory, sellerAverageRating, sellerReviews.length]);
 
+  // FIX: Use the updated calculateTotalPayable that doesn't add 10%
+  const calculateTotalPayableFixed = useCallback((amount: number) => {
+    return getAuctionTotalPayable(amount);
+  }, []);
+
   // If loading, return loading state
   if (isLoading) {
     return {
@@ -800,7 +807,7 @@ export const useBrowseDetail = () => {
     getTimerProgress,
     formatTimeRemaining: (endTime: string) => formatTimeRemaining(endTime),
     formatBidDate,
-    calculateTotalPayable,
+    calculateTotalPayable: calculateTotalPayableFixed, // Use the fixed version
     
     // Navigation
     router,

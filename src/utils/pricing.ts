@@ -25,10 +25,28 @@ export function getBuyerDebitAmount(listing: {
 }
 
 /**
- * Calculate total payable for auction bids (includes 10% platform fee)
+ * CRITICAL FIX: Remove 10% markup for auction bids
+ * Buyers pay exactly their bid amount, no additional fees
  */
 export function getAuctionTotalPayable(bidAmount: number): number {
-  return Math.round(bidAmount * 1.1 * 100) / 100;
+  // NEW: No markup for buyers - they pay exactly what they bid
+  return bidAmount;
+}
+
+/**
+ * Calculate seller earnings for auction (after 20% platform fee)
+ */
+export function getAuctionSellerEarnings(winningBid: number): number {
+  const AUCTION_PLATFORM_FEE = 0.20; // 20% platform fee from seller
+  return Math.round(winningBid * (1 - AUCTION_PLATFORM_FEE) * 100) / 100;
+}
+
+/**
+ * Calculate platform fee for auction (20% of winning bid)
+ */
+export function getAuctionPlatformFee(winningBid: number): number {
+  const AUCTION_PLATFORM_FEE = 0.20; // 20% platform fee
+  return Math.round(winningBid * AUCTION_PLATFORM_FEE * 100) / 100;
 }
 
 /**

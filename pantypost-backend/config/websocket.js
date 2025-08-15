@@ -525,11 +525,24 @@ class WebSocketService {
     });
   }
 
+  // UPDATED: Include seller earnings in auction ended event
   emitAuctionEnded(listing, winner, finalBid) {
+    // Calculate seller earnings for the event
+    let sellerEarnings = null;
+    let platformFee = null;
+    
+    if (winner && finalBid) {
+      const AUCTION_PLATFORM_FEE = 0.20; // 20% for auctions
+      platformFee = Math.round(finalBid * AUCTION_PLATFORM_FEE * 100) / 100;
+      sellerEarnings = Math.round((finalBid - platformFee) * 100) / 100;
+    }
+    
     this.io.emit('auction:ended', {
       listingId: listing._id,
       winner,
       finalBid,
+      sellerEarnings, // Include seller's earnings
+      platformFee, // Include platform fee
       reserveMet: finalBid >= (listing.auction.reservePrice || 0),
       endedAt: new Date()
     });

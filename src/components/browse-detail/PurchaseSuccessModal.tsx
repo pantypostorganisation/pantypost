@@ -30,18 +30,17 @@ export default function PurchaseSuccessModal({
                 <span className="text-gray-400">Winning Bid:</span>
                 <span className="font-bold text-yellow-400">${listing.auction?.highestBid?.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Platform Fee:</span>
-                <span className="font-bold text-gray-300">${((listing.auction?.highestBid || 0) * 0.1).toFixed(2)}</span>
-              </div>
               <div className="border-t border-gray-600 pt-2">
                 <div className="flex justify-between">
                   <span className="text-white font-semibold">Total Paid:</span>
                   <span className="text-xl font-bold text-[#ff950e]">
-                    ${calculateTotalPayable(listing.auction?.highestBid || 0).toFixed(2)}
+                    ${listing.auction?.highestBid?.toFixed(2)}
                   </span>
                 </div>
               </div>
+              <p className="text-xs text-gray-400 mt-2">
+                No additional fees charged
+              </p>
             </div>
           </div>
           

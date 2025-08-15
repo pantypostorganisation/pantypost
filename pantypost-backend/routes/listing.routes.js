@@ -412,7 +412,7 @@ router.get('/:id/views', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/bid - Place a bid on an auction
+// POST /api/listings/:id/bid - Place a bid on an auction (NO BUYER FEES)
 router.post('/:id/bid', authMiddleware, async (req, res) => {
   try {
     const { amount } = req.body;
@@ -458,52 +458,135 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     const previousHighestBidder = listing.auction.highestBidder;
     const previousHighestBid = listing.auction.currentBid;
     
+    // Store the current balance before withdrawal
+    const bidderPreviousBalance = buyerWallet.balance;
+    
+    // Check if this is an incremental bid (user raising their own bid)
+    const isIncrementalBid = previousHighestBidder === bidder && previousHighestBid > 0;
+    
     try {
       await listing.placeBid(bidder, amount);
-      await buyerWallet.withdraw(amount);
       
-      const holdTransaction = new Transaction({
-        type: 'bid_hold',
-        amount: amount,
-        from: bidder,
-        to: 'platform_escrow',
-        fromRole: 'buyer',
-        toRole: 'admin',
-        description: `Bid placed on auction: ${listing.title}`,
-        status: 'completed',
-        metadata: {
-          auctionId: listing._id.toString(),
-          bidAmount: amount
+      if (isIncrementalBid) {
+        // For incremental bids, only charge the difference (NO FEE)
+        const bidDifference = amount - previousHighestBid;
+        await buyerWallet.withdraw(bidDifference);
+        
+        const holdTransaction = new Transaction({
+          type: 'bid_hold',
+          amount: bidDifference,
+          from: bidder,
+          to: 'platform_escrow',
+          fromRole: 'buyer',
+          toRole: 'admin',
+          description: `Incremental bid on auction: ${listing.title} (difference only)`,
+          status: 'completed',
+          metadata: {
+            auctionId: listing._id.toString(),
+            bidAmount: amount,
+            previousBid: previousHighestBid,
+            incrementalAmount: bidDifference
+          }
+        });
+        await holdTransaction.save();
+        
+        console.log(`Incremental bid: charged difference of $${bidDifference} (no fee)`);
+        
+        // Emit balance update for the bidder
+        if (global.webSocketService) {
+          global.webSocketService.emitBalanceUpdate(
+            bidder, 
+            'buyer', 
+            bidderPreviousBalance, 
+            buyerWallet.balance, 
+            `Incremental bid placed on ${listing.title}`
+          );
         }
-      });
-      await holdTransaction.save();
-      
-      // Refund previous bidder
-      if (previousHighestBidder && previousHighestBid > 0 && previousHighestBidder !== bidder) {
-        const previousBidderWallet = await Wallet.findOne({ username: previousHighestBidder });
-        if (previousBidderWallet) {
-          await previousBidderWallet.deposit(previousHighestBid);
-          
-          const refundTransaction = new Transaction({
-            type: 'bid_refund',
-            amount: previousHighestBid,
-            from: 'platform_escrow',
-            to: previousHighestBidder,
-            fromRole: 'admin',
-            toRole: 'buyer',
-            description: `Outbid refund for auction: ${listing.title}`,
-            status: 'completed',
-            metadata: {
-              auctionId: listing._id.toString(),
-              reason: 'outbid',
-              newHighestBidder: bidder
+      } else {
+        // New bidder - hold exact bid amount (NO FEE)
+        await buyerWallet.withdraw(amount);
+        
+        const holdTransaction = new Transaction({
+          type: 'bid_hold',
+          amount: amount,
+          from: bidder,
+          to: 'platform_escrow',
+          fromRole: 'buyer',
+          toRole: 'admin',
+          description: `Bid placed on auction: ${listing.title}`,
+          status: 'completed',
+          metadata: {
+            auctionId: listing._id.toString(),
+            bidAmount: amount
+          }
+        });
+        await holdTransaction.save();
+        
+        // Emit balance update for the new bidder
+        if (global.webSocketService) {
+          global.webSocketService.emitBalanceUpdate(
+            bidder, 
+            'buyer', 
+            bidderPreviousBalance, 
+            buyerWallet.balance, 
+            `Bid placed on ${listing.title}`
+          );
+        }
+        
+        // Refund previous bidder if there was one
+        if (previousHighestBidder && previousHighestBid > 0) {
+          const previousBidderWallet = await Wallet.findOne({ username: previousHighestBidder });
+          if (previousBidderWallet) {
+            const previousBidderOldBalance = previousBidderWallet.balance;
+            await previousBidderWallet.deposit(previousHighestBid);
+            
+            const refundTransaction = new Transaction({
+              type: 'bid_refund',
+              amount: previousHighestBid,
+              from: 'platform_escrow',
+              to: previousHighestBidder,
+              fromRole: 'admin',
+              toRole: 'buyer',
+              description: `Outbid refund for auction: ${listing.title}`,
+              status: 'completed',
+              metadata: {
+                auctionId: listing._id.toString(),
+                reason: 'outbid',
+                newHighestBidder: bidder
+              }
+            });
+            await refundTransaction.save();
+            
+            // CRITICAL: Emit balance update for the outbid user
+            if (global.webSocketService) {
+              console.log(`[Auction] Emitting balance update for outbid user ${previousHighestBidder}`);
+              
+              // Emit the balance update event
+              global.webSocketService.emitBalanceUpdate(
+                previousHighestBidder, 
+                'buyer', 
+                previousBidderOldBalance, 
+                previousBidderWallet.balance, 
+                `Outbid refund for ${listing.title}`
+              );
+              
+              // Also emit a specific refund event
+              global.webSocketService.emitToUser(previousHighestBidder, 'wallet:refund', {
+                username: previousHighestBidder,
+                amount: previousHighestBid,
+                balance: previousBidderWallet.balance,
+                reason: 'outbid_refund',
+                listingId: listing._id.toString(),
+                listingTitle: listing.title,
+                newBidder: bidder,
+                timestamp: new Date()
+              });
             }
-          });
-          await refundTransaction.save();
+          }
         }
       }
       
-      // Emit WebSocket event
+      // Emit WebSocket event for the bid
       if (global.webSocketService) {
         global.webSocketService.emitNewBid(listing, {
           bidder: bidder,
@@ -515,7 +598,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       res.json({
         success: true,
         data: listing,
-        message: `Bid placed successfully! $${amount} has been held. You are now the highest bidder!`
+        message: `Bid placed successfully! You are now the highest bidder at $${amount}!`
       });
     } catch (bidError) {
       return res.status(400).json({
@@ -531,7 +614,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/end-auction - End an auction
+// POST /api/listings/:id/end-auction - End an auction (20% SELLER FEE)
 router.post('/:id/end-auction', authMiddleware, async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -595,6 +678,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       
       const bidderWallet = await Wallet.findOne({ username: listing.auction.highestBidder });
       if (bidderWallet) {
+        const oldBalance = bidderWallet.balance;
         await bidderWallet.deposit(listing.auction.currentBid);
         
         const refundTransaction = new Transaction({
@@ -612,6 +696,17 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
           }
         });
         await refundTransaction.save();
+        
+        // Emit balance update for refund
+        if (global.webSocketService) {
+          global.webSocketService.emitBalanceUpdate(
+            listing.auction.highestBidder, 
+            'buyer', 
+            oldBalance, 
+            bidderWallet.balance, 
+            `Reserve not met refund for ${listing.title}`
+          );
+        }
       }
       
       if (global.webSocketService) {
@@ -624,7 +719,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Create order for winner
+    // Create order for winner - UPDATED FOR 20% SELLER FEE
     const winningBid = listing.auction.currentBid;
     const winner = listing.auction.highestBidder;
     
@@ -649,23 +744,29 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       await platformWallet.save();
     }
     
-    const sellerPlatformFee = Math.round(winningBid * 0.1 * 100) / 100;
+    // UPDATED: 20% platform fee from seller (not 10%)
+    const AUCTION_PLATFORM_FEE = 0.20; // Changed from 0.10 to 0.20
+    const sellerPlatformFee = Math.round(winningBid * AUCTION_PLATFORM_FEE * 100) / 100;
     const sellerEarnings = Math.round((winningBid - sellerPlatformFee) * 100) / 100;
     
     const order = new Order({
       title: listing.title,
       description: listing.description,
       price: winningBid,
-      markedUpPrice: winningBid,
+      markedUpPrice: winningBid, // No markup for auctions
       seller: listing.seller,
       buyer: winner,
       imageUrl: listing.imageUrls[0],
       tags: listing.tags,
       wasAuction: true,
       finalBid: winningBid,
+      // UPDATED: Auction-specific fee structure (20% from seller, 0% from buyer)
       platformFee: sellerPlatformFee,
       sellerPlatformFee: sellerPlatformFee,
+      buyerMarkupFee: 0, // No buyer markup for auctions
       sellerEarnings: sellerEarnings,
+      tierCreditAmount: 0, // No tier bonuses for auctions
+      sellerTier: null, // Don't apply tier for auctions
       paymentStatus: 'completed',
       paymentCompletedAt: new Date(),
       deliveryAddress: {
@@ -680,24 +781,28 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     
     await order.save();
     
+    const sellerOldBalance = sellerWallet.balance;
+    const platformOldBalance = platformWallet.balance;
+    
     await sellerWallet.deposit(sellerEarnings);
     await platformWallet.deposit(sellerPlatformFee);
     
     const saleTransaction = new Transaction({
       type: 'auction_sale',
-      amount: sellerEarnings,
-      from: winner,
+      amount: winningBid,
+      from: 'platform_escrow', // Money was held in escrow
       to: listing.seller,
-      fromRole: 'buyer',
+      fromRole: 'system',
       toRole: 'seller',
-      description: `Auction won: ${listing.title} (after fees)`,
+      description: `Auction won: ${listing.title} (20% platform fee applied)`,
       status: 'completed',
       completedAt: new Date(),
       metadata: { 
         orderId: order._id.toString(), 
         auctionId: listing._id.toString(),
         originalAmount: winningBid,
-        platformFee: sellerPlatformFee
+        platformFee: sellerPlatformFee,
+        sellerEarnings: sellerEarnings
       }
     });
     await saleTransaction.save();
@@ -709,7 +814,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       to: 'platform',
       fromRole: 'seller',
       toRole: 'admin',
-      description: `Platform fee (10%) for auction: ${listing.title}`,
+      description: `Platform fee (20%) for auction: ${listing.title}`,
       status: 'completed',
       completedAt: new Date(),
       metadata: { 
@@ -720,7 +825,8 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
         buyer: winner,
         originalPrice: winningBid,
         sellerFee: sellerPlatformFee,
-        totalFee: sellerPlatformFee
+        totalFee: sellerPlatformFee,
+        percentage: 20 // Updated to 20%
       }
     });
     await feeTransaction.save();
@@ -737,14 +843,25 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     if (global.webSocketService) {
       global.webSocketService.emitAuctionEnded(listing, winner, winningBid);
       global.webSocketService.emitListingSold(listing, winner);
+      
+      // Emit proper balance update with previous balance
+      global.webSocketService.emitBalanceUpdate(
+        listing.seller, 
+        'seller', 
+        sellerOldBalance,
+        sellerWallet.balance, 
+        `Auction sale completed - received ${sellerEarnings} (after 20% fee)`
+      );
     }
     
     res.json({
       success: true,
-      message: `Auction ended successfully! Winner: ${winner} at $${winningBid}`,
+      message: `Auction ended successfully! Winner: ${winner} at $${winningBid}. Seller receives $${sellerEarnings} (after 20% platform fee).`,
       data: {
         listing: listing,
-        order: order
+        order: order,
+        sellerEarnings: sellerEarnings,
+        platformFee: sellerPlatformFee
       }
     });
   } catch (error) {

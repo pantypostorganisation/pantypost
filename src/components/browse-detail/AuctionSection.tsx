@@ -105,18 +105,33 @@ export default function AuctionSection({
         </div>
       )}
       
-      {/* Total Payable */}
+      {/* Total Payable - Updated for new fee structure */}
       <div className="bg-purple-900/30 rounded-lg p-3 mb-4">
         <div className="flex justify-between items-center">
-          <span className="text-purple-200 text-sm">Total if you win</span>
+          <span className="text-purple-200 text-sm">Amount if you win</span>
           <span className="text-lg font-bold text-white">
             ${currentTotalPayable.toFixed(2)}
           </span>
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          Includes 10% platform fee
+          No additional fees
         </p>
       </div>
+
+      {/* Show seller earnings if user is the seller */}
+      {userRole === 'seller' && username === listing.seller && listing.auction.highestBid && (
+        <div className="bg-gray-800/50 rounded-lg p-3 mb-4 border border-gray-700">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-sm">You'll receive (after 20% fee)</span>
+            <span className="text-lg font-bold text-green-400">
+              ${(listing.auction.highestBid * 0.8).toFixed(2)}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Platform fee: ${(listing.auction.highestBid * 0.2).toFixed(2)}
+          </p>
+        </div>
+      )}
 
       {/* Bidding Section */}
       {canBid && (

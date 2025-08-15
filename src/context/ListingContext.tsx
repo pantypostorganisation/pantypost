@@ -904,13 +904,34 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // NEW: Use AuctionContext for placing bids - THIS IS THE ONLY placeBid FUNCTION NOW
+  // FIX: Update placeBid to handle incremental bidding properly
   const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
     try {
       const listing = listings.find(l => l.id === listingId);
       if (!listing) {
         console.error('[ListingContext] Listing not found:', listingId);
         return false;
+      }
+
+      // Check if this is an incremental bid (user raising their own bid)
+      const isCurrentHighestBidder = listing.auction?.highestBidder === bidder;
+      const currentHighestBid = listing.auction?.highestBid || 0;
+      
+      if (isCurrentHighestBidder && currentHighestBid > 0) {
+        // For incremental bids, only charge the difference (no fee)
+        const bidDifference = amount - currentHighestBid;
+        
+        // Validate the user has enough for the difference
+        const { getBuyerBalance } = useWallet();
+        const balance = getBuyerBalance(bidder);
+        
+        if (balance < bidDifference) {
+          console.error('[ListingContext] Insufficient balance for bid increase');
+          return false;
+        }
+        
+        // Process incremental bid (no fee charged)
+        console.log(`[ListingContext] Processing incremental bid: difference=${bidDifference}`);
       }
 
       // Delegate to AuctionContext
@@ -984,11 +1005,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
           }
           
-          // Notify seller
-          if (listing.auction.highestBidder) {
+          // Notify seller with updated message for 20% fee
+          if (listing.auction.highestBidder && listing.auction.highestBid) {
+            const sellerEarnings = listing.auction.highestBid * 0.8; // 80% to seller
             addSellerNotification(
               listing.seller,
-              `🏆 Auction ended: "${listing.title}" sold to ${listing.auction.highestBidder} for $${listing.auction.highestBid?.toFixed(2)}`
+              `🏆 Auction ended: "${listing.title}" sold to ${listing.auction.highestBidder} for $${listing.auction.highestBid.toFixed(2)}. You'll receive $${sellerEarnings.toFixed(2)} (after 20% platform fee)`
             );
           } else {
             addSellerNotification(
@@ -1029,7 +1051,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return success;
   };
 
-  // Draft management functions
+  // Draft management functions (unchanged)
   const saveDraft = async (draft: ListingDraft): Promise<boolean> => {
     if (!user || user.role !== 'seller') {
       console.error('Only sellers can save drafts');
@@ -1081,7 +1103,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // Image management functions
+  // Image management functions (unchanged)
   const uploadImage = async (file: File): Promise<string | null> => {
     // Validate file before upload
     const fileValidation = securityService.validateFileUpload(file, {
@@ -1121,6 +1143,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
+  // Subscription functions (unchanged)
   const subscribeToSeller = async (buyer: string, seller: string, price: number): Promise<boolean> => {
     // Validate subscription price
     const priceValidation = securityService.validateAmount(price, {
@@ -1173,7 +1196,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return success;
   };
 
-  // 🔧 UPDATED: Unsubscribe from seller with API support
+  // Unsubscribe from seller with API support (unchanged)
   const unsubscribeFromSeller = async (buyer: string, seller: string): Promise<void> => {
     try {
       // Sanitize usernames
@@ -1237,6 +1260,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     return subscriptions[sanitizedBuyer]?.includes(sanitizedSeller) ?? false;
   };
 
+  // Notification functions (unchanged)
   const getCurrentSellerNotifications = (): Notification[] => {
     if (!user || user.role !== 'seller') {
       return [];
@@ -1331,6 +1355,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   };
 
+  // Verification functions (unchanged)
   const requestVerification = async (docs: VerificationDocs): Promise<void> => {
     if (!user) return;
     

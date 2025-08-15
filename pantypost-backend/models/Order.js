@@ -19,7 +19,12 @@ const orderSchema = new mongoose.Schema({
   markedUpPrice: {
     type: Number,
     default: function() {
-      return Math.round(this.price * 1.1 * 100) / 100; // 10% markup, rounded to 2 decimals
+      // For auctions, no markup
+      if (this.wasAuction) {
+        return this.price;
+      }
+      // For regular listings, 10% markup
+      return Math.round(this.price * 1.1 * 100) / 100;
     }
   },
   imageUrl: {
@@ -103,21 +108,38 @@ const orderSchema = new mongoose.Schema({
   // TIER INFORMATION - THIS IS THE CRITICAL MISSING FIELD
   sellerTier: {
     type: String,
-    enum: ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'],
-    default: 'Tease'
+    enum: ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess', null],
+    default: function() {
+      // Auctions don't use tiers
+      if (this.wasAuction) {
+        return null;
+      }
+      return 'Tease';
+    }
   },
   
-  // 🔧 ENHANCED FINANCIAL FIELDS FOR DOUBLE 10% FEE MODEL
+  // 🔧 ENHANCED FINANCIAL FIELDS FOR DOUBLE 10% FEE MODEL (Regular) or 20% SELLER FEE (Auctions)
   tierCreditAmount: {
     type: Number,
-    default: 0
+    default: function() {
+      // No tier credits for auctions
+      if (this.wasAuction) {
+        return 0;
+      }
+      return 0;
+    }
   },
   
-  // Platform fee breakdown
+  // Platform fee breakdown - UPDATED FOR NEW AUCTION MODEL
   platformFee: {
     type: Number,
     default: function() {
-      return Math.round(this.price * 0.2 * 100) / 100; // 20% total platform fee (10% from buyer + 10% from seller)
+      if (this.wasAuction) {
+        // Auctions: 20% from seller only
+        return Math.round(this.price * 0.2 * 100) / 100;
+      }
+      // Regular: 20% total (10% from buyer + 10% from seller)
+      return Math.round(this.price * 0.2 * 100) / 100;
     }
   },
   
@@ -125,8 +147,13 @@ const orderSchema = new mongoose.Schema({
   buyerMarkupFee: {
     type: Number,
     default: function() {
+      if (this.wasAuction) {
+        // No buyer fee for auctions
+        return 0;
+      }
+      // Regular listings: 10% buyer markup
       if (this.markedUpPrice && this.price) {
-        return Math.round((this.markedUpPrice - this.price) * 100) / 100; // 10% buyer markup fee
+        return Math.round((this.markedUpPrice - this.price) * 100) / 100;
       }
       return Math.round(this.price * 0.1 * 100) / 100;
     }
@@ -135,15 +162,26 @@ const orderSchema = new mongoose.Schema({
   sellerPlatformFee: {
     type: Number,
     default: function() {
-      return Math.round(this.price * 0.1 * 100) / 100; // 10% seller platform fee
+      if (this.wasAuction) {
+        // Auctions: 20% from seller
+        return Math.round(this.price * 0.2 * 100) / 100;
+      }
+      // Regular: 10% from seller
+      return Math.round(this.price * 0.1 * 100) / 100;
     }
   },
   
   sellerEarnings: {
     type: Number,
     default: function() {
+      if (this.wasAuction) {
+        // Auctions: 80% to seller (after 20% fee)
+        const sellerFee = Math.round(this.price * 0.2 * 100) / 100;
+        return Math.round((this.price - sellerFee) * 100) / 100;
+      }
+      // Regular: 90% to seller (after 10% fee)
       const sellerFee = Math.round(this.price * 0.1 * 100) / 100;
-      return Math.round((this.price - sellerFee) * 100) / 100; // Original price minus seller's 10%
+      return Math.round((this.price - sellerFee) * 100) / 100;
     }
   },
   
@@ -184,9 +222,14 @@ orderSchema.index({ seller: 1, date: -1 });
 orderSchema.index({ shippingStatus: 1 });
 orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ sellerTier: 1 });
+orderSchema.index({ wasAuction: 1 });
 
 // Calculate tier credit (difference between marked up price and original price)
 orderSchema.methods.calculateTierCredit = function() {
+  // No tier credits for auctions
+  if (this.wasAuction) {
+    return 0;
+  }
   if (this.tierCreditAmount) {
     return this.tierCreditAmount;
   }
@@ -195,11 +238,24 @@ orderSchema.methods.calculateTierCredit = function() {
 
 // 🔧 NEW: Calculate total platform profit for this order
 orderSchema.methods.calculatePlatformProfit = function() {
+  if (this.wasAuction) {
+    // Auctions: 20% from seller only
+    return Math.round(this.price * 0.2 * 100) / 100;
+  }
+  
+  // Regular: buyer fee + seller fee - tier credits
   const buyerFee = this.buyerMarkupFee || Math.round((this.markedUpPrice - this.price) * 100) / 100;
   const sellerFee = this.sellerPlatformFee || Math.round(this.price * 0.1 * 100) / 100;
   const tierCredit = this.tierCreditAmount || 0;
+  
   // Platform profit is fees minus tier credits paid out
   return Math.round((buyerFee + sellerFee - tierCredit) * 100) / 100;
+};
+
+// Helper method to determine if tier should apply
+orderSchema.methods.shouldApplyTier = function() {
+  // Auctions don't use tier system
+  return !this.wasAuction;
 };
 
 const Order = mongoose.model('Order', orderSchema);

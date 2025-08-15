@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, Rea
 import { useAuth } from './AuthContext';
 import { useWebSocket } from './WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
+import { apiCall, ApiResponse } from '@/services/api.config';
 
 export interface Bid {
   id: string;
@@ -21,6 +22,7 @@ export interface AuctionData {
   startingPrice: number;
   currentBid: number;
   highestBidder?: string;
+  previousBidder?: string;
   endTime: string;
   bids: Bid[];
   status: 'active' | 'ended' | 'cancelled';
@@ -59,33 +61,6 @@ interface AuctionContextType {
 
 const AuctionContext = createContext<AuctionContextType | null>(null);
 
-// API base URL - using same as AuthContext
-const API_BASE_URL = 'http://localhost:5000/api';
-
-// Fetch wrapper with auth
-async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem('auth_token');
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'API request failed');
-  }
-
-  return data;
-}
-
 export function AuctionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   
@@ -111,25 +86,96 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     setBidError(null);
   }, []);
 
-  // Update auction with new bid
-  const updateAuctionWithBid = useCallback((listingId: string, bid: Bid) => {
-    setAuctions(prev => ({
-      ...prev,
-      [listingId]: {
-        ...prev[listingId],
-        currentBid: bid.amount,
-        highestBidder: bid.bidder,
-        bids: [...(prev[listingId]?.bids || []), bid].sort(
-          (a, b) => b.amount - a.amount
-        )
+  // Helper function to refresh ONLY current user's wallet balance
+  const refreshCurrentUserBalance = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Only fetch balance for the current user - this is allowed
+      const response = await apiCall<any>(`/wallet/balance/${user.username}`);
+      
+      if (response.success && response.data) {
+        const newBalance = response.data.balance || 0;
+        
+        // Fire wallet update event for current user
+        if (typeof window !== 'undefined') {
+          console.log(`[AuctionContext] Current user balance updated: $${newBalance}`);
+          
+          // Fire generic balance update event
+          window.dispatchEvent(new CustomEvent('wallet:balance_update', {
+            detail: { 
+              username: user.username,
+              role: user.role,
+              balance: newBalance,
+              newBalance: newBalance,
+              timestamp: Date.now()
+            }
+          }));
+          
+          // Fire role-specific event
+          const roleEvent = user.role === 'buyer' ? 'wallet:buyer-balance-updated' : 'wallet:seller-balance-updated';
+          window.dispatchEvent(new CustomEvent(roleEvent, {
+            detail: { 
+              username: user.username,
+              balance: newBalance,
+              timestamp: Date.now()
+            }
+          }));
+        }
       }
-    }));
+    } catch (error) {
+      console.error(`[AuctionContext] Error refreshing current user balance:`, error);
+    }
+  }, [user]);
+
+  // Update auction with new bid - Enhanced to track previous bidder
+  const updateAuctionWithBid = useCallback((listingId: string, bidData: any) => {
+    // Handle the actual WebSocket data structure
+    const bid: Bid = {
+      id: `bid_${Date.now()}`,
+      bidder: bidData.bidder || bidData.username,
+      amount: bidData.amount || bidData.bid?.amount || 0,
+      timestamp: bidData.timestamp || new Date().toISOString(),
+      isWinning: true
+    };
+
+    console.log('[AuctionContext] Processing bid update:', { listingId, bid });
+
+    // Track the previous highest bidder before updating
+    let previousHighestBidder: string | undefined;
+    
+    setAuctions(prev => {
+      const existingAuction = prev[listingId];
+      previousHighestBidder = existingAuction?.highestBidder;
+      
+      return {
+        ...prev,
+        [listingId]: {
+          ...existingAuction,
+          listingId,
+          id: listingId,
+          seller: existingAuction?.seller || '',
+          startingPrice: existingAuction?.startingPrice || 0,
+          currentBid: bid.amount,
+          highestBidder: bid.bidder,
+          previousBidder: previousHighestBidder,
+          endTime: existingAuction?.endTime || '',
+          status: existingAuction?.status || 'active',
+          bids: [...(existingAuction?.bids || []), bid].sort(
+            (a, b) => b.amount - a.amount
+          )
+        }
+      };
+    });
 
     // Update user bids
     setUserBids(prev => ({
       ...prev,
       [bid.bidder]: [...(prev[bid.bidder] || []), bid]
     }));
+    
+    // Return the previous bidder so we can handle updates
+    return previousHighestBidder;
   }, []);
 
   // Update auction status
@@ -139,15 +185,26 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     winnerId?: string,
     finalPrice?: number
   ) => {
-    setAuctions(prev => ({
-      ...prev,
-      [listingId]: {
-        ...prev[listingId],
-        status,
-        ...(winnerId && { winnerId }),
-        ...(finalPrice && { finalPrice })
-      }
-    }));
+    setAuctions(prev => {
+      const existingAuction = prev[listingId];
+      
+      return {
+        ...prev,
+        [listingId]: {
+          ...existingAuction,
+          listingId,
+          id: listingId,
+          seller: existingAuction?.seller || '',
+          startingPrice: existingAuction?.startingPrice || 0,
+          currentBid: existingAuction?.currentBid || 0,
+          endTime: existingAuction?.endTime || '',
+          bids: existingAuction?.bids || [],
+          status,
+          ...(winnerId && { winnerId }),
+          ...(finalPrice && { finalPrice })
+        }
+      };
+    });
   }, []);
 
   // Load auctions on mount
@@ -157,9 +214,9 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       
       setIsLoadingAuctions(true);
       try {
-        // TODO: Replace with actual API call
+        // TODO: Replace with actual API call when endpoint exists
         console.log('[AuctionContext] Loading auctions...');
-        // const response = await fetchWithAuth('/auctions');
+        // const response = await apiCall<any>('/auctions');
         // if (response.success) {
         //   setAuctions(response.data);
         // }
@@ -181,34 +238,126 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
 
     // Subscribe to auction bid events
     unsubscribers.push(
-      subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
+      subscribe(WebSocketEvent.AUCTION_BID, async (data: any) => {
         console.log('[AuctionContext] New bid received:', data);
-        updateAuctionWithBid(data.listingId, data.bid);
+        
+        // Extract listing ID and bid data from the WebSocket event
+        const listingId = data.listingId || data.id;
+        if (listingId) {
+          // Update auction and get the previous bidder
+          const previousBidder = updateAuctionWithBid(listingId, data);
+          
+          // Only refresh balance if current user is involved
+          if (user && data.bidder === user.username) {
+            // Current user placed a bid - refresh their balance
+            await refreshCurrentUserBalance();
+          }
+          
+          // Note: We don't try to refresh the outbid user's balance here
+          // The backend will send a wallet:balance_update or wallet:refund event for them
+        }
+      })
+    );
+
+    // Subscribe to wallet:refund events (for when current user is outbid)
+    unsubscribers.push(
+      subscribe('wallet:refund' as WebSocketEvent, async (data: any) => {
+        console.log('[AuctionContext] Wallet refund received:', data);
+        
+        // If this refund is for the current user, refresh their balance
+        if (user && data.username === user.username) {
+          console.log('[AuctionContext] Current user was refunded, refreshing balance');
+          await refreshCurrentUserBalance();
+        }
+      })
+    );
+
+    // Subscribe to wallet:balance_update events
+    unsubscribers.push(
+      subscribe('wallet:balance_update' as WebSocketEvent, async (data: any) => {
+        console.log('[AuctionContext] Balance update received:', data);
+        
+        // If this is for the current user and has a balance value, update UI
+        if (user && data.username === user.username && typeof data.newBalance === 'number') {
+          // Fire events to update the UI
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('wallet:balance_update', {
+              detail: { 
+                username: user.username,
+                role: user.role,
+                balance: data.newBalance,
+                newBalance: data.newBalance,
+                timestamp: Date.now()
+              }
+            }));
+            
+            const roleEvent = user.role === 'buyer' ? 'wallet:buyer-balance-updated' : 'wallet:seller-balance-updated';
+            window.dispatchEvent(new CustomEvent(roleEvent, {
+              detail: { 
+                username: user.username,
+                balance: data.newBalance,
+                timestamp: Date.now()
+              }
+            }));
+          }
+        }
+      })
+    );
+
+    // Subscribe to auction:outbid events
+    unsubscribers.push(
+      subscribe('auction:outbid' as WebSocketEvent, async (data: any) => {
+        console.log('[AuctionContext] User was outbid:', data);
+        
+        // If current user was outbid, they should get a refund
+        // The backend will handle this and send a wallet:refund event
+        // We just show a notification here if needed
+        if (user && data.username === user.username) {
+          console.log('[AuctionContext] Current user was outbid on', data.listingTitle);
+          // You could show a notification here
+        }
       })
     );
 
     // Subscribe to auction ended events
     unsubscribers.push(
-      subscribe(WebSocketEvent.AUCTION_ENDED, (data: any) => {
+      subscribe(WebSocketEvent.AUCTION_ENDED, async (data: any) => {
         console.log('[AuctionContext] Auction ended:', data);
-        updateAuctionStatus(data.listingId, 'ended', data.winnerId, data.finalPrice);
+        const listingId = data.listingId || data.id;
+        if (listingId) {
+          updateAuctionStatus(listingId, 'ended', data.winnerId || data.winner, data.finalPrice || data.finalBid);
+          
+          // If current user is the winner, refresh their balance
+          if (user && (data.winnerId === user.username || data.winner === user.username)) {
+            await refreshCurrentUserBalance();
+          }
+        }
       })
     );
 
     // Subscribe to auction cancelled events
     unsubscribers.push(
-      subscribe(WebSocketEvent.AUCTION_CANCELLED, (data: any) => {
+      subscribe(WebSocketEvent.AUCTION_CANCELLED, async (data: any) => {
         console.log('[AuctionContext] Auction cancelled:', data);
-        updateAuctionStatus(data.listingId, 'cancelled');
+        const listingId = data.listingId || data.id;
+        if (listingId) {
+          const auction = auctions[listingId];
+          updateAuctionStatus(listingId, 'cancelled');
+          
+          // If current user was highest bidder, refresh their balance (they get refunded)
+          if (user && auction?.highestBidder === user.username) {
+            await refreshCurrentUserBalance();
+          }
+        }
       })
     );
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [isConnected, subscribe, updateAuctionWithBid, updateAuctionStatus]);
+  }, [isConnected, subscribe, updateAuctionWithBid, updateAuctionStatus, user, refreshCurrentUserBalance, auctions]);
 
-  // Place a bid
+  // Place a bid - Using apiCall from api.config
   const placeBid = useCallback(async (
     listingId: string,
     bidder: string, 
@@ -223,29 +372,47 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     setBidError(null);
 
     try {
-      const response = await fetchWithAuth(`/auctions/${listingId}/bid`, {
+      // Use apiCall which handles auth properly
+      const response = await apiCall<any>(`/listings/${listingId}/bid`, {
         method: 'POST',
-        body: JSON.stringify({ bidder, amount }),
+        body: JSON.stringify({ amount }),
       });
 
       if (response.success) {
         // Update will come through WebSocket
+        console.log('[AuctionContext] Bid placed successfully:', response.data?.message || 'Success');
+        
+        // Also update local state immediately for better UX
+        updateAuctionWithBid(listingId, {
+          bidder: bidder,
+          amount: amount,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Refresh current user's balance (they placed the bid)
+        await refreshCurrentUserBalance();
+        
         return true;
       } else {
-        const error = response.error?.message || 'Failed to place bid';
-        setBidError(error);
+        // Extract error message string from ApiError object
+        const errorMsg = typeof response.error === 'string' 
+          ? response.error 
+          : response.error?.message || 'Failed to place bid';
+        setBidError(errorMsg);
+        console.error('[AuctionContext] Bid failed:', errorMsg);
         return false;
       }
     } catch (error: any) {
       const errorMsg = error.message || 'Network error while placing bid';
       setBidError(errorMsg);
+      console.error('[AuctionContext] Bid error:', error);
       return false;
     } finally {
       setIsPlacingBid(false);
     }
-  }, [user]);
+  }, [user, updateAuctionWithBid, refreshCurrentUserBalance]);
 
-  // Cancel auction (seller only)
+  // Cancel auction (seller only) - Using apiCall
   const cancelAuction = useCallback(async (
     listingId: string
   ): Promise<boolean> => {
@@ -256,7 +423,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     setIsCancellingAuction(true);
 
     try {
-      const response = await fetchWithAuth(`/auctions/${listingId}/cancel`, {
+      const response = await apiCall<any>(`/listings/${listingId}/cancel-auction`, {
         method: 'POST',
       });
 
@@ -264,16 +431,18 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
         // Update will come through WebSocket
         return true;
       } else {
+        console.error('[AuctionContext] Cancel auction failed:', response.error);
         return false;
       }
     } catch (error: any) {
+      console.error('[AuctionContext] Cancel auction error:', error);
       return false;
     } finally {
       setIsCancellingAuction(false);
     }
   }, [user]);
 
-  // End auction (admin/system only)
+  // End auction (admin/system only) - Using apiCall
   const endAuction = useCallback(async (
     listingId: string
   ): Promise<boolean> => {
@@ -282,16 +451,18 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const response = await fetchWithAuth(`/auctions/${listingId}/end`, {
+      const response = await apiCall<any>(`/listings/${listingId}/end-auction`, {
         method: 'POST',
       });
 
       if (response.success) {
         return true;
       } else {
+        console.error('[AuctionContext] End auction failed:', response.error);
         return false;
       }
     } catch (error: any) {
+      console.error('[AuctionContext] End auction error:', error);
       return false;
     }
   }, [user]);
@@ -303,13 +474,9 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     try {
       // If there's a highest bidder, process the sale
       if (listing.auction.highestBidder && listing.auction.highestBid) {
-        // TODO: Call backend to process auction completion
-        const response = await fetchWithAuth(`/auctions/${listing.id}/complete`, {
+        // Call backend to process auction completion
+        const response = await apiCall<any>(`/listings/${listing.id}/end-auction`, {
           method: 'POST',
-          body: JSON.stringify({
-            winner: listing.auction.highestBidder,
-            finalPrice: listing.auction.highestBid
-          }),
         });
 
         if (response.success) {
@@ -319,8 +486,14 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // No bids - just mark as ended
-        updateAuctionStatus(listing.id, 'ended');
-        return true;
+        const response = await apiCall<any>(`/listings/${listing.id}/end-auction`, {
+          method: 'POST',
+        });
+        
+        if (response.success) {
+          updateAuctionStatus(listing.id, 'ended');
+          return true;
+        }
       }
       
       return false;

@@ -95,16 +95,53 @@ class TierService {
   }
   
   /**
+   * Check if order should get tier bonus
+   * CRITICAL: Auctions do NOT get tier bonuses - they have flat 20% fee
+   */
+  shouldApplyTierBonus(order) {
+    // NO tier bonuses for auctions - they get flat 20% fee
+    if (order.wasAuction) {
+      console.log('[TierService] Auction order - no tier bonus applied');
+      return false;
+    }
+    return true;
+  }
+  
+  /**
    * Apply tier-based revenue share to an order
+   * UPDATED: Skip tier bonuses for auctions
    */
   async applyTierRevenue(order, sellerTier) {
     try {
-      // Fix old tier name if needed
+      // Check if this is an auction - auctions don't get tier bonuses
+      if (order.wasAuction) {
+        console.log('[TierService] Auction order - applying flat 20% fee, no tier bonus');
+        
+        const price = order.price;
+        const AUCTION_PLATFORM_FEE = 0.20; // 20% for auctions
+        const platformFee = Math.round(price * AUCTION_PLATFORM_FEE * 100) / 100;
+        const sellerEarnings = Math.round((price - platformFee) * 100) / 100;
+        
+        // Update order with auction-specific fees
+        order.sellerEarnings = sellerEarnings;
+        order.sellerPlatformFee = platformFee;
+        order.tierCreditAmount = 0; // No tier bonus for auctions
+        order.sellerTier = null; // Don't apply tier for auctions
+        
+        return {
+          sellerEarnings,
+          platformFee,
+          tierBonus: 0,
+          totalPlatformRevenue: platformFee
+        };
+      }
+      
+      // Regular listing - apply tier bonuses as normal
       const fixedTier = TIER_CONFIG.fixTierName(sellerTier);
       const tier = TIER_CONFIG.getTierByName(fixedTier);
       const price = order.price;
       
-      // Calculate with tier bonus
+      // Calculate with tier bonus for regular listings
       const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(price, fixedTier);
       const platformFee = TIER_CONFIG.calculatePlatformFee(price, fixedTier);
       const tierBonus = Math.round((price * tier.bonusPercentage) * 100) / 100;
@@ -113,12 +150,13 @@ class TierService {
       order.sellerEarnings = sellerEarnings;
       order.sellerPlatformFee = platformFee;
       order.tierCreditAmount = tierBonus;
+      order.sellerTier = fixedTier;
       
       return {
         sellerEarnings,
         platformFee,
         tierBonus,
-        totalPlatformRevenue: platformFee // Platform gets the reduced fee
+        totalPlatformRevenue: platformFee
       };
     } catch (error) {
       console.error('[TierService] Error applying tier revenue:', error);
@@ -128,8 +166,15 @@ class TierService {
   
   /**
    * Create tier credit transaction if applicable
+   * UPDATED: Skip for auction orders
    */
   async createTierCreditTransaction(order, tierBonus, seller) {
+    // Skip if auction order
+    if (order.wasAuction) {
+      console.log('[TierService] Skipping tier credit for auction order');
+      return null;
+    }
+    
     if (tierBonus <= 0) return null;
     
     try {
@@ -203,6 +248,7 @@ class TierService {
   
   /**
    * Process order with tier-based settlement
+   * UPDATED: Handle auctions with flat 20% fee
    */
   async processOrderWithTier(order, buyer, seller) {
     const session = await mongoose.startSession();
@@ -215,16 +261,38 @@ class TierService {
       
       const sellerTier = TIER_CONFIG.fixTierName(sellerUser.tier || 'Tease');
       
-      // Calculate tier-based revenue
-      const tier = TIER_CONFIG.getTierByName(sellerTier);
-      const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(order.price, sellerTier);
-      const platformFee = TIER_CONFIG.calculatePlatformFee(order.price, sellerTier);
-      const tierBonus = Math.round((order.price * tier.bonusPercentage) * 100) / 100;
+      let sellerEarnings, platformFee, tierBonus;
       
-      // Update order with tier calculations
-      order.sellerEarnings = sellerEarnings;
-      order.sellerPlatformFee = platformFee;
-      order.tierCreditAmount = tierBonus;
+      // Check if this is an auction order
+      if (order.wasAuction) {
+        // Auctions: flat 20% fee, no tier bonuses
+        const AUCTION_PLATFORM_FEE = 0.20;
+        platformFee = Math.round(order.price * AUCTION_PLATFORM_FEE * 100) / 100;
+        sellerEarnings = Math.round((order.price - platformFee) * 100) / 100;
+        tierBonus = 0;
+        
+        // Update order with auction-specific fees
+        order.sellerEarnings = sellerEarnings;
+        order.sellerPlatformFee = platformFee;
+        order.tierCreditAmount = 0;
+        order.sellerTier = null; // Don't apply tier for auctions
+        
+        console.log(`[TierService] Auction order processed: 20% fee ($${platformFee}), seller gets $${sellerEarnings}`);
+      } else {
+        // Regular listings: tier-based fees with bonuses
+        const tier = TIER_CONFIG.getTierByName(sellerTier);
+        sellerEarnings = TIER_CONFIG.calculateSellerEarnings(order.price, sellerTier);
+        platformFee = TIER_CONFIG.calculatePlatformFee(order.price, sellerTier);
+        tierBonus = Math.round((order.price * tier.bonusPercentage) * 100) / 100;
+        
+        // Update order with tier calculations
+        order.sellerEarnings = sellerEarnings;
+        order.sellerPlatformFee = platformFee;
+        order.tierCreditAmount = tierBonus;
+        order.sellerTier = sellerTier;
+        
+        console.log(`[TierService] Regular order processed: ${sellerTier} tier, ${(tier.bonusPercentage * 100).toFixed(0)}% bonus`);
+      }
       
       // Get or create wallets
       let sellerWallet = await Wallet.findOne({ username: seller }).session(session);
@@ -254,29 +322,34 @@ class TierService {
       platformWallet.balance += platformFee;
       await platformWallet.save({ session });
       
-      // Create transactions
+      // Create sale transaction
+      const saleDescription = order.wasAuction 
+        ? `Auction sale: ${order.title} (20% platform fee)`
+        : `Sale: ${order.title} (${sellerTier} tier - ${(tier.bonusPercentage * 100).toFixed(0)}% bonus)`;
+      
       const saleTransaction = new Transaction({
-        type: 'sale',
+        type: order.wasAuction ? 'auction_sale' : 'sale',
         amount: sellerEarnings,
         from: buyer,
         to: seller,
         fromRole: 'buyer',
         toRole: 'seller',
-        description: `Sale: ${order.title} (${sellerTier} tier - ${(tier.bonusPercentage * 100).toFixed(0)}% bonus)`,
+        description: saleDescription,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
           orderId: order._id.toString(),
           listingTitle: order.title,
           sellerEarnings: sellerEarnings,
-          tier: sellerTier,
-          tierBonus: tierBonus
+          tier: order.wasAuction ? null : sellerTier,
+          tierBonus: tierBonus,
+          wasAuction: order.wasAuction
         }
       });
       await saleTransaction.save({ session });
       
-      // Create tier credit transaction if there's a bonus
-      if (tierBonus > 0) {
+      // Create tier credit transaction only for non-auction orders with bonuses
+      if (!order.wasAuction && tierBonus > 0) {
         const tierCreditTransaction = new Transaction({
           type: 'tier_credit',
           amount: tierBonus,
@@ -298,14 +371,14 @@ class TierService {
       
       await session.commitTransaction();
       
-      // Update seller tier after successful sale
+      // Update seller tier after successful sale (both auction and regular)
       await this.updateSellerTier(seller);
       
       return {
         sellerEarnings,
         platformFee,
         tierBonus,
-        tier: sellerTier
+        tier: order.wasAuction ? null : sellerTier
       };
       
     } catch (error) {
