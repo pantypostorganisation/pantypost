@@ -2,12 +2,13 @@
 'use client';
 
 import { Ban, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { BanModalProps } from './types';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { sanitizeNumber } from '@/utils/security/sanitization';
-import { useState, useEffect } from 'react';
 import { usersService } from '@/services/users.service';
+import { useAuth } from '@/context/AuthContext';
 
 export default function BanModal({
   isOpen,
@@ -17,6 +18,8 @@ export default function BanModal({
   onClose,
   onConfirm
 }: BanModalProps) {
+  const { user: currentUser } = useAuth();
+
   const [touched, setTouched] = useState({
     username: false,
     hours: false,
@@ -28,28 +31,31 @@ export default function BanModal({
   const [targetUserRole, setTargetUserRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
   const [isCheckingUser, setIsCheckingUser] = useState(false);
 
-  // Check user role when username changes
+  // Check user role when username changes (debounced + cleanup safe)
   useEffect(() => {
-    const checkUserRole = async () => {
-      if (!banForm.username.trim()) {
-        setTargetUserRole(null);
-        return;
-      }
-      
-      setIsCheckingUser(true);
+    if (!isOpen) return;
+
+    let mounted = true;
+    const trimmed = banForm.username.trim();
+    if (!trimmed) {
+      setTargetUserRole(null);
+      return;
+    }
+
+    setIsCheckingUser(true);
+    const timer = setTimeout(async () => {
       try {
-        const result = await usersService.getUser(banForm.username);
-        if (result.success && result.data) {
+        const result = await usersService.getUser(trimmed);
+        if (!mounted) return;
+
+        if (result.success && result.data?.role) {
           setTargetUserRole(result.data.role);
-          
-          // If user is admin, set error immediately
+
+          // Flag admin target immediately
           if (result.data.role === 'admin') {
-            setErrors(prev => ({
-              ...prev,
-              username: 'Admin accounts cannot be banned'
-            }));
+            setErrors(prev => ({ ...prev, username: 'Admin accounts cannot be banned' }));
           } else {
-            // Clear username error if not admin
+            // Clear username error if previously set
             setErrors(prev => {
               const { username, ...rest } = prev;
               return rest;
@@ -60,48 +66,57 @@ export default function BanModal({
         }
       } catch (error) {
         console.error('Failed to check user role:', error);
-        setTargetUserRole(null);
+        if (mounted) setTargetUserRole(null);
       } finally {
-        setIsCheckingUser(false);
+        if (mounted) setIsCheckingUser(false);
       }
+    }, 500);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
     };
-    
-    const debounceTimer = setTimeout(checkUserRole, 500);
-    return () => clearTimeout(debounceTimer);
-  }, [banForm.username]);
+  }, [banForm.username, isOpen]);
 
   if (!isOpen) return null;
 
   // Handle secure form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessing) return; // double-submit guard
     setErrors({});
-    
+
     const validationErrors: Record<string, string> = {};
-    
+    const trimmedUsername = banForm.username.trim();
+
     // Validate username
-    if (!banForm.username.trim()) {
+    if (!trimmedUsername) {
       validationErrors.username = 'Username is required';
     }
-    
+
+    // Prevent self-ban
+    if (currentUser?.username && trimmedUsername === currentUser.username) {
+      validationErrors.username = 'You cannot ban your own account';
+    }
+
     // Check if trying to ban an admin
     if (targetUserRole === 'admin') {
       validationErrors.username = 'Admin accounts cannot be banned';
     }
-    
+
     // Validate hours for temporary ban
     if (banForm.banType === 'temporary') {
-      const hours = parseInt(banForm.hours);
-      if (isNaN(hours) || hours < 1 || hours > 8760) { // Max 1 year
-        validationErrors.hours = 'Please enter valid hours (1-8760)';
+      const hours = parseInt(banForm.hours, 10);
+      if (isNaN(hours) || hours < 1 || hours > 8760) {
+        validationErrors.hours = 'Please enter valid hours (1–8760)';
       }
     }
-    
+
     // Validate custom reason if "other" is selected
     if (banForm.reason === 'other' && !banForm.customReason.trim()) {
       validationErrors.customReason = 'Please specify a custom reason';
     }
-    
+
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       setTouched({
@@ -113,7 +128,7 @@ export default function BanModal({
       });
       return;
     }
-    
+
     await onConfirm();
   };
 
@@ -148,7 +163,7 @@ export default function BanModal({
           <Ban className="mr-2 text-red-400" />
           Manual Ban Decision
         </h3>
-        
+
         <SecureForm
           onSubmit={handleSubmit}
           rateLimitKey="admin_ban_user"
@@ -175,7 +190,8 @@ export default function BanModal({
               )}
               {targetUserRole && !errors.username && (
                 <p className="text-xs text-gray-400 mt-1">
-                  User role: <span className={targetUserRole === 'admin' ? 'text-red-400 font-bold' : 'text-gray-300'}>
+                  User role:{' '}
+                  <span className={targetUserRole === 'admin' ? 'text-red-400 font-bold' : 'text-gray-300'}>
                     {targetUserRole}
                   </span>
                 </p>
@@ -262,7 +278,12 @@ export default function BanModal({
                 label="Additional Details"
                 type="text"
                 value={banForm.notes.split('\n')[0] || ''}
-                onChange={(value) => setBanForm(prev => ({ ...prev, notes: value + '\n' + (prev.notes.split('\n')[1] || '') }))}
+                onChange={(value) =>
+                  setBanForm(prev => ({
+                    ...prev,
+                    notes: value + '\n' + (prev.notes.split('\n')[1] || '')
+                  }))
+                }
                 onBlur={() => setTouched(prev => ({ ...prev, details: true }))}
                 className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
                 placeholder="Additional details..."
@@ -271,13 +292,18 @@ export default function BanModal({
                 disabled={targetUserRole === 'admin'}
               />
             </div>
-            
+
             {/* Admin Notes */}
             <div>
               <SecureTextarea
                 label="Admin Notes"
                 value={banForm.notes.split('\n').slice(1).join('\n')}
-                onChange={(value) => setBanForm(prev => ({ ...prev, notes: (prev.notes.split('\n')[0] || '') + '\n' + value }))}
+                onChange={(value) =>
+                  setBanForm(prev => ({
+                    ...prev,
+                    notes: (prev.notes.split('\n')[0] || '') + '\n' + value
+                  }))
+                }
                 onBlur={() => setTouched(prev => ({ ...prev, notes: true }))}
                 className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
                 rows={3}
@@ -302,7 +328,7 @@ export default function BanModal({
               </div>
             )}
           </div>
-          
+
           <div className="flex gap-3 mt-6">
             <button
               type="button"
