@@ -1,10 +1,14 @@
 // src/components/admin/resolved/ResolvedEntry.tsx
 'use client';
 
-import { useState } from 'react';
-import { User, Calendar, Shield, AlertTriangle, ChevronDown, ChevronUp, RotateCcw, Trash2, MessageSquare, FileText } from 'lucide-react';
+import { useMemo } from 'react';
+import {
+  User, Calendar, Shield, AlertTriangle, ChevronDown, ChevronUp,
+  RotateCcw, Trash2, MessageSquare, FileText
+} from 'lucide-react';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import type { ResolvedEntryProps } from '@/types/resolved';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 const getSeverityColor = (severity?: string) => {
   switch (severity) {
@@ -26,6 +30,11 @@ const getSeverityIcon = (severity?: string) => {
   }
 };
 
+const safeDate = (d?: string | number | Date) => {
+  const dd = d ? new Date(d) : null;
+  return dd && Number.isFinite(dd.getTime()) ? dd.toLocaleDateString() : '—';
+};
+
 export default function ResolvedEntry({
   report,
   index,
@@ -36,13 +45,23 @@ export default function ResolvedEntry({
   onRestore,
   onDelete
 }: ResolvedEntryProps) {
-  const SeverityIcon = getSeverityIcon(report.severity);
+  const SeverityIcon = getSeverityIcon(report?.severity);
+
+  const prettyCategory = useMemo(() => {
+    const c = (report?.category ?? '').toString().replace(/_/g, ' ');
+    return c ? sanitizeStrict(c) : '—';
+  }, [report?.category]);
+
+  const resolvedBy = sanitizeStrict(report?.resolvedBy ?? 'Unknown');
+  const resolvedReason = sanitizeStrict(report?.resolvedReason ?? 'No reason provided');
 
   return (
-    <div 
+    <div
       className={`bg-[#1a1a1a] border ${
         isSelected ? 'border-[#ff950e]' : 'border-gray-800'
       } rounded-lg overflow-hidden hover:border-gray-700 transition-all`}
+      role="group"
+      aria-label={`Resolved report ${index + 1}`}
     >
       {/* Report Header */}
       <div className="p-4">
@@ -50,27 +69,49 @@ export default function ResolvedEntry({
           {/* Checkbox */}
           <input
             type="checkbox"
-            checked={isSelected}
+            checked={!!isSelected}
             onChange={onToggleSelected}
             className="mt-1 w-4 h-4 text-[#ff950e] bg-gray-700 border-gray-600 rounded focus:ring-[#ff950e]"
+            aria-label="Select resolved report"
           />
-          
+
           {/* Main Content */}
-          <div 
+          <div
             className="flex-1 cursor-pointer"
             onClick={onToggleExpanded}
+            role="button"
+            aria-expanded={!!isExpanded}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onToggleExpanded();
+              }
+            }}
           >
             <div className="flex justify-between items-start">
               <div>
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3 mb-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <User size={16} className="text-gray-400" />
                     <span className="font-semibold text-white">
-                      {report.reporter} → {report.reportee}
+                      <SecureMessageDisplay
+                        content={report?.reporter ?? ''}
+                        className="inline"
+                        maxLength={120}
+                        allowBasicFormatting={false}
+                      />
+                      {' '}&rarr;{' '}
+                      <SecureMessageDisplay
+                        content={report?.reportee ?? ''}
+                        className="inline"
+                        maxLength={120}
+                        allowBasicFormatting={false}
+                      />
                     </span>
                   </div>
-                  
-                  {report.banApplied ? (
+
+                  {report?.banApplied ? (
                     <span className="px-2 py-0.5 bg-red-900/20 text-red-400 text-xs rounded-md border border-red-800">
                       Ban Applied
                     </span>
@@ -80,57 +121,61 @@ export default function ResolvedEntry({
                     </span>
                   )}
 
-                  {report.severity && (
+                  {report?.severity && (
                     <div className={`flex items-center gap-1 ${getSeverityColor(report.severity)}`}>
                       <SeverityIcon size={14} />
-                      <span className="text-xs font-medium uppercase">{report.severity}</span>
+                      <span className="text-xs font-medium uppercase">{sanitizeStrict(report.severity)}</span>
                     </div>
                   )}
 
-                  {report.category && (
+                  {report?.category && (
                     <span className="text-xs text-gray-400">
-                      {report.category.replace(/_/g, ' ')}
+                      {prettyCategory}
                     </span>
                   )}
                 </div>
-                
-                <div className="flex items-center gap-4 text-sm text-gray-400">
+
+                <div className="flex items-center gap-4 text-sm text-gray-400 flex-wrap">
                   <div className="flex items-center gap-1">
                     <Calendar size={14} />
-                    <span>Resolved: {new Date(report.date).toLocaleDateString()}</span>
+                    <span>Resolved: {safeDate(report?.date)}</span>
                   </div>
-                  {report.resolvedBy && (
-                    <span>By: {report.resolvedBy}</span>
+                  {report?.resolvedBy && (
+                    <span>By: {resolvedBy}</span>
                   )}
-                  {report.resolvedReason && (
-                    <span>Reason: {report.resolvedReason}</span>
+                  {report?.resolvedReason && (
+                    <span>Reason: {resolvedReason}</span>
                   )}
                 </div>
               </div>
-              
+
               {/* Actions */}
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRestore();
                   }}
                   className="p-2 hover:bg-[#222] rounded transition"
                   title="Restore to active reports"
+                  aria-label="Restore report to active"
                 >
                   <RotateCcw size={16} className="text-yellow-500" />
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDelete();
                   }}
                   className="p-2 hover:bg-[#222] rounded transition"
                   title="Delete permanently"
+                  aria-label="Delete report permanently"
                 >
                   <Trash2 size={16} className="text-red-500" />
                 </button>
-                <div className="pl-2">
+                <div className="pl-2" aria-hidden>
                   {isExpanded ? (
                     <ChevronUp size={20} className="text-gray-400" />
                   ) : (
@@ -154,20 +199,20 @@ export default function ResolvedEntry({
                 Report Details
               </h4>
               <div className="space-y-2 text-sm">
-                {report.originalReportDate && (
+                {report?.originalReportDate && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Original Report Date:</span>
-                    <span className="text-gray-300">{new Date(report.originalReportDate).toLocaleDateString()}</span>
+                    <span className="text-gray-300">{safeDate(report.originalReportDate)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-500">Resolution Date:</span>
-                  <span className="text-gray-300">{new Date(report.date).toLocaleDateString()}</span>
+                  <span className="text-gray-300">{safeDate(report?.date)}</span>
                 </div>
-                {report.banId && (
+                {report?.banId && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Ban ID:</span>
-                    <span className="text-gray-300 font-mono text-xs">{report.banId}</span>
+                    <span className="text-gray-300 font-mono text-xs">{sanitizeStrict(report.banId)}</span>
                   </div>
                 )}
               </div>
@@ -179,13 +224,13 @@ export default function ResolvedEntry({
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Resolved By:</span>
-                  <span className="text-gray-300">{report.resolvedBy || 'Unknown'}</span>
+                  <span className="text-gray-300">{resolvedBy}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Resolution:</span>
-                  <span className="text-gray-300">{report.resolvedReason || 'No reason provided'}</span>
+                  <span className="text-gray-300">{resolvedReason}</span>
                 </div>
-                {report.banApplied !== undefined && (
+                {typeof report?.banApplied === 'boolean' && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Ban Applied:</span>
                     <span className={report.banApplied ? 'text-red-400' : 'text-green-400'}>
@@ -198,12 +243,12 @@ export default function ResolvedEntry({
           </div>
 
           {/* Admin Notes */}
-          {(report.notes || report.adminNotes) && (
+          {(report?.notes || report?.adminNotes) && (
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-300 mb-2">Admin Notes</h4>
               <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-3">
                 <SecureMessageDisplay
-                  content={report.notes || report.adminNotes || ''}
+                  content={report?.notes || report?.adminNotes || ''}
                   className="text-sm text-gray-400 whitespace-pre-wrap"
                   allowBasicFormatting={false}
                   maxLength={1000}
@@ -213,7 +258,7 @@ export default function ResolvedEntry({
           )}
 
           {/* Messages */}
-          {report.messages && report.messages.length > 0 && (
+          {Array.isArray(report?.messages) && report.messages.length > 0 && (
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                 <MessageSquare size={14} />
@@ -224,10 +269,22 @@ export default function ResolvedEntry({
                   <div key={idx} className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-3">
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-sm font-medium text-white">
-                        {msg.sender} → {msg.receiver}
+                        <SecureMessageDisplay
+                          content={msg.sender}
+                          className="inline"
+                          allowBasicFormatting={false}
+                          maxLength={120}
+                        />
+                        {' '}&rarr;{' '}
+                        <SecureMessageDisplay
+                          content={msg.receiver}
+                          className="inline"
+                          allowBasicFormatting={false}
+                          maxLength={120}
+                        />
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(msg.date).toLocaleString()}
+                        {safeDate(msg.date)} {new Date(msg.date).toLocaleTimeString?.()}
                       </span>
                     </div>
                     <SecureMessageDisplay

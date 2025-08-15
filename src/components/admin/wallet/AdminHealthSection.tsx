@@ -1,6 +1,7 @@
 // src/components/admin/wallet/AdminHealthSection.tsx
 'use client';
 
+import { useMemo } from 'react';
 import {
   Activity,
   Users,
@@ -10,6 +11,7 @@ import {
   Download,
   Upload
 } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface User {
   role: string;
@@ -28,7 +30,6 @@ interface Deposit {
   amount: number;
   status: string;
   date?: string;
-  // If backend provides this, we honor it; otherwise we infer below.
   role?: 'buyer' | 'seller' | 'admin';
   [key: string]: any;
 }
@@ -48,148 +49,150 @@ interface AdminHealthSectionProps {
 }
 
 export default function AdminHealthSection({
-  users,
-  listings,
-  wallet,
-  depositLogs,
-  filteredDeposits,
-  sellerWithdrawals
+  users = {},
+  listings = [],
+  wallet = {},
+  depositLogs = [],
+  filteredDeposits = [],
+  sellerWithdrawals = {}
 }: AdminHealthSectionProps) {
-  // -------- Helpers --------
   const isAdminName = (u?: string) => u === 'platform' || u === 'oakley' || u === 'gerome';
   const clean = (u?: string) => (typeof u === 'string' ? u.trim() : '');
 
-  // Build a quick role map from users (if provided)
-  const userRoleMap: Record<string, 'buyer' | 'seller' | 'admin' | undefined> = {};
-  Object.entries(users || {}).forEach(([username, info]) => {
-    const uname = clean(username);
-    const role = (info?.role as any) || undefined;
-    if (uname) userRoleMap[uname] = role;
-  });
-
-  // Prefer backend-provided deposit.role; else infer buyer/admin
   const depositorRole = (d: Deposit): 'buyer' | 'admin' => {
-    const r = d.role ?? (d.username === 'platform' ? 'admin' : 'buyer');
-    // Even if something upstream mislabeled as seller, treat depositors as buyers for this card.
+    const r = d?.role ?? (d?.username === 'platform' ? 'admin' : 'buyer');
     return r === 'admin' ? 'admin' : 'buyer';
   };
 
-  // -------- Sellers set (exclude admins) --------
-  const sellersFromUsers = new Set(
-    Object.entries(users || {})
-      .filter(([, info]) => info?.role === 'seller')
-      .map(([u]) => clean(u))
-      .filter((u) => u && !isAdminName(u))
-  );
+  const {
+    sellersSet,
+    buyersSet,
+    verifiedSellers,
+    activeListings,
+    avgListingsPerSeller,
+    topSellers,
+    depositorRoleByUser,
+    topDepositors,
+    topWithdrawers
+  } = useMemo(() => {
+    // Sellers
+    const sellersFromUsers = new Set(
+      Object.entries(users)
+        .filter(([, info]) => info?.role === 'seller')
+        .map(([u]) => clean(u))
+        .filter((u) => u && !isAdminName(u))
+    );
 
-  const sellersFromWithdrawals = new Set(
-    Object.keys(sellerWithdrawals || {})
-      .map((u) => clean(u))
-      .filter((u) => u && !isAdminName(u))
-  );
+    const sellersFromWithdrawals = new Set(
+      Object.keys(sellerWithdrawals || {})
+        .map((u) => clean(u))
+        .filter((u) => u && !isAdminName(u))
+    );
 
-  const sellersFromListings = new Set(
-    (listings || [])
-      .map((l) => clean(l.seller))
-      .filter((u) => u && !isAdminName(u))
-  );
+    const sellersFromListings = new Set(
+      (listings || [])
+        .map((l) => clean(l?.seller))
+        .filter((u) => u && !isAdminName(u))
+    );
 
-  const sellersSet = new Set<string>([
-    ...Array.from(sellersFromUsers),
-    ...Array.from(sellersFromWithdrawals),
-    ...Array.from(sellersFromListings),
-  ]);
+    const sellersSetTemp = new Set<string>([
+      ...Array.from(sellersFromUsers),
+      ...Array.from(sellersFromWithdrawals),
+      ...Array.from(sellersFromListings),
+    ]);
 
-  // -------- Buyers set (exclude admins) --------
-  const buyersFromUsers = new Set(
-    Object.entries(users || {})
-      .filter(([, info]) => info?.role === 'buyer')
-      .map(([u]) => clean(u))
-      .filter((u) => u && !isAdminName(u))
-  );
+    // Buyers
+    const buyersFromUsers = new Set(
+      Object.entries(users || {})
+        .filter(([, info]) => info?.role === 'buyer')
+        .map(([u]) => clean(u))
+        .filter((u) => u && !isAdminName(u))
+    );
 
-  const buyersFromDeposits = new Set(
-    (filteredDeposits || [])
-      .filter((d) => d.status === 'completed')
-      .filter((d) => depositorRole(d) !== 'admin') // drop platform/admin
-      .map((d) => clean(d.username))
-      .filter((u) => u && !isAdminName(u))
-  );
+    const buyersFromDeposits = new Set(
+      (filteredDeposits || [])
+        .filter((d) => d?.status === 'completed')
+        .filter((d) => depositorRole(d) !== 'admin')
+        .map((d) => clean(d?.username))
+        .filter((u) => u && !isAdminName(u))
+    );
 
-  const buyersSet = new Set<string>([
-    ...Array.from(buyersFromUsers),
-    ...Array.from(buyersFromDeposits),
-  ]);
+    const buyersSetTemp = new Set<string>([
+      ...Array.from(buyersFromUsers),
+      ...Array.from(buyersFromDeposits),
+    ]);
 
-  // Final counts (buyers + sellers, admins excluded)
-  const totalUsersCount = new Set<string>([...Array.from(buyersSet), ...Array.from(sellersSet)]).size;
+    const verifiedSellersTemp = Object.values(users || {}).filter(
+      (u) => u?.role === 'seller' && (u?.verified || u?.verificationStatus === 'verified')
+    );
+
+    const activeListingsCount = (listings || []).length;
+    const avgListings = sellersSetTemp.size > 0 ? (activeListingsCount / sellersSetTemp.size).toFixed(1) : '0';
+
+    const topSellersTemp = Object.entries(wallet || {})
+      .filter(([username, bal]) => users?.[username]?.role === 'seller' && Number.isFinite(bal))
+      .sort(([, a], [, b]) => (Number(b) as number) - (Number(a) as number))
+      .slice(0, 5);
+
+    const depositorRoleByUserTemp: Record<string, 'buyer' | 'admin'> =
+      (filteredDeposits || []).reduce((acc, d) => {
+        const uname = clean(d?.username);
+        if (!uname) return acc;
+        const r = depositorRole(d);
+        acc[uname] = r === 'admin' ? 'admin' : 'buyer';
+        return acc;
+      }, {} as Record<string, 'buyer' | 'admin'>);
+
+    const depositTotals: Record<string, number> = (filteredDeposits || [])
+      .filter((deposit) => deposit?.status === 'completed')
+      .reduce((acc: Record<string, number>, deposit: Deposit) => {
+        const uname = clean(deposit?.username);
+        if (!uname || isAdminName(uname)) return acc;
+        const amt = Number(deposit?.amount);
+        acc[uname] = (acc[uname] || 0) + (Number.isFinite(amt) ? amt : 0);
+        return acc;
+      }, {});
+
+    const topDepositorsTemp = Object.entries(depositTotals)
+      .sort(([, a], [, b]) => (Number(b) as number) - (Number(a) as number))
+      .slice(0, 5);
+
+    const topWithdrawersTemp = Object.entries(sellerWithdrawals || {})
+      .map(([seller, withdrawals]) => ({
+        seller,
+        totalWithdrawn: (withdrawals || []).reduce((sum, w) => {
+          const amt = Number(w?.amount);
+          return sum + (Number.isFinite(amt) ? amt : 0);
+        }, 0),
+        withdrawalCount: (withdrawals || []).length
+      }))
+      .sort((a, b) => b.totalWithdrawn - a.totalWithdrawn)
+      .slice(0, 5);
+
+    return {
+      sellersSet: sellersSetTemp,
+      buyersSet: buyersSetTemp,
+      verifiedSellers: verifiedSellersTemp,
+      activeListings: activeListingsCount,
+      avgListingsPerSeller: avgListings,
+      topSellers: topSellersTemp,
+      depositorRoleByUser: depositorRoleByUserTemp,
+      topDepositors: topDepositorsTemp,
+      topWithdrawers: topWithdrawersTemp
+    };
+  }, [users, listings, wallet, filteredDeposits, sellerWithdrawals]);
+
   const buyersCount = buyersSet.size;
   const sellersCount = sellersSet.size;
+  const totalUsersCount = new Set<string>([...Array.from(buyersSet), ...Array.from(sellersSet)]).size;
 
-  // Verified sellers (from users map only—verification is account-level)
-  const verifiedSellers = Object.values(users || {}).filter(
-    (u) => u.role === 'seller' && (u.verified || u.verificationStatus === 'verified')
-  );
-
-  // Active listings + average per seller (based on sellersSet)
-  const activeListings = (listings || []).length;
-  const avgListingsPerSeller = sellersCount > 0 ? (activeListings / sellersCount).toFixed(1) : '0';
-
-  // Top sellers by wallet balance (stable)
-  const topSellers = Object.entries(wallet || {})
-    .filter(([username]: [string, number]) => (users?.[username]?.role === 'seller'))
-    .sort(([, a]: [string, number], [, b]: [string, number]) => b - a)
-    .slice(0, 5);
-
-  // Role map for depositors (for label only)
-  const depositorRoleByUser: Record<string, 'buyer' | 'admin'> =
-    (filteredDeposits || []).reduce((acc, d) => {
-      const uname = clean(d.username);
-      if (!uname) return acc;
-      const r = depositorRole(d);
-      if (r === 'admin') acc[uname] = 'admin';
-      else acc[uname] = 'buyer';
-      return acc;
-    }, {} as Record<string, 'buyer' | 'admin'>);
-
-  // Top depositors (sum completed deposits)
-  const depositTotals: Record<string, number> = (filteredDeposits || [])
-    .filter((deposit) => deposit.status === 'completed')
-    .reduce((acc: Record<string, number>, deposit: Deposit) => {
-      const uname = clean(deposit.username);
-      if (!uname || isAdminName(uname)) return acc;
-      acc[uname] = (acc[uname] || 0) + (deposit.amount || 0);
-      return acc;
-    }, {});
-
-  const topDepositors: [string, number][] = Object.entries(depositTotals)
-    .sort(([, a]: [string, number], [, b]: [string, number]) => b - a)
-    .slice(0, 5);
-
-  // Top withdrawers (unchanged)
-  const topWithdrawers = Object.entries(sellerWithdrawals || {})
-    .map(([seller, withdrawals]: [string, Withdrawal[]]) => ({
-      seller,
-      totalWithdrawn: (withdrawals || []).reduce((sum: number, w: Withdrawal) => sum + (w?.amount || 0), 0),
-      withdrawalCount: (withdrawals || []).length
-    }))
-    .sort((a, b) => b.totalWithdrawn - a.totalWithdrawn)
-    .slice(0, 5);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount || 0);
-  };
-
-  const roleLabel = (username: string) => {
-    const role = depositorRoleByUser[username] ?? (username === 'platform' ? 'admin' : 'buyer');
-    if (role === 'admin') return '🛡️ Admin';
-    return '💳 Buyer';
-  };
+    }).format(Number.isFinite(amount) ? amount : 0);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
@@ -260,18 +263,21 @@ export default function AdminHealthSection({
                         ? 'bg-orange-600 text-white'
                         : 'bg-[#333] text-gray-300'
                     }`}
+                    aria-label={`Rank ${index + 1}`}
                   >
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white">{username}</p>
+                    <p className="font-medium text-white">
+                      <SecureMessageDisplay content={username} allowBasicFormatting={false} />
+                    </p>
                     <p className="text-xs text-gray-400">
-                      {users[username]?.verified ? '✅ Verified' : '⏳ Unverified'}
+                      {users?.[username]?.verified ? '✅ Verified' : '⏳ Unverified'}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-white">{formatCurrency(balance)}</p>
+                  <p className="font-bold text-white">{formatCurrency(Number(balance))}</p>
                   <p className="text-xs text-gray-500">earned</p>
                 </div>
               </div>
@@ -306,16 +312,21 @@ export default function AdminHealthSection({
                         ? 'bg-blue-300 text-black'
                         : 'bg-[#333] text-gray-300'
                     }`}
+                    aria-label={`Rank ${index + 1}`}
                   >
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white">{username}</p>
-                    <p className="text-xs text-gray-400">{depositorRoleByUser[username] === 'admin' ? '🛡️ Admin' : '💳 Buyer'}</p>
+                    <p className="font-medium text-white">
+                      <SecureMessageDisplay content={username} allowBasicFormatting={false} />
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {depositorRoleByUser[username] === 'admin' ? '🛡️ Admin' : '💳 Buyer'}
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-blue-400">{formatCurrency(totalDeposited)}</p>
+                  <p className="font-bold text-blue-400">{formatCurrency(Number(totalDeposited))}</p>
                   <p className="text-xs text-gray-500">deposited</p>
                 </div>
               </div>
@@ -350,18 +361,21 @@ export default function AdminHealthSection({
                         ? 'bg-red-300 text-black'
                         : 'bg-[#333] text-gray-300'
                     }`}
+                    aria-label={`Rank ${index + 1}`}
                   >
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white">{withdrawer.seller}</p>
+                    <p className="font-medium text-white">
+                      <SecureMessageDisplay content={withdrawer.seller} allowBasicFormatting={false} />
+                    </p>
                     <p className="text-xs text-gray-400">
                       {withdrawer.withdrawalCount} withdrawal{withdrawer.withdrawalCount !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-red-400">{formatCurrency(withdrawer.totalWithdrawn)}</p>
+                  <p className="font-bold text-red-400">{formatCurrency(Number(withdrawer.totalWithdrawn))}</p>
                   <p className="text-xs text-gray-500">withdrawn</p>
                 </div>
               </div>

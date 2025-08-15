@@ -5,20 +5,26 @@ import { ChevronRight, Clock, Shield, Upload } from 'lucide-react';
 import type { VerificationCardProps } from '@/types/verification';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
-export default function VerificationCard({ 
-  user, 
-  onSelect, 
-  getTimeAgo 
+export default function VerificationCard({
+  user,
+  onSelect,
+  getTimeAgo
 }: VerificationCardProps) {
-  const hasAllDocs = user.verificationDocs && (
-    user.verificationDocs.codePhoto && 
-    (user.verificationDocs.idFront || user.verificationDocs.passport)
-  );
+  const hasAllDocs =
+    !!user.verificationDocs &&
+    !!user.verificationDocs.codePhoto &&
+    (!!user.verificationDocs.idFront || !!user.verificationDocs.passport);
 
   return (
     <div
       onClick={onSelect}
       className="bg-[#0e0e0e] border border-[#222] rounded-xl p-4 hover:border-[#ff950e] transition-all duration-200 cursor-pointer group"
+      role="button"
+      aria-label={`Open verification for ${user.username}`}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect();
+      }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -27,10 +33,7 @@ export default function VerificationCard({
           </div>
           <div>
             <h3 className="font-bold text-white text-lg group-hover:text-[#ff950e] transition-colors">
-              <SecureMessageDisplay 
-                content={user.username}
-                allowBasicFormatting={false}
-              />
+              <SecureMessageDisplay content={user.username} allowBasicFormatting={false} />
             </h3>
             <div className="flex items-center gap-2 mt-1">
               <Clock className="w-3 h-3 text-gray-500" />
@@ -40,7 +43,7 @@ export default function VerificationCard({
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           {hasAllDocs ? (
             <div className="flex items-center gap-2 text-green-500">

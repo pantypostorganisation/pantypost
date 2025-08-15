@@ -11,9 +11,7 @@ export default function ResolvedFilters({
   onFiltersChange
 }: ResolvedFiltersProps) {
   const handleSearchChange = (value: string) => {
-    // Sanitize search input
-    const sanitizedValue = sanitizeSearchQuery(value);
-    onFiltersChange({ searchTerm: sanitizedValue });
+    onFiltersChange({ searchTerm: sanitizeSearchQuery(value) });
   };
 
   return (
@@ -31,6 +29,7 @@ export default function ResolvedFilters({
             maxLength={100}
             sanitize={true}
             sanitizer={sanitizeSearchQuery}
+            aria-label="Search resolved reports"
           />
         </div>
 
@@ -39,6 +38,7 @@ export default function ResolvedFilters({
           value={filters.filterBy}
           onChange={(e) => onFiltersChange({ filterBy: e.target.value as any })}
           className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          aria-label="Filter resolved reports"
         >
           <option value="all">All Reports</option>
           <option value="banned">With Bans</option>
@@ -51,14 +51,18 @@ export default function ResolvedFilters({
             value={filters.sortBy}
             onChange={(e) => onFiltersChange({ sortBy: e.target.value as any })}
             className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            aria-label="Sort resolved reports"
           >
             <option value="date">Sort by Date</option>
             <option value="reporter">Sort by Reporter</option>
             <option value="reportee">Sort by Reportee</option>
           </select>
           <button
+            type="button"
             onClick={() => onFiltersChange({ sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' })}
             className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white hover:bg-[#333] transition-colors"
+            aria-label={`Sort ${filters.sortOrder === 'asc' ? 'descending' : 'ascending'}`}
+            title="Toggle sort order"
           >
             {filters.sortOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>

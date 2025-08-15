@@ -1,6 +1,7 @@
 // src/components/admin/resolved/ResolvedList.tsx
 'use client';
 
+import { useMemo } from 'react';
 import { Archive } from 'lucide-react';
 import ResolvedEntry from './ResolvedEntry';
 import type { ResolvedListProps } from '@/types/resolved';
@@ -16,53 +17,61 @@ export default function ResolvedList({
   onDelete,
   filters
 }: ResolvedListProps) {
-  // Sanitize search term
-  const sanitizedSearchTerm = filters.searchTerm ? sanitizeSearchQuery(filters.searchTerm).toLowerCase() : '';
+  const sanitizedSearchTerm = (filters?.searchTerm ? sanitizeSearchQuery(filters.searchTerm) : '').toLowerCase();
 
-  // Filter and sort reports
-  const filteredAndSortedReports = (() => {
-    let filtered = reports.filter(report => {
-      const matchesSearch = sanitizedSearchTerm ?
-        report.reporter.toLowerCase().includes(sanitizedSearchTerm) ||
-        report.reportee.toLowerCase().includes(sanitizedSearchTerm) ||
-        (report.notes && report.notes.toLowerCase().includes(sanitizedSearchTerm)) ||
-        (report.resolvedReason && report.resolvedReason.toLowerCase().includes(sanitizedSearchTerm))
+  const filteredAndSortedReports = useMemo(() => {
+    const safeReports = Array.isArray(reports) ? reports : [];
+
+    const filtered = safeReports.filter((report) => {
+      const reporter = (report?.reporter || '').toString().toLowerCase();
+      const reportee = (report?.reportee || '').toString().toLowerCase();
+      const notes = (report?.notes || '').toString().toLowerCase();
+      const reason = (report?.resolvedReason || '').toString().toLowerCase();
+
+      const matchesSearch = sanitizedSearchTerm
+        ? reporter.includes(sanitizedSearchTerm) ||
+          reportee.includes(sanitizedSearchTerm) ||
+          notes.includes(sanitizedSearchTerm) ||
+          reason.includes(sanitizedSearchTerm)
         : true;
 
-      const matchesFilter = 
-        filters.filterBy === 'all' ? true :
-        filters.filterBy === 'banned' ? report.banApplied === true :
-        report.banApplied === false;
+      const matchesFilter =
+        filters.filterBy === 'all'
+          ? true
+          : filters.filterBy === 'banned'
+            ? report?.banApplied === true
+            : report?.banApplied === false;
 
       return matchesSearch && matchesFilter;
     });
 
-    // Sort
     filtered.sort((a, b) => {
       let comparison = 0;
       switch (filters.sortBy) {
         case 'date':
-          comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+          comparison = new Date(a?.date ?? 0).getTime() - new Date(b?.date ?? 0).getTime();
           break;
         case 'reporter':
-          comparison = a.reporter.localeCompare(b.reporter);
+          comparison = (a?.reporter || '').localeCompare(b?.reporter || '');
           break;
         case 'reportee':
-          comparison = a.reportee.localeCompare(b.reportee);
+          comparison = (a?.reportee || '').localeCompare(b?.reportee || '');
           break;
+        default:
+          comparison = 0;
       }
       return filters.sortOrder === 'asc' ? comparison : -comparison;
     });
 
     return filtered;
-  })();
+  }, [reports, filters.sortBy, filters.sortOrder, filters.filterBy, sanitizedSearchTerm]);
 
   if (filteredAndSortedReports.length === 0) {
     return (
       <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-8 text-center">
         <Archive size={48} className="mx-auto text-gray-600 mb-4" />
         <p className="text-gray-400 text-lg">No resolved reports found</p>
-        {filters.searchTerm && (
+        {sanitizedSearchTerm && (
           <p className="text-gray-500 text-sm mt-2">
             Try adjusting your search terms or filters
           </p>
@@ -74,8 +83,9 @@ export default function ResolvedList({
   return (
     <div className="space-y-4">
       {filteredAndSortedReports.map((report, index) => {
-        const reportId = report.id || `${report.reporter}-${report.reportee}-${report.date}`;
-        
+        const fallbackId = `${report?.reporter ?? 'unknown'}-${report?.reportee ?? 'unknown'}-${report?.date ?? index}`;
+        const reportId = (report?.id && String(report.id)) || fallbackId;
+
         return (
           <ResolvedEntry
             key={reportId}

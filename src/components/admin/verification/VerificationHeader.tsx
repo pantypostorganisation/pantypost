@@ -12,10 +12,12 @@ export default function VerificationHeader({ onRefresh }: VerificationHeaderProp
           <Shield className="w-6 h-6 text-[#ff950e] mr-3" />
           <h1 className="text-xl font-bold text-white">Verification Center</h1>
         </div>
-        {onRefresh && (
+        {typeof onRefresh === 'function' && (
           <button
-            onClick={onRefresh}
+            type="button"
+            onClick={() => { onRefresh(); }}
             className="px-4 py-2 bg-[#1a1a1a] border border-gray-700 rounded-lg text-white hover:bg-[#222] transition flex items-center gap-2"
+            aria-label="Refresh verification list"
           >
             <RefreshCw size={16} />
             Refresh

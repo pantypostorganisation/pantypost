@@ -1,10 +1,11 @@
 // src/components/admin/wallet/WalletActionPanel.tsx
 'use client';
 
+import { useState } from 'react';
 import { DollarSign, ArrowUpRight, ArrowDownRight, UserCheck, Loader2 } from 'lucide-react';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
-import { sanitizeCurrency } from '@/utils/security/sanitization';
-import { useState } from 'react';
+import { sanitizeCurrency, sanitizeStrict } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface WalletActionPanelProps {
   selectedUser: string | null;
@@ -43,7 +44,6 @@ export default function WalletActionPanel({
 }: WalletActionPanelProps) {
   const [touched, setTouched] = useState({ amount: false, reason: false });
 
-  // Handle secure amount change
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
       setAmount('');
@@ -52,6 +52,8 @@ export default function WalletActionPanel({
       setAmount(sanitized.toString());
     }
   };
+
+  const canSubmit = Boolean(amount) && Boolean(sanitizeStrict(reason).trim()) && !isLoading;
 
   return (
     <div className="bg-[#1a1a1a] p-6 rounded-xl border border-gray-800 shadow-lg h-fit">
@@ -65,13 +67,18 @@ export default function WalletActionPanel({
           {/* Selected User Info */}
           <div className="bg-black/30 p-4 rounded-lg">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-medium text-white">{selectedUser}</span>
+              <span className="font-medium text-white">
+                <SecureMessageDisplay content={selectedUser} allowBasicFormatting={false} className="inline" />
+              </span>
               <span className={`px-2 py-1 rounded text-xs border ${getRoleBadgeColor(selectedUserRole)}`}>
                 {formatRole(selectedUserRole)}
               </span>
             </div>
             <div className="text-sm text-gray-400">
-              Current Balance: <span className={getBalanceColor(getUserBalance(selectedUser))}>${getUserBalance(selectedUser).toFixed(2)}</span>
+              Current Balance:{' '}
+              <span className={getBalanceColor(getUserBalance(selectedUser))}>
+                ${Number(getUserBalance(selectedUser)).toFixed(2)}
+              </span>
             </div>
           </div>
 
@@ -82,10 +89,9 @@ export default function WalletActionPanel({
               <button
                 onClick={() => setActionType('credit')}
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                  actionType === 'credit' 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  actionType === 'credit' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
+                aria-pressed={actionType === 'credit'}
               >
                 <ArrowUpRight className="h-4 w-4" />
                 Credit
@@ -93,10 +99,9 @@ export default function WalletActionPanel({
               <button
                 onClick={() => setActionType('debit')}
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                  actionType === 'debit' 
-                    ? 'bg-red-600 text-white' 
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  actionType === 'debit' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
+                aria-pressed={actionType === 'debit'}
               >
                 <ArrowDownRight className="h-4 w-4" />
                 Debit
@@ -111,14 +116,14 @@ export default function WalletActionPanel({
               type="number"
               value={amount}
               onChange={handleSecureAmountChange}
-              onBlur={() => setTouched(prev => ({ ...prev, amount: true }))}
+              onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
               step="0.01"
               min="0"
               max="999999.99"
               className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
               placeholder="0.00"
               touched={touched.amount}
-              sanitize={false} // We handle sanitization in handleSecureAmountChange
+              sanitize={false}
             />
           </div>
 
@@ -128,13 +133,15 @@ export default function WalletActionPanel({
               label="Reason"
               value={reason}
               onChange={setReason}
-              onBlur={() => setTouched(prev => ({ ...prev, reason: true }))}
+              onBlur={() => setTouched((prev) => ({ ...prev, reason: true }))}
               className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e] resize-none"
               rows={3}
               placeholder="Reason for this action..."
               maxLength={500}
               characterCount={true}
               touched={touched.reason}
+              sanitize={true}
+              sanitizer={sanitizeStrict}
             />
           </div>
 
@@ -151,7 +158,7 @@ export default function WalletActionPanel({
             </button>
             <button
               onClick={handleAction}
-              disabled={!amount || !reason || isLoading}
+              disabled={!canSubmit}
               className="flex-1 py-2 px-4 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-gray-600 disabled:cursor-not-allowed text-black disabled:text-gray-400 rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
