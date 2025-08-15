@@ -39,7 +39,7 @@ export const useAdminMessages = () => {
   const readThreadsRef = useRef<Set<string>>(new Set());
   const rateLimiter = getRateLimiter();
   
-  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
+  const isAdmin = user?.role === 'admin';
   const username = user?.username || '';
 
   // Load views data with error handling
@@ -55,22 +55,17 @@ export const useAdminMessages = () => {
     }
   }, []);
 
-  // Load views and handle localStorage events
   useEffect(() => {
     loadViews();
-    
     const handleStorageChange = () => loadViews();
-    
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('focus', handleStorageChange);
-    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('focus', handleStorageChange);
     };
   }, [loadViews]);
 
-  // Load previously read threads
   useEffect(() => {
     const loadReadThreads = async () => {
       try {
@@ -86,11 +81,9 @@ export const useAdminMessages = () => {
         console.error('Failed to load read threads:', error);
       }
     };
-    
     loadReadThreads();
   }, [user]);
 
-  // UPDATED: Use new helper functions from MessageContext
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
     if (!user) return { 
       threads: {}, 
@@ -101,7 +94,6 @@ export const useAdminMessages = () => {
       totalUnreadCount: 0 
     };
     
-    // Use the new helper functions (no role filter for admin - sees all)
     const threads = getThreadsForUser(user.username);
     const threadInfos = getAllThreadsInfo(user.username);
     
@@ -113,31 +105,20 @@ export const useAdminMessages = () => {
     Object.entries(threadInfos).forEach(([userKey, info]) => {
       unreadCounts[userKey] = info.unreadCount;
       lastMessages[userKey] = info.lastMessage as Message;
-      
-      // Get user profile picture and verification status
       try {
-        // Note: Profile pics should come from users context or be loaded async
         const userInfo = users?.[userKey];
         const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
         const role = userInfo?.role || 'unknown';
-        
-        userProfiles[userKey] = { 
-          pic: null, // Profile pics should be loaded through proper channels
-          verified: isVerified,
-          role: role
-        };
+        userProfiles[userKey] = { pic: null, verified: isVerified, role };
       } catch (error) {
         console.error(`Error processing user profile for ${userKey}:`, error);
         userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
       }
-      
-      // Only add to total if not in readThreadsRef
       if (!readThreadsRef.current.has(userKey) && info.unreadCount > 0) {
         totalUnreadCount += 1;
       }
     });
     
-    // Get active messages
     let activeMessages: Message[] = [];
     if (activeThread) {
       activeMessages = threads[activeThread] || [];
@@ -146,24 +127,22 @@ export const useAdminMessages = () => {
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
   }, [user, messages, activeThread, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
 
-  // Get all users for directory
+  // Directory: include all non-admin users except the current admin
   const allUsers = useMemo(() => {
     const allUsersList = Object.entries(users || {})
-      .filter(([username, userInfo]) => 
-        username !== user?.username && // Exclude current admin user
-        username !== 'oakley' && username !== 'gerome' // Exclude other admins
+      .filter(([uName, userInfo]) => 
+        uName !== user?.username && // exclude self
+        userInfo?.role !== 'admin'   // exclude admins by role
       )
-      .map(([username, userInfo]) => {
+      .map(([uName, userInfo]) => {
         const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
-        
         return {
-          username,
+          username: uName,
           role: userInfo?.role || 'unknown',
           verified: isVerified,
-          pic: null // Profile pics should be loaded through proper channels
+          pic: null
         };
       });
-    
     return allUsersList;
   }, [users, user]);
 
@@ -184,13 +163,11 @@ export const useAdminMessages = () => {
             if (typeof window !== 'undefined') {
               const readThreadsKey = `panty_read_threads_${user.username}`;
               await storageService.setItem(readThreadsKey, Array.from(readThreadsRef.current));
-              
               const event = new CustomEvent('readThreadsUpdated', { 
                 detail: { threads: Array.from(readThreadsRef.current), username: user.username }
               });
               window.dispatchEvent(event);
             }
-            
             setMessageUpdate(prev => prev + 1);
           }
         }
@@ -203,25 +180,21 @@ export const useAdminMessages = () => {
         }
       }
     };
-    
     markThreadAsRead();
   }, [activeThread, user, threads, markMessagesAsRead]);
 
-  // Save read threads to localStorage
   useEffect(() => {
     const saveReadThreads = async () => {
       if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
         const readThreadsKey = `panty_read_threads_${user.username}`;
         const threadsArray = Array.from(readThreadsRef.current);
         await storageService.setItem(readThreadsKey, threadsArray);
-        
         const event = new CustomEvent('readThreadsUpdated', { 
           detail: { threads: threadsArray, username: user.username }
         });
         window.dispatchEvent(event);
       }
     };
-    
     saveReadThreads();
   }, [messageUpdate, user]);
 
@@ -231,20 +204,15 @@ export const useAdminMessages = () => {
       return;
     }
 
-    // Clear rate limit error
     setRateLimitError(null);
-
-    // Check rate limit
     const rateLimitResult = rateLimiter.check('MESSAGE_SEND', RATE_LIMITS.MESSAGE_SEND);
     if (!rateLimitResult.allowed) {
       setRateLimitError(`Too many messages sent. Please wait ${rateLimitResult.waitTime} seconds.`);
       return;
     }
 
-    // Sanitize message content
     const sanitizedContent = sanitize.strict(content.trim());
 
-    // Validate image URL if provided
     if (selectedImage) {
       const sanitizedImageUrl = sanitize.url(selectedImage);
       if (!sanitizedImageUrl) {
@@ -264,14 +232,11 @@ export const useAdminMessages = () => {
 
   const handleBlockToggle = useCallback(() => {
     if (!activeThread) return;
-    
-    // Rate limit block/unblock actions
     const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
     if (!rateLimitResult.allowed) {
       alert(`Please wait ${rateLimitResult.waitTime} seconds before performing this action.`);
       return;
     }
-
     if (isBlocked(username, activeThread)) {
       unblockUser(username, activeThread);
     } else {
@@ -281,35 +246,28 @@ export const useAdminMessages = () => {
 
   const handleReport = useCallback(() => {
     if (activeThread && !hasReported(username, activeThread)) {
-      // Rate limit report actions
       const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
       if (!rateLimitResult.allowed) {
         alert(`Please wait ${rateLimitResult.waitTime} seconds before reporting.`);
         return;
       }
-      
       reportUser(username, activeThread);
     }
   }, [activeThread, username, hasReported, reportUser, rateLimiter]);
 
   const handleThreadSelect = useCallback((userId: string) => {
-    // Sanitize username
     const sanitizedUserId = sanitize.username(userId);
-    
     if (activeThread === sanitizedUserId) return;
     setActiveThread(sanitizedUserId);
     setShowUserDirectory(false);
   }, [activeThread]);
 
   const handleStartConversation = useCallback((targetUsername: string) => {
-    // Sanitize username
     const sanitizedUsername = sanitize.username(targetUsername);
-    
     setActiveThread(sanitizedUsername);
     setShowUserDirectory(false);
   }, []);
 
-  // Create enhanced search setters that sanitize input
   const setSearchQuerySafe = useCallback((value: string | ((prev: string) => string)) => {
     if (typeof value === 'function') {
       setSearchQuery(prev => {
@@ -361,11 +319,11 @@ export const useAdminMessages = () => {
     selectedUser,
     setSelectedUser,
     content,
-    setContent, // Keep the original setter for compatibility
+    setContent,
     activeThread,
     setActiveThread,
     searchQuery,
-    setSearchQuery: setSearchQuerySafe, // Use the safe setter
+    setSearchQuery: setSearchQuerySafe,
     selectedImage,
     setSelectedImage,
     filterBy,
@@ -373,7 +331,7 @@ export const useAdminMessages = () => {
     showUserDirectory,
     setShowUserDirectory,
     directorySearchQuery,
-    setDirectorySearchQuery: setDirectorySearchQuerySafe, // Use the safe setter
+    setDirectorySearchQuery: setDirectorySearchQuerySafe,
     
     // Computed
     isUserBlocked,

@@ -125,10 +125,7 @@ export default function Header() {
   const lastAuctionCheck = useRef(0);
 
   // Derived values with sanitization
-  const isAdminUser = user?.role === 'admin' || 
-                     user?.username === 'oakley' || 
-                     user?.username === 'gerome' ||
-                     user?.username === 'platform';
+  const isAdminUser = user?.role === 'admin';
   const role = user?.role ?? null;
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
@@ -154,9 +151,7 @@ export default function Header() {
     }
 
     const addNotificationEmojis = (message: string): string => {
-      // Sanitize the message first
       const sanitizedMessage = sanitizeStrict(message);
-      
       if (sanitizedMessage.includes('New sale:') && !sanitizedMessage.includes('Auction ended:')) {
         return `💰🛍️ ${sanitizedMessage}`;
       }
@@ -228,10 +223,8 @@ export default function Header() {
     if (!username || typeof getBuyerBalance !== 'function') return 0;
     try {
       const balance = getBuyerBalance(username) || 0;
-      console.log('[Header] Buyer balance updated:', balance);
       return balance;
-    } catch (error) {
-      console.error('Error getting buyer balance:', error);
+    } catch {
       return 0;
     }
   }, [getBuyerBalance, username, balanceUpdateTrigger]);
@@ -240,10 +233,8 @@ export default function Header() {
     if (!username || typeof getSellerBalance !== 'function') return 0;
     try {
       const balance = getSellerBalance(username) || 0;
-      console.log('[Header] Seller balance updated:', balance);
       return balance;
-    } catch (error) {
-      console.error('Error getting seller balance:', error);
+    } catch {
       return 0;
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
@@ -251,9 +242,7 @@ export default function Header() {
   // ✅ FIXED: Properly get platform balance for admin users
   const platformBalance = useMemo(() => {
     if (isAdminUser && user) {
-      // Use adminBalance directly from context for admin users
       const balance = adminBalance || 0;
-      console.log('[Header] Platform balance from context:', balance);
       return balance;
     }
     return 0;
@@ -263,31 +252,26 @@ export default function Header() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleAdminBalanceUpdate = (event: CustomEvent) => {
+    const handleAdminBalanceUpdate = () => {
       if (isAdminUser && user) {
-        console.log('[Header] Admin balance update event received:', event.detail);
-        // Force re-render to update displayed balance
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
 
-    const handlePlatformBalanceUpdate = (event: CustomEvent) => {
+    const handlePlatformBalanceUpdate = () => {
       if (isAdminUser && user) {
-        console.log('[Header] Platform balance update event received:', event.detail);
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
 
-    const handleBuyerBalanceUpdate = (event: CustomEvent) => {
+    const handleBuyerBalanceUpdate = () => {
       if (user?.role === 'buyer') {
-        console.log('[Header] Buyer balance update event received:', event.detail);
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
 
-    const handleSellerBalanceUpdate = (event: CustomEvent) => {
+    const handleSellerBalanceUpdate = () => {
       if (user?.role === 'seller') {
-        console.log('[Header] Seller balance update event received:', event.detail);
         setBalanceUpdateTrigger(prev => prev + 1);
       }
     };
@@ -309,28 +293,18 @@ export default function Header() {
 
   // ✅ Refresh admin data on mount if admin user
   useEffect(() => {
-    if (isAdminUser && user) {
-      console.log('[Header] Admin user detected, refreshing admin data...');
-      
-      // Refresh admin data if available
-      if (typeof refreshAdminData === 'function') {
-        refreshAdminData().then(() => {
-          console.log('[Header] Admin data refreshed');
-          setBalanceUpdateTrigger(prev => prev + 1);
-        }).catch((error: any) => {
-          console.error('[Header] Error refreshing admin data:', error);
-        });
-      }
+    if (isAdminUser && user && typeof refreshAdminData === 'function') {
+      refreshAdminData()
+        .then(() => setBalanceUpdateTrigger(prev => prev + 1))
+        .catch((error: any) => console.error('[Header] Error refreshing admin data:', error));
     }
   }, [isAdminUser, user, refreshAdminData]);
 
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
-    
     try {
       const threads: { [otherUser: string]: any[] } = {};
-      
       Object.values(messages)
         .flat()
         .forEach((msg: any) => {
@@ -348,10 +322,8 @@ export default function Header() {
         ).length;
         totalUnreadCount += threadUnreadCount;
       });
-      
       return totalUnreadCount;
-    } catch (error) {
-      console.error('Error calculating unread count:', error);
+    } catch {
       return 0;
     }
   }, [user?.username, messages]);
@@ -359,15 +331,10 @@ export default function Header() {
   // ✅ FIXED: Rate-limited balance update function
   const forceUpdateBalances = useCallback(() => {
     if (!isMountedRef.current) return;
-    
     const now = Date.now();
     if (now - lastBalanceUpdate.current < 1000) return; // Rate limit to 1 second
-    
     lastBalanceUpdate.current = now;
-    console.log('[Header] Force updating balances');
     setBalanceUpdateTrigger(prev => prev + 1);
-    
-    // Refresh admin data if admin user
     if (isAdminUser && user && refreshAdminData) {
       refreshAdminData();
     }
@@ -376,16 +343,12 @@ export default function Header() {
   // Rate-limited auction check function
   const checkAuctionsWithRateLimit = useCallback(() => {
     if (!isMountedRef.current) return;
-    
     const now = Date.now();
     if (now - lastAuctionCheck.current < 10000) return; // Rate limit to 10 seconds
-    
     lastAuctionCheck.current = now;
-    
     try {
       if (typeof checkEndedAuctions === 'function') {
         checkEndedAuctions();
-        // Update balances after auction check with delay
         setTimeout(() => {
           if (isMountedRef.current) {
             setBalanceUpdateTrigger(prev => prev + 1);
@@ -400,7 +363,6 @@ export default function Header() {
   // Update report count with error handling
   const updateReportCount = useCallback(() => {
     if (!isAdminUser || !isMountedRef.current) return;
-    
     try {
       const count = getReportCount();
       const validCount = typeof count === 'number' && !isNaN(count) && count >= 0 ? count : 0;
@@ -414,25 +376,18 @@ export default function Header() {
   // ✅ Improved bulk notification actions with loading states and error handling
   const clearAllNotifications = useCallback(async () => {
     if (!user || user.role !== 'seller' || !sellerNotifications || clearingNotifications) return;
-    
     setClearingNotifications(true);
-    
     try {
       const username = user.username;
       const activeNotifsToUpdate = sellerNotifications.filter(notification => !notification.cleared);
-      
       if (activeNotifsToUpdate.length === 0) return;
-      
       const updatedNotifications = sellerNotifications.map(notification => ({
         ...notification,
         cleared: notification.cleared ? notification.cleared : true
       }));
-      
       const notificationStore = await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {});
       notificationStore[username] = updatedNotifications;
-      
       await storageService.setItem('seller_notifications_store', notificationStore);
-      
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'seller_notifications_store',
         newValue: JSON.stringify(notificationStore)
@@ -446,22 +401,15 @@ export default function Header() {
 
   const deleteAllClearedNotifications = useCallback(async () => {
     if (!user || user.role !== 'seller' || !sellerNotifications || deletingNotifications) return;
-    
     setDeletingNotifications(true);
-    
     try {
       const username = user.username;
       const clearedNotifsToDelete = sellerNotifications.filter(notification => notification.cleared);
-      
       if (clearedNotifsToDelete.length === 0) return;
-      
       const updatedNotifications = sellerNotifications.filter(notification => !notification.cleared);
-      
       const notificationStore = await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {});
       notificationStore[username] = updatedNotifications;
-      
       await storageService.setItem('seller_notifications_store', notificationStore);
-      
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'seller_notifications_store',
         newValue: JSON.stringify(notificationStore)
@@ -476,18 +424,16 @@ export default function Header() {
   // ✅ FIXED: Setup intervals using custom hook with longer intervals
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
-  }, 30000); // Changed to 30 seconds to reduce load
+  }, 30000); // 30s
 
   const clearAuctionInterval = useInterval(() => {
     if (isMountedRef.current) checkAuctionsWithRateLimit();
-  }, 30000);
+  }, 30000); // 30s
 
   // Calculate pending orders count with error handling
   useEffect(() => {
     if (!isMountedRef.current || !user || user.role !== 'seller') return;
-    
     try {
-      // Only count orders that are NOT shipped (pending, processing, or no status)
       const sales = orderHistory.filter((order) => 
         order.seller === user.username && 
         (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
@@ -495,8 +441,7 @@ export default function Header() {
       const requests = getRequestsForUser(user.username, 'seller');
       const acceptedCustoms = requests.filter((req) => req.status === 'accepted');
       setPendingOrdersCount(sales.length + acceptedCustoms.length);
-    } catch (err) {
-      console.error('Error calculating pending orders:', err);
+    } catch {
       setPendingOrdersCount(0);
     }
   }, [user, orderHistory, getRequestsForUser]);
@@ -504,10 +449,8 @@ export default function Header() {
   // ✅ Main component setup with secure context function
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
     isMountedRef.current = true;
-    
-    // Initial updates - run after a short delay to ensure everything is ready
+
     const initTimer = setTimeout(() => {
       if (isMountedRef.current) {
         updateReportCount();
@@ -515,19 +458,14 @@ export default function Header() {
         checkAuctionsWithRateLimit();
       }
     }, 100);
-    
-    // Event listeners
+
     const handleUpdateReports = () => {
       if (isMountedRef.current) updateReportCount();
     };
-    
     const handleAuctionEnd = () => {
       if (isMountedRef.current) forceUpdateBalances();
     };
-    
-    // ✅ Custom event listener for wallet updates
-    const handleWalletUpdate = (event: CustomEvent) => {
-      console.log('[Header] Wallet update event received');
+    const handleWalletUpdate = () => {
       if (isMountedRef.current) {
         forceUpdateBalances();
       }
@@ -539,20 +477,14 @@ export default function Header() {
     
     return () => {
       isMountedRef.current = false;
-      
-      // Clear init timer
       clearTimeout(initTimer);
-      
-      // Clear intervals
       clearBalanceInterval();
       clearAuctionInterval();
-      
-      // Remove event listeners
       window.removeEventListener('updateReports', handleUpdateReports);
       window.removeEventListener('auctionEnd', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
     };
-  }, []); // Empty deps to run only once on mount
+  }, []); // mount only
 
   // Reset notification tab when dropdown opens
   useEffect(() => {
@@ -661,7 +593,6 @@ export default function Header() {
     return null;
   }
 
-  // Early return if not mounted
   if (!isMountedRef.current) return null;
 
   return (
@@ -749,7 +680,7 @@ export default function Header() {
                 <span>Wallets</span>
               </Link>
               
-              {/* ✅ FIXED: Display platform wallet balance for admins without "Platform" text */}
+              {/* ✅ Platform wallet balance for admins */}
               <Link 
                 href="/wallet/admin" 
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
@@ -913,7 +844,7 @@ export default function Header() {
                               <div className="flex-1 pr-2">
                                 <SecureMessageDisplay 
                                   content={notification.message}
-                                  className="text-gray-200 leading-snug"
+                                  className="text-gray-2 00 leading-snug"
                                   allowBasicFormatting={false}
                                 />
                                 {notification.timestamp && (
