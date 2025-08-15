@@ -4,6 +4,7 @@
 import { Search, Eye, EyeOff, X } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeSearchQuery } from '@/utils/security/sanitization';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface WalletFiltersProps {
   searchTerm: string;
@@ -30,14 +31,13 @@ export default function WalletFilters({
   setBalanceFilter,
   showBalances,
   setShowBalances,
-  selectedUsers,
+  selectedUsers = [],
   setSelectedUsers,
-  displayedUsers,
+  displayedUsers = [],
   handleSelectAll,
   setShowBulkModal
 }: WalletFiltersProps) {
   const handleSearchChange = (value: string) => {
-    // Sanitize search input
     const sanitizedValue = sanitizeSearchQuery(value);
     setSearchTerm(sanitizedValue);
   };
@@ -57,6 +57,7 @@ export default function WalletFilters({
             maxLength={100}
             sanitize={true}
             sanitizer={sanitizeSearchQuery}
+            aria-label="Search users"
           />
         </div>
 
@@ -65,6 +66,7 @@ export default function WalletFilters({
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value as any)}
           className="px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
+          aria-label="Role filter"
         >
           <option value="all">All Roles</option>
           <option value="buyer">Buyers</option>
@@ -76,6 +78,7 @@ export default function WalletFilters({
           value={balanceFilter}
           onChange={(e) => setBalanceFilter(e.target.value as any)}
           className="px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
+          aria-label="Balance filter"
         >
           <option value="all">All Balances</option>
           <option value="positive">Positive</option>
@@ -87,6 +90,8 @@ export default function WalletFilters({
         <button
           onClick={() => setShowBalances(!showBalances)}
           className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-2"
+          aria-pressed={showBalances}
+          aria-label="Toggle balance visibility"
         >
           {showBalances ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           {showBalances ? 'Hide' : 'Show'} Balances
@@ -97,13 +102,8 @@ export default function WalletFilters({
       {selectedUsers.length > 0 && (
         <div className="flex items-center justify-between bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg p-3 mb-4">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-white">
-              {selectedUsers.length} users selected
-            </span>
-            <button
-              onClick={() => setSelectedUsers([])}
-              className="text-gray-400 hover:text-white"
-            >
+            <span className="text-sm font-medium text-white">{selectedUsers.length} users selected</span>
+            <button onClick={() => setSelectedUsers([])} className="text-gray-400 hover:text-white" aria-label="Clear selection">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -116,16 +116,24 @@ export default function WalletFilters({
         </div>
       )}
 
+      {/* Selected users (optional inline peek) */}
+      {selectedUsers.length > 0 && (
+        <div className="mb-3 -mt-2">
+          <div className="max-h-16 overflow-y-auto">
+            {selectedUsers.map((u) => (
+              <span key={u} className="inline-block bg-[#ff950e]/20 text-[#ff950e] px-2 py-1 rounded text-xs mr-1 mb-1">
+                <SecureMessageDisplay content={u} allowBasicFormatting={false} className="inline" />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Results Summary */}
       <div className="flex items-center justify-between text-sm text-gray-400">
-        <span>
-          Showing {displayedUsers.length} users
-        </span>
-        {displayedUsers.length > 0 && (
-          <button
-            onClick={handleSelectAll}
-            className="text-[#ff950e] hover:text-[#ff6b00] transition-colors"
-          >
+        <span>Showing {Array.isArray(displayedUsers) ? displayedUsers.length : 0} users</span>
+        {Array.isArray(displayedUsers) && displayedUsers.length > 0 && (
+          <button onClick={handleSelectAll} className="text-[#ff950e] hover:text-[#ff6b00] transition-colors">
             {selectedUsers.length === displayedUsers.length ? 'Deselect All' : 'Select All'}
           </button>
         )}

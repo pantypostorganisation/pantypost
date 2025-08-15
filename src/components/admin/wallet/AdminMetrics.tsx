@@ -20,7 +20,7 @@ import {
   getPreviousPeriodData,
   getAllSellerWithdrawals
 } from '@/utils/admin/walletHelpers';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface AdminMetricsProps {
   timeFilter: string;
@@ -29,13 +29,15 @@ interface AdminMetricsProps {
   filteredDeposits: any[];
   filteredSellerWithdrawals: any[];
   filteredAdminWithdrawals: any[];
-  adminBalance: number; // 🔧 This is the real admin wallet balance from API
+  adminBalance: number;
   orderHistory: any[];
   adminActions: any[];
   depositLogs: any[];
   sellerWithdrawals: any;
   adminWithdrawals: any[];
 }
+
+type IconType = React.ComponentType<{ className?: string }>;
 
 function MetricCard({
   title,
@@ -53,33 +55,31 @@ function MetricCard({
   subtitle: string;
   value: number;
   currency?: boolean;
-  icon: any;
+  icon: IconType;
   iconColor: string;
   bgGradient: string;
   growthRate?: number;
   breakdown?: { label: string; value: number }[];
   loading?: boolean;
 }) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount);
-  };
+    }).format(Number.isFinite(amount) ? amount : 0);
 
-  const formatValue = (val: number) => {
-    if (currency) return formatCurrency(val);
-    return val.toLocaleString();
-  };
+  const formatValue = (val: number) => (currency ? formatCurrency(val) : (Number.isFinite(val) ? val : 0).toLocaleString());
+
+  const cleanGrowth = Number.isFinite(growthRate as number) ? (growthRate as number) : 0;
 
   return (
     <div className={`bg-gradient-to-br ${bgGradient} rounded-xl p-6 border relative overflow-hidden`}>
-      <div className="absolute top-0 right-0 w-32 h-32 bg-black/10 rounded-full -translate-y-16 translate-x-16"></div>
+      <div className="absolute top-0 right-0 w-32 h-32 bg-black/10 rounded-full -translate-y-16 translate-x-16" aria-hidden="true"></div>
       <div className="relative">
         <div className="flex items-center gap-3 mb-4">
-          <div className={`p-3 ${iconColor} rounded-lg`}>
+          <div className={`p-3 ${iconColor} rounded-lg`} aria-hidden="true">
             <Icon className="w-6 h-6" />
           </div>
           <div>
@@ -97,12 +97,10 @@ function MetricCard({
           <>
             <div className="flex items-baseline gap-2 mb-2">
               <span className="text-3xl font-bold text-white">{formatValue(value)}</span>
-              {growthRate !== undefined && growthRate !== 0 && (
-                <span className={`text-sm flex items-center gap-1 ml-2 ${
-                  growthRate > 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {growthRate > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                  {Math.abs(growthRate).toFixed(1)}%
+              {cleanGrowth !== 0 && (
+                <span className={`text-sm flex items-center gap-1 ml-2 ${cleanGrowth > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {cleanGrowth > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {Math.abs(cleanGrowth).toFixed(1)}%
                 </span>
               )}
             </div>
@@ -127,17 +125,17 @@ function MetricCard({
 export default function AdminMetrics(props: AdminMetricsProps) {
   const {
     timeFilter,
-    filteredActions,
-    filteredOrders,
-    filteredDeposits,
-    filteredSellerWithdrawals,
-    filteredAdminWithdrawals,
-    adminBalance, // 🔧 This is the REAL admin wallet balance that contains platform fees
-    orderHistory,
-    adminActions,
-    depositLogs,
-    sellerWithdrawals,
-    adminWithdrawals
+    filteredActions = [],
+    filteredOrders = [],
+    filteredDeposits = [],
+    filteredSellerWithdrawals = [],
+    filteredAdminWithdrawals = [],
+    adminBalance,
+    orderHistory = [],
+    adminActions = [],
+    depositLogs = [],
+    sellerWithdrawals = {},
+    adminWithdrawals = []
   } = props;
 
   const [metrics, setMetrics] = useState({
@@ -153,6 +151,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     withdrawalGrowthRate: 0
   });
 
+  const safeAdminBalance = useMemo(() => (typeof adminBalance === 'number' && Number.isFinite(adminBalance) ? adminBalance : 0), [adminBalance]);
+
   useEffect(() => {
     try {
       const periodSalesProfit = calculatePlatformProfit(filteredOrders);
@@ -167,90 +167,96 @@ export default function AdminMetrics(props: AdminMetricsProps) {
       const periodSalesRevenue = calculateTotalRevenue(filteredOrders);
       const allTimeSalesRevenue = calculateTotalRevenue(orderHistory);
 
-      const periodTotalRevenue = periodSalesRevenue + periodSubscriptionRevenue;
-      const allTimeTotalRevenue = allTimeSalesRevenue + allTimeSubscriptionRevenue;
+      const periodTotalRevenue = (Number.isFinite(periodSalesRevenue) ? periodSalesRevenue : 0) + (Number.isFinite(periodSubscriptionRevenue) ? periodSubscriptionRevenue : 0);
+      const allTimeTotalRevenue = (Number.isFinite(allTimeSalesRevenue) ? allTimeSalesRevenue : 0) + (Number.isFinite(allTimeSubscriptionRevenue) ? allTimeSubscriptionRevenue : 0);
 
-      // Enhanced safety checks for average order value calculations
-      const periodAverageOrderValue = filteredOrders.length > 0 && Number.isFinite(periodSalesRevenue) && periodSalesRevenue > 0 
-        ? (periodSalesRevenue / filteredOrders.length) 
-        : 0;
-      const allTimeAverageOrderValue = orderHistory.length > 0 && Number.isFinite(allTimeSalesRevenue) && allTimeSalesRevenue > 0 
-        ? (allTimeSalesRevenue / orderHistory.length) 
-        : 0;
+      const periodAverageOrderValue =
+        filteredOrders.length > 0 && Number.isFinite(periodSalesRevenue) && periodSalesRevenue > 0
+          ? periodSalesRevenue / filteredOrders.length
+          : 0;
 
-      // 🔧 CRITICAL FIX: For "Money Made" - use REAL admin wallet balance instead of calculated values
-      // Ensure adminBalance is always a number to prevent dependency array issues
-      const safeAdminBalance = typeof adminBalance === 'number' ? adminBalance : 0;
-      
-      let displayTotalProfit;
-      
-      if (timeFilter === 'all') {
-        // For "all time", show the actual admin wallet balance (real accumulated platform fees)
-        displayTotalProfit = safeAdminBalance;
-      } else {
-        // For specific time periods, calculate from filtered data
-        displayTotalProfit = periodSalesProfit + periodSubscriptionProfit;
-      }
+      const allTimeAverageOrderValue =
+        orderHistory.length > 0 && Number.isFinite(allTimeSalesRevenue) && allTimeSalesRevenue > 0
+          ? allTimeSalesRevenue / orderHistory.length
+          : 0;
 
-      console.log('💰 [AdminMetrics] Platform profit calculation:', {
-        timeFilter,
-        adminWalletBalance: safeAdminBalance,
-        calculatedPeriodProfit: periodSalesProfit + periodSubscriptionProfit,
-        calculatedAllTimeProfit: allTimeSalesProfit + allTimeSubscriptionProfit,
-        displayTotalProfit,
-        usingRealBalance: timeFilter === 'all'
-      });
+      // Real balance for "all"
+      const displayTotalProfit =
+        timeFilter === 'all' ? safeAdminBalance : (Number.isFinite(periodSalesProfit) ? periodSalesProfit : 0) + (Number.isFinite(periodSubscriptionProfit) ? periodSubscriptionProfit : 0);
 
       const displayTotalRevenue = timeFilter === 'all' ? allTimeTotalRevenue : periodTotalRevenue;
       const displayAverageOrderValue = timeFilter === 'all' ? allTimeAverageOrderValue : periodAverageOrderValue;
 
-      const totalDepositsAllTime = depositLogs
-        .filter((deposit: any) => deposit.status === 'completed')
-        .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
-      const periodTotalDeposits = filteredDeposits
-        .filter((deposit: any) => deposit.status === 'completed')
-        .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
+      const totalDepositsAllTime = (depositLogs || [])
+        .filter((d: any) => d?.status === 'completed')
+        .reduce((sum: number, d: any) => sum + (Number.isFinite(Number(d?.amount)) ? Number(d.amount) : 0), 0);
+
+      const periodTotalDeposits = (filteredDeposits || [])
+        .filter((d: any) => d?.status === 'completed')
+        .reduce((sum: number, d: any) => sum + (Number.isFinite(Number(d?.amount)) ? Number(d.amount) : 0), 0);
+
       const displayTotalDeposits = timeFilter === 'all' ? totalDepositsAllTime : periodTotalDeposits;
 
       const withdrawalMetrics = calculateWithdrawals(filteredSellerWithdrawals, filteredAdminWithdrawals);
-      const allTimeWithdrawalData = timeFilter === 'all' ? {
-        totalWithdrawals: getAllSellerWithdrawals(sellerWithdrawals).reduce((sum: number, w: any) => sum + w.amount, 0) + 
-                         adminWithdrawals.reduce((sum: number, w: any) => sum + w.amount, 0)
-      } : withdrawalMetrics;
+      const allTimeWithdrawalData =
+        timeFilter === 'all'
+          ? {
+              totalWithdrawals:
+                getAllSellerWithdrawals(sellerWithdrawals).reduce((sum: number, w: any) => sum + (Number.isFinite(Number(w?.amount)) ? Number(w.amount) : 0), 0) +
+                (adminWithdrawals || []).reduce((sum: number, w: any) => sum + (Number.isFinite(Number(w?.amount)) ? Number(w.amount) : 0), 0)
+            }
+          : withdrawalMetrics;
 
-      const { orders: previousPeriodOrders, deposits: previousPeriodDeposits, withdrawals: previousPeriodWithdrawals, actions: previousPeriodActions } =
-        getPreviousPeriodData(timeFilter, orderHistory, depositLogs, getAllSellerWithdrawals(sellerWithdrawals), adminActions);
+      const {
+        orders: previousPeriodOrders,
+        deposits: previousPeriodDeposits,
+        withdrawals: previousPeriodWithdrawals,
+        actions: previousPeriodActions
+      } = getPreviousPeriodData(
+        timeFilter,
+        orderHistory,
+        depositLogs,
+        getAllSellerWithdrawals(sellerWithdrawals),
+        adminActions
+      );
 
-      const previousPeriodProfit = calculatePlatformProfit(previousPeriodOrders) + calculateSubscriptionProfit(previousPeriodActions);
-      const previousPeriodDepositAmount = previousPeriodDeposits
-        .filter((deposit: any) => deposit.status === 'completed')
-        .reduce((sum: number, deposit: any) => sum + deposit.amount, 0);
-      const previousPeriodWithdrawalAmount = previousPeriodWithdrawals
-        .reduce((sum: number, withdrawal: any) => sum + withdrawal.amount, 0);
+      const previousPeriodProfit =
+        calculatePlatformProfit(previousPeriodOrders) + calculateSubscriptionProfit(previousPeriodActions);
 
-      // 🔧 IMPROVED: Growth rate calculation - only for specific time periods, not "all time"
-      const growthRate = timeFilter !== 'all' && previousPeriodProfit > 0 ?
-        ((displayTotalProfit - previousPeriodProfit) / previousPeriodProfit) * 100 : 0;
+      const previousPeriodDepositAmount = (previousPeriodDeposits || [])
+        .filter((d: any) => d?.status === 'completed')
+        .reduce((sum: number, d: any) => sum + (Number.isFinite(Number(d?.amount)) ? Number(d.amount) : 0), 0);
 
-      const depositGrowthRate = timeFilter !== 'all' && previousPeriodDepositAmount > 0 ?
-        ((periodTotalDeposits - previousPeriodDepositAmount) / previousPeriodDepositAmount) * 100 : 0;
+      const previousPeriodWithdrawalAmount = (previousPeriodWithdrawals || [])
+        .reduce((sum: number, w: any) => sum + (Number.isFinite(Number(w?.amount)) ? Number(w.amount) : 0), 0);
 
-      const withdrawalGrowthRate = timeFilter !== 'all' && previousPeriodWithdrawalAmount > 0 ?
-        ((withdrawalMetrics.totalWithdrawals - previousPeriodWithdrawalAmount) / previousPeriodWithdrawalAmount) * 100 : 0;
+      const growthRate =
+        timeFilter !== 'all' && Number(previousPeriodProfit) > 0
+          ? ((displayTotalProfit - previousPeriodProfit) / previousPeriodProfit) * 100
+          : 0;
+
+      const depositGrowthRate =
+        timeFilter !== 'all' && Number(previousPeriodDepositAmount) > 0
+          ? ((periodTotalDeposits - previousPeriodDepositAmount) / previousPeriodDepositAmount) * 100
+          : 0;
+
+      const withdrawalGrowthRate =
+        timeFilter !== 'all' && Number(previousPeriodWithdrawalAmount) > 0
+          ? ((withdrawalMetrics.totalWithdrawals - previousPeriodWithdrawalAmount) / previousPeriodWithdrawalAmount) * 100
+          : 0;
 
       setMetrics({
         platformProfit: timeFilter === 'all' ? allTimeSalesProfit : periodSalesProfit,
         subscriptionProfit: timeFilter === 'all' ? allTimeSubscriptionProfit : periodSubscriptionProfit,
-        totalProfit: displayTotalProfit, // 🔧 This now uses real admin wallet balance for "all time"
-        totalDeposits: displayTotalDeposits,
-        totalWithdrawals: allTimeWithdrawalData.totalWithdrawals,
-        totalRevenue: displayTotalRevenue,
-        averageOrderValue: displayAverageOrderValue,
-        growthRate,
-        depositGrowthRate,
-        withdrawalGrowthRate
+        totalProfit: Number.isFinite(displayTotalProfit) ? displayTotalProfit : 0,
+        totalDeposits: Number.isFinite(displayTotalDeposits) ? displayTotalDeposits : 0,
+        totalWithdrawals: Number.isFinite(allTimeWithdrawalData.totalWithdrawals) ? allTimeWithdrawalData.totalWithdrawals : 0,
+        totalRevenue: Number.isFinite(displayTotalRevenue) ? displayTotalRevenue : 0,
+        averageOrderValue: Number.isFinite(displayAverageOrderValue) ? displayAverageOrderValue : 0,
+        growthRate: Number.isFinite(growthRate) ? growthRate : 0,
+        depositGrowthRate: Number.isFinite(depositGrowthRate) ? depositGrowthRate : 0,
+        withdrawalGrowthRate: Number.isFinite(withdrawalGrowthRate) ? withdrawalGrowthRate : 0
       });
-
     } catch (error) {
       console.error('Error calculating metrics:', error);
     }
@@ -266,7 +272,7 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     depositLogs,
     sellerWithdrawals,
     adminWithdrawals,
-    typeof adminBalance === 'number' ? adminBalance : 0 // 🔧 Fix: Always pass a number to prevent dependency array issues
+    safeAdminBalance
   ]);
 
   return (
@@ -279,13 +285,17 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         iconColor="bg-[#ff950e]"
         bgGradient="from-[#ff950e]/20 to-[#ff6b00]/10 border-[#ff950e]/30"
         growthRate={timeFilter !== 'all' ? metrics.growthRate : undefined}
-        breakdown={timeFilter !== 'all' ? [
-          { label: 'Sales', value: metrics.platformProfit },
-          { label: 'Subs', value: metrics.subscriptionProfit }
-        ] : [
-          { label: 'Real Balance', value: typeof adminBalance === 'number' ? adminBalance : 0 },
-          { label: 'In Wallet', value: typeof adminBalance === 'number' ? adminBalance : 0 }
-        ]}
+        breakdown={
+          timeFilter !== 'all'
+            ? [
+                { label: 'Sales', value: Number(metrics.platformProfit) || 0 },
+                { label: 'Subs', value: Number(metrics.subscriptionProfit) || 0 }
+              ]
+            : [
+                { label: 'Real Balance', value: safeAdminBalance },
+                { label: 'In Wallet', value: safeAdminBalance }
+              ]
+        }
       />
 
       <MetricCard
