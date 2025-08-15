@@ -5,7 +5,6 @@ import { FileText, Ban, CheckCircle, Clock, Calendar } from 'lucide-react';
 import type { ResolvedStatsProps } from '@/types/resolved';
 
 export default function ResolvedStats({ stats }: ResolvedStatsProps) {
-  // Ensure all values are valid numbers
   const safeNumber = (value: any): number => {
     const num = Number(value);
     return Number.isFinite(num) && num >= 0 ? num : 0;
