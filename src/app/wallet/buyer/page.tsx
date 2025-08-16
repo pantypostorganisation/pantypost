@@ -1,4 +1,3 @@
-// src/app/wallet/buyer/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -13,6 +12,7 @@ import EmptyState from '@/components/wallet/buyer/EmptyState';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { isAdmin as isAdminRole } from '@/utils/security/permissions';
 
 // Inner component that uses the hooks after providers are ready
 function BuyerWalletContent() {
@@ -95,8 +95,13 @@ function BuyerWalletWrapper() {
   useEffect(() => {
     if (!isAuthReady) return;
 
+<<<<<<< HEAD
     const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
     const canAccess = user && (user.role === 'buyer' || isAdmin);
+=======
+    const isAdminUser = isAdminRole(user);
+    const canAccess = !!user && (user.role === 'buyer' || isAdminUser);
+>>>>>>> parent of d1cbbf6 (Revert "removing hardcoded admin names")
 
     if (!canAccess) {
       console.log('[BuyerWallet] Unauthorized access, redirecting to login');
@@ -124,8 +129,13 @@ function BuyerWalletWrapper() {
     );
   }
 
+<<<<<<< HEAD
   const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
   const roleForAuth = isAdmin ? 'admin' : 'buyer';
+=======
+  const isAdminUser = isAdminRole(user);
+  const roleForAuth = isAdminUser ? 'admin' : 'buyer';
+>>>>>>> parent of d1cbbf6 (Revert "removing hardcoded admin names")
 
   return (
     <RequireAuth role={roleForAuth as 'buyer' | 'admin'}>

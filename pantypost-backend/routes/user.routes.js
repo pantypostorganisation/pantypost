@@ -21,13 +21,14 @@ router.get('/', async (req, res) => {
     if (query) {
       filter.$or = [
         { username: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } },
-        { bio: { $regex: query, $options: 'i' } }
+        { email: { $regex: query, $options: 'i' } }
       ];
     }
     
     // Pagination
-    const skip = (page - 1) * limit;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Get users
     const users = await User.find(filter)
       .select('-password -verificationData')
       .sort({ createdAt: -1 })
@@ -43,7 +44,7 @@ router.get('/', async (req, res) => {
         page: parseInt(page),
         pageSize: parseInt(limit),
         total,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
@@ -57,7 +58,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/users/:username/profile - Get public profile
+// GET /api/users/:username/profile - Public user profile
 router.get('/:username/profile', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })
@@ -90,48 +91,6 @@ router.get('/:username/profile', async (req, res) => {
         role: user.role,
         galleryImages: user.role === 'seller' ? user.galleryImages : undefined
       }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
-    });
-  }
-});
-
-// GET /api/users/:username/profile/full - Get full profile (auth required)
-router.get('/:username/profile/full', authMiddleware, async (req, res) => {
-  try {
-    // Only user themselves or admin can view full profile
-    if (req.user.username !== req.params.username && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-          message: 'You can only view your own full profile'
-        }
-      });
-    }
-    
-    const user = await User.findOne({ username: req.params.username })
-      .select('-password');
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: user.toSafeObject()
     });
   } catch (error) {
     res.status(500).json({
@@ -207,22 +166,20 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
       });
     }
     
-    // Validate gallery images
-    if (req.body.galleryImages && req.body.galleryImages.length > 20) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: 'Maximum 20 gallery images allowed'
-        }
-      });
-    }
-    
     await user.save();
     
     res.json({
       success: true,
-      data: user.toSafeObject()
+      message: 'Profile updated successfully',
+      data: {
+        username: user.username,
+        bio: user.bio,
+        profilePic: user.profilePic,
+        phoneNumber: user.phoneNumber,
+        subscriptionPrice: user.subscriptionPrice,
+        galleryImages: user.galleryImages,
+        settings: user.settings
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -235,14 +192,13 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/users/:username/verification - Submit verification request
+// POST /api/users/:username/verification - Submit or review verification
 router.post('/:username/verification', authMiddleware, async (req, res) => {
   try {
-    // Check if user is updating their own verification
-    const isOwnProfile = req.user.username === req.params.username;
     const isAdmin = req.user.role === 'admin';
     
-    if (!isOwnProfile && !isAdmin) {
+    // Only user themselves or admin can submit/review verification
+    if (!isAdmin && req.user.username !== req.params.username) {
       return res.status(403).json({
         success: false,
         error: {
@@ -263,26 +219,27 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
       });
     }
     
-    // Seller submitting verification
-    if (isOwnProfile && !isAdmin) {
-      const { codePhoto, idFront, idBack, code } = req.body;
+    // User submitting verification
+    if (!isAdmin) {
+      const { codePhoto, idFront, idBack } = req.body || {};
       
-      if (!codePhoto || !idFront || !idBack || !code) {
+      if (!codePhoto || !idFront || !idBack) {
         return res.status(400).json({
           success: false,
           error: {
             code: ERROR_CODES.MISSING_REQUIRED_FIELD,
-            message: 'All verification fields are required'
+            message: 'All verification documents are required'
           }
         });
       }
       
       user.verificationData = {
+        ...user.verificationData,
         codePhoto,
         idFront,
         idBack,
-        code,
-        submittedAt: new Date()
+        submittedAt: new Date(),
+        code: user.verificationData?.code || undefined
       };
       user.verificationStatus = 'pending';
       
@@ -298,46 +255,47 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
     } 
     // Admin reviewing verification
     else if (isAdmin) {
-      const { status, rejectionReason, adminUsername } = req.body;
+      const { action, rejectionReason } = req.body || {};
       
-      if (!['verified', 'rejected'].includes(status)) {
+      if (!['approve', 'reject'].includes(action)) {
         return res.status(400).json({
           success: false,
           error: {
-            code: ERROR_CODES.INVALID_INPUT,
-            message: 'Status must be verified or rejected'
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Invalid action. Must be approve or reject'
           }
         });
       }
       
-      if (status === 'rejected' && !rejectionReason) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: ERROR_CODES.MISSING_REQUIRED_FIELD,
-            message: 'Rejection reason is required'
-          }
-        });
-      }
-      
-      user.verificationStatus = status;
-      user.isVerified = status === 'verified';
-      user.verificationData.reviewedAt = new Date();
-      user.verificationData.reviewedBy = adminUsername;
-      
-      if (status === 'rejected') {
-        user.verificationData.rejectionReason = rejectionReason;
+      if (action === 'approve') {
+        user.isVerified = true;
+        user.verificationStatus = 'verified';
+        user.verificationData = {
+          ...user.verificationData,
+          reviewedAt: new Date(),
+          reviewedBy: req.user.username,
+          rejectionReason: undefined
+        };
+      } else {
+        user.isVerified = false;
+        user.verificationStatus = 'rejected';
+        user.verificationData = {
+          ...user.verificationData,
+          reviewedAt: new Date(),
+          reviewedBy: req.user.username,
+          rejectionReason: rejectionReason || 'Not specified'
+        };
       }
       
       await user.save();
       
       res.json({
         success: true,
-        message: `User ${status} successfully`,
+        message: `Verification ${action}ed successfully`,
         data: {
           username: user.username,
-          verificationStatus: user.verificationStatus,
-          isVerified: user.isVerified
+          isVerified: user.isVerified,
+          verificationStatus: user.verificationStatus
         }
       });
     }
@@ -352,32 +310,33 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/users/:username/ban - Ban a user (admin only)
-router.post('/:username/ban', authMiddleware, async (req, res) => {
+// PATCH /api/users/:username/role - Update a user's role (admin only)
+router.patch('/:username/role', authMiddleware, async (req, res) => {
   try {
-    // Check if admin
-    if (req.user.role !== 'admin') {
+    // Only admins can change roles
+    if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
           code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-          message: 'Only admins can ban users'
+          message: 'Only admins can change user roles'
         }
       });
     }
     
-    const { reason, duration, adminUsername } = req.body;
-    
-    if (!reason || reason.length < 10 || reason.length > 500) {
+    const { role } = req.body || {};
+    const allowedRoles = ['buyer', 'seller', 'admin'];
+    if (!role || !allowedRoles.includes(role)) {
       return res.status(400).json({
         success: false,
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
-          message: 'Ban reason must be between 10 and 500 characters'
+          message: 'Invalid role. Allowed values: buyer, seller, admin'
         }
       });
     }
     
+    // Find the target user
     const user = await User.findOne({ username: req.params.username });
     if (!user) {
       return res.status(404).json({
@@ -389,65 +348,92 @@ router.post('/:username/ban', authMiddleware, async (req, res) => {
       });
     }
     
-    // Can't ban admins
-    if (user.role === 'admin') {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.ACTION_NOT_ALLOWED,
-          message: 'Cannot ban admin users'
+    // No-op if already the same role
+    if (user.role === role) {
+      return res.json({
+        success: true,
+        message: 'Role unchanged',
+        data: {
+          username: user.username,
+          role: user.role
         }
       });
     }
     
-    user.isBanned = true;
-    user.banReason = reason;
-    user.bannedBy = adminUsername || req.user.username;
-    
-    if (duration && duration >= 1 && duration <= 365) {
-      const banExpiry = new Date();
-      banExpiry.setDate(banExpiry.getDate() + duration);
-      user.banExpiry = banExpiry;
-    }
-    
+    user.role = role;
     await user.save();
     
-    res.json({
+    return res.json({
       success: true,
-      message: `User ${user.username} has been banned`,
+      message: 'User role updated successfully',
       data: {
         username: user.username,
-        isBanned: user.isBanned,
-        banReason: user.banReason,
-        banExpiry: user.banExpiry
+        role: user.role
       }
     });
   } catch (error) {
-    res.status(500).json({
+    console.error('Error updating user role:', error);
+    return res.status(500).json({
       success: false,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
+        message: 'Failed to update user role'
       }
     });
   }
 });
 
-// POST /api/users/:username/unban - Unban a user (admin only)
-router.post('/:username/unban', authMiddleware, async (req, res) => {
+/**
+ * POST /api/users/bootstrap-admin
+ * One-time bootstrap endpoint to promote a user to admin when no admins exist yet.
+ * Requires ADMIN_BOOTSTRAP_TOKEN to match the server environment variable.
+ */
+router.post('/bootstrap-admin', async (req, res) => {
   try {
-    // Check if admin
-    if (req.user.role !== 'admin') {
+    const existingAdmins = await User.countDocuments({ role: 'admin' });
+    if (existingAdmins > 0) {
       return res.status(403).json({
         success: false,
         error: {
-          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-          message: 'Only admins can unban users'
+          code: ERROR_CODES.ACTION_NOT_ALLOWED,
+          message: 'Bootstrap disabled: an admin account already exists'
         }
       });
     }
     
-    const user = await User.findOne({ username: req.params.username });
+    const { username, token } = req.body || {};
+    if (!username || !token) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD,
+          message: 'username and token are required'
+        }
+      });
+    }
+    
+    const expected = process.env.ADMIN_BOOTSTRAP_TOKEN;
+    if (!expected) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.SERVICE_UNAVAILABLE,
+          message: 'Server not configured for bootstrap (missing ADMIN_BOOTSTRAP_TOKEN)'
+        }
+      });
+    }
+    
+    if (token !== expected) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+          message: 'Invalid bootstrap token'
+        }
+      });
+    }
+    
+    const user = await User.findOne({ username });
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -458,41 +444,27 @@ router.post('/:username/unban', authMiddleware, async (req, res) => {
       });
     }
     
-    if (!user.isBanned) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.ACTION_NOT_ALLOWED,
-          message: 'User is not banned'
-        }
-      });
-    }
-    
-    user.isBanned = false;
-    user.banReason = undefined;
-    user.banExpiry = undefined;
-    user.bannedBy = undefined;
-    
+    user.role = 'admin';
     await user.save();
     
-    res.json({
+    return res.json({
       success: true,
-      message: `User ${user.username} has been unbanned`,
+      message: 'Bootstrap complete: user promoted to admin',
       data: {
         username: user.username,
-        isBanned: user.isBanned
+        role: user.role
       }
     });
   } catch (error) {
-    res.status(500).json({
+    console.error('Bootstrap admin error:', error);
+    return res.status(500).json({
       success: false,
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
+        message: 'Failed to bootstrap admin'
       }
     });
   }
 });
 
-// Export the router
 module.exports = router;

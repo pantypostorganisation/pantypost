@@ -1,4 +1,3 @@
-// src/app/wallet/seller/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -14,6 +13,7 @@ import EmptyState from '@/components/wallet/seller/EmptyState';
 import WithdrawConfirmModal from '@/components/wallet/seller/WithdrawConfirmModal';
 import { useSellerWallet } from '@/hooks/useSellerWallet';
 import { useRouter } from 'next/navigation';
+import { isAdmin as isAdminRole } from '@/utils/security/permissions';
 
 // Inner component that uses the hooks after providers are ready
 function SellerWalletContent() {
@@ -107,8 +107,13 @@ function SellerWalletWrapper() {
     if (!isAuthReady) return;
 
     // Check if user is authorized
+<<<<<<< HEAD
     const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
     const canAccess = user && (user.role === 'seller' || isAdmin);
+=======
+    const isAdminUser = isAdminRole(user);
+    const canAccess = !!user && (user.role === 'seller' || isAdminUser);
+>>>>>>> parent of d1cbbf6 (Revert "removing hardcoded admin names")
 
     if (!canAccess) {
       console.log('[SellerWallet] Unauthorized access, redirecting to login');
@@ -136,8 +141,13 @@ function SellerWalletWrapper() {
     );
   }
 
+<<<<<<< HEAD
   const isAdmin = user?.username === 'oakley' || user?.username === 'gerome';
   const roleForAuth = isAdmin ? 'admin' : 'seller';
+=======
+  const isAdminUser = isAdminRole(user);
+  const roleForAuth = isAdminUser ? 'admin' : 'seller';
+>>>>>>> parent of d1cbbf6 (Revert "removing hardcoded admin names")
 
   return (
     <RequireAuth role={roleForAuth as 'seller' | 'admin'}>

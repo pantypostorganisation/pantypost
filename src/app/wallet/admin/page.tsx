@@ -1,4 +1,3 @@
-// src/app/wallet/admin/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -15,6 +14,7 @@ import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
 import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
+import { isAdmin as isAdminRole } from '@/utils/security/permissions';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
 
@@ -69,10 +69,14 @@ function AdminProfitDashboardContent() {
     }
   }, [timeFilter, mounted]);
 
+<<<<<<< HEAD
   const isAdmin = useMemo(() => {
     if (!user?.username) return false;
     return user.username === 'oakley' || user.username === 'gerome';
   }, [user?.username]);
+=======
+  const isAdminUser = useMemo(() => isAdminRole(user), [user]);
+>>>>>>> parent of d1cbbf6 (Revert "removing hardcoded admin names")
 
   const filteredData = useMemo(() => {
     if (!adminActions || !orderHistory || !depositLogs || !sellerWithdrawals || !adminWithdrawals) {
@@ -206,7 +210,7 @@ function AdminProfitDashboardContent() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdminUser) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
