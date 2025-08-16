@@ -263,7 +263,7 @@ export const useBrowseDetail = () => {
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuction, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
-  // FIX: Update fund checking to use the new pricing (no 10% fee for auctions)
+  // UPDATED: Check current user funds with fresh balance
   const checkCurrentUserFunds = useCallback(() => {
     // GATE 1: Not an auction? Clear bid status and return
     if (!isAuction || !listing?.auction) {
@@ -286,13 +286,22 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    // Only do auction calculations if all gates pass
+    // CRITICAL: Always get fresh balance, not cached
     const balance = getBuyerBalance(user.username);
+    console.log('[useBrowseDetail] Checking funds - current balance:', balance);
+    
     const startingBid = listing.auction.startingPrice || 0;
     const minimumBid = (listing.auction.highestBid || startingBid) + 1;
     // FIX: Use the new pricing function that doesn't add 10%
     const totalRequired = getAuctionTotalPayable(minimumBid);
     const hasEnoughFunds = balance >= totalRequired;
+
+    console.log('[useBrowseDetail] Fund check:', {
+      balance,
+      minimumBid,
+      totalRequired,
+      hasEnoughFunds
+    });
 
     updateState({ 
       biddingEnabled: hasEnoughFunds,
@@ -340,6 +349,64 @@ export const useBrowseDetail = () => {
       console.error('Mark messages as read error:', error);
     }
   }, []);
+
+  // NEW: Listen for wallet balance updates and refunds
+  useEffect(() => {
+    if (!isAuction || !user || user.role !== 'buyer') return;
+    
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      console.log('[useBrowseDetail] Balance update received:', event.detail);
+      
+      // Re-check funds when balance is updated
+      if (event.detail.username === user.username) {
+        checkCurrentUserFunds();
+        
+        // Clear any bid errors since balance has changed
+        updateState({ 
+          bidError: null,
+          bidSuccess: null
+        });
+      }
+    };
+    
+    const handleUserRefunded = (event: CustomEvent) => {
+      console.log('[useBrowseDetail] User refunded:', event.detail);
+      
+      // If this refund is for the current listing, show a message
+      if (event.detail.username === user.username && 
+          event.detail.listingId === listing?.id) {
+        updateState({ 
+          bidStatus: {
+            success: true,
+            message: `You were outbid! Your funds ($${event.detail.amount.toFixed(2)}) have been refunded.`
+          },
+          bidError: null,
+          bidSuccess: null
+        });
+        
+        // Re-check funds after refund
+        setTimeout(() => {
+          checkCurrentUserFunds();
+        }, 100);
+      }
+    };
+    
+    const handleCheckBidStatus = () => {
+      console.log('[useBrowseDetail] Checking bid status after balance change');
+      checkCurrentUserFunds();
+    };
+    
+    // Listen for balance update events
+    window.addEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
+    window.addEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
+    window.addEventListener('auction:check-bid-status', handleCheckBidStatus);
+    
+    return () => {
+      window.removeEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
+      window.removeEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
+      window.removeEventListener('auction:check-bid-status', handleCheckBidStatus);
+    };
+  }, [isAuction, user, listing?.id, checkCurrentUserFunds, updateState]);
 
   // Action handlers
   const handlePurchase = useCallback(async () => {

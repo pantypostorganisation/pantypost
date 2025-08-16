@@ -259,7 +259,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Subscribe to wallet:refund events (for when current user is outbid)
+    // CRITICAL: Subscribe to wallet:refund events (for when current user is outbid)
     unsubscribers.push(
       subscribe('wallet:refund' as WebSocketEvent, async (data: any) => {
         console.log('[AuctionContext] Wallet refund received:', data);
@@ -268,6 +268,19 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
         if (user && data.username === user.username) {
           console.log('[AuctionContext] Current user was refunded, refreshing balance');
           await refreshCurrentUserBalance();
+          
+          // CRITICAL: Fire a custom event to notify components that balance was updated
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('wallet:user-refunded', {
+              detail: { 
+                username: user.username,
+                amount: data.amount,
+                listingId: data.listingId,
+                balance: data.balance,
+                timestamp: Date.now()
+              }
+            }));
+          }
         }
       })
     );
@@ -293,6 +306,15 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
             
             const roleEvent = user.role === 'buyer' ? 'wallet:buyer-balance-updated' : 'wallet:seller-balance-updated';
             window.dispatchEvent(new CustomEvent(roleEvent, {
+              detail: { 
+                username: user.username,
+                balance: data.newBalance,
+                timestamp: Date.now()
+              }
+            }));
+            
+            // CRITICAL: Also fire a bid-enablement check event
+            window.dispatchEvent(new CustomEvent('auction:check-bid-status', {
               detail: { 
                 username: user.username,
                 balance: data.newBalance,

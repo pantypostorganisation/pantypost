@@ -180,7 +180,7 @@ export default function AuctionSection({
             </button>
           </div>
           
-          {/* Status Messages - DEFENSIVE: Only show for actual auctions */}
+          {/* Status Messages - ENHANCED for real-time feedback */}
           {bidError && isActualAuction && (
             <div className="bg-red-900/30 border border-red-800 text-red-400 p-3 rounded text-sm">
               {bidError}
@@ -193,7 +193,7 @@ export default function AuctionSection({
             </div>
           )}
           
-          {/* DEFENSIVE: Only show bidStatus messages for actual auctions */}
+          {/* ENHANCED: Show bidStatus messages for actual auctions with better feedback */}
           {bidStatus?.message && isActualAuction && (
             <div className={`p-3 rounded text-sm border ${
               bidStatus.success 
@@ -201,6 +201,21 @@ export default function AuctionSection({
                 : 'bg-yellow-900/20 border-yellow-800/40 text-yellow-400'
             }`}>
               {bidStatus.message}
+              {!bidStatus.success && !biddingEnabled && (
+                <div className="mt-2 text-xs opacity-80">
+                  Waiting for balance update...
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Add a refresh hint if bidding is disabled */}
+          {!biddingEnabled && canBid && !bidStatus?.message && (
+            <div className="bg-yellow-900/20 border border-yellow-800/40 text-yellow-400 p-3 rounded text-sm">
+              <div className="flex items-center justify-between">
+                <span>Checking your balance...</span>
+                <div className="animate-spin h-4 w-4 border-2 border-yellow-400 border-t-transparent rounded-full"></div>
+              </div>
             </div>
           )}
         </div>

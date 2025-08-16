@@ -904,8 +904,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // FIX: Update placeBid to handle incremental bidding properly
-  const placeBid = async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
+  // CRITICAL FIX: Update placeBid to not call hooks inside
+  const placeBid = useCallback(async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
     try {
       const listing = listings.find(l => l.id === listingId);
       if (!listing) {
@@ -921,16 +921,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         // For incremental bids, only charge the difference (no fee)
         const bidDifference = amount - currentHighestBid;
         
-        // Validate the user has enough for the difference
-        const { getBuyerBalance } = useWallet();
-        const balance = getBuyerBalance(bidder);
+        // NOTE: Balance validation should be done in the component that calls placeBid
+        // We don't validate balance here to avoid using hooks inside this function
         
-        if (balance < bidDifference) {
-          console.error('[ListingContext] Insufficient balance for bid increase');
-          return false;
-        }
-        
-        // Process incremental bid (no fee charged)
         console.log(`[ListingContext] Processing incremental bid: difference=${bidDifference}`);
       }
 
@@ -953,7 +946,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.error('[ListingContext] Bid error:', error);
       return false;
     }
-  };
+  }, [listings, auctionPlaceBid, refreshListings, addSellerNotification]);
 
   const getAuctionListings = (): Listing[] => {
     return listings.filter(listing => listing.auction?.isAuction);
