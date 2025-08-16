@@ -97,6 +97,8 @@ export interface AuctionSectionProps {
   username?: string;
   bidInputRef: React.RefObject<HTMLInputElement | null>;
   bidButtonRef: React.RefObject<HTMLButtonElement | null>;
+  realtimeBids?: BidHistoryItem[];  // Add this
+  mergedBidsHistory?: BidHistoryItem[];  // Add this
 }
 
 export interface PurchaseSectionProps {

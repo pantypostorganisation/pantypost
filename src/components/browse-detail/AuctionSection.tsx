@@ -1,10 +1,16 @@
 // src/components/browse-detail/AuctionSection.tsx
 'use client';
 
-import { Gavel, Clock, ArrowUp, BarChart2 } from 'lucide-react';
-import { AuctionSectionProps } from '@/types/browseDetail';
+import { Gavel, Clock, ArrowUp, BarChart2, TrendingUp } from 'lucide-react';
+import { AuctionSectionProps, BidHistoryItem } from '@/types/browseDetail';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeCurrency } from '@/utils/security/sanitization';
+import { formatRelativeTime } from '@/utils/browseDetailUtils';
+
+interface ExtendedAuctionSectionProps extends AuctionSectionProps {
+  realtimeBids?: BidHistoryItem[];
+  mergedBidsHistory?: BidHistoryItem[];
+}
 
 export default function AuctionSection({
   listing,
@@ -28,18 +34,18 @@ export default function AuctionSection({
   userRole,
   username,
   bidInputRef,
-  bidButtonRef
-}: AuctionSectionProps) {
-  // DEFENSIVE CHECK 1: Return null if no auction data
+  bidButtonRef,
+  realtimeBids,
+  mergedBidsHistory
+}: ExtendedAuctionSectionProps) {
+  // Defensive checks
   if (!listing.auction) return null;
 
-  // DEFENSIVE CHECK 2: Verify this is actually an auction listing
   const isActualAuction = !!(
     listing.auction.isAuction || 
     listing.auction.startingPrice !== undefined
   );
   
-  // Return null if not actually an auction
   if (!isActualAuction) return null;
 
   const isUserSeller = username === listing.seller;
@@ -54,6 +60,10 @@ export default function AuctionSection({
       onBidAmountChange(sanitized.toString());
     }
   };
+
+  // Get the latest 5 bids for inline display
+  const recentBids = mergedBidsHistory?.slice(0, 5) || listing.auction.bids?.slice(0, 5) || [];
+  const hasMoreBids = (mergedBidsHistory?.length || listing.auction.bids?.length || 0) > 5;
 
   return (
     <div className={`rounded-xl border p-5 ${
@@ -76,7 +86,12 @@ export default function AuctionSection({
         </div>
         
         <div>
-          <p className="text-gray-400 text-sm">Current Bid</p>
+          <p className="text-gray-400 text-sm flex items-center gap-1">
+            Current Bid 
+            {listing.auction.highestBid && (
+              <TrendingUp className="w-3 h-3 text-green-400" />
+            )}
+          </p>
           {listing.auction.highestBid ? (
             <p className="text-xl font-bold text-green-400">${listing.auction.highestBid.toFixed(2)}</p>
           ) : (
@@ -84,7 +99,7 @@ export default function AuctionSection({
           )}
         </div>
       </div>
-      
+
       {/* Time Remaining */}
       {!isAuctionEnded && (
         <div className="mb-4">
@@ -99,13 +114,13 @@ export default function AuctionSection({
               <div 
                 className="bg-gradient-to-r from-purple-600 to-purple-500 h-2 rounded-full transition-all duration-1000 ease-linear"
                 style={{ width: `${getTimerProgress()}%` }}
-              ></div>
+              />
             </div>
           </div>
         </div>
       )}
       
-      {/* Total Payable - Updated for new fee structure */}
+      {/* Total Payable */}
       <div className="bg-purple-900/30 rounded-lg p-3 mb-4">
         <div className="flex justify-between items-center">
           <span className="text-purple-200 text-sm">Amount if you win</span>
@@ -118,7 +133,7 @@ export default function AuctionSection({
         </p>
       </div>
 
-      {/* Show seller earnings if user is the seller */}
+      {/* Seller earnings display */}
       {userRole === 'seller' && username === listing.seller && listing.auction.highestBid && (
         <div className="bg-gray-800/50 rounded-lg p-3 mb-4 border border-gray-700">
           <div className="flex justify-between items-center">
@@ -148,7 +163,7 @@ export default function AuctionSection({
                 min={listing.auction.highestBid ? (listing.auction.highestBid + 0.01).toString() : listing.auction.startingPrice.toString()}
                 step="0.01"
                 className="w-full px-3 py-2 rounded-lg bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-transparent text-sm"
-                sanitize={false} // We handle sanitization in handleSecureBidChange
+                sanitize={false}
               />
             </div>
             <button
@@ -161,83 +176,114 @@ export default function AuctionSection({
             </button>
           </div>
           
-          {/* Quick Bid + History */}
+          {/* Quick Bid Suggestions */}
           <div className="flex gap-2">
             {suggestedBidAmount && (
               <button
                 onClick={() => handleSecureBidChange(suggestedBidAmount)}
                 className="bg-purple-800/50 text-purple-300 px-3 py-1 rounded text-sm hover:bg-purple-700/50 transition"
               >
-                ${suggestedBidAmount}
+                Quick: ${suggestedBidAmount}
               </button>
             )}
-            <button
-              onClick={onShowBidHistory}
-              className="flex-1 bg-gray-800/50 text-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-700/50 transition flex items-center justify-center gap-1"
-            >
-              <BarChart2 className="w-3 h-3" />
-              Bid history ({bidsCount})
-            </button>
           </div>
           
-          {/* Status Messages - ENHANCED for real-time feedback */}
-          {bidError && isActualAuction && (
+          {/* Status Messages */}
+          {bidError && (
             <div className="bg-red-900/30 border border-red-800 text-red-400 p-3 rounded text-sm">
               {bidError}
             </div>
           )}
           
-          {bidSuccess && isActualAuction && (
-            <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded text-sm">
+          {bidSuccess && (
+            <div className="bg-green-900/30 border border-green-800 text-green-400 p-3 rounded text-sm animate-pulse">
               {bidSuccess}
             </div>
           )}
           
-          {/* ENHANCED: Show bidStatus messages for actual auctions with better feedback */}
-          {bidStatus?.message && isActualAuction && (
+          {bidStatus?.message && (
             <div className={`p-3 rounded text-sm border ${
               bidStatus.success 
-                ? 'bg-green-900/20 border-green-800/40 text-green-400' 
-                : 'bg-yellow-900/20 border-yellow-800/40 text-yellow-400'
+                ? 'bg-green-900/30 border-green-800 text-green-400' 
+                : 'bg-yellow-900/30 border-yellow-800 text-yellow-400'
             }`}>
               {bidStatus.message}
-              {!bidStatus.success && !biddingEnabled && (
-                <div className="mt-2 text-xs opacity-80">
-                  Waiting for balance update...
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Add a refresh hint if bidding is disabled */}
-          {!biddingEnabled && canBid && !bidStatus?.message && (
-            <div className="bg-yellow-900/20 border border-yellow-800/40 text-yellow-400 p-3 rounded text-sm">
-              <div className="flex items-center justify-between">
-                <span>Checking your balance...</span>
-                <div className="animate-spin h-4 w-4 border-2 border-yellow-400 border-t-transparent rounded-full"></div>
-              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Reserve Price Info */}
-      {listing.auction.reservePrice && (
-        <div className="flex items-center justify-between text-xs mt-2">
-          <span className="text-gray-400 flex items-center gap-1">
-            <Gavel className="w-3 h-3" />
-            Reserve Price
-          </span>
-          <span className={`font-medium ${
-            (!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
-              ? 'text-yellow-400'
-              : 'text-green-400'
-          }`}>
-            {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
-              ? '⚠️ Not met'
-              : '✅ Met'
-            }
-          </span>
+      {/* Recent Bids Section - MOVED BELOW BID INPUT */}
+      {recentBids.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-700/50">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-300 flex items-center gap-2">
+              Recent Bids
+              {realtimeBids && realtimeBids.length > 0 && (
+                <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full animate-pulse">
+                  LIVE
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-gray-500">{bidsCount || recentBids.length} total</p>
+          </div>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {recentBids.map((bid, index) => (
+              <div 
+                key={`${bid.bidder}-${bid.amount}-${index}`}
+                className={`flex items-center justify-between p-2.5 rounded-lg text-sm transition-all ${
+                  index === 0 
+                    ? 'bg-gradient-to-r from-green-900/20 to-green-800/10' 
+                    : 'bg-gray-800/20 hover:bg-gray-800/30'
+                } ${bid.bidder === username ? 'relative before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-purple-500 before:rounded-l-lg' : ''}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                    index === 0 
+                      ? 'bg-green-500/30 text-green-400 ring-1 ring-green-500/30' 
+                      : bid.bidder === username 
+                        ? 'bg-purple-500/20 text-purple-400'
+                        : 'bg-gray-700/50 text-gray-400'
+                  }`}>
+                    {bid.bidder === username ? '•' : bid.bidder.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <span className={`font-medium ${
+                      bid.bidder === username ? 'text-purple-400' : 'text-gray-300'
+                    }`}>
+                      {bid.bidder === username ? 'You' : bid.bidder}
+                    </span>
+                    {index === 0 && (
+                      <span className="ml-2 text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
+                        Leading
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className={`font-bold ${
+                    index === 0 ? 'text-green-400 text-base' : 'text-white'
+                  }`}>
+                    ${bid.amount.toFixed(2)}
+                  </span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {formatRelativeTime(bid.date)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* View Full History Button - Only show if more than 5 bids */}
+          {hasMoreBids && (
+            <button
+              onClick={onShowBidHistory}
+              className="mt-3 w-full bg-gray-800/30 text-gray-400 px-3 py-2 rounded-lg text-sm hover:bg-gray-800/40 hover:text-gray-300 transition flex items-center justify-center gap-2 font-medium"
+            >
+              <BarChart2 className="w-4 h-4" />
+              View Full History ({bidsCount || listing.auction.bids?.length || 0} bids)
+            </button>
+          )}
         </div>
       )}
     </div>

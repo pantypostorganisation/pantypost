@@ -1,3 +1,4 @@
+// src/app/browse/[id]/page.tsx
 'use client';
 
 import React, { useEffect, useCallback, useRef } from 'react';
@@ -40,6 +41,9 @@ export default function ListingDetailPage() {
     suggestedBidAmount,
     needsSubscription,
     currentUsername,
+    realtimeBids,
+    mergedBidsHistory,
+    lastBidUpdate,
     
     // State
     purchaseStatus,
@@ -413,11 +417,13 @@ export default function ListingDetailPage() {
                   bidStatus={bidStatus}
                   suggestedBidAmount={suggestedBidAmount}
                   onShowBidHistory={() => updateState({ showBidHistory: true })}
-                  bidsCount={listing.auction.bids?.length || 0}
+                  bidsCount={mergedBidsHistory?.length || bidsHistory?.length || 0}
                   userRole={user?.role}
                   username={user?.username}
                   bidInputRef={bidInputRef}
                   bidButtonRef={bidButtonRef}
+                  realtimeBids={realtimeBids}
+                  mergedBidsHistory={mergedBidsHistory}
                 />
               )}
 

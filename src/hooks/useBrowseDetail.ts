@@ -5,6 +5,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
+import { useWebSocket } from '@/context/WebSocketContext';
+import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { storageService, listingsService } from '@/services';
@@ -16,7 +18,7 @@ import {
   extractSellerInfo 
 } from '@/utils/browseDetailUtils';
 import { getBuyerDebitAmount, hasSufficientBalance, getAmountNeeded, getAuctionTotalPayable } from '@/utils/pricing';
-import { DetailState, ListingWithDetails } from '@/types/browseDetail';
+import { DetailState, ListingWithDetails, BidHistoryItem } from '@/types/browseDetail';
 import { securityService, sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
@@ -83,6 +85,11 @@ export const useBrowseDetail = () => {
     refreshListings
   } = useListings();
   
+  // Add WebSocket hook
+  const wsContext = useWebSocket();
+  const subscribe = wsContext?.subscribe || (() => () => {});
+  const isConnected = wsContext?.isConnected || false;
+  
   const rateLimiter = getRateLimiter();
   
   // State
@@ -92,6 +99,10 @@ export const useBrowseDetail = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  
+  // Add new state for real-time bid updates
+  const [realtimeBids, setRealtimeBids] = useState<BidHistoryItem[]>([]);
+  const [lastBidUpdate, setLastBidUpdate] = useState<number>(Date.now());
   
   // Refs - CRITICAL: Add isPurchasingRef to track purchase state
   const isPurchasingRef = useRef(false);
@@ -103,7 +114,7 @@ export const useBrowseDetail = () => {
   const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fundingTimerRef = useRef<NodeJS.Timeout | null>(null); // FIX 4: Keep this ref for proper cleanup
+  const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
   const viewIncrementedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -117,6 +128,93 @@ export const useBrowseDetail = () => {
   const isAuction = !!(listing?.auction?.isAuction || (listing?.auction && listing.auction.startingPrice !== undefined));
   const isAuctionListing = isAuction; // Keep old variable name for compatibility
   const isAuctionEnded = isAuction && listing?.auction && !isAuctionActive(listing.auction);
+
+  // Helper functions - Define updateState early
+  const updateState = useCallback((updates: Partial<DetailState> | ((prev: DetailState) => Partial<DetailState>)) => {
+    if (!mountedRef.current) return;
+    setState(prev => {
+      const newUpdates = typeof updates === 'function' ? updates(prev) : updates;
+      return { ...prev, ...newUpdates };
+    });
+  }, []);
+
+  // WebSocket subscription for real-time bid updates
+  useEffect(() => {
+    if (!isConnected || !isAuction || !listingId || !mountedRef.current || !subscribe) return;
+
+    const unsubscribe = subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
+      // Only process bids for this specific listing
+      if (data.listingId !== listingId) return;
+
+      console.log('[BrowseDetail] Real-time bid received:', data);
+
+      // Create new bid object for history display
+      const newBidForHistory: BidHistoryItem = {
+        bidder: data.bidder || data.username,
+        amount: data.amount || 0,
+        date: data.timestamp || new Date().toISOString()
+      };
+
+      // Create proper Bid object for listing auction
+      const newBidForListing = {
+        id: data.id || `bid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        bidder: data.bidder || data.username,
+        amount: data.amount || 0,
+        date: data.timestamp || new Date().toISOString()
+      };
+
+      // Update the listing's auction data
+      setListing(prev => {
+        if (!prev || !prev.auction) return prev;
+        
+        const updatedBids = [...(prev.auction.bids || []), newBidForListing]
+          .sort((a, b) => b.amount - a.amount)
+          .slice(0, 20); // Keep top 20 bids in memory
+        
+        return {
+          ...prev,
+          auction: {
+            ...prev.auction,
+            highestBid: newBidForListing.amount,
+            highestBidder: newBidForListing.bidder,
+            bids: updatedBids
+          }
+        } as ListingWithDetails;
+      });
+
+      // Update realtime bids for inline display
+      setRealtimeBids(prev => {
+        const updated = [newBidForHistory, ...prev]
+          .filter((bid, index, self) => 
+            index === self.findIndex(b => b.bidder === bid.bidder && b.amount === bid.amount)
+          )
+          .sort((a, b) => b.amount - a.amount)
+          .slice(0, 5); // Keep only last 5 for inline display
+        return updated;
+      });
+
+      // Update the state's bid history
+      updateState(prevState => ({
+        bidsHistory: [newBidForHistory, ...prevState.bidsHistory]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      }));
+
+      // Trigger re-render
+      setLastBidUpdate(Date.now());
+
+      // Show success message if it's from current user
+      if (newBidForHistory.bidder === currentUsername) {
+        updateState({ 
+          bidSuccess: 'Your bid was placed successfully!',
+          bidError: null 
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isConnected, isAuction, listingId, currentUsername, subscribe, updateState]);
 
   // Load listing using the service
   useEffect(() => {
@@ -190,10 +288,22 @@ export const useBrowseDetail = () => {
     loadData();
   }, []);
 
+  // Merge realtime bids with existing bids
+  const mergedBidsHistory = useMemo(() => {
+    const allBids = [...realtimeBids, ...state.bidsHistory];
+    const uniqueBids = allBids.filter((bid, index, self) =>
+      index === self.findIndex(b => 
+        b.bidder === bid.bidder && 
+        b.amount === bid.amount && 
+        Math.abs(new Date(b.date).getTime() - new Date(bid.date).getTime()) < 1000
+      )
+    );
+    return uniqueBids.sort((a, b) => b.amount - a.amount);
+  }, [realtimeBids, state.bidsHistory]);
+
   // Computed values
   const images = listing?.imageUrls || [];
   const currentHighestBid = listing?.auction?.highestBid || 0;
-  // FIX: Use the updated pricing function that doesn't add 10% for auctions
   const currentTotalPayable = isAuction ? getAuctionTotalPayable(currentHighestBid) : 0;
   const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
   const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
@@ -247,12 +357,6 @@ export const useBrowseDetail = () => {
     return totalRating / sellerReviews.length;
   }, [sellerReviews]);
 
-  // Helper functions
-  const updateState = useCallback((updates: Partial<DetailState>) => {
-    if (!mountedRef.current) return;
-    setState(prev => ({ ...prev, ...updates }));
-  }, []);
-
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
     const now = new Date().getTime();
@@ -292,7 +396,6 @@ export const useBrowseDetail = () => {
     
     const startingBid = listing.auction.startingPrice || 0;
     const minimumBid = (listing.auction.highestBid || startingBid) + 1;
-    // FIX: Use the new pricing function that doesn't add 10%
     const totalRequired = getAuctionTotalPayable(minimumBid);
     const hasEnoughFunds = balance >= totalRequired;
 
@@ -648,7 +751,14 @@ export const useBrowseDetail = () => {
   // CRITICAL: Only populate bid history for actual auctions
   useEffect(() => {
     if (isAuction && listing?.auction?.bids) {
-      const sortedBids = [...listing.auction.bids].sort((a, b) => 
+      // Convert Bid[] to BidHistoryItem[]
+      const historyItems: BidHistoryItem[] = listing.auction.bids.map(bid => ({
+        bidder: bid.bidder,
+        amount: bid.amount,
+        date: bid.date
+      }));
+      
+      const sortedBids = historyItems.sort((a, b) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       updateState({ bidsHistory: sortedBids });
@@ -798,6 +908,9 @@ export const useBrowseDetail = () => {
       needsSubscription: false,
       currentUsername: '',
       buyerBalance,
+      realtimeBids: [],
+      mergedBidsHistory: [],
+      lastBidUpdate: Date.now(),
       ...initialState,
       imageRef,
       bidInputRef,
@@ -839,6 +952,9 @@ export const useBrowseDetail = () => {
     needsSubscription: needsSubscription || false,
     currentUsername: currentUsername || '',
     buyerBalance,
+    realtimeBids,
+    mergedBidsHistory,
+    lastBidUpdate,
     
     // State - CRITICAL: Only return bidStatus for actual auctions and when not purchasing
     purchaseStatus: state.purchaseStatus,
