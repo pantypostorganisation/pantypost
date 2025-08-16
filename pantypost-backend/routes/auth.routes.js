@@ -397,6 +397,129 @@ router.get('/verify-username', async (req, res) => {
   }
 });
 
+// ============= ADMIN BOOTSTRAP ROUTE =============
+
+// POST /api/auth/admin/bootstrap - One-time admin promotion using secret code
+router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
+  try {
+    const { code } = req.body || {};
+    const configuredCode = process.env.ADMIN_BOOTSTRAP_CODE;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD,
+          message: 'Bootstrap code is required'
+        }
+      });
+    }
+
+    if (!configuredCode) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.INTERNAL_ERROR,
+          message: 'Server is missing ADMIN_BOOTSTRAP_CODE'
+        }
+      });
+    }
+
+    const dbUser = await User.findById(req.user.id);
+    if (!dbUser) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.NOT_FOUND,
+          message: 'User not found'
+        }
+      });
+    }
+
+    // If already admin, return success idempotently with fresh token
+    if (dbUser.role === 'admin') {
+      const token = jwt.sign(
+        { id: dbUser._id, username: dbUser.username, role: dbUser.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      return res.json({
+        success: true,
+        message: 'User is already an admin',
+        data: {
+          user: {
+            id: dbUser._id,
+            username: dbUser.username,
+            email: dbUser.email,
+            role: dbUser.role,
+            tier: dbUser.tier || 'Tease'
+          },
+          token,
+          refreshToken: token
+        }
+      });
+    }
+
+    // Only allow bootstrap if no admin exists yet
+    const adminExists = await User.exists({ role: 'admin' });
+    if (adminExists) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+          message: 'Admin already exists. Bootstrap can only be used once.'
+        }
+      });
+    }
+
+    // Validate secret code
+    if (code !== configuredCode) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+          message: 'Invalid bootstrap code'
+        }
+      });
+    }
+
+    // Promote current user
+    dbUser.role = 'admin';
+    await dbUser.save();
+
+    // Issue a fresh token with updated role
+    const token = jwt.sign(
+      { id: dbUser._id, username: dbUser.username, role: dbUser.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        user: {
+          id: dbUser._id,
+          username: dbUser.username,
+          email: dbUser.email,
+          role: dbUser.role,
+          tier: dbUser.tier || 'Tease'
+        },
+        token,
+        refreshToken: token
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] Admin bootstrap error:', error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to promote user to admin'
+      }
+    });
+  }
+});
+
 // ============= PASSWORD RESET ROUTES =============
 
 // POST /api/auth/forgot-password - Request password reset with code
