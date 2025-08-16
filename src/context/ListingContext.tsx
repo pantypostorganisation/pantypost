@@ -966,13 +966,22 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
   };
 
-  // NEW: Use AuctionContext for processing ended auctions
+  // FIX: Updated checkEndedAuctions to only run for sellers and admins
   const checkEndedAuctions = async (): Promise<void> => {
+    // Only check ended auctions if user is a seller or admin
+    if (!user || (user.role !== 'seller' && user.role !== 'admin')) {
+      return; // Skip auction checks for buyers
+    }
+    
     const activeAuctions = getActiveAuctions();
     const now = new Date();
     
     for (const listing of activeAuctions) {
-      if (listing.auction && new Date(listing.auction.endTime) <= now) {
+      // Only process auctions where the current user is the seller
+      if (listing.auction && 
+          new Date(listing.auction.endTime) <= now && 
+          (user.username === listing.seller || user.role === 'admin')) {
+        
         const processed = await processEndedAuction(listing);
         
         if (processed) {

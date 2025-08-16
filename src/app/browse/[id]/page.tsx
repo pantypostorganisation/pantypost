@@ -1,7 +1,7 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -20,11 +20,14 @@ import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function ListingDetailPage() {
   const { trackEvent, trackPurchase } = useAnalytics();
   const isMountedRef = useRef(true);
   const trackingRef = useRef({ hasTrackedView: false, hasTrackedPurchase: false });
+  const [viewerCount, setViewerCount] = useState(Math.floor(Math.random() * 10) + 3);
   
   const {
     // Data
@@ -100,12 +103,50 @@ export default function ListingDetailPage() {
   const isFavorited = sellerId ? checkIsFavorited(sellerId) : false;
 
   // CRITICAL FIX: Properly determine if this is an auction
-  // Check both auction.isAuction flag and presence of auction properties
   const isActualAuction = !!(
     isAuctionListing && 
     listing?.auction && 
     (listing.auction.isAuction || listing.auction.startingPrice !== undefined)
   );
+
+  // Simulate viewer count changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setViewerCount(prev => {
+        const change = Math.random() > 0.5 ? 1 : -1;
+        return Math.max(1, prev + change);
+      });
+    }, Math.random() * 10000 + 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Show toast notifications for bid events
+  useEffect(() => {
+    if (bidSuccess && isMountedRef.current) {
+      toast.success(bidSuccess, {
+        duration: 4000,
+        icon: '🎉',
+        style: {
+          background: '#1a1a1a',
+          color: '#fff',
+          border: '1px solid #22c55e',
+        },
+      });
+    }
+  }, [bidSuccess]);
+
+  useEffect(() => {
+    if (bidError && isMountedRef.current) {
+      toast.error(bidError, {
+        duration: 4000,
+        style: {
+          background: '#1a1a1a',
+          color: '#fff',
+          border: '1px solid #ef4444',
+        },
+      });
+    }
+  }, [bidError]);
 
   // Track component mount/unmount
   useEffect(() => {
@@ -189,7 +230,6 @@ export default function ListingDetailPage() {
     if (!listing || !sellerId || !isMountedRef.current) return;
     
     try {
-      // Get seller tier info from the listing with null safety
       const sellerTier = listing.sellerTierInfo?.tier || undefined;
       
       const success = await toggleFav({
@@ -201,7 +241,6 @@ export default function ListingDetailPage() {
       });
       
       if (success && isMountedRef.current) {
-        // Track favorite toggle
         trackEvent({
           action: isFavorited ? 'remove_from_favorites' : 'add_to_favorites',
           category: 'engagement',
@@ -211,24 +250,31 @@ export default function ListingDetailPage() {
           }
         });
         
-        showSuccessToast(
-          isFavorited ? 'Removed from favorites' : 'Added to favorites'
+        toast.success(
+          isFavorited ? 'Removed from favorites' : 'Added to favorites',
+          {
+            duration: 3000,
+            style: {
+              background: '#1a1a1a',
+              color: '#fff',
+              border: '1px solid #ff950e',
+            },
+          }
         );
       } else if (favError && isMountedRef.current) {
-        showErrorToast(favError);
+        toast.error(favError);
       }
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
       if (isMountedRef.current) {
-        showErrorToast('Failed to update favorites');
+        toast.error('Failed to update favorites');
       }
     }
-  }, [listing, sellerId, sellerProfile, isFavorited, toggleFav, trackEvent, showSuccessToast, showErrorToast, favError]);
+  }, [listing, sellerId, sellerProfile, isFavorited, toggleFav, trackEvent, favError]);
 
   const handleSubscribeClick = useCallback(() => {
     if (listing?.seller && isMountedRef.current) {
       try {
-        // Track subscription click
         trackEvent({
           action: 'subscription_click',
           category: 'engagement',
@@ -241,11 +287,9 @@ export default function ListingDetailPage() {
     }
   }, [listing, trackEvent, router]);
 
-  // Enhanced purchase handler with analytics
   const handlePurchaseWithAnalytics = useCallback(async () => {
     if (listing && listingId && isMountedRef.current) {
       try {
-        // Track purchase attempt
         trackEvent({
           action: 'begin_checkout',
           category: 'ecommerce',
@@ -257,15 +301,12 @@ export default function ListingDetailPage() {
       }
     }
     
-    // Call original purchase handler
     await handlePurchase();
   }, [listing, listingId, trackEvent, handlePurchase]);
 
-  // Enhanced bid handler with analytics
   const handleBidSubmitWithAnalytics = useCallback(async () => {
     if (listing && bidAmount && listingId && isMountedRef.current) {
       try {
-        // Track bid attempt
         trackEvent({
           action: 'place_bid',
           category: 'auction',
@@ -277,7 +318,6 @@ export default function ListingDetailPage() {
       }
     }
     
-    // Call original bid handler
     await handleBidSubmit();
   }, [listing, bidAmount, listingId, trackEvent, handleBidSubmit]);
 
@@ -307,10 +347,14 @@ export default function ListingDetailPage() {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-          <div className="text-center">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
             <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
             <p className="text-gray-400">Loading listing details...</p>
-          </div>
+          </motion.div>
         </div>
       </BanCheck>
     );
@@ -362,23 +406,36 @@ export default function ListingDetailPage() {
 
   return (
     <BanCheck>
+      <Toaster position="top-center" />
       <main className="min-h-screen bg-black text-white">
         <DetailHeader onBack={() => router.push('/browse')} />
 
         <div className="max-w-7xl mx-auto px-4 py-6">
           {/* Rate Limit Error */}
-          {rateLimitError && (
-            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <div className="flex items-center gap-2 text-red-400">
-                <AlertCircle className="w-5 h-5" />
-                <span>{rateLimitError}</span>
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {rateLimitError && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm"
+              >
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertCircle className="w-5 h-5" />
+                  <span>{rateLimitError}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             {/* Left: Image Gallery */}
-            <div ref={imageRef}>
+            <motion.div 
+              ref={imageRef}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
               <ImageGallery
                 images={images}
                 currentIndex={currentImageIndex}
@@ -391,10 +448,15 @@ export default function ListingDetailPage() {
                 formatTimeRemaining={formatTimeRemaining}
                 forceUpdateTimer={forceUpdateTimer}
               />
-            </div>
+            </motion.div>
 
             {/* Right: Product Details */}
-            <div className="space-y-4">
+            <motion.div 
+              className="space-y-4"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
               <ProductInfo listing={listing} />
 
               {/* CRITICAL FIX: Only render AuctionSection for ACTUAL auctions */}
@@ -424,6 +486,7 @@ export default function ListingDetailPage() {
                   bidButtonRef={bidButtonRef}
                   realtimeBids={realtimeBids}
                   mergedBidsHistory={mergedBidsHistory}
+                  viewerCount={viewerCount}
                 />
               )}
 
@@ -441,83 +504,90 @@ export default function ListingDetailPage() {
               )}
 
               {/* Purchase Status */}
-              {purchaseStatus && (
-                <div className={`p-4 rounded-xl font-medium ${
-                  purchaseStatus.includes('successful') 
-                    ? 'bg-green-900/30 border border-green-800 text-green-400' 
-                    : 'bg-red-900/30 border border-red-800 text-red-400'
-                }`}>
-                  {purchaseStatus}
-                </div>
-              )}
+              <AnimatePresence>
+                {purchaseStatus && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className={`p-4 rounded-xl font-medium ${
+                    purchaseStatus.includes('successful') 
+                       ? 'bg-green-900/30 border border-green-800 text-green-400' 
+                       : 'bg-red-900/30 border border-red-800 text-red-400'
+                   }`}
+                 >
+                   {purchaseStatus}
+                 </motion.div>
+               )}
+             </AnimatePresence>
 
-              {/* Premium Content Lock */}
-              {needsSubscription && (
-                <PremiumLockMessage listing={listing} userRole={user?.role} />
-              )}
+             {/* Premium Content Lock */}
+             {needsSubscription && (
+               <PremiumLockMessage listing={listing} userRole={user?.role} />
+             )}
 
-              {/* Seller Profile */}
-              {user?.role === 'buyer' && (
-                <SellerProfile
-                  seller={listing.seller}
-                  sellerProfile={sellerProfile}
-                  sellerTierInfo={listing.sellerTierInfo}
-                  sellerAverageRating={listing.sellerAverageRating}
-                  sellerReviewCount={listing.sellerReviewCount || 0}
-                  isVerified={(listing.isSellerVerified ?? listing.isVerified) || false}
-                />
-              )}
+             {/* Seller Profile */}
+             {user?.role === 'buyer' && (
+               <SellerProfile
+                 seller={listing.seller}
+                 sellerProfile={sellerProfile}
+                 sellerTierInfo={listing.sellerTierInfo}
+                 sellerAverageRating={listing.sellerAverageRating}
+                 sellerReviewCount={listing.sellerReviewCount || 0}
+                 isVerified={(listing.isSellerVerified ?? listing.isVerified) || false}
+               />
+             )}
 
-              {/* Trust & Safety */}
-              <TrustBadges />
-            </div>
-          </div>
+             {/* Trust & Safety */}
+             <TrustBadges />
+           </motion.div>
+         </div>
 
-          {/* Modals */}
-          <BidHistoryModal
-            show={showBidHistory}
-            onClose={() => updateState({ showBidHistory: false })}
-            bidsHistory={bidsHistory}
-            currentUsername={currentUsername}
-            formatBidDate={formatBidDate}
-            calculateTotalPayable={calculateTotalPayable}
-          />
+         {/* Modals */}
+         <BidHistoryModal
+           show={showBidHistory}
+           onClose={() => updateState({ showBidHistory: false })}
+           bidsHistory={bidsHistory}
+           currentUsername={currentUsername}
+           formatBidDate={formatBidDate}
+           calculateTotalPayable={calculateTotalPayable}
+         />
 
-          <PurchaseSuccessModal
-            showPurchaseSuccess={showPurchaseSuccess}
-            showAuctionSuccess={showAuctionSuccess}
-            isAuctionListing={isActualAuction}
-            listing={listing}
-            isUserHighestBidder={isUserHighestBidder}
-            userRole={user?.role}
-            calculateTotalPayable={calculateTotalPayable}
-            onNavigate={router.push}
-          />
+         <PurchaseSuccessModal
+           showPurchaseSuccess={showPurchaseSuccess}
+           showAuctionSuccess={showAuctionSuccess}
+           isAuctionListing={isActualAuction}
+           listing={listing}
+           isUserHighestBidder={isUserHighestBidder}
+           userRole={user?.role}
+           calculateTotalPayable={calculateTotalPayable}
+           onNavigate={router.push}
+         />
 
-          <AuctionEndedModal
-            isAuctionListing={isActualAuction}
-            isAuctionEnded={isAuctionEnded}
-            listing={listing}
-            isUserHighestBidder={isUserHighestBidder}
-            didUserBid={didUserBid}
-            userRole={user?.role}
-            username={user?.username}
-            bidsHistory={bidsHistory}
-            onNavigate={router.push}
-          />
+         <AuctionEndedModal
+           isAuctionListing={isActualAuction}
+           isAuctionEnded={isAuctionEnded}
+           listing={listing}
+           isUserHighestBidder={isUserHighestBidder}
+           didUserBid={didUserBid}
+           userRole={user?.role}
+           username={user?.username}
+           bidsHistory={bidsHistory}
+           onNavigate={router.push}
+         />
 
-          {/* Sticky Buy Button for Mobile */}
-          <StickyPurchaseBar
-            show={showStickyBuy}
-            listing={listing}
-            isProcessing={isProcessing}
-            needsSubscription={needsSubscription}
-            isAuctionListing={isActualAuction}
-            userRole={user?.role}
-            onPurchase={handlePurchaseWithAnalytics}
-          />
-        </div>
-      </main>
-    </BanCheck>
-  );
+         {/* Sticky Buy Button for Mobile */}
+         <StickyPurchaseBar
+           show={showStickyBuy}
+           listing={listing}
+           isProcessing={isProcessing}
+           needsSubscription={needsSubscription}
+           isAuctionListing={isActualAuction}
+           userRole={user?.role}
+           onPurchase={handlePurchaseWithAnalytics}
+         />
+       </div>
+     </main>
+   </BanCheck>
+ );
 }

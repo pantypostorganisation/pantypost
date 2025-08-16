@@ -1,8 +1,9 @@
 // src/components/browse-detail/BidHistoryModal.tsx
 'use client';
 
-import { History, X, Gavel } from 'lucide-react';
+import { History, X, Gavel, Trophy, TrendingUp } from 'lucide-react';
 import { BidHistoryModalProps } from '@/types/browseDetail';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function BidHistoryModal({
   show,
@@ -15,80 +16,142 @@ export default function BidHistoryModal({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl border border-purple-800 w-full max-w-2xl max-h-[70vh] p-6 relative">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <History className="w-5 h-5 text-purple-400" />
-            Bid History
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white p-1"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        {bidsHistory.length === 0 ? (
-          <div className="text-center py-12">
-            <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400">No bids placed yet</p>
-            <p className="text-gray-500 text-sm">Be the first to bid on this item!</p>
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      >
+        <motion.div 
+          initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-xl border border-purple-800 w-full max-w-2xl max-h-[70vh] p-6 relative shadow-2xl"
+        >
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-purple-400" />
+              Bid History
+              {bidsHistory.length > 0 && (
+                <span className="text-sm bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full">
+                  {bidsHistory.length} bids
+                </span>
+              )}
+            </h3>
+            <motion.button
+              onClick={onClose}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="text-gray-400 hover:text-white p-1 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </motion.button>
           </div>
-        ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {bidsHistory.map((bid, index) => (
-              <div 
-                key={index} 
-                className={`p-3 rounded-lg border ${
-                  bid.bidder === currentUsername 
-                    ? 'bg-purple-900/30 border-purple-700' 
-                    : 'bg-gray-800/50 border-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                      bid.bidder === currentUsername ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-700 text-gray-300'
-                    }`}>
-                      {bid.bidder === currentUsername ? 'You' : bid.bidder.charAt(0).toUpperCase()}
+          
+          {bidsHistory.length === 0 ? (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-12"
+            >
+              <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-400">No bids placed yet</p>
+              <p className="text-gray-500 text-sm">Be the first to bid on this item!</p>
+            </motion.div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-2">
+              {bidsHistory.map((bid, index) => (
+                <motion.div 
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={`p-3 rounded-lg border transition-all ${
+                    index === 0
+                      ? 'bg-gradient-to-r from-green-900/30 to-green-800/20 border-green-700/50'
+                      : bid.bidder === currentUsername 
+                        ? 'bg-purple-900/30 border-purple-700' 
+                        : 'bg-gray-800/50 border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                        index === 0
+                          ? 'bg-gradient-to-br from-green-500/30 to-green-600/20 text-green-400 ring-2 ring-green-500/30'
+                          : bid.bidder === currentUsername 
+                            ? 'bg-purple-500/20 text-purple-400' 
+                            : 'bg-gray-700 text-gray-300'
+                      }`}>
+                        {index === 0 ? (
+                          <Trophy className="w-5 h-5" />
+                        ) : bid.bidder === currentUsername ? (
+                          'You'
+                        ) : (
+                          bid.bidder.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-white text-sm">
+                          {bid.bidder === currentUsername ? 'Your bid' : bid.bidder}
+                        </p>
+                        <p className="text-xs text-gray-400">{formatBidDate(bid.date)}</p>
+                      </div>
+                      {index === 0 && (
+                        <motion.span 
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-bold flex items-center gap-1"
+                        >
+                          <TrendingUp className="w-3 h-3" />
+                          Highest
+                        </motion.span>
+                      )}
                     </div>
-                    <div>
-                      <p className="font-medium text-white text-sm">
-                        {bid.bidder === currentUsername ? 'Your bid' : bid.bidder}
+                    <div className="text-right">
+                      <p className={`font-bold ${index === 0 ? 'text-green-400 text-lg' : 'text-white'}`}>
+                        ${bid.amount.toFixed(2)}
                       </p>
-                      <p className="text-xs text-gray-400">{formatBidDate(bid.date)}</p>
+                      <p className="text-xs text-gray-400">
+                        Total: ${calculateTotalPayable(bid.amount).toFixed(2)}
+                      </p>
                     </div>
-                    {index === 0 && (
-                      <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded font-medium">
-                        Highest
-                      </span>
-                    )}
                   </div>
-                  <div className="text-right">
-                    <p className={`font-bold ${index === 0 ? 'text-green-400' : 'text-white'}`}>
-                      ${bid.amount.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Total: ${calculateTotalPayable(bid.amount).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+                </motion.div>
+              ))}
+            </div>
+          )}
+          
+          <div className="mt-4 pt-4 border-t border-gray-700">
+            <motion.button
+              onClick={onClose}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full bg-gradient-to-r from-purple-600 to-purple-500 text-white py-2.5 px-4 rounded-lg font-medium hover:from-purple-500 hover:to-purple-400 transition-all shadow-lg"
+            >
+              Close
+            </motion.button>
           </div>
-        )}
-        
-        <div className="mt-4 pt-4 border-t border-gray-700">
-          <button
-            onClick={onClose}
-            className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-500 transition"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+
+          <style jsx>{`
+            .custom-scrollbar::-webkit-scrollbar {
+              width: 6px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+              background: rgba(0, 0, 0, 0.2);
+              border-radius: 3px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+              background: rgba(139, 92, 246, 0.3);
+              border-radius: 3px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+              background: rgba(139, 92, 246, 0.5);
+            }
+          `}</style>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
