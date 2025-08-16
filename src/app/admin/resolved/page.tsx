@@ -14,7 +14,6 @@ import { storageService } from '@/services';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import type { ResolvedReport, FilterOptions, ResolvedStats as StatsType } from '@/types/resolved';
-import { isAdmin as isAdminRole } from '@/utils/security/permissions';
 
 // --- Conservative mock data detector ---
 const isMockString = (val?: string) => {
@@ -401,8 +400,8 @@ export default function ResolvedReportsPage() {
     }).length
   };
 
-  // Check admin access (no hardcoded usernames)
-  if (!isAdminRole(user)) {
+  // Check admin access
+  if (!user || (user.username !== 'oakley' && user.username !== 'gerome')) {
     return (
       <RequireAuth role="admin">
         <main className="p-8 max-w-4xl mx-auto">
