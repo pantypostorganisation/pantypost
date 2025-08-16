@@ -1,3 +1,4 @@
+// src/app/wallet/seller/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +14,6 @@ import EmptyState from '@/components/wallet/seller/EmptyState';
 import WithdrawConfirmModal from '@/components/wallet/seller/WithdrawConfirmModal';
 import { useSellerWallet } from '@/hooks/useSellerWallet';
 import { useRouter } from 'next/navigation';
-import { isAdmin as isAdminRole } from '@/utils/security/permissions';
 
 // Inner component that uses the hooks after providers are ready
 function SellerWalletContent() {
@@ -107,8 +107,8 @@ function SellerWalletWrapper() {
     if (!isAuthReady) return;
 
     // Check if user is authorized
-    const isAdminUser = isAdminRole(user);
-    const canAccess = !!user && (user.role === 'seller' || isAdminUser);
+    const isAdmin = user?.role === 'admin';
+    const canAccess = user && (user.role === 'seller' || isAdmin);
 
     if (!canAccess) {
       console.log('[SellerWallet] Unauthorized access, redirecting to login');
@@ -136,8 +136,8 @@ function SellerWalletWrapper() {
     );
   }
 
-  const isAdminUser = isAdminRole(user);
-  const roleForAuth = isAdminUser ? 'admin' : 'seller';
+  const isAdmin = user?.role === 'admin';
+  const roleForAuth = isAdmin ? 'admin' : 'seller';
 
   return (
     <RequireAuth role={roleForAuth as 'seller' | 'admin'}>

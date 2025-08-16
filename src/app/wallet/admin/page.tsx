@@ -1,3 +1,4 @@
+// src/app/wallet/admin/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -14,7 +15,6 @@ import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
 import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
-import { isAdmin as isAdminRole } from '@/utils/security/permissions';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
 
@@ -69,7 +69,7 @@ function AdminProfitDashboardContent() {
     }
   }, [timeFilter, mounted]);
 
-  const isAdminUser = useMemo(() => isAdminRole(user), [user]);
+  const isAdmin = useMemo(() => user?.role === 'admin', [user?.role]);
 
   const filteredData = useMemo(() => {
     if (!adminActions || !orderHistory || !depositLogs || !sellerWithdrawals || !adminWithdrawals) {
@@ -203,7 +203,7 @@ function AdminProfitDashboardContent() {
     );
   }
 
-  if (!isAdminUser) {
+  if (!isAdmin) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
