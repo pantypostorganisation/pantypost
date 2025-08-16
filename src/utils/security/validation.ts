@@ -1,5 +1,3 @@
-// src/utils/security/validation.ts
-
 import { z } from 'zod';
 
 /**
@@ -23,12 +21,20 @@ export function isValidUsername(username: string): boolean {
 }
 
 /**
- * Validates password strength
+ * Validates password strength (summary type)
  */
 export interface PasswordStrength {
   isValid: boolean;
   score: number; // 0-5
   feedback: string[];
+}
+
+/**
+ * HOISTED, STABLE export to avoid TDZ/circular surprises.
+ * Returns a simple boolean using the strength rules below.
+ */
+export function isValidPassword(password: string): boolean {
+  return validatePasswordStrength(password).isValid;
 }
 
 export function validatePasswordStrength(password: string): PasswordStrength {
@@ -90,13 +96,17 @@ export function validatePasswordStrength(password: string): PasswordStrength {
     /^admin/i,
   ];
 
-  const hasCommonPattern = commonPatterns.some(pattern => pattern.test(password));
+  const hasCommonPattern = commonPatterns.some((pattern) => pattern.test(password));
   if (hasCommonPattern) {
     score = Math.max(0, score - 2);
     feedback.push('Avoid common patterns');
   }
 
-  const isValid = password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password);
+  const isValid =
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /\d/.test(password);
 
   return {
     isValid,
@@ -130,7 +140,7 @@ export function isValidPhoneNumber(phone: string): boolean {
  */
 export function isValidCreditCard(cardNumber: string): boolean {
   const cleaned = cardNumber.replace(/\s/g, '');
-  
+
   if (!/^\d{13,19}$/.test(cleaned)) {
     return false;
   }
@@ -139,7 +149,7 @@ export function isValidCreditCard(cardNumber: string): boolean {
   let isEven = false;
 
   for (let i = cleaned.length - 1; i >= 0; i--) {
-    let digit = parseInt(cleaned[i]);
+    let digit = parseInt(cleaned[i], 10);
 
     if (isEven) {
       digit *= 2;
@@ -187,7 +197,7 @@ export function validateImageFile(file: File): ImageValidationResult {
  */
 export function isValidPrice(price: string | number): boolean {
   const numPrice = typeof price === 'string' ? parseFloat(price) : price;
-  
+
   if (isNaN(numPrice) || !isFinite(numPrice)) {
     return false;
   }
@@ -211,11 +221,11 @@ export function isValidAge(birthDate: Date | string): boolean {
   const today = new Date();
   const age = today.getFullYear() - date.getFullYear();
   const monthDiff = today.getMonth() - date.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
     return age - 1 >= 18;
   }
-  
+
   return age >= 18;
 }
 
@@ -249,7 +259,7 @@ export function isValidBankAccount(accountNumber: string): boolean {
  */
 export function isValidRoutingNumber(routingNumber: string): boolean {
   const cleaned = routingNumber.replace(/\D/g, '');
-  
+
   if (cleaned.length !== 9) {
     return false;
   }
@@ -257,9 +267,9 @@ export function isValidRoutingNumber(routingNumber: string): boolean {
   // Checksum validation for US routing numbers
   let sum = 0;
   for (let i = 0; i < 9; i += 3) {
-    sum += parseInt(cleaned[i]) * 3;
-    sum += parseInt(cleaned[i + 1]) * 7;
-    sum += parseInt(cleaned[i + 2]) * 1;
+    sum += parseInt(cleaned[i], 10) * 3;
+    sum += parseInt(cleaned[i + 1], 10) * 7;
+    sum += parseInt(cleaned[i + 2], 10) * 1;
   }
 
   return sum % 10 === 0;
@@ -332,19 +342,19 @@ export class RateLimiter {
   getRemainingAttempts(key: string): number {
     const attempt = this.attempts.get(key);
     if (!attempt) return this.maxAttempts;
-    
+
     const now = Date.now();
     if (now - attempt.firstAttempt > this.windowMs) {
       return this.maxAttempts;
     }
-    
+
     return Math.max(0, this.maxAttempts - attempt.count);
   }
 
   getResetTime(key: string): number | null {
     const attempt = this.attempts.get(key);
     if (!attempt) return null;
-    
+
     return attempt.firstAttempt + this.windowMs;
   }
 }
@@ -364,10 +374,10 @@ export class CSRFTokenManager {
     const array = new Uint8Array(32);
     window.crypto.getRandomValues(array);
     const token = btoa(String.fromCharCode(...array));
-    
+
     this.token = token;
     sessionStorage.setItem(this.tokenKey, token);
-    
+
     return token;
   }
 
@@ -399,10 +409,7 @@ export class CSRFTokenManager {
 /**
  * Input debouncing for validation
  */
-export function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
+export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
 
   return function executedFunction(...args: Parameters<T>) {
@@ -428,7 +435,7 @@ export function safeJsonParse<T>(
 ): { success: boolean; data?: T; error?: string } {
   try {
     const parsed = JSON.parse(json);
-    
+
     if (schema) {
       const result = schema.safeParse(parsed);
       if (!result.success) {
@@ -436,7 +443,7 @@ export function safeJsonParse<T>(
       }
       return { success: true, data: result.data };
     }
-    
+
     return { success: true, data: parsed };
   } catch (error) {
     return { success: false, error: 'Invalid JSON' };

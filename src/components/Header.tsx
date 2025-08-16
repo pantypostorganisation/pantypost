@@ -1,4 +1,3 @@
-// src/components/Header.tsx
 'use client';
 
 import Link from 'next/link';
@@ -33,6 +32,7 @@ import { usePathname } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
+import { isAdmin } from '@/utils/security/permissions';
 
 // ✅ Custom hooks for better reusability
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
@@ -86,24 +86,24 @@ export default function Header() {
   // ✅ FIXED: All hooks MUST be called before any conditional returns
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { 
-    sellerNotifications, 
-    clearSellerNotification, 
-    restoreSellerNotification, 
-    permanentlyDeleteSellerNotification, 
-    listings, 
-    checkEndedAuctions 
+  const {
+    sellerNotifications,
+    clearSellerNotification,
+    restoreSellerNotification,
+    permanentlyDeleteSellerNotification,
+    listings,
+    checkEndedAuctions
   } = useListings();
-  const { 
-    getBuyerBalance, 
-    getSellerBalance, 
+  const {
+    getBuyerBalance,
+    getSellerBalance,
     adminBalance,
     orderHistory,
     refreshAdminData
   } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
-  
+
   // ✅ All state hooks called unconditionally
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -112,11 +112,11 @@ export default function Header() {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
-  
+
   // ✅ Button loading states to prevent double-clicks
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
-  
+
   // Refs for cleanup and optimization
   const notifRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -125,10 +125,7 @@ export default function Header() {
   const lastAuctionCheck = useRef(0);
 
   // Derived values with sanitization
-  const isAdminUser = user?.role === 'admin' || 
-                     user?.username === 'oakley' || 
-                     user?.username === 'gerome' ||
-                     user?.username === 'platform';
+  const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
@@ -141,7 +138,7 @@ export default function Header() {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -154,16 +151,15 @@ export default function Header() {
     }
 
     const addNotificationEmojis = (message: string): string => {
-      // Sanitize the message first
       const sanitizedMessage = sanitizeStrict(message);
-      
+
       if (sanitizedMessage.includes('New sale:') && !sanitizedMessage.includes('Auction ended:')) {
         return `💰🛍️ ${sanitizedMessage}`;
       }
       if (sanitizedMessage.includes('Auction ended:') && sanitizedMessage.includes('sold to')) {
         return `💰🏆 ${sanitizedMessage}`;
       }
-      if (!sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆💰🛍️]/)) {
+      if (!sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
         if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('Tip received')) return `💸 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
@@ -182,13 +178,13 @@ export default function Header() {
     const deduplicateNotifications = (notifications: any[]): any[] => {
       const seen = new Map<string, any>();
       const deduped: any[] = [];
-      
+
       for (const notification of notifications) {
         const cleanMessage = notification.message.replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
         const timestamp = new Date(notification.timestamp);
         const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
         const key = `${cleanMessage}_${timeWindow}`;
-        
+
         if (!seen.has(key)) {
           seen.set(key, notification);
           deduped.push({
@@ -209,13 +205,13 @@ export default function Header() {
           }
         }
       }
-      
+
       return deduped.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     };
 
     try {
-      const active = deduplicateNotifications(sellerNotifications.filter(n => !n.cleared));
-      const cleared = deduplicateNotifications(sellerNotifications.filter(n => n.cleared));
+      const active = deduplicateNotifications(sellerNotifications.filter((n) => !n.cleared));
+      const cleared = deduplicateNotifications(sellerNotifications.filter((n) => n.cleared));
       return { active, cleared };
     } catch (error) {
       console.error('Error processing notifications:', error);
@@ -248,10 +244,9 @@ export default function Header() {
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
 
-  // ✅ FIXED: Properly get platform balance for admin users
+  // ✅ Proper platform balance for admins
   const platformBalance = useMemo(() => {
     if (isAdminUser && user) {
-      // Use adminBalance directly from context for admin users
       const balance = adminBalance || 0;
       console.log('[Header] Platform balance from context:', balance);
       return balance;
@@ -259,36 +254,35 @@ export default function Header() {
     return 0;
   }, [isAdminUser, user, adminBalance, balanceUpdateTrigger]);
 
-  // ✅ Listen for wallet balance update events
+  // ✅ Events for wallet/balance updates
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const handleAdminBalanceUpdate = (event: CustomEvent) => {
       if (isAdminUser && user) {
         console.log('[Header] Admin balance update event received:', event.detail);
-        // Force re-render to update displayed balance
-        setBalanceUpdateTrigger(prev => prev + 1);
+        setBalanceUpdateTrigger((prev) => prev + 1);
       }
     };
 
     const handlePlatformBalanceUpdate = (event: CustomEvent) => {
       if (isAdminUser && user) {
         console.log('[Header] Platform balance update event received:', event.detail);
-        setBalanceUpdateTrigger(prev => prev + 1);
+        setBalanceUpdateTrigger((prev) => prev + 1);
       }
     };
 
     const handleBuyerBalanceUpdate = (event: CustomEvent) => {
       if (user?.role === 'buyer') {
         console.log('[Header] Buyer balance update event received:', event.detail);
-        setBalanceUpdateTrigger(prev => prev + 1);
+        setBalanceUpdateTrigger((prev) => prev + 1);
       }
     };
 
     const handleSellerBalanceUpdate = (event: CustomEvent) => {
       if (user?.role === 'seller') {
         console.log('[Header] Seller balance update event received:', event.detail);
-        setBalanceUpdateTrigger(prev => prev + 1);
+        setBalanceUpdateTrigger((prev) => prev + 1);
       }
     };
 
@@ -311,15 +305,16 @@ export default function Header() {
   useEffect(() => {
     if (isAdminUser && user) {
       console.log('[Header] Admin user detected, refreshing admin data...');
-      
-      // Refresh admin data if available
+
       if (typeof refreshAdminData === 'function') {
-        refreshAdminData().then(() => {
-          console.log('[Header] Admin data refreshed');
-          setBalanceUpdateTrigger(prev => prev + 1);
-        }).catch((error: any) => {
-          console.error('[Header] Error refreshing admin data:', error);
-        });
+        refreshAdminData()
+          .then(() => {
+            console.log('[Header] Admin data refreshed');
+            setBalanceUpdateTrigger((prev) => prev + 1);
+          })
+          .catch((error: any) => {
+            console.error('[Header] Error refreshing admin data:', error);
+          });
       }
     }
   }, [isAdminUser, user, refreshAdminData]);
@@ -327,10 +322,10 @@ export default function Header() {
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
-    
+
     try {
       const threads: { [otherUser: string]: any[] } = {};
-      
+
       Object.values(messages)
         .flat()
         .forEach((msg: any) => {
@@ -348,7 +343,7 @@ export default function Header() {
         ).length;
         totalUnreadCount += threadUnreadCount;
       });
-      
+
       return totalUnreadCount;
     } catch (error) {
       console.error('Error calculating unread count:', error);
@@ -356,39 +351,37 @@ export default function Header() {
     }
   }, [user?.username, messages]);
 
-  // ✅ FIXED: Rate-limited balance update function
+  // ✅ Rate-limited balance update function
   const forceUpdateBalances = useCallback(() => {
     if (!isMountedRef.current) return;
-    
+
     const now = Date.now();
-    if (now - lastBalanceUpdate.current < 1000) return; // Rate limit to 1 second
-    
+    if (now - lastBalanceUpdate.current < 1000) return; // 1s rate limit
+
     lastBalanceUpdate.current = now;
     console.log('[Header] Force updating balances');
-    setBalanceUpdateTrigger(prev => prev + 1);
-    
-    // Refresh admin data if admin user
+    setBalanceUpdateTrigger((prev) => prev + 1);
+
     if (isAdminUser && user && refreshAdminData) {
       refreshAdminData();
     }
   }, [isAdminUser, user, refreshAdminData]);
 
-  // Rate-limited auction check function
+  // Rate-limited auction check
   const checkAuctionsWithRateLimit = useCallback(() => {
     if (!isMountedRef.current) return;
-    
+
     const now = Date.now();
-    if (now - lastAuctionCheck.current < 10000) return; // Rate limit to 10 seconds
-    
+    if (now - lastAuctionCheck.current < 10000) return; // 10s
+
     lastAuctionCheck.current = now;
-    
+
     try {
       if (typeof checkEndedAuctions === 'function') {
         checkEndedAuctions();
-        // Update balances after auction check with delay
         setTimeout(() => {
           if (isMountedRef.current) {
-            setBalanceUpdateTrigger(prev => prev + 1);
+            setBalanceUpdateTrigger((prev) => prev + 1);
           }
         }, 1000);
       }
@@ -400,7 +393,7 @@ export default function Header() {
   // Update report count with error handling
   const updateReportCount = useCallback(() => {
     if (!isAdminUser || !isMountedRef.current) return;
-    
+
     try {
       const count = getReportCount();
       const validCount = typeof count === 'number' && !isNaN(count) && count >= 0 ? count : 0;
@@ -411,32 +404,36 @@ export default function Header() {
     }
   }, [isAdminUser]);
 
-  // ✅ Improved bulk notification actions with loading states and error handling
+  // ✅ NEW: Bulk notification actions that were referenced but missing
   const clearAllNotifications = useCallback(async () => {
     if (!user || user.role !== 'seller' || !sellerNotifications || clearingNotifications) return;
-    
+
     setClearingNotifications(true);
-    
+
     try {
-      const username = user.username;
-      const activeNotifsToUpdate = sellerNotifications.filter(notification => !notification.cleared);
-      
+      const uname = user.username;
+      const activeNotifsToUpdate = sellerNotifications.filter((notification: any) => !notification.cleared);
+
       if (activeNotifsToUpdate.length === 0) return;
-      
-      const updatedNotifications = sellerNotifications.map(notification => ({
+
+      const updatedNotifications = sellerNotifications.map((notification: any) => ({
         ...notification,
         cleared: notification.cleared ? notification.cleared : true
       }));
-      
-      const notificationStore = await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {});
-      notificationStore[username] = updatedNotifications;
-      
+
+      const notificationStore =
+        (await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {})) || {};
+      notificationStore[uname] = updatedNotifications;
+
       await storageService.setItem('seller_notifications_store', notificationStore);
-      
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'seller_notifications_store',
-        newValue: JSON.stringify(notificationStore)
-      }));
+
+      // Let listeners update
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'seller_notifications_store',
+          newValue: JSON.stringify(notificationStore)
+        } as StorageEventInit)
+      );
     } catch (error) {
       console.error('Error clearing notifications:', error);
     } finally {
@@ -446,26 +443,29 @@ export default function Header() {
 
   const deleteAllClearedNotifications = useCallback(async () => {
     if (!user || user.role !== 'seller' || !sellerNotifications || deletingNotifications) return;
-    
+
     setDeletingNotifications(true);
-    
+
     try {
-      const username = user.username;
-      const clearedNotifsToDelete = sellerNotifications.filter(notification => notification.cleared);
-      
+      const uname = user.username;
+      const clearedNotifsToDelete = sellerNotifications.filter((notification: any) => notification.cleared);
+
       if (clearedNotifsToDelete.length === 0) return;
-      
-      const updatedNotifications = sellerNotifications.filter(notification => !notification.cleared);
-      
-      const notificationStore = await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {});
-      notificationStore[username] = updatedNotifications;
-      
+
+      const updatedNotifications = sellerNotifications.filter((notification: any) => !notification.cleared);
+
+      const notificationStore =
+        (await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {})) || {};
+      notificationStore[uname] = updatedNotifications;
+
       await storageService.setItem('seller_notifications_store', notificationStore);
-      
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'seller_notifications_store',
-        newValue: JSON.stringify(notificationStore)
-      }));
+
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'seller_notifications_store',
+          newValue: JSON.stringify(notificationStore)
+        } as StorageEventInit)
+      );
     } catch (error) {
       console.error('Error deleting cleared notifications:', error);
     } finally {
@@ -473,24 +473,24 @@ export default function Header() {
     }
   }, [user, sellerNotifications, deletingNotifications]);
 
-  // ✅ FIXED: Setup intervals using custom hook with longer intervals
+  // ✅ Intervals + events setup
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
-  }, 30000); // Changed to 30 seconds to reduce load
+  }, 30000);
 
   const clearAuctionInterval = useInterval(() => {
     if (isMountedRef.current) checkAuctionsWithRateLimit();
   }, 30000);
 
-  // Calculate pending orders count with error handling
+  // Calculate pending orders count
   useEffect(() => {
     if (!isMountedRef.current || !user || user.role !== 'seller') return;
-    
+
     try {
-      // Only count orders that are NOT shipped (pending, processing, or no status)
-      const sales = orderHistory.filter((order) => 
-        order.seller === user.username && 
-        (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
+      const sales = orderHistory.filter(
+        (order) =>
+          order.seller === user.username &&
+          (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
       );
       const requests = getRequestsForUser(user.username, 'seller');
       const acceptedCustoms = requests.filter((req) => req.status === 'accepted');
@@ -501,13 +501,12 @@ export default function Header() {
     }
   }, [user, orderHistory, getRequestsForUser]);
 
-  // ✅ Main component setup with secure context function
+  // ✅ Main component setup
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     isMountedRef.current = true;
-    
-    // Initial updates - run after a short delay to ensure everything is ready
+
     const initTimer = setTimeout(() => {
       if (isMountedRef.current) {
         updateReportCount();
@@ -515,44 +514,37 @@ export default function Header() {
         checkAuctionsWithRateLimit();
       }
     }, 100);
-    
-    // Event listeners
+
     const handleUpdateReports = () => {
       if (isMountedRef.current) updateReportCount();
     };
-    
+
     const handleAuctionEnd = () => {
       if (isMountedRef.current) forceUpdateBalances();
     };
-    
-    // ✅ Custom event listener for wallet updates
+
     const handleWalletUpdate = (event: CustomEvent) => {
       console.log('[Header] Wallet update event received');
       if (isMountedRef.current) {
         forceUpdateBalances();
       }
     };
-    
+
     window.addEventListener('updateReports', handleUpdateReports);
     window.addEventListener('auctionEnded', handleAuctionEnd);
     window.addEventListener('walletUpdated', handleWalletUpdate as EventListener);
-    
+
     return () => {
       isMountedRef.current = false;
-      
-      // Clear init timer
       clearTimeout(initTimer);
-      
-      // Clear intervals
       clearBalanceInterval();
       clearAuctionInterval();
-      
-      // Remove event listeners
       window.removeEventListener('updateReports', handleUpdateReports);
-      window.removeEventListener('auctionEnd', handleAuctionEnd);
+      // ✅ FIXED cleanup event name to match the addEventListener above
+      window.removeEventListener('auctionEnded', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
     };
-  }, []); // Empty deps to run only once on mount
+  }, []); // run once
 
   // Reset notification tab when dropdown opens
   useEffect(() => {
@@ -563,7 +555,7 @@ export default function Header() {
 
   // ✅ Reusable mobile link renderer
   const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
-    <Link 
+    <Link
       href={href}
       className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-colors"
       onClick={() => setMobileMenuOpen(false)}
@@ -583,7 +575,7 @@ export default function Header() {
   const MobileMenu = () => (
     <div className={`mobile-menu fixed inset-0 z-50 lg:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
-      <div 
+      <div
         ref={mobileMenuRef}
         className="fixed top-0 left-0 w-64 h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-r border-[#ff950e]/30 overflow-y-auto overscroll-contain"
         style={{ touchAction: 'pan-y' }}
@@ -594,7 +586,7 @@ export default function Header() {
               <img src="/logo.png" alt="PantyPost" className="w-8 h-auto" />
               <span className="text-[#ff950e] font-bold">PantyPost</span>
             </div>
-            <button 
+            <button
               onClick={() => setMobileMenuOpen(false)}
               className="text-[#ff950e] hover:text-white"
               aria-label="Close menu"
@@ -604,10 +596,10 @@ export default function Header() {
             </button>
           </div>
         </div>
-        
+
         <nav className="p-4 space-y-2">
           {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
-          
+
           {isAdminUser && (
             <>
               <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/20 rounded-lg">
@@ -618,7 +610,7 @@ export default function Header() {
               {renderMobileLink('/wallet/admin', <Wallet className="w-5 h-5" />, `Wallet: $${platformBalance.toFixed(2)}`)}
             </>
           )}
-          
+
           {role === 'seller' && !isAdminUser && (
             <>
               {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
@@ -628,7 +620,7 @@ export default function Header() {
               {renderMobileLink('/wallet/seller', <Wallet className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
             </>
           )}
-          
+
           {role === 'buyer' && !isAdminUser && (
             <>
               {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
@@ -637,7 +629,7 @@ export default function Header() {
               {renderMobileLink('/wallet/buyer', <Wallet className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
             </>
           )}
-          
+
           {user && (
             <button
               onClick={() => {
@@ -670,10 +662,10 @@ export default function Header() {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <img 
-              src="/logo.png" 
-              alt="PantyPost Logo" 
-              className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300" 
+            <img
+              src="/logo.png"
+              alt="PantyPost Logo"
+              className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300"
             />
           </div>
         </Link>
@@ -692,7 +684,10 @@ export default function Header() {
 
         {/* Desktop Navigation */}
         <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
-          <Link href="/browse" className="group flex items-center gap-1.5 bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs">
+          <Link
+            href="/browse"
+            className="group flex items-center gap-1.5 bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs"
+          >
             <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
             <span className="font-medium">Browse</span>
           </Link>
@@ -703,7 +698,7 @@ export default function Header() {
                 <Crown className="w-3.5 h-3.5 text-purple-400" />
                 <span className="text-[10px] font-bold text-purple-300">ADMIN</span>
               </div>
-              
+
               <div className="relative flex items-center">
                 <Link
                   href="/admin/reports"
@@ -718,18 +713,27 @@ export default function Header() {
                   )}
                 </Link>
               </div>
-              
-              <Link href="/admin/bans" className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-red-900/20 hover:from-purple-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs">
+
+              <Link
+                href="/admin/bans"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-red-900/20 hover:from-purple-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
+              >
                 <Ban className="w-3.5 h-3.5 text-purple-400" />
                 <span>Bans</span>
               </Link>
-              
-              <Link href="/admin/resolved" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs">
+
+              <Link
+                href="/admin/resolved"
+                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+              >
                 <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
                 <span>Resolved</span>
               </Link>
-              
-              <Link href="/admin/messages" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs relative">
+
+              <Link
+                href="/admin/messages"
+                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs relative"
+              >
                 <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
                 <span>Messages</span>
                 {unreadCount > 0 && (
@@ -738,20 +742,26 @@ export default function Header() {
                   </span>
                 )}
               </Link>
-              
-              <Link href="/admin/verification-requests" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs">
+
+              <Link
+                href="/admin/verification-requests"
+                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+              >
                 <ClipboardCheck className="w-3.5 h-3.5 text-yellow-400" />
                 <span>Verify</span>
               </Link>
-              
-              <Link href="/admin/wallet-management" className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs">
+
+              <Link
+                href="/admin/wallet-management"
+                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+              >
                 <DollarSign className="w-3.5 h-3.5 text-green-400" />
                 <span>Wallets</span>
               </Link>
-              
-              {/* ✅ FIXED: Display platform wallet balance for admins without "Platform" text */}
-              <Link 
-                href="/wallet/admin" 
+
+              {/* Admin platform wallet balance */}
+              <Link
+                href="/wallet/admin"
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
                 onClick={(e) => {
                   e.preventDefault();
@@ -768,23 +778,32 @@ export default function Header() {
 
           {role === 'seller' && !isAdminUser && (
             <>
-              <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
+              <Link
+                href="/sellers/my-listings"
+                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+              >
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Listings</span>
               </Link>
-              
-              <Link href="/sellers/profile" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
+
+              <Link
+                href="/sellers/profile"
+                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+              >
                 <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Profile</span>
               </Link>
-              
-              <Link href="/sellers/verify" className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs">
+
+              <Link
+                href="/sellers/verify"
+                className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
+              >
                 <ShieldCheck className="w-3.5 h-3.5 text-green-400 group-hover:scale-110 transition-transform" />
                 <span className="font-medium">Get Verified</span>
               </Link>
-              
-              <Link 
-                href="/wallet/seller" 
+
+              <Link
+                href="/wallet/seller"
                 className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
@@ -796,7 +815,7 @@ export default function Header() {
                 <Wallet className="w-3.5 h-3.5 text-[#ff950e]" />
                 <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
-              
+
               <Link href="/sellers/messages" className="relative group">
                 <div className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                   <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
@@ -808,27 +827,15 @@ export default function Header() {
                   </span>
                 )}
               </Link>
-              
-              <Link href="/sellers/subscribers" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
+
+              <Link
+                href="/sellers/subscribers"
+                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+              >
                 <Users className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Subscribers</span>
               </Link>
-              
-              <div className="relative">
-                <Link
-                  href="/sellers/orders-to-fulfil"
-                  className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-white px-4 py-2 rounded-lg shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transition-all duration-300 transform hover:scale-105 border border-white/20 text-xs"
-                >
-                  <Package className="w-4 h-4 text-white" />
-                  <span className="font-bold text-white">Orders to Fulfil</span>
-                </Link>
-                {pendingOrdersCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-white text-[#ff950e] text-[10px] rounded-full px-1.5 py-0.5 min-w-[20px] text-center border-2 border-[#ff950e] font-bold shadow-lg animate-pulse">
-                    {pendingOrdersCount}
-                  </span>
-                )}
-              </div>
-              
+
               <div className="relative flex items-center" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -843,7 +850,7 @@ export default function Header() {
                     </span>
                   )}
                 </button>
-                
+
                 {showNotifDropdown && (
                   <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-50 border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
                     <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
@@ -871,35 +878,27 @@ export default function Header() {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="flex border-b border-gray-800">
                       <button
                         onClick={() => setActiveNotifTab('active')}
                         className={`flex-1 px-4 py-2 text-xs font-medium transition-colors relative ${
-                          activeNotifTab === 'active' 
-                            ? 'text-[#ff950e] bg-[#ff950e]/10' 
-                            : 'text-gray-400 hover:text-gray-300 hover:bg-[#222]/50'
+                          activeNotifTab === 'active' ? 'text-[#ff950e] bg-[#ff950e]/10' : 'text-gray-400 hover:text-gray-300 hover:bg-[#222]/50'
                         }`}
                         style={{ touchAction: 'manipulation' }}
                       >
                         Active ({processedNotifications.active.length})
-                        {activeNotifTab === 'active' && (
-                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]"></div>
-                        )}
+                        {activeNotifTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]"></div>}
                       </button>
                       <button
                         onClick={() => setActiveNotifTab('cleared')}
                         className={`flex-1 px-4 py-2 text-xs font-medium transition-colors relative ${
-                          activeNotifTab === 'cleared' 
-                            ? 'text-[#ff950e] bg-[#ff950e]/10' 
-                            : 'text-gray-400 hover:text-gray-300 hover:bg-[#222]/50'
+                          activeNotifTab === 'cleared' ? 'text-[#ff950e] bg-[#ff950e]/10' : 'text-gray-400 hover:text-gray-300 hover:bg-[#222]/50'
                         }`}
                         style={{ touchAction: 'manipulation' }}
                       >
                         Cleared ({processedNotifications.cleared.length})
-                        {activeNotifTab === 'cleared' && (
-                          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]"></div>
-                        )}
+                        {activeNotifTab === 'cleared' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]"></div>}
                       </button>
                     </div>
 
@@ -911,15 +910,9 @@ export default function Header() {
                           processedNotifications.active.map((notification, i) => (
                             <li key={notification.id || i} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
                               <div className="flex-1 pr-2">
-                                <SecureMessageDisplay 
-                                  content={notification.message}
-                                  className="text-gray-200 leading-snug"
-                                  allowBasicFormatting={false}
-                                />
+                                <SecureMessageDisplay content={notification.message} className="text-gray-200 leading-snug" allowBasicFormatting={false} />
                                 {notification.timestamp && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {new Date(notification.timestamp).toLocaleString()}
-                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">{new Date(notification.timestamp).toLocaleString()}</div>
                                 )}
                               </div>
                               <button
@@ -932,47 +925,37 @@ export default function Header() {
                             </li>
                           ))
                         )
+                      ) : processedNotifications.cleared.length === 0 ? (
+                        <li className="p-4 text-sm text-center text-gray-400">No cleared notifications</li>
                       ) : (
-                        processedNotifications.cleared.length === 0 ? (
-                          <li className="p-4 text-sm text-center text-gray-400">No cleared notifications</li>
-                        ) : (
-                          processedNotifications.cleared.map((notification, i) => (
-                            <li key={notification.id || `cleared-${i}`} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
-                              <div className="flex-1 pr-2">
-                                <SecureMessageDisplay 
-                                  content={notification.message}
-                                  className="text-gray-400 leading-snug"
-                                  allowBasicFormatting={false}
-                                />
-                                {notification.timestamp && (
-                                  <div className="text-xs text-gray-600 mt-1">
-                                    {new Date(notification.timestamp).toLocaleString()}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex gap-2 flex-col">
-                                <button
-                                  onClick={() => restoreSellerNotification(notification.id)}
-                                  className="text-xs text-green-400 hover:text-green-300 font-bold transition-colors whitespace-nowrap flex items-center gap-1"
-                                  title="Restore notification"
-                                  style={{ touchAction: 'manipulation' }}
-                                >
-                                  <RotateCcw className="w-3 h-3" />
-                                  Restore
-                                </button>
-                                <button
-                                  onClick={() => permanentlyDeleteSellerNotification(notification.id)}
-                                  className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors whitespace-nowrap flex items-center gap-1"
-                                  title="Delete permanently"
-                                  style={{ touchAction: 'manipulation' }}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                  Delete
-                                </button>
-                              </div>
-                            </li>
-                          ))
-                        )
+                        processedNotifications.cleared.map((notification, i) => (
+                          <li key={notification.id || `cleared-${i}`} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
+                            <div className="flex-1 pr-2">
+                              <SecureMessageDisplay content={notification.message} className="text-gray-400 leading-snug" allowBasicFormatting={false} />
+                              {notification.timestamp && <div className="text-xs text-gray-600 mt-1">{new Date(notification.timestamp).toLocaleString()}</div>}
+                            </div>
+                            <div className="flex gap-2 flex-col">
+                              <button
+                                onClick={() => restoreSellerNotification(notification.id)}
+                                className="text-xs text-green-400 hover:text-green-300 font-bold transition-colors whitespace-nowrap flex items-center gap-1"
+                                title="Restore notification"
+                                style={{ touchAction: 'manipulation' }}
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                Restore
+                              </button>
+                              <button
+                                onClick={() => permanentlyDeleteSellerNotification(notification.id)}
+                                className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors whitespace-nowrap flex items-center gap-1"
+                                title="Delete permanently"
+                                style={{ touchAction: 'manipulation' }}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                              </button>
+                            </div>
+                          </li>
+                        ))
                       )}
                     </ul>
                   </div>
@@ -983,18 +966,24 @@ export default function Header() {
 
           {role === 'buyer' && !isAdminUser && (
             <>
-              <Link href="/buyers/dashboard" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
+              <Link
+                href="/buyers/dashboard"
+                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+              >
                 <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Dashboard</span>
               </Link>
-              
-              <Link href="/buyers/my-orders" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
+
+              <Link
+                href="/buyers/my-orders"
+                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+              >
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Orders</span>
               </Link>
-              
-              <Link 
-                href="/wallet/buyer" 
+
+              <Link
+                href="/wallet/buyer"
                 className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
@@ -1006,7 +995,7 @@ export default function Header() {
                 <Wallet className="w-3.5 h-3.5 text-purple-400" />
                 <span className="font-bold text-purple-400">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
-              
+
               <Link href="/buyers/messages" className="relative group">
                 <div className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                   <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
@@ -1060,7 +1049,7 @@ export default function Header() {
           )}
         </nav>
       </header>
-      
+
       <MobileMenu />
     </>
   );
