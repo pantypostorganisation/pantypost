@@ -69,7 +69,10 @@ function AdminProfitDashboardContent() {
     }
   }, [timeFilter, mounted]);
 
-  const isAdmin = useMemo(() => user?.role === 'admin', [user?.role]);
+  const isAdmin = useMemo(() => {
+    if (!user?.username) return false;
+    return user.username === 'oakley' || user.username === 'gerome';
+  }, [user?.username]);
 
   const filteredData = useMemo(() => {
     if (!adminActions || !orderHistory || !depositLogs || !sellerWithdrawals || !adminWithdrawals) {
