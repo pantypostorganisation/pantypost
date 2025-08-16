@@ -3,7 +3,7 @@
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { canAccessRole, isAdmin } from '@/utils/security/permissions';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 const VALID_ROLES = ['buyer', 'seller', 'admin'] as const;
 type ValidRole = typeof VALID_ROLES[number];
@@ -21,53 +21,35 @@ export default function RequireAuth({
   const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    // Wait for auth to be ready
-    if (!isAuthReady) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[RequireAuth] Waiting for auth to be ready...');
-      }
-      return;
-    }
-    if (hasChecked) return;
+    if (!isAuthReady || hasChecked) return;
 
-    // Validate role prop
+    // Validate the role parameter
     if (!VALID_ROLES.includes(role as ValidRole)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[RequireAuth] Invalid role:', role);
-      }
       router.push('/login');
       setHasChecked(true);
       return;
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[RequireAuth] Auth ready, checking access for role:', role);
-      console.log('[RequireAuth] Current user:', user ? { username: '***', role: user.role } : 'No user');
+    const userRole = user?.role;
+    const sanitizedUsername = user?.username ? sanitizeStrict(user.username).toLowerCase() : '';
+
+    // NEW: strict role matching — no admin override for buyer/seller
+    let hasAccess = false;
+    if (role === 'admin') {
+      hasAccess = userRole === 'admin';
+    } else {
+      hasAccess = userRole === role; // admin can’t view buyer/seller pages
     }
 
-    // Access logic: admins can access anything; otherwise must match required role
-    const hasAccess = !!user && canAccessRole(user, role);
-
-    if (!hasAccess) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `[RequireAuth] Access denied (required=${role}, userRole=${user?.role}). Redirecting to login.`
-        );
-      }
+    if (!user || !hasAccess) {
       router.push('/login');
     } else {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `[RequireAuth] Access granted (required=${role}, userRole=${user?.role}, isAdmin=${isAdmin(user)})`
-        );
-      }
       setAuthorized(true);
     }
 
     setHasChecked(true);
   }, [isAuthReady, user, role, router, hasChecked]);
 
-  // Loading states
   if (!isAuthReady || !hasChecked) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -81,5 +63,6 @@ export default function RequireAuth({
   }
 
   if (!authorized) return null;
+
   return <>{children}</>;
 }
