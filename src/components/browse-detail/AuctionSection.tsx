@@ -62,21 +62,22 @@ export default function AuctionSection({
 
   // Calculate time remaining for urgency
   useEffect(() => {
-    if (listing.auction?.endTime) {
-      const checkUrgency = () => {
-        const endTime = new Date(listing.auction!.endTime).getTime();
-        const now = Date.now();
-        const timeLeft = endTime - now;
-        const fiveMinutes = 5 * 60 * 1000;
-        
-        setIsUrgent(timeLeft <= fiveMinutes && timeLeft > 0);
-      };
-      
-      checkUrgency();
-      const interval = setInterval(checkUrgency, 1000);
-      return () => clearInterval(interval);
+    if (!listing.auction?.endTime) {
+      return; // Early return with no cleanup needed
     }
-    return undefined;
+    
+    const checkUrgency = () => {
+      const endTime = new Date(listing.auction!.endTime).getTime();
+      const now = Date.now();
+      const timeLeft = endTime - now;
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      setIsUrgent(timeLeft <= fiveMinutes && timeLeft > 0);
+    };
+    
+    checkUrgency();
+    const interval = setInterval(checkUrgency, 1000);
+    return () => clearInterval(interval);
   }, [listing.auction?.endTime]);
 
   // Calculate user's bid position
@@ -93,13 +94,18 @@ export default function AuctionSection({
 
   // Show recent bid alerts
   useEffect(() => {
-    if (realtimeBids && realtimeBids.length > 0) {
-      const latestBid = realtimeBids[0];
-      if (latestBid.bidder !== username) {
-        setRecentBidAlert(`${latestBid.bidder} bid $${latestBid.amount.toFixed(2)}!`);
-        setTimeout(() => setRecentBidAlert(null), 5000);
-      }
+    if (!realtimeBids || realtimeBids.length === 0) {
+      return; // Early return with no cleanup needed
     }
+    
+    const latestBid = realtimeBids[0];
+    if (latestBid.bidder !== username) {
+      setRecentBidAlert(`${latestBid.bidder} bid ${latestBid.amount.toFixed(2)}!`);
+      const timer = setTimeout(() => setRecentBidAlert(null), 5000);
+      return () => clearTimeout(timer);
+    }
+    // Add explicit return for the else case
+    return;
   }, [realtimeBids, username]);
 
   // Simulate viewer count changes
@@ -141,11 +147,11 @@ export default function AuctionSection({
   // Calculate minimum bid - ensure it's always an integer
   const getMinimumBid = () => {
     if (listing.auction?.highestBid) {
-      // Parse as integer to remove ALL decimals, then add 1
-      const currentBid = parseInt(listing.auction.highestBid.toString().split('.')[0]);
+      // Ensure we're working with an integer (remove any floating point errors)
+      const currentBid = Math.floor(Number(listing.auction.highestBid));
       return currentBid + 1;
     }
-    const startingPrice = parseInt((listing.auction?.startingPrice || 0).toString().split('.')[0]);
+    const startingPrice = Math.floor(Number(listing.auction?.startingPrice || 0));
     return startingPrice || 1;
   };
 
@@ -221,7 +227,7 @@ export default function AuctionSection({
       <div className="grid grid-cols-3 gap-2.5 mb-3">
         <div className="bg-black/40 rounded-lg p-2.5 border border-gray-700/50">
           <p className="text-gray-500 text-xs mb-0.5">Start</p>
-          <p className="text-sm font-bold text-white">${listing.auction.startingPrice.toFixed(2)}</p>
+          <p className="text-sm font-bold text-white">${Math.floor(listing.auction.startingPrice)}</p>
         </div>
         
         <div className="bg-black/40 rounded-lg p-2.5 border border-gray-700/50">
@@ -236,7 +242,7 @@ export default function AuctionSection({
               animate={{ scale: 1 }}
               className="text-sm font-bold text-green-400"
             >
-              ${listing.auction.highestBid.toFixed(2)}
+              ${Math.floor(listing.auction.highestBid)}
             </motion.p>
           ) : (
             <p className="text-xs text-gray-500 italic">No bids</p>
@@ -406,7 +412,7 @@ export default function AuctionSection({
                   <span className={`font-bold ${
                     index === 0 ? 'text-green-400 text-sm' : 'text-white'
                   }`}>
-                    ${bid.amount.toFixed(2)}
+                    ${Math.floor(bid.amount)}
                   </span>
                 </div>
               </motion.div>

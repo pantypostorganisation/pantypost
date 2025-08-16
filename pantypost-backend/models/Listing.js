@@ -112,8 +112,8 @@ const listingSchema = new mongoose.Schema({
     },
     bidIncrement: {
       type: Number,
-      default: 1, // Minimum bid increment
-      min: 0.01
+      default: 1, // Always use whole dollars
+      min: 1      // Changed from 0.01 to 1 - no decimals allowed!
     },
     highestBidder: {
       type: String,
@@ -173,18 +173,25 @@ listingSchema.virtual('auction.reserveMet').get(function() {
 
 // Method to place a bid
 listingSchema.methods.placeBid = async function(bidder, amount) {
+  // Ensure amount is an integer
+  amount = Math.floor(amount);
+  
   // Validate auction is active
   if (!this.auction.isActive) {
     throw new Error('Auction is not active');
   }
   
-  // Validate bid amount
-  const minimumBid = this.auction.currentBid > 0 
-    ? this.auction.currentBid + this.auction.bidIncrement
-    : this.auction.startingPrice;
+  // Calculate minimum bid with integer math
+  const currentBid = Math.floor(this.auction.currentBid || 0);
+  const increment = Math.floor(this.auction.bidIncrement || 1);
+  const startingPrice = Math.floor(this.auction.startingPrice || 0);
+  
+  const minimumBid = currentBid > 0 
+    ? currentBid + increment
+    : startingPrice;
     
   if (amount < minimumBid) {
-    throw new Error(`Bid must be at least $${minimumBid.toFixed(2)}`);
+    throw new Error(`Bid must be at least $${minimumBid}`);
   }
   
   // Can't bid on own auction
@@ -192,7 +199,7 @@ listingSchema.methods.placeBid = async function(bidder, amount) {
     throw new Error('Cannot bid on your own auction');
   }
   
-  // Update auction
+  // Update auction with integer values
   this.auction.currentBid = amount;
   this.auction.highestBidder = bidder;
   this.auction.bidCount += 1;

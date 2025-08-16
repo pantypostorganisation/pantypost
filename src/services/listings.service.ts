@@ -147,20 +147,23 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing {
   if (backendListing.auction?.isAuction) {
     frontendListing.auction = {
       isAuction: true,
-      startingPrice: backendListing.auction.startingPrice,
-      reservePrice: backendListing.auction.reservePrice,
+      startingPrice: Math.floor(backendListing.auction.startingPrice || 0),
+      reservePrice: backendListing.auction.reservePrice ? 
+        Math.floor(backendListing.auction.reservePrice) : undefined,
       endTime: backendListing.auction.endTime,
       bids: backendListing.auction.bids.map(bid => ({
         id: uuidv4(), // Generate ID for frontend
         bidder: bid.bidder,
-        amount: bid.amount,
+        amount: Math.floor(bid.amount || 0), // Ensure integer
         date: bid.date,
       })),
-      highestBid: backendListing.auction.currentBid > 0 ? backendListing.auction.currentBid : undefined,
+      // CRITICAL FIX: Always floor the currentBid to remove any decimals
+      highestBid: backendListing.auction.currentBid > 0 ? 
+        Math.floor(backendListing.auction.currentBid) : undefined,
       highestBidder: backendListing.auction.highestBidder,
       status: backendListing.auction.status === 'active' ? 'active' : 
               backendListing.auction.status === 'ended' ? 'ended' : 'cancelled',
-      minimumIncrement: backendListing.auction.bidIncrement || 1,
+      minimumIncrement: Math.floor(backendListing.auction.bidIncrement || 1),
     };
   }
 

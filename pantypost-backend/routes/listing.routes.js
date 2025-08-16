@@ -300,13 +300,14 @@ router.post('/', authMiddleware, async (req, res) => {
     if (listingData.isAuction) {
       listingData.auction = {
         isAuction: true,
-        startingPrice: listingData.startingPrice || 0,
-        reservePrice: listingData.reservePrice,
+        startingPrice: Math.floor(listingData.startingPrice || 0),
+        reservePrice: listingData.reservePrice ? Math.floor(listingData.reservePrice) : undefined,
         endTime: new Date(listingData.endTime),
         currentBid: 0,
         bidCount: 0,
         bids: [],
-        status: 'active'
+        status: 'active',
+        bidIncrement: 1  // Always use $1 increments
       };
       
       delete listingData.isAuction;
@@ -418,7 +419,10 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     const { amount } = req.body;
     const bidder = req.user.username;
     
-    if (!amount || amount <= 0) {
+    // CRITICAL FIX: Ensure amount is always an integer
+    const bidAmount = Math.floor(Number(amount));
+    
+    if (!bidAmount || bidAmount <= 0) {
       return res.status(400).json({
         success: false,
         error: 'Invalid bid amount'
@@ -447,8 +451,20 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
+    // Validate minimum bid with integer math
+    const currentBid = Math.floor(listing.auction.currentBid || 0);
+    const startingPrice = Math.floor(listing.auction.startingPrice || 0);
+    const minimumBid = currentBid > 0 ? currentBid + 1 : startingPrice;
+    
+    if (bidAmount < minimumBid) {
+      return res.status(400).json({
+        success: false,
+        error: `Minimum bid is $${minimumBid}`
+      });
+    }
+    
     const buyerWallet = await Wallet.findOne({ username: bidder });
-    if (!buyerWallet || !buyerWallet.hasBalance(amount)) {
+    if (!buyerWallet || !buyerWallet.hasBalance(bidAmount)) {
       return res.status(400).json({
         success: false,
         error: 'Insufficient balance to place this bid'
@@ -456,7 +472,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     }
     
     const previousHighestBidder = listing.auction.highestBidder;
-    const previousHighestBid = listing.auction.currentBid;
+    const previousHighestBid = Math.floor(listing.auction.currentBid || 0);
     
     // Store the current balance before withdrawal
     const bidderPreviousBalance = buyerWallet.balance;
@@ -465,11 +481,11 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     const isIncrementalBid = previousHighestBidder === bidder && previousHighestBid > 0;
     
     try {
-      await listing.placeBid(bidder, amount);
+      await listing.placeBid(bidder, bidAmount); // Use bidAmount instead of amount
       
       if (isIncrementalBid) {
         // For incremental bids, only charge the difference (NO FEE)
-        const bidDifference = amount - previousHighestBid;
+        const bidDifference = bidAmount - previousHighestBid;
         await buyerWallet.withdraw(bidDifference);
         
         const holdTransaction = new Transaction({
@@ -483,7 +499,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
           status: 'completed',
           metadata: {
             auctionId: listing._id.toString(),
-            bidAmount: amount,
+            bidAmount: bidAmount,
             previousBid: previousHighestBid,
             incrementalAmount: bidDifference
           }
@@ -504,11 +520,11 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         }
       } else {
         // New bidder - hold exact bid amount (NO FEE)
-        await buyerWallet.withdraw(amount);
+        await buyerWallet.withdraw(bidAmount);
         
         const holdTransaction = new Transaction({
           type: 'bid_hold',
-          amount: amount,
+          amount: bidAmount,
           from: bidder,
           to: 'platform_escrow',
           fromRole: 'buyer',
@@ -517,7 +533,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
           status: 'completed',
           metadata: {
             auctionId: listing._id.toString(),
-            bidAmount: amount
+            bidAmount: bidAmount
           }
         });
         await holdTransaction.save();
@@ -590,7 +606,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       if (global.webSocketService) {
         global.webSocketService.emitNewBid(listing, {
           bidder: bidder,
-          amount: amount,
+          amount: bidAmount,
           date: new Date()
         });
       }
@@ -598,7 +614,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       res.json({
         success: true,
         data: listing,
-        message: `Bid placed successfully! You are now the highest bidder at $${amount}!`
+        message: `Bid placed successfully! You are now the highest bidder at $${bidAmount}!`
       });
     } catch (bidError) {
       return res.status(400).json({
@@ -720,7 +736,7 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     }
     
     // Create order for winner - UPDATED FOR 20% SELLER FEE
-    const winningBid = listing.auction.currentBid;
+    const winningBid = Math.floor(listing.auction.currentBid);
     const winner = listing.auction.highestBidder;
     
     let sellerWallet = await Wallet.findOne({ username: listing.seller });
