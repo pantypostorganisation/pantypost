@@ -1,4 +1,3 @@
-// src/app/wallet/admin/page.tsx
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -69,10 +68,8 @@ function AdminProfitDashboardContent() {
     }
   }, [timeFilter, mounted]);
 
-  const isAdmin = useMemo(() => {
-    if (!user?.username) return false;
-    return user.username === 'oakley' || user.username === 'gerome';
-  }, [user?.username]);
+  // ✅ Source of truth: role from backend-authenticated user
+  const isAdminUser = useMemo(() => user?.role === 'admin', [user?.role]);
 
   const filteredData = useMemo(() => {
     if (!adminActions || !orderHistory || !depositLogs || !sellerWithdrawals || !adminWithdrawals) {
@@ -80,8 +77,8 @@ function AdminProfitDashboardContent() {
         actions: [] as any[],
         orders: [] as any[],
         deposits: [] as any[],
-        sellerWithdrawals: [] as any, // may come back as object map from helper
-        adminWithdrawals: [] as any,  // may come back as object map from helper
+        sellerWithdrawals: [] as any,
+        adminWithdrawals: [] as any,
       };
     }
 
@@ -206,7 +203,7 @@ function AdminProfitDashboardContent() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdminUser) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
         <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
