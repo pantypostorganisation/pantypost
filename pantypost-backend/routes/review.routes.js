@@ -5,6 +5,7 @@ const Review = require('../models/Review');
 const Order = require('../models/Order');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
+const mongoose = require('mongoose');
 
 // ============= REVIEW ROUTES =============
 
@@ -90,8 +91,8 @@ router.get('/order/:orderId', authMiddleware, async (req, res) => {
   try {
     const { orderId } = req.params;
     
-    // Check if review exists for this order
-    const review = await Review.findOne({ orderId });
+    // Check if review exists for this order (orderId can be string or ObjectId)
+    const review = await Review.findOne({ orderId: orderId });
     
     res.json({
       success: true,
@@ -113,6 +114,13 @@ router.post('/', authMiddleware, async (req, res) => {
   try {
     const { orderId, rating, comment, asDescribed, fastShipping, wouldBuyAgain } = req.body;
     
+    console.log('[Review Route] Creating review:', {
+      orderId,
+      rating,
+      reviewer: req.user.username,
+      commentLength: comment?.length
+    });
+    
     // Validate rating
     if (!rating || rating < 1 || rating > 5) {
       return res.status(400).json({
@@ -129,45 +137,90 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if order exists
-    const order = await Order.findById(orderId);
-    if (!order) {
+    // Determine the seller from the orderId
+    let sellerUsername;
+    
+    // Check if orderId is a valid MongoDB ObjectId
+    if (mongoose.Types.ObjectId.isValid(orderId) && orderId.length === 24) {
+      // It's a valid ObjectId, try to find the order
+      const order = await Order.findById(orderId);
+      if (order) {
+        // Check if user is the buyer of this order
+        if (order.buyer !== req.user.username) {
+          return res.status(403).json({
+            success: false,
+            error: 'You can only review your own orders'
+          });
+        }
+        
+        sellerUsername = order.seller;
+      } else {
+        // Order not found, but we can still proceed if it's a generated ID
+        // Parse the seller from the string format
+        if (orderId.includes('_')) {
+          const parts = orderId.split('_');
+          if (parts.length >= 3 && parts[0] === 'order') {
+            sellerUsername = parts[2];
+          }
+        }
+        
+        if (!sellerUsername) {
+          return res.status(404).json({
+            success: false,
+            error: 'Order not found'
+          });
+        }
+      }
+    } else {
+      // It's not a valid ObjectId, parse from string format
+      // Format: order_buyer_seller_timestamp
+      const parts = orderId.split('_');
+      if (parts.length >= 3 && parts[0] === 'order') {
+        const buyer = parts[1];
+        sellerUsername = parts[2];
+        
+        // Verify the buyer matches
+        if (buyer !== req.user.username) {
+          return res.status(403).json({
+            success: false,
+            error: 'Invalid order ID for this user'
+          });
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid order ID format'
+        });
+      }
+    }
+    
+    // Check if seller exists
+    const seller = await User.findOne({ username: sellerUsername, role: 'seller' });
+    if (!seller) {
       return res.status(404).json({
         success: false,
-        error: 'Order not found'
+        error: 'Seller not found'
       });
     }
     
-    // Check if user is the buyer of this order
-    if (order.buyer !== req.user.username) {
-      return res.status(403).json({
-        success: false,
-        error: 'You can only review your own orders'
-      });
-    }
+    // Check if review already exists for this buyer-seller combination
+    const existingReview = await Review.findOne({ 
+      reviewer: req.user.username,
+      reviewee: sellerUsername
+    });
     
-    // Check if order has been delivered
-    if (order.shippingStatus !== 'delivered') {
-      return res.status(400).json({
-        success: false,
-        error: 'You can only review delivered orders'
-      });
-    }
-    
-    // Check if review already exists
-    const existingReview = await Review.findOne({ orderId });
     if (existingReview) {
       return res.status(400).json({
         success: false,
-        error: 'This order has already been reviewed'
+        error: 'You have already reviewed this seller'
       });
     }
     
     // Create the review
     const review = new Review({
-      orderId,
+      orderId: orderId, // Store as-is (Mixed type accepts both string and ObjectId)
       reviewer: req.user.username,
-      reviewee: order.seller,
+      reviewee: sellerUsername,
       rating,
       comment,
       asDescribed: asDescribed !== false,
@@ -177,9 +230,11 @@ router.post('/', authMiddleware, async (req, res) => {
     
     await review.save();
     
+    console.log('[Review Route] Review created successfully:', review._id);
+    
     // Update seller's rating in User model
     const allSellerReviews = await Review.find({ 
-      reviewee: order.seller,
+      reviewee: sellerUsername,
       status: 'approved'
     });
     
@@ -187,7 +242,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const avgRating = totalRating / allSellerReviews.length;
     
     await User.findOneAndUpdate(
-      { username: order.seller },
+      { username: sellerUsername },
       { 
         rating: Math.round(avgRating * 10) / 10, // Round to 1 decimal
         reviewCount: allSellerReviews.length
@@ -199,6 +254,7 @@ router.post('/', authMiddleware, async (req, res) => {
       data: review
     });
   } catch (error) {
+    console.error('[Review Route] Error creating review:', error);
     res.status(500).json({
       success: false,
       error: error.message

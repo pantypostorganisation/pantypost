@@ -3,10 +3,9 @@ const mongoose = require('mongoose');
 
 // Create review schema
 const reviewSchema = new mongoose.Schema({
-  // The order this review is for
+  // The order this review is for - now accepts both ObjectId and String
   orderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
+    type: mongoose.Schema.Types.Mixed, // Changed from ObjectId to Mixed to accept both
     required: true
   },
   
@@ -87,7 +86,10 @@ const reviewSchema = new mongoose.Schema({
 // Indexes for better performance
 reviewSchema.index({ reviewer: 1, createdAt: -1 });
 reviewSchema.index({ reviewee: 1, rating: -1 });
-reviewSchema.index({ orderId: 1 }, { unique: true }); // One review per order
+// Remove the unique constraint on orderId since we're using generated strings
+// reviewSchema.index({ orderId: 1 }, { unique: true }); 
+// Add unique constraint on reviewer + reviewee instead (one review per buyer-seller pair)
+reviewSchema.index({ reviewer: 1, reviewee: 1 }, { unique: true });
 
 // Virtual for calculating helpfulness (for future use)
 reviewSchema.virtual('helpfulness').get(function() {

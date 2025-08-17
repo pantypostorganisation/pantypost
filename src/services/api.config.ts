@@ -119,6 +119,9 @@ export const API_ENDPOINTS = {
     DELETE: '/reviews/:id',
     BY_SELLER: '/reviews/seller/:username',
     BY_BUYER: '/reviews/buyer/:username',
+    BY_ORDER: '/reviews/order/:orderId',
+    RESPONSE: '/reviews/:reviewId/response',
+    FLAG: '/reviews/:reviewId/flag',
   },
   
   // Upload endpoints

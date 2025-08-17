@@ -26,6 +26,9 @@ export { ordersService } from './orders.service';
 // Messages service - messaging functionality
 export { messagesService } from './messages.service';
 
+// Reviews service - review management
+export { reviewsService } from './reviews.service';
+
 // Security service - validation, sanitization, and security features
 export { securityService, sanitize } from './security.service';
 
@@ -90,6 +93,16 @@ export type {
   CustomRequestData,
   MessageAttachment
 } from './messages.service';
+
+// Reviews service types
+export type {
+  Review,
+  ReviewStats,
+  ReviewsResponse,
+  CreateReviewRequest,
+  SellerResponseRequest,
+  FlagReviewRequest
+} from './reviews.service';
 
 // Export order types from WalletContext
 export type { Order, CustomRequestPurchase, DepositLog } from '@/context/WalletContext';

@@ -1,12 +1,12 @@
 // src/hooks/profile/useSellerReviews.ts
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
 import { useReviews } from '@/context/ReviewContext';
+import { useWallet } from '@/context/WalletContext';
 import { sanitizeUsername, sanitizeStrict } from '@/utils/security/sanitization';
-import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
+import type { Order } from '@/types/order';
 
 // Review validation schema
 const reviewSchema = z.object({
@@ -19,8 +19,8 @@ const reviewSchema = z.object({
 
 export function useSellerReviews(username: string) {
   const { user } = useAuth();
+  const { getReviewsForSeller, addReview, hasReviewed, getReviewStats, isLoading: reviewsLoading, error: reviewsError } = useReviews();
   const { orderHistory } = useWallet();
-  const { getReviewsForSeller, addReview, hasReviewed } = useReviews();
 
   // Sanitize username
   const sanitizedUsername = sanitizeUsername(username);
@@ -30,33 +30,104 @@ export function useSellerReviews(username: string) {
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get reviews data
-  const reviews = getReviewsForSeller(sanitizedUsername);
-  
-  const averageRating = useMemo(() => 
-    reviews.length > 0
-      ? reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length
-      : null,
-    [reviews]
-  );
+  // Reviews data state
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [hasPurchased, setHasPurchased] = useState(false);
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false);
+  const [eligibleOrderId, setEligibleOrderId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const hasPurchased = useMemo(() => 
-    orderHistory.some(
-      order => order.seller === sanitizedUsername && order.buyer === user?.username
-    ),
-    [orderHistory, sanitizedUsername, user?.username]
-  );
+  // Fetch reviews for the seller
+  useEffect(() => {
+    const fetchReviews = async () => {
+      if (!sanitizedUsername) return;
+      
+      setIsLoading(true);
+      try {
+        const fetchedReviews = await getReviewsForSeller(sanitizedUsername);
+        setReviews(fetchedReviews);
+        
+        // Get stats for average rating
+        const stats = await getReviewStats(sanitizedUsername);
+        if (stats) {
+          setAverageRating(stats.avgRating);
+        }
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const alreadyReviewed = user?.username ? hasReviewed(sanitizedUsername, user.username) : false;
+    fetchReviews();
+  }, [sanitizedUsername, getReviewsForSeller, getReviewStats]);
+
+  // Check if user has purchased from this seller and if they've already reviewed
+  useEffect(() => {
+    const checkPurchaseAndReview = async () => {
+      if (!user?.username || !sanitizedUsername) {
+        setHasPurchased(false);
+        setAlreadyReviewed(false);
+        setEligibleOrderId(null);
+        return;
+      }
+
+      try {
+        // Use orderHistory from wallet context
+        // Filter orders where the current user is the buyer and the seller matches
+        const ordersFromSeller = orderHistory.filter(
+          (order: Order) => {
+            const isBuyer = order.buyer === user.username;
+            const isSeller = order.seller === sanitizedUsername;
+            return isBuyer && isSeller;
+          }
+        );
+
+        if (ordersFromSeller.length > 0) {
+          setHasPurchased(true);
+          
+          // Use the first order's ID as the eligible order for the review
+          // Generate a dummy order ID if none exists (for backwards compatibility)
+          const orderId = ordersFromSeller[0].id || 
+                         ordersFromSeller[0].listingId || 
+                         `order_${user.username}_${sanitizedUsername}_${Date.now()}`;
+          
+          setEligibleOrderId(orderId);
+          
+          // Check if the user has already reviewed this seller
+          // by checking if their username appears in the reviews list
+          const existingReviews = await getReviewsForSeller(sanitizedUsername);
+          const hasUserReviewed = existingReviews.some(
+            (review: any) => review.reviewer === user.username
+          );
+          
+          setAlreadyReviewed(hasUserReviewed);
+        } else {
+          setHasPurchased(false);
+          setAlreadyReviewed(false);
+          setEligibleOrderId(null);
+        }
+      } catch (error) {
+        console.error('Error checking purchase/review status:', error);
+        setHasPurchased(false);
+        setAlreadyReviewed(false);
+        setEligibleOrderId(null);
+      }
+    };
+
+    checkPurchaseAndReview();
+  }, [user?.username, sanitizedUsername, orderHistory, getReviewsForSeller]);
 
   // Auto-hide submitted message
   useEffect(() => {
     if (submitted) {
-      const timeout = setTimeout(() => setSubmitted(false), 2000);
+      const timeout = setTimeout(() => setSubmitted(false), 3000);
       return () => clearTimeout(timeout);
     }
-    return; // Add explicit return for else case
+    return undefined;
   }, [submitted]);
 
   // Clear validation error when inputs change
@@ -64,11 +135,35 @@ export function useSellerReviews(username: string) {
     setValidationError('');
   }, [rating, comment]);
 
+  // Clear review errors
+  useEffect(() => {
+    if (reviewsError) {
+      setValidationError(reviewsError);
+    }
+  }, [reviewsError]);
+
   // Handlers
-  const handleReviewSubmit = () => {
+  const handleReviewSubmit = useCallback(async () => {
     if (!user?.username) {
       setValidationError('You must be logged in to submit a review');
       return;
+    }
+
+    if (!eligibleOrderId) {
+      // If no order ID but user has purchased, generate a temporary one
+      if (hasPurchased) {
+        const tempOrderId = `order_${user.username}_${sanitizedUsername}_${Date.now()}`;
+        setEligibleOrderId(tempOrderId);
+        
+        // Retry with the generated ID
+        setTimeout(() => {
+          handleReviewSubmit();
+        }, 100);
+        return;
+      } else {
+        setValidationError('You must purchase from this seller before leaving a review');
+        return;
+      }
     }
 
     // Validate review data
@@ -79,26 +174,51 @@ export function useSellerReviews(username: string) {
       return;
     }
 
-    // Add sanitized review
-    addReview(sanitizedUsername, {
-      reviewer: user.username,
-      rating: validationResult.data.rating,
-      comment: validationResult.data.comment,
-      date: new Date().toISOString(),
-    });
-
-    setSubmitted(true);
-    setComment('');
-    setRating(5);
+    setIsSubmitting(true);
     setValidationError('');
-  };
+
+    try {
+      // Add review via context (which calls the API)
+      const success = await addReview(sanitizedUsername, eligibleOrderId, {
+        rating: validationResult.data.rating,
+        comment: validationResult.data.comment,
+        asDescribed: true,
+        fastShipping: true,
+        wouldBuyAgain: true,
+      });
+
+      if (success) {
+        setSubmitted(true);
+        setComment('');
+        setRating(5);
+        setAlreadyReviewed(true);
+        
+        // Refresh reviews
+        const updatedReviews = await getReviewsForSeller(sanitizedUsername);
+        setReviews(updatedReviews);
+        
+        // Update stats
+        const stats = await getReviewStats(sanitizedUsername);
+        if (stats) {
+          setAverageRating(stats.avgRating);
+        }
+      } else {
+        setValidationError('Failed to submit review. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      setValidationError('An error occurred while submitting your review');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [user?.username, eligibleOrderId, rating, comment, sanitizedUsername, hasPurchased, addReview, getReviewsForSeller, getReviewStats]);
 
   // Sanitize comment input
-  const handleCommentChange = (value: string) => {
+  const handleCommentChange = useCallback((value: string) => {
     // Apply basic length limit to prevent excessive input
     const truncated = value.slice(0, 600);
     setComment(truncated);
-  };
+  }, []);
 
   return {
     // Review data
@@ -117,6 +237,10 @@ export function useSellerReviews(username: string) {
     setComment: handleCommentChange,
     submitted,
     validationError,
+    isSubmitting,
+    
+    // Loading state
+    isLoading: isLoading || reviewsLoading,
     
     // Handlers
     handleReviewSubmit,

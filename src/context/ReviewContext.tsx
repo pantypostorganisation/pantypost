@@ -1,16 +1,27 @@
 // src/context/ReviewContext.tsx
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { storageService } from '@/services';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { reviewsService, Review as ServiceReview, ReviewStats } from '@/services/reviews.service';
+import { useAuth } from './AuthContext';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { z } from 'zod';
 
 export type Review = {
+  _id?: string;
+  orderId?: string;
   reviewer: string;
-  rating: number; // 1 to 5
+  reviewee?: string;
+  rating: number;
   comment: string;
   date: string;
+  asDescribed?: boolean;
+  fastShipping?: boolean;
+  wouldBuyAgain?: boolean;
+  sellerResponse?: {
+    text: string;
+    date: string;
+  };
 };
 
 // Validation schema for reviews
@@ -20,92 +31,193 @@ const reviewSchema = z.object({
 });
 
 type ReviewContextType = {
-  getReviewsForSeller: (sellerUsername: string) => Review[];
-  addReview: (sellerUsername: string, review: Review) => void;
-  hasReviewed: (sellerUsername: string, buyerUsername: string) => boolean;
+  getReviewsForSeller: (sellerUsername: string) => Promise<Review[]>;
+  addReview: (sellerUsername: string, orderId: string, review: Omit<Review, 'reviewer' | 'date'>) => Promise<boolean>;
+  hasReviewed: (orderId: string) => Promise<boolean>;
+  getReviewStats: (sellerUsername: string) => Promise<ReviewStats | null>;
+  isLoading: boolean;
+  error: string | null;
 };
 
 const ReviewContext = createContext<ReviewContextType | undefined>(undefined);
 
 export const ReviewProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [allReviews, setAllReviews] = useState<{ [seller: string]: Review[] }>({});
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [cachedReviews, setCachedReviews] = useState<{ [seller: string]: Review[] }>({});
+  const [cachedStats, setCachedStats] = useState<{ [seller: string]: ReviewStats }>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  // Load data using storage service
+  // Clear cache when user changes
   useEffect(() => {
-    const loadData = async () => {
-      if (typeof window === 'undefined' || isInitialized) return;
+    setCachedReviews({});
+    setCachedStats({});
+  }, [user?.username]);
+
+  const getReviewsForSeller = useCallback(async (sellerUsername: string): Promise<Review[]> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Check cache first
+      if (cachedReviews[sellerUsername]) {
+        return cachedReviews[sellerUsername];
+      }
+
+      // Fetch from API
+      const response = await reviewsService.getSellerReviews(sellerUsername);
       
-      try {
-        const stored = await storageService.getItem<{ [seller: string]: Review[] }>('panty_reviews', {});
-        
-        // Sanitize existing reviews
-        const sanitizedReviews: { [seller: string]: Review[] } = {};
-        Object.entries(stored).forEach(([seller, reviews]) => {
-          sanitizedReviews[seller] = reviews.map(review => ({
-            ...review,
-            comment: sanitizeStrict(review.comment || ''),
+      if (response.success && response.data) {
+        const reviews: Review[] = response.data.reviews.map(r => ({
+          _id: r._id,
+          orderId: r.orderId,
+          reviewer: r.reviewer,
+          reviewee: r.reviewee,
+          rating: r.rating,
+          comment: r.comment,
+          date: r.createdAt,
+          asDescribed: r.asDescribed,
+          fastShipping: r.fastShipping,
+          wouldBuyAgain: r.wouldBuyAgain,
+          sellerResponse: r.sellerResponse,
+        }));
+
+        // Update cache
+        setCachedReviews(prev => ({
+          ...prev,
+          [sellerUsername]: reviews
+        }));
+
+        // Cache stats too
+        if (response.data.stats) {
+          setCachedStats(prev => ({
+            ...prev,
+            [sellerUsername]: response.data!.stats
           }));
+        }
+
+        return reviews;
+      } else {
+        setError(response.error?.message || 'Failed to fetch reviews');
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      setError('Failed to fetch reviews');
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cachedReviews]);
+
+  const addReview = useCallback(async (
+    sellerUsername: string, 
+    orderId: string,
+    review: Omit<Review, 'reviewer' | 'date'>
+  ): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      if (!user?.username) {
+        setError('You must be logged in to submit a review');
+        return false;
+      }
+
+      // Validate review data
+      const validation = reviewSchema.safeParse({
+        rating: review.rating,
+        comment: review.comment,
+      });
+
+      if (!validation.success) {
+        setError(validation.error.errors[0]?.message || 'Invalid review');
+        return false;
+      }
+
+      // Create review via API
+      const response = await reviewsService.createReview({
+        orderId,
+        rating: validation.data.rating,
+        comment: sanitizeStrict(validation.data.comment),
+        asDescribed: review.asDescribed !== false,
+        fastShipping: review.fastShipping !== false,
+        wouldBuyAgain: review.wouldBuyAgain !== false,
+      });
+
+      if (response.success) {
+        // Clear cache for this seller to force refresh
+        setCachedReviews(prev => {
+          const updated = { ...prev };
+          delete updated[sellerUsername];
+          return updated;
+        });
+        setCachedStats(prev => {
+          const updated = { ...prev };
+          delete updated[sellerUsername];
+          return updated;
         });
         
-        setAllReviews(sanitizedReviews);
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Error loading reviews:', error);
-        setIsInitialized(true);
+        return true;
+      } else {
+        setError(response.error?.message || 'Failed to create review');
+        return false;
       }
-    };
-
-    loadData();
-  }, [isInitialized]);
-
-  // Save data using storage service
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
-      storageService.setItem('panty_reviews', allReviews);
+    } catch (error) {
+      console.error('Error adding review:', error);
+      setError('Failed to add review');
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-  }, [allReviews, isInitialized]);
+  }, [user?.username]);
 
-  const getReviewsForSeller = (sellerUsername: string): Review[] => {
-    return allReviews[sellerUsername] || [];
-  };
+  const hasReviewed = useCallback(async (orderId: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-  const addReview = (sellerUsername: string, review: Review) => {
-    // Validate review data
-    const validation = reviewSchema.safeParse({
-      rating: review.rating,
-      comment: review.comment,
-    });
-
-    if (!validation.success) {
-      console.error('Invalid review data:', validation.error);
-      alert(validation.error.errors[0]?.message || 'Invalid review');
-      return;
+      const response = await reviewsService.checkOrderReview(orderId);
+      
+      if (response.success && response.data) {
+        return response.data.hasReview;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking review status:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
     }
+  }, []);
 
-    const sanitizedReview: Review = {
-      ...review,
-      rating: validation.data.rating,
-      comment: sanitizeStrict(validation.data.comment),
-    };
+  const getReviewStats = useCallback(async (sellerUsername: string): Promise<ReviewStats | null> => {
+    try {
+      // Check cache first
+      if (cachedStats[sellerUsername]) {
+        return cachedStats[sellerUsername];
+      }
 
-    setAllReviews((prev) => {
-      const updated = {
-        ...prev,
-        [sellerUsername]: [...(prev[sellerUsername] || []), sanitizedReview],
-      };
-      return updated;
-    });
-  };
-
-  const hasReviewed = (sellerUsername: string, buyerUsername: string): boolean => {
-    return allReviews[sellerUsername]?.some(
-      (review) => review.reviewer === buyerUsername
-    ) || false;
-  };
+      // If not in cache, fetch reviews which will also cache stats
+      await getReviewsForSeller(sellerUsername);
+      
+      return cachedStats[sellerUsername] || null;
+    } catch (error) {
+      console.error('Error getting review stats:', error);
+      return null;
+    }
+  }, [cachedStats, getReviewsForSeller]);
 
   return (
-    <ReviewContext.Provider value={{ getReviewsForSeller, addReview, hasReviewed }}>
+    <ReviewContext.Provider value={{ 
+      getReviewsForSeller, 
+      addReview, 
+      hasReviewed,
+      getReviewStats,
+      isLoading,
+      error
+    }}>
       {children}
     </ReviewContext.Provider>
   );
