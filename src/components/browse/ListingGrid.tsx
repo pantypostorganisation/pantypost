@@ -1,4 +1,3 @@
-// src/components/browse/ListingGrid.tsx
 'use client';
 
 import { AlertTriangle } from 'lucide-react';
@@ -30,7 +29,7 @@ export default function ListingGrid({
             <div key={listing.id} className="bg-red-900/20 border border-red-700 rounded-xl p-4 text-center">
               <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
               <p className="text-red-400 text-sm">Error loading listing</p>
-              <SecureMessageDisplay 
+              <SecureMessageDisplay
                 content={listingErrors[listing.id]}
                 allowBasicFormatting={false}
                 className="text-gray-500 text-xs mt-1"
@@ -41,7 +40,8 @@ export default function ListingGrid({
         }
 
         try {
-          const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
+          const isLockedPremium =
+            listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
           const displayPrice = getDisplayPrice(listing);
 
           return (

@@ -1,4 +1,3 @@
-// src/components/browse/BrowseFilters.tsx
 'use client';
 
 import { Search, DollarSign, X } from 'lucide-react';
@@ -21,7 +20,6 @@ export default function BrowseFilters({
   onClearFilters,
   hasActiveFilters
 }: BrowseFiltersProps) {
-  
   // Handle secure price changes
   const handleMinPriceChange = (value: string) => {
     if (value === '') {
@@ -52,6 +50,7 @@ export default function BrowseFilters({
             placeholder="Search by title, description, tags, or seller..."
             className="w-full pl-10 pr-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-sm text-white placeholder-gray-400 focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
             maxLength={100}
+            aria-label="Search listings"
           />
         </div>
 
@@ -69,7 +68,10 @@ export default function BrowseFilters({
             min="0"
             max="9999"
             step="0.01"
+            inputMode="decimal"
+            pattern="[0-9]*\.?[0-9]*"
             sanitize={false}
+            aria-label="Minimum price"
           />
           <span className="text-gray-500 text-xs">—</span>
           <SecureInput
@@ -81,7 +83,10 @@ export default function BrowseFilters({
             min="0"
             max="9999"
             step="0.01"
+            inputMode="decimal"
+            pattern="[0-9]*\.?[0-9]*"
             sanitize={false}
+            aria-label="Maximum price"
           />
         </div>
 
@@ -89,6 +94,7 @@ export default function BrowseFilters({
           value={sortBy}
           onChange={(e) => onSortByChange(e.target.value as any)}
           className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+          aria-label="Sort by"
         >
           <option value="newest">🕒 Newest First</option>
           <option value="priceAsc">💰 Price: Low → High</option>
@@ -103,6 +109,7 @@ export default function BrowseFilters({
             if (selectedOption) onHourRangeChange(selectedOption);
           }}
           className="px-3 py-2 rounded-lg bg-black/50 border border-gray-700 text-xs text-white cursor-pointer focus:ring-1 focus:ring-[#ff950e] focus:border-[#ff950e] transition-all"
+          aria-label="Delivery time filter"
         >
           {hourRangeOptions.map(option => (
             <option key={option.label} value={option.label}>
@@ -115,6 +122,7 @@ export default function BrowseFilters({
           <button
             onClick={onClearFilters}
             className="px-3 py-2 rounded-lg bg-red-600/20 border border-red-700 text-red-400 hover:bg-red-600/30 text-xs transition-all flex items-center gap-1 font-medium"
+            aria-label="Clear filters"
           >
             <X size={12} />
             Clear

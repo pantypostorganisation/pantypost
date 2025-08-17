@@ -1,4 +1,3 @@
-// src/components/browse/EmptyState.tsx
 'use client';
 
 import { ShoppingBag } from 'lucide-react';
@@ -16,19 +15,20 @@ export default function EmptyState({ searchTerm, onResetFilters }: EmptyStatePro
       <p className="text-gray-400 mb-8 max-w-md mx-auto">
         {searchTerm ? (
           <>
-            We couldn't find any listings matching "<SecureMessageDisplay 
-              content={searchTerm} 
+            We couldn't find any listings matching "<SecureMessageDisplay
+              content={searchTerm}
               allowBasicFormatting={false}
               className="inline font-semibold text-[#ff950e]"
             />". Try adjusting your filters or check back later for new items.
           </>
         ) : (
-          'We couldn\'t find any listings matching your criteria. Try adjusting your filters or check back later for new items.'
+          "We couldn't find any listings matching your criteria. Try adjusting your filters or check back later for new items."
         )}
       </p>
       <button
         onClick={onResetFilters}
         className="px-8 py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black rounded-xl font-bold hover:from-[#e88800] hover:to-[#ff950e] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+        aria-label="Reset all filters"
       >
         Reset All Filters
       </button>
