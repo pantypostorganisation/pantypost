@@ -8,6 +8,9 @@ import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessage
 import { sanitizeUsername } from '@/utils/security/sanitization';
 
 export default function SubscribedSellers({ subscriptions }: SubscribedSellersProps) {
+  // 👇 Ensure the fallback isn't typed as never[]
+  const list = (Array.isArray(subscriptions) ? subscriptions : []) as SubscribedSellersProps['subscriptions'];
+
   return (
     <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
       <div className="flex items-center justify-between mb-5">
@@ -16,11 +19,11 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
           Subscriptions
         </h2>
         <span className="bg-[#ff950e] text-black text-sm font-bold px-2 py-0.5 rounded">
-          {subscriptions.length}
+          {list.length}
         </span>
       </div>
-      
-      {subscriptions.length === 0 ? (
+
+      {list.length === 0 ? (
         <div className="text-center py-8">
           <Crown className="w-12 h-12 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400 mb-4">No active subscriptions</p>
@@ -34,37 +37,49 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
         </div>
       ) : (
         <div className="space-y-4">
-          {subscriptions.map((sub) => {
+          {list.map((sub) => {
             const sanitizedUsername = sanitizeUsername(sub.seller);
-            
+
+            // Robust number formatting (handles string/undefined)
+            const monthlyPrice =
+              typeof sub.price === 'number'
+                ? sub.price
+                : typeof sub.price === 'string'
+                ? Number(sub.price)
+                : 0;
+            const priceDisplay = Number.isFinite(monthlyPrice) ? monthlyPrice.toFixed(2) : '0.00';
+
+            const newListings =
+              typeof sub.newListings === 'number'
+                ? Math.max(0, sub.newListings)
+                : Number.isFinite(Number(sub.newListings))
+                ? Math.max(0, Number(sub.newListings))
+                : 0;
+
             return (
               <div key={sub.seller} className="bg-[#111111] rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
                     {sub.pic ? (
-                      <SecureImage 
-                        src={sub.pic} 
+                      <SecureImage
+                        src={sub.pic}
                         alt={sub.seller}
                         className="w-12 h-12 rounded-full object-cover border-2 border-gray-700"
                         fallbackSrc="/placeholder-avatar.png"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-gray-8 00 flex items-center justify-center">
                         <Crown className="w-5 h-5 text-gray-600" />
                       </div>
                     )}
-                    
+
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <Link 
+                        <Link
                           href={`/sellers/${sanitizedUsername}`}
                           className="font-medium text-white hover:text-[#ff950e] transition-colors"
                         >
-                          <SecureMessageDisplay 
-                            content={sub.seller}
-                            allowBasicFormatting={false}
-                            className="inline"
-                          />
+                          <SecureMessageDisplay content={sub.seller} allowBasicFormatting={false} className="inline" />
                         </Link>
                         {sub.verified && (
                           <span title="Verified">
@@ -77,24 +92,24 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
                           </span>
                         )}
                       </div>
-                      
+
                       <div className="text-sm text-gray-400 line-clamp-2 mb-2">
-                        <SecureMessageDisplay 
+                        <SecureMessageDisplay
                           content={sub.bio}
                           allowBasicFormatting={false}
                           maxLength={200}
                           className="inline"
                         />
                       </div>
-                      
+
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>{sub.newListings} new listings</span>
+                        <span>{newListings} new listings</span>
                         <span>•</span>
-                        <span>${sub.price}/month</span>
+                        <span>${priceDisplay}/month</span>
                       </div>
                     </div>
                   </div>
-                  
+
                   <Link
                     href={`/sellers/${sanitizedUsername}`}
                     className="text-gray-400 hover:text-[#ff950e] transition-colors"

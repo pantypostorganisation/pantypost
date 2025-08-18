@@ -37,30 +37,27 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
     }
   };
 
+  const safeActivities = Array.isArray(activities) ? activities : [];
+
   return (
     <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-bold text-white">Recent Activity</h2>
-        <Link 
-          href="/buyers/my-orders"
-          className="text-[#ff950e] hover:text-[#e88800] font-medium flex items-center gap-2 text-sm"
-        >
+        <Link href="/buyers/my-orders" className="text-[#ff950e] hover:text-[#e88800] font-medium flex items-center gap-2 text-sm">
           View All <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
-      
-      {activities.length > 0 ? (
+
+      {safeActivities.length > 0 ? (
         <div className="space-y-3">
-          {activities.map((activity) => (
+          {safeActivities.map((activity) => (
             <Link
               key={activity.id}
               href={activity.href || '#'}
               className="flex items-center justify-between bg-[#111111] rounded-lg p-4 hover:bg-[#1a1a1a] transition-colors group"
             >
               <div className="flex items-center gap-4">
-                <div className={`p-2 rounded-lg bg-black ${getStatusColor(activity.type)}`}>
-                  {activity.icon}
-                </div>
+                <div className={`p-2 rounded-lg bg-black ${getStatusColor(activity.type)}`}>{activity.icon}</div>
                 <div>
                   <SecureMessageDisplay
                     content={activity.title}
@@ -76,10 +73,10 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
                   />
                 </div>
               </div>
-              
+
               <div className="text-right flex items-center gap-3">
                 <div>
-                  {activity.amount && (
+                  {typeof activity.amount === 'number' && !Number.isNaN(activity.amount) && (
                     <p className="text-white font-semibold text-sm">${activity.amount.toFixed(2)}</p>
                   )}
                   <p className="text-gray-500 text-xs">{activity.time}</p>
@@ -93,10 +90,7 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
         <div className="text-center py-12 bg-[#111111] rounded-lg">
           <Clock className="w-10 h-10 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400">No recent activity</p>
-          <Link 
-            href="/browse" 
-            className="text-[#ff950e] hover:underline text-sm mt-2 inline-block"
-          >
+          <Link href="/browse" className="text-[#ff950e] hover:underline text-sm mt-2 inline-block">
             Start browsing
           </Link>
         </div>
