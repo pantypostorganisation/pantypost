@@ -1,4 +1,4 @@
-// src/hooks/useBuyerMessages.ts - OPTIMISTIC VERSION WITH REAL-TIME UPDATES
+// src/hooks/useBuyerMessages.ts
 // Declare global to prevent TypeScript errors
 declare global {
   interface Window {
@@ -149,10 +149,7 @@ export const useBuyerMessages = () => {
     return walletContext.getBuyerBalance(username);
   }, [walletContext]);
   
-  const sendTip = useCallback(async (buyer: string, seller: string, amount: number, message?: string) => {
-    if (!walletContext) return false;
-    return walletContext.sendTip(buyer, seller, amount, message);
-  }, [walletContext]);
+  // REMOVED sendTip callback - we don't need it anymore since tipService handles everything
   
   // FIXED: Memoize wallet object properly
   const wallet = useMemo(() => {
@@ -1041,6 +1038,7 @@ export const useBuyerMessages = () => {
     inputRef.current?.focus();
   }, [recentEmojis, setRecentEmojis]);
   
+  // FIXED: Removed the duplicate tip processing logic
   const handleSendTip = useCallback(async () => {
     if (!activeThread || !tipAmount || !user) return;
     
@@ -1064,13 +1062,14 @@ export const useBuyerMessages = () => {
     }
     
     try {
-      // Use the tip service for backend integration
+      // Use the tip service for backend integration - it handles everything including wallet updates
       const result = await tipService.sendTip(activeThread, amount);
       
       if (result.success) {
-        // Update local wallet state
-        if (sendTip) {
-          await sendTip(user.username, activeThread, amount);
+        // DON'T update wallet again - the backend already did it!
+        // Just refresh the wallet data to get the latest balance
+        if (walletContext && walletContext.reloadData) {
+          await walletContext.reloadData();
         }
         
         setTipResult({
@@ -1126,7 +1125,7 @@ export const useBuyerMessages = () => {
         message: 'Failed to send tip. Please try again.'
       });
     }
-  }, [activeThread, tipAmount, user, wallet, sendTip, sendMessage]);
+  }, [activeThread, tipAmount, user, wallet, walletContext, sendMessage]);
   
   const validateCustomRequest = useCallback((): boolean => {
     const errors: Partial<CustomRequestForm> = {};
