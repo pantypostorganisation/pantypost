@@ -1,4 +1,3 @@
-// src/components/browse-detail/TrustBadges.tsx
 'use client';
 
 import { Shield, Truck, Gift } from 'lucide-react';

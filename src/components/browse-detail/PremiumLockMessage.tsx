@@ -1,4 +1,3 @@
-// src/components/browse-detail/PremiumLockMessage.tsx
 'use client';
 
 import Link from 'next/link';
@@ -18,17 +17,14 @@ export default function PremiumLockMessage({ listing, userRole }: PremiumLockMes
           <h3 className="text-base font-bold text-white mb-1">Premium Content</h3>
           <p className="text-gray-300 mb-2 text-xs">
             Subscribe to{' '}
-            <SecureMessageDisplay 
-              content={listing.seller}
-              allowBasicFormatting={false}
-              className="inline font-semibold"
-            />{' '}
-            to view full details and make purchases.
+            <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline font-semibold" /> to view full
+            details and make purchases.
           </p>
           {userRole === 'buyer' && (
             <Link
               href={`/sellers/${sanitizedUsername}`}
               className="inline-flex items-center gap-1.5 bg-yellow-600 text-black font-medium px-3 py-1.5 rounded-lg hover:bg-yellow-500 transition text-xs"
+              aria-label={`Subscribe to ${sanitizedUsername}`}
             >
               <Crown className="w-3.5 h-3.5" />
               Subscribe Now

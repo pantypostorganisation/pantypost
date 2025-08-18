@@ -1,20 +1,21 @@
-// src/components/browse-detail/PurchaseSection.tsx
+'use client';
+
 import React, { useState } from 'react';
-import { Heart, Crown, ShoppingBag, AlertCircle } from 'lucide-react';
+import { Heart, Crown, ShoppingBag, AlertCircle, ShieldAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
-import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { formatMoney } from '@/utils/format';
 import { Money } from '@/types/common';
 import { Listing } from '@/context/ListingContext';
 import { DeliveryAddress } from '@/types/order';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface PurchaseSectionProps {
   listing: Listing;
   user: any;
-  handlePurchase: () => void;
+  handlePurchase: () => void; // kept for compatibility
   isProcessing: boolean;
   isFavorited: boolean;
   toggleFavorite: () => void;
@@ -34,7 +35,7 @@ const DEFAULT_DELIVERY_ADDRESS: DeliveryAddress = {
 export default function PurchaseSection({
   listing,
   user,
-  handlePurchase,
+  handlePurchase, // eslint-disable-line @typescript-eslint/no-unused-vars
   isProcessing,
   isFavorited,
   toggleFavorite,
@@ -45,30 +46,39 @@ export default function PurchaseSection({
   const { getBuyerBalance, purchaseListing, reloadData } = useWallet();
   const { showToast } = useToast();
   const [isPurchasing, setIsPurchasing] = useState(false);
-  
-  const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
+
   const isSeller = user?.username === listing.seller;
-  
+  const isAdmin = user?.role === 'admin';
+  const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
+
   // Get buyer's balance
   const buyerBalance = user ? getBuyerBalance(user.username) : 0;
   const purchasePrice = listing.markedUpPrice || listing.price;
   const canAfford = buyerBalance >= purchasePrice;
 
-  // ✅ IMPROVED: Real purchase handler that calls backend API with better error handling
+  // Real purchase handler with validation and admin guardrails
   const handleRealPurchase = async () => {
     if (!user || isPurchasing || isProcessing) return;
-    
-    // Validation
+
+    // Admins cannot act as buyers
+    if (isAdmin) {
+      showToast({
+        type: 'error',
+        title: 'Admins cannot purchase items. Please use the Crown Admin portal.',
+      });
+      return;
+    }
+
     if (isSeller) {
       showToast({ type: 'error', title: 'You cannot purchase your own listing' });
       return;
     }
-    
+
     if (listing.isPremium && !isUserSubscribed) {
       showToast({ type: 'error', title: 'You must be subscribed to purchase premium content' });
       return;
     }
-    
+
     if (!canAfford) {
       showToast({ type: 'error', title: 'Insufficient balance. Please add funds to your wallet.' });
       router.push('/wallet/buyer');
@@ -76,17 +86,8 @@ export default function PurchaseSection({
     }
 
     setIsPurchasing(true);
-    
+
     try {
-      console.log('[PurchaseSection] Starting purchase:', {
-        listing: listing.title,
-        price: purchasePrice,
-        buyer: user.username,
-        seller: listing.seller,
-        listingId: listing.id
-      });
-      
-      // ✅ IMPROVED: Call WalletContext.purchaseListing - it now throws errors properly
       await purchaseListing(
         {
           id: listing.id,
@@ -100,113 +101,95 @@ export default function PurchaseSection({
         } as any,
         user.username
       );
-      
-      console.log('[PurchaseSection] Purchase completed successfully');
-      
-      // ✅ SUCCESS: Show success message
+
       showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
-      
-      // Reload wallet data to get updated balance and orders
-      console.log('[PurchaseSection] Reloading wallet data...');
+
+      // Reload wallet/orders
       await reloadData();
-      
-      // Wait a moment for the data to sync
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Redirect to orders page to see the new order
+      await new Promise((r) => setTimeout(r, 1000));
+
       router.push('/buyers/my-orders');
-      
     } catch (error) {
-      console.error('[PurchaseSection] Purchase error:', error);
-      
-      // ✅ IMPROVED: Show detailed error information from backend
       let errorMessage = 'Purchase failed. Please try again.';
       if (error instanceof Error) {
-        errorMessage = error.message;
-        
-        // Log detailed error information for debugging
-        console.log('[PurchaseSection] Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        
-        // Handle specific error types
         if (error.message.includes('Missing required fields')) {
           errorMessage = 'Order creation failed due to missing information. Please try again.';
         } else if (error.message.includes('Insufficient balance')) {
           errorMessage = 'Insufficient balance. Please add funds to your wallet.';
-          // Automatically redirect to wallet page for balance issues
-          setTimeout(() => router.push('/wallet/buyer'), 2000);
+          setTimeout(() => router.push('/wallet/buyer'), 1500);
         } else if (error.message.includes('Rate limit exceeded')) {
           errorMessage = 'Too many requests. Please wait a moment and try again.';
+        } else {
+          errorMessage = error.message;
         }
       }
-      
-      showToast({
-        type: 'error',
-        title: errorMessage
-      });
+      showToast({ type: 'error', title: errorMessage });
     } finally {
       setIsPurchasing(false);
     }
   };
 
-  if (listing.auction && listing.auction.status === 'active') {
-    // Auction listing - show in AuctionSection instead
-    return null;
-  }
+  // If auction is active, purchase controls are handled by AuctionSection instead
+  if (listing.auction && listing.auction.status === 'active') return null;
 
   return (
     <div className="bg-gray-900 rounded-lg p-6 space-y-4">
+      {/* Admin notice */}
+      {user && isAdmin && (
+        <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-3 -mt-1">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="w-5 h-5 text-purple-400 mt-0.5" />
+            <p className="text-sm text-purple-200">
+              Admin accounts cannot make purchases or act as buyers. Please use the{' '}
+              <span className="font-semibold text-purple-300">Crown Admin</span> tools.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-sm text-gray-400">Price</p>
-          <p className="text-3xl font-bold text-white">
-            {formatMoney(Money.fromDollars(purchasePrice))}
-          </p>
+          <p className="text-3xl font-bold text-white">{formatMoney(Money.fromDollars(purchasePrice))}</p>
         </div>
+
         {user?.role === 'buyer' && (
           <button
             onClick={toggleFavorite}
             className="p-2 rounded-lg bg-[#222] hover:bg-[#333] transition-colors"
             aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <Heart 
-              size={20} 
-              className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400'} 
-            />
+            <Heart size={20} className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400'} />
           </button>
         )}
       </div>
 
-      {listing.isPremium && !isUserSubscribed && !isSeller && (
-        <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-4">
+      {listing.isPremium && !isUserSubscribed && !isSeller && !isAdmin && (
+        <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
             <Crown className="w-5 h-5 text-yellow-500 mt-0.5" />
             <div className="flex-1">
               <p className="text-yellow-500 font-semibold">Premium Content</p>
               <p className="text-sm text-yellow-400 mt-1">
-                Subscribe to {listing.seller} to purchase this item
+                Subscribe to{' '}
+                <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline font-semibold" /> to purchase
+                this item.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {user && !canAfford && !isSeller && (
-        <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-4">
+      {user && !isAdmin && !canAfford && !isSeller && (
+        <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
             <div className="flex-1">
               <p className="text-red-500 font-semibold">Insufficient Balance</p>
               <p className="text-sm text-red-400 mt-1">
-                You need {formatMoney(Money.fromDollars(purchasePrice - buyerBalance))} more to purchase this item
+                You need {formatMoney(Money.fromDollars(Math.max(0, purchasePrice - buyerBalance)))} more to purchase this item
               </p>
-              <button
-                onClick={() => router.push('/wallet/buyer')}
-                className="text-sm text-[#ff950e] hover:underline mt-2"
-              >
+              <button onClick={() => router.push('/wallet/buyer')} className="text-sm text-[#ff950e] hover:underline mt-2">
                 Add funds to wallet →
               </button>
             </div>
@@ -214,6 +197,7 @@ export default function PurchaseSection({
         </div>
       )}
 
+      {/* Call-to-action */}
       {!user ? (
         <button
           onClick={() => router.push('/login')}
@@ -223,11 +207,12 @@ export default function PurchaseSection({
           Login to Purchase
         </button>
       ) : isSeller ? (
-        <button
-          disabled
-          className="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-semibold cursor-not-allowed"
-        >
+        <button disabled className="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-semibold cursor-not-allowed">
           Your Listing
+        </button>
+      ) : isAdmin ? (
+        <button disabled className="w-full bg-purple-900/40 text-purple-300 py-3 rounded-lg font-semibold cursor-not-allowed">
+          Admin accounts cannot purchase
         </button>
       ) : listing.isPremium && !isUserSubscribed ? (
         <button
@@ -242,10 +227,11 @@ export default function PurchaseSection({
           onClick={handleRealPurchase}
           disabled={isPurchasing || isProcessing || !canAfford}
           className={`w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-            canAfford && !isPurchasing
+            canAfford && !isPurchasing && !isProcessing
               ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
               : 'bg-gray-700 text-gray-400 cursor-not-allowed'
           }`}
+          aria-label="Purchase now"
         >
           <ShoppingBag className="w-5 h-5" />
           {isPurchasing ? 'Processing Purchase...' : isProcessing ? 'Processing...' : 'Purchase Now'}
