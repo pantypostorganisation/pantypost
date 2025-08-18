@@ -17,6 +17,7 @@ import { getUserProfileData } from '@/utils/profileUtils';
 import { useLocalStorage } from './useLocalStorage';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services';
+import { tipService } from '@/services/tip.service';
 import {
   saveRecentEmojis,
   getRecentEmojis,
@@ -148,9 +149,9 @@ export const useBuyerMessages = () => {
     return walletContext.getBuyerBalance(username);
   }, [walletContext]);
   
-  const sendTip = useCallback(async (buyer: string, seller: string, amount: number) => {
+  const sendTip = useCallback(async (buyer: string, seller: string, amount: number, message?: string) => {
     if (!walletContext) return false;
-    return walletContext.sendTip(buyer, seller, amount);
+    return walletContext.sendTip(buyer, seller, amount, message);
   }, [walletContext]);
   
   // FIXED: Memoize wallet object properly
@@ -1044,79 +1045,88 @@ export const useBuyerMessages = () => {
     if (!activeThread || !tipAmount || !user) return;
     
     const amount = parseFloat(tipAmount);
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(amount) || amount <= 0 || amount > 500) {
       setTipResult({
         success: false,
-        message: 'Please enter a valid amount'
+        message: 'Please enter a valid amount between $1 and $500'
       });
       return;
     }
     
-    const currentBalance = getBuyerBalance(user.username);
-    if (currentBalance < amount) {
+    // Check wallet balance
+    const userBalance = wallet[user.username] || 0;
+    if (userBalance < amount) {
       setTipResult({
         success: false,
-        message: 'Insufficient balance. Please add funds to your wallet.'
+        message: 'Insufficient wallet balance'
       });
       return;
     }
     
-    const success = await sendTip(user.username, activeThread, amount);
-    
-    if (success) {
-      setTipResult({
-        success: true,
-        message: `$${amount.toFixed(2)} tip sent successfully!`
-      });
+    try {
+      // Use the tip service for backend integration
+      const result = await tipService.sendTip(activeThread, amount);
       
-      // Send tip message optimistically
-      const tempId = uuidv4();
-      const threadId = getConversationKey(user.username, activeThread);
-      const tipMessage = `💰 Sent a $${amount.toFixed(2)} tip`;
-      
-      const optimisticMsg: OptimisticMessage = {
-        id: tempId,
-        _tempId: tempId,
-        _optimistic: true,
-        sender: user.username,
-        receiver: activeThread,
-        content: tipMessage,
-        date: new Date().toISOString(),
-        isRead: false,
-        read: false,
-        type: 'normal',
-        meta: {
-          id: `tip_${Date.now()}`,
-          price: amount
+      if (result.success) {
+        // Update local wallet state
+        if (sendTip) {
+          await sendTip(user.username, activeThread, amount);
         }
-      };
-      
-      setOptimisticMessages(prev => ({
-        ...prev,
-        [threadId]: [...(prev[threadId] || []), optimisticMsg]
-      }));
-      
-      // Send actual message in background
-      sendMessage(user.username, activeThread, tipMessage, {
-        type: 'normal',
-        meta: optimisticMsg.meta
-      });
-      
-      // Force update
-      setMessageUpdateCounter(prev => prev + 1);
-      
-      setTimeout(() => {
-        setShowTipModal(false);
-        setTipAmount('');
-        setTipResult(null);
-      }, 2000);
-    } else {
+        
+        setTipResult({
+          success: true,
+          message: `Sent $${amount.toFixed(2)} tip to ${activeThread}!`
+        });
+        
+        // Send a message about the tip (optimistically)
+        const tempId = uuidv4();
+        const threadId = getConversationKey(user.username, activeThread);
+        const tipMessage = `💝 I just sent you a $${amount.toFixed(2)} tip! Thank you!`;
+        
+        const optimisticMsg: OptimisticMessage = {
+          id: tempId,
+          _tempId: tempId,
+          _optimistic: true,
+          sender: user.username,
+          receiver: activeThread,
+          content: tipMessage,
+          date: new Date().toISOString(),
+          isRead: false,
+          read: false,
+          type: 'normal'
+        };
+        
+        setOptimisticMessages(prev => ({
+          ...prev,
+          [threadId]: [...(prev[threadId] || []), optimisticMsg]
+        }));
+        
+        // Send actual message in background
+        sendMessage(user.username, activeThread, tipMessage, { type: 'normal' });
+        
+        // Force update
+        setMessageUpdateCounter(prev => prev + 1);
+        
+        // Reset form after delay
+        setTimeout(() => {
+          setShowTipModal(false);
+          setTipAmount('');
+          setTipResult(null);
+        }, 2000);
+      } else {
+        setTipResult({
+          success: false,
+          message: result.message || 'Failed to send tip'
+        });
+      }
+    } catch (error) {
+      console.error('Error sending tip:', error);
       setTipResult({
         success: false,
         message: 'Failed to send tip. Please try again.'
       });
     }
-  }, [activeThread, tipAmount, user, getBuyerBalance, sendTip, sendMessage]);
+  }, [activeThread, tipAmount, user, wallet, sendTip, sendMessage]);
   
   const validateCustomRequest = useCallback((): boolean => {
     const errors: Partial<CustomRequestForm> = {};

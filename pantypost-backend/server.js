@@ -31,6 +31,7 @@ const subscriptionRoutes = require('./routes/subscription.routes');
 const reviewRoutes = require('./routes/review.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const tierRoutes = require('./routes/tier.routes');
+const tipRoutes = require('./routes/tip.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -103,6 +104,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tiers', tierRoutes);
+app.use('/api/tips', tipRoutes);
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -370,5 +372,6 @@ server.listen(PORT, async () => {
   console.log('  - Reviews:       /api/reviews/*');
   console.log('  - Upload:        /api/upload/*');
   console.log('  - Tiers:         /api/tiers/*');
+  console.log('  - Tips:          /api/tips/*');
   console.log('\n✨ Server initialization complete!\n');
 });

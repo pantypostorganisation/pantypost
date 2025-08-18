@@ -189,7 +189,7 @@ type WalletContextType = {
   updateWallet: (username: string, amount: number, orderToFulfil?: Order) => void;
   
   // Tips and notifications
-  sendTip: (buyer: string, seller: string, amount: number) => Promise<boolean>;
+  sendTip: (buyer: string, seller: string, amount: number, message?: string) => Promise<boolean>;
   setAddSellerNotificationCallback?: (fn: (seller: string, message: string) => void) => void;
   
   // Admin actions
@@ -672,6 +672,91 @@ export function WalletProvider({ children }: { children: ReactNode }) {
      });
    }
  }, [isConnected, sendMessage]);
+
+ // Send tip function
+ const sendTip = useCallback(async (
+   fromUsername: string, 
+   toUsername: string, 
+   amount: number,
+   message?: string
+ ): Promise<boolean> => {
+   try {
+     checkRateLimit('TIP', fromUsername);
+     
+     // Input validation
+     if (!fromUsername || !toUsername || amount <= 0) {
+       console.error('[Wallet] Invalid tip parameters');
+       return false;
+     }
+     
+     // Validate and sanitize inputs
+     const validatedFrom = validateUsername(fromUsername);
+     const validatedTo = validateUsername(toUsername);
+     const validatedAmount = validateTransactionAmount(amount);
+     
+     // Additional tip-specific validation
+     const tipValidation = walletOperationSchemas.tipAmount.safeParse(validatedAmount);
+     if (!tipValidation.success) {
+       console.error('[Wallet] Invalid tip amount:', tipValidation.error);
+       return false;
+     }
+     
+     // Check balance locally first
+     const senderBalance = buyerBalances[validatedFrom] || 0;
+     if (senderBalance < validatedAmount) {
+       console.error('[Wallet] Insufficient balance for tip');
+       return false;
+     }
+     
+     // Send tip to backend
+     const response = await apiClient.post<any>('/tips/send', {
+       amount: validatedAmount,
+       recipientUsername: validatedTo,
+       message: message ? sanitizeStrict(message) : undefined
+     });
+     
+     if (!response.success) {
+       console.error('[Wallet] Tip failed:', response.error);
+       return false;
+     }
+     
+     // Update local state optimistically
+     setBuyerBalancesState(prev => ({
+       ...prev,
+       [validatedFrom]: prev[validatedFrom] - validatedAmount
+     }));
+     
+     setSellerBalancesState(prev => ({
+       ...prev,
+       [validatedTo]: (prev[validatedTo] || 0) + validatedAmount
+     }));
+     
+     // Emit balance updates
+     emitBalanceUpdate(validatedFrom, 'buyer', senderBalance - validatedAmount);
+     emitBalanceUpdate(validatedTo, 'seller', (sellerBalances[validatedTo] || 0) + validatedAmount);
+     
+     // Log the transaction locally
+     const tipLog: DepositLog = {
+       id: response.data?.transaction?.id || uuidv4(),
+       username: validatedFrom,
+       amount: validatedAmount,
+       method: 'credit_card',
+       date: new Date().toISOString(),
+       status: 'completed',
+       transactionId: response.data?.transaction?.id || uuidv4(),
+       notes: `Tip to ${validatedTo}`,
+     };
+     
+     setDepositLogs(prev => [...prev, tipLog]);
+     
+     debugLog(`[Wallet] Tip sent: $${validatedAmount} from ${validatedFrom} to ${validatedTo}`);
+     return true;
+     
+   } catch (error) {
+     console.error('[Wallet] Error sending tip:', error);
+     return false;
+   }
+ }, [buyerBalances, sellerBalances, apiClient, emitBalanceUpdate]);
 
  // Rest of the implementation continues unchanged...
  // I'll include the remaining methods that were in the original file
@@ -1585,203 +1670,174 @@ export function WalletProvider({ children }: { children: ReactNode }) {
      
      if (response.success) {
        debugLog('Successfully unsubscribed');
-       
-       // Optionally refresh buyer balance to reflect any changes
-       if (buyer === user?.username) {
-         const newBalance = await fetchBalance(buyer);
-         if (!isAdminUser(buyer)) {
-           setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
-         }
-       }
-       
-       return true;
-     }
-     
-     console.error('[WalletContext] Unsubscribe failed:', response.error);
-     return false;
-   } catch (error) {
-     console.error('[WalletContext] Unsubscribe error:', error);
-     return false;
-   }
- }, [apiClient, fetchBalance, user]);
+      
+      // Optionally refresh buyer balance to reflect any changes
+      if (buyer === user?.username) {
+        const newBalance = await fetchBalance(buyer);
+        if (!isAdminUser(buyer)) {
+          setBuyerBalancesState(prev => ({ ...prev, [buyer]: newBalance }));
+        }
+      }
+      
+      return true;
+    }
+    
+    console.error('[WalletContext] Unsubscribe failed:', response.error);
+    return false;
+  } catch (error) {
+    console.error('[WalletContext] Unsubscribe error:', error);
+    return false;
+  }
+}, [apiClient, fetchBalance, user]);
 
- // Stub implementations for features not yet in API
- const sendTip = useCallback(async (buyer: string, seller: string, amount: number): Promise<boolean> => {
-   debugLog('Tip feature - using mock implementation');
-   
-   try {
-     const validatedAmount = validateTransactionAmount(amount);
-     
-     // Check buyer has sufficient balance
-     const buyerBalance = getBuyerBalance(buyer);
-     if (buyerBalance < validatedAmount) {
-       throw new Error('Insufficient balance for tip');
-     }
-     
-     // Update balances locally (mock)
-     setBuyerBalancesState(prev => ({ 
-       ...prev, 
-       [buyer]: prev[buyer] - validatedAmount 
-     }));
-     setSellerBalancesState(prev => ({ 
-       ...prev, 
-       [seller]: (prev[seller] || 0) + validatedAmount 
-     }));
-     
-     return true;
-   } catch (error) {
-     console.error('Tip error:', error);
-     return false;
-   }
- }, [getBuyerBalance]);
+// Stub implementation for custom request purchase
+const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
+  debugLog('Custom request purchase - using mock implementation');
+  return false;
+}, []);
 
- const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
-   debugLog('Custom request purchase - using mock implementation');
-   return false;
- }, []);
+// Admin withdrawal
+const addAdminWithdrawal = useCallback(async (amount: number) => {
+  try {
+    debugLog('Processing admin withdrawal from unified platform wallet');
+    
+    const response = await apiClient.post<any>('/wallet/admin-withdraw', {
+      amount,
+      accountDetails: {
+        accountNumber: '****9999',
+        accountType: 'business'
+      },
+      notes: `Platform withdrawal by ${user?.username}`
+    });
+    
+    if (response.success) {
+      const withdrawal: Withdrawal = {
+        amount,
+        date: new Date().toISOString(),
+        status: 'completed',
+        method: 'bank_transfer'
+      };
+      
+      setAdminWithdrawals(prev => [...prev, withdrawal]);
+      
+      // Refresh unified platform balance
+      await fetchAdminPlatformBalance();
+      
+      debugLog('Admin withdrawal successful');
+    } else {
+      console.error('[WalletContext] Admin withdrawal failed:', response.error);
+      throw new Error(response.error?.message || 'Withdrawal failed');
+    }
+  } catch (error) {
+    console.error('[WalletContext] Admin withdrawal error:', error);
+    throw error;
+  }
+}, [apiClient, fetchAdminPlatformBalance, user]);
 
- // Admin withdrawal
- const addAdminWithdrawal = useCallback(async (amount: number) => {
-   try {
-     debugLog('Processing admin withdrawal from unified platform wallet');
-     
-     const response = await apiClient.post<any>('/wallet/admin-withdraw', {
-       amount,
-       accountDetails: {
-         accountNumber: '****9999',
-         accountType: 'business'
-       },
-       notes: `Platform withdrawal by ${user?.username}`
-     });
-     
-     if (response.success) {
-       const withdrawal: Withdrawal = {
-         amount,
-         date: new Date().toISOString(),
-         status: 'completed',
-         method: 'bank_transfer'
-       };
-       
-       setAdminWithdrawals(prev => [...prev, withdrawal]);
-       
-       // Refresh unified platform balance
-       await fetchAdminPlatformBalance();
-       
-       debugLog('Admin withdrawal successful');
-     } else {
-       console.error('[WalletContext] Admin withdrawal failed:', response.error);
-       throw new Error(response.error?.message || 'Withdrawal failed');
-     }
-   } catch (error) {
-     console.error('[WalletContext] Admin withdrawal error:', error);
-     throw error;
-   }
- }, [apiClient, fetchAdminPlatformBalance, user]);
+// Auction-related stubs
+const holdBidFunds = useCallback(async (): Promise<boolean> => {
+  debugLog('Auction features not fully implemented in API yet');
+  return false;
+}, []);
 
- // Auction-related stubs
- const holdBidFunds = useCallback(async (): Promise<boolean> => {
-   debugLog('Auction features not fully implemented in API yet');
-   return false;
- }, []);
+const refundBidFunds = useCallback(async (): Promise<boolean> => {
+  debugLog('Auction features not fully implemented in API yet');
+  return false;
+}, []);
 
- const refundBidFunds = useCallback(async (): Promise<boolean> => {
-   debugLog('Auction features not fully implemented in API yet');
-   return false;
- }, []);
+const placeBid = useCallback(async (): Promise<boolean> => {
+  debugLog('Auction features not fully implemented in API yet');
+  return false;
+}, []);
 
- const placeBid = useCallback(async (): Promise<boolean> => {
-   debugLog('Auction features not fully implemented in API yet');
-   return false;
- }, []);
+const finalizeAuctionPurchase = useCallback(async (): Promise<boolean> => {
+  debugLog('Auction features not fully implemented in API yet');
+  return false;
+}, []);
 
- const finalizeAuctionPurchase = useCallback(async (): Promise<boolean> => {
-   debugLog('Auction features not fully implemented in API yet');
-   return false;
- }, []);
+// Enhanced features stubs
+const checkSuspiciousActivity = useCallback(async (username: string) => {
+  return { suspicious: false, reasons: [] };
+}, []);
 
- // Enhanced features stubs
- const checkSuspiciousActivity = useCallback(async (username: string) => {
-   return { suspicious: false, reasons: [] };
- }, []);
+const reconcileBalance = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin') => {
+  return null;
+}, []);
 
- const reconcileBalance = useCallback(async (username: string, role: 'buyer' | 'seller' | 'admin') => {
-   return null;
- }, []);
+const contextValue: WalletContextType = {
+  // Loading state
+  isLoading,
+  isInitialized,
+  initializationError,
+  
+  // Core functionality
+  buyerBalances,
+  adminBalance,
+  sellerBalances,
+  setBuyerBalance,
+  getBuyerBalance,
+  setAdminBalance,
+  setSellerBalance,
+  getSellerBalance,
+  purchaseListing,
+  purchaseCustomRequest,
+  subscribeToSellerWithPayment,
+  unsubscribeFromSeller,
+  orderHistory,
+  addOrder,
+  sellerWithdrawals,
+  adminWithdrawals,
+  addSellerWithdrawal,
+  addAdminWithdrawal,
+  wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
+  updateWallet: () => { console.warn('updateWallet is deprecated - use API methods instead'); },
+  sendTip,
+  setAddSellerNotificationCallback,
+  adminCreditUser,
+  adminDebitUser,
+  adminActions,
+  updateOrderAddress: async () => { debugLog('Order address update not implemented yet'); },
+  updateShippingStatus: async () => { debugLog('Shipping status update not implemented yet'); },
+  depositLogs,
+  addDeposit,
+  getDepositsForUser: (username: string) => depositLogs.filter(log => log.username === username),
+  getTotalDeposits: () => depositLogs.reduce((sum, log) => sum + log.amount, 0),
+  getDepositsByTimeframe: () => depositLogs,
+  
+  // Auction methods (stubs for now)
+  holdBidFunds,
+  refundBidFunds,
+  finalizeAuctionPurchase,
+  placeBid,
+  chargeIncrementalBid: async () => false,
+  getAuctionBidders: async () => [],
+  cleanupAuctionTracking: async () => {},
+  
+  // Enhanced features
+  checkSuspiciousActivity,
+  reconcileBalance,
+  getTransactionHistory,
+  
+  // Admin-specific methods
+  refreshAdminData,
+  getPlatformTransactions,
+  getAnalyticsData,
+  
+  // Data management
+  reloadData,
+};
 
- const contextValue: WalletContextType = {
-   // Loading state
-   isLoading,
-   isInitialized,
-   initializationError,
-   
-   // Core functionality
-   buyerBalances,
-   adminBalance,
-   sellerBalances,
-   setBuyerBalance,
-   getBuyerBalance,
-   setAdminBalance,
-   setSellerBalance,
-   getSellerBalance,
-   purchaseListing,
-   purchaseCustomRequest,
-   subscribeToSellerWithPayment,
-   unsubscribeFromSeller,
-   orderHistory,
-   addOrder,
-   sellerWithdrawals,
-   adminWithdrawals,
-   addSellerWithdrawal,
-   addAdminWithdrawal,
-   wallet: { ...buyerBalances, ...sellerBalances, admin: adminBalance },
-   updateWallet: () => { console.warn('updateWallet is deprecated - use API methods instead'); },
-   sendTip,
-   setAddSellerNotificationCallback,
-   adminCreditUser,
-   adminDebitUser,
-   adminActions,
-   updateOrderAddress: async () => { debugLog('Order address update not implemented yet'); },
-   updateShippingStatus: async () => { debugLog('Shipping status update not implemented yet'); },
-   depositLogs,
-   addDeposit,
-   getDepositsForUser: (username: string) => depositLogs.filter(log => log.username === username),
-   getTotalDeposits: () => depositLogs.reduce((sum, log) => sum + log.amount, 0),
-   getDepositsByTimeframe: () => depositLogs,
-   
-   // Auction methods (stubs for now)
-   holdBidFunds,
-   refundBidFunds,
-   finalizeAuctionPurchase,
-   placeBid,
-   chargeIncrementalBid: async () => false,
-   getAuctionBidders: async () => [],
-   cleanupAuctionTracking: async () => {},
-   
-   // Enhanced features
-   checkSuspiciousActivity,
-   reconcileBalance,
-   getTransactionHistory,
-   
-   // Admin-specific methods
-   refreshAdminData,
-   getPlatformTransactions,
-   getAnalyticsData,
-   
-   // Data management
-   reloadData,
- };
-
- return (
-   <WalletContext.Provider value={contextValue}>
-     {children}
-   </WalletContext.Provider>
- );
+return (
+  <WalletContext.Provider value={contextValue}>
+    {children}
+  </WalletContext.Provider>
+);
 }
 
 export const useWallet = () => {
- const context = useContext(WalletContext);
- if (!context) {
-   throw new Error("useWallet must be used within a WalletProvider");
- }
- return context;
+const context = useContext(WalletContext);
+if (!context) {
+  throw new Error("useWallet must be used within a WalletProvider");
+}
+return context;
 };
