@@ -47,6 +47,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const isMountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   const FETCH_COOLDOWN = 1000;
+  
+  // Track processed notification IDs to prevent duplicates
+  const processedNotificationIds = useRef<Set<string>>(new Set());
 
   const loadNotifications = useCallback(async () => {
     if (!user || !isMountedRef.current) return;
@@ -61,6 +64,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (activeRes.success && Array.isArray(activeRes.data) && isMountedRef.current) {
         setActiveNotifications(activeRes.data);
         setUnreadCount(activeRes.data.filter(n => !n.read).length);
+        
+        // Track all loaded notification IDs
+        activeRes.data.forEach(n => {
+          const id = n._id || n.id;
+          if (id) processedNotificationIds.current.add(id);
+        });
       }
       const clearedRes = await notificationService.getClearedNotifications(50);
       if (clearedRes.success && Array.isArray(clearedRes.data) && isMountedRef.current) {
@@ -85,19 +94,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => { isMountedRef.current = false; };
   }, [user, loadNotifications]);
 
-  // 🧷 Stable websocket subscriptions (no dependency on active list)
+  // FIXED: Only listen to the primary notification:new event from backend
   useEffect(() => {
     if (!subscribe || !user) return;
     const unsubs: Array<() => void> = [];
 
-    // Primary: generic backend notifications
+    // PRIMARY: This is the ONLY source for tip notifications
+    // The backend's Notification.createTipNotification automatically emits this
     unsubs.push(subscribe('notification:new' as WebSocketEvent, (data: any) => {
       if (!isMountedRef.current) return;
-      console.log('[WS] notification:new received', data);
+      
+      console.log('[NotificationContext] notification:new received', data);
+      
+      // Check if we've already processed this notification
+      const notificationId = data.id || data._id;
+      if (notificationId && processedNotificationIds.current.has(notificationId)) {
+        console.log('[NotificationContext] Skipping duplicate notification:', notificationId);
+        return;
+      }
+      
+      // Add to processed set
+      if (notificationId) {
+        processedNotificationIds.current.add(notificationId);
+        
+        // Clean up old IDs to prevent memory leak
+        if (processedNotificationIds.current.size > 200) {
+          const idsArray = Array.from(processedNotificationIds.current);
+          processedNotificationIds.current = new Set(idsArray.slice(-100));
+        }
+      }
+      
       const n: Notification = {
-        id: data.id || data._id,
-        _id: data._id || data.id,
-        recipient: user.username,
+        id: notificationId,
+        _id: notificationId,
+        recipient: data.recipient || user.username,
         type: data.type,
         title: data.title,
         message: data.message,
@@ -107,65 +137,36 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         priority: data.priority || 'normal',
         createdAt: data.createdAt || new Date().toISOString()
       };
-      setActiveNotifications(prev => [n, ...prev]);
+      
+      // Check if notification already exists in state
+      setActiveNotifications(prev => {
+        const exists = prev.some(existing => 
+          (existing._id || existing.id) === notificationId
+        );
+        
+        if (exists) {
+          console.log('[NotificationContext] Notification already in state:', notificationId);
+          return prev;
+        }
+        
+        return [n, ...prev];
+      });
+      
       setUnreadCount(c => c + 1);
     }));
 
-    // Legacy: tip_received
-    unsubs.push(subscribe('tip_received' as WebSocketEvent, (data: any) => {
-      if (!isMountedRef.current) return;
-      console.log('[WS] tip_received received', data);
-      const amount = Number(data?.amount || 0);
-      const tipper = data?.from || 'A buyer';
-      const n: Notification = {
-        id: `legacy_tip_${Date.now()}`,
-        _id: `legacy_tip_${Date.now()}`,
-        recipient: user.username,
-        type: 'tip' as any,
-        title: 'Tip Received!',
-        message: `${tipper} tipped you $${amount.toFixed(2)}`,
-        data: { tipper, amount },
-        read: false,
-        cleared: false,
-        priority: 'normal',
-        createdAt: new Date().toISOString()
-      };
-      setActiveNotifications(prev => [n, ...prev]);
-      setUnreadCount(c => c + 1);
-    }));
-
-    // Optional: tip via message:new
-    unsubs.push(subscribe('message:new' as WebSocketEvent, (m: any) => {
-      if (!isMountedRef.current) return;
-      const isTip = m?.type === 'tip' || (m?.meta && typeof m.meta.tipAmount === 'number');
-      if (!isTip) return;
-      if (m?.receiver !== user.username) return;
-      console.log('[WS] message:new (tip) received', m);
-      const amount = Number(m?.meta?.tipAmount ?? m?.amount ?? 0);
-      const tipper = m?.sender ?? 'A buyer';
-      const n: Notification = {
-        id: `msg_tip_${m?.id || m?._id || Date.now()}`,
-        _id: `msg_tip_${m?.id || m?._id || Date.now()}`,
-        recipient: user.username,
-        type: 'tip' as any,
-        title: 'Tip Received!',
-        message: `${tipper} tipped you $${amount.toFixed(2)}`,
-        data: { tipper, amount, messageId: m?._id ?? m?.id ?? null },
-        read: false,
-        cleared: false,
-        priority: 'normal',
-        createdAt: new Date().toISOString()
-      };
-      setActiveNotifications(prev => [n, ...prev]);
-      setUnreadCount(c => c + 1);
-    }));
-
-    // Clear/restore/delete
+    // REMOVED: Legacy tip_received listener - no longer needed
+    // REMOVED: message:new tip listener - no longer needed
+    
+    // Clear/restore/delete event handlers remain the same
     unsubs.push(subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
       const id = data?.notificationId;
       setActiveNotifications(prev => {
         const found = prev.find(n => (n._id || n.id) === id);
-        if (found) setClearedNotifications(c => [found, ...c]);
+        if (found) {
+          setClearedNotifications(c => [found, ...c]);
+          if (!found.read) setUnreadCount(u => Math.max(0, u - 1));
+        }
         return prev.filter(n => (n._id || n.id) !== id);
       });
     }));
@@ -186,7 +187,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setClearedNotifications(prev => {
         const found = prev.find(n => (n._id || n.id) === id);
         if (found) {
-          setActiveNotifications(active => [found, ...active]);
+          setActiveNotifications(active => {
+            // Check if already exists to prevent duplicates
+            const exists = active.some(n => (n._id || n.id) === id);
+            if (exists) return active;
+            return [found, ...active];
+          });
           if (!found.read) setUnreadCount(c => c + 1);
         }
         return prev.filter(n => (n._id || n.id) !== id);
@@ -245,7 +251,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setClearedNotifications(prev => {
           const found = prev.find(n => (n._id || n.id) === id);
           if (found) {
-            setActiveNotifications(active => [found, ...active]);
+            setActiveNotifications(active => {
+              // Check if already exists to prevent duplicates
+              const exists = active.some(n => (n._id || n.id) === id);
+              if (exists) return active;
+              return [found, ...active];
+            });
             if (!found.read) setUnreadCount(u => u + 1);
           }
           return prev.filter(n => (n._id || n.id) !== id);
@@ -294,7 +305,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const markAllAsRead = useCallback(async () => {
     try {
       const res = await notificationService.markAllAsRead();
-    if (res.success) {
+      if (res.success) {
         setActiveNotifications(prev => prev.map(n => ({ ...n, read: true })));
         setUnreadCount(0);
       }

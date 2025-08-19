@@ -387,25 +387,9 @@ class WebSocketService {
       this.emitToUser(message.receiver, 'message:new', message);
       console.log(`[WebSocket] Successfully emitted to receiver ${message.receiver}`);
 
-      // Tip → also emit a generic notification to receiver (no DB write)
-      try {
-        const isTip = message?.type === 'tip' || (message?.meta && typeof message.meta.tipAmount === 'number');
-        if (isTip) {
-          const tipAmount = message.meta?.tipAmount ?? message.amount ?? 0;
-          this.emitNotification(message.receiver, {
-            type: 'tip',
-            title: 'Tip Received!',
-            message: `💸 Tip received from ${message.sender}: $${Number(tipAmount).toFixed(2)}`,
-            data: {
-              tipper: message.sender,
-              amount: Number(tipAmount),
-              messageId: message._id || message.id || null
-            }
-          });
-        }
-      } catch (e) {
-        console.warn('[WebSocket] Tip notification emit failed (non-critical):', e.message);
-      }
+      // REMOVED: Duplicate tip notification that was causing double notifications
+      // Tip notifications are already handled by the tip route which creates
+      // both the DB notification and emits the appropriate WebSocket event
 
       // Auto-read if viewing
       if (this.isUserViewingThread(message.receiver, message.threadId)) {

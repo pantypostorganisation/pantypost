@@ -109,38 +109,15 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
       });
       await transaction.save();
 
-      // 4) DB notification (persists)
+      // 4) DB notification (persists) - THIS AUTOMATICALLY EMITS notification:new via the model
       await Notification.createTipNotification(recipientUsername, senderUsername, amount);
       console.log('[Tip] DB notification created for', recipientUsername);
 
-      // 5) 🔔 Real-time WS notifications
-      try {
-        // Primary, generic: FE listens to notification:new
-        webSocketService.emitNotification(recipientUsername, {
-          type: 'tip',
-          title: 'Tip Received!',
-          message: `${senderUsername} tipped you $${amount.toFixed(2)}`,
-          data: {
-            tipper: senderUsername,
-            amount,
-            transactionId: transaction._id || null
-          }
-        });
-
-        // Legacy safety-net: FE may listen to tip_received
-        webSocketService.emitToUser(recipientUsername, 'tip_received', {
-          from: senderUsername,
-          amount,
-          message: message || null,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log('[Tip] WS emitted to', recipientUsername, '(notification:new + tip_received)');
-      } catch (wsErr) {
-        console.warn('[Tip] Non-critical: failed to emit WS tip notification:', wsErr.message);
-      }
-
-      // (Optional) balance update signals
+      // REMOVED DUPLICATE EMISSIONS - The DB notification already handles WebSocket emission
+      // The Notification.createTipNotification method in the model already calls:
+      // global.webSocketService.emitToUser(data.recipient, 'notification:new', ...)
+      
+      // 5) Balance update signals (keeping these as they're different events)
       try {
         webSocketService.emitBalanceUpdate(
           senderUsername, 'buyer',
