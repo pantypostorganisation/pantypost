@@ -4,6 +4,7 @@ const router = express.Router();
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { body, validationResult } = require('express-validator');
 
@@ -140,6 +141,10 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
       });
 
       await transaction.save();
+
+      // Create database notification for the recipient
+      await Notification.createTipNotification(recipientUsername, senderUsername, amount);
+      console.log('[Tip] Created database notification for recipient');
 
       // Send WebSocket notification if available
       try {

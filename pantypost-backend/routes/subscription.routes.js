@@ -5,6 +5,7 @@ const Subscription = require('../models/Subscription');
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
 
@@ -223,6 +224,10 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
         }
       });
       await feeTransaction.save();
+      
+      // Create database notification for seller
+      await Notification.createSubscriptionNotification(seller, buyer);
+      console.log('[Subscription] Created database notification for seller');
       
       // WEBSOCKET: Emit new subscription event
       webSocketService.emitNewSubscription({

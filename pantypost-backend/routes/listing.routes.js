@@ -6,6 +6,7 @@ const Order = require('../models/Order');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 
 // ============= LISTING ROUTES =============
@@ -483,6 +484,10 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     try {
       await listing.placeBid(bidder, bidAmount); // Use bidAmount instead of amount
       
+      // Create database notification for seller about new bid
+      await Notification.createBidNotification(listing.seller, bidder, listing, bidAmount);
+      console.log('[Bid] Created database notification for seller');
+      
       if (isIncrementalBid) {
         // For incremental bids, only charge the difference (NO FEE)
         const bidDifference = bidAmount - previousHighestBid;
@@ -855,6 +860,10 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
     listing.status = 'sold';
     listing.soldAt = new Date();
     await listing.save();
+    
+    // Create database notification for seller
+    await Notification.createAuctionEndNotification(listing.seller, listing, winner, winningBid);
+    console.log('[Auction] Created database notification for seller');
     
     if (global.webSocketService) {
       global.webSocketService.emitAuctionEnded(listing, winner, winningBid);

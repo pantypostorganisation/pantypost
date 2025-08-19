@@ -6,6 +6,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const Listing = require('../models/Listing');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const tierService = require('../services/tierService');
 const TIER_CONFIG = require('../config/tierConfig');
@@ -215,6 +216,13 @@ router.post('/', authMiddleware, async (req, res) => {
 
       await order.save();
       console.log('[Order] Order created with tier:', order._id);
+
+      // Create database notification for seller
+      await Notification.createSaleNotification(seller, buyer, { 
+        _id: order._id, 
+        title: order.title 
+      }, actualMarkedUpPrice);
+      console.log('[Order] Created database notification for seller');
 
       // Create transaction records
       // 1. Main purchase transaction with tier info
