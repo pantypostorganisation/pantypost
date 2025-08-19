@@ -68,6 +68,39 @@ class WebSocketService {
     }, 30000); // Every 30 seconds
   }
 
+  // ===== Utility helpers =====================================================
+
+  // Emit to all of a user's sockets
+  emitToUser(username, event, data) {
+    const socketIds = this.userSockets.get(username) || [];
+    console.log(`[WebSocket] Emitting ${event} to ${username} (${socketIds.length} sockets)`);
+    socketIds.forEach(socketId => {
+      this.io.to(socketId).emit(event, data);
+    });
+  }
+
+  emitToRoom(roomType, roomId, event, data) {
+    this.io.to(`${roomType}:${roomId}`).emit(event, data);
+  }
+
+  // Small helper to safely emit a generic notification
+  emitNotification(username, payload) {
+    // Defensive: ensure minimal fields
+    const now = new Date();
+    const pkg = {
+      id: payload?.id || `notif_${now.getTime()}_${Math.random().toString(36).slice(2)}`,
+      type: payload?.type || 'system',
+      title: payload?.title || 'Notification',
+      message: payload?.message || '',
+      data: payload?.data || {},
+      priority: payload?.priority || 'normal',
+      createdAt: payload?.createdAt || now
+    };
+    this.emitToUser(username, 'notification:new', pkg);
+  }
+
+  // ===== Connection & presence ==============================================
+
   async handleConnection(socket) {
     // Track connection
     this.activeConnections.set(socket.id, {
@@ -90,7 +123,7 @@ class WebSocketService {
     // Update user activity
     this.userActivity.set(socket.username, Date.now());
     
-    // CRITICAL FIX: Always update user's online status when WebSocket connects
+    // Update DB presence
     try {
       const user = await User.findOne({ username: socket.username });
       if (user) {
@@ -109,10 +142,8 @@ class WebSocketService {
       sessionId: socket.id
     });
 
-    // IMPORTANT: Broadcast user is online to ALL connected clients with fresh data
+    // Broadcast presence + online list
     this.broadcastUserStatus(socket.username, true);
-    
-    // Send list of online users to the newly connected user
     const onlineUsers = await this.getOnlineUsers();
     socket.emit('users:online_list', onlineUsers);
     
@@ -172,22 +203,15 @@ class WebSocketService {
         console.log(`[WebSocket] Database updated: ${username} is now ${isOnline ? 'online' : 'offline'}`);
       }
     } catch (error) {
-      console.error('Error updating user online status:', error);
     }
   }
 
   async updateAllUserActivityStatus() {
-    // Check all tracked users and update their activity status
     for (const [username, lastActivity] of this.userActivity.entries()) {
       const timeSinceActivity = Date.now() - lastActivity;
-      
-      // If no activity for 5 minutes, consider them inactive
       if (timeSinceActivity > 5 * 60 * 1000) {
-        // Check if they're still connected
         const isConnected = this.userSockets.has(username);
-        
         if (!isConnected) {
-          // Remove from activity tracking
           this.userActivity.delete(username);
         }
       }
@@ -230,48 +254,41 @@ class WebSocketService {
     }
   }
 
-  // Handle when user focuses on a thread
+  // ===== Thread focus & typing ==============================================
+
   handleThreadFocus(socket, data) {
     const { threadId, otherUser } = data;
     if (!threadId || !otherUser) return;
 
     console.log(`[WebSocket] ${socket.username} focused on thread with ${otherUser}`);
     
-    // Track which thread the user is viewing
     const userThreads = this.userThreads.get(socket.username) || new Set();
     userThreads.add(threadId);
     this.userThreads.set(socket.username, userThreads);
 
-    // Join the conversation room
     socket.join(`conversation:${threadId}`);
 
-    // Notify the other user that this user is viewing the thread
     this.emitToUser(otherUser, 'thread:user_viewing', {
       username: socket.username,
       threadId,
       viewing: true
     });
     
-    // Update user activity
     this.handleUserActivity(socket);
   }
 
-  // Handle when user leaves a thread
   handleThreadBlur(socket, data) {
     const { threadId, otherUser } = data;
     if (!threadId || !otherUser) return;
 
     console.log(`[WebSocket] ${socket.username} left thread with ${otherUser}`);
     
-    // Remove from tracked threads
     const userThreads = this.userThreads.get(socket.username) || new Set();
     userThreads.delete(threadId);
     this.userThreads.set(socket.username, userThreads);
 
-    // Leave the conversation room
     socket.leave(`conversation:${threadId}`);
 
-    // Notify the other user that this user left the thread
     this.emitToUser(otherUser, 'thread:user_viewing', {
       username: socket.username,
       threadId,
@@ -289,7 +306,6 @@ class WebSocketService {
       isTyping
     });
     
-    // Update user activity when typing
     this.handleUserActivity(socket);
   }
 
@@ -309,7 +325,6 @@ class WebSocketService {
   }
 
   broadcastUserStatus(username, isOnline) {
-    // Include last active time when broadcasting
     const statusData = {
       username,
       isOnline,
@@ -317,10 +332,8 @@ class WebSocketService {
       timestamp: new Date()
     };
     
-    // Broadcast to ALL connected clients
     this.io.emit('user:status', statusData);
     
-    // Also emit specific online/offline events for backward compatibility
     if (isOnline) {
       this.io.emit('user:online', statusData);
       console.log(`[WebSocket] Broadcasted ${username} is ONLINE to all clients`);
@@ -330,36 +343,15 @@ class WebSocketService {
     }
   }
 
-  // Emit events from other parts of the application
-  emitToUser(username, event, data) {
-    const socketIds = this.userSockets.get(username) || [];
-    console.log(`[WebSocket] Emitting ${event} to ${username} (${socketIds.length} sockets)`);
-    
-    socketIds.forEach(socketId => {
-      this.io.to(socketId).emit(event, data);
-    });
-  }
+  // ===== User updates (tier etc.) ===========================================
 
-  emitToRoom(roomType, roomId, event, data) {
-    this.io.to(`${roomType}:${roomId}`).emit(event, data);
-  }
-
-  // Check if a user is viewing a specific thread
-  isUserViewingThread(username, threadId) {
-    const userThreads = this.userThreads.get(username);
-    return userThreads ? userThreads.has(threadId) : false;
-  }
-
-  // User update event (for tier system)
   emitUserUpdate(username, updateData) {
-    // Emit to the user themselves
     this.emitToUser(username, 'user:updated', {
       username,
       ...updateData,
       timestamp: new Date()
     });
     
-    // Also broadcast to all connected clients if tier changed
     if (updateData.tier) {
       this.io.emit('seller:tier_updated', {
         username,
@@ -368,6 +360,8 @@ class WebSocketService {
       });
     }
   }
+
+  // ===== Messages ============================================================
 
   // Message events with better logging and auto-read
   emitNewMessage(message) {
@@ -378,10 +372,8 @@ class WebSocketService {
       threadId: message.threadId
     });
 
-    // Emit to sender
     const senderSockets = this.userSockets.get(message.sender) || [];
     console.log(`[WebSocket] Emitting to sender ${message.sender} (${senderSockets.length} sockets)`);
-    
     if (senderSockets.length > 0) {
       this.emitToUser(message.sender, 'message:new', message);
       console.log(`[WebSocket] Successfully emitted to sender ${message.sender}`);
@@ -389,36 +381,50 @@ class WebSocketService {
       console.log(`[WebSocket] Sender ${message.sender} not connected`);
     }
     
-    // Emit to receiver
     const receiverSockets = this.userSockets.get(message.receiver) || [];
     console.log(`[WebSocket] Emitting to receiver ${message.receiver} (${receiverSockets.length} sockets)`);
-    
     if (receiverSockets.length > 0) {
       this.emitToUser(message.receiver, 'message:new', message);
       console.log(`[WebSocket] Successfully emitted to receiver ${message.receiver}`);
-      
-      // Check if receiver is viewing this thread and auto-mark as read
+
+      // Tip → also emit a generic notification to receiver (no DB write)
+      try {
+        const isTip = message?.type === 'tip' || (message?.meta && typeof message.meta.tipAmount === 'number');
+        if (isTip) {
+          const tipAmount = message.meta?.tipAmount ?? message.amount ?? 0;
+          this.emitNotification(message.receiver, {
+            type: 'tip',
+            title: 'Tip Received!',
+            message: `💸 Tip received from ${message.sender}: $${Number(tipAmount).toFixed(2)}`,
+            data: {
+              tipper: message.sender,
+              amount: Number(tipAmount),
+              messageId: message._id || message.id || null
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[WebSocket] Tip notification emit failed (non-critical):', e.message);
+      }
+
+      // Auto-read if viewing
       if (this.isUserViewingThread(message.receiver, message.threadId)) {
         console.log(`[WebSocket] Receiver ${message.receiver} is viewing thread, auto-marking as read`);
-        
-        // Emit read status immediately
         setTimeout(() => {
           this.emitMessageRead([message.id], message.threadId, message.receiver);
-          
-          // Also emit to sender that message was read
           this.emitToUser(message.sender, 'message:read', {
             messageIds: [message.id],
             threadId: message.threadId,
             readBy: message.receiver,
             readAt: new Date()
           });
-        }, 100); // Small delay to ensure message is processed first
+        }, 100);
       }
     } else {
       console.log(`[WebSocket] Receiver ${message.receiver} not connected`);
     }
     
-    // Also emit to the conversation room
+    // Also emit to the conversation room (symmetric key)
     const conversationKey = [message.sender, message.receiver].sort().join('-');
     this.emitToRoom('conversation', conversationKey, 'message:new', message);
     console.log(`[WebSocket] Emitted to conversation room: conversation:${conversationKey}`);
@@ -438,10 +444,8 @@ class WebSocketService {
       readAt: new Date()
     };
 
-    // Emit to the conversation room
     this.emitToRoom('conversation', threadId, 'message:read', readData);
     
-    // Also emit directly to both users in the thread
     const [user1, user2] = threadId.split('-');
     this.emitToUser(user1, 'message:read', readData);
     this.emitToUser(user2, 'message:read', readData);
@@ -449,23 +453,16 @@ class WebSocketService {
     console.log(`[WebSocket] Emitted message:read to thread ${threadId} and users ${user1}, ${user2}`);
   }
 
-  // Order events
+  // ===== Orders =============================================================
+
   emitOrderCreated(order) {
-    // Emit to seller
     this.emitToUser(order.seller, 'order:created', order);
-    
-    // Emit to buyer
     this.emitToUser(order.buyer, 'order:created', order);
-    
-    // Send notification to buyer
-    this.emitToUser(order.buyer, 'notification:new', {
-      id: `notif_${Date.now()}`,
+    this.emitNotification(order.buyer, {
       type: 'order',
       title: 'Order Placed!',
-      body: `Your order for ${order.title} has been placed`,
-      data: { orderId: order._id || order.id },
-      read: false,
-      createdAt: new Date()
+      message: `Your order for ${order.title} has been placed`,
+      data: { orderId: order._id || order.id }
     });
   }
 
@@ -491,7 +488,8 @@ class WebSocketService {
     this.emitToUser(order.seller, 'order:status_change', eventData);
   }
 
-  // Auction events
+  // ===== Auctions ===========================================================
+
   emitNewBid(listing, bid) {
     this.io.emit('auction:bid', {
       listingId: listing._id,
@@ -502,7 +500,6 @@ class WebSocketService {
       timestamp: new Date()
     });
 
-    // Notify previous highest bidder they were outbid
     if (listing.auction.bids.length > 1) {
       const previousBidder = listing.auction.bids[listing.auction.bids.length - 2].bidder;
       this.emitToUser(previousBidder, 'auction:outbid', {
@@ -525,14 +522,13 @@ class WebSocketService {
     });
   }
 
-  // UPDATED: Include seller earnings in auction ended event
+  // Include seller earnings in auction ended event
   emitAuctionEnded(listing, winner, finalBid) {
-    // Calculate seller earnings for the event
     let sellerEarnings = null;
     let platformFee = null;
     
     if (winner && finalBid) {
-      const AUCTION_PLATFORM_FEE = 0.20; // 20% for auctions
+      const AUCTION_PLATFORM_FEE = 0.20;
       platformFee = Math.round(finalBid * AUCTION_PLATFORM_FEE * 100) / 100;
       sellerEarnings = Math.round((finalBid - platformFee) * 100) / 100;
     }
@@ -541,14 +537,15 @@ class WebSocketService {
       listingId: listing._id,
       winner,
       finalBid,
-      sellerEarnings, // Include seller's earnings
-      platformFee, // Include platform fee
+      sellerEarnings,
+      platformFee,
       reserveMet: finalBid >= (listing.auction.reservePrice || 0),
       endedAt: new Date()
     });
   }
 
-  // Wallet events
+  // ===== Wallet =============================================================
+
   emitBalanceUpdate(username, role, previousBalance, newBalance, reason) {
     this.emitToUser(username, 'wallet:balance_update', {
       username,
@@ -570,29 +567,41 @@ class WebSocketService {
     }
   }
 
-  // Subscription events
+  // ===== Subscriptions ======================================================
+
   emitNewSubscription(subscription) {
     this.emitToUser(subscription.creator, 'subscription:new', subscription);
-    this.emitToUser(subscription.subscriber, 'notification:new', {
-      id: `notif_${Date.now()}`,
+    this.emitNotification(subscription.subscriber, {
       type: 'subscription',
       title: 'Subscription Activated!',
-      body: `You are now subscribed to ${subscription.creator}`,
-      data: { subscriptionId: subscription._id },
-      read: false,
-      createdAt: new Date()
+      message: `You are now subscribed to ${subscription.creator}`,
+      data: { subscriptionId: subscription._id }
     });
   }
 
   emitSubscriptionCancelled(subscription, reason) {
+    // Legacy event
     this.emitToUser(subscription.creator, 'subscription:cancelled', {
       ...subscription,
       cancelledAt: new Date(),
       reason
     });
+
+    // Generic notification for UI storage
+    try {
+      this.emitNotification(subscription.creator, {
+        type: 'subscription',
+        title: 'Subscription Cancelled',
+        message: `${subscription.subscriber} cancelled their subscription`,
+        data: { subscriptionId: subscription.id || subscription._id, reason }
+      });
+    } catch (err) {
+      console.error('[WebSocket] Failed to emit unsubscribe notification:', err);
+    }
   }
 
-  // Listing events
+  // ===== Listings ===========================================================
+
   emitNewListing(listing) {
     this.io.emit('listing:new', {
       id: listing._id,
@@ -622,25 +631,75 @@ class WebSocketService {
     });
   }
 
-  emitListingSold(listing, buyer) {
-    // Emit with both formats for compatibility
-    this.io.emit('listing:sold', {
-      id: listing._id,
-      title: listing.title,
+  /**
+   * Accepts either:
+   *  - emitListingSold(listingObject, buyerUsername)
+   *  - emitListingSold({ _id/id, title, seller, buyer/soldTo, price, ... })
+   */
+  emitListingSold(listingOrPayload, buyerMaybe) {
+    let id, title, seller, buyer, price;
+
+    if (buyerMaybe === undefined && listingOrPayload && typeof listingOrPayload === 'object') {
+      // Single payload form
+      id = listingOrPayload._id || listingOrPayload.id;
+      title = listingOrPayload.title;
+      seller = listingOrPayload.seller;
+      buyer = listingOrPayload.buyer || listingOrPayload.soldTo;
+      price = listingOrPayload.price;
+    } else {
+      // (listing, buyer) form
+      const listing = listingOrPayload || {};
+      id = listing._id || listing.id;
+      title = listing.title;
+      seller = listing.seller;
+      buyer = buyerMaybe;
+      price = listing.price;
+    }
+
+    const payload = {
+      id: id,
+      listingId: id,
+      title,
+      seller,
+      buyer,
       soldTo: buyer,
-      price: listing.price,
+      price,
       soldAt: new Date()
-    });
-    
-    // Also emit with listingId format for consistency
-    this.io.emit('listing:sold', {
-      listingId: listing._id,
-      seller: listing.seller,
-      buyer: buyer
-    });
+    };
+
+    // Normalize to one consistent event shape
+    this.io.emit('listing:sold', payload);
+
+    // Notifications
+    try {
+      if (seller) {
+        this.emitNotification(seller, {
+          type: 'listing',
+          title: 'Your listing sold!',
+          message: `${title} sold to ${buyer} for $${Number(price || 0).toFixed(2)}`,
+          data: { listingId: id, buyer }
+        });
+      }
+      if (buyer) {
+        this.emitNotification(buyer, {
+          type: 'order',
+          title: 'Purchase successful',
+          message: `You bought ${title} for $${Number(price || 0).toFixed(2)}`,
+          data: { listingId: id, seller }
+        });
+      }
+    } catch (err) {
+      console.error('[WebSocket] Failed to emit listing sold notifications:', err);
+    }
   }
 
-  // Get connection stats
+  // ===== Diagnostics ========================================================
+
+  isUserViewingThread(username, threadId) {
+    const userThreads = this.userThreads.get(username);
+    return userThreads ? userThreads.has(threadId) : false;
+  }
+
   getConnectionStats() {
     return {
       totalConnections: this.activeConnections.size,

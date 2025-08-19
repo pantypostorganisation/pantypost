@@ -1,4 +1,3 @@
-// src/app/ClientLayout.tsx
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
@@ -33,7 +32,6 @@ export default function ClientLayout({
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
 
-  // Define routes where header should be hidden
   const hideHeaderRoutes = [
     '/login',
     '/signup',
@@ -43,10 +41,7 @@ export default function ClientLayout({
     '/reset-password-final'
   ];
 
-  // Check if current route should hide header
-  // Using exact match to avoid issues with similar route names
   const shouldHideHeader = hideHeaderRoutes.some(route => {
-    // Exact match or starts with route followed by query params or hash
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
   });
 
@@ -54,7 +49,6 @@ export default function ClientLayout({
     setMounted(true);
   }, []);
 
-  // Register service worker
   useEffect(() => {
     if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
       window.addEventListener('load', () => {
@@ -65,15 +59,12 @@ export default function ClientLayout({
     }
   }, []);
 
-  // Initialize error tracking
   useEffect(() => {
     errorTracker.initialize();
   }, []);
 
-  // Initialize performance monitoring
   usePerformanceMonitoring();
 
-  // Debug log for development
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log('Current pathname:', pathname);
@@ -81,7 +72,6 @@ export default function ClientLayout({
     }
   }, [pathname, shouldHideHeader]);
 
-  // Prevent SSR/hydration issues by only rendering after mount
   if (!mounted) {
     return <LoadingFallback />;
   }
@@ -100,7 +90,9 @@ export default function ClientLayout({
                 {children}
               </main>
               <AgeVerificationModal />
+              {/* Keep message area if you still want DM popups; remove the next line if you don't want message popups either */}
               <MessageNotifications />
+              {/* NOTICE: No NotificationToaster mounted here */}
             </BanCheck>
           </div>
         </Suspense>

@@ -1,25 +1,17 @@
-// src/context/NotificationContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useWebSocket } from './WebSocketContext';
 import { notificationService } from '@/services/notification.service';
-import type { Notification, NotificationResponse } from '@/types/notification';
+import type { Notification } from '@/types/notification';
 import { WebSocketEvent } from '@/types/websocket';
-import { storageService } from '@/services';
-import { v4 as uuidv4 } from 'uuid';
 
 interface NotificationContextType {
-  // Notification lists
   activeNotifications: Notification[];
   clearedNotifications: Notification[];
-  
-  // Counts
   unreadCount: number;
   totalCount: number;
-  
-  // Actions
   clearNotification: (notificationId: string) => Promise<void>;
   clearAllNotifications: () => Promise<void>;
   restoreNotification: (notificationId: string) => Promise<void>;
@@ -27,121 +19,82 @@ interface NotificationContextType {
   deleteAllCleared: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  
-  // Refresh
   refreshNotifications: () => Promise<void>;
-  
-  // Loading states
   isLoading: boolean;
   error: string | null;
-  
-  // Add notification locally (for testing or offline)
   addLocalNotification: (message: string, type?: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const useNotifications = () => {
-  const context = useContext(NotificationContext);
-  if (!context) {
-    throw new Error('useNotifications must be used within NotificationProvider');
-  }
-  return context;
+  const ctx = useContext(NotificationContext);
+  if (!ctx) throw new Error('useNotifications must be used within NotificationProvider');
+  return ctx;
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const webSocketContext = useWebSocket();
-  const subscribe = webSocketContext?.subscribe;
-  
+  const ws = useWebSocket();
+  const subscribe = ws?.subscribe;
+
   const [activeNotifications, setActiveNotifications] = useState<Notification[]>([]);
   const [clearedNotifications, setClearedNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const isMountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
-  const FETCH_COOLDOWN = 1000; // 1 second cooldown between fetches
+  const FETCH_COOLDOWN = 1000;
 
-  // Load notifications from backend
   const loadNotifications = useCallback(async () => {
     if (!user || !isMountedRef.current) return;
-    
-    // Check cooldown
     const now = Date.now();
-    if (now - lastFetchRef.current < FETCH_COOLDOWN) {
-      console.log('[NotificationContext] Skipping fetch due to cooldown');
-      return;
-    }
+    if (now - lastFetchRef.current < FETCH_COOLDOWN) return;
     lastFetchRef.current = now;
-    
+
     setIsLoading(true);
     setError(null);
-    
     try {
-      // Fetch active notifications
-      const activeResponse = await notificationService.getActiveNotifications(50);
-      if (activeResponse.success && activeResponse.data && isMountedRef.current) {
-        const notifications = Array.isArray(activeResponse.data) ? activeResponse.data : [];
-        setActiveNotifications(notifications);
-        
-        // Calculate unread count
-        const unread = notifications.filter(n => !n.read).length;
-        setUnreadCount(unread);
+      const activeRes = await notificationService.getActiveNotifications(50);
+      if (activeRes.success && Array.isArray(activeRes.data) && isMountedRef.current) {
+        setActiveNotifications(activeRes.data);
+        setUnreadCount(activeRes.data.filter(n => !n.read).length);
       }
-      
-      // Fetch cleared notifications
-      const clearedResponse = await notificationService.getClearedNotifications(50);
-      if (clearedResponse.success && clearedResponse.data && isMountedRef.current) {
-        const notifications = Array.isArray(clearedResponse.data) ? clearedResponse.data : [];
-        setClearedNotifications(notifications);
+      const clearedRes = await notificationService.getClearedNotifications(50);
+      if (clearedRes.success && Array.isArray(clearedRes.data) && isMountedRef.current) {
+        setClearedNotifications(clearedRes.data);
       }
-    } catch (err) {
-      console.error('[NotificationContext] Error loading notifications:', err);
-      if (isMountedRef.current) {
-        setError('Failed to load notifications');
-      }
+    } catch (e) {
+      if (isMountedRef.current) setError('Failed to load notifications');
     } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      if (isMountedRef.current) setIsLoading(false);
     }
   }, [user]);
 
-  // Load notifications on mount and when user changes
   useEffect(() => {
     isMountedRef.current = true;
-    
     if (user) {
       loadNotifications();
     } else {
-      // Clear notifications when user logs out
       setActiveNotifications([]);
       setClearedNotifications([]);
       setUnreadCount(0);
     }
-    
-    return () => {
-      isMountedRef.current = false;
-    };
+    return () => { isMountedRef.current = false; };
   }, [user, loadNotifications]);
 
-  // Subscribe to WebSocket events for real-time notifications
+  // 🧷 Stable websocket subscriptions (no dependency on active list)
   useEffect(() => {
     if (!subscribe || !user) return;
-    
-    console.log('[NotificationContext] Setting up WebSocket subscriptions');
-    
-    const unsubscribers: (() => void)[] = [];
-    
-    // New notification event
-    const unsubNew = subscribe('notification:new' as WebSocketEvent, (data: any) => {
-      console.log('[NotificationContext] New notification received:', data);
-      
+    const unsubs: Array<() => void> = [];
+
+    // Primary: generic backend notifications
+    unsubs.push(subscribe('notification:new' as WebSocketEvent, (data: any) => {
       if (!isMountedRef.current) return;
-      
-      const notification: Notification = {
+      console.log('[WS] notification:new received', data);
+      const n: Notification = {
         id: data.id || data._id,
         _id: data._id || data.id,
         recipient: user.username,
@@ -154,231 +107,203 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         priority: data.priority || 'normal',
         createdAt: data.createdAt || new Date().toISOString()
       };
-      
-      setActiveNotifications(prev => [notification, ...prev]);
-      setUnreadCount(prev => prev + 1);
-      
-      // Fire browser notification if permitted
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(notification.title, {
-          body: notification.message,
-          icon: '/icon.png',
-          tag: notification.id
-        });
-      }
-    });
-    unsubscribers.push(unsubNew);
-    
-    // Notification cleared event
-    const unsubCleared = subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
-      console.log('[NotificationContext] Notification cleared:', data);
-      
-      if (!isMountedRef.current) return;
-      
-      const notificationId = data.notificationId;
-      
-      setActiveNotifications(prev => {
-        const notification = prev.find(n => (n._id || n.id) === notificationId);
-        if (notification) {
-          setClearedNotifications(cleared => [notification, ...cleared]);
-        }
-        return prev.filter(n => (n._id || n.id) !== notificationId);
-      });
-    });
-    unsubscribers.push(unsubCleared);
-    
-    // All notifications cleared event
-    const unsubAllCleared = subscribe('notification:all_cleared' as WebSocketEvent, () => {
-      console.log('[NotificationContext] All notifications cleared');
-      
-      if (!isMountedRef.current) return;
-      
-      setClearedNotifications(prev => [...activeNotifications, ...prev]);
-      setActiveNotifications([]);
-      setUnreadCount(0);
-    });
-    unsubscribers.push(unsubAllCleared);
-    
-    // Notification restored event
-    const unsubRestored = subscribe('notification:restored' as WebSocketEvent, (data: any) => {
-      console.log('[NotificationContext] Notification restored:', data);
-      
-      if (!isMountedRef.current) return;
-      
-      const notificationId = data.notificationId;
-      
-      setClearedNotifications(prev => {
-        const notification = prev.find(n => (n._id || n.id) === notificationId);
-        if (notification) {
-          setActiveNotifications(active => [notification, ...active]);
-          if (!notification.read) {
-            setUnreadCount(count => count + 1);
-          }
-        }
-        return prev.filter(n => (n._id || n.id) !== notificationId);
-      });
-    });
-    unsubscribers.push(unsubRestored);
-    
-    // Notification deleted event
-    const unsubDeleted = subscribe('notification:deleted' as WebSocketEvent, (data: any) => {
-      console.log('[NotificationContext] Notification deleted:', data);
-      
-      if (!isMountedRef.current) return;
-      
-      const notificationId = data.notificationId;
-      
-      setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== notificationId));
-    });
-    unsubscribers.push(unsubDeleted);
-    
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-    };
-  }, [subscribe, user, activeNotifications]);
+      setActiveNotifications(prev => [n, ...prev]);
+      setUnreadCount(c => c + 1);
+    }));
 
-  // Clear notification
-  const clearNotification = useCallback(async (notificationId: string) => {
-    try {
-      const response = await notificationService.clearNotification(notificationId);
-      
-      if (response.success) {
-        const notification = activeNotifications.find(n => (n._id || n.id) === notificationId);
-        
-        if (notification) {
-          setActiveNotifications(prev => prev.filter(n => (n._id || n.id) !== notificationId));
-          setClearedNotifications(prev => [{ ...notification, cleared: true }, ...prev]);
-          
-          if (!notification.read) {
-            setUnreadCount(prev => Math.max(0, prev - 1));
-          }
+    // Legacy: tip_received
+    unsubs.push(subscribe('tip_received' as WebSocketEvent, (data: any) => {
+      if (!isMountedRef.current) return;
+      console.log('[WS] tip_received received', data);
+      const amount = Number(data?.amount || 0);
+      const tipper = data?.from || 'A buyer';
+      const n: Notification = {
+        id: `legacy_tip_${Date.now()}`,
+        _id: `legacy_tip_${Date.now()}`,
+        recipient: user.username,
+        type: 'tip' as any,
+        title: 'Tip Received!',
+        message: `${tipper} tipped you $${amount.toFixed(2)}`,
+        data: { tipper, amount },
+        read: false,
+        cleared: false,
+        priority: 'normal',
+        createdAt: new Date().toISOString()
+      };
+      setActiveNotifications(prev => [n, ...prev]);
+      setUnreadCount(c => c + 1);
+    }));
+
+    // Optional: tip via message:new
+    unsubs.push(subscribe('message:new' as WebSocketEvent, (m: any) => {
+      if (!isMountedRef.current) return;
+      const isTip = m?.type === 'tip' || (m?.meta && typeof m.meta.tipAmount === 'number');
+      if (!isTip) return;
+      if (m?.receiver !== user.username) return;
+      console.log('[WS] message:new (tip) received', m);
+      const amount = Number(m?.meta?.tipAmount ?? m?.amount ?? 0);
+      const tipper = m?.sender ?? 'A buyer';
+      const n: Notification = {
+        id: `msg_tip_${m?.id || m?._id || Date.now()}`,
+        _id: `msg_tip_${m?.id || m?._id || Date.now()}`,
+        recipient: user.username,
+        type: 'tip' as any,
+        title: 'Tip Received!',
+        message: `${tipper} tipped you $${amount.toFixed(2)}`,
+        data: { tipper, amount, messageId: m?._id ?? m?.id ?? null },
+        read: false,
+        cleared: false,
+        priority: 'normal',
+        createdAt: new Date().toISOString()
+      };
+      setActiveNotifications(prev => [n, ...prev]);
+      setUnreadCount(c => c + 1);
+    }));
+
+    // Clear/restore/delete
+    unsubs.push(subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
+      const id = data?.notificationId;
+      setActiveNotifications(prev => {
+        const found = prev.find(n => (n._id || n.id) === id);
+        if (found) setClearedNotifications(c => [found, ...c]);
+        return prev.filter(n => (n._id || n.id) !== id);
+      });
+    }));
+
+    unsubs.push(subscribe('notification:all_cleared' as WebSocketEvent, () => {
+      setActiveNotifications(prevActive => {
+        setClearedNotifications(prevCleared => [
+          ...prevActive.map(n => ({ ...n, cleared: true })),
+          ...prevCleared
+        ]);
+        setUnreadCount(0);
+        return [];
+      });
+    }));
+
+    unsubs.push(subscribe('notification:restored' as WebSocketEvent, (data: any) => {
+      const id = data?.notificationId;
+      setClearedNotifications(prev => {
+        const found = prev.find(n => (n._id || n.id) === id);
+        if (found) {
+          setActiveNotifications(active => [found, ...active]);
+          if (!found.read) setUnreadCount(c => c + 1);
         }
-      } else {
-        setError('Failed to clear notification');
-      }
-    } catch (err) {
-      console.error('Error clearing notification:', err);
+        return prev.filter(n => (n._id || n.id) !== id);
+      });
+    }));
+
+    unsubs.push(subscribe('notification:deleted' as WebSocketEvent, (data: any) => {
+      const id = data?.notificationId;
+      setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== id));
+    }));
+
+    return () => unsubs.forEach(fn => fn());
+  }, [subscribe, user]);
+
+  // Actions
+  const clearNotification = useCallback(async (id: string) => {
+    try {
+      const res = await notificationService.clearNotification(id);
+      if (res.success) {
+        setActiveNotifications(prev => {
+          const found = prev.find(n => (n._id || n.id) === id);
+          if (found) {
+            setClearedNotifications(c => [{ ...found, cleared: true }, ...c]);
+            if (!found.read) setUnreadCount(u => Math.max(0, u - 1));
+          }
+          return prev.filter(n => (n._id || n.id) !== id);
+        });
+      } else setError('Failed to clear notification');
+    } catch {
       setError('Failed to clear notification');
     }
-  }, [activeNotifications]);
+  }, []);
 
-  // Clear all notifications
   const clearAllNotifications = useCallback(async () => {
     try {
-      const response = await notificationService.clearAll();
-      
-      if (response.success) {
-        setClearedNotifications(prev => [
-          ...activeNotifications.map(n => ({ ...n, cleared: true })),
-          ...prev
-        ]);
-        setActiveNotifications([]);
-        setUnreadCount(0);
-      } else {
-        setError('Failed to clear all notifications');
-      }
-    } catch (err) {
-      console.error('Error clearing all notifications:', err);
+      const res = await notificationService.clearAll();
+      if (res.success) {
+        setActiveNotifications(prevActive => {
+          setClearedNotifications(prevCleared => [
+            ...prevActive.map(n => ({ ...n, cleared: true })),
+            ...prevCleared
+          ]);
+          setUnreadCount(0);
+          return [];
+        });
+      } else setError('Failed to clear all notifications');
+    } catch {
       setError('Failed to clear all notifications');
     }
-  }, [activeNotifications]);
+  }, []);
 
-  // Restore notification
-  const restoreNotification = useCallback(async (notificationId: string) => {
+  const restoreNotification = useCallback(async (id: string) => {
     try {
-      const response = await notificationService.restoreNotification(notificationId);
-      
-      if (response.success) {
-        const notification = clearedNotifications.find(n => (n._id || n.id) === notificationId);
-        
-        if (notification) {
-          setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== notificationId));
-          setActiveNotifications(prev => [{ ...notification, cleared: false }, ...prev]);
-          
-          if (!notification.read) {
-            setUnreadCount(prev => prev + 1);
+      const res = await notificationService.restoreNotification(id);
+      if (res.success) {
+        setClearedNotifications(prev => {
+          const found = prev.find(n => (n._id || n.id) === id);
+          if (found) {
+            setActiveNotifications(active => [found, ...active]);
+            if (!found.read) setUnreadCount(u => u + 1);
           }
-        }
-      } else {
-        setError('Failed to restore notification');
-      }
-    } catch (err) {
-      console.error('Error restoring notification:', err);
+          return prev.filter(n => (n._id || n.id) !== id);
+        });
+      } else setError('Failed to restore notification');
+    } catch {
       setError('Failed to restore notification');
     }
-  }, [clearedNotifications]);
+  }, []);
 
-  // Delete notification
-  const deleteNotification = useCallback(async (notificationId: string) => {
+  const deleteNotification = useCallback(async (id: string) => {
     try {
-      const response = await notificationService.deleteNotification(notificationId);
-      
-      if (response.success) {
-        setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== notificationId));
-      } else {
-        setError('Failed to delete notification');
-      }
-    } catch (err) {
-      console.error('Error deleting notification:', err);
+      const res = await notificationService.deleteNotification(id);
+      if (res.success) {
+        setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== id));
+      } else setError('Failed to delete notification');
+    } catch {
       setError('Failed to delete notification');
     }
   }, []);
 
-  // Delete all cleared notifications
   const deleteAllCleared = useCallback(async () => {
     try {
-      const response = await notificationService.deleteAllCleared();
-      
-      if (response.success) {
+      const res = await notificationService.deleteAllCleared();
+      if (res.success) {
         setClearedNotifications([]);
-      } else {
-        setError('Failed to delete cleared notifications');
-      }
-    } catch (err) {
-      console.error('Error deleting cleared notifications:', err);
+      } else setError('Failed to delete cleared notifications');
+    } catch {
       setError('Failed to delete cleared notifications');
     }
   }, []);
 
-  // Mark as read
-  const markAsRead = useCallback(async (notificationId: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     try {
-      const response = await notificationService.markAsRead(notificationId);
-      
-      if (response.success) {
-        setActiveNotifications(prev => 
-          prev.map(n => (n._id || n.id) === notificationId ? { ...n, read: true } : n)
+      const res = await notificationService.markAsRead(id);
+      if (res.success) {
+        setActiveNotifications(prev =>
+          prev.map(n => (n._id || n.id) === id ? { ...n, read: true } : n)
         );
-        
-        const notification = activeNotifications.find(n => (n._id || n.id) === notificationId);
-        if (notification && !notification.read) {
-          setUnreadCount(prev => Math.max(0, prev - 1));
-        }
+        const found = activeNotifications.find(n => (n._id || n.id) === id);
+        if (found && !found.read) setUnreadCount(u => Math.max(0, u - 1));
       }
-    } catch (err) {
-      console.error('Error marking as read:', err);
-    }
+    } catch {}
   }, [activeNotifications]);
 
-  // Mark all as read
   const markAllAsRead = useCallback(async () => {
     try {
-      const response = await notificationService.markAllAsRead();
-      
-      if (response.success) {
+      const res = await notificationService.markAllAsRead();
+    if (res.success) {
         setActiveNotifications(prev => prev.map(n => ({ ...n, read: true })));
         setUnreadCount(0);
       }
-    } catch (err) {
-      console.error('Error marking all as read:', err);
-    }
+    } catch {}
   }, []);
 
-  // Add local notification
   const addLocalNotification = useCallback((message: string, type: string = 'system') => {
     if (!user) return;
-    
-    const notification: Notification = {
+    const n: Notification = {
       id: `local_${Date.now()}`,
       recipient: user.username,
       type: type as any,
@@ -389,35 +314,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       createdAt: new Date().toISOString(),
       priority: 'normal'
     };
-    
-    setActiveNotifications(prev => [notification, ...prev]);
-    setUnreadCount(prev => prev + 1);
-    
-    // Also create in service for persistence
-    notificationService.createLocalNotification(user.username, message, type);
-  }, [user]);
-
-  // Refresh notifications
-  const refreshNotifications = useCallback(async () => {
-    await loadNotifications();
-  }, [loadNotifications]);
-
-  // Request notification permission on mount
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  // Sync notifications periodically
-  useEffect(() => {
-    if (!user) return;
-    
-    const syncInterval = setInterval(() => {
-      notificationService.syncNotifications();
-    }, 60000); // Sync every minute
-    
-    return () => clearInterval(syncInterval);
+    setActiveNotifications(prev => [n, ...prev]);
+    setUnreadCount(c => c + 1);
   }, [user]);
 
   const value: NotificationContextType = {
@@ -432,7 +330,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     deleteAllCleared,
     markAsRead,
     markAllAsRead,
-    refreshNotifications,
+    refreshNotifications: loadNotifications,
     isLoading,
     error,
     addLocalNotification

@@ -33,6 +33,16 @@ import { storageService } from '@/services';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { isAdmin } from '@/utils/security/permissions';
+import { useNotifications } from '@/context/NotificationContext'; // ✅ NEW
+
+// UI notification union used in the dropdown
+type UINotification = {
+  id: string;
+  message: string;
+  timestamp?: string | Date;
+  cleared: boolean;
+  source: 'legacy' | 'ctx';
+};
 
 // ✅ Custom hooks for better reusability
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
@@ -104,6 +114,17 @@ export default function Header() {
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
 
+  // ✅ NotificationContext (DB/WebSocket-backed)
+  const {
+    activeNotifications: ctxActive,
+    clearedNotifications: ctxCleared,
+    clearNotification: ctxClearNotification,
+    restoreNotification: ctxRestoreNotification,
+    deleteNotification: ctxDeleteNotification,
+    clearAllNotifications: ctxClearAll,
+    deleteAllCleared: ctxDeleteAllCleared
+  } = useNotifications();
+
   // ✅ All state hooks called unconditionally
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -144,10 +165,10 @@ export default function Header() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // ✅ Memoized notification processing with safe error handling and sanitization
+  // ✅ Merge legacy sellerNotifications with NotificationContext (tips come from ctx)
   const processedNotifications = useMemo(() => {
-    if (!user?.username || user.role !== 'seller' || !sellerNotifications) {
-      return { active: [], cleared: [] };
+    if (!user?.username || user.role !== 'seller') {
+      return { active: [] as UINotification[], cleared: [] as UINotification[] };
     }
 
     const addNotificationEmojis = (message: string): string => {
@@ -161,7 +182,7 @@ export default function Header() {
       }
       if (!sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
         if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('Tip received')) return `💸 ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('New bid')) return `💰 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('created a new auction')) return `🔨 ${sanitizedMessage}`;
@@ -175,49 +196,67 @@ export default function Header() {
       return sanitizedMessage;
     };
 
-    const deduplicateNotifications = (notifications: any[]): any[] => {
-      const seen = new Map<string, any>();
-      const deduped: any[] = [];
+    const deduplicateNotifications = (notifications: UINotification[]): UINotification[] => {
+      const seen = new Map<string, UINotification>();
+      const deduped: UINotification[] = [];
 
-      for (const notification of notifications) {
-        const cleanMessage = notification.message.replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
-        const timestamp = new Date(notification.timestamp);
-        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
+      for (const n of notifications) {
+        const cleanMessage = (n.message || '').replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
+        const timestamp = new Date(n.timestamp || Date.now());
+        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000)); // 1 min window
         const key = `${cleanMessage}_${timeWindow}`;
 
         if (!seen.has(key)) {
-          seen.set(key, notification);
-          deduped.push({
-            ...notification,
-            message: addNotificationEmojis(notification.message)
-          });
+          const withEmoji = { ...n, message: addNotificationEmojis(n.message) };
+          seen.set(key, withEmoji);
+          deduped.push(withEmoji);
         } else {
-          const existing = seen.get(key);
-          if (timestamp > new Date(existing.timestamp)) {
-            seen.set(key, notification);
-            const existingIndex = deduped.findIndex((n: any) => n.id === existing.id);
-            if (existingIndex !== -1) {
-              deduped[existingIndex] = {
-                ...notification,
-                message: addNotificationEmojis(notification.message)
-              };
-            }
+          const existing = seen.get(key)!;
+          if (timestamp > new Date(existing.timestamp || 0)) {
+            const withEmoji = { ...n, message: addNotificationEmojis(n.message) };
+            seen.set(key, withEmoji);
+            const idx = deduped.findIndex((x) => x.id === existing.id);
+            if (idx !== -1) deduped[idx] = withEmoji;
           }
         }
       }
 
-      return deduped.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      return deduped.sort(
+        (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+      );
     };
 
-    try {
-      const active = deduplicateNotifications(sellerNotifications.filter((n) => !n.cleared));
-      const cleared = deduplicateNotifications(sellerNotifications.filter((n) => n.cleared));
-      return { active, cleared };
-    } catch (error) {
-      console.error('Error processing notifications:', error);
-      return { active: [], cleared: [] };
-    }
-  }, [user?.username, user?.role, sellerNotifications]);
+    // Legacy (local) source
+    const legacyActive: UINotification[] = (sellerNotifications || [])
+      .filter((n: any) => !n.cleared)
+      .map((n: any) => ({ id: n.id, message: n.message, timestamp: n.timestamp, cleared: false, source: 'legacy' as const }));
+
+    const legacyCleared: UINotification[] = (sellerNotifications || [])
+      .filter((n: any) => n.cleared)
+      .map((n: any) => ({ id: n.id, message: n.message, timestamp: n.timestamp, cleared: true, source: 'legacy' as const }));
+
+    // Context (DB) source – includes TIP events
+    const ctxActiveUi: UINotification[] = (ctxActive || []).map((n) => ({
+      id: (n._id || n.id) as string,
+      message: n.message,
+      timestamp: n.createdAt,
+      cleared: false,
+      source: 'ctx'
+    }));
+
+    const ctxClearedUi: UINotification[] = (ctxCleared || []).map((n) => ({
+      id: (n._id || n.id) as string,
+      message: n.message,
+      timestamp: n.createdAt,
+      cleared: true,
+      source: 'ctx'
+    }));
+
+    return {
+      active: deduplicateNotifications([...legacyActive, ...ctxActiveUi]),
+      cleared: deduplicateNotifications([...legacyCleared, ...ctxClearedUi])
+    };
+  }, [user?.username, user?.role, sellerNotifications, ctxActive, ctxCleared]);
 
   // ✅ Enhanced balance memoization
   const buyerBalance = useMemo(() => {
@@ -404,30 +443,25 @@ export default function Header() {
     }
   }, [isAdminUser]);
 
-  // ✅ NEW: Bulk notification actions that were referenced but missing
+  // ✅ Bulk notification actions (call BOTH sources)
   const clearAllNotifications = useCallback(async () => {
     if (!user || user.role !== 'seller' || !sellerNotifications || clearingNotifications) return;
 
     setClearingNotifications(true);
 
     try {
+      // Context-backed notifications (DB)
+      await ctxClearAll();
+
+      // Legacy local notifications
       const uname = user.username;
-      const activeNotifsToUpdate = sellerNotifications.filter((notification: any) => !notification.cleared);
-
-      if (activeNotifsToUpdate.length === 0) return;
-
-      const updatedNotifications = sellerNotifications.map((notification: any) => ({
-        ...notification,
-        cleared: notification.cleared ? notification.cleared : true
-      }));
-
+      const updatedNotifications = sellerNotifications.map((n: any) => ({ ...n, cleared: true }));
       const notificationStore =
         (await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {})) || {};
       notificationStore[uname] = updatedNotifications;
-
       await storageService.setItem('seller_notifications_store', notificationStore);
 
-      // Let listeners update
+      // Notify listeners
       window.dispatchEvent(
         new StorageEvent('storage', {
           key: 'seller_notifications_store',
@@ -439,7 +473,7 @@ export default function Header() {
     } finally {
       setClearingNotifications(false);
     }
-  }, [user, sellerNotifications, clearingNotifications]);
+  }, [user, sellerNotifications, clearingNotifications, ctxClearAll]);
 
   const deleteAllClearedNotifications = useCallback(async () => {
     if (!user || user.role !== 'seller' || !sellerNotifications || deletingNotifications) return;
@@ -447,17 +481,15 @@ export default function Header() {
     setDeletingNotifications(true);
 
     try {
+      // Context-backed notifications (DB)
+      await ctxDeleteAllCleared();
+
+      // Legacy local notifications
       const uname = user.username;
-      const clearedNotifsToDelete = sellerNotifications.filter((notification: any) => notification.cleared);
-
-      if (clearedNotifsToDelete.length === 0) return;
-
-      const updatedNotifications = sellerNotifications.filter((notification: any) => !notification.cleared);
-
+      const updatedNotifications = sellerNotifications.filter((n: any) => !n.cleared);
       const notificationStore =
         (await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {})) || {};
       notificationStore[uname] = updatedNotifications;
-
       await storageService.setItem('seller_notifications_store', notificationStore);
 
       window.dispatchEvent(
@@ -471,7 +503,41 @@ export default function Header() {
     } finally {
       setDeletingNotifications(false);
     }
-  }, [user, sellerNotifications, deletingNotifications]);
+  }, [user, sellerNotifications, deletingNotifications, ctxDeleteAllCleared]);
+
+  // ✅ Per-item actions route to the right source
+  const handleClearOne = useCallback(
+    async (n: UINotification) => {
+      if (n.source === 'ctx') {
+        await ctxClearNotification(n.id);
+      } else {
+        clearSellerNotification(n.id);
+      }
+    },
+    [ctxClearNotification, clearSellerNotification]
+  );
+
+  const handleRestoreOne = useCallback(
+    async (n: UINotification) => {
+      if (n.source === 'ctx') {
+        await ctxRestoreNotification(n.id);
+      } else {
+        restoreSellerNotification(n.id);
+      }
+    },
+    [ctxRestoreNotification, restoreSellerNotification]
+  );
+
+  const handleDeleteOne = useCallback(
+    async (n: UINotification) => {
+      if (n.source === 'ctx') {
+        await ctxDeleteNotification(n.id);
+      } else {
+        permanentlyDeleteSellerNotification(n.id);
+      }
+    },
+    [ctxDeleteNotification, permanentlyDeleteSellerNotification]
+  );
 
   // ✅ Intervals + events setup
   const clearBalanceInterval = useInterval(() => {
@@ -916,7 +982,7 @@ export default function Header() {
                                 )}
                               </div>
                               <button
-                                onClick={() => clearSellerNotification(notification.id)}
+                                onClick={() => handleClearOne(notification)}
                                 className="text-xs text-[#ff950e] hover:text-[#ff6b00] font-bold transition-colors whitespace-nowrap"
                                 style={{ touchAction: 'manipulation' }}
                               >
@@ -936,7 +1002,7 @@ export default function Header() {
                             </div>
                             <div className="flex gap-2 flex-col">
                               <button
-                                onClick={() => restoreSellerNotification(notification.id)}
+                                onClick={() => handleRestoreOne(notification)}
                                 className="text-xs text-green-400 hover:text-green-300 font-bold transition-colors whitespace-nowrap flex items-center gap-1"
                                 title="Restore notification"
                                 style={{ touchAction: 'manipulation' }}
@@ -945,7 +1011,7 @@ export default function Header() {
                                 Restore
                               </button>
                               <button
-                                onClick={() => permanentlyDeleteSellerNotification(notification.id)}
+                                onClick={() => handleDeleteOne(notification)}
                                 className="text-xs text-red-400 hover:text-red-300 font-bold transition-colors whitespace-nowrap flex items-center gap-1"
                                 title="Delete permanently"
                                 style={{ touchAction: 'manipulation' }}

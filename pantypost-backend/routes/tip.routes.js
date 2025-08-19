@@ -1,4 +1,3 @@
-// pantypost-backend/routes/tip.routes.js
 const express = require('express');
 const router = express.Router();
 const Wallet = require('../models/Wallet');
@@ -7,6 +6,9 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { body, validationResult } = require('express-validator');
+
+// ✅ Use the initialized singleton websocket service
+const webSocketService = require('../config/websocket');
 
 // Validation middleware for tip amount
 const validateTip = [
@@ -31,99 +33,65 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
+      return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { amount, recipientUsername, message } = req.body;
+    // Coerce amount to number
+    const amount = Number(req.body.amount);
+    const { recipientUsername, message } = req.body;
     const senderUsername = req.user.username;
 
-    console.log('[Tip] Processing tip:', {
-      from: senderUsername,
-      to: recipientUsername,
-      amount: amount
-    });
+    console.log('[Tip] Processing tip:', { from: senderUsername, to: recipientUsername, amount });
 
-    // Prevent self-tipping
     if (senderUsername === recipientUsername) {
-      return res.status(400).json({
-        success: false,
-        error: 'You cannot tip yourself'
-      });
+      return res.status(400).json({ success: false, error: 'You cannot tip yourself' });
     }
 
-    // Get sender wallet
+    // Sender wallet
     let senderWallet = await Wallet.findOne({ username: senderUsername });
     if (!senderWallet) {
-      // Create wallet if it doesn't exist
-      senderWallet = new Wallet({
-        username: senderUsername,
-        role: 'buyer',
-        balance: 0
-      });
+      senderWallet = new Wallet({ username: senderUsername, role: 'buyer', balance: 0 });
       await senderWallet.save();
-      
-      // If wallet was just created with 0 balance, they can't tip
-      return res.status(400).json({
-        success: false,
-        error: 'Insufficient balance'
-      });
+      return res.status(400).json({ success: false, error: 'Insufficient balance' });
     }
 
-    // Check balance
     if (senderWallet.balance < amount) {
-      return res.status(400).json({
-        success: false,
-        error: 'Insufficient balance'
-      });
+      return res.status(400).json({ success: false, error: 'Insufficient balance' });
     }
 
-    // Get recipient user and wallet
+    // Recipient
     const recipient = await User.findOne({ username: recipientUsername });
     if (!recipient) {
-      return res.status(404).json({
-        success: false,
-        error: 'Recipient not found'
-      });
+      return res.status(404).json({ success: false, error: 'Recipient not found' });
     }
-
-    // Only sellers can receive tips
     if (recipient.role !== 'seller') {
-      return res.status(400).json({
-        success: false,
-        error: 'Tips can only be sent to sellers'
-      });
+      return res.status(400).json({ success: false, error: 'Tips can only be sent to sellers' });
     }
 
-    // Get or create recipient wallet
+    // Recipient wallet
     let recipientWallet = await Wallet.findOne({ username: recipientUsername });
     if (!recipientWallet) {
-      recipientWallet = new Wallet({
-        username: recipientUsername,
-        role: 'seller',
-        balance: 0
-      });
+      recipientWallet = new Wallet({ username: recipientUsername, role: 'seller', balance: 0 });
       await recipientWallet.save();
     }
 
-    // Process the tip transaction WITHOUT MongoDB transactions
     try {
-      // 1. Deduct from sender
-      senderWallet.balance -= amount;
+      // 1) Deduct sender
+      const prevSenderBalance = senderWallet.balance;
+      senderWallet.balance = Number((senderWallet.balance - amount).toFixed(2));
       senderWallet.lastTransaction = new Date();
       await senderWallet.save();
 
-      // 2. Add to recipient (100% - no platform fees on tips)
-      recipientWallet.balance += amount;
+      // 2) Credit recipient
+      const prevRecipientBalance = recipientWallet.balance;
+      recipientWallet.balance = Number((recipientWallet.balance + amount).toFixed(2));
       recipientWallet.lastTransaction = new Date();
       await recipientWallet.save();
 
-      // 3. Create transaction record
+      // 3) Transaction record
       const transaction = new Transaction({
         type: 'tip',
-        amount: amount,
+        amount,
         from: senderUsername,
         to: recipientUsername,
         fromRole: 'buyer',
@@ -139,72 +107,77 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
           buyerPayment: amount
         }
       });
-
       await transaction.save();
 
-      // Create database notification for the recipient
+      // 4) DB notification (persists)
       await Notification.createTipNotification(recipientUsername, senderUsername, amount);
-      console.log('[Tip] Created database notification for recipient');
+      console.log('[Tip] DB notification created for', recipientUsername);
 
-      // Send WebSocket notification if available
+      // 5) 🔔 Real-time WS notifications
       try {
-        // Try to get webSocketService from the app context (the correct way in your setup)
-        const webSocketService = req.app.get('webSocketService');
-        if (webSocketService && typeof webSocketService.sendToUser === 'function') {
-          webSocketService.sendToUser(recipientUsername, {
-            type: 'tip_received',
-            from: senderUsername,
-            amount: amount,
-            message: message || null,
-            timestamp: new Date()
-          });
-        } else if (global.webSocketService && typeof global.webSocketService.emit === 'function') {
-          // Fallback to global webSocketService with emit method
-          global.webSocketService.emit('tip_received', {
-            to: recipientUsername,
-            from: senderUsername,
-            amount: amount,
-            message: message || null,
-            timestamp: new Date()
-          });
-        }
-      } catch (wsError) {
-        // Don't fail the tip if WebSocket notification fails
-        console.log('[Tip] WebSocket notification failed (non-critical):', wsError.message);
+        // Primary, generic: FE listens to notification:new
+        webSocketService.emitNotification(recipientUsername, {
+          type: 'tip',
+          title: 'Tip Received!',
+          message: `${senderUsername} tipped you $${amount.toFixed(2)}`,
+          data: {
+            tipper: senderUsername,
+            amount,
+            transactionId: transaction._id || null
+          }
+        });
+
+        // Legacy safety-net: FE may listen to tip_received
+        webSocketService.emitToUser(recipientUsername, 'tip_received', {
+          from: senderUsername,
+          amount,
+          message: message || null,
+          timestamp: new Date().toISOString()
+        });
+
+        console.log('[Tip] WS emitted to', recipientUsername, '(notification:new + tip_received)');
+      } catch (wsErr) {
+        console.warn('[Tip] Non-critical: failed to emit WS tip notification:', wsErr.message);
       }
 
-      res.json({
+      // (Optional) balance update signals
+      try {
+        webSocketService.emitBalanceUpdate(
+          senderUsername, 'buyer',
+          prevSenderBalance, senderWallet.balance, 'tip_sent'
+        );
+        webSocketService.emitBalanceUpdate(
+          recipientUsername, 'seller',
+          prevRecipientBalance, recipientWallet.balance, 'tip_received'
+        );
+      } catch (_) {}
+
+      return res.json({
         success: true,
         message: `Successfully sent $${amount.toFixed(2)} tip to ${recipientUsername}`,
         transaction: {
           id: transaction._id,
-          amount: amount,
+          amount,
           recipient: recipientUsername,
           timestamp: transaction.createdAt
         }
       });
 
     } catch (saveError) {
-      // If something fails, try to rollback manually
       console.error('[Tip] Error during save operations:', saveError);
-      
-      // Try to restore sender balance
+      // Manual rollback sender
       try {
-        senderWallet.balance += amount;
+        senderWallet.balance = Number((senderWallet.balance + amount).toFixed(2));
         await senderWallet.save();
-      } catch (rollbackError) {
-        console.error('[Tip] Failed to rollback sender balance:', rollbackError);
+      } catch (rbErr) {
+        console.error('[Tip] Failed to rollback sender balance:', rbErr);
       }
-      
       throw saveError;
     }
 
   } catch (error) {
     console.error('[Tip] Error sending tip:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to send tip'
-    });
+    return res.status(500).json({ success: false, error: 'Failed to send tip' });
   }
 });
 
@@ -212,41 +185,21 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
 router.get('/received', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
-    
-    // Check if user can view these tips
     if (username !== req.user.username && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: 'You can only view your own tips'
-      });
+      return res.status(403).json({ success: false, error: 'You can only view your own tips' });
     }
 
-    // Get date filter
     const dateFilter = {};
-    if (req.query.startDate) {
-      dateFilter.createdAt = { $gte: new Date(req.query.startDate) };
-    }
-    if (req.query.endDate) {
-      dateFilter.createdAt = { 
-        ...dateFilter.createdAt, 
-        $lte: new Date(req.query.endDate) 
-      };
-    }
+    if (req.query.startDate) dateFilter.createdAt = { $gte: new Date(req.query.startDate) };
+    if (req.query.endDate) dateFilter.createdAt = { ...(dateFilter.createdAt || {}), $lte: new Date(req.query.endDate) };
 
-    // Find all tips received
-    const tips = await Transaction.find({
-      type: 'tip',
-      to: username,
-      status: 'completed',
-      ...dateFilter
-    })
-    .sort({ createdAt: -1 })
-    .limit(parseInt(req.query.limit) || 50);
+    const tips = await Transaction.find({ type: 'tip', to: username, status: 'completed', ...dateFilter })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(req.query.limit) || 50);
 
-    // Calculate total
     const total = tips.reduce((sum, tip) => sum + tip.amount, 0);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         tips: tips.map(tip => ({
@@ -256,17 +209,14 @@ router.get('/received', authMiddleware, async (req, res) => {
           message: tip.metadata?.message || null,
           date: tip.createdAt
         })),
-        total: total,
+        total,
         count: tips.length
       }
     });
 
   } catch (error) {
     console.error('[Tip] Error fetching received tips:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch tips'
-    });
+    return res.status(500).json({ success: false, error: 'Failed to fetch tips' });
   }
 });
 
@@ -275,32 +225,17 @@ router.get('/sent', authMiddleware, async (req, res) => {
   try {
     const username = req.user.username;
 
-    // Get date filter
     const dateFilter = {};
-    if (req.query.startDate) {
-      dateFilter.createdAt = { $gte: new Date(req.query.startDate) };
-    }
-    if (req.query.endDate) {
-      dateFilter.createdAt = { 
-        ...dateFilter.createdAt, 
-        $lte: new Date(req.query.endDate) 
-      };
-    }
+    if (req.query.startDate) dateFilter.createdAt = { $gte: new Date(req.query.startDate) };
+    if (req.query.endDate) dateFilter.createdAt = { ...(dateFilter.createdAt || {}), $lte: new Date(req.query.endDate) };
 
-    // Find all tips sent
-    const tips = await Transaction.find({
-      type: 'tip',
-      from: username,
-      status: 'completed',
-      ...dateFilter
-    })
-    .sort({ createdAt: -1 })
-    .limit(parseInt(req.query.limit) || 50);
+    const tips = await Transaction.find({ type: 'tip', from: username, status: 'completed', ...dateFilter })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(req.query.limit) || 50);
 
-    // Calculate total
     const total = tips.reduce((sum, tip) => sum + tip.amount, 0);
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         tips: tips.map(tip => ({
@@ -310,17 +245,14 @@ router.get('/sent', authMiddleware, async (req, res) => {
           message: tip.metadata?.message || null,
           date: tip.createdAt
         })),
-        total: total,
+        total,
         count: tips.length
       }
     });
 
   } catch (error) {
     console.error('[Tip] Error fetching sent tips:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch tips'
-    });
+    return res.status(500).json({ success: false, error: 'Failed to fetch tips' });
   }
 });
 
@@ -328,51 +260,30 @@ router.get('/sent', authMiddleware, async (req, res) => {
 router.get('/stats/:username', authMiddleware, async (req, res) => {
   try {
     const { username } = req.params;
-    
-    // Verify user exists and is a seller
     const user = await User.findOne({ username });
     if (!user || user.role !== 'seller') {
-      return res.status(404).json({
-        success: false,
-        error: 'Seller not found'
-      });
+      return res.status(404).json({ success: false, error: 'Seller not found' });
     }
 
-    // Get all tips for this seller
-    const tips = await Transaction.find({
-      type: 'tip',
-      to: username,
-      status: 'completed'
-    });
+    const tips = await Transaction.find({ type: 'tip', to: username, status: 'completed' });
 
-    // Calculate statistics
     const stats = {
       totalTips: tips.length,
       totalAmount: tips.reduce((sum, tip) => sum + tip.amount, 0),
-      averageTip: tips.length > 0 ? tips.reduce((sum, tip) => sum + tip.amount, 0) / tips.length : 0,
-      largestTip: tips.length > 0 ? Math.max(...tips.map(tip => tip.amount)) : 0,
-      uniqueTippers: [...new Set(tips.map(tip => tip.from))].length,
+      averageTip: tips.length > 0 ? tips.reduce((s, t) => s + t.amount, 0) / tips.length : 0,
+      largestTip: tips.length > 0 ? Math.max(...tips.map(t => t.amount)) : 0,
+      uniqueTippers: [...new Set(tips.map(t => t.from))].length,
       recentTips: tips
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 5)
-        .map(tip => ({
-          from: tip.from,
-          amount: tip.amount,
-          date: tip.createdAt
-        }))
+        .map(tip => ({ from: tip.from, amount: tip.amount, date: tip.createdAt }))
     };
 
-    res.json({
-      success: true,
-      data: stats
-    });
+    return res.json({ success: true, data: stats });
 
   } catch (error) {
     console.error('[Tip] Error fetching tip stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch tip statistics'
-    });
+    return res.status(500).json({ success: false, error: 'Failed to fetch tip statistics' });
   }
 });
 
