@@ -16,6 +16,7 @@ const webSocketService = require('./config/websocket');
 
 // Import models
 const User = require('./models/User');
+const Notification = require('./models/Notification');
 
 // Import middleware
 const authMiddleware = require('./middleware/auth.middleware');
@@ -33,6 +34,7 @@ const uploadRoutes = require('./routes/upload.routes');
 const tierRoutes = require('./routes/tier.routes');
 const tipRoutes = require('./routes/tip.routes');
 const favoriteRoutes = require('./routes/favorite.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -90,7 +92,8 @@ app.get('/api/health', (req, res) => {
     features: {
       tiers: true,
       websocket: true,
-      favorites: true
+      favorites: true,
+      notifications: true
     }
   });
 });
@@ -108,6 +111,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/tiers', tierRoutes);
 app.use('/api/tips', tipRoutes);
 app.use('/api/favorites', favoriteRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -122,6 +126,63 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
     success: true,
     data: webSocketService.getConnectionStats()
   });
+});
+
+// Notification system status endpoint (admin only)
+app.get('/api/notifications/system-status', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+  
+  try {
+    // Get notification statistics
+    const totalNotifications = await Notification.countDocuments();
+    const unreadNotifications = await Notification.countDocuments({ read: false });
+    const clearedNotifications = await Notification.countDocuments({ cleared: true });
+    const deletedNotifications = await Notification.countDocuments({ deleted: true });
+    
+    // Get notification distribution by type
+    const typeDistribution = await Notification.aggregate([
+      { $group: { 
+        _id: '$type',
+        count: { $sum: 1 }
+      }},
+      { $sort: { count: -1 } }
+    ]);
+    
+    // Get top recipients
+    const topRecipients = await Notification.aggregate([
+      { $group: { 
+        _id: '$recipient',
+        count: { $sum: 1 }
+      }},
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          total: totalNotifications,
+          unread: unreadNotifications,
+          cleared: clearedNotifications,
+          deleted: deletedNotifications
+        },
+        typeDistribution,
+        topRecipients,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Tier system status endpoint (admin only)
@@ -318,6 +379,41 @@ app.post('/api/admin/fix-tier-names', authMiddleware, async (req, res) => {
   }
 });
 
+// Admin endpoint to clean up old notifications
+app.post('/api/admin/cleanup-notifications', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+  
+  try {
+    const { daysOld = 30 } = req.body;
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    const result = await Notification.deleteMany({
+      createdAt: { $lt: cutoffDate },
+      deleted: true
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        message: `Cleaned up ${result.deletedCount} old notifications`,
+        deletedCount: result.deletedCount
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware (should be last)
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
@@ -354,6 +450,24 @@ async function initializeTierSystem() {
   }
 }
 
+// Initialize notification system on startup
+async function initializeNotificationSystem() {
+  try {
+    // Clean up old deleted notifications on startup
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days old
+    
+    const result = await Notification.deleteMany({
+      createdAt: { $lt: cutoffDate },
+      deleted: true
+    });
+    
+    console.log(`✅ Notification system initialized, cleaned up ${result.deletedCount} old notifications`);
+  } catch (error) {
+    console.error('⚠️ Error initializing notification system:', error);
+  }
+}
+
 // Start server
 server.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
@@ -362,6 +476,10 @@ server.listen(PORT, async () => {
   // Initialize tier system
   await initializeTierSystem();
   console.log(`🏆 Tier system ready`);
+  
+  // Initialize notification system
+  await initializeNotificationSystem();
+  console.log(`🔔 Notification system ready`);
   
   // Log available endpoints
   console.log('\n📍 Available endpoints:');
@@ -377,5 +495,6 @@ server.listen(PORT, async () => {
   console.log('  - Tiers:         /api/tiers/*');
   console.log('  - Tips:          /api/tips/*');
   console.log('  - Favorites:     /api/favorites/*');
+  console.log('  - Notifications: /api/notifications/*');
   console.log('\n✨ Server initialization complete!\n');
 });

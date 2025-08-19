@@ -14,6 +14,7 @@ import { RequestProvider } from '@/context/RequestContext';
 import { LoadingProvider } from '@/context/LoadingContext';
 import { WebSocketProvider } from '@/context/WebSocketContext';
 import { FavoritesProvider } from '@/context/FavoritesContext';
+import { NotificationProvider } from '@/context/NotificationContext';
 import { AppInitializationProvider } from './AppInitializationProvider';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -212,10 +213,11 @@ class FinancialErrorBoundary extends Component<FinancialErrorBoundaryProps, Fina
  * 4. Ban - Needs auth but used by many components
  * 5. WebSocket - Needs auth for connection but provides real-time features to others
  * 6. Wallet - Depends on auth and initialization
- * 7. Auction - NEW: Depends on wallet for bid/refund operations
+ * 7. Auction - Depends on wallet for bid/refund operations
  * 8. Favorites - Depends on auth, placed after wallet for consistency
- * 9. Listing - Depends on auth, wallet, and auction
- * 10. Others - Depend on the above
+ * 9. NotificationProvider - NEW: Depends on auth and websocket for real-time updates
+ * 10. Listing - Depends on auth, wallet, auction, and notifications
+ * 11. Others - Depend on the above
  */
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -228,17 +230,19 @@ export function Providers({ children }: { children: ReactNode }) {
                 <WalletProvider>
                   <AuctionProvider>
                     <FavoritesProvider>
-                      <ListingProvider>
-                        <MessageProvider>
-                          <ReviewProvider>
-                            <RequestProvider>
-                              <LoadingProvider>
-                                {children}
-                              </LoadingProvider>
-                            </RequestProvider>
-                          </ReviewProvider>
-                        </MessageProvider>
-                      </ListingProvider>
+                      <NotificationProvider>
+                        <ListingProvider>
+                          <MessageProvider>
+                            <ReviewProvider>
+                              <RequestProvider>
+                                <LoadingProvider>
+                                  {children}
+                                </LoadingProvider>
+                              </RequestProvider>
+                            </ReviewProvider>
+                          </MessageProvider>
+                        </ListingProvider>
+                      </NotificationProvider>
                     </FavoritesProvider>
                   </AuctionProvider>
                 </WalletProvider>
