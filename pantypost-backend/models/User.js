@@ -121,6 +121,16 @@ const userSchema = new mongoose.Schema({
     default: 0
   },
   
+  // FAVORITES FIELDS (NEW)
+  favorites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Favorite'
+  }],
+  favoriteCount: {
+    type: Number,
+    default: 0
+  },
+  
   // SETTINGS
   settings: {
     emailNotifications: {

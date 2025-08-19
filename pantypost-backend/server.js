@@ -32,6 +32,7 @@ const reviewRoutes = require('./routes/review.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const tierRoutes = require('./routes/tier.routes');
 const tipRoutes = require('./routes/tip.routes');
+const favoriteRoutes = require('./routes/favorite.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -88,7 +89,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date(),
     features: {
       tiers: true,
-      websocket: true
+      websocket: true,
+      favorites: true
     }
   });
 });
@@ -105,6 +107,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tiers', tierRoutes);
 app.use('/api/tips', tipRoutes);
+app.use('/api/favorites', favoriteRoutes);
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -373,5 +376,6 @@ server.listen(PORT, async () => {
   console.log('  - Upload:        /api/upload/*');
   console.log('  - Tiers:         /api/tiers/*');
   console.log('  - Tips:          /api/tips/*');
+  console.log('  - Favorites:     /api/favorites/*');
   console.log('\n✨ Server initialization complete!\n');
 });

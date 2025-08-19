@@ -102,17 +102,23 @@ export default function ProfileHeader({
   };
 
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative">
-      {/* Favorite button - top right corner */}
+    <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative overflow-visible">
+      {/* Favorite button - FIXED with high z-index and better positioning */}
       {user?.role === 'buyer' && user.username !== username && onToggleFavorite && (
         <button
-          onClick={onToggleFavorite}
-          className="absolute top-6 right-6 p-2 rounded-lg bg-[#222] hover:bg-[#333] transition-colors"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleFavorite();
+          }}
+          className="absolute top-4 right-4 w-12 h-12 flex items-center justify-center rounded-lg bg-[#222] hover:bg-[#333] transition-colors group z-50"
           aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+          type="button"
         >
           <Heart 
             size={20} 
-            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400'} 
+            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400 group-hover:text-gray-300'} 
+            style={{ pointerEvents: 'none' }}
           />
         </button>
       )}
@@ -120,7 +126,7 @@ export default function ProfileHeader({
       {/* Profile section with centered profile pic and badge to the right */}
       <div className="flex flex-col items-center relative mb-6 w-full">
         {/* Profile Picture - Centered */}
-        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative">
+        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative z-10">
           {profilePic ? (
             <img
               src={profilePic}
@@ -135,13 +141,13 @@ export default function ProfileHeader({
           
           {/* Online indicator - bottom left of profile picture */}
           {activityStatus.isOnline && !activityLoading && (
-            <div className="absolute bottom-2 left-2 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+            <div className="absolute bottom-2 left-2 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1a1a1a] z-20" />
           )}
         </div>
         
-        {/* Badge positioned absolutely to the right of profile pic */}
+        {/* Badge positioned absolutely to the right of profile pic - with lower z-index */}
         {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-          <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2">
+          <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2 z-10">
             <TierBadge tier={sellerTierInfo.tier} size="2xl" showTooltip={true} />
           </div>
         )}
