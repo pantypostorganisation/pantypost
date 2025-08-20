@@ -49,7 +49,6 @@ export const API_ENDPOINTS = {
     VERIFICATION: '/users/:username/verification',
     SETTINGS: '/users/:username/settings',
     LIST: '/users',
-    GALLERY: '/users/:username/gallery',
   },
   
   // Listing endpoints
@@ -181,48 +180,6 @@ export const getDefaultHeaders = (): HeadersInit => {
 // Auth token management
 export const AUTH_TOKEN_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
-
-/**
- * Get authorization headers for API requests
- */
-export const getAuthHeaders = (): HeadersInit => {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return headers;
-};
-
-/**
- * Get auth token from storage
- */
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  
-  try {
-    // Try localStorage first (where tokens are usually stored)
-    const token = localStorage.getItem('token');
-    if (token) return token;
-    
-    // Try sessionStorage as fallback
-    const authTokens = sessionStorage.getItem('auth_tokens');
-    if (authTokens) {
-      const parsed = JSON.parse(authTokens);
-      return parsed.token;
-    }
-    
-    // Final fallback to auth_token key
-    return localStorage.getItem('auth_token');
-  } catch (error) {
-    console.warn('Failed to get auth token:', error);
-    return null;
-  }
-}
 
 /**
  * Helper to build full API URL with validation
@@ -543,6 +500,28 @@ class ApiClient {
   }
 
   /**
+   * Get auth token from storage
+   */
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Try sessionStorage first (where AuthContext stores tokens)
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (authTokens) {
+        const parsed = JSON.parse(authTokens);
+        return parsed.token;
+      }
+      
+      // Fallback to localStorage
+      return localStorage.getItem('auth_token');
+    } catch (error) {
+      console.warn('Failed to get auth token:', error);
+      return null;
+    }
+  }
+
+  /**
    * Make an API call with abort capability and security
    */
   async call<T>(
@@ -637,7 +616,7 @@ class ApiClient {
         throw new Error('Invalid endpoint format - must start with / or be a full URL');
       }
       
-      const token = getAuthToken();
+      const token = this.getAuthToken();
       
       const headers: Record<string, string> = {
         ...getDefaultHeaders() as Record<string, string>,
@@ -789,26 +768,6 @@ export async function apiCall<T>(
 ): Promise<ApiResponse<T>> {
   return apiClient.call<T>(endpoint, options);
 }
-
-/**
- * Enhanced API call with automatic auth headers
- */
-export const authenticatedApiCall = async <T = any>(
-  url: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> => {
-  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
-  
-  const enhancedOptions: RequestInit = {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-  };
-  
-  return apiClient.call<T>(fullUrl, enhancedOptions);
-};
 
 // Retry utility for failed requests with exponential backoff
 export async function apiCallWithRetry<T>(
