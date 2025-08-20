@@ -112,6 +112,32 @@ const activitySchema = z.object({
 });
 
 /**
+ * Get auth token from storage
+ */
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    // Try localStorage first (where tokens are usually stored)
+    const token = localStorage.getItem('token');
+    if (token) return token;
+    
+    // Try sessionStorage as fallback
+    const authTokens = sessionStorage.getItem('auth_tokens');
+    if (authTokens) {
+      const parsed = JSON.parse(authTokens);
+      return parsed.token;
+    }
+    
+    // Final fallback to auth_token key
+    return localStorage.getItem('auth_token');
+  } catch (error) {
+    console.warn('Failed to get auth token:', error);
+    return null;
+  }
+}
+
+/**
  * Enhanced Users Service with caching, validation, and better error handling
  */
 export class EnhancedUsersService {
@@ -464,7 +490,6 @@ export class EnhancedUsersService {
       };
     }
   }
-
   /**
    * Get user profile with caching and validation
    */
@@ -527,7 +552,7 @@ export class EnhancedUsersService {
               bio: userData.bio || '',
               profilePic: null,
               subscriptionPrice: '0',
-              galleryImages: [],
+              galleryImages: [], // Gallery images are part of UserProfile, not User
             };
           } else {
             // Unexpected format, create defaults
@@ -834,6 +859,204 @@ export class EnhancedUsersService {
         error: {
           code: UserErrorCode.NETWORK_ERROR,
           message: 'Failed to update profile',
+        },
+      };
+    }
+  }
+
+  /**
+   * Get user gallery images
+   */
+  async getGallery(username: string): Promise<ApiResponse<{ galleryImages: string[]; totalImages: number }>> {
+    try {
+      // Validate username
+      if (!username || !isValidUsername(username)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedUsername = sanitizeUsername(username);
+
+      if (FEATURES.USE_API_USERS) {
+        const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/gallery`;
+        const response = await apiCall<any>(url);
+        
+        if (response.success && response.data) {
+          return {
+            success: true,
+            data: {
+              galleryImages: response.data.galleryImages || [],
+              totalImages: response.data.totalImages || 0,
+            },
+          };
+        }
+        
+        return response;
+      }
+
+      // LocalStorage implementation
+      const galleryImages = await storageService.getItem<string[]>(
+        `profile_gallery_${sanitizedUsername}`,
+        []
+      );
+
+      return {
+        success: true,
+        data: {
+          galleryImages,
+          totalImages: galleryImages.length,
+        },
+      };
+    } catch (error) {
+      console.error('Get gallery error:', error);
+      return {
+        success: false,
+        error: {
+          code: UserErrorCode.NETWORK_ERROR,
+          message: 'Failed to get gallery',
+        },
+      };
+    }
+  }
+
+  /**
+   * Update user gallery
+   */
+  async updateGallery(
+    username: string,
+    action: 'add' | 'remove' | 'replace' | 'clear',
+    params: {
+      images?: string[];
+      imageUrl?: string;
+      imageIndex?: number;
+    } = {}
+  ): Promise<ApiResponse<{ galleryImages: string[]; totalImages: number }>> {
+    try {
+      // Validate username
+      if (!username || !isValidUsername(username)) {
+        return {
+          success: false,
+          error: {
+            code: UserErrorCode.INVALID_USERNAME,
+            message: 'Invalid username format',
+          },
+        };
+      }
+
+      const sanitizedUsername = sanitizeUsername(username);
+
+      // Validate images if provided
+      if (params.images) {
+        const sanitizedImages = params.images
+          .map(url => sanitizeUrl(url))
+          .filter((url): url is string => url !== '' && url !== null);
+        
+        if (sanitizedImages.length !== params.images.length) {
+          return {
+            success: false,
+            error: {
+              code: UserErrorCode.VALIDATION_ERROR,
+              message: 'Invalid image URLs provided',
+            },
+          };
+        }
+        
+        params.images = sanitizedImages;
+      }
+
+      // Clear caches for this user
+      this.clearUserCache(sanitizedUsername);
+
+      if (FEATURES.USE_API_USERS) {
+        const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/gallery`;
+        const token = getAuthToken();
+        
+        const response = await apiCall<any>(url, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            action,
+            ...params,
+          }),
+        });
+        
+        if (response.success && response.data) {
+          return {
+            success: true,
+            data: {
+              galleryImages: response.data.galleryImages || [],
+              totalImages: response.data.totalImages || 0,
+            },
+          };
+        }
+        
+        return response;
+      }
+
+      // LocalStorage implementation
+      let galleryImages = await storageService.getItem<string[]>(
+        `profile_gallery_${sanitizedUsername}`,
+        []
+      );
+
+      switch (action) {
+        case 'add':
+          if (params.images) {
+            galleryImages = [...galleryImages, ...params.images].slice(0, 20);
+          }
+          break;
+        
+        case 'remove':
+          if (params.imageIndex !== undefined && params.imageIndex >= 0) {
+            galleryImages.splice(params.imageIndex, 1);
+          } else if (params.imageUrl) {
+            galleryImages = galleryImages.filter(img => img !== params.imageUrl);
+          }
+          break;
+        
+        case 'replace':
+          if (params.images) {
+            galleryImages = params.images.slice(0, 20);
+          }
+          break;
+        
+        case 'clear':
+          galleryImages = [];
+          break;
+      }
+
+      // Save updated gallery
+      await storageService.setItem(`profile_gallery_${sanitizedUsername}`, galleryImages);
+
+      // Also update the user's profile in all_users_v2 if it exists
+      const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
+      if (allUsers[sanitizedUsername]) {
+        allUsers[sanitizedUsername].galleryImages = galleryImages;
+        await storageService.setItem('all_users_v2', allUsers);
+      }
+
+      return {
+        success: true,
+        data: {
+          galleryImages,
+          totalImages: galleryImages.length,
+        },
+      };
+    } catch (error) {
+      console.error('Update gallery error:', error);
+      return {
+        success: false,
+        error: {
+          code: UserErrorCode.NETWORK_ERROR,
+          message: 'Failed to update gallery',
         },
       };
     }
@@ -1462,6 +1685,7 @@ export class EnhancedUsersService {
       bio: user.bio ? sanitizeStrict(user.bio) : undefined,
       banReason: user.banReason ? sanitizeStrict(user.banReason) : undefined,
       verificationRejectionReason: user.verificationRejectionReason ? sanitizeStrict(user.verificationRejectionReason) : undefined,
+      galleryImages: user.galleryImages || [],
     };
   }
 

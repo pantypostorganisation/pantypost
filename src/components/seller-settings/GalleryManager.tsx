@@ -11,20 +11,24 @@ interface GalleryManagerProps {
   galleryImages: string[];
   selectedFiles: File[];
   isUploading: boolean;
+  isLoading?: boolean;
   uploadProgress?: number;
+  validationError?: string;
   multipleFileInputRef: RefObject<HTMLInputElement | null>;
   handleMultipleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   uploadGalleryImages: () => void;
   removeGalleryImage: (index: number) => void;
   removeSelectedFile: (index: number) => void;
   clearAllGalleryImages: () => void;
-}
+} 
 
 export default function GalleryManager({
   galleryImages,
   selectedFiles,
   isUploading,
+  isLoading = false,
   uploadProgress = 0,
+  validationError,
   multipleFileInputRef,
   handleMultipleFileChange,
   uploadGalleryImages,
@@ -85,6 +89,9 @@ export default function GalleryManager({
   // Sanitize upload progress
   const sanitizedProgress = sanitizeNumber(uploadProgress, 0, 100);
 
+  // Show combined error (validation error takes priority)
+  const displayError = validationError || fileError;
+
   return (
     <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6">
       <div className="flex justify-between items-center mb-6">
@@ -109,6 +116,16 @@ export default function GalleryManager({
         Add photos to your public gallery. These will be visible to all visitors on your profile page. Gallery changes are saved automatically.
       </p>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#ff950e]"></div>
+            <span className="text-gray-300 text-sm">Loading gallery...</span>
+          </div>
+        </div>
+      )}
+
       {/* Upload Progress */}
       {isUploading && sanitizedProgress > 0 && (
         <div className="mb-4">
@@ -122,6 +139,16 @@ export default function GalleryManager({
               style={{ width: `${sanitizedProgress}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Error message */}
+      {displayError && (
+        <div className="mb-4 p-3 bg-red-900/20 border border-red-600/30 rounded-lg">
+          <p className="text-sm text-red-400 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            {displayError}
+          </p>
         </div>
       )}
 
@@ -141,7 +168,7 @@ export default function GalleryManager({
                 multiple
                 onChange={handleSecureFileChange}
                 className="hidden"
-                disabled={isUploading}
+                disabled={isUploading || isLoading}
               />
               <PlusCircle className="w-5 h-5 text-[#ff950e]" />
               <span className="text-gray-300">Select multiple images...</span>
@@ -153,25 +180,17 @@ export default function GalleryManager({
             alt="Add to Gallery"
             onClick={uploadGalleryImages}
             className={`w-12 h-auto object-contain cursor-pointer hover:scale-[1.02] transition-transform duration-200 ${
-              selectedFiles.length === 0 || isUploading
+              selectedFiles.length === 0 || isUploading || isLoading
                 ? 'opacity-50 cursor-not-allowed'
                 : ''
             }`}
           />
         </div>
 
-        {/* File error message */}
-        {fileError && (
-          <p className="text-xs text-red-400 flex items-center gap-1 mb-2">
-            <AlertCircle className="w-3 h-3" />
-            {fileError}
-          </p>
-        )}
-
         {/* Selected Files Preview */}
         {selectedFiles.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">Selected Images:</h3>
+            <h3 className="text-sm font-medium text-gray-300 mb-3">Selected Images ({selectedFiles.length}):</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {selectedFiles.map((file, index) => (
                 <div key={index} className="relative group border border-gray-700 rounded-lg overflow-hidden">
@@ -221,7 +240,7 @@ export default function GalleryManager({
                 <button
                   onClick={() => removeGalleryImage(index)}
                   className="absolute top-2 right-2 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  disabled={isUploading}
+                  disabled={isUploading || isLoading}
                 >
                   <X size={16} className="text-white" />
                 </button>
