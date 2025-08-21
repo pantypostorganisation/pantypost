@@ -29,6 +29,9 @@ export { messagesService } from './messages.service';
 // Reviews service - review management
 export { reviewsService } from './reviews.service';
 
+// Tip service - tipping functionality
+export { tipService } from './tip.service';
+
 // Security service - validation, sanitization, and security features
 export { securityService, sanitize } from './security.service';
 

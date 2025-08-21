@@ -1,325 +1,363 @@
 // src/hooks/seller-settings/useProfileSettings.ts
-import { useState, useEffect, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext'; // Fixed path
-import { useToast } from '@/context/ToastContext'; // Use your custom toast
-import { TierLevel } from '@/utils/sellerTiers'; // Import the actual TierLevel type
 
-interface TierProgress {
-  salesProgress: number;
-  revenueProgress: number;
-}
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useProfileData } from './useProfileData';
+import { useProfileSave } from './useProfileSave';
+import { useTierCalculation } from './useTierCalculation';
+import { storageService } from '@/services';
+import { API_BASE_URL } from '@/services/api.config';
+import { sanitizeUrl } from '@/utils/security/sanitization';
+import { securityService } from '@/services/security.service';
+import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+
+const MAX_GALLERY_IMAGES = 20;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 export function useProfileSettings() {
-  const { user, apiClient, getAuthToken } = useAuth(); // Use your auth context
-  const toast = useToast(); // Use your toast context
+  const { user, token } = useAuth();
+  const rateLimiter = getRateLimiter();
   
+  // Profile data management
+  const profileData = useProfileData();
+  
+  // Gallery state
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [validationError, setValidationError] = useState<string>('');
   const multipleFileInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
   
-  // Profile state
-  const [bio, setBio] = useState('');
-  const [profilePic, setProfilePic] = useState('');
-  const [subscriptionPrice, setSubscriptionPrice] = useState('');
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [preview, setPreview] = useState('');
+  // Profile save management - pass gallery images to the hook
+  const { saveSuccess, saveError, isSaving, handleSave: baseSaveProfile, handleSaveWithGallery } = useProfileSave();
   
-  // Upload state
-  const [profileUploading, setProfileUploading] = useState(false);
-  const [galleryUploading, setGalleryUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  // Tier calculation
+  const tierData = useTierCalculation();
   
-  // Save state
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [saveError, setSaveError] = useState<string | undefined>(undefined); // Changed from null to undefined
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Tier info
-  const [sellerTierInfo, setSellerTierInfo] = useState<any>(null);
-  const [userStats, setUserStats] = useState<any>({
-    totalSales: 0,
-    totalRevenue: 0,
-    subscribers: 0
-  }); // Initialize with correct property names
+  // State for tier modal
   const [selectedTierDetails, setSelectedTierDetails] = useState<any>(null);
 
-  // Load profile data on mount
+  // Load gallery images on mount from backend
   useEffect(() => {
-    if (user?.username) {
-      loadProfile();
-    }
-  }, [user?.username]);
-
-  const loadProfile = async () => {
-    if (!user?.username) return;
-    
-    try {
-      // Use the full profile endpoint for authenticated users
-      const response = await apiClient.get(`/users/${user.username}/profile/full`);
-      
-      if (response.success && response.data) {
-        setBio(response.data.bio || '');
-        setProfilePic(response.data.profilePic || '');
-        setPreview(response.data.profilePic || '');
-        setSubscriptionPrice(response.data.subscriptionPrice || '');
-        setGalleryImages(response.data.galleryImages || []);
-        
-        // Set tier info if available
-        if (response.data.tier) {
-          setSellerTierInfo({ 
-            tier: response.data.tier || 'Tease',
-            isVerified: response.data.isVerified || false,
-            subscriberCount: response.data.subscriberCount || 0,
-            totalSales: response.data.totalSales || 0,
-            rating: response.data.rating || 0,
-            reviewCount: response.data.reviewCount || 0
+    const loadGalleryImages = async () => {
+      if (user?.username && token) {
+        try {
+          // Fetch user profile from backend to get gallery images
+          const response = await fetch(`${API_BASE_URL}/api/users/${user.username}/profile/full`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            }
           });
           
-          // Set user stats with proper defaults
-          setUserStats({
-            totalSales: response.data.totalSales || 0,
-            totalRevenue: response.data.totalRevenue || 0,
-            subscribers: response.data.subscriberCount || 0
-          });
-        } else {
-          // Set default tier info if not provided
-          setSellerTierInfo({ 
-            tier: 'Tease',
-            isVerified: false,
-            subscriberCount: 0,
-            totalSales: 0,
-            rating: 0,
-            reviewCount: 0
-          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data) {
+              // Handle both direct data and nested profile structure
+              const userData = data.data.profile || data.data;
+              
+              if (userData.galleryImages && Array.isArray(userData.galleryImages)) {
+                const validatedGallery = userData.galleryImages
+                  .map((url: string) => {
+                    // Handle both relative and absolute URLs
+                    if (url.startsWith('http://') || url.startsWith('https://')) {
+                      return url;
+                    } else if (url.startsWith('/uploads/')) {
+                      // Convert relative upload paths to full URLs
+                      return `${API_BASE_URL}${url}`;
+                    } else {
+                      return sanitizeUrl(url);
+                    }
+                  })
+                  .filter((url: string | null): url is string => url !== '' && url !== null)
+                  .slice(0, MAX_GALLERY_IMAGES);
+                
+                setGalleryImages(validatedGallery);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load gallery images from backend:', error);
+          // Fallback to localStorage
+          const storedGallery = await storageService.getItem<string[]>(
+            `profile_gallery_${user.username}`,
+            []
+          );
+          
+          const validatedGallery = storedGallery
+            .map(url => sanitizeUrl(url))
+            .filter((url): url is string => url !== '' && url !== null)
+            .slice(0, MAX_GALLERY_IMAGES);
+            
+          setGalleryImages(validatedGallery);
         }
       }
-    } catch (error) {
-      console.error('Failed to load profile:', error);
-      // Don't show error toast for initial load failures
-    }
-  };
-
-  // Handle profile picture change
-  const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // For now, create a local preview
-    // In production, you'd upload to Cloudinary/S3 here
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setProfilePic(result);
-      setPreview(result);
     };
-    reader.readAsDataURL(file);
     
-    // TODO: Implement actual image upload
-    // setProfileUploading(true);
-    // try {
-    //   const uploadedUrl = await uploadImage(file);
-    //   setProfilePic(uploadedUrl);
-    //   setPreview(uploadedUrl);
-    // } catch (error) {
-    //   toast.error('Failed to upload image');
-    // } finally {
-    //   setProfileUploading(false);
-    // }
-  };
+    loadGalleryImages();
+  }, [user?.username, token]);
 
-  const removeProfilePic = () => {
-    setProfilePic('');
-    setPreview('');
-  };
+  // Clear validation error when files change
+  useEffect(() => {
+    setValidationError('');
+  }, [selectedFiles]);
 
-  // Handle gallery images
-  const handleMultipleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setSelectedFiles(prev => [...prev, ...files]);
-  };
-
-  const uploadGalleryImages = async () => {
-    if (selectedFiles.length === 0) return;
-
-    // For now, convert to base64 for local preview
-    // In production, upload to your image service
-    const newImages: string[] = [];
-    
-    for (const file of selectedFiles) {
-      const reader = new FileReader();
-      const result = await new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-      newImages.push(result);
+  // Validate files
+  const validateFiles = (files: File[]): { valid: boolean; error?: string } => {
+    // Check total number of images
+    if (galleryImages.length + files.length > MAX_GALLERY_IMAGES) {
+      return { 
+        valid: false, 
+        error: `Maximum ${MAX_GALLERY_IMAGES} gallery images allowed. You have ${galleryImages.length} images.` 
+      };
     }
-    
-    setGalleryImages(prev => [...prev, ...newImages]);
-    setSelectedFiles([]);
-    toast.success('Gallery images added');
+
+    // Validate each file
+    for (const file of files) {
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: MAX_FILE_SIZE,
+        allowedTypes: ALLOWED_IMAGE_TYPES,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      });
+
+      if (!validation.valid) {
+        return { valid: false, error: validation.error };
+      }
+    }
+
+    return { valid: true };
   };
 
+  // Handle multiple file selection
+  const handleMultipleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newFiles = Array.from(files);
+    
+    // Validate new files
+    const validation = validateFiles(newFiles);
+    if (!validation.valid) {
+      setValidationError(validation.error || 'Invalid files selected');
+      if (multipleFileInputRef.current) {
+        multipleFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    setSelectedFiles(prev => [...prev, ...newFiles]);
+    if (multipleFileInputRef.current) {
+      multipleFileInputRef.current.value = '';
+    }
+  };
+
+  // Remove selected file before upload
   const removeSelectedFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const removeGalleryImage = (index: number) => {
-    setGalleryImages(prev => prev.filter((_, i) => i !== index));
-  };
+  // Upload gallery images to backend
+  const uploadGalleryImages = async () => {
+    if (selectedFiles.length === 0) return;
 
-  const clearAllGalleryImages = () => {
-    setGalleryImages([]);
-  };
+    // Check rate limit
+    if (user?.username) {
+      const rateLimitResult = rateLimiter.check('IMAGE_UPLOAD', {
+        ...RATE_LIMITS.IMAGE_UPLOAD,
+        identifier: user.username
+      });
 
-  // MAIN SAVE FUNCTION - Using your apiClient
-  const handleSave = async () => {
-    if (!user?.username) {
-      const error = 'User not authenticated';
-      setSaveError(error);
-      toast.error('Authentication Error', error);
+      if (!rateLimitResult.allowed) {
+        setValidationError(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
+        return;
+      }
+    }
+
+    // Final validation before upload
+    const validation = validateFiles(selectedFiles);
+    if (!validation.valid) {
+      setValidationError(validation.error || 'Invalid files');
       return;
     }
 
-    setIsSaving(true);
-    setSaveSuccess(false);
-    setSaveError(undefined); // Changed from null to undefined
-
+    setGalleryUploading(true);
+    setUploadProgress(0);
+    setValidationError('');
+    
     try {
-      // Prepare the data according to API spec
-      const profileData = {
-        bio: bio.trim(),
-        profilePic: profilePic,
-        subscriptionPrice: subscriptionPrice.toString(),
-        galleryImages: galleryImages
-      };
+      // Create FormData for file upload
+      const formData = new FormData();
+      selectedFiles.forEach(file => {
+        formData.append('gallery', file);
+      });
 
-      console.log('Saving profile with data:', profileData);
+      // Start progress simulation
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
 
-      // Use apiClient from AuthContext
-      const response = await apiClient.patch(
-        `/users/${user.username}/profile`,
-        profileData
-      );
+      // Upload to backend
+      const response = await fetch(`${API_BASE_URL}/api/upload/gallery`, {
+        method: 'POST',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: formData,
+      });
 
-      console.log('Save response:', response);
+      clearInterval(progressInterval);
 
-      if (response.success && response.data) {
-        setSaveSuccess(true);
-        setSaveError(undefined); // Changed from null to undefined
-        toast.success('Success', 'Profile updated successfully!');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        // Extract URLs from response and convert relative paths to full URLs
+        const newGallery = (result.data.gallery || []).map((url: string) => {
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+          } else if (url.startsWith('/uploads/')) {
+            return `${API_BASE_URL}${url}`;
+          } else {
+            return url;
+          }
+        });
         
-        // Update local state with response data
-        setBio(response.data.bio || '');
-        setProfilePic(response.data.profilePic || '');
-        setSubscriptionPrice(response.data.subscriptionPrice || '');
-        setGalleryImages(response.data.galleryImages || []);
+        setGalleryImages(newGallery);
+        setSelectedFiles([]);
+        setUploadProgress(100);
         
-        // Update tier info if returned
-        if (response.data.tier) {
-          setSellerTierInfo({ 
-            tier: response.data.tier,
-            isVerified: response.data.isVerified,
-            subscriberCount: response.data.subscriberCount || 0,
-            totalSales: response.data.totalSales || 0,
-            rating: response.data.rating || 0,
-            reviewCount: response.data.reviewCount || 0
-          });
-          
-          // Update user stats with correct property names
-          setUserStats({
-            totalSales: response.data.totalSales || 0,
-            totalRevenue: response.data.totalRevenue || 0,
-            subscribers: response.data.subscriberCount || 0
+        // Also save to localStorage as backup
+        if (user?.username) {
+          await storageService.setItem(`profile_gallery_${user.username}`, newGallery);
+        }
+        
+        console.log('Gallery images uploaded successfully:', result.data);
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error("Error uploading images:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setValidationError(`Failed to upload images: ${errorMessage}`);
+    } finally {
+      setGalleryUploading(false);
+      setTimeout(() => setUploadProgress(0), 1000);
+    }
+  };
+
+  // Remove gallery image from backend
+  const removeGalleryImage = async (index: number) => {
+    if (index < 0 || index >= galleryImages.length) return;
+    
+    try {
+      // Call backend to remove image
+      const response = await fetch(`${API_BASE_URL}/api/upload/gallery/${index}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to remove image');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        // Update with gallery returned from backend, converting URLs
+        const updatedGallery = (result.data.gallery || []).map((url: string) => {
+          if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+          } else if (url.startsWith('/uploads/')) {
+            return `${API_BASE_URL}${url}`;
+          } else {
+            return url;
+          }
+        });
+        
+        setGalleryImages(updatedGallery);
+        
+        // Update localStorage
+        if (user?.username) {
+          await storageService.setItem(`profile_gallery_${user.username}`, updatedGallery);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to remove image:', error);
+      // Fallback to local removal
+      const updatedGallery = galleryImages.filter((_, i) => i !== index);
+      setGalleryImages(updatedGallery);
+      
+      if (user?.username) {
+        await storageService.setItem(`profile_gallery_${user.username}`, updatedGallery);
+      }
+    }
+  };
+
+  // Clear all gallery images
+  const clearAllGalleryImages = async () => {
+    if (window.confirm("Are you sure you want to remove all gallery images?")) {
+      try {
+        // Remove all images one by one from backend
+        for (let i = galleryImages.length - 1; i >= 0; i--) {
+          await fetch(`${API_BASE_URL}/api/upload/gallery/${i}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
           });
         }
         
-        // Hide success indicator after 3 seconds
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setGalleryImages([]);
         
-        // Reload profile to ensure we have the latest data
-        setTimeout(() => {
-          loadProfile();
-        }, 500);
-      } else {
-        const errorMsg = response.error?.message || 'Failed to update profile';
-        setSaveError(errorMsg);
-        toast.error('Update Failed', errorMsg);
+        // Clear localStorage
+        if (user?.username) {
+          await storageService.setItem(`profile_gallery_${user.username}`, []);
+        }
+      } catch (error) {
+        console.error('Failed to clear gallery:', error);
+        setGalleryImages([]);
+        
+        if (user?.username) {
+          await storageService.setItem(`profile_gallery_${user.username}`, []);
+        }
       }
-    } catch (error) {
-      console.error('Save error:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to save profile';
-      setSaveError(errorMsg);
-      toast.error('Error', errorMsg);
-      setSaveSuccess(false);
-    } finally {
-      setIsSaving(false);
     }
   };
 
-  // Tier helper functions with proper types
-  const getTierProgress = (): TierProgress => {
-    // Calculate based on your tier requirements from TIER_LEVELS
-    let salesTarget = 10; // Default to Flirt requirement
-    let revenueTarget = 5000; // Default to Flirt requirement
-    
-    // Determine targets based on current tier
-    if (sellerTierInfo?.tier) {
-      switch (sellerTierInfo.tier) {
-        case 'None':
-        case 'Tease':
-          salesTarget = 10; // To reach Flirt
-          revenueTarget = 5000;
-          break;
-        case 'Flirt':
-          salesTarget = 101; // To reach Obsession
-          revenueTarget = 12500;
-          break;
-        case 'Obsession':
-          salesTarget = 251; // To reach Desire
-          revenueTarget = 75000;
-          break;
-        case 'Desire':
-          salesTarget = 1001; // To reach Goddess
-          revenueTarget = 150000;
-          break;
-        case 'Goddess':
-          // Already at max tier - show 100% progress
-          return {
-            salesProgress: 100,
-            revenueProgress: 100
-          };
-      }
-    }
-    
-    // Ensure we have valid numbers - use totalSales and totalRevenue
-    const currentSales = userStats?.totalSales || 0;
-    const currentRevenue = userStats?.totalRevenue || 0;
-    
-    const salesProgress = salesTarget > 0 ? (currentSales / salesTarget) * 100 : 0;
-    const revenueProgress = revenueTarget > 0 ? (currentRevenue / revenueTarget) * 100 : 0;
-    
-    return {
-      salesProgress: Math.min(Math.max(0, salesProgress), 100), // Ensure between 0 and 100
-      revenueProgress: Math.min(Math.max(0, revenueProgress), 100) // Ensure between 0 and 100
+  // Enhanced save handler that includes gallery
+  const handleSave = async () => {
+    // Create profile data object with gallery
+    const profileDataToSave = {
+      bio: profileData.bio,
+      profilePic: profileData.preview || profileData.profilePic,
+      subscriptionPrice: profileData.subscriptionPrice,
+      galleryImages: galleryImages.map(url => {
+        // Convert full URLs back to relative paths for storage
+        if (url.startsWith(`${API_BASE_URL}/uploads/`)) {
+          return url.replace(API_BASE_URL, '');
+        }
+        return url;
+      }),
     };
-  };
-
-  const getNextTier = (currentTier: string): TierLevel => {
-    // Match the exact TierLevel type from @/utils/sellerTiers
-    const tiers: TierLevel[] = ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
-    const currentIndex = tiers.indexOf(currentTier as TierLevel);
     
-    if (currentIndex === -1) {
-      // If current tier is not found or 'None', return 'Tease' as the first tier
-      return 'Tease';
+    // Save profile including gallery URLs
+    await baseSaveProfile(profileDataToSave);
+    
+    // Also save gallery separately if needed
+    if (galleryImages.length > 0) {
+      await handleSaveWithGallery(galleryImages);
     }
     
-    if (currentIndex === tiers.length - 1) {
-      // Already at highest tier
-      return 'Goddess';
-    }
-    
-    return tiers[currentIndex + 1];
+    return saveSuccess;
   };
 
   return {
@@ -327,15 +365,16 @@ export function useProfileSettings() {
     user,
     
     // Profile data
-    bio,
-    setBio,
-    profilePic,
-    preview,
-    subscriptionPrice,
-    setSubscriptionPrice,
-    profileUploading,
-    handleProfilePicChange,
-    removeProfilePic,
+    bio: profileData.bio,
+    setBio: profileData.setBio,
+    profilePic: profileData.profilePic,
+    preview: profileData.preview,
+    subscriptionPrice: profileData.subscriptionPrice,
+    setSubscriptionPrice: profileData.setSubscriptionPrice,
+    profileUploading: profileData.isUploading,
+    handleProfilePicChange: profileData.handleProfilePicChange,
+    removeProfilePic: profileData.removeProfilePic,
+    profilePicInputRef,
     
     // Gallery
     galleryImages,
@@ -348,19 +387,20 @@ export function useProfileSettings() {
     uploadGalleryImages,
     removeGalleryImage,
     clearAllGalleryImages,
+    validationError,
     
     // Tier info
-    sellerTierInfo,
-    userStats,
-    getTierProgress,
-    getNextTier,
+    sellerTierInfo: tierData.sellerTierInfo,
+    userStats: tierData.userStats,
+    getTierProgress: tierData.getTierProgress,
+    getNextTier: tierData.getNextTier,
     selectedTierDetails,
     setSelectedTierDetails,
     
     // Save functionality
     saveSuccess,
-    saveError, // Added this
-    isSaving, // Changed from 'saving' to 'isSaving'
-    handleSave,
+    saveError,
+    isSaving,
+    handleSave
   };
 }

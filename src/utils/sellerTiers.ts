@@ -140,3 +140,9 @@ export const getSellerTierMemoized = (
   
   return tier;
 };
+
+/**
+ * Calculate tier info for a seller
+ * This is an alias for getSellerTierMemoized for backward compatibility
+ */
+export const calculateTierInfo = getSellerTierMemoized;

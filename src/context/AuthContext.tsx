@@ -50,6 +50,7 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
   getAuthToken: () => string | null;
   apiClient: ApiClient;
+  token: string | null; // Added for compatibility
 }
 
 // ==================== API CLIENT ====================
@@ -531,6 +532,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshSession,
     getAuthToken,
     apiClient: apiClientRef.current!,
+    token: getAuthToken(), // Add token to context
   };
 
   return (
