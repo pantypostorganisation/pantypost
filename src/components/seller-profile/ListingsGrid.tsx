@@ -50,18 +50,18 @@ export default function ListingsGrid({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {allListings.map((listing) => {
+          {allListings.map((listing, index) => {
             const sanitizedTitle = sanitizeStrict(listing.title);
             const sanitizedDescription = sanitizeStrict(listing.description);
             
             return (
               <div
-                key={listing.id}
+                key={listing.id || `listing-${index}`}
                 className="rounded-xl border border-gray-800 bg-[#1a1a1a] shadow-lg hover:shadow-xl transition relative flex flex-col overflow-hidden"
               >
                 <div className="relative w-full h-56 overflow-hidden">
                   <img
-                    src={listing.imageUrls?.[0]}
+                    src={listing.imageUrls?.[0] || '/placeholder-image.png'}
                     alt={sanitizedTitle}
                     className={`w-full h-full object-cover transition-transform duration-300 hover:scale-105 ${listing.isPremium && !hasAccess ? 'blur-sm' : ''
                       }`}
@@ -102,7 +102,7 @@ export default function ListingsGrid({
                   {listing.tags && listing.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-auto mb-3">
                       {listing.tags.map((tag, idx) => (
-                        <span key={idx} className="bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded-full">
+                        <span key={`${listing.id}-tag-${idx}`} className="bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded-full">
                           {sanitizeStrict(tag)}
                         </span>
                       ))}

@@ -4,6 +4,7 @@ const router = express.Router();
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
+const jwt = require('jsonwebtoken');
 
 // ============= USER ROUTES =============
 
@@ -57,7 +58,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/users/:username/profile - Get public profile
+// GET /api/users/:username/profile - Get public profile (PUBLIC for sellers, optional auth)
 router.get('/:username/profile', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })
@@ -72,6 +73,49 @@ router.get('/:username/profile', async (req, res) => {
         }
       });
     }
+    
+    // IMPORTANT FIX: Sellers' profiles are public to everyone
+    // Buyers' profiles remain private (only viewable by themselves or admins if authenticated)
+    if (user.role === 'buyer') {
+      // Check if user is authenticated
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          req.user = decoded;
+          
+          // Buyer profiles are private
+          if (req.user.username !== req.params.username && req.user.role !== 'admin') {
+            return res.status(403).json({
+              success: false,
+              error: {
+                code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+                message: 'You can only view your own buyer profile'
+              }
+            });
+          }
+        } catch (err) {
+          // Invalid token for buyer profile
+          return res.status(403).json({
+            success: false,
+            error: {
+              code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+              message: 'Authentication required to view buyer profiles'
+            }
+          });
+        }
+      } else {
+        // No auth for buyer profile
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+            message: 'Authentication required to view buyer profiles'
+          }
+        });
+      }
+    }
+    // If user is a seller, allow anyone to view (no auth check needed)
     
     res.json({
       success: true,
@@ -102,24 +146,13 @@ router.get('/:username/profile', async (req, res) => {
   }
 });
 
-// GET /api/users/:username/profile/full - Get full profile (auth required)
+// GET /api/users/:username/profile/full - Get full profile (auth required, but public for sellers)
 router.get('/:username/profile/full', authMiddleware, async (req, res) => {
   try {
-    // Only user themselves or admin can view full profile
-    if (req.user.username !== req.params.username && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-          message: 'You can only view your own full profile'
-        }
-      });
-    }
-    
-    const user = await User.findOne({ username: req.params.username })
+    const targetUser = await User.findOne({ username: req.params.username })
       .select('-password');
     
-    if (!user) {
+    if (!targetUser) {
       return res.status(404).json({
         success: false,
         error: {
@@ -129,9 +162,78 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
       });
     }
     
+    // For sellers, allow any authenticated user to view their full profile
+    // For buyers, only they themselves or admin can view
+    if (targetUser.role === 'buyer') {
+      if (req.user.username !== req.params.username && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+            message: 'You can only view your own full profile'
+          }
+        });
+      }
+    }
+    // If target is a seller, continue to show full profile to any authenticated user
+    
     res.json({
       success: true,
-      data: user.toSafeObject()
+      data: targetUser.toSafeObject ? targetUser.toSafeObject() : targetUser
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: error.message
+      }
+    });
+  }
+});
+
+// GET /api/users/:username/settings/preferences - Get user preferences (auth required, seller profiles public)
+router.get('/:username/settings/preferences', authMiddleware, async (req, res) => {
+  try {
+    const targetUser = await User.findOne({ username: req.params.username });
+    
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.NOT_FOUND,
+          message: 'User not found'
+        }
+      });
+    }
+    
+    // For sellers, allow any authenticated user to view preferences
+    // For buyers, only they themselves or admin can view
+    if (targetUser.role === 'buyer') {
+      if (req.user.username !== req.params.username && req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+            message: 'You can only view your own preferences'
+          }
+        });
+      }
+    }
+    
+    // Return user preferences/settings
+    res.json({
+      success: true,
+      data: {
+        preferences: targetUser.settings || {},
+        notifications: targetUser.notificationSettings || {
+          email: true,
+          push: true,
+          orders: true,
+          messages: true,
+          marketing: false
+        }
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -222,7 +324,7 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     
     res.json({
       success: true,
-      data: user.toSafeObject()
+      data: user.toSafeObject ? user.toSafeObject() : user
     });
   } catch (error) {
     res.status(500).json({
@@ -481,6 +583,108 @@ router.post('/:username/unban', authMiddleware, async (req, res) => {
       data: {
         username: user.username,
         isBanned: user.isBanned
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: error.message
+      }
+    });
+  }
+});
+
+// POST /api/users/activity - Track user activity
+router.post('/activity', authMiddleware, async (req, res) => {
+  try {
+    const { action, metadata } = req.body;
+    const username = req.user.username;
+    
+    // Find the user
+    const user = await User.findOne({ username });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.NOT_FOUND,
+          message: 'User not found'
+        }
+      });
+    }
+    
+    // Update last active timestamp
+    user.lastActive = new Date();
+    
+    // Store activity log if the user has an activity array
+    if (!user.activityLog) {
+      user.activityLog = [];
+    }
+    
+    // Add the new activity
+    user.activityLog.push({
+      action: action || 'page_view',
+      metadata: metadata || {},
+      timestamp: new Date(),
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    // Keep only last 100 activities to prevent unbounded growth
+    if (user.activityLog.length > 100) {
+      user.activityLog = user.activityLog.slice(-100);
+    }
+    
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'Activity tracked successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: error.message
+      }
+    });
+  }
+});
+
+// GET /api/users/:username/activity - Get user activity log (admin only)
+router.get('/:username/activity', authMiddleware, async (req, res) => {
+  try {
+    // Only admin or the user themselves can view activity
+    if (req.user.username !== req.params.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+          message: 'You can only view your own activity log'
+        }
+      });
+    }
+    
+    const user = await User.findOne({ username: req.params.username });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.NOT_FOUND,
+          message: 'User not found'
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        lastActive: user.lastActive,
+        activityLog: user.activityLog || []
       }
     });
   } catch (error) {
