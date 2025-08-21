@@ -8,10 +8,10 @@ export const fetchCache = 'force-no-store';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { useAuth } from '@/context/AuthContext';
-import { useListings, type VerificationDocs } from '@/context/ListingContext';
 import { useRouter } from 'next/navigation';
 import { Shield } from 'lucide-react';
 import Link from 'next/link';
+import { verificationService } from '@/services/verification.service';
 
 // Verification components
 import ImageViewerModal from '@/components/seller-verification/ImageViewerModal';
@@ -48,14 +48,16 @@ const LoginButton = () => {
 
 export default function SellerVerifyPage() {
   const { user } = useAuth();
-  const { requestVerification, users } = useListings();
+  const router = useRouter();
   const isMountedRef = useRef(false);
 
+  const [verificationStatus, setVerificationStatus] = useState<string>('unverified');
   const [code, setCode] = useState('');
   const [codePhoto, setCodePhoto] = useState<string | null>(null);
   const [idFront, setIdFront] = useState<string | null>(null);
   const [idBack, setIdBack] = useState<string | null>(null);
   const [passport, setPassport] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>('');
   const [currentImage, setCurrentImage] = useState<ImageViewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,68 +68,111 @@ export default function SellerVerifyPage() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // Initialize code + existing docs
+  // Initialize verification status and code
   useEffect(() => {
-    // If auth context hasn't provided a user yet, let the UI show the login card
     if (!user) {
       setIsLoading(false);
       return;
     }
 
-    (async () => {
-      try {
-        if (!user.username || typeof user.username !== 'string') {
-          throw new Error('Invalid user data: missing or invalid username');
+    loadVerificationStatus();
+  }, [user]);
+
+  const loadVerificationStatus = async () => {
+    if (!user || !isMountedRef.current) return;
+
+    try {
+      // Get verification status from backend
+      const result = await verificationService.getVerificationStatus();
+      
+      if (result.success && result.data) {
+        setVerificationStatus(result.data.status);
+        if (result.data.rejectionReason) {
+          setRejectionReason(result.data.rejectionReason);
         }
-
-        // Code: new each time if rejected; otherwise reuse or generate
-        const userRecord = users?.[user.username];
-        const existingCode = userRecord?.verificationDocs?.code;
-
-        const nextCode =
-          user.verificationStatus === 'rejected'
-            ? generateVerificationCode(user.username)
-            : (typeof existingCode === 'string' && existingCode) || generateVerificationCode(user.username);
-
-        if (isMountedRef.current) setCode(nextCode);
-
-        // Existing docs
-        const docs = userRecord?.verificationDocs;
-        if (docs && isMountedRef.current) {
-          if (typeof docs.codePhoto === 'string') setCodePhoto(docs.codePhoto);
-          if (typeof docs.idFront === 'string') setIdFront(docs.idFront);
-          if (typeof docs.idBack === 'string') setIdBack(docs.idBack);
-          if (typeof docs.passport === 'string') setPassport(docs.passport);
-        }
-      } catch (err) {
-        console.error('Error initializing verification page:', err);
-        if (isMountedRef.current) {
-          setError(err instanceof Error ? err.message : 'Failed to initialize verification page');
-        }
-      } finally {
-        if (isMountedRef.current) setIsLoading(false);
       }
-    })();
-  }, [user, users]);
+
+      // Generate or retrieve verification code
+      const storedCode = localStorage.getItem(`verification_code_${user.username}`);
+      let nextCode: string;
+      
+      if (verificationStatus === 'rejected' || !storedCode) {
+        // Generate new code if rejected or no existing code
+        nextCode = generateVerificationCode(user.username);
+        localStorage.setItem(`verification_code_${user.username}`, nextCode);
+      } else {
+        nextCode = storedCode;
+      }
+      
+      if (isMountedRef.current) {
+        setCode(nextCode);
+      }
+
+      // Load stored documents if in pending/verified state
+      if (result.data?.status === 'pending' || result.data?.status === 'verified') {
+        const storedDocs = localStorage.getItem(`verification_docs_${user.username}`);
+        if (storedDocs) {
+          const docs = JSON.parse(storedDocs);
+          if (isMountedRef.current) {
+            setCodePhoto(docs.codePhoto || null);
+            setIdFront(docs.idFront || null);
+            setIdBack(docs.idBack || null);
+            setPassport(docs.passport || null);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error loading verification status:', err);
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load verification status');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  };
 
   // Submit handler
   const handleSubmit = useCallback(
-    async (docs: VerificationDocs) => {
+    async (docs: any) => {
       if (!isMountedRef.current || !user) return;
 
       try {
         if (!docs || typeof docs !== 'object') throw new Error('Invalid verification documents');
         if (!docs.code || typeof docs.code !== 'string') throw new Error('Verification code is required');
 
-        await requestVerification(docs);
+        // Store documents locally for display
+        localStorage.setItem(`verification_docs_${user.username}`, JSON.stringify(docs));
+        
+        // Submit to backend
+        const result = await verificationService.submitVerification(docs);
+        
+        if (result.success) {
+          setVerificationStatus('pending');
+          setCodePhoto(docs.codePhoto);
+          setIdFront(docs.idFront || null);
+          setIdBack(docs.idBack || null);
+          setPassport(docs.passport || null);
+          
+          // Redirect to profile after short delay
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              router.push('/sellers/profile');
+            }
+          }, 2000);
+        } else {
+          throw new Error(result.error?.message || 'Failed to submit verification');
+        }
       } catch (err) {
         console.error('Error submitting verification:', err);
         if (isMountedRef.current) {
           setError(err instanceof Error ? err.message : 'Failed to submit verification');
         }
+        throw err; // Re-throw to let the component handle it
       }
     },
-    [user, requestVerification]
+    [user, router]
   );
 
   // View image fullscreen
@@ -215,7 +260,7 @@ export default function SellerVerifyPage() {
   }
 
   // VERIFIED
-  if (user.verificationStatus === 'verified') {
+  if (verificationStatus === 'verified') {
     return (
       <BanCheck>
         <VerifiedState user={user} code={code} />
@@ -224,7 +269,7 @@ export default function SellerVerifyPage() {
   }
 
   // PENDING
-  if (user.verificationStatus === 'pending') {
+  if (verificationStatus === 'pending') {
     return (
       <BanCheck>
         <PendingState
@@ -235,8 +280,6 @@ export default function SellerVerifyPage() {
           idBack={idBack || undefined}
           passport={passport || undefined}
           getTimeAgo={getTimeAgo}
-          // If your PendingState supports an image viewer callback, you can pass:
-          // onViewImage={viewImage}
         />
         {currentImage && (
           <ImageViewerModal imageData={currentImage} onClose={() => safeSetCurrentImage(null)} />
@@ -246,10 +289,17 @@ export default function SellerVerifyPage() {
   }
 
   // REJECTED
-  if (user.verificationStatus === 'rejected') {
+  if (verificationStatus === 'rejected') {
     return (
       <BanCheck>
-        <RejectedState user={user} code={code} onSubmit={handleSubmit} />
+        <RejectedState 
+          user={{
+            ...user,
+            verificationRejectionReason: rejectionReason
+          }} 
+          code={code} 
+          onSubmit={handleSubmit} 
+        />
       </BanCheck>
     );
   }

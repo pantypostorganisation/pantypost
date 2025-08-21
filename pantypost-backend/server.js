@@ -17,6 +17,7 @@ const webSocketService = require('./config/websocket');
 // Import models
 const User = require('./models/User');
 const Notification = require('./models/Notification');
+const Verification = require('./models/Verification');
 
 // Import middleware
 const authMiddleware = require('./middleware/auth.middleware');
@@ -35,6 +36,8 @@ const tierRoutes = require('./routes/tier.routes');
 const tipRoutes = require('./routes/tip.routes');
 const favoriteRoutes = require('./routes/favorite.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const verificationRoutes = require('./routes/verification.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -77,8 +80,8 @@ app.use(cors({
   ]
 }));
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(__dirname));
 
 // Serve uploaded files statically
@@ -93,7 +96,8 @@ app.get('/api/health', (req, res) => {
       tiers: true,
       websocket: true,
       favorites: true,
-      notifications: true
+      notifications: true,
+      verification: true
     }
   });
 });
@@ -112,6 +116,8 @@ app.use('/api/tiers', tierRoutes);
 app.use('/api/tips', tipRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/verification', verificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -174,6 +180,89 @@ app.get('/api/notifications/system-status', authMiddleware, async (req, res) => 
         },
         typeDistribution,
         topRecipients,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Verification system status endpoint (admin only)
+app.get('/api/verification/system-status', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+  
+  try {
+    // Get verification statistics
+    const totalVerifications = await Verification.countDocuments();
+    const pendingVerifications = await Verification.countDocuments({ status: 'pending' });
+    const approvedVerifications = await Verification.countDocuments({ status: 'approved' });
+    const rejectedVerifications = await Verification.countDocuments({ status: 'rejected' });
+    
+    // Get verification distribution by status
+    const statusDistribution = await Verification.aggregate([
+      { $group: { 
+        _id: '$status',
+        count: { $sum: 1 }
+      }},
+      { $sort: { count: -1 } }
+    ]);
+    
+    // Calculate average processing time
+    const processingTimes = await Verification.aggregate([
+      {
+        $match: {
+          status: { $in: ['approved', 'rejected'] },
+          reviewedAt: { $exists: true }
+        }
+      },
+      {
+        $project: {
+          processingTime: {
+            $divide: [
+              { $subtract: ['$reviewedAt', '$submittedAt'] },
+              1000 * 60 * 60 // Convert to hours
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgTime: { $avg: '$processingTime' },
+          minTime: { $min: '$processingTime' },
+          maxTime: { $max: '$processingTime' }
+        }
+      }
+    ]);
+    
+    // Get recent verifications
+    const recentVerifications = await Verification.find()
+      .sort({ submittedAt: -1 })
+      .limit(10)
+      .populate('userId', 'username')
+      .select('username status submittedAt reviewedAt');
+    
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          total: totalVerifications,
+          pending: pendingVerifications,
+          approved: approvedVerifications,
+          rejected: rejectedVerifications
+        },
+        statusDistribution,
+        processingTimes: processingTimes[0] || { avgTime: 0, minTime: 0, maxTime: 0 },
+        recentVerifications,
         timestamp: new Date()
       }
     });
@@ -315,6 +404,39 @@ app.get('/api/test/check-tier/:username', async (req, res) => {
   }
 });
 
+// Test endpoint to check verification status
+app.get('/api/test/check-verification/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const user = await User.findOne({ username });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+    
+    const verification = await Verification.findOne({ userId: user._id })
+      .sort({ submittedAt: -1 });
+    
+    res.json({
+      success: true,
+      data: {
+        username: user.username,
+        isVerified: user.isVerified,
+        verificationStatus: user.verificationStatus,
+        latestVerification: verification
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Admin endpoint to manually update all seller tiers
 app.post('/api/admin/recalculate-all-tiers', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
@@ -414,6 +536,65 @@ app.post('/api/admin/cleanup-notifications', authMiddleware, async (req, res) =>
   }
 });
 
+// Admin endpoint to clean up old verification documents
+app.post('/api/admin/cleanup-verification-docs', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required'
+    });
+  }
+  
+  try {
+    const { daysOld = 90 } = req.body;
+    const fs = require('fs').promises;
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    // Find old rejected verifications
+    const oldVerifications = await Verification.find({
+      status: 'rejected',
+      reviewedAt: { $lt: cutoffDate }
+    });
+    
+    let deletedFiles = 0;
+    
+    for (const verification of oldVerifications) {
+      // Delete document files
+      for (const docType of ['codePhoto', 'idFront', 'idBack', 'passport']) {
+        if (verification.documents[docType]?.url) {
+          const filePath = path.join(__dirname, verification.documents[docType].url);
+          try {
+            await fs.unlink(filePath);
+            deletedFiles++;
+          } catch (err) {
+            console.error(`Failed to delete file: ${filePath}`, err);
+          }
+        }
+      }
+      
+      // Clear document URLs from database
+      verification.documents = {};
+      await verification.save();
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        message: `Cleaned up ${deletedFiles} old verification documents from ${oldVerifications.length} verifications`,
+        verifications: oldVerifications.length,
+        deletedFiles
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Error handling middleware (should be last)
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
@@ -468,6 +649,59 @@ async function initializeNotificationSystem() {
   }
 }
 
+// Initialize verification system on startup
+async function initializeVerificationSystem() {
+  try {
+    const fs = require('fs').promises;
+    
+    // Ensure verification upload directory exists
+    const verificationDir = path.join(__dirname, 'uploads', 'verification');
+    await fs.mkdir(verificationDir, { recursive: true });
+    
+    // Get verification statistics
+    const pendingCount = await Verification.countDocuments({ status: 'pending' });
+    const verifiedUsers = await User.countDocuments({ isVerified: true, role: 'seller' });
+    
+    console.log(`✅ Verification system initialized`);
+    console.log(`   - ${pendingCount} pending verifications`);
+    console.log(`   - ${verifiedUsers} verified sellers`);
+    
+    // Send notifications to admins if there are pending verifications
+    if (pendingCount > 0 && global.webSocketService) {
+      const admins = await User.find({ role: 'admin' }).select('username');
+      
+      for (const admin of admins) {
+        // Create notification for admin
+        const notification = new Notification({
+          recipient: admin.username,
+          type: 'admin_alert',
+          title: 'Pending Verifications',
+          message: `There are ${pendingCount} verification requests waiting for review`,
+          link: '/admin/verification-requests',
+          priority: 'high'
+        });
+        await notification.save();
+        
+        // Send real-time notification
+        global.webSocketService.sendToUser(admin.username, {
+          type: 'notification',
+          data: {
+            id: notification._id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            link: notification.link,
+            priority: notification.priority,
+            createdAt: notification.createdAt
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing verification system:', error);
+  }
+}
+
 // Start server
 server.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
@@ -480,6 +714,10 @@ server.listen(PORT, async () => {
   // Initialize notification system
   await initializeNotificationSystem();
   console.log(`🔔 Notification system ready`);
+  
+  // Initialize verification system
+  await initializeVerificationSystem();
+  console.log(`✔️  Verification system ready`);
   
   // Log available endpoints
   console.log('\n📍 Available endpoints:');
@@ -496,5 +734,7 @@ server.listen(PORT, async () => {
   console.log('  - Tips:          /api/tips/*');
   console.log('  - Favorites:     /api/favorites/*');
   console.log('  - Notifications: /api/notifications/*');
+  console.log('  - Verification:  /api/verification/*');
+  console.log('  - Admin:         /api/admin/*');
   console.log('\n✨ Server initialization complete!\n');
 });

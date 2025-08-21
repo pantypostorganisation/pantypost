@@ -1,132 +1,182 @@
+// src/app/admin/verification-requests/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useListings } from '@/context/ListingContext';
+import { useRouter } from 'next/navigation';
 import RequireAuth from '@/components/RequireAuth';
 import VerificationHeader from '@/components/admin/verification/VerificationHeader';
 import VerificationSearch from '@/components/admin/verification/VerificationSearch';
 import VerificationStats from '@/components/admin/verification/VerificationStats';
 import VerificationList from '@/components/admin/verification/VerificationList';
 import ReviewModal from '@/components/admin/verification/ReviewModal';
-import { storageService } from '@/services';
+import ImageViewer from '@/components/admin/verification/ImageViewer';
+import { verificationService } from '@/services/verification.service';
+import type { PendingVerification, VerificationStats as StatsType } from '@/services/verification.service';
+import type { VerificationUser, SortOption, ImageViewData } from '@/types/verification';
 import { sanitizeStrict } from '@/utils/security/sanitization';
-import { securityService } from '@/services/security.service';
-import type { VerificationUser, SortOption, VerificationStats as StatsType } from '@/types/verification';
+import { Shield, AlertCircle, Loader2 } from 'lucide-react';
+import { FEATURES } from '@/services/api.config';
 
-// Conservative mock/dev detector — avoids nuking legit data
-const isMockString = (val?: string) => {
-  if (!val) return false;
-  const v = String(val).trim().toLowerCase();
-  const patterns = [
-    'spammer', 'scammer', 'troublemaker', 'oldbanner',
-    'mock', 'sample', 'demo', 'test',
-    'lorem', 'ipsum', 'john_doe', 'jane_doe'
-  ];
-  return patterns.some(p => v.includes(p));
+// Get backend URL from environment
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// Helper to convert relative URL to absolute backend URL
+const toAbsoluteUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  
+  // If it's already an absolute URL or data URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  
+  // If it starts with /, remove it to avoid double slashes
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${BACKEND_URL}${path}`;
+};
+
+// Convert PendingVerification to VerificationUser format for components
+const convertToVerificationUser = (pv: PendingVerification): VerificationUser => {
+  return {
+    username: pv.userId?.username || 'Unknown',
+    verificationStatus: 'pending', // Always pending from this endpoint
+    verificationRequestedAt: pv.submittedAt,
+    verificationDocs: {
+      code: pv.verificationCode,
+      codePhoto: toAbsoluteUrl(pv.documents?.codePhoto?.url),
+      idFront: toAbsoluteUrl(pv.documents?.idFront?.url),
+      idBack: toAbsoluteUrl(pv.documents?.idBack?.url),
+      passport: toAbsoluteUrl(pv.documents?.passport?.url)
+    }
+  };
 };
 
 export default function AdminVerificationRequestsPage() {
-  const { user } = useAuth();
-  const { users, setVerificationStatus } = useListings();
+  const { user, isAuthReady } = useAuth();
+  const router = useRouter();
+  
+  // State
   const [pending, setPending] = useState<VerificationUser[]>([]);
+  const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map()); // username -> verification ID
   const [selected, setSelected] = useState<VerificationUser | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [avgProcessingHours, setAvgProcessingHours] = useState<number>(0);
+  const [sortBy, setSortBy] = useState<SortOption>('oldest');
+  const [stats, setStats] = useState<StatsType>({
+    total: 0,
+    today: 0,
+    thisWeek: 0,
+    averageProcessingTime: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [imageViewer, setImageViewer] = useState<ImageViewData | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Load average processing time from resolved verifications (hours)
-  useEffect(() => {
-    const loadAvg = async () => {
-      try {
-        const resolved = await storageService.getItem<any[]>('panty_resolved_verifications', []);
-        const cleaned = (resolved || [])
-          .filter((r) => !isMockString(r?.username))
-          .filter((r) => r?.requestDate && r?.resolvedDate);
+  // Load verifications and stats
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        if (!cleaned.length) {
-          setAvgProcessingHours(0);
-          return;
+      // Load pending verifications
+      const verResult = await verificationService.getPendingVerifications({
+        sort: sortBy === 'alphabetical' ? 'oldest' : sortBy,
+        limit: 100 // Get more for client-side filtering
+      });
+
+      console.log('[Admin] Verification result:', verResult);
+
+      if (verResult.success && verResult.data) {
+        const idMap = new Map<string, string>();
+        
+        // Handle different response structures
+        let verifications: PendingVerification[] = [];
+        
+        // Check if data.data exists (paginated response)
+        if (Array.isArray(verResult.data.data)) {
+          verifications = verResult.data.data;
+        } 
+        // Check if data itself is an array (direct response)
+        else if (Array.isArray(verResult.data)) {
+          verifications = verResult.data as any;
+        }
+        // Handle unexpected structure
+        else {
+          console.warn('[Admin] Unexpected verification data structure:', verResult.data);
+          verifications = [];
         }
 
-        const diffs = cleaned
-          .map((r) => {
-            const start = new Date(r.requestDate).getTime();
-            const end = new Date(r.resolvedDate).getTime();
-            if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
-              return (end - start) / (1000 * 60 * 60); // hours
-            }
-            return null;
-          })
-          .filter((h): h is number => h !== null);
-
-        const avg = diffs.length ? (diffs.reduce((a, b) => a + b, 0) / diffs.length) : 0;
-        // round to 1 decimal for UI friendliness
-        setAvgProcessingHours(Math.round(avg * 10) / 10);
-      } catch {
-        setAvgProcessingHours(0);
+        const converted = verifications.map(pv => {
+          const user = convertToVerificationUser(pv);
+          // Store the verification ID mapping
+          idMap.set(user.username, pv._id);
+          return user;
+        });
+        
+        // Apply alphabetical sort if needed
+        if (sortBy === 'alphabetical') {
+          converted.sort((a, b) => a.username.localeCompare(b.username));
+        }
+        
+        setPending(converted);
+        setPendingMap(idMap);
+      } else {
+        console.error('[Admin] Failed to load verifications:', verResult.error);
+        // Don't set error for empty results
+        if (verResult.error?.message && verResult.error.message !== 'No pending verifications') {
+          setError(verResult.error.message);
+        }
       }
-    };
-    loadAvg();
-  }, []);
 
-  // Get pending verification requests (excluding obvious mock/dev users)
+      // Load stats
+      const statsResult = await verificationService.getVerificationStats();
+      if (statsResult.success && statsResult.data) {
+        setStats(statsResult.data);
+      }
+    } catch (err) {
+      console.error('Error loading verification data:', err);
+      setError('Failed to load verification data');
+    } finally {
+      setLoading(false);
+    }
+  }, [sortBy]);
+
+  // Initial load and auth check
   useEffect(() => {
-    const pendingUsers = (Object.values(users) as VerificationUser[])
-      .filter((u) => u.verificationStatus === 'pending')
-      .filter((u) => !isMockString(u.username));
+    if (!isAuthReady) return;
+    
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    
+    if (user.role !== 'admin') {
+      router.push('/');
+      return;
+    }
 
-    // Sort users based on selected sort method
-    const sortedUsers = [...pendingUsers].sort((a: VerificationUser, b: VerificationUser) => {
-      if (sortBy === 'newest') {
-        return (
-          new Date(b.verificationRequestedAt || '0').getTime() -
-          new Date(a.verificationRequestedAt || '0').getTime()
-        );
-      } else if (sortBy === 'oldest') {
-        return (
-          new Date(a.verificationRequestedAt || '0').getTime() -
-          new Date(b.verificationRequestedAt || '0').getTime()
-        );
-      } else if (sortBy === 'alphabetical') {
-        return a.username.localeCompare(b.username);
-      }
-      return 0;
-    });
+    loadData();
+  }, [isAuthReady, user, router, loadData]);
 
-    setPending(sortedUsers);
-    setSelected(null);
-  }, [users, sortBy]);
-
-  // Handle search term change – use query sanitizer (keeps intent)
+  // Handle search
   const handleSearchTermChange = (term: string) => {
-    const sanitizedTerm = securityService.sanitizeSearchQuery(term);
-    setSearchTerm(sanitizedTerm);
+    const sanitized = sanitizeStrict(term);
+    setSearchTerm(sanitized);
   };
 
-  // Filter users based on search term
+  // Filter users based on search
   const filteredUsers = pending.filter((u) =>
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Calculate stats
-  const stats: StatsType = {
-    total: filteredUsers.length,
-    today: filteredUsers.filter((u) => {
-      const requestDate = new Date(u.verificationRequestedAt || '');
-      const today = new Date();
-      return requestDate.toDateString() === today.toDateString();
-    }).length,
-    thisWeek: filteredUsers.filter((u) => {
-      const requestDate = new Date(u.verificationRequestedAt || '');
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return requestDate >= weekAgo;
-    }).length,
-    averageProcessingTime: avgProcessingHours
+  // Calculate filtered stats
+  const filteredStats: StatsType = {
+    ...stats,
+    total: filteredUsers.length
   };
 
-  // Time ago helper function
+  // Time ago helper
   const getTimeAgo = (timestamp?: string): string => {
     if (!timestamp) return 'Unknown';
 
@@ -141,79 +191,137 @@ export default function AdminVerificationRequestsPage() {
     return `${Math.floor(seconds / 604800)}w ago`;
   };
 
-  // Handle approval with sanitization + mock guard
+  // Handle approval
   const handleApprove = async (username: string): Promise<void> => {
-    const sanitizedUsername = sanitizeStrict(username);
-    if (isMockString(sanitizedUsername)) {
-      alert('Cannot approve a mock/demo user.');
-      return;
+    if (isProcessing) return;
+    
+    try {
+      setIsProcessing(true);
+      console.log('[Admin] Approving verification for:', username);
+      
+      // Find the verification ID from our map
+      const verificationId = pendingMap.get(username);
+      if (!verificationId) {
+        throw new Error('Verification ID not found');
+      }
+
+      // Call backend API
+      const result = await verificationService.reviewVerification(
+        verificationId,
+        'approve'
+      );
+
+      if (result.success) {
+        console.log('[Admin] Verification approved successfully');
+        
+        // Remove from pending list
+        setPending(prev => prev.filter(p => p.username !== username));
+        setSelected(null);
+        
+        // Reload data to refresh stats
+        loadData();
+      } else {
+        throw new Error(result.error?.message || 'Failed to approve verification');
+      }
+    } catch (err) {
+      console.error('[Admin] Error approving verification:', err);
+      alert(`Error: ${err instanceof Error ? err.message : 'Failed to approve verification'}`);
+    } finally {
+      setIsProcessing(false);
     }
-
-    setVerificationStatus(sanitizedUsername, 'verified');
-
-    // Best-effort pull of the requesting record
-    const srcUser =
-      (users as Record<string, any>)[sanitizedUsername] ??
-      (users as Record<string, any>)[username] ?? {};
-
-    // Add to resolved verifications with sanitized data
-    const resolvedEntry = {
-      id: `verification_${Date.now()}`,
-      username: sanitizedUsername,
-      requestDate: srcUser?.verificationRequestedAt || new Date().toISOString(),
-      resolvedDate: new Date().toISOString(),
-      resolvedBy: sanitizeStrict(user?.username || 'admin'),
-      status: 'approved' as const,
-      verificationDocs: srcUser?.verificationDocs
-    };
-
-    const existingResolved = await storageService.getItem<any[]>('panty_resolved_verifications', []);
-    const cleanedExisting = (existingResolved || []).filter((r) => !isMockString(r?.username));
-    cleanedExisting.push(resolvedEntry);
-    await storageService.setItem('panty_resolved_verifications', cleanedExisting);
-
-    setSelected(null);
   };
 
-  // Handle rejection with sanitization + mock guard
+  // Handle rejection
   const handleReject = async (username: string, reason: string): Promise<void> => {
-    const sanitizedUsername = sanitizeStrict(username);
-    const sanitizedReason = sanitizeStrict(reason);
-    if (isMockString(sanitizedUsername)) {
-      alert('Cannot reject a mock/demo user.');
-      return;
+    if (isProcessing) return;
+    
+    try {
+      setIsProcessing(true);
+      console.log('[Admin] Rejecting verification for:', username);
+      
+      // Find the verification ID from our map
+      const verificationId = pendingMap.get(username);
+      if (!verificationId) {
+        throw new Error('Verification ID not found');
+      }
+
+      // Call backend API
+      const result = await verificationService.reviewVerification(
+        verificationId,
+        'reject',
+        reason
+      );
+
+      if (result.success) {
+        console.log('[Admin] Verification rejected successfully');
+        
+        // Remove from pending list
+        setPending(prev => prev.filter(p => p.username !== username));
+        setSelected(null);
+        
+        // Reload data to refresh stats
+        loadData();
+      } else {
+        throw new Error(result.error?.message || 'Failed to reject verification');
+      }
+    } catch (err) {
+      console.error('[Admin] Error rejecting verification:', err);
+      alert(`Error: ${err instanceof Error ? err.message : 'Failed to reject verification'}`);
+    } finally {
+      setIsProcessing(false);
     }
-
-    setVerificationStatus(sanitizedUsername, 'rejected', sanitizedReason);
-
-    const srcUser =
-      (users as Record<string, any>)[sanitizedUsername] ??
-      (users as Record<string, any>)[username] ?? {};
-
-    // Add to resolved verifications with sanitized data
-    const resolvedEntry = {
-      id: `verification_${Date.now()}`,
-      username: sanitizedUsername,
-      requestDate: srcUser?.verificationRequestedAt || new Date().toISOString(),
-      resolvedDate: new Date().toISOString(),
-      resolvedBy: sanitizeStrict(user?.username || 'admin'),
-      status: 'rejected' as const,
-      rejectionReason: sanitizedReason,
-      verificationDocs: srcUser?.verificationDocs
-    };
-
-    const existingResolved = await storageService.getItem<any[]>('panty_resolved_verifications', []);
-    const cleanedExisting = (existingResolved || []).filter((r) => !isMockString(r?.username));
-    cleanedExisting.push(resolvedEntry);
-    await storageService.setItem('panty_resolved_verifications', cleanedExisting);
-
-    setSelected(null);
   };
 
+  // Refresh data
   const refreshData = () => {
-    // Force re-run sorting without changing criteria
-    setSortBy((prev) => prev);
+    loadData();
   };
+
+  // Handle image viewer
+  const handleImageView = (imageData: ImageViewData) => {
+    setImageViewer(imageData);
+    setImageLoading(true);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoading(false);
+  };
+
+  const handleImageClose = () => {
+    setImageViewer(null);
+    setImageLoading(false);
+  };
+
+  // Loading state
+  if (!isAuthReady || loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#ff950e]" />
+          <p className="text-gray-400">Loading verification requests...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Error Loading Verifications</h2>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={refreshData}
+            className="px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <RequireAuth role="admin">
@@ -228,21 +336,56 @@ export default function AdminVerificationRequestsPage() {
           pendingCount={filteredUsers.length}
         />
 
-        <VerificationStats stats={stats} />
+        <VerificationStats stats={filteredStats} />
 
-        <VerificationList
-          users={filteredUsers}
-          searchTerm={searchTerm}
-          onSelectUser={setSelected}
-        />
+        {filteredUsers.length === 0 ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="bg-[#121212] rounded-xl border border-gray-800 p-12 text-center">
+              <Shield className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+              <h3 className="text-xl font-bold mb-2">No Pending Verifications</h3>
+              <p className="text-gray-400">
+                {searchTerm 
+                  ? `No verification requests found matching "${searchTerm}"`
+                  : 'There are no verification requests awaiting review'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <VerificationList
+            users={filteredUsers}
+            searchTerm={searchTerm}
+            onSelectUser={setSelected}
+          />
+        )}
 
-        <ReviewModal
-          user={selected}
-          onClose={() => setSelected(null)}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          getTimeAgo={getTimeAgo}
-        />
+        {selected && (
+          <ReviewModal
+            user={selected}
+            onClose={() => setSelected(null)}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            getTimeAgo={getTimeAgo}
+          />
+        )}
+
+        {imageViewer && (
+          <ImageViewer
+            imageData={imageViewer}
+            isLoading={imageLoading}
+            onClose={handleImageClose}
+            onLoad={handleImageLoad}
+          />
+        )}
+
+        {/* Processing overlay */}
+        {isProcessing && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-[#121212] rounded-xl border border-gray-800 p-6">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#ff950e]" />
+              <p className="text-gray-400">Processing verification...</p>
+            </div>
+          </div>
+        )}
       </div>
     </RequireAuth>
   );
