@@ -13,13 +13,18 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
   if (!isTyping) return null;
 
   return (
-    <div className="flex items-end gap-2 mb-3" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+    <div
+      className="flex items-end gap-2 mb-3"
+      style={{ animation: 'fadeIn 0.3s ease-out' }}
+      aria-live="polite"
+      aria-atomic="true"
+    >
       {/* User Avatar */}
       <div className="flex-shrink-0">
         {userPic ? (
-          <img 
-            src={userPic} 
-            alt={username} 
+          <img
+            src={userPic}
+            alt={username}
             className="w-8 h-8 rounded-full object-cover"
           />
         ) : (
@@ -28,15 +33,15 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
           </div>
         )}
       </div>
-      
+
       {/* Typing Bubble Container */}
       <div className="flex flex-col">
-        <div className="text-xs text-gray-400 mb-1">
+        <div className="text-xs text-gray-400 mb-1" aria-label={`${username} is typing`}>
           {username} is typing
         </div>
-        
+
         {/* Clean bubble without tail */}
-        <div 
+        <div
           className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded shadow-sm"
           style={{
             background: 'linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%)',
@@ -44,11 +49,11 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
             borderRadius: '6px',
             width: 'fit-content',
             minWidth: '48px',
-            maxWidth: '56px'
+            maxWidth: '56px',
           }}
         >
           {/* Typing dots */}
-          <span 
+          <span
             className="typing-dot"
             style={{
               width: '5px',
@@ -57,10 +62,10 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
               borderRadius: '50%',
               display: 'inline-block',
               animation: 'typingBounce 1.4s infinite ease-in-out',
-              animationDelay: '0ms'
+              animationDelay: '0ms',
             }}
           />
-          <span 
+          <span
             className="typing-dot"
             style={{
               width: '5px',
@@ -69,10 +74,10 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
               borderRadius: '50%',
               display: 'inline-block',
               animation: 'typingBounce 1.4s infinite ease-in-out',
-              animationDelay: '200ms'
+              animationDelay: '200ms',
             }}
           />
-          <span 
+          <span
             className="typing-dot"
             style={{
               width: '5px',
@@ -81,12 +86,12 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
               borderRadius: '50%',
               display: 'inline-block',
               animation: 'typingBounce 1.4s infinite ease-in-out',
-              animationDelay: '400ms'
+              animationDelay: '400ms',
             }}
           />
         </div>
       </div>
-      
+
       {/* Inline styles for animations - REDUCED BOUNCE HEIGHT */}
       <style jsx>{`
         @keyframes typingBounce {
@@ -99,7 +104,7 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
             opacity: 1;
           }
         }
-        
+
         @keyframes fadeIn {
           from {
             opacity: 0;

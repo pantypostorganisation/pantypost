@@ -36,7 +36,6 @@ interface VirtualMessageListProps {
 
 /**
  * VirtualMessageList component for efficient rendering of large message lists
- * This is a drop-in replacement for the static message list, but with better performance
  */
 const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   messages,
@@ -51,76 +50,59 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
   const [initialHeight, setInitialHeight] = useState(0);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  
-  // Sanitize current user for comparison
+
+  // Sanitize current user for comparison & display safety
   const sanitizedCurrentUser = sanitizeStrict(currentUser);
-  
-  // Setup intersection observer for infinite scrolling
+
+  // Intersection observer for infinite scrolling
   useEffect(() => {
     if (!loadMoreRef.current || !hasMoreMessages || loading) return;
-    
+
     const observer = new IntersectionObserver(
-      entries => {
+      (entries) => {
         const [entry] = entries;
-        if (entry.isIntersecting && onLoadMore) {
-          onLoadMore();
-        }
+        if (entry.isIntersecting && onLoadMore) onLoadMore();
       },
       { threshold: 0.5 }
     );
-    
+
     observer.observe(loadMoreRef.current);
-    
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, [hasMoreMessages, onLoadMore, loading]);
-  
-  // Format time function
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-  
-  // Check if user is at bottom before new messages arrive
+
+  const formatTime = (dateString: string) =>
+    new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Track whether user is near bottom before updates
   useEffect(() => {
     if (!listRef.current) return;
-    
     const { scrollHeight, scrollTop, clientHeight } = listRef.current;
-    // Consider "at bottom" if within 150px of the bottom
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 150;
     setIsScrolledToBottom(isAtBottom);
-    
-    // Save initial height
-    if (initialHeight === 0) {
-      setInitialHeight(scrollHeight);
-    }
+    if (initialHeight === 0) setInitialHeight(scrollHeight);
   }, [messages, initialHeight]);
-  
-  // Auto-scroll to bottom if user was already at bottom
+
+  // Auto-scroll to bottom if already near bottom
   useEffect(() => {
     if (isScrolledToBottom && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages.length, isScrolledToBottom]);
-  
-  // Render message content based on type
+
+  // Render message content by type
   const renderMessageContent = useCallback((message: Message) => {
-    // Image message
     if (message.type === 'image' && message.meta?.imageUrl) {
       return (
         <div className="mt-1 mb-2">
-          <SecureImage 
-            src={message.meta.imageUrl} 
-            alt="Shared image" 
+          <SecureImage
+            src={message.meta.imageUrl}
+            alt="Shared image"
             className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
             onClick={() => setPreviewImage(message.meta?.imageUrl || null)}
           />
           {message.content && (
             <div className="mt-2">
-              <SecureMessageDisplay 
+              <SecureMessageDisplay
                 content={message.content}
                 allowBasicFormatting={false}
                 className="text-white"
@@ -130,18 +112,21 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
         </div>
       );
     }
-    
-    // Custom request message
+
     if (message.type === 'customRequest' && message.meta) {
+      const safePrice = Number(sanitizeCurrency(message.meta.price || 0));
       return (
-        <div className="mt-2 text-sm border-t border-white border-opacity-20 pt-2">
+        <div className="mt-2 text-sm border-t border-white/20 pt-2">
           <p><strong>Custom Request</strong></p>
           <p>Title: {sanitizeStrict(message.meta.title || '')}</p>
-          <p>Price: ${sanitizeCurrency(message.meta.price || 0).toFixed(2)}</p>
-          <p>Tags: {message.meta.tags?.map(tag => sanitizeStrict(tag)).join(', ')}</p>
+          <p>Price: ${safePrice.toFixed(2)}</p>
+          <p>
+            Tags:{' '}
+            {message.meta.tags?.map((tag) => sanitizeStrict(tag)).join(', ')}
+          </p>
           {message.meta.message && (
             <div>
-              <SecureMessageDisplay 
+              <SecureMessageDisplay
                 content={message.meta.message}
                 allowBasicFormatting={false}
                 className="text-white"
@@ -151,30 +136,26 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
         </div>
       );
     }
-    
-    // Regular text message
+
     return (
-      <SecureMessageDisplay 
+      <SecureMessageDisplay
         content={message.content || ''}
         allowBasicFormatting={false}
         className="text-white"
       />
     );
   }, []);
-  
+
   return (
-    <div 
+    <div
       ref={listRef}
       className="flex-1 overflow-y-auto p-4 bg-[#121212]"
       aria-live="polite"
       aria-atomic="false"
     >
-      {/* "Load More" element at the top */}
+      {/* Load More (top) */}
       {hasMoreMessages && (
-        <div 
-          ref={loadMoreRef}
-          className="text-center py-2 mb-4"
-        >
+        <div ref={loadMoreRef} className="text-center py-2 mb-4">
           {loading ? (
             <div className="flex justify-center items-center py-2">
               <div className="w-5 h-5 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin"></div>
@@ -190,76 +171,71 @@ const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
           )}
         </div>
       )}
-      
+
       <div className="max-w-3xl mx-auto space-y-4">
         {messages.map((msg, index) => {
-          const isFromMe = msg.sender === currentUser;
-          const time = formatTime(msg.date);
           const sanitizedSender = sanitizeStrict(msg.sender || '');
-          
+          const isFromMe = sanitizedSender === sanitizedCurrentUser;
+          const time = formatTime(msg.date);
+
           return (
-            <div 
-              key={`${msg.date}-${index}`} 
+            <div
+              key={`${msg.date}-${index}`}
               className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}
               aria-label={`Message from ${isFromMe ? 'you' : sanitizedSender}`}
             >
-              <div 
+              <div
                 className={`rounded-lg p-3 max-w-[75%] ${
                   isFromMe ? 'bg-[#ff950e] text-white' : 'bg-[#333] text-white'
                 }`}
               >
-                {/* Message header */}
+                {/* Header */}
                 <div className="flex items-center text-xs mb-1">
-                  <span className={isFromMe ? 'text-white opacity-75' : 'text-gray-300'}>
+                  <span className={isFromMe ? 'text-white/75' : 'text-gray-300'}>
                     {isFromMe ? 'You' : sanitizedSender} • {time}
                   </span>
                   {isFromMe && (
                     <span className="ml-2 text-[10px]">
                       {msg.read ? (
-                        <span className={`flex items-center ${isFromMe ? 'text-white opacity-75' : 'text-gray-400'}`}>
+                        <span className={`flex items-center ${isFromMe ? 'text-white/75' : 'text-gray-400'}`}>
                           <CheckCheck size={12} className="mr-1" /> Read
                         </span>
                       ) : (
-                        <span className={isFromMe ? 'text-white opacity-50' : 'text-gray-400'}>Sent</span>
+                        <span className={isFromMe ? 'text-white/50' : 'text-gray-400'}>Sent</span>
                       )}
                     </span>
                   )}
                 </div>
-                
-                {/* Message content */}
+
+                {/* Content */}
                 {renderMessageContent(msg)}
               </div>
             </div>
           );
         })}
-        
-        {/* Scroll anchor for auto-scrolling */}
+
         <div ref={messagesEndRef} />
       </div>
-      
-      {/* Back to bottom button */}
+
+      {/* Back to bottom */}
       {!isScrolledToBottom && messages.length > 20 && (
         <button
           className="fixed bottom-24 right-8 bg-[#ff950e] text-black rounded-full p-2 shadow-lg z-10"
           onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
           aria-label="Scroll to bottom"
         >
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            width="24" 
-            height="24" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24" height="24" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden="true"
           >
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </button>
       )}
-      
+
       {/* Image Preview Modal */}
       <ImagePreviewModal
         imageUrl={previewImage || ''}
