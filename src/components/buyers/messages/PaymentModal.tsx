@@ -4,14 +4,24 @@
 import React, { useContext, useMemo, useRef } from 'react';
 import { X, DollarSign, AlertCircle, Check } from 'lucide-react';
 import { WalletContext } from '@/context/WalletContext';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+
+interface PayingRequest {
+  title: string;
+  description: string;
+  seller: string;
+  price: number;
+  // (optional) id, etc.
+}
 
 interface PaymentModalProps {
   show: boolean;
   onClose: () => void;
-  payingRequest: any;
+  payingRequest: PayingRequest | null;
   wallet: { [username: string]: number };
-  user: any;
-  onConfirmPay: () => void;
+  user: { username: string } | null;
+  onConfirmPay: () => Promise<void> | void;
 }
 
 export default function PaymentModal({
@@ -22,98 +32,72 @@ export default function PaymentModal({
   user,
   onConfirmPay
 }: PaymentModalProps) {
-  // Get fresh wallet balance directly from context
   const walletContext = useContext(WalletContext);
   const [isProcessing, setIsProcessing] = React.useState(false);
-  
-  // Use a ref to track if we've already reloaded for this modal open
   const hasReloadedRef = useRef(false);
-  
-  // Force reload wallet when modal opens - FIXED to prevent infinite loops
+
   React.useEffect(() => {
     if (show && walletContext && walletContext.reloadData && !hasReloadedRef.current && !walletContext.isLoading) {
-      console.log('PaymentModal: Reloading wallet data...');
       hasReloadedRef.current = true;
-      walletContext.reloadData().catch(error => {
+      walletContext.reloadData().catch((error: unknown) => {
         console.error('PaymentModal: Error reloading wallet data:', error);
       });
     }
-    
-    // Reset the ref when modal closes
     if (!show) {
       hasReloadedRef.current = false;
     }
-  }, [show]); // Remove walletContext from dependencies to prevent loops
-  
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
+
   if (!show || !payingRequest) return null;
 
-  const basePrice = payingRequest.price || 0;
+  // Ensure numeric math even if upstream passes strings
+  const basePrice = Number(payingRequest.price) || 0;
   const markupPrice = Math.round(basePrice * 1.1 * 100) / 100;
   const platformFee = Math.round((markupPrice - basePrice) * 100) / 100;
-  
-  // Check if wallet is still loading
+
   const isWalletLoading = walletContext?.isLoading || false;
-  
-  // FIXED: Get fresh balance with multiple fallbacks
+
   const userBalance = useMemo(() => {
-    if (!user) {
-      console.log('PaymentModal: No user');
-      return 0;
+    if (!user) return 0;
+    if (isWalletLoading) return 0;
+
+    if (walletContext?.getBuyerBalance) {
+      const contextBalance = Number(walletContext.getBuyerBalance(user.username));
+      if (!Number.isNaN(contextBalance) && contextBalance >= 0) return contextBalance;
     }
-    
-    // Don't calculate if still loading
-    if (isWalletLoading) {
-      console.log('PaymentModal: Wallet still loading');
-      return 0;
-    }
-    
-    // Try to get from wallet context first
-    if (walletContext && walletContext.getBuyerBalance) {
-      const contextBalance = walletContext.getBuyerBalance(user.username);
-      console.log('PaymentModal: Got balance from context', contextBalance);
-      if (contextBalance >= 0) return contextBalance; // Changed from > 0 to >= 0
-    }
-    
-    // Fallback to wallet prop
-    const propBalance = wallet[user.username] || 0;
-    console.log('PaymentModal: Wallet prop balance', propBalance);
-    if (propBalance >= 0) return propBalance; // Changed from > 0 to >= 0
-    
-    // Last resort: try to get from localStorage
+
+    const propBalance = Number(wallet[user.username] || 0);
+    if (!Number.isNaN(propBalance) && propBalance >= 0) return propBalance;
+
     try {
       const walletBuyers = localStorage.getItem('wallet_buyers');
       if (walletBuyers) {
-        const buyers = JSON.parse(walletBuyers);
-        const localBalance = buyers[user.username] || 0;
-        console.log('PaymentModal: LocalStorage balance', localBalance);
-        return localBalance;
+        const buyers = JSON.parse(walletBuyers) as Record<string, number>;
+        const localBalance = Number(buyers[user.username] || 0);
+        return Number.isNaN(localBalance) ? 0 : localBalance;
       }
-      
-      // Also check individual key
       const individualKey = localStorage.getItem(`wallet_buyer_${user.username}`);
       if (individualKey) {
-        const balanceInCents = parseInt(individualKey);
-        const balanceInDollars = balanceInCents / 100;
-        console.log('PaymentModal: Individual key balance', balanceInDollars);
-        return balanceInDollars;
+        const balanceInCents = parseInt(individualKey, 10);
+        return Number.isNaN(balanceInCents) ? 0 : balanceInCents / 100;
       }
-    } catch (error) {
-      console.error('PaymentModal: Error reading localStorage', error);
+    } catch {
+      // ignore localStorage parse errors
     }
-    
+
     return 0;
   }, [user, walletContext, wallet, isWalletLoading]);
-  
+
   const canAfford = userBalance >= markupPrice;
 
   const handleConfirm = async () => {
     if (isProcessing || !canAfford) return;
-    
     setIsProcessing(true);
     try {
       await onConfirmPay();
     } finally {
-      // Don't reset isProcessing here - let the parent component handle closing the modal
+      // parent decides when to close; keep processing state until then
     }
   };
 
@@ -134,16 +118,22 @@ export default function PaymentModal({
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Request Details */}
+          {/* Request Details (sanitized) */}
           <div className="bg-[#222] rounded-lg p-4 space-y-2">
-            <h3 className="font-semibold text-white">{payingRequest.title}</h3>
-            <p className="text-sm text-gray-400">{payingRequest.description}</p>
-            <p className="text-sm text-gray-500">Seller: {payingRequest.seller}</p>
+            <h3 className="font-semibold text-white">
+              <SecureMessageDisplay content={payingRequest.title} allowBasicFormatting={false} />
+            </h3>
+            <p className="text-sm text-gray-400">
+              <SecureMessageDisplay content={payingRequest.description} allowBasicFormatting={false} />
+            </p>
+            <p className="text-sm text-gray-500">
+              Seller: <span className="text-gray-300">{sanitizeStrict(payingRequest.seller)}</span>
+            </p>
           </div>
-          
+
           {/* Price Breakdown */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
@@ -159,7 +149,7 @@ export default function PaymentModal({
               <span className="text-[#ff950e]">${markupPrice.toFixed(2)}</span>
             </div>
           </div>
-          
+
           {/* Balance Info */}
           {isWalletLoading ? (
             <div className="rounded-lg p-3 bg-gray-500/10 border border-gray-500/30">
@@ -169,14 +159,20 @@ export default function PaymentModal({
               </div>
             </div>
           ) : (
-            <div className={`rounded-lg p-3 ${canAfford ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+            <div
+              className={`rounded-lg p-3 ${
+                canAfford ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'
+              }`}
+            >
               <div className="flex items-center gap-2">
                 {canAfford ? (
                   <>
                     <Check className="w-4 h-4 text-green-400" />
                     <div className="text-sm">
                       <p className="text-green-400 font-medium">Sufficient Balance</p>
-                      <p className="text-gray-400">Current: ${userBalance.toFixed(2)} | After: ${(userBalance - markupPrice).toFixed(2)}</p>
+                      <p className="text-gray-400">
+                        Current: ${userBalance.toFixed(2)} | After: ${(userBalance - markupPrice).toFixed(2)}
+                      </p>
                     </div>
                   </>
                 ) : (
@@ -193,18 +189,17 @@ export default function PaymentModal({
               </div>
             </div>
           )}
-          
-          {/* Info */}
+
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-xs text-blue-400">
             <p className="font-medium mb-1">Payment Info:</p>
             <ul className="space-y-0.5">
               <li>• The seller will be notified immediately</li>
-              <li>• Your order will appear in "My Orders"</li>
+              <li>• Your order will appear in &quot;My Orders&quot;</li>
               <li>• The seller has 7 days to fulfill the order</li>
             </ul>
           </div>
         </div>
-        
+
         {/* Footer */}
         <div className="flex gap-3 p-6 border-t border-gray-800">
           <button

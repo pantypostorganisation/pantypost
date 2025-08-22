@@ -28,8 +28,22 @@ interface MessagesListProps {
   statusBadge: (status: string) => React.ReactElement;
   setPreviewImage: (url: string | null) => void;
   wallet: { [username: string]: number };
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>; // allow null
 }
+
+// Define a concrete item type instead of using typeof messageData[0]
+type RowItem = {
+  msg: Message;
+  index: number;
+  isFromMe: boolean;
+  customReq?: CustomRequest;
+  isLatestCustom: boolean;
+  isPaid: boolean;
+  showPayNow: boolean;
+  markupPrice: number;
+  canPay: boolean;
+  key: string;
+};
 
 export default function MessagesList({
   messages,
@@ -55,32 +69,31 @@ export default function MessagesList({
   wallet,
   messagesEndRef
 }: MessagesListProps) {
-  // Prepare message data with all necessary props
-  const messageData = useMemo(() => {
+  const messageData: RowItem[] = useMemo(() => {
     return messages.map((msg, index) => {
       const isFromMe = msg.sender === currentUser?.username;
-      
-      // Get custom request info if available
-      let customReq: CustomRequest | undefined = undefined;
+
+      let customReq: CustomRequest | undefined;
       if (msg.type === 'customRequest' && msg.meta && typeof msg.meta.id === 'string') {
-        customReq = buyerRequests.find((r: CustomRequest) => r.id === msg.meta?.id);
+        customReq = buyerRequests.find((r) => r.id === msg.meta?.id);
       }
-      
-      const isLatestCustom = !!customReq &&
-        (customReq.status === 'pending' || customReq.status === 'edited' || customReq.status === 'accepted') &&
+
+      const isLatestCustom =
+        !!customReq &&
+        (customReq.status === 'pending' ||
+          customReq.status === 'edited' ||
+          customReq.status === 'accepted') &&
         msg.type === 'customRequest';
-      
-      // Show pay now button for accepted requests that aren't paid yet
-      const showPayNow = !!customReq &&
-        customReq.status === 'accepted' &&
-        !customReq.paid &&
-        msg.type === 'customRequest';
-      
-      const markupPrice = customReq ? Math.round(customReq.price * 1.1 * 100) / 100 : 0;
-      const buyerBalance = currentUser && wallet ? (wallet[currentUser.username] || 0) : 0;
+
+      const showPayNow =
+        !!customReq && customReq.status === 'accepted' && !customReq.paid && msg.type === 'customRequest';
+
+      const base = customReq ? Number(customReq.price) || 0 : 0;
+      const markupPrice = Math.round(base * 1.1 * 100) / 100;
+      const buyerBalance = currentUser && wallet ? Number(wallet[currentUser.username] || 0) : 0;
       const canPay = !!(customReq && buyerBalance >= markupPrice);
       const isPaid = !!(customReq && (customReq.paid || customReq.status === 'paid'));
-      
+
       return {
         msg,
         index,
@@ -96,8 +109,7 @@ export default function MessagesList({
     });
   }, [messages, currentUser, buyerRequests, wallet]);
 
-  // Render function for virtual list
-  const renderMessage = useCallback((item: typeof messageData[0]) => {
+  const renderMessage = useCallback((item: RowItem) => {
     return (
       <MessageItem
         key={item.key}
@@ -156,12 +168,10 @@ export default function MessagesList({
       <div className="h-full max-w-3xl mx-auto">
         <VirtualList
           items={messageData}
-          itemHeight={100} // Adjust based on average message height
+          itemHeight={100}
           renderItem={renderMessage}
           className="p-4 h-full overflow-y-auto"
         />
-        
-        {/* Auto-scroll anchor */}
         <div ref={messagesEndRef} />
       </div>
     </div>
