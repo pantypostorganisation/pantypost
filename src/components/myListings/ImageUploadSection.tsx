@@ -1,8 +1,7 @@
-// src/components/myListings/ImageUploadSection.tsx
 'use client';
 
 import { Image as ImageIcon, Upload, X, MoveVertical, AlertCircle } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
@@ -30,11 +29,21 @@ export default function ImageUploadSection({
   onRemoveFile,
   onUploadFiles,
   onRemoveImage,
-  onImageReorder
+  onImageReorder,
 }: ImageUploadSectionProps) {
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [fileError, setFileError] = useState<string>('');
+  const [previews, setPreviews] = useState<string[]>([]);
+
+  // Create/revoke object URLs to avoid memory leaks
+  useEffect(() => {
+    const urls = selectedFiles.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [selectedFiles]);
 
   const handleDragStart = (index: number) => {
     dragItem.current = index;
@@ -55,18 +64,17 @@ export default function ImageUploadSection({
   const handleSecureFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError('');
     const files = Array.from(e.target.files || []);
-    
-    // Validate each file
+
     const validFiles: File[] = [];
     let hasError = false;
-    
-    files.forEach(file => {
+
+    files.forEach((file) => {
       const validation = securityService.validateFileUpload(file, {
         maxSize: 5 * 1024 * 1024, // 5MB
         allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
       });
-      
+
       if (validation.valid) {
         validFiles.push(file);
       } else {
@@ -74,22 +82,19 @@ export default function ImageUploadSection({
         setFileError(validation.error || 'Invalid file selected');
       }
     });
-    
-    // Only proceed if we have valid files
+
     if (validFiles.length > 0) {
-      // Create a new event with only valid files
+      // Keep onFileSelect signature the same by adapting a faux event
       const newEvent = {
         ...e,
         target: {
           ...e.target,
-          files: validFiles as unknown as FileList
-        }
+          files: validFiles as unknown as FileList,
+        },
       } as React.ChangeEvent<HTMLInputElement>;
-      
       onFileSelect(newEvent);
     }
-    
-    // Clear the input if there were errors
+
     if (hasError && e.target) {
       e.target.value = '';
     }
@@ -102,12 +107,14 @@ export default function ImageUploadSection({
     <>
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">Add Images</label>
-        <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-700 rounded-lg bg-black transition cursor-pointer ${
-          isAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'
-        }`}>
+        <label
+          className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-700 rounded-lg bg-black transition cursor-pointer ${
+            isAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'
+          }`}
+        >
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             multiple
             onChange={handleSecureFileSelect}
             className="hidden"
@@ -115,10 +122,9 @@ export default function ImageUploadSection({
           <ImageIcon className={`w-5 h-5 ${isAuction ? 'text-purple-500' : 'text-[#ff950e]'}`} />
           <span className="text-gray-300">Select images from your computer</span>
         </label>
-        
-        {/* File error message */}
+
         {fileError && (
-          <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+          <p className="mt-1 text-xs text-red-400 flex items-center gap-1" role="alert">
             <AlertCircle className="w-3 h-3" />
             {fileError}
           </p>
@@ -133,6 +139,7 @@ export default function ImageUploadSection({
               type="button"
               onClick={onUploadFiles}
               disabled={isUploading}
+              aria-busy={isUploading}
               className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
                 isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
               }`}
@@ -148,18 +155,15 @@ export default function ImageUploadSection({
             </button>
           </div>
 
-          {/* Upload Progress Bar */}
           {isUploading && (
             <div className="mb-3">
               <div className="flex justify-between text-xs text-gray-400 mb-1">
                 <span>Uploading images...</span>
                 <span>{sanitizedProgress}%</span>
               </div>
-              <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-300 ${
-                    isAuction ? 'bg-purple-500' : 'bg-[#ff950e]'
-                  }`}
+              <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden" aria-label="Upload progress">
+                <div
+                  className={`h-full transition-all duration-300 ${isAuction ? 'bg-purple-500' : 'bg-[#ff950e]'}`}
                   style={{ width: `${sanitizedProgress}%` }}
                 />
               </div>
@@ -168,16 +172,16 @@ export default function ImageUploadSection({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {selectedFiles.map((file, index) => (
-              <div key={`selected-file-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">
-                <SecureImage
-                  src={URL.createObjectURL(file)}
-                  alt={`Selected ${index + 1}`}
-                  className="w-full h-24 object-cover"
-                />
+              <div
+                key={`selected-file-${index}`}
+                className="relative border border-gray-700 rounded-lg overflow-hidden group"
+              >
+                <SecureImage src={previews[index]} alt={`Selected ${index + 1}`} className="w-full h-24 object-cover" />
                 <button
                   type="button"
                   onClick={() => onRemoveFile(index)}
                   className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+                  aria-label="Remove selected file"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -205,6 +209,7 @@ export default function ImageUploadSection({
                 className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${
                   index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'
                 }`}
+                aria-grabbed="true"
               >
                 <SecureImage
                   src={url}
@@ -221,6 +226,7 @@ export default function ImageUploadSection({
                   onClick={() => onRemoveImage(url)}
                   className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
                   aria-label="Remove image"
+                  title="Remove image"
                 >
                   <X className="w-4 h-4" />
                 </button>
