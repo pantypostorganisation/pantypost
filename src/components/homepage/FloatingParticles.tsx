@@ -173,8 +173,8 @@ export default function FloatingParticles() {
             left: `${particle.left}%`,
             top: `${particle.top}%`,
             background: `radial-gradient(circle at 30% 30%, 
-              hsl(${39 + particle.hue}, 100%, 65%, ${particle.opacity}), 
-              hsl(${39 + particle.hue}, 100%, 55%, ${particle.opacity * 0.5}))`,
+              hsla(${39 + particle.hue}, 100%, 65%, ${particle.opacity}), 
+              hsla(${39 + particle.hue}, 100%, 55%, ${particle.opacity * 0.5}))`,
             boxShadow: `
               0 0 6px hsla(${39 + particle.hue}, 100%, 60%, ${particle.opacity * 0.3}),
               0 0 12px hsla(${39 + particle.hue}, 100%, 60%, ${particle.opacity * 0.15})
