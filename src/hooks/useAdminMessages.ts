@@ -1,4 +1,3 @@
-// src/hooks/useAdminMessages.ts
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -39,7 +38,7 @@ export const useAdminMessages = () => {
   const readThreadsRef = useRef<Set<string>>(new Set());
   const rateLimiter = getRateLimiter();
   
-  const isAdmin = !!user && (user.username === 'oakley' || user.username === 'gerome');
+  const isAdmin = !!user && user.role === 'admin';
   const username = user?.username || '';
 
   // Load views data with error handling
@@ -116,13 +115,12 @@ export const useAdminMessages = () => {
       
       // Get user profile picture and verification status
       try {
-        // Note: Profile pics should come from users context or be loaded async
         const userInfo = users?.[userKey];
         const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
         const role = userInfo?.role || 'unknown';
         
         userProfiles[userKey] = { 
-          pic: null, // Profile pics should be loaded through proper channels
+          pic: null,
           verified: isVerified,
           role: role
         };
@@ -146,18 +144,18 @@ export const useAdminMessages = () => {
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
   }, [user, messages, activeThread, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
 
-  // Get all users for directory
+  // Get all users for directory (exclude the current admin and any admin accounts)
   const allUsers = useMemo(() => {
     const allUsersList = Object.entries(users || {})
-      .filter(([username, userInfo]) => 
-        username !== user?.username && // Exclude current admin user
-        username !== 'oakley' && username !== 'gerome' // Exclude other admins
+      .filter(([uname, userInfo]) => 
+        uname !== user?.username && // Exclude current admin user
+        userInfo?.role !== 'admin'    // Exclude any admin accounts
       )
-      .map(([username, userInfo]) => {
+      .map(([uname, userInfo]) => {
         const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
         
         return {
-          username,
+          username: uname,
           role: userInfo?.role || 'unknown',
           verified: isVerified,
           pic: null // Profile pics should be loaded through proper channels

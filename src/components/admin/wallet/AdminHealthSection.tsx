@@ -1,4 +1,3 @@
-// src/components/admin/wallet/AdminHealthSection.tsx
 'use client';
 
 import { useMemo } from 'react';
@@ -56,12 +55,21 @@ export default function AdminHealthSection({
   filteredDeposits = [],
   sellerWithdrawals = {}
 }: AdminHealthSectionProps) {
-  const isAdminName = (u?: string) => u === 'platform' || u === 'oakley' || u === 'gerome';
   const clean = (u?: string) => (typeof u === 'string' ? u.trim() : '');
+  const isAdminUser = (u?: string) => {
+    const uname = clean(u);
+    if (!uname) return false;
+    // Treat the platform/system account as admin; otherwise use role from users map
+    if (uname === 'platform') return true;
+    return users?.[uname]?.role === 'admin';
+  };
 
   const depositorRole = (d: Deposit): 'buyer' | 'admin' => {
-    const r = d?.role ?? (d?.username === 'platform' ? 'admin' : 'buyer');
-    return r === 'admin' ? 'admin' : 'buyer';
+    const uname = clean(d?.username);
+    const roleFromData = d?.role;
+    const roleFromUsers = users?.[uname]?.role;
+    const finalRole = roleFromData ?? roleFromUsers ?? (uname === 'platform' ? 'admin' : 'buyer');
+    return finalRole === 'admin' ? 'admin' : 'buyer';
   };
 
   const {
@@ -80,19 +88,19 @@ export default function AdminHealthSection({
       Object.entries(users)
         .filter(([, info]) => info?.role === 'seller')
         .map(([u]) => clean(u))
-        .filter((u) => u && !isAdminName(u))
+        .filter((u) => u && !isAdminUser(u))
     );
 
     const sellersFromWithdrawals = new Set(
       Object.keys(sellerWithdrawals || {})
         .map((u) => clean(u))
-        .filter((u) => u && !isAdminName(u))
+        .filter((u) => u && !isAdminUser(u))
     );
 
     const sellersFromListings = new Set(
       (listings || [])
         .map((l) => clean(l?.seller))
-        .filter((u) => u && !isAdminName(u))
+        .filter((u) => u && !isAdminUser(u))
     );
 
     const sellersSetTemp = new Set<string>([
@@ -106,7 +114,7 @@ export default function AdminHealthSection({
       Object.entries(users || {})
         .filter(([, info]) => info?.role === 'buyer')
         .map(([u]) => clean(u))
-        .filter((u) => u && !isAdminName(u))
+        .filter((u) => u && !isAdminUser(u))
     );
 
     const buyersFromDeposits = new Set(
@@ -114,7 +122,7 @@ export default function AdminHealthSection({
         .filter((d) => d?.status === 'completed')
         .filter((d) => depositorRole(d) !== 'admin')
         .map((d) => clean(d?.username))
-        .filter((u) => u && !isAdminName(u))
+        .filter((u) => u && !isAdminUser(u))
     );
 
     const buyersSetTemp = new Set<string>([
@@ -147,7 +155,7 @@ export default function AdminHealthSection({
       .filter((deposit) => deposit?.status === 'completed')
       .reduce((acc: Record<string, number>, deposit: Deposit) => {
         const uname = clean(deposit?.username);
-        if (!uname || isAdminName(uname)) return acc;
+        if (!uname || isAdminUser(uname)) return acc;
         const amt = Number(deposit?.amount);
         acc[uname] = (acc[uname] || 0) + (Number.isFinite(amt) ? amt : 0);
         return acc;

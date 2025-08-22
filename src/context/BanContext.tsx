@@ -61,23 +61,19 @@ export type IPBan = {
   reason: string;
 };
 
-// Admin usernames that cannot be banned
-const PROTECTED_USERNAMES = ['admin', 'administrator', 'moderator', 'mod', 'system'];
+/**
+ * Reserved usernames that should never be bannable (system/service accounts).
+ * NOTE: This is NOT a list of human admins. Real admin checks are done via role.
+ */
+const RESERVED_USERNAMES = ['system', 'platform', 'admin', 'administrator', 'moderator', 'mod'] as const;
 
-// Specific admin accounts that cannot be banned
-const ADMIN_ACCOUNTS = ['oakley', 'gerome', 'admin'];
-
-// Helper function to check if a username is protected
+/**
+ * Helper: check if a username is reserved (exact match, case-insensitive).
+ * We use exact matches to avoid false positives like "notadmin123".
+ */
 const isProtectedUsername = (username: string): boolean => {
-  const cleanUsername = (username || '').toLowerCase().trim();
-
-  // Check if it's a specific admin account
-  if (ADMIN_ACCOUNTS.includes(cleanUsername)) {
-    return true;
-  }
-
-  // Check if username contains protected terms
-  return PROTECTED_USERNAMES.some(protectedName => cleanUsername.includes(protectedName));
+  const clean = (username || '').toLowerCase().trim();
+  return RESERVED_USERNAMES.includes(clean as typeof RESERVED_USERNAMES[number]);
 };
 
 // Helper function to check if a user is an admin via the users service
@@ -393,17 +389,17 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { valid: false, error: 'Invalid username format' };
     }
 
-    // If role is provided, check it first (faster)
-    if (targetUserRole === 'admin') {
-      return { valid: false, error: 'Admin accounts cannot be banned' };
-    }
-
-    // Check if username is in the protected list
+    // Prevent banning reserved/system accounts by exact match
     if (isProtectedUsername(username)) {
       return { valid: false, error: 'This account is protected and cannot be banned' };
     }
 
-    // If no role provided, check via user service
+    // If role is provided, block admin immediately (fast path)
+    if (targetUserRole === 'admin') {
+      return { valid: false, error: 'Admin accounts cannot be banned' };
+    }
+
+    // If no role provided, query the user service for true role
     if (!targetUserRole) {
       const userRole = await checkUserRole(username);
       if (userRole === 'admin') {

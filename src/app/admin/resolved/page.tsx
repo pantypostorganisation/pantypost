@@ -400,8 +400,8 @@ export default function ResolvedReportsPage() {
     }).length
   };
 
-  // Check admin access
-  if (!user || (user.username !== 'oakley' && user.username !== 'gerome')) {
+  // Clean role-based admin access
+  if (!user || user.role !== 'admin') {
     return (
       <RequireAuth role="admin">
         <main className="p-8 max-w-4xl mx-auto">
