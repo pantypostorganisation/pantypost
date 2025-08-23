@@ -1,5 +1,3 @@
-// src/hooks/useSellerProfile.ts
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services/users.service';
@@ -10,73 +8,27 @@ import { API_BASE_URL } from '@/services/api.config';
 import { sanitizeUrl } from '@/utils/security/sanitization';
 import { getSellerTierMemoized, TierInfo } from '@/utils/sellerTiers';
 import { useWallet } from '@/context/WalletContext';
+import { subscriptionsService } from '@/services/subscriptions.service';
 
-// Subscription service mock implementation
-const subscriptionService = {
-  async checkSubscription(username: string) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/subscriptions/check/${username}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('Subscription check error:', error);
-      return { success: false, data: { hasAccess: false } };
-    }
-  },
+const apiBaseWithApi = (() => {
+  const raw = (API_BASE_URL || '').replace(/\/+$/, '');
+  return /\/api$/.test(raw) ? raw : `${raw}/api`;
+})();
 
-  async subscribe(username: string) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/subscriptions/subscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ seller: username }),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('Subscribe error:', error);
-      return { success: false };
-    }
-  },
+const joinApi = (path: string) =>
+  `${apiBaseWithApi}/${path.replace(/^\//, '')}`;
 
-  async unsubscribe(username: string) {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/subscriptions/unsubscribe`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ seller: username }),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('Unsubscribe error:', error);
-      return { success: false };
-    }
-  },
-};
-
-// Helper to normalize an image URL (supports relative /uploads/*)
 function normalizeImageUrl(url?: string | null): string | null {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
+  if (url.startsWith('/uploads/')) return `${apiBaseWithApi.replace(/\/api$/, '')}${url}`;
   return sanitizeUrl(url);
 }
 
-// Safely extract a profile object from various backend shapes
 function coerceProfileData(profileRespData: any): any {
-  // Shape A: { profile, user }
   if (profileRespData && typeof profileRespData === 'object' && 'profile' in profileRespData) {
     return profileRespData.profile;
   }
-  // Shape B: plain profile object
   return profileRespData;
 }
 
@@ -84,7 +36,6 @@ export function useSellerProfile(username: string) {
   const { user, token } = useAuth();
   const { orderHistory } = useWallet();
 
-  // Profile data
   const [sellerUser, setSellerUser] = useState<any>(null);
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
@@ -93,29 +44,24 @@ export function useSellerProfile(username: string) {
   const [isVerified, setIsVerified] = useState(false);
   const [sellerTierInfo, setSellerTierInfo] = useState<TierInfo | null>(null);
 
-  // Stats
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [totalVideos] = useState(0);
   const [followers, setFollowers] = useState(0);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
 
-  // Listings
   const [standardListings, setStandardListings] = useState<any[]>([]);
   const [premiumListings, setPremiumListings] = useState<any[]>([]);
 
-  // Access control
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
 
-  // Slideshow state
   const [slideIndex, setSlideIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const slideshowRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Modal states
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
   const [showTipModal, setShowTipModal] = useState(false);
@@ -124,7 +70,6 @@ export function useSellerProfile(username: string) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
 
-  // Form states
   const [tipAmount, setTipAmount] = useState('');
   const [tipSuccess, setTipSuccess] = useState(false);
   const [tipError, setTipError] = useState('');
@@ -132,35 +77,28 @@ export function useSellerProfile(username: string) {
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  // Fetch seller profile data
   useEffect(() => {
     const fetchSellerData = async () => {
       if (!username) return;
 
       try {
-        // Use explicit any to avoid strict inference from service types
         let userData: any = null;
         let profileData: any = null;
         let gallery: string[] = [];
 
-        // Try backend first
         if (token) {
           try {
-            const response = await fetch(`${API_BASE_URL}/api/users/${username}/profile/full`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-
+            const response = await fetch(
+              joinApi(`/users/${encodeURIComponent(username)}/profile/full`),
+              { headers: { Authorization: `Bearer ${token}` } as Record<string, string> }
+            );
             if (response.ok) {
               const result = await response.json();
-              if (result.success && result.data) {
+              if (result?.success && result.data) {
                 userData = result.data;
-
-                // Extract gallery images and convert URLs
                 if (userData.galleryImages && Array.isArray(userData.galleryImages)) {
                   gallery = userData.galleryImages
-                    .map((url: string) => normalizeImageUrl(url))
+                    .map((u: string) => normalizeImageUrl(u))
                     .filter((u: string | null): u is string => !!u);
                 }
               }
@@ -170,21 +108,16 @@ export function useSellerProfile(username: string) {
           }
         }
 
-        // Fallback to service if backend fails
         if (!userData) {
           const userResult: any = await usersService.getUser(username);
           if (userResult?.success && userResult.data) {
             userData = userResult.data;
-
-            // Get profile data separately (can be {profile, user} or just profile)
             const profileResult: any = await usersService.getUserProfile(username);
             if (profileResult?.success && profileResult.data) {
               profileData = coerceProfileData(profileResult.data);
-
-              // Extract gallery from profile
-              if (profileData.galleryImages && Array.isArray(profileData.galleryImages)) {
+              if (profileData?.galleryImages && Array.isArray(profileData.galleryImages)) {
                 gallery = profileData.galleryImages
-                  .map((url: string) => normalizeImageUrl(url))
+                  .map((u: string) => normalizeImageUrl(u))
                   .filter((u: string | null): u is string => !!u);
               }
             }
@@ -196,23 +129,17 @@ export function useSellerProfile(username: string) {
           return;
         }
 
-        // Set user data
         setSellerUser(userData);
-
-        // Bio: prefer profile.bio, fallback to user.bio
         setBio(profileData?.bio ?? userData.bio ?? '');
 
-        // Resolve profile picture with robust fallbacks
         const resolvedPic =
           userData?.profilePicture ??
           profileData?.profilePicture ??
           profileData?.profilePic ??
           userData?.profilePic ??
           null;
-
         setProfilePic(normalizeImageUrl(resolvedPic));
 
-        // Resolve subscription price (string -> number)
         const rawPrice =
           userData?.subscriptionPrice ??
           profileData?.subscriptionPrice ??
@@ -225,36 +152,32 @@ export function useSellerProfile(username: string) {
         setFollowers(userData.subscriberCount || 0);
         setAverageRating(userData.rating ?? null);
 
-        // Calculate tier info using getSellerTierMemoized
         const tierInfo = getSellerTierMemoized(username, orderHistory);
         setSellerTierInfo(tierInfo);
 
-        // Fetch listings
         const listingsResult = await listingsService.getListingsBySeller(username);
         if (listingsResult.success && listingsResult.data) {
           const listings = listingsResult.data;
           setStandardListings(listings.filter((l: any) => !l.isPremium));
           setPremiumListings(listings.filter((l: any) => l.isPremium));
-
-          // Calculate total photos (gallery + listing images)
           setTotalPhotos(gallery.length + listings.length);
         }
 
-        // Check subscription access
         if (user?.role === 'buyer' && user.username !== username) {
-          const subResult = await subscriptionService.checkSubscription(username);
-          setHasAccess(subResult.success && subResult.data?.hasAccess);
+          const check = await subscriptionsService.check({
+            subscriber: user.username,
+            creator: username,
+            token: token ?? undefined,
+          });
+          setHasAccess(Boolean(check?.isSubscribed));
         } else if (user?.username === username) {
           setHasAccess(true);
         }
 
-        // Fetch reviews
         const reviewsResult = await reviewsService.getSellerReviews(username);
         if (reviewsResult.success && reviewsResult.data) {
           setReviews(reviewsResult.data.reviews || []);
           setAverageRating(reviewsResult.data.stats?.avgRating || null);
-
-          // Check if current user has already reviewed
           if (user?.username) {
             const userReview = reviewsResult.data.reviews.find(
               (r: any) => r.reviewer === user.username
@@ -263,7 +186,6 @@ export function useSellerProfile(username: string) {
           }
         }
 
-        // Check if user has purchased from seller (for review eligibility)
         if (user?.username && orderHistory.length > 0) {
           const userOrder = orderHistory.find(
             (order) =>
@@ -284,30 +206,46 @@ export function useSellerProfile(username: string) {
     fetchSellerData();
   }, [username, user, token, orderHistory]);
 
-  // Slideshow effect
   useEffect(() => {
     if (galleryImages.length > 1 && !isPaused && !showGalleryModal) {
       slideshowRef.current = setInterval(() => {
         setSlideIndex((prevIndex) => (prevIndex + 1) % galleryImages.length);
       }, 4000);
     }
-
     return () => {
-      if (slideshowRef.current) {
-        clearInterval(slideshowRef.current);
-      }
+      if (slideshowRef.current) clearInterval(slideshowRef.current);
     };
   }, [galleryImages.length, isPaused, showGalleryModal]);
 
-  // Handlers
   const handleConfirmSubscribe = async () => {
     try {
-      const result = await subscriptionService.subscribe(username);
-      if (result.success) {
+      if (!token) {
+        console.error('No auth token; please log in.');
+        return;
+      }
+      const price =
+        typeof subscriptionPrice === 'number' && subscriptionPrice > 0
+          ? Math.round(subscriptionPrice * 100) / 100
+          : 0;
+
+      if (price <= 0) {
+        console.error('Invalid subscription price');
+        return;
+      }
+
+      const result = await subscriptionsService.subscribe({
+        seller: username,
+        price,
+        token: token ?? undefined,
+      });
+
+      if (result?.success) {
         setShowSubscribeModal(false);
         setHasAccess(true);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
+      } else {
+        console.error('Subscribe failed:', JSON.stringify(result?.error ?? result));
       }
     } catch (error) {
       console.error('Subscription error:', error);
@@ -316,10 +254,19 @@ export function useSellerProfile(username: string) {
 
   const handleConfirmUnsubscribe = async () => {
     try {
-      const result = await subscriptionService.unsubscribe(username);
-      if (result.success) {
+      if (!token) {
+        console.error('No auth token; please log in.');
+        return;
+      }
+      const result = await subscriptionsService.unsubscribe({
+        seller: username,
+        token: token ?? undefined,
+      });
+      if (result?.success) {
         setShowUnsubscribeModal(false);
         setHasAccess(false);
+      } else {
+        console.error('Unsubscribe failed:', JSON.stringify(result?.error ?? result));
       }
     } catch (error) {
       console.error('Unsubscribe error:', error);
@@ -348,10 +295,7 @@ export function useSellerProfile(username: string) {
   };
 
   const handleReviewSubmit = async () => {
-    if (!comment || comment.trim().length < 10) {
-      return;
-    }
-
+    if (!comment || comment.trim().length < 10) return;
     if (!currentOrderId) {
       console.error('No order ID available for review');
       return;
@@ -370,7 +314,6 @@ export function useSellerProfile(username: string) {
       if (result.success) {
         setSubmitted(true);
         setAlreadyReviewed(true);
-
         const reviewsResult = await reviewsService.getSellerReviews(username);
         if (reviewsResult.success && reviewsResult.data) {
           setReviews(reviewsResult.data.reviews || []);
@@ -429,39 +372,26 @@ export function useSellerProfile(username: string) {
   };
 
   return {
-    // User data
     user,
     sellerUser,
     isVerified,
-
-    // Profile data
     bio,
     profilePic,
     subscriptionPrice,
     galleryImages,
     sellerTierInfo,
-
-    // Stats
     totalPhotos,
     totalVideos,
     followers,
     averageRating,
     reviews,
-
-    // Listings
     standardListings,
     premiumListings,
-
-    // Access control
     hasAccess,
     hasPurchased,
     alreadyReviewed,
-
-    // Slideshow
     slideIndex,
     isPaused,
-
-    // Modals
     showSubscribeModal,
     showUnsubscribeModal,
     showTipModal,
@@ -469,16 +399,12 @@ export function useSellerProfile(username: string) {
     selectedImage,
     currentImageIndex,
     showToast,
-
-    // Form state
     tipAmount,
     tipSuccess,
     tipError,
     rating,
     comment,
     submitted,
-
-    // Handlers
     setShowSubscribeModal,
     setShowUnsubscribeModal,
     setShowTipModal,
