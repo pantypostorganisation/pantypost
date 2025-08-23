@@ -1,34 +1,25 @@
+// src/components/myListings/ListingForm.tsx
 'use client';
 
 import { ListingFormProps } from '@/types/myListings';
-import {
-  Sparkles,
-  Gavel,
-  LockIcon,
-  Image as ImageIcon,
-  Upload,
-  X,
-  MoveVertical,
-  Edit,
-  AlertCircle,
-  Crown,
-  CheckCircle,
-} from 'lucide-react';
+import { Sparkles, Gavel, LockIcon, ImageIcon, Upload, X, MoveVertical, Edit, AlertCircle, Crown, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { sanitizeStrict, sanitizeNumber, sanitizeCurrency } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
-import { listingSchemas, validateSchema } from '@/utils/validation/schemas';
+import { listingSchemas } from '@/utils/validation/schemas';
+import { validateSchema } from '@/utils/validation/schemas';
 
+// Character requirements from schemas
 const VALIDATION_REQUIREMENTS = {
   title: { min: 5, max: 100 },
   description: { min: 20, max: 2000 },
   price: { min: 0.01, max: 10000 },
   tags: { max: 200 },
-  hoursWorn: { min: 0, max: 999 },
+  hoursWorn: { min: 0, max: 999 }
 };
 
 interface ValidationState {
@@ -39,21 +30,6 @@ interface ValidationState {
   reservePrice: { isValid: boolean; message: string };
   images: { isValid: boolean; message: string };
   tags: { isValid: boolean; message: string; count: number };
-}
-
-/** Humanize auction duration (string days; supports fractional minutes/hours) */
-function humanizeAuctionDuration(durationDaysStr: string): string {
-  const daysFloat = Math.max(0, parseFloat(durationDaysStr || '0'));
-  const totalMinutes = Math.round(daysFloat * 24 * 60);
-
-  if (totalMinutes < 1) return 'less than a minute';
-  if (totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
-
-  const hours = Math.round(totalMinutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'}`;
-
-  const days = Math.round(daysFloat);
-  return `${days} day${days === 1 ? '' : 's'}`;
 }
 
 export default function ListingForm({
@@ -70,39 +46,11 @@ export default function ListingForm({
   onRemoveImage,
   onImageReorder,
   onSave,
-  onCancel,
+  onCancel
 }: ListingFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Safe object URLs for selected file previews
-  const [previews, setPreviews] = useState<string[]>([]);
-  useEffect(() => {
-    const urls = selectedFiles.map((f) => URL.createObjectURL(f));
-    setPreviews(urls);
-    return () => {
-      urls.forEach((u) => URL.revokeObjectURL(u));
-    };
-  }, [selectedFiles]);
-
-  // Drag state for imageUrls reordering (fixes previous no-op)
-  const dragItem = useRef<number | null>(null);
-  const dragOverItem = useRef<number | null>(null);
-  const handleDragStart = (index: number) => {
-    dragItem.current = index;
-  };
-  const handleDragEnter = (index: number) => {
-    dragOverItem.current = index;
-  };
-  const handleDrop = () => {
-    if (dragItem.current === null || dragOverItem.current === null) return;
-    if (dragItem.current !== dragOverItem.current) {
-      onImageReorder(dragItem.current, dragOverItem.current);
-    }
-    dragItem.current = null;
-    dragOverItem.current = null;
-  };
 
   // Real-time validation
   const validation = useMemo((): ValidationState => {
@@ -114,221 +62,222 @@ export default function ListingForm({
     return {
       title: {
         count: titleLength,
-        isValid:
-          titleLength >= VALIDATION_REQUIREMENTS.title.min &&
-          titleLength <= VALIDATION_REQUIREMENTS.title.max,
-        message:
-          titleLength < VALIDATION_REQUIREMENTS.title.min
-            ? `Title needs at least ${VALIDATION_REQUIREMENTS.title.min} characters`
-            : titleLength > VALIDATION_REQUIREMENTS.title.max
-            ? `Title exceeds ${VALIDATION_REQUIREMENTS.title.max} characters`
-            : 'Perfect title length!',
+        isValid: titleLength >= VALIDATION_REQUIREMENTS.title.min && titleLength <= VALIDATION_REQUIREMENTS.title.max,
+        message: titleLength < VALIDATION_REQUIREMENTS.title.min 
+          ? `Title needs at least ${VALIDATION_REQUIREMENTS.title.min} characters`
+          : titleLength > VALIDATION_REQUIREMENTS.title.max 
+          ? `Title exceeds ${VALIDATION_REQUIREMENTS.title.max} characters`
+          : 'Perfect title length!'
       },
       description: {
         count: descriptionLength,
-        isValid:
-          descriptionLength >= VALIDATION_REQUIREMENTS.description.min &&
-          descriptionLength <= VALIDATION_REQUIREMENTS.description.max,
-        message:
-          descriptionLength < VALIDATION_REQUIREMENTS.description.min
-            ? `Description needs at least ${VALIDATION_REQUIREMENTS.description.min} characters`
-            : descriptionLength > VALIDATION_REQUIREMENTS.description.max
-            ? `Description exceeds ${VALIDATION_REQUIREMENTS.description.max} characters`
-            : 'Great description length!',
+        isValid: descriptionLength >= VALIDATION_REQUIREMENTS.description.min && descriptionLength <= VALIDATION_REQUIREMENTS.description.max,
+        message: descriptionLength < VALIDATION_REQUIREMENTS.description.min 
+          ? `Description needs at least ${VALIDATION_REQUIREMENTS.description.min} characters`
+          : descriptionLength > VALIDATION_REQUIREMENTS.description.max 
+          ? `Description exceeds ${VALIDATION_REQUIREMENTS.description.max} characters`
+          : 'Great description length!'
       },
       price: {
-        isValid: formState.isAuction
-          ? true
-          : parseFloat(formState.price) >= VALIDATION_REQUIREMENTS.price.min &&
-            parseFloat(formState.price) <= VALIDATION_REQUIREMENTS.price.max,
-        message:
-          !formState.isAuction &&
-          (isNaN(parseFloat(formState.price)) ||
-            parseFloat(formState.price) < VALIDATION_REQUIREMENTS.price.min)
-            ? `Price must be at least $${VALIDATION_REQUIREMENTS.price.min}`
-            : !formState.isAuction && parseFloat(formState.price) > VALIDATION_REQUIREMENTS.price.max
-            ? `Price cannot exceed $${VALIDATION_REQUIREMENTS.price.max.toLocaleString()}`
-            : 'Valid price',
+        isValid: formState.isAuction ? true : (parseFloat(formState.price) >= VALIDATION_REQUIREMENTS.price.min && parseFloat(formState.price) <= VALIDATION_REQUIREMENTS.price.max),
+        message: !formState.isAuction && (isNaN(parseFloat(formState.price)) || parseFloat(formState.price) < VALIDATION_REQUIREMENTS.price.min) 
+          ? `Price must be at least $${VALIDATION_REQUIREMENTS.price.min}`
+          : !formState.isAuction && parseFloat(formState.price) > VALIDATION_REQUIREMENTS.price.max 
+          ? `Price cannot exceed $${VALIDATION_REQUIREMENTS.price.max.toLocaleString()}`
+          : 'Valid price'
       },
       startingPrice: {
-        isValid:
-          !formState.isAuction ||
-          (parseFloat(formState.startingPrice) >= VALIDATION_REQUIREMENTS.price.min &&
-            parseFloat(formState.startingPrice) <= VALIDATION_REQUIREMENTS.price.max),
-        message:
-          formState.isAuction &&
-          (isNaN(parseFloat(formState.startingPrice)) ||
-            parseFloat(formState.startingPrice) < VALIDATION_REQUIREMENTS.price.min)
-            ? `Starting bid must be at least $${VALIDATION_REQUIREMENTS.price.min}`
-            : formState.isAuction && parseFloat(formState.startingPrice) > VALIDATION_REQUIREMENTS.price.max
-            ? `Starting bid cannot exceed $${VALIDATION_REQUIREMENTS.price.max.toLocaleString()}`
-            : 'Valid starting bid',
+        isValid: !formState.isAuction || (parseFloat(formState.startingPrice) >= VALIDATION_REQUIREMENTS.price.min && parseFloat(formState.startingPrice) <= VALIDATION_REQUIREMENTS.price.max),
+        message: formState.isAuction && (isNaN(parseFloat(formState.startingPrice)) || parseFloat(formState.startingPrice) < VALIDATION_REQUIREMENTS.price.min) 
+          ? `Starting bid must be at least $${VALIDATION_REQUIREMENTS.price.min}`
+          : formState.isAuction && parseFloat(formState.startingPrice) > VALIDATION_REQUIREMENTS.price.max 
+          ? `Starting bid cannot exceed $${VALIDATION_REQUIREMENTS.price.max.toLocaleString()}`
+          : 'Valid starting bid'
       },
       reservePrice: {
-        isValid:
-          !formState.isAuction ||
-          !formState.reservePrice ||
-          parseFloat(formState.reservePrice) >= parseFloat(formState.startingPrice || '0'),
-        message:
-          formState.isAuction &&
-          formState.reservePrice &&
-          parseFloat(formState.reservePrice) < parseFloat(formState.startingPrice || '0')
-            ? 'Reserve price must be at least the starting bid'
-            : 'Valid reserve price',
+        isValid: !formState.isAuction || !formState.reservePrice || parseFloat(formState.reservePrice) >= parseFloat(formState.startingPrice),
+        message: formState.isAuction && formState.reservePrice && parseFloat(formState.reservePrice) < parseFloat(formState.startingPrice)
+          ? 'Reserve price must be at least the starting bid'
+          : 'Valid reserve price'
       },
       images: {
         isValid: totalImages > 0,
-        message:
-          totalImages === 0
-            ? 'At least one image is required'
-            : `${totalImages} image${totalImages === 1 ? '' : 's'} selected`,
+        message: totalImages === 0 ? 'At least one image is required' : `${totalImages} image${totalImages === 1 ? '' : 's'} selected`
       },
       tags: {
         count: tagsLength,
         isValid: tagsLength <= VALIDATION_REQUIREMENTS.tags.max,
-        message:
-          tagsLength > VALIDATION_REQUIREMENTS.tags.max
-            ? `Tags exceed ${VALIDATION_REQUIREMENTS.tags.max} characters`
-            : 'Valid tags',
-      },
+        message: tagsLength > VALIDATION_REQUIREMENTS.tags.max 
+          ? `Tags exceed ${VALIDATION_REQUIREMENTS.tags.max} characters`
+          : 'Valid tags'
+      }
     };
   }, [formState, selectedFiles.length]);
 
-  // Overall validity
+  // Check if form is valid overall
   const isFormValid = useMemo(() => {
-    return (
-      validation.title.isValid &&
-      validation.description.isValid &&
-      validation.price.isValid &&
-      validation.startingPrice.isValid &&
-      validation.reservePrice.isValid &&
-      validation.images.isValid &&
-      validation.tags.isValid
-    );
+    return validation.title.isValid && 
+           validation.description.isValid && 
+           validation.price.isValid &&
+           validation.startingPrice.isValid &&
+           validation.reservePrice.isValid &&
+           validation.images.isValid &&
+           validation.tags.isValid;
   }, [validation]);
 
   // Handle file selection with validation
-  const handleSecureFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files || []);
-      const validFiles: File[] = [];
-      const fileErrors: string[] = [];
-
-      files.forEach((file) => {
-        const result = securityService.validateFileUpload(file, {
-          maxSize: 5 * 1024 * 1024,
-          allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-          allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-        });
-        if (result.valid) validFiles.push(file);
-        else fileErrors.push(result.error || 'Invalid file');
+  const handleSecureFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles: File[] = [];
+    let fileErrors: string[] = [];
+    
+    files.forEach(file => {
+      const validation = securityService.validateFileUpload(file, {
+        maxSize: 5 * 1024 * 1024, // 5MB
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
       });
-
-      if (validFiles.length > 0) {
-        onFileSelect({ target: { files: validFiles } } as any);
+      
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        fileErrors.push(validation.error || 'Invalid file');
       }
-
-      setErrors((prev) => {
-        const next = { ...prev };
-        if (fileErrors.length > 0) next.files = fileErrors.join(', ');
-        else delete next.files;
-        return next;
+    });
+    
+    if (validFiles.length > 0) {
+      onFileSelect({ target: { files: validFiles } } as any);
+    }
+    
+    if (fileErrors.length > 0) {
+      setErrors(prev => ({ ...prev, files: fileErrors.join(', ') }));
+    } else {
+      setErrors(prev => {
+        const { files, ...rest } = prev;
+        return rest;
       });
+    }
+  }, [onFileSelect]);
 
-      // clear native input on error to allow re-select
-      if (fileErrors.length > 0 && e.target) {
-        e.target.value = '';
-      }
-    },
-    [onFileSelect]
-  );
-
-  // Before submit, run validations
+  // Comprehensive form validation before submission
   const validateForm = useCallback((): { isValid: boolean; errors: Record<string, string> } => {
     const newErrors: Record<string, string> = {};
 
-    if (!validation.title.isValid) newErrors.title = validation.title.message;
-    if (!validation.description.isValid) newErrors.description = validation.description.message;
-
-    if (formState.isAuction) {
-      if (!validation.startingPrice.isValid) newErrors.startingPrice = validation.startingPrice.message;
-      if (!validation.reservePrice.isValid) newErrors.reservePrice = validation.reservePrice.message;
-    } else {
-      if (!validation.price.isValid) newErrors.price = validation.price.message;
+    // Title validation
+    if (!validation.title.isValid) {
+      newErrors.title = validation.title.message;
     }
 
-    if (!validation.images.isValid) newErrors.images = validation.images.message;
-    if (!validation.tags.isValid) newErrors.tags = validation.tags.message;
+    // Description validation
+    if (!validation.description.isValid) {
+      newErrors.description = validation.description.message;
+    }
 
-    return { isValid: Object.keys(newErrors).length === 0, errors: newErrors };
+    // Price validation
+    if (formState.isAuction) {
+      if (!validation.startingPrice.isValid) {
+        newErrors.startingPrice = validation.startingPrice.message;
+      }
+      if (!validation.reservePrice.isValid) {
+        newErrors.reservePrice = validation.reservePrice.message;
+      }
+    } else {
+      if (!validation.price.isValid) {
+        newErrors.price = validation.price.message;
+      }
+    }
+
+    // Images validation
+    if (!validation.images.isValid) {
+      newErrors.images = validation.images.message;
+    }
+
+    // Tags validation
+    if (!validation.tags.isValid) {
+      newErrors.tags = validation.tags.message;
+    }
+
+    return {
+      isValid: Object.keys(newErrors).length === 0,
+      errors: newErrors
+    };
   }, [validation, formState.isAuction]);
 
-  const handleSecureSave = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (isSubmitting) return;
+  // Handle secure form submission
+  const handleSecureSave = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
+    setErrors({});
+    
+    try {
+      // Validate form
+      const formValidation = validateForm();
+      
+      if (!formValidation.isValid) {
+        setErrors(formValidation.errors);
+        // Mark all invalid fields as touched
+        const touchedFields = Object.keys(formValidation.errors).reduce(
+          (acc, key) => ({ ...acc, [key]: true }), 
+          {}
+        );
+        setTouched(prev => ({ ...prev, ...touchedFields }));
+        return;
+      }
 
-      setIsSubmitting(true);
-      setErrors({});
+      // Additional schema validation for extra safety
+      if (!formState.isAuction) {
+        const listingData = {
+          title: formState.title,
+          description: formState.description,
+          price: parseFloat(formState.price),
+          images: [...formState.imageUrls], // Convert to array for validation
+          category: 'panties' as const, // Default category
+          condition: 'worn_once' as const, // Default condition
+          size: 'm' as const, // Default size
+          tags: formState.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+          wearDuration: formState.hoursWorn ? parseInt(formState.hoursWorn.toString()) : undefined,
+          listingType: 'regular' as const
+        };
 
-      try {
-        const formValidation = validateForm();
-        if (!formValidation.isValid) {
-          setErrors(formValidation.errors);
-          const touchedFields = Object.keys(formValidation.errors).reduce(
-            (acc, key) => ({ ...acc, [key]: true }),
-            {}
-          );
-          setTouched((prev) => ({ ...prev, ...touchedFields }));
+        const schemaValidation = validateSchema(listingSchemas.createListingSchema, listingData);
+        
+        if (!schemaValidation.success && schemaValidation.errors) {
+          console.error('Schema validation failed:', schemaValidation.errors);
+          setErrors(schemaValidation.errors);
           return;
         }
-
-        // Extra schema validation (regular listing only)
-        if (!formState.isAuction) {
-          const listingData = {
-            title: formState.title,
-            description: formState.description,
-            price: parseFloat(formState.price),
-            images: [...formState.imageUrls],
-            category: 'panties' as const,
-            condition: 'worn_once' as const,
-            size: 'm' as const,
-            tags: formState.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-            wearDuration: formState.hoursWorn ? parseInt(formState.hoursWorn.toString()) : undefined,
-            listingType: 'regular' as const,
-          };
-
-          const schemaValidation = validateSchema(listingSchemas.createListingSchema, listingData);
-          if (!schemaValidation.success && schemaValidation.errors) {
-            console.error('Schema validation failed:', schemaValidation.errors);
-            setErrors(schemaValidation.errors);
-            return;
-          }
-        }
-
-        await onSave();
-      } catch (error) {
-        console.error('Form submission error:', error);
-        setErrors({ submit: 'An error occurred while saving. Please try again.' });
-      } finally {
-        setIsSubmitting(false);
       }
-    },
-    [formState, isSubmitting, validateForm, onSave]
-  );
 
+      // If all validations pass, submit the form
+      await onSave();
+      
+    } catch (error) {
+      console.error('Form submission error:', error);
+      setErrors({ submit: 'An error occurred while saving. Please try again.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [formState, isSubmitting, validateForm, onSave]);
+
+  // Handle field blur
   const handleFieldBlur = useCallback((fieldName: string) => {
-    setTouched((prev) => ({ ...prev, [fieldName]: true }));
+    setTouched(prev => ({ ...prev, [fieldName]: true }));
   }, []);
 
   return (
-    <SecureForm
+    <SecureForm 
       onSubmit={handleSecureSave}
       rateLimitKey="listing_create"
       rateLimitConfig={{ maxAttempts: 10, windowMs: 60 * 60 * 1000 }}
     >
-      <h2 className="text-2xl font-bold mb-6 text-white">{isEditing ? 'Edit Listing' : 'Create New Listing'}</h2>
+      <h2 className="text-2xl font-bold mb-6 text-white">
+        {isEditing ? 'Edit Listing' : 'Create New Listing'}
+      </h2>
 
+      {/* Form validation summary */}
       {!isFormValid && Object.keys(touched).length > 0 && (
         <div className="mb-6 p-4 bg-red-900 bg-opacity-30 border border-red-700 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
@@ -352,18 +301,16 @@ export default function ListingForm({
           <label className="block text-sm font-medium text-gray-300 mb-1">
             Title *
             <div className="flex items-center justify-between mt-1">
-              <span className={`text-xs ${validation.title.isValid ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`text-xs ${
+                validation.title.isValid ? 'text-green-400' : 'text-red-400'
+              }`}>
                 {validation.title.message}
               </span>
-              <span
-                className={`text-xs ${
-                  validation.title.count < VALIDATION_REQUIREMENTS.title.min
-                    ? 'text-red-400'
-                    : validation.title.count > VALIDATION_REQUIREMENTS.title.max
-                    ? 'text-red-400'
-                    : 'text-green-400'
-                }`}
-              >
+              <span className={`text-xs ${
+                validation.title.count < VALIDATION_REQUIREMENTS.title.min ? 'text-red-400' : 
+                validation.title.count > VALIDATION_REQUIREMENTS.title.max ? 'text-red-400' : 
+                'text-green-400'
+              }`}>
                 {validation.title.count}/{VALIDATION_REQUIREMENTS.title.max}
               </span>
             </div>
@@ -380,7 +327,9 @@ export default function ListingForm({
                 validation.title.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
               }`}
             />
-            {validation.title.isValid && <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />}
+            {validation.title.isValid && (
+              <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
+            )}
           </div>
         </div>
 
@@ -388,18 +337,16 @@ export default function ListingForm({
           <label className="block text-sm font-medium text-gray-300 mb-1">
             Description *
             <div className="flex items-center justify-between mt-1">
-              <span className={`text-xs ${validation.description.isValid ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`text-xs ${
+                validation.description.isValid ? 'text-green-400' : 'text-red-400'
+              }`}>
                 {validation.description.message}
               </span>
-              <span
-                className={`text-xs ${
-                  validation.description.count < VALIDATION_REQUIREMENTS.description.min
-                    ? 'text-red-400'
-                    : validation.description.count > VALIDATION_REQUIREMENTS.description.max
-                    ? 'text-red-400'
-                    : 'text-green-400'
-                }`}
-              >
+              <span className={`text-xs ${
+                validation.description.count < VALIDATION_REQUIREMENTS.description.min ? 'text-red-400' : 
+                validation.description.count > VALIDATION_REQUIREMENTS.description.max ? 'text-red-400' : 
+                'text-green-400'
+              }`}>
                 {validation.description.count}/{VALIDATION_REQUIREMENTS.description.max}
               </span>
             </div>
@@ -415,19 +362,17 @@ export default function ListingForm({
                 validation.description.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
               }`}
             />
-            {validation.description.isValid && <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />}
+            {validation.description.isValid && (
+              <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
+            )}
           </div>
         </div>
-
+        
         {/* Listing Type Selection */}
         <div className="bg-[#121212] p-4 rounded-lg border border-gray-700">
           <h3 className="text-lg font-medium mb-3 text-white">Listing Type</h3>
           <div className="flex flex-col sm:flex-row gap-4">
-            <label
-              className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition flex-1 ${
-                !formState.isAuction ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'
-              }`}
-            >
+            <label className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition flex-1 ${!formState.isAuction ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
               <input
                 type="radio"
                 checked={!formState.isAuction}
@@ -440,18 +385,26 @@ export default function ListingForm({
                 <p className="text-xs text-gray-400 mt-1">Fixed price, first come first served</p>
               </div>
             </label>
-
+            
             <div className="relative flex-1">
-              <label
+              <label 
                 className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition ${
-                  formState.isAuction ? 'border-purple-600 bg-purple-600 bg-opacity-10' : 'border-gray-700 bg-black'
-                } ${!isVerified ? 'opacity-50 cursor-not-allowed' : 'hover:border-purple-500'}`}
+                  formState.isAuction 
+                    ? 'border-purple-600 bg-purple-600 bg-opacity-10' 
+                    : 'border-gray-700 bg-black'
+                } ${
+                  !isVerified 
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:border-purple-500'
+                }`}
               >
                 <input
                   type="radio"
                   checked={formState.isAuction}
                   onChange={() => {
-                    if (isVerified) onFormChange({ isAuction: true });
+                    if (isVerified) {
+                      onFormChange({ isAuction: true });
+                    }
                   }}
                   disabled={!isVerified}
                   className="sr-only"
@@ -462,15 +415,14 @@ export default function ListingForm({
                   <p className="text-xs text-gray-400 mt-1">Let buyers bid, highest wins</p>
                 </div>
               </label>
-
+              
+              {/* Lock overlay for unverified sellers */}
               {!isVerified && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-lg px-3 py-2">
                   <LockIcon className="w-6 h-6 text-yellow-500 mb-1" />
-                  <span className="text-xs text-yellow-400 font-medium text-center">
-                    Verify your account to unlock auctions
-                  </span>
-                  <Link
-                    href="/sellers/verify"
+                  <span className="text-xs text-yellow-400 font-medium text-center">Verify your account to unlock auctions</span>
+                  <Link 
+                    href="/sellers/verify" 
                     className="mt-1 text-xs text-white bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded-full font-medium transition"
                   >
                     Get Verified
@@ -480,7 +432,7 @@ export default function ListingForm({
             </div>
           </div>
         </div>
-
+        
         {/* Show different price fields based on listing type */}
         {formState.isAuction ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -565,7 +517,9 @@ export default function ListingForm({
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
                 Price ($) *
-                {!validation.price.isValid && <span className="text-xs text-red-400 ml-2">{validation.price.message}</span>}
+                {!validation.price.isValid && (
+                  <span className="text-xs text-red-400 ml-2">{validation.price.message}</span>
+                )}
               </label>
               <div className="relative">
                 <SecureInput
@@ -584,25 +538,27 @@ export default function ListingForm({
                     validation.price.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
                   }`}
                 />
-                {validation.price.isValid && <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />}
+                {validation.price.isValid && (
+                  <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
+                )}
               </div>
             </div>
             {/* Image Upload Section */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
                 Add Images *
-                <span className={`text-xs ml-2 ${validation.images.isValid ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`text-xs ml-2 ${
+                  validation.images.isValid ? 'text-green-400' : 'text-red-400'
+                }`}>
                   {validation.images.message}
                 </span>
               </label>
-              <label
-                className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black hover:border-[#ff950e] transition cursor-pointer ${
-                  validation.images.isValid ? 'border-green-600' : 'border-gray-700'
-                }`}
-              >
+              <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black hover:border-[#ff950e] transition cursor-pointer ${
+                validation.images.isValid ? 'border-green-600' : 'border-gray-700'
+              }`}>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/*"
                   multiple
                   onChange={handleSecureFileSelect}
                   className="hidden"
@@ -619,24 +575,24 @@ export default function ListingForm({
             </div>
           </div>
         )}
-
+        
         {/* Image upload section for auction type */}
         {formState.isAuction && (
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Add Images *
-              <span className={`text-xs ml-2 ${validation.images.isValid ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`text-xs ml-2 ${
+                validation.images.isValid ? 'text-green-400' : 'text-red-400'
+              }`}>
                 {validation.images.message}
               </span>
             </label>
-            <label
-              className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black hover:border-purple-600 transition cursor-pointer ${
-                validation.images.isValid ? 'border-green-600' : 'border-gray-700'
-              }`}
-            >
+            <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black hover:border-purple-600 transition cursor-pointer ${
+              validation.images.isValid ? 'border-green-600' : 'border-gray-700'
+            }`}>
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 multiple
                 onChange={handleSecureFileSelect}
                 className="hidden"
@@ -652,7 +608,7 @@ export default function ListingForm({
             )}
           </div>
         )}
-
+        
         {/* Selected Files Preview */}
         {selectedFiles.length > 0 && (
           <div className="mt-3">
@@ -662,10 +618,7 @@ export default function ListingForm({
                 type="button"
                 onClick={onUploadFiles}
                 disabled={isUploading}
-                aria-busy={isUploading}
-                className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
-                  formState.isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
-                }`}
+                className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${formState.isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'}`}
               >
                 {isUploading ? (
                   <>Uploading...</>
@@ -678,6 +631,7 @@ export default function ListingForm({
               </button>
             </div>
 
+            {/* Upload Progress Bar */}
             {isUploading && (
               <div className="mb-3">
                 <div className="flex justify-between text-xs text-gray-400 mb-1">
@@ -685,7 +639,7 @@ export default function ListingForm({
                   <span>{sanitizeNumber(uploadProgress, 0, 100)}%</span>
                 </div>
                 <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                  <div
+                  <div 
                     className={`h-full transition-all duration-300 ${
                       formState.isAuction ? 'bg-purple-500' : 'bg-[#ff950e]'
                     }`}
@@ -698,12 +652,15 @@ export default function ListingForm({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {selectedFiles.map((file, index) => (
                 <div key={index} className="relative border border-gray-700 rounded-lg overflow-hidden group">
-                  <SecureImage src={previews[index]} alt={`Selected ${index + 1}`} className="w-full h-24 object-cover" />
+                  <SecureImage
+                    src={URL.createObjectURL(file)}
+                    alt={`Selected ${index + 1}`}
+                    className="w-full h-24 object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => onRemoveFile(index)}
                     className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
-                    aria-label="Remove selected file"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -716,22 +673,20 @@ export default function ListingForm({
           </div>
         )}
 
-        {/* Image Preview and Reordering (existing URLs) */}
+        {/* Image Preview and Reordering */}
         {formState.imageUrls.length > 0 && (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-300 mb-2">Images (Drag to reorder)</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {formState.imageUrls.map((url, index) => (
                 <div
-                  key={`${index}-${url.substring(0, 20)}`}
+                  key={index}
                   draggable
-                  onDragStart={() => handleDragStart(index)}
-                  onDragEnter={() => handleDragEnter(index)}
-                  onDragEnd={handleDrop}
+                  onDragStart={() => onImageReorder(index, index)}
+                  onDragEnter={() => onImageReorder(index, index)}
+                  onDragEnd={() => onImageReorder(index, index)}
                   onDragOver={(e) => e.preventDefault()}
-                  className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${
-                    index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'
-                  }`}
+                  className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'}`}
                 >
                   <SecureImage
                     src={url}
@@ -763,7 +718,9 @@ export default function ListingForm({
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
             Tags (comma separated)
-            <span className={`text-xs ml-2 ${validation.tags.isValid ? 'text-green-400' : 'text-red-400'}`}>
+            <span className={`text-xs ml-2 ${
+              validation.tags.isValid ? 'text-green-400' : 'text-red-400'
+            }`}>
               {validation.tags.count}/{VALIDATION_REQUIREMENTS.tags.max}
             </span>
           </label>
@@ -795,14 +752,11 @@ export default function ListingForm({
             max="999"
           />
         </div>
-
+        
+        {/* Only show premium option for standard listings */}
         {!formState.isAuction && (
           <div className="mt-4">
-            <label
-              className={`flex items-center gap-3 py-4 px-5 border-2 rounded-lg cursor-pointer transition ${
-                formState.isPremium ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'
-              }`}
-            >
+            <label className={`flex items-center gap-3 py-4 px-5 border-2 rounded-lg cursor-pointer transition ${formState.isPremium ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
               <input
                 type="checkbox"
                 checked={formState.isPremium}
@@ -811,17 +765,13 @@ export default function ListingForm({
               />
               <Crown className={`w-6 h-6 ${formState.isPremium ? 'text-[#ff950e]' : 'text-gray-500'}`} />
               <div>
-                <span className={`font-semibold text-lg ${formState.isPremium ? 'text-white' : 'text-gray-300'}`}>
-                  Make Premium Listing
-                </span>
-                <p className={`text-sm mt-0.5 ${formState.isPremium ? 'text-gray-200' : 'text-gray-400'}`}>
-                  Only available to your subscribers
-                </p>
+                <span className={`font-semibold text-lg ${formState.isPremium ? 'text-white' : 'text-gray-300'}`}>Make Premium Listing</span>
+                <p className={`text-sm mt-0.5 ${formState.isPremium ? 'text-gray-200' : 'text-gray-400'}`}>Only available to your subscribers</p>
               </div>
             </label>
           </div>
         )}
-
+        
         {/* Auction information notice */}
         {formState.isAuction && (
           <div className="bg-purple-900 bg-opacity-30 border border-purple-700 rounded-lg p-4 mt-4">
@@ -830,15 +780,9 @@ export default function ListingForm({
               <div>
                 <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
                 <ul className="text-sm text-gray-300 space-y-1">
-                  <li>
-                    • Auctions run for {humanizeAuctionDuration(formState.auctionDuration)} from the time you
-                    create the listing
-                  </li>
+                  <li>• Auctions run for {formState.auctionDuration === '0.017' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing</li>
                   <li>• Bidders must have sufficient funds in their wallet to place a bid</li>
-                  <li>
-                    • If the reserve price is met, the highest bidder automatically purchases the item when the
-                    auction ends
-                  </li>
+                  <li>• If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
                   <li>• You can cancel an auction at any time before it ends</li>
                 </ul>
               </div>
@@ -846,18 +790,18 @@ export default function ListingForm({
           </div>
         )}
 
+        {/* Submit errors */}
         {errors.submit && (
-          <div className="text-red-400 text-sm flex items-center gap-2" role="alert">
+          <div className="text-red-400 text-sm flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
             {errors.submit}
           </div>
         )}
-
+        
         <div className="flex flex-col sm:flex-row gap-4 mt-6">
           <button
             type="submit"
             disabled={!isFormValid || isSubmitting}
-            aria-disabled={!isFormValid || isSubmitting}
             className={`w-full sm:flex-1 text-black px-6 py-3 rounded-lg font-bold text-lg transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
               formState.isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
             }`}
