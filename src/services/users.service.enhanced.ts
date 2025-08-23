@@ -2,18 +2,17 @@
 
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
-import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient, API_BASE_URL } from './api.config';
+import { FEATURES, API_ENDPOINTS, apiCall, ApiResponse, API_BASE_URL } from './api.config';
 import { securityService } from './security.service';
 import { sanitizeStrict, sanitizeUsername, sanitizeUrl, sanitizeEmail } from '@/utils/security/sanitization';
-import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { getRateLimiter } from '@/utils/security/rate-limiter';
 import { z } from 'zod';
-import { authSchemas, profileSchemas, validateSchema } from '@/utils/validation/schemas';
-import { 
-  UserProfile, 
+import { validateSchema } from '@/utils/validation/schemas';
+import {
+  UserProfile,
   UserPreferences,
   UserSearchParams,
   VerificationRequest,
-  VerificationUpdateRequest,
   BanRequest,
   BatchUserUpdate,
   BatchOperationResult,
@@ -29,14 +28,13 @@ import {
   isValidBio,
   isValidSubscriptionPrice,
   calculateProfileCompleteness,
-  ProfileCompleteness,
 } from '@/types/users';
 
 // Cache configuration
 const CACHE_CONFIG = {
-  USER_TTL: 5 * 60 * 1000, // 5 minutes
+  USER_TTL: 5 * 60 * 1000,    // 5 minutes
   PROFILE_TTL: 3 * 60 * 1000, // 3 minutes
-  LIST_TTL: 60 * 1000, // 1 minute
+  LIST_TTL: 60 * 1000,        // 1 minute
 };
 
 // Security limits
@@ -49,7 +47,7 @@ const SECURITY_LIMITS = {
   MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
 };
 
-// Validation schemas
+// Validation schemas (local to this file)
 const userSearchSchema = z.object({
   query: z.string().max(SECURITY_LIMITS.MAX_QUERY_LENGTH).transform(sanitizeStrict).optional(),
   role: z.enum(['buyer', 'seller', 'admin']).optional(),
@@ -67,32 +65,41 @@ const userSearchSchema = z.object({
 const userProfileUpdateSchema = z.object({
   bio: z.string().max(500).transform(sanitizeStrict).optional(),
   profilePic: z.string().url().nullable().optional(),
+  // Always KEEP this as string; convert numbers to string before sending
   subscriptionPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   galleryImages: z.array(z.string().url()).max(SECURITY_LIMITS.MAX_GALLERY_IMAGES).optional(),
-  socialLinks: z.object({
-    twitter: z.string().url().transform(sanitizeUrl).optional(),
-    instagram: z.string().url().transform(sanitizeUrl).optional(),
-    tiktok: z.string().url().transform(sanitizeUrl).optional(),
-    website: z.string().url().transform(sanitizeUrl).optional(),
-  }).optional(),
+  socialLinks: z
+    .object({
+      twitter: z.string().url().transform(sanitizeUrl).optional(),
+      instagram: z.string().url().transform(sanitizeUrl).optional(),
+      tiktok: z.string().url().transform(sanitizeUrl).optional(),
+      website: z.string().url().transform(sanitizeUrl).optional(),
+    })
+    .optional(),
 });
 
-const userPreferencesSchema = z.object({
-  notifications: z.object({
-    messages: z.boolean(),
-    orders: z.boolean(),
-    promotions: z.boolean(),
-    newsletters: z.boolean(),
-  }).partial(),
-  privacy: z.object({
-    showOnlineStatus: z.boolean(),
-    allowDirectMessages: z.boolean(),
-    profileVisibility: z.enum(['public', 'subscribers', 'private']),
-  }).partial(),
-  language: z.string().max(10),
-  currency: z.string().max(10),
-  timezone: z.string().max(50),
-}).partial();
+const userPreferencesSchema = z
+  .object({
+    notifications: z
+      .object({
+        messages: z.boolean(),
+        orders: z.boolean(),
+        promotions: z.boolean(),
+        newsletters: z.boolean(),
+      })
+      .partial(),
+    privacy: z
+      .object({
+        showOnlineStatus: z.boolean(),
+        allowDirectMessages: z.boolean(),
+        profileVisibility: z.enum(['public', 'subscribers', 'private']),
+      })
+      .partial(),
+    language: z.string().max(10),
+    currency: z.string().max(10),
+    timezone: z.string().max(50),
+  })
+  .partial();
 
 const verificationRequestSchema = z.object({
   codePhoto: z.string().url().optional(),
@@ -112,6 +119,30 @@ const activitySchema = z.object({
 });
 
 /**
+ * Helpers – enforce string types for storage & profile fields
+ */
+function toStringSafe(val: unknown, fallback = ''): string {
+  if (val === undefined || val === null) return fallback;
+  return String(val);
+}
+
+function toPriceString(val: unknown): string {
+  // normalize numbers or strings into a valid price string; caller ensures regex match if needed
+  if (typeof val === 'number') return String(val);
+  return toStringSafe(val, '0');
+}
+
+function sanitizeUrlOrUndefined(url: unknown): string | undefined {
+  const s = typeof url === 'string' ? sanitizeUrl(url) : null;
+  return s || undefined;
+}
+
+function sanitizeUrlOrNull(url: unknown): string | null {
+  const s = typeof url === 'string' ? sanitizeUrl(url) : null;
+  return s || null;
+}
+
+/**
  * Enhanced Users Service with caching, validation, and better error handling
  */
 export class EnhancedUsersService {
@@ -119,10 +150,10 @@ export class EnhancedUsersService {
   private userCache = new Map<string, CachedUser>();
   private profileCache = new Map<string, CachedUserProfile>();
   private listCache = new Map<string, { data: any; expiresAt: number }>();
-  
+
   // Request deduplication
   private pendingRequests = new Map<string, Promise<any>>();
-  
+
   // Rate limiter
   private rateLimiter = getRateLimiter();
 
@@ -171,7 +202,7 @@ export class EnhancedUsersService {
       const pendingKey = `user:${sanitizedUsername}`;
       if (this.pendingRequests.has(pendingKey)) {
         console.log('[EnhancedUsersService.getUser] Awaiting pending request');
-        return await this.pendingRequests.get(pendingKey);
+        return await this.pendingRequests.get(pendingKey)!;
       }
 
       // Create new request
@@ -200,7 +231,7 @@ export class EnhancedUsersService {
 
   private async _fetchUser(username: string): Promise<ApiResponse<User | null>> {
     console.log('[EnhancedUsersService._fetchUser] Fetching user:', username);
-    
+
     if (!username) {
       console.error('[EnhancedUsersService._fetchUser] Username is empty');
       return {
@@ -216,45 +247,41 @@ export class EnhancedUsersService {
       // Build URL directly to avoid parameter issues
       const url = `${API_BASE_URL}/api/users/${encodeURIComponent(username)}/profile`;
       console.log('[EnhancedUsersService._fetchUser] API URL:', url);
-      
+
       const response = await apiCall<User>(url);
-      
+
       if (response.success && response.data) {
         // Sanitize user data
         const sanitizedUser = this.sanitizeUserData(response.data);
-        
+
         // Cache the result
         this.userCache.set(username, {
           data: sanitizedUser,
           timestamp: Date.now(),
           expiresAt: Date.now() + CACHE_CONFIG.USER_TTL,
         });
-        
+
         return { ...response, data: sanitizedUser };
       }
-      
+
       return response;
     }
 
     // LocalStorage implementation
-    const allUsers = await storageService.getItem<Record<string, any>>(
-      'all_users_v2',
-      {}
-    );
-
+    const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
     const user = allUsers[username] || null;
-    
+
     if (user) {
       // Sanitize user data
       const sanitizedUser = this.sanitizeUserData(user);
-      
+
       // Cache the result
       this.userCache.set(username, {
         data: sanitizedUser,
         timestamp: Date.now(),
         expiresAt: Date.now() + CACHE_CONFIG.USER_TTL,
       });
-      
+
       return { success: true, data: sanitizedUser };
     }
 
@@ -285,7 +312,7 @@ export class EnhancedUsersService {
       // Create cache key from params
       const cacheKey = `users:${JSON.stringify(validatedParams || {})}`;
       const cached = this.listCache.get(cacheKey);
-      
+
       if (cached && cached.expiresAt > Date.now()) {
         return { success: true, data: cached.data };
       }
@@ -299,18 +326,16 @@ export class EnhancedUsersService {
             }
           });
         }
-        
-        const response = await apiCall<any>(
-          `${API_ENDPOINTS.USERS.LIST}?${queryParams.toString()}`
-        );
-        
+
+        const response = await apiCall<any>(`${API_ENDPOINTS.USERS.LIST}?${queryParams.toString()}`);
+
         if (response.success && response.data) {
-          // CRITICAL FIX: Handle both response formats
+          // Handle both response formats
           let sanitizedResponse: UsersResponse;
-          
+
           if (Array.isArray(response.data)) {
             // Backend returns array directly
-            const sanitizedUsers = response.data.map((user: any) => this.sanitizeUserData(user));
+            const sanitizedUsers = response.data.map((u: any) => this.sanitizeUserData(u));
             sanitizedResponse = {
               users: sanitizedUsers,
               total: sanitizedUsers.length,
@@ -319,94 +344,82 @@ export class EnhancedUsersService {
             };
           } else {
             // Backend returns UsersResponse object
-            const sanitizedUsers = response.data.users?.map((user: any) => this.sanitizeUserData(user)) || [];
-            sanitizedResponse = { 
-              ...response.data, 
-              users: sanitizedUsers 
+            const sanitizedUsers = response.data.users?.map((u: any) => this.sanitizeUserData(u)) || [];
+            sanitizedResponse = {
+              ...response.data,
+              users: sanitizedUsers,
             };
           }
-          
+
           // Cache the result
           this.listCache.set(cacheKey, {
             data: sanitizedResponse,
             expiresAt: Date.now() + CACHE_CONFIG.LIST_TTL,
           });
-          
-          return { 
-            success: true, 
+
+          return {
+            success: true,
             data: sanitizedResponse,
             error: response.error,
-            meta: response.meta 
+            meta: response.meta,
           };
         }
-        
+
         return {
           success: false,
-          error: response.error || { code: UserErrorCode.NETWORK_ERROR, message: 'Failed to get users' }
+          error: response.error || { code: UserErrorCode.NETWORK_ERROR, message: 'Failed to get users' },
         };
       }
 
       // LocalStorage implementation with advanced filtering
-      const allUsers = await storageService.getItem<Record<string, any>>(
-        'all_users_v2',
-        {}
-      );
-
+      const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
       let filteredUsers = Object.entries(allUsers);
 
       // Apply filters
       if (validatedParams) {
         if (validatedParams.query) {
           const query = validatedParams.query.toLowerCase();
-          filteredUsers = filteredUsers.filter(([username, user]) =>
-            username.toLowerCase().includes(query) ||
-            user.bio?.toLowerCase().includes(query) ||
-            user.email?.toLowerCase().includes(query)
+          filteredUsers = filteredUsers.filter(
+            ([username, u]) =>
+              username.toLowerCase().includes(query) ||
+              u.bio?.toLowerCase().includes(query) ||
+              u.email?.toLowerCase().includes(query),
           );
         }
 
         if (validatedParams.role) {
-          filteredUsers = filteredUsers.filter(([_, user]) => user.role === validatedParams.role);
+          filteredUsers = filteredUsers.filter(([_, u]) => u.role === validatedParams.role);
         }
 
         if (validatedParams.verified !== undefined) {
           filteredUsers = filteredUsers.filter(
-            ([_, user]) => (user.verificationStatus === 'verified') === validatedParams.verified
+            ([_, u]) => (u.verificationStatus === 'verified') === validatedParams.verified,
           );
         }
 
         if (validatedParams.tier) {
-          filteredUsers = filteredUsers.filter(([_, user]) => user.tier === validatedParams.tier);
+          filteredUsers = filteredUsers.filter(([_, u]) => u.tier === validatedParams.tier);
         }
 
         if (validatedParams.minRating !== undefined) {
-          filteredUsers = filteredUsers.filter(
-            ([_, user]) => (user.rating || 0) >= validatedParams.minRating!
-          );
-        }
-
-        if (validatedParams.hasListings !== undefined) {
-          // This would need to check listings data
-          // For now, we'll skip this filter in localStorage mode
+          filteredUsers = filteredUsers.filter(([_, u]) => (u.rating || 0) >= validatedParams!.minRating!);
         }
 
         if (validatedParams.isActive !== undefined) {
           const dayAgo = new Date();
           dayAgo.setDate(dayAgo.getDate() - 1);
-          filteredUsers = filteredUsers.filter(
-            ([_, user]) => {
-              const lastActive = new Date(user.lastActive || user.createdAt);
-              return validatedParams.isActive ? lastActive > dayAgo : lastActive <= dayAgo;
-            }
-          );
+          filteredUsers = filteredUsers.filter(([_, u]) => {
+            const lastActive = new Date(u.lastActive || u.createdAt);
+            return validatedParams!.isActive ? lastActive > dayAgo : lastActive <= dayAgo;
+          });
         }
 
-        // Apply sorting
+        // Sorting
         if (validatedParams.sortBy) {
           filteredUsers.sort(([aUsername, a], [bUsername, b]) => {
             let compareValue = 0;
-            
-            switch (validatedParams.sortBy) {
+
+            switch (validatedParams!.sortBy) {
               case 'username':
                 compareValue = aUsername.localeCompare(bUsername);
                 break;
@@ -420,24 +433,24 @@ export class EnhancedUsersService {
                 compareValue = (a.totalSales || 0) - (b.totalSales || 0);
                 break;
               case 'lastActive':
-                compareValue = new Date(a.lastActive || a.createdAt).getTime() - 
-                               new Date(b.lastActive || b.createdAt).getTime();
+                compareValue =
+                  new Date(a.lastActive || a.createdAt).getTime() - new Date(b.lastActive || b.createdAt).getTime();
                 break;
             }
-            
-            return validatedParams.sortOrder === 'desc' ? -compareValue : compareValue;
+
+            return validatedParams!.sortOrder === 'desc' ? -compareValue : compareValue;
           });
         }
       }
 
-      // Apply pagination
+      // Pagination
       const page = validatedParams?.page || 1;
       const limit = validatedParams?.limit || 50;
       const startIndex = (page - 1) * limit;
       const endIndex = startIndex + limit;
-      
+
       const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
-      const users = paginatedUsers.map(([_, user]) => this.sanitizeUserData(user));
+      const users = paginatedUsers.map(([_, u]) => this.sanitizeUserData(u));
 
       const result: UsersResponse = {
         users,
@@ -471,7 +484,7 @@ export class EnhancedUsersService {
   async getUserProfile(username: string): Promise<ApiResponse<ProfileResponse | null>> {
     try {
       console.log('[EnhancedUsersService.getUserProfile] Getting profile for:', username);
-      
+
       // Validate username
       if (!username || !isValidUsername(username)) {
         console.error('[EnhancedUsersService.getUserProfile] Invalid username:', username);
@@ -507,47 +520,44 @@ export class EnhancedUsersService {
         // Build the full profile URL directly
         const fullUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile/full`;
         console.log('[EnhancedUsersService.getUserProfile] API URL:', fullUrl);
-        
-        const response = await apiCall<ProfileResponse>(fullUrl);
-        
+
+        const response = await apiCall<ProfileResponse | any>(fullUrl);
+
         if (response.success && response.data) {
-          // Handle both possible response formats
           let profileData: UserProfile;
           let userData: User;
-          
-          // Check if response.data has the expected structure
-          if (response.data.profile !== undefined && response.data.user !== undefined) {
-            // Backend returns { profile, user } format
-            profileData = this.sanitizeProfileData(response.data.profile);
-            userData = response.data.user;
+
+          // Accept both { profile, user } and user-only shapes
+          if ((response.data as any).profile !== undefined && (response.data as any).user !== undefined) {
+            profileData = this.sanitizeProfileData((response.data as any).profile);
+            userData = (response.data as any).user;
           } else if ((response.data as any).username) {
-            // Backend might return just user data, create empty profile
             userData = response.data as any;
-            profileData = {
-              bio: userData.bio || '',
-              profilePic: null,
-              subscriptionPrice: '0',
-              galleryImages: [],
-            };
+            profileData = this.sanitizeProfileData({
+              bio: (response.data as any).bio || '',
+              profilePic: (response.data as any).profilePic ?? (response.data as any).profilePicture ?? null,
+              subscriptionPrice: toPriceString((response.data as any).subscriptionPrice ?? '0'),
+              galleryImages: (response.data as any).galleryImages || [],
+            });
           } else {
-            // Unexpected format, create defaults
+            // Unexpected format: coerce to empty profile
             console.warn('[EnhancedUsersService.getUserProfile] Unexpected response format:', response.data);
-            profileData = {
+            profileData = this.sanitizeProfileData({
               bio: '',
               profilePic: null,
               subscriptionPrice: '0',
               galleryImages: [],
-            };
+            });
             userData = response.data as any;
           }
-          
+
           // Cache the profile
           this.profileCache.set(sanitizedUsername, {
             data: profileData,
             timestamp: Date.now(),
             expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
           });
-          
+
           return {
             success: true,
             data: {
@@ -556,8 +566,8 @@ export class EnhancedUsersService {
             },
           };
         }
-        
-        return response;
+
+        return response as ApiResponse<ProfileResponse | null>;
       }
 
       // LocalStorage implementation
@@ -572,25 +582,21 @@ export class EnhancedUsersService {
         };
       }
 
-      const profilesData = await storageService.getItem<Record<string, UserProfile>>(
-        'user_profiles',
-        {}
-      );
-
+      const profilesData = await storageService.getItem<Record<string, UserProfile>>('user_profiles', {});
       let profile = profilesData[sanitizedUsername];
-      
+
       if (!profile) {
-        // Try legacy storage
+        // Legacy storage fallback
         const bio = sessionStorage.getItem(`profile_bio_${sanitizedUsername}`) || '';
-        const profilePic = sessionStorage.getItem(`profile_pic_${sanitizedUsername}`) || null;
+        const profilePic = sessionStorage.getItem(`profile_pic_${sanitizedUsername}`);
         const subscriptionPrice = sessionStorage.getItem(`subscription_price_${sanitizedUsername}`) || '0';
         const galleryData = localStorage.getItem(`profile_gallery_${sanitizedUsername}`);
         const galleryImages = galleryData ? JSON.parse(galleryData) : [];
 
         profile = {
           bio,
-          profilePic,
-          subscriptionPrice,
+          profilePic: profilePic ?? null,
+          subscriptionPrice: toPriceString(subscriptionPrice),
           galleryImages,
         };
       }
@@ -603,13 +609,11 @@ export class EnhancedUsersService {
       sanitizedProfile.completeness = completeness;
 
       // Cache the profile
-      if (sanitizedProfile) {
-        this.profileCache.set(sanitizedUsername, {
-          data: sanitizedProfile,
-          timestamp: Date.now(),
-          expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
-        });
-      }
+      this.profileCache.set(sanitizedUsername, {
+        data: sanitizedProfile,
+        timestamp: Date.now(),
+        expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
+      });
 
       return {
         success: true,
@@ -633,16 +637,13 @@ export class EnhancedUsersService {
   /**
    * Update user profile with validation and optimistic updates
    */
-  async updateUserProfile(
-    username: string,
-    updates: Partial<UserProfile>
-  ): Promise<ApiResponse<UserProfile>> {
+  async updateUserProfile(username: string, updates: Partial<UserProfile>): Promise<ApiResponse<UserProfile>> {
     try {
-      // Check rate limit
-      const rateLimitResult = this.rateLimiter.check(
-        `profile_update_${username}`,
-        { maxAttempts: 10, windowMs: 60 * 60 * 1000 } // 10 updates per hour
-      );
+      // Rate limit
+      const rateLimitResult = this.rateLimiter.check(`profile_update_${username}`, {
+        maxAttempts: 10,
+        windowMs: 60 * 60 * 1000,
+      });
       if (!rateLimitResult.allowed) {
         return {
           success: false,
@@ -653,7 +654,7 @@ export class EnhancedUsersService {
         };
       }
 
-      // Validate inputs
+      // Validate username
       if (!username || !isValidUsername(username)) {
         return {
           success: false,
@@ -667,8 +668,17 @@ export class EnhancedUsersService {
 
       const sanitizedUsername = sanitizeUsername(username);
 
+      // PRE-NORMALIZE: coerce price to string if caller passed number
+      const normalizedUpdates: Partial<UserProfile> = {
+        ...updates,
+        subscriptionPrice:
+          updates.subscriptionPrice !== undefined
+            ? toPriceString(updates.subscriptionPrice)
+            : undefined,
+      };
+
       // Validate and sanitize updates
-      const validation = validateSchema(userProfileUpdateSchema, updates);
+      const validation = validateSchema(userProfileUpdateSchema, normalizedUpdates);
       if (!validation.success) {
         return {
           success: false,
@@ -681,7 +691,7 @@ export class EnhancedUsersService {
 
       const sanitizedUpdates = validation.data!;
 
-      // Additional validation for bio and subscription price
+      // Additional validation
       if (sanitizedUpdates.bio !== undefined && !isValidBio(sanitizedUpdates.bio)) {
         return {
           success: false,
@@ -693,7 +703,10 @@ export class EnhancedUsersService {
         };
       }
 
-      if (sanitizedUpdates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(sanitizedUpdates.subscriptionPrice)) {
+      if (
+        sanitizedUpdates.subscriptionPrice !== undefined &&
+        !isValidSubscriptionPrice(sanitizedUpdates.subscriptionPrice)
+      ) {
         return {
           success: false,
           error: {
@@ -704,10 +717,15 @@ export class EnhancedUsersService {
         };
       }
 
-      // Optimistic update - update cache immediately
+      // Optimistic update
       const currentProfile = this.profileCache.get(sanitizedUsername);
       if (currentProfile) {
-        const optimisticProfile = { ...currentProfile.data, ...sanitizedUpdates };
+        const optimisticProfile: UserProfile = {
+          ...currentProfile.data,
+          ...sanitizedUpdates,
+          subscriptionPrice:
+            sanitizedUpdates.subscriptionPrice ?? currentProfile.data.subscriptionPrice,
+        };
         this.profileCache.set(sanitizedUsername, {
           data: optimisticProfile,
           timestamp: Date.now(),
@@ -716,13 +734,12 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        // Build URL directly
         const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile`;
         const response = await apiCall<UserProfile>(url, {
           method: 'PATCH',
           body: JSON.stringify(sanitizedUpdates),
         });
-        
+
         if (!response.success) {
           // Revert optimistic update
           if (currentProfile) {
@@ -730,36 +747,37 @@ export class EnhancedUsersService {
           } else {
             this.profileCache.delete(sanitizedUsername);
           }
-        } else if (response.data) {
-          // Update cache with server response
+          return response as ApiResponse<UserProfile>;
+        }
+
+        if (response.data) {
           const sanitizedProfile = this.sanitizeProfileData(response.data);
           this.profileCache.set(sanitizedUsername, {
             data: sanitizedProfile,
             timestamp: Date.now(),
             expiresAt: Date.now() + CACHE_CONFIG.PROFILE_TTL,
           });
-          
           return { ...response, data: sanitizedProfile };
         }
-        
-        return response;
+
+        return response as ApiResponse<UserProfile>;
       }
 
       // LocalStorage implementation
-      const profilesData = await storageService.getItem<Record<string, UserProfile>>(
-        'user_profiles',
-        {}
-      );
-
+      const profilesData = await storageService.getItem<Record<string, UserProfile>>('user_profiles', {});
       const currentData = profilesData[sanitizedUsername] || {
         bio: '',
         profilePic: null,
         subscriptionPrice: '0',
+        galleryImages: [],
       };
 
       const updatedProfile: UserProfile = {
         ...currentData,
         ...sanitizedUpdates,
+        subscriptionPrice: toPriceString(
+          sanitizedUpdates.subscriptionPrice ?? currentData.subscriptionPrice ?? '0',
+        ),
         lastUpdated: new Date().toISOString(),
       };
 
@@ -767,30 +785,36 @@ export class EnhancedUsersService {
       const success = await storageService.setItem('user_profiles', profilesData);
 
       if (success) {
-        // Update legacy storage for backward compatibility
+        // Legacy storage for backward compatibility
         if (sanitizedUpdates.bio !== undefined) {
-          sessionStorage.setItem(`profile_bio_${sanitizedUsername}`, sanitizedUpdates.bio);
+          sessionStorage.setItem(`profile_bio_${sanitizedUsername}`, toStringSafe(sanitizedUpdates.bio, ''));
         }
         if (sanitizedUpdates.profilePic !== undefined) {
           if (sanitizedUpdates.profilePic) {
-            sessionStorage.setItem(`profile_pic_${sanitizedUsername}`, sanitizedUpdates.profilePic);
+            sessionStorage.setItem(
+              `profile_pic_${sanitizedUsername}`,
+              toStringSafe(sanitizedUpdates.profilePic, ''),
+            );
           } else {
             sessionStorage.removeItem(`profile_pic_${sanitizedUsername}`);
           }
         }
         if (sanitizedUpdates.subscriptionPrice !== undefined) {
-          sessionStorage.setItem(`subscription_price_${sanitizedUsername}`, sanitizedUpdates.subscriptionPrice);
+          sessionStorage.setItem(
+            `subscription_price_${sanitizedUsername}`,
+            toPriceString(sanitizedUpdates.subscriptionPrice),
+          );
         }
         if (sanitizedUpdates.galleryImages !== undefined) {
-          localStorage.setItem(`profile_gallery_${sanitizedUsername}`, JSON.stringify(sanitizedUpdates.galleryImages));
+          localStorage.setItem(
+            `profile_gallery_${sanitizedUsername}`,
+            JSON.stringify(sanitizedUpdates.galleryImages || []),
+          );
         }
 
         // Update user bio in all_users_v2 if needed
         if (sanitizedUpdates.bio !== undefined) {
-          const allUsers = await storageService.getItem<Record<string, any>>(
-            'all_users_v2',
-            {}
-          );
+          const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
           if (allUsers[sanitizedUsername]) {
             allUsers[sanitizedUsername].bio = sanitizedUpdates.bio;
             await storageService.setItem('all_users_v2', allUsers);
@@ -825,10 +849,10 @@ export class EnhancedUsersService {
       }
     } catch (error) {
       console.error('Update user profile error:', error);
-      
+
       // Revert optimistic update on error
       this.profileCache.delete(username);
-      
+
       return {
         success: false,
         error: {
@@ -845,7 +869,7 @@ export class EnhancedUsersService {
   async getUserPreferences(username: string): Promise<ApiResponse<UserPreferences>> {
     try {
       console.log('[EnhancedUsersService.getUserPreferences] Getting preferences for:', username);
-      
+
       // Validate username
       if (!username || !isValidUsername(username)) {
         console.error('[EnhancedUsersService.getUserPreferences] Invalid username:', username);
@@ -878,25 +902,26 @@ export class EnhancedUsersService {
       };
 
       if (FEATURES.USE_API_USERS) {
-        // Build the preferences URL directly
-        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/settings/preferences`;
+        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(
+          sanitizedUsername,
+        )}/settings/preferences`;
         console.log('[EnhancedUsersService.getUserPreferences] API URL:', preferencesUrl);
-        
+
         const response = await apiCall<UserPreferences>(preferencesUrl);
-        
+
         // If endpoint doesn't exist (404), return default preferences
         if (!response.success && (response.error?.code === '404' || response.error?.code === 'INVALID_CONTENT_TYPE')) {
           console.log('[EnhancedUsersService.getUserPreferences] Endpoint not found, using defaults');
           return { success: true, data: defaultPreferences };
         }
-        
+
         return response;
       }
 
       // LocalStorage implementation
       const preferencesData = await storageService.getItem<Record<string, UserPreferences>>(
         'user_preferences',
-        {}
+        {},
       );
 
       const preferences = preferencesData[sanitizedUsername] || defaultPreferences;
@@ -922,7 +947,7 @@ export class EnhancedUsersService {
           language: 'en',
           currency: 'USD',
           timezone: 'UTC',
-        }
+        },
       };
     }
   }
@@ -932,7 +957,7 @@ export class EnhancedUsersService {
    */
   async updateUserPreferences(
     username: string,
-    updates: Partial<UserPreferences>
+    updates: Partial<UserPreferences>,
   ): Promise<ApiResponse<UserPreferences>> {
     try {
       // Validate username
@@ -963,9 +988,10 @@ export class EnhancedUsersService {
       const sanitizedUpdates = validation.data!;
 
       if (FEATURES.USE_API_USERS) {
-        // Build the preferences URL directly
-        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/settings/preferences`;
-        
+        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(
+          sanitizedUsername,
+        )}/settings/preferences`;
+
         return await apiCall<UserPreferences>(preferencesUrl, {
           method: 'PATCH',
           body: JSON.stringify(sanitizedUpdates),
@@ -975,7 +1001,7 @@ export class EnhancedUsersService {
       // LocalStorage implementation
       const preferencesData = await storageService.getItem<Record<string, UserPreferences>>(
         'user_preferences',
-        {}
+        {},
       );
 
       const currentPreferences = preferencesData[sanitizedUsername] || {
@@ -1042,18 +1068,18 @@ export class EnhancedUsersService {
           method: 'POST',
           body: JSON.stringify(sanitizedActivity),
         });
-        
+
         // Silently fail if endpoint doesn't exist
         if (!response.success && (response.error?.code === '404' || response.error?.code === 'INVALID_CONTENT_TYPE')) {
           return { success: true };
         }
-        
+
         return response;
       }
 
       // LocalStorage implementation
       const activities = await storageService.getItem<UserActivity[]>('user_activities', []);
-      
+
       const newActivity: UserActivity = {
         ...sanitizedActivity,
         id: `activity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1061,7 +1087,7 @@ export class EnhancedUsersService {
       };
 
       activities.push(newActivity);
-      
+
       // Keep only last N activities
       if (activities.length > SECURITY_LIMITS.MAX_ACTIVITY_HISTORY) {
         activities.splice(0, activities.length - SECURITY_LIMITS.MAX_ACTIVITY_HISTORY);
@@ -1080,10 +1106,7 @@ export class EnhancedUsersService {
   /**
    * Get user activity history
    */
-  async getUserActivity(
-    username: string,
-    limit: number = 50
-  ): Promise<ApiResponse<UserActivity[]>> {
+  async getUserActivity(username: string, limit: number = 50): Promise<ApiResponse<UserActivity[]>> {
     try {
       // Validate username
       if (!username || !isValidUsername(username)) {
@@ -1100,17 +1123,18 @@ export class EnhancedUsersService {
       const sanitizedLimit = Math.min(Math.max(1, limit), SECURITY_LIMITS.MAX_PAGE_SIZE);
 
       if (FEATURES.USE_API_USERS) {
-        // Build the activity URL directly
-        const activityUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile/activity?limit=${sanitizedLimit}`;
-        
+        const activityUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(
+          sanitizedUsername,
+        )}/profile/activity?limit=${sanitizedLimit}`;
+
         return await apiCall<UserActivity[]>(activityUrl);
       }
 
       // LocalStorage implementation
       const activities = await storageService.getItem<UserActivity[]>('user_activities', []);
-      
+
       const userActivities = activities
-        .filter(activity => activity.userId === sanitizedUsername)
+        .filter((a) => a.userId === sanitizedUsername)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, sanitizedLimit);
 
@@ -1130,15 +1154,13 @@ export class EnhancedUsersService {
   /**
    * Batch update users (admin only)
    */
-  async batchUpdateUsers(
-    updates: BatchUserUpdate[]
-  ): Promise<ApiResponse<BatchOperationResult>> {
+  async batchUpdateUsers(updates: BatchUserUpdate[]): Promise<ApiResponse<BatchOperationResult>> {
     try {
-      // Check rate limit
-      const rateLimitResult = this.rateLimiter.check(
-        'batch_update',
-        { maxAttempts: 5, windowMs: 60 * 60 * 1000 } // 5 batch updates per hour
-      );
+      // Rate limit
+      const rateLimitResult = this.rateLimiter.check('batch_update', {
+        maxAttempts: 5,
+        windowMs: 60 * 60 * 1000,
+      });
       if (!rateLimitResult.allowed) {
         return {
           success: false,
@@ -1166,10 +1188,10 @@ export class EnhancedUsersService {
         if (!isValidUsername(update.username)) {
           continue;
         }
-        
+
         const sanitizedUsername = sanitizeUsername(update.username);
         const sanitizedUpdates = this.sanitizeUserData(update.updates as User);
-        
+
         validatedUpdates.push({
           username: sanitizedUsername,
           updates: sanitizedUpdates,
@@ -1184,10 +1206,7 @@ export class EnhancedUsersService {
       }
 
       // LocalStorage implementation
-      const allUsers = await storageService.getItem<Record<string, any>>(
-        'all_users_v2',
-        {}
-      );
+      const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
 
       const result: BatchOperationResult = {
         succeeded: [],
@@ -1210,10 +1229,10 @@ export class EnhancedUsersService {
               error: 'User not found',
             });
           }
-        } catch (error) {
+        } catch (error: any) {
           result.failed.push({
             username: update.username,
-            error: error instanceof Error ? error.message : 'Update failed',
+            error: error?.message || 'Update failed',
           });
         }
       }
@@ -1238,16 +1257,13 @@ export class EnhancedUsersService {
   /**
    * Request verification with file validation
    */
-  async requestVerification(
-    username: string,
-    docs: VerificationRequest
-  ): Promise<ApiResponse<void>> {
+  async requestVerification(username: string, docs: VerificationRequest): Promise<ApiResponse<void>> {
     try {
-      // Check rate limit
-      const rateLimitResult = this.rateLimiter.check(
-        `verification_${username}`,
-        { maxAttempts: 3, windowMs: 24 * 60 * 60 * 1000 } // 3 requests per day
-      );
+      // Rate limit
+      const rateLimitResult = this.rateLimiter.check(`verification_${username}`, {
+        maxAttempts: 3,
+        windowMs: 24 * 60 * 60 * 1000,
+      });
       if (!rateLimitResult.allowed) {
         return {
           success: false,
@@ -1307,9 +1323,8 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        // Build verification URL directly
         const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/verification`;
-        
+
         return await apiCall<void>(url, {
           method: 'POST',
           body: JSON.stringify(sanitizedDocs),
@@ -1317,17 +1332,14 @@ export class EnhancedUsersService {
       }
 
       // LocalStorage implementation
-      const allUsers = await storageService.getItem<Record<string, any>>(
-        'all_users_v2',
-        {}
-      );
+      const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
 
       if (allUsers[sanitizedUsername]) {
         allUsers[sanitizedUsername].verificationStatus = 'pending';
         allUsers[sanitizedUsername].verificationRequestedAt = new Date().toISOString();
         allUsers[sanitizedUsername].verificationDocs = sanitizedDocs;
         await storageService.setItem('all_users_v2', allUsers);
-        
+
         // Clear user cache
         this.userCache.delete(sanitizedUsername);
       }
@@ -1335,15 +1347,15 @@ export class EnhancedUsersService {
       // Store verification request
       const verificationRequests = await storageService.getItem<Record<string, any>>(
         'panty_verification_requests',
-        {}
+        {},
       );
-      
+
       verificationRequests[sanitizedUsername] = {
         ...sanitizedDocs,
         requestedAt: new Date().toISOString(),
         status: 'pending',
       };
-      
+
       await storageService.setItem('panty_verification_requests', verificationRequests);
 
       // Track activity
@@ -1369,10 +1381,7 @@ export class EnhancedUsersService {
   /**
    * Get subscription status with caching
    */
-  async getSubscriptionStatus(
-    buyer: string,
-    seller: string
-  ): Promise<ApiResponse<SubscriptionInfo | null>> {
+  async getSubscriptionStatus(buyer: string, seller: string): Promise<ApiResponse<SubscriptionInfo | null>> {
     try {
       // Validate usernames
       if (!isValidUsername(buyer) || !isValidUsername(seller)) {
@@ -1387,37 +1396,37 @@ export class EnhancedUsersService {
 
       const sanitizedBuyer = sanitizeUsername(buyer);
       const sanitizedSeller = sanitizeUsername(seller);
-      
+
       const cacheKey = `sub:${sanitizedBuyer}:${sanitizedSeller}`;
       const cached = this.listCache.get(cacheKey);
-      
+
       if (cached && cached.expiresAt > Date.now()) {
         return { success: true, data: cached.data };
       }
 
       if (FEATURES.USE_API_USERS) {
         const response = await apiCall<SubscriptionInfo>(
-          `${API_ENDPOINTS.SUBSCRIPTIONS.CHECK}?buyer=${sanitizedBuyer}&seller=${sanitizedSeller}`
+          `${API_ENDPOINTS.SUBSCRIPTIONS.CHECK}?buyer=${sanitizedBuyer}&seller=${sanitizedSeller}`,
         );
-        
+
         if (response.success && response.data) {
           this.listCache.set(cacheKey, {
             data: response.data,
             expiresAt: Date.now() + CACHE_CONFIG.LIST_TTL,
           });
         }
-        
+
         return response;
       }
 
       // LocalStorage implementation
       const subscriptions = await storageService.getItem<Record<string, SubscriptionInfo[]>>(
         'user_subscriptions',
-        {}
+        {},
       );
 
       const buyerSubs = subscriptions[sanitizedBuyer] || [];
-      const subscription = buyerSubs.find(sub => sub.seller === sanitizedSeller);
+      const subscription = buyerSubs.find((sub) => sub.seller === sanitizedSeller) || null;
 
       if (subscription) {
         this.listCache.set(cacheKey, {
@@ -1428,7 +1437,7 @@ export class EnhancedUsersService {
 
       return {
         success: true,
-        data: subscription || null,
+        data: subscription,
       };
     } catch (error) {
       console.error('Get subscription status error:', error);
@@ -1457,42 +1466,55 @@ export class EnhancedUsersService {
   private sanitizeUserData(user: any): User {
     return {
       ...user,
-      username: user.username ? sanitizeUsername(user.username) : '',
-      email: user.email ? sanitizeEmail(user.email) : undefined,
-      bio: user.bio ? sanitizeStrict(user.bio) : undefined,
-      banReason: user.banReason ? sanitizeStrict(user.banReason) : undefined,
-      verificationRejectionReason: user.verificationRejectionReason ? sanitizeStrict(user.verificationRejectionReason) : undefined,
+      username: user?.username ? sanitizeUsername(user.username) : '',
+      email: user?.email ? sanitizeEmail(user.email) : undefined,
+      bio: user?.bio ? sanitizeStrict(user.bio) : undefined,
+      banReason: user?.banReason ? sanitizeStrict(user.banReason) : undefined,
+      verificationRejectionReason: user?.verificationRejectionReason
+        ? sanitizeStrict(user.verificationRejectionReason)
+        : undefined,
     };
   }
 
   /**
-   * Sanitize profile data
+   * Sanitize profile data (guarantees subscriptionPrice is a string)
    */
   private sanitizeProfileData(profile: any): UserProfile {
     // Handle undefined or null profile
-    if (!profile) {
-      return {
-        bio: '',
-        profilePic: null,
-        subscriptionPrice: '0',
-        galleryImages: [],
-      };
-    }
+    const p = profile || {};
+
+    const rawPic = p.profilePic ?? p.profilePicture ?? null;
+    const profilePic = sanitizeUrlOrNull(rawPic);
+
+    const priceStr = toPriceString(p.subscriptionPrice ?? '0');
+
+    const galleryImages: string[] = Array.isArray(p.galleryImages)
+      ? (p.galleryImages
+          .map((u: any) => (typeof u === 'string' ? sanitizeUrl(u) : null))
+          .filter(Boolean) as string[])
+      : [];
+
+    const socialLinks = p.socialLinks
+      ? {
+          twitter: sanitizeUrlOrUndefined(p.socialLinks.twitter),
+          instagram: sanitizeUrlOrUndefined(p.socialLinks.instagram),
+          tiktok: sanitizeUrlOrUndefined(p.socialLinks.tiktok),
+          website: sanitizeUrlOrUndefined(p.socialLinks.website),
+        }
+      : undefined;
 
     return {
-      bio: sanitizeStrict(profile.bio || ''),
-      profilePic: profile.profilePic ? sanitizeUrl(profile.profilePic) : null,
-      subscriptionPrice: profile.subscriptionPrice || '0',
-      galleryImages: profile.galleryImages?.map((url: string) => sanitizeUrl(url)).filter(Boolean) as string[] || [],
-      socialLinks: profile.socialLinks ? {
-        twitter: profile.socialLinks.twitter ? sanitizeUrl(profile.socialLinks.twitter) : undefined,
-        instagram: profile.socialLinks.instagram ? sanitizeUrl(profile.socialLinks.instagram) : undefined,
-        tiktok: profile.socialLinks.tiktok ? sanitizeUrl(profile.socialLinks.tiktok) : undefined,
-        website: profile.socialLinks.website ? sanitizeUrl(profile.socialLinks.website) : undefined,
-      } : undefined,
-      completeness: profile.completeness,
-      lastUpdated: profile.lastUpdated,
+      bio: sanitizeStrict(p.bio || ''),
+      profilePic,
+      subscriptionPrice: priceStr, // <- always string
+      galleryImages,
+      socialLinks,
+      completeness: p.completeness,
+      lastUpdated: p.lastUpdated,
+      preferences: p.preferences,
+      stats: p.stats,
     };
+    // NOTE: UserProfile typing is satisfied: subscriptionPrice is string, others match optional fields.
   }
 }
 

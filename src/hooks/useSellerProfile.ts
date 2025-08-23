@@ -17,8 +17,8 @@ const subscriptionService = {
     try {
       const response = await fetch(`${API_BASE_URL}/api/subscriptions/check/${username}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        }
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
       });
       return await response.json();
     } catch (error) {
@@ -26,16 +26,16 @@ const subscriptionService = {
       return { success: false, data: { hasAccess: false } };
     }
   },
-  
+
   async subscribe(username: string) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/subscriptions/subscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({ seller: username })
+        body: JSON.stringify({ seller: username }),
       });
       return await response.json();
     } catch (error) {
@@ -43,29 +43,47 @@ const subscriptionService = {
       return { success: false };
     }
   },
-  
+
   async unsubscribe(username: string) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/subscriptions/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({ seller: username })
+        body: JSON.stringify({ seller: username }),
       });
       return await response.json();
     } catch (error) {
       console.error('Unsubscribe error:', error);
       return { success: false };
     }
-  }
+  },
 };
+
+// Helper to normalize an image URL (supports relative /uploads/*)
+function normalizeImageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
+  return sanitizeUrl(url);
+}
+
+// Safely extract a profile object from various backend shapes
+function coerceProfileData(profileRespData: any): any {
+  // Shape A: { profile, user }
+  if (profileRespData && typeof profileRespData === 'object' && 'profile' in profileRespData) {
+    return profileRespData.profile;
+  }
+  // Shape B: plain profile object
+  return profileRespData;
+}
 
 export function useSellerProfile(username: string) {
   const { user, token } = useAuth();
   const { orderHistory } = useWallet();
-  
+
   // Profile data
   const [sellerUser, setSellerUser] = useState<any>(null);
   const [bio, setBio] = useState('');
@@ -74,29 +92,29 @@ export function useSellerProfile(username: string) {
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isVerified, setIsVerified] = useState(false);
   const [sellerTierInfo, setSellerTierInfo] = useState<TierInfo | null>(null);
-  
+
   // Stats
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [totalVideos] = useState(0);
   const [followers, setFollowers] = useState(0);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
-  
+
   // Listings
   const [standardListings, setStandardListings] = useState<any[]>([]);
   const [premiumListings, setPremiumListings] = useState<any[]>([]);
-  
+
   // Access control
   const [hasAccess, setHasAccess] = useState<boolean | undefined>(undefined);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  
+
   // Slideshow state
   const [slideIndex, setSlideIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const slideshowRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Modal states
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
@@ -105,7 +123,7 @@ export function useSellerProfile(username: string) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
-  
+
   // Form states
   const [tipAmount, setTipAmount] = useState('');
   const [tipSuccess, setTipSuccess] = useState(false);
@@ -120,9 +138,9 @@ export function useSellerProfile(username: string) {
       if (!username) return;
 
       try {
-        // Fetch user profile with gallery from backend
-        let userData = null;
-        let profileData = null;
+        // Use explicit any to avoid strict inference from service types
+        let userData: any = null;
+        let profileData: any = null;
         let gallery: string[] = [];
 
         // Try backend first
@@ -130,30 +148,20 @@ export function useSellerProfile(username: string) {
           try {
             const response = await fetch(`${API_BASE_URL}/api/users/${username}/profile/full`, {
               headers: {
-                'Authorization': `Bearer ${token}`,
-              }
+                Authorization: `Bearer ${token}`,
+              },
             });
 
             if (response.ok) {
               const result = await response.json();
               if (result.success && result.data) {
                 userData = result.data;
-                
+
                 // Extract gallery images and convert URLs
                 if (userData.galleryImages && Array.isArray(userData.galleryImages)) {
                   gallery = userData.galleryImages
-                    .map((url: string) => {
-                      // Handle both relative and absolute URLs
-                      if (url.startsWith('http://') || url.startsWith('https://')) {
-                        return url;
-                      } else if (url.startsWith('/uploads/')) {
-                        // Convert relative upload paths to full URLs
-                        return `${API_BASE_URL}${url}`;
-                      } else {
-                        return sanitizeUrl(url);
-                      }
-                    })
-                    .filter((url: string | null): url is string => url !== null && url !== '');
+                    .map((url: string) => normalizeImageUrl(url))
+                    .filter((u: string | null): u is string => !!u);
                 }
               }
             }
@@ -164,28 +172,20 @@ export function useSellerProfile(username: string) {
 
         // Fallback to service if backend fails
         if (!userData) {
-          const userResult = await usersService.getUser(username);
-          if (userResult.success && userResult.data) {
+          const userResult: any = await usersService.getUser(username);
+          if (userResult?.success && userResult.data) {
             userData = userResult.data;
-            
-            // Get profile data separately
-            const profileResult = await usersService.getUserProfile(username);
-            if (profileResult.success && profileResult.data) {
-              profileData = profileResult.data;
-              
+
+            // Get profile data separately (can be {profile, user} or just profile)
+            const profileResult: any = await usersService.getUserProfile(username);
+            if (profileResult?.success && profileResult.data) {
+              profileData = coerceProfileData(profileResult.data);
+
               // Extract gallery from profile
               if (profileData.galleryImages && Array.isArray(profileData.galleryImages)) {
                 gallery = profileData.galleryImages
-                  .map((url: string) => {
-                    if (url.startsWith('http://') || url.startsWith('https://')) {
-                      return url;
-                    } else if (url.startsWith('/uploads/')) {
-                      return `${API_BASE_URL}${url}`;
-                    } else {
-                      return sanitizeUrl(url);
-                    }
-                  })
-                  .filter((url: string | null): url is string => url !== null && url !== '');
+                  .map((url: string) => normalizeImageUrl(url))
+                  .filter((u: string | null): u is string => !!u);
               }
             }
           }
@@ -198,15 +198,32 @@ export function useSellerProfile(username: string) {
 
         // Set user data
         setSellerUser(userData);
-        setBio(userData.bio || profileData?.bio || '');
-        setProfilePic(userData.profilePic || profileData?.profilePic || null);
-        setSubscriptionPrice(
-          parseFloat(userData.subscriptionPrice || profileData?.subscriptionPrice || '0') || null
-        );
+
+        // Bio: prefer profile.bio, fallback to user.bio
+        setBio(profileData?.bio ?? userData.bio ?? '');
+
+        // Resolve profile picture with robust fallbacks
+        const resolvedPic =
+          userData?.profilePicture ??
+          profileData?.profilePicture ??
+          profileData?.profilePic ??
+          userData?.profilePic ??
+          null;
+
+        setProfilePic(normalizeImageUrl(resolvedPic));
+
+        // Resolve subscription price (string -> number)
+        const rawPrice =
+          userData?.subscriptionPrice ??
+          profileData?.subscriptionPrice ??
+          '0';
+        const parsedPrice = parseFloat(String(rawPrice));
+        setSubscriptionPrice(Number.isFinite(parsedPrice) ? parsedPrice : null);
+
         setGalleryImages(gallery);
-        setIsVerified(userData.isVerified || false);
+        setIsVerified(Boolean(userData.isVerified));
         setFollowers(userData.subscriberCount || 0);
-        setAverageRating(userData.rating || null);
+        setAverageRating(userData.rating ?? null);
 
         // Calculate tier info using getSellerTierMemoized
         const tierInfo = getSellerTierMemoized(username, orderHistory);
@@ -218,7 +235,7 @@ export function useSellerProfile(username: string) {
           const listings = listingsResult.data;
           setStandardListings(listings.filter((l: any) => !l.isPremium));
           setPremiumListings(listings.filter((l: any) => l.isPremium));
-          
+
           // Calculate total photos (gallery + listing images)
           setTotalPhotos(gallery.length + listings.length);
         }
@@ -231,12 +248,12 @@ export function useSellerProfile(username: string) {
           setHasAccess(true);
         }
 
-        // Fetch reviews using the correct method name
+        // Fetch reviews
         const reviewsResult = await reviewsService.getSellerReviews(username);
         if (reviewsResult.success && reviewsResult.data) {
           setReviews(reviewsResult.data.reviews || []);
           setAverageRating(reviewsResult.data.stats?.avgRating || null);
-          
+
           // Check if current user has already reviewed
           if (user?.username) {
             const userReview = reviewsResult.data.reviews.find(
@@ -247,19 +264,18 @@ export function useSellerProfile(username: string) {
         }
 
         // Check if user has purchased from seller (for review eligibility)
-        // Find an order from this seller that the current user made
         if (user?.username && orderHistory.length > 0) {
           const userOrder = orderHistory.find(
-            order => order.seller === username && 
-                     order.buyer === user.username && 
-                     order.shippingStatus === 'shipped' // Use shippingStatus instead of status
+            (order) =>
+              order.seller === username &&
+              order.buyer === user.username &&
+              order.shippingStatus === 'shipped'
           );
           if (userOrder) {
             setHasPurchased(true);
-            setCurrentOrderId(userOrder.id); // Order type always has 'id' field
+            setCurrentOrderId(userOrder.id);
           }
         }
-
       } catch (error) {
         console.error('Error fetching seller profile:', error);
       }
@@ -272,10 +288,10 @@ export function useSellerProfile(username: string) {
   useEffect(() => {
     if (galleryImages.length > 1 && !isPaused && !showGalleryModal) {
       slideshowRef.current = setInterval(() => {
-        setSlideIndex(prevIndex => (prevIndex + 1) % galleryImages.length);
+        setSlideIndex((prevIndex) => (prevIndex + 1) % galleryImages.length);
       }, 4000);
     }
-    
+
     return () => {
       if (slideshowRef.current) {
         clearInterval(slideshowRef.current);
@@ -342,21 +358,19 @@ export function useSellerProfile(username: string) {
     }
 
     try {
-      // Use the correct CreateReviewRequest structure
       const result = await reviewsService.createReview({
         orderId: currentOrderId,
         rating,
         comment: comment.trim(),
         asDescribed: true,
         fastShipping: true,
-        wouldBuyAgain: true
+        wouldBuyAgain: true,
       });
-      
+
       if (result.success) {
         setSubmitted(true);
         setAlreadyReviewed(true);
-        
-        // Refresh reviews using the correct method name
+
         const reviewsResult = await reviewsService.getSellerReviews(username);
         if (reviewsResult.success && reviewsResult.data) {
           setReviews(reviewsResult.data.reviews || []);
@@ -397,19 +411,19 @@ export function useSellerProfile(username: string) {
 
   const togglePause = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setIsPaused(prev => !prev);
+    setIsPaused((prev) => !prev);
   };
 
   const goToPrevSlide = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSlideIndex(prevIndex => (prevIndex - 1 + galleryImages.length) % galleryImages.length);
+    setSlideIndex((prevIndex) => (prevIndex - 1 + galleryImages.length) % galleryImages.length);
     setIsPaused(true);
     setTimeout(() => setIsPaused(false), 5000);
   };
-  
+
   const goToNextSlide = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSlideIndex(prevIndex => (prevIndex + 1) % galleryImages.length);
+    setSlideIndex((prevIndex) => (prevIndex + 1) % galleryImages.length);
     setIsPaused(true);
     setTimeout(() => setIsPaused(false), 5000);
   };
@@ -419,34 +433,34 @@ export function useSellerProfile(username: string) {
     user,
     sellerUser,
     isVerified,
-    
+
     // Profile data
     bio,
     profilePic,
     subscriptionPrice,
     galleryImages,
     sellerTierInfo,
-    
+
     // Stats
     totalPhotos,
     totalVideos,
     followers,
     averageRating,
     reviews,
-    
+
     // Listings
     standardListings,
     premiumListings,
-    
+
     // Access control
     hasAccess,
     hasPurchased,
     alreadyReviewed,
-    
+
     // Slideshow
     slideIndex,
     isPaused,
-    
+
     // Modals
     showSubscribeModal,
     showUnsubscribeModal,
@@ -455,7 +469,7 @@ export function useSellerProfile(username: string) {
     selectedImage,
     currentImageIndex,
     showToast,
-    
+
     // Form state
     tipAmount,
     tipSuccess,
@@ -463,7 +477,7 @@ export function useSellerProfile(username: string) {
     rating,
     comment,
     submitted,
-    
+
     // Handlers
     setShowSubscribeModal,
     setShowUnsubscribeModal,

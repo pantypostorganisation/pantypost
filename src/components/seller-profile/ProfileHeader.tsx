@@ -30,6 +30,19 @@ interface ProfileHeaderProps {
   onToggleFavorite?: () => void;
 }
 
+/**
+ * Resolve relative URLs like "/uploads/xyz.jpg" to absolute backend URLs
+ * using NEXT_PUBLIC_API_BASE_URL. Handles cases where that env includes `/api`.
+ */
+function resolveUrl(path?: string | null): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path; // already absolute
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
+  const baseHost = apiBase.replace(/\/api\/?$/, '').replace(/\/$/, ''); // strip /api and trailing slash
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${baseHost}${normalized}`;
+}
+
 export default function ProfileHeader({
   username,
   profilePic,
@@ -61,19 +74,18 @@ export default function ProfileHeader({
     hasAccess;
 
   const sanitizedUsername = sanitizeStrict(username);
-  
+
   // Get user activity status using the hook
   const { activityStatus, loading: activityLoading } = useUserActivityStatus(username);
-  
+
   // Format the activity status for display
   const getActivityDisplay = () => {
     if (activityLoading) {
       return 'Loading...';
     }
-    
     return formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
   };
-  
+
   // Determine the status badge color and text based on activity
   const getStatusBadge = () => {
     if (activityLoading) {
@@ -83,7 +95,7 @@ export default function ProfileHeader({
         </span>
       );
     }
-    
+
     if (activityStatus.isOnline) {
       return (
         <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
@@ -91,8 +103,7 @@ export default function ProfileHeader({
         </span>
       );
     }
-    
-    // For offline users, show when they were last active
+
     const activityText = formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
     return (
       <span className="flex items-center gap-1 text-xs bg-gray-600 text-white px-2 py-1 rounded-full font-bold shadow">
@@ -100,6 +111,9 @@ export default function ProfileHeader({
       </span>
     );
   };
+
+  // Resolve profile picture URL so it loads correctly from backend when on :3000
+  const resolvedProfilePic = resolveUrl(profilePic);
 
   return (
     <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative overflow-visible">
@@ -115,9 +129,9 @@ export default function ProfileHeader({
           aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           type="button"
         >
-          <Heart 
-            size={20} 
-            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400 group-hover:text-gray-300'} 
+          <Heart
+            size={20}
+            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400 group-hover:text-gray-300'}
             style={{ pointerEvents: 'none' }}
           />
         </button>
@@ -127,9 +141,10 @@ export default function ProfileHeader({
       <div className="flex flex-col items-center relative mb-6 w-full">
         {/* Profile Picture - Centered */}
         <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative z-10">
-          {profilePic ? (
+          {resolvedProfilePic ? (
+            // Absolute URL ensures the image comes from the backend host (:5000) not the FE dev server (:3000)
             <img
-              src={profilePic}
+              src={resolvedProfilePic}
               alt={`${sanitizedUsername}'s profile`}
               className="w-full h-full object-cover"
             />
@@ -138,13 +153,13 @@ export default function ProfileHeader({
               {sanitizedUsername ? sanitizedUsername.charAt(0).toUpperCase() : '?'}
             </div>
           )}
-          
+
           {/* Online indicator - bottom left of profile picture */}
           {activityStatus.isOnline && !activityLoading && (
             <div className="absolute bottom-2 left-2 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1a1a1a] z-20" />
           )}
         </div>
-        
+
         {/* Badge positioned absolutely to the right of profile pic - with lower z-index */}
         {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
           <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2 z-10">
@@ -152,7 +167,7 @@ export default function ProfileHeader({
           </div>
         )}
       </div>
-      
+
       <div className="flex flex-col items-center text-center mb-6">
         <div className="flex items-center justify-center gap-3 mb-2">
           <span className="text-2xl sm:text-3xl font-bold text-white">{sanitizedUsername}</span>
@@ -178,14 +193,14 @@ export default function ProfileHeader({
         <div className="text-sm text-gray-400 mb-1">Location: Private</div>
         <div className="text-sm text-gray-400 mb-3">{getActivityDisplay()}</div>
         <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
-          <SecureMessageDisplay 
+          <SecureMessageDisplay
             content={bio || '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'}
             allowBasicFormatting={false}
             maxLength={500}
           />
         </div>
       </div>
-      
+
       <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
         <div className="flex flex-col items-center">
           <Camera className="w-6 h-6 text-[#ff950e] mb-1" />
@@ -224,7 +239,10 @@ export default function ProfileHeader({
             className="flex items-center gap-2 bg-[#ff950e] text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-[#e0850d] transition text-base"
           >
             <DollarSign className="w-5 h-5" />
-            Subscribe {subscriptionPrice ? `($${subscriptionPrice.toFixed(2)}/mo)` : ''}
+            {/* Guard display if the page still passes zero temporarily */}
+            {typeof subscriptionPrice === 'number' && subscriptionPrice > 0
+              ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
+              : 'Subscribe'}
           </button>
         )}
         {showUnsubscribeButton && (

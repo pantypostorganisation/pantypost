@@ -2,7 +2,7 @@
 
 import { User } from '@/context/AuthContext';
 import { storageService } from './storage.service';
-import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient } from './api.config';
+import { FEATURES, API_ENDPOINTS, buildApiUrl, apiCall, ApiResponse, apiClient, API_BASE_URL } from './api.config';
 import { enhancedUsersService } from './users.service.enhanced';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
@@ -23,10 +23,13 @@ import {
 // Re-export types for backward compatibility
 export type VerificationStatus = 'pending' | 'verified' | 'rejected' | 'unverified';
 
+// NOTE: Normalize to what the UI expects:
+// - subscriptionPrice: number (not string)
+// - profilePic/galleryImages: absolute URLs
 export interface UserProfile {
   bio: string;
   profilePic: string | null;
-  subscriptionPrice: string;
+  subscriptionPrice: number; // <-- normalized to number for UI reliability
   lastUpdated?: string;
   galleryImages?: string[];
 }
@@ -34,6 +37,8 @@ export interface UserProfile {
 export interface UpdateProfileRequest {
   bio?: string;
   profilePic?: string | null;
+  // Keep request as string for backward-compatibility with existing callers;
+  // backend accepts number; enhanced layer handles conversion.
   subscriptionPrice?: string;
   galleryImages?: string[];
 }
@@ -67,6 +72,36 @@ export interface BanRequest {
   adminUsername: string;
 }
 
+// ---------- Helpers to normalize API data for UI ----------
+
+/** Base host for non-API assets (e.g., /uploads/*). */
+const BASE_HOST = (() => {
+  try {
+    // API_BASE_URL can be "http://localhost:5000" or "http://localhost:5000/api"
+    return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
+  } catch {
+    return 'http://localhost:5000';
+  }
+})();
+
+/** Make a URL absolute if it's relative like "/uploads/xyz.jpg" */
+function toAbsoluteUrl(path?: string | null): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path; // already absolute
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${BASE_HOST}${normalized}`;
+}
+
+/** Normalize subscription price (string|number|null|undefined) -> number */
+function toPriceNumber(value: unknown): number {
+  if (typeof value === 'number' && isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const n = parseFloat(value);
+    return isFinite(n) && !Number.isNaN(n) ? n : 0;
+  }
+  return 0;
+}
+
 // Validation schemas
 const verificationUpdateSchema = z.object({
   status: z.enum(['pending', 'verified', 'rejected', 'unverified']),
@@ -83,9 +118,7 @@ const banRequestSchema = z.object({
 
 /**
  * Users Service - Enhanced Version with Backward Compatibility
- * 
- * This service now uses the enhanced implementation while maintaining
- * the same API for backward compatibility.
+ * Normalizes API responses so UI components always receive correct shapes.
  */
 export class UsersService {
   private enhanced = enhancedUsersService;
@@ -96,7 +129,6 @@ export class UsersService {
    */
   async getUsers(params?: UserSearchParams): Promise<ApiResponse<Record<string, User>>> {
     try {
-      // Convert params to enhanced format
       const enhancedParams: EnhancedUserSearchParams = {
         ...params,
         sortBy: 'username',
@@ -104,12 +136,10 @@ export class UsersService {
       };
 
       const result = await this.enhanced.getUsers(enhancedParams);
-      
       if (!result.success) {
         return result as any;
       }
 
-      // Convert UsersResponse to Record<string, User> for backward compatibility
       const usersMap: Record<string, User> = {};
       if (result.data?.users) {
         result.data.users.forEach(user => {
@@ -138,12 +168,14 @@ export class UsersService {
   }
 
   /**
-   * Get user profile data
+   * Get user profile data (PUBLIC profile)
+   * - Ensure price is number
+   * - Ensure images are absolute URLs so they display on the seller profile page
    */
   async getUserProfile(username: string): Promise<ApiResponse<UserProfile | null>> {
     try {
       const result = await this.enhanced.getUserProfile(username);
-      
+
       if (!result.success) {
         return result as any;
       }
@@ -152,13 +184,16 @@ export class UsersService {
         return { success: true, data: null };
       }
 
-      // Extract just the profile part for backward compatibility
+      const raw = result.data.profile;
+
       const profile: UserProfile = {
-        bio: result.data.profile.bio,
-        profilePic: result.data.profile.profilePic,
-        subscriptionPrice: result.data.profile.subscriptionPrice,
-        lastUpdated: result.data.profile.lastUpdated,
-        galleryImages: result.data.profile.galleryImages,
+        bio: raw.bio,
+        profilePic: toAbsoluteUrl(raw.profilePic),
+        subscriptionPrice: toPriceNumber(raw.subscriptionPrice),
+        lastUpdated: raw.lastUpdated,
+        galleryImages: Array.isArray(raw.galleryImages)
+          ? (raw.galleryImages.map(p => toAbsoluteUrl(p)!).filter(Boolean) as string[])
+          : undefined,
       };
 
       return { success: true, data: profile };
@@ -173,47 +208,40 @@ export class UsersService {
 
   /**
    * Update user profile
+   * - Normalize the returned data to UI shapes (number price + absolute URLs)
    */
   async updateUserProfile(
     username: string,
     updates: UpdateProfileRequest
   ): Promise<ApiResponse<UserProfile>> {
     try {
-      // Validate inputs using enhanced validation
       if (!isValidUsername(username)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
+        return { success: false, error: { message: 'Invalid username format' } };
       }
 
       if (updates.bio !== undefined && !isValidBio(updates.bio)) {
-        return {
-          success: false,
-          error: { message: 'Bio is too long (max 500 characters)' },
-        };
+        return { success: false, error: { message: 'Bio is too long (max 500 characters)' } };
       }
 
       if (updates.subscriptionPrice !== undefined && !isValidSubscriptionPrice(updates.subscriptionPrice)) {
-        return {
-          success: false,
-          error: { message: 'Invalid subscription price' },
-        };
+        return { success: false, error: { message: 'Invalid subscription price' } };
       }
 
       const result = await this.enhanced.updateUserProfile(username, updates);
-      
       if (!result.success) {
         return result as any;
       }
 
-      // Convert to simple profile format
+      const raw = result.data!;
+
       const profile: UserProfile = {
-        bio: result.data!.bio,
-        profilePic: result.data!.profilePic,
-        subscriptionPrice: result.data!.subscriptionPrice,
-        lastUpdated: result.data!.lastUpdated,
-        galleryImages: result.data!.galleryImages,
+        bio: raw.bio,
+        profilePic: toAbsoluteUrl(raw.profilePic),
+        subscriptionPrice: toPriceNumber(raw.subscriptionPrice),
+        lastUpdated: raw.lastUpdated,
+        galleryImages: Array.isArray(raw.galleryImages)
+          ? (raw.galleryImages.map((p: string) => toAbsoluteUrl(p)!).filter(Boolean) as string[])
+          : undefined,
       };
 
       return { success: true, data: profile };
@@ -244,7 +272,6 @@ export class UsersService {
     update: VerificationUpdateRequest
   ): Promise<ApiResponse<void>> {
     try {
-      // Check rate limit
       const rateLimitResult = this.rateLimiter.check(
         'REPORT_ACTION',
         { ...RATE_LIMITS.REPORT_ACTION, identifier: update.adminUsername }
@@ -256,17 +283,12 @@ export class UsersService {
         };
       }
 
-      // Validate username
       if (!isValidUsername(username)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
+        return { success: false, error: { message: 'Invalid username format' } };
       }
 
       const sanitizedUsername = sanitizeUsername(username);
 
-      // Validate update request
       const validation = validateSchema(verificationUpdateSchema, update);
       if (!validation.success) {
         return {
@@ -301,13 +323,13 @@ export class UsersService {
       if (allUsers[sanitizedUsername]) {
         allUsers[sanitizedUsername].verificationStatus = sanitizedUpdate.status;
         allUsers[sanitizedUsername].isVerified = sanitizedUpdate.status === 'verified';
-        
+
         if (sanitizedUpdate.status === 'rejected' && sanitizedUpdate.rejectionReason) {
           allUsers[sanitizedUsername].verificationRejectionReason = sanitizedUpdate.rejectionReason;
         }
-        
+
         await storageService.setItem('all_users_v2', allUsers);
-        
+
         // Clear cache
         this.enhanced.clearCache();
       }
@@ -317,7 +339,7 @@ export class UsersService {
         'panty_verification_requests',
         {}
       );
-      
+
       if (verificationRequests[sanitizedUsername]) {
         verificationRequests[sanitizedUsername].status = sanitizedUpdate.status;
         verificationRequests[sanitizedUsername].reviewedAt = new Date().toISOString();
@@ -354,7 +376,6 @@ export class UsersService {
    */
   async banUser(request: BanRequest): Promise<ApiResponse<void>> {
     try {
-      // Check rate limit
       const rateLimitResult = this.rateLimiter.check(
         'BAN_USER',
         { ...RATE_LIMITS.BAN_USER, identifier: request.adminUsername }
@@ -366,7 +387,6 @@ export class UsersService {
         };
       }
 
-      // Validate and sanitize request
       const validation = validateSchema(banRequestSchema, request);
       if (!validation.success) {
         return {
@@ -398,15 +418,15 @@ export class UsersService {
       if (allUsers[sanitizedRequest.username]) {
         allUsers[sanitizedRequest.username].isBanned = true;
         allUsers[sanitizedRequest.username].banReason = sanitizedRequest.reason;
-        
+
         if (sanitizedRequest.duration) {
           const expiresAt = new Date();
           expiresAt.setDate(expiresAt.getDate() + sanitizedRequest.duration);
           allUsers[sanitizedRequest.username].banExpiresAt = expiresAt.toISOString();
         }
-        
+
         await storageService.setItem('all_users_v2', allUsers);
-        
+
         // Clear cache
         this.enhanced.clearCache();
       }
@@ -420,12 +440,11 @@ export class UsersService {
         bannedBy: sanitizedRequest.adminUsername,
         bannedAt: new Date().toISOString(),
       });
-      
-      // Limit ban log size
+
       if (banLogs.length > 1000) {
         banLogs.splice(0, banLogs.length - 1000);
       }
-      
+
       await storageService.setItem('ban_logs', banLogs);
 
       // Track activity
@@ -455,7 +474,6 @@ export class UsersService {
    */
   async unbanUser(username: string, adminUsername: string): Promise<ApiResponse<void>> {
     try {
-      // Check rate limit
       const rateLimitResult = this.rateLimiter.check(
         'BAN_USER',
         { ...RATE_LIMITS.BAN_USER, identifier: adminUsername }
@@ -467,12 +485,8 @@ export class UsersService {
         };
       }
 
-      // Validate usernames
       if (!isValidUsername(username) || !isValidUsername(adminUsername)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
+        return { success: false, error: { message: 'Invalid username format' } };
       }
 
       const sanitizedUsername = sanitizeUsername(username);
@@ -496,7 +510,7 @@ export class UsersService {
         delete allUsers[sanitizedUsername].banReason;
         delete allUsers[sanitizedUsername].banExpiresAt;
         await storageService.setItem('all_users_v2', allUsers);
-        
+
         // Clear cache
         this.enhanced.clearCache();
       }
@@ -509,12 +523,11 @@ export class UsersService {
         unbannedBy: sanitizedAdminUsername,
         unbannedAt: new Date().toISOString(),
       });
-      
-      // Limit ban log size
+
       if (banLogs.length > 1000) {
         banLogs.splice(0, banLogs.length - 1000);
       }
-      
+
       await storageService.setItem('ban_logs', banLogs);
 
       // Track activity
@@ -539,6 +552,7 @@ export class UsersService {
 
   /**
    * Get subscription info for a seller
+   * (kept as-is; callers can coerce price if needed)
    */
   async getSubscriptionInfo(seller: string, buyer: string): Promise<ApiResponse<{
     isSubscribed: boolean;
@@ -546,30 +560,23 @@ export class UsersService {
     subscribedAt?: string;
   }>> {
     try {
-      // Validate usernames
       if (!isValidUsername(seller) || !isValidUsername(buyer)) {
-        return {
-          success: false,
-          error: { message: 'Invalid username format' },
-        };
+        return { success: false, error: { message: 'Invalid username format' } };
       }
 
       const subResult = await this.enhanced.getSubscriptionStatus(buyer, seller);
-      
       if (!subResult.success) {
         return subResult as any;
       }
 
-      // Get subscription price from profile if not subscribed
       if (!subResult.data) {
         const profileResult = await this.getUserProfile(seller);
-        const price = profileResult.data?.subscriptionPrice || '0';
-        
+        const price = profileResult.data?.subscriptionPrice ?? 0;
         return {
           success: true,
           data: {
             isSubscribed: false,
-            price,
+            price: String(price),
           },
         };
       }
@@ -591,48 +598,27 @@ export class UsersService {
     }
   }
 
-  /**
-   * New enhanced methods - exposed for gradual adoption
-   */
-  
-  /**
-   * Get user preferences
-   */
+  // New enhanced methods - exposed for gradual adoption
   async getUserPreferences(username: string) {
     return this.enhanced.getUserPreferences(username);
   }
 
-  /**
-   * Update user preferences
-   */
   async updateUserPreferences(username: string, updates: any) {
     return this.enhanced.updateUserPreferences(username, updates);
   }
 
-  /**
-   * Track user activity
-   */
   async trackActivity(activity: any) {
     return this.enhanced.trackActivity(activity);
   }
 
-  /**
-   * Get user activity history
-   */
   async getUserActivity(username: string, limit?: number) {
     return this.enhanced.getUserActivity(username, limit);
   }
 
-  /**
-   * Batch update users
-   */
   async batchUpdateUsers(updates: any[]) {
     return this.enhanced.batchUpdateUsers(updates);
   }
 
-  /**
-   * Clear cache
-   */
   clearCache() {
     this.enhanced.clearCache();
   }
