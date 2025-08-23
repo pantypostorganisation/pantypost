@@ -1,8 +1,19 @@
-// src/components/myListings/ListingForm.tsx
 'use client';
 
 import { ListingFormProps } from '@/types/myListings';
-import { Sparkles, Gavel, LockIcon, ImageIcon, Upload, X, MoveVertical, Edit, AlertCircle, Crown, CheckCircle } from 'lucide-react';
+import {
+  Sparkles,
+  Gavel,
+  Lock as LockIcon,
+  ImagePlus as ImageIcon,
+  Upload,
+  X,
+  MoveVertical,
+  Edit,
+  AlertCircle,
+  Crown,
+  CheckCircle,
+} from 'lucide-react';
 import Link from 'next/link';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
@@ -780,7 +791,9 @@ export default function ListingForm({
               <div>
                 <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
                 <ul className="text-sm text-gray-300 space-y-1">
-                  <li>• Auctions run for {formState.auctionDuration === '0.017' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing</li>
+                  <li>
+                    • Auctions run for {formState.auctionDuration === '0.000694' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing
+                  </li>
                   <li>• Bidders must have sufficient funds in their wallet to place a bid</li>
                   <li>• If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
                   <li>• You can cancel an auction at any time before it ends</li>

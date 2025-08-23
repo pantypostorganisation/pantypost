@@ -1,7 +1,6 @@
-// src/components/myListings/ImageUploadSection.tsx
 'use client';
 
-import { Image as ImageIcon, Upload, X, MoveVertical, AlertCircle } from 'lucide-react';
+import { ImagePlus as ImageIcon, Upload, X, MoveVertical, AlertCircle } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
