@@ -1,10 +1,9 @@
-// src/components/sellers/orders/OrdersSection.tsx
 'use client';
 
 import React from 'react';
 import { Order } from '@/context/WalletContext';
 import OrderCard from './OrderCard';
-import { Gavel, Settings, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 
 interface OrdersSectionProps {
   title: string;
@@ -31,7 +30,7 @@ export default function OrdersSection({
   renderAddressBlock,
   renderShippingControls,
   getShippingStatusBadge,
-  showEmptyState = false
+  showEmptyState = false,
 }: OrdersSectionProps) {
   if (orders.length === 0 && !showEmptyState) {
     return null;
@@ -45,7 +44,7 @@ export default function OrdersSection({
         </div>
         {title} ({orders.length})
       </h2>
-      
+
       {orders.length === 0 && showEmptyState ? (
         <div className="text-center py-16 bg-gray-900/30 rounded-2xl border border-gray-700">
           <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />

@@ -1,16 +1,14 @@
-// src/components/sellers/orders/OrderCard.tsx
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
-import { Listing } from '@/context/ListingContext';
 import { Order } from '@/context/WalletContext';
-import { 
-  User, 
-  Gavel, 
-  MapPin, 
-  ChevronDown, 
-  ChevronUp, 
+import {
+  User,
+  Gavel,
+  MapPin,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Package,
   Truck,
@@ -18,7 +16,7 @@ import {
   Star,
   Settings,
   MessageCircle,
-  ShoppingBag
+  ShoppingBag,
 } from 'lucide-react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
@@ -40,15 +38,15 @@ export default function OrderCard({
   onToggleExpand,
   renderAddressBlock,
   renderShippingControls,
-  getShippingStatusBadge
+  getShippingStatusBadge,
 }: OrderCardProps) {
   const isAuction = type === 'auction';
   const isCustom = type === 'custom';
-  
+
   let borderStyle = 'border-gray-700 hover:border-[#ff950e]/50';
   let gradientStyle = 'from-gray-900/50 via-black/30 to-gray-800/50';
-  let badgeContent = null;
-  
+  let badgeContent: React.ReactNode = null;
+
   if (isAuction) {
     borderStyle = 'border-purple-500/30 hover:border-purple-400/50';
     gradientStyle = 'from-purple-900/10 via-gray-900/50 to-blue-900/10';
@@ -68,10 +66,11 @@ export default function OrderCard({
       </span>
     );
   }
-  
+
   const sanitizedTitle = sanitizeStrict(order.title);
   const sanitizedBuyer = sanitizeStrict(order.buyer);
-  
+  const buyerParam = encodeURIComponent(order.buyer);
+
   return (
     <li
       key={order.id + order.date}
@@ -110,14 +109,14 @@ export default function OrderCard({
               {isAuction && <Star className="w-5 h-5 text-purple-400 flex-shrink-0" />}
               {isCustom && <Settings className="w-5 h-5 text-blue-400 flex-shrink-0" />}
             </div>
-            
+
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4">
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-300">Buyer:</span>
                 <span className="font-semibold text-white">{sanitizedBuyer}</span>
                 <Link
-                  href={`/sellers/messages?thread=${order.buyer}`}
+                  href={`/sellers/messages?thread=${buyerParam}`}
                   className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-all shadow-lg hover:shadow-blue-500/25"
                 >
                   <MessageCircle className="w-3 h-3" />
@@ -125,14 +124,14 @@ export default function OrderCard({
                 </Link>
               </div>
             </div>
-            
+
             <div className="text-sm text-gray-400 mb-4">
               {isAuction && 'Won on: '}
               {isCustom && 'Requested on: '}
-              {!isAuction && !isCustom && 'Sold on: '} 
+              {!isAuction && !isCustom && 'Sold on: '}
               <span className="text-gray-300 font-medium">{new Date(order.date).toLocaleDateString()}</span>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-4">
               {isAuction && (
                 <div className="bg-purple-900/30 px-4 py-2 rounded-lg border border-purple-700/50">
@@ -142,7 +141,7 @@ export default function OrderCard({
                   </span>
                 </div>
               )}
-              
+
               {isCustom && (
                 <div className="bg-blue-900/30 px-4 py-2 rounded-lg border border-blue-700/50">
                   <span className="text-blue-300 text-sm">Agreed price:</span>
@@ -151,7 +150,7 @@ export default function OrderCard({
                   </span>
                 </div>
               )}
-              
+
               {!isAuction && !isCustom && (
                 <div className="bg-[#ff950e]/10 px-4 py-2 rounded-lg border border-[#ff950e]/30">
                   <span className="text-[#ff950e] text-sm">Listed price:</span>
@@ -161,16 +160,13 @@ export default function OrderCard({
                 </div>
               )}
             </div>
-            
+
             {/* Show custom request details */}
             {isCustom && order.originalRequestId && (
               <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-700/50">
                 <div className="text-blue-300 text-sm font-medium mb-1">Custom Request Details:</div>
                 <div className="text-blue-200 text-sm">
-                  <SecureMessageDisplay 
-                    content={order.description || ''} 
-                    allowBasicFormatting={false}
-                  />
+                  <SecureMessageDisplay content={order.description || ''} allowBasicFormatting={false} />
                 </div>
                 {order.tags && order.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
@@ -191,7 +187,7 @@ export default function OrderCard({
           {/* Status & Actions */}
           <div className="flex flex-col items-end gap-4">
             {getShippingStatusBadge(order.shippingStatus)}
-            
+
             {order.deliveryAddress ? (
               <div className="flex items-center gap-2 bg-green-900/30 px-3 py-2 rounded-lg border border-green-700/50">
                 <MapPin className="w-4 h-4 text-green-400" />
@@ -203,11 +199,11 @@ export default function OrderCard({
                 <span className="text-yellow-300 text-sm font-medium">No address yet</span>
               </div>
             )}
-            
+
             <button
               className={`flex items-center gap-2 font-semibold px-4 py-2 rounded-lg transition-all text-sm ${
-                isAuction 
-                  ? 'text-purple-300 bg-purple-900/30 hover:bg-purple-800/50 border border-purple-700/50 hover:border-purple-600' 
+                isAuction
+                  ? 'text-purple-300 bg-purple-900/30 hover:bg-purple-800/50 border border-purple-700/50 hover:border-purple-600'
                   : isCustom
                   ? 'text-blue-300 bg-blue-900/30 hover:bg-blue-800/50 border border-blue-700/50 hover:border-blue-600'
                   : 'text-[#ff950e] bg-[#ff950e]/10 hover:bg-[#ff950e]/20 border border-[#ff950e]/30 hover:border-[#ff950e]/50'

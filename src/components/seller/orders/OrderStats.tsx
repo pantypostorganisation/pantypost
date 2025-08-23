@@ -1,4 +1,3 @@
-// src/components/sellers/orders/OrderStats.tsx
 'use client';
 
 import React from 'react';

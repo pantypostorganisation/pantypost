@@ -1,4 +1,3 @@
-// src/components/sellers/orders/ShippingControls.tsx
 'use client';
 
 import React from 'react';
@@ -12,7 +11,7 @@ interface ShippingControlsProps {
 
 export default function ShippingControls({ order, onStatusChange }: ShippingControlsProps) {
   if (!order.deliveryAddress) return null;
-  
+
   return (
     <div className="mt-6 border-t border-gray-700 pt-6">
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">

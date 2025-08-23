@@ -1,33 +1,34 @@
-// src/components/sellers/orders/AddressDisplay.tsx
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
-import type { Order } from '@/types/order';
-import type { DeliveryAddress } from '@/types/order';
-import { 
-  AlertTriangle, 
-  Copy, 
+import type { Order } from '@/context/WalletContext';
+import {
+  AlertTriangle,
+  Copy,
   Check,
   FileText,
   ShieldAlert,
   MapPin,
-  MessageCircle
+  MessageCircle,
 } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface AddressDisplayProps {
   order: Order;
-  onCopyAddress: (address: DeliveryAddress) => void;
+  onCopyAddress: (address: NonNullable<Order['deliveryAddress']>) => void;
   copiedText: string | null;
   getShippingLabel: (order: Order) => string;
 }
 
-export default function AddressDisplay({ 
-  order, 
-  onCopyAddress, 
+export default function AddressDisplay({
+  order,
+  onCopyAddress,
   copiedText,
-  getShippingLabel 
+  getShippingLabel,
 }: AddressDisplayProps) {
+  const buyerParam = encodeURIComponent(order.buyer);
+
   if (!order.deliveryAddress) {
     return (
       <div className="mt-4 py-4 px-6 bg-gradient-to-r from-yellow-900/20 to-orange-900/20 border border-yellow-500/30 rounded-xl flex items-start">
@@ -35,14 +36,14 @@ export default function AddressDisplay({
         <div className="flex-1">
           <p className="text-yellow-200 font-semibold text-base mb-2">Waiting for delivery address</p>
           <p className="text-yellow-300/80 text-sm mb-3">
-            The buyer hasn't provided their shipping address yet. You can message them to request it.
+            The buyer hasn&apos;t provided their shipping address yet. You can message them to request it.
           </p>
           <Link
-            href={`/sellers/messages?thread=${order.buyer}`}
+            href={`/sellers/messages?thread=${buyerParam}`}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black font-bold px-4 py-2 rounded-lg transition-all text-sm shadow-lg hover:shadow-[#ff950e]/25"
           >
             <MessageCircle className="w-4 h-4" />
-            Message {order.buyer}
+            Message {sanitizeStrict(order.buyer)}
           </Link>
         </div>
       </div>
@@ -50,6 +51,7 @@ export default function AddressDisplay({
   }
 
   const address = order.deliveryAddress;
+
   return (
     <>
       <div className="mt-4 border border-gray-700 rounded-xl overflow-hidden bg-gradient-to-r from-gray-800/50 to-gray-900/50">
@@ -58,7 +60,7 @@ export default function AddressDisplay({
             <MapPin className="w-5 h-5 text-[#ff950e] mr-2" />
             <h4 className="font-semibold text-white text-base">📦 Shipping Address</h4>
           </div>
-          <button 
+          <button
             onClick={() => onCopyAddress(address)}
             className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] hover:from-[#e0850d] hover:to-[#ff950e] text-black text-sm font-bold flex items-center px-4 py-2 rounded-lg transition-all shadow-lg hover:shadow-[#ff950e]/25"
           >
@@ -76,17 +78,21 @@ export default function AddressDisplay({
           </button>
         </div>
         <div className="p-6 bg-gradient-to-br from-gray-800/30 to-gray-900/30">
-          <div className="font-bold text-lg text-white mb-1">{address.fullName}</div>
+          <div className="font-bold text-lg text-white mb-1">{sanitizeStrict(address.fullName)}</div>
           <div className="text-gray-300 text-base leading-relaxed">
-            <div>{address.addressLine1}</div>
-            {address.addressLine2 && <div>{address.addressLine2}</div>}
-            <div>{address.city}, {address.state} {address.postalCode}</div>
-            <div className="font-medium">{address.country}</div>
+            <div>{sanitizeStrict(address.addressLine1)}</div>
+            {address.addressLine2 && <div>{sanitizeStrict(address.addressLine2)}</div>}
+            <div>
+              {sanitizeStrict(address.city)}, {sanitizeStrict(address.state)} {sanitizeStrict(address.postalCode)}
+            </div>
+            <div className="font-medium">{sanitizeStrict(address.country)}</div>
           </div>
           {address.specialInstructions && (
             <div className="mt-4 pt-4 border-t border-gray-600">
               <div className="text-sm text-[#ff950e] font-semibold mb-2">Special Instructions:</div>
-              <p className="text-gray-300 bg-black/20 p-3 rounded-lg border border-gray-600">{address.specialInstructions}</p>
+              <p className="text-gray-300 bg-black/20 p-3 rounded-lg border border-gray-600 whitespace-pre-line">
+                {sanitizeStrict(address.specialInstructions)}
+              </p>
             </div>
           )}
         </div>
@@ -98,7 +104,7 @@ export default function AddressDisplay({
           <FileText className="w-5 h-5 mr-2 text-[#ff950e]" />
           Shipping Label
         </h4>
-        
+
         {/* Enhanced Warning */}
         <div className="bg-gradient-to-r from-red-900/50 to-red-800/50 border-2 border-red-500 rounded-xl p-4 mb-4 flex items-start">
           <ShieldAlert className="w-6 h-6 text-red-400 mr-3 flex-shrink-0 mt-1" />
@@ -107,12 +113,12 @@ export default function AddressDisplay({
               PRIVACY WARNING - NO RETURN ADDRESS
             </p>
             <p className="text-red-300 text-sm">
-              For your safety and privacy, <strong>never include your personal address</strong> on any package. 
+              For your safety and privacy, <strong>never include your personal address</strong> on any package.
               Use a PO Box or shipping service if a return address is required.
             </p>
           </div>
         </div>
-        
+
         <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-600 font-mono text-base text-gray-100 whitespace-pre-line shadow-inner">
           {getShippingLabel(order)}
         </div>

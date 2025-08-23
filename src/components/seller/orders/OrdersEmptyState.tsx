@@ -1,4 +1,3 @@
-// src/components/sellers/orders/OrdersEmptyState.tsx
 'use client';
 
 import React from 'react';
