@@ -1,4 +1,3 @@
-// src/components/seller-profile/modals/SubscribeModal.tsx
 'use client';
 
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -20,8 +19,11 @@ export default function SubscribeModal({
 }: SubscribeModalProps) {
   if (!show) return null;
 
-  // Sanitize username for display
   const sanitizedUsername = sanitizeStrict(username);
+  const priceText =
+    typeof subscriptionPrice === 'number' && Number.isFinite(subscriptionPrice)
+      ? subscriptionPrice.toFixed(2)
+      : '...';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
@@ -31,20 +33,20 @@ export default function SubscribeModal({
         </h2>
         <p className="mb-6 text-center text-white text-base">
           Subscribe to <strong className="text-[#ff950e]">{sanitizedUsername}</strong> for{' '}
-          <span className="text-xl font-bold text-[#ff950e]">
-            ${subscriptionPrice ? subscriptionPrice.toFixed(2) : '...'}/month
-          </span>?
+          <span className="text-xl font-bold text-[#ff950e]">${priceText}/month</span>?
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-end">
           <button
             onClick={onClose}
             className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+            type="button"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#ff950e] text-black font-bold hover:bg-[#e0850d] transition text-lg"
+            type="button"
           >
             Confirm
           </button>

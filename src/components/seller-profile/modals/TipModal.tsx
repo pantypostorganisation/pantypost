@@ -1,11 +1,10 @@
-// src/components/seller-profile/modals/TipModal.tsx
 'use client';
 
+import { useState } from 'react';
 import { Gift, DollarSign, X } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { sanitizeStrict, sanitizeCurrency } from '@/utils/security/sanitization';
-import { useState } from 'react';
 
 interface TipModalProps {
   show: boolean;
@@ -32,10 +31,8 @@ export default function TipModal({
 
   if (!show) return null;
 
-  // Sanitize username for display
   const sanitizedUsername = sanitizeStrict(username);
 
-  // Handle secure amount change
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
       onAmountChange('');
@@ -45,11 +42,12 @@ export default function TipModal({
     }
   };
 
-  // Handle secure form submission
   const handleSecureSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit();
   };
+
+  const disabled = !tipAmount || Number.parseFloat(tipAmount) <= 0;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
@@ -62,6 +60,8 @@ export default function TipModal({
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition"
+            aria-label="Close"
+            type="button"
           >
             <X className="w-6 h-6" />
           </button>
@@ -103,7 +103,7 @@ export default function TipModal({
                   step="0.01"
                   error={tipError}
                   touched={touched}
-                  sanitize={false} // We handle sanitization in handleSecureAmountChange
+                  sanitize={false}
                 />
               </div>
             </div>
@@ -111,7 +111,7 @@ export default function TipModal({
             <div className="flex flex-col gap-3">
               <button
                 type="submit"
-                disabled={!tipAmount || parseFloat(tipAmount) <= 0}
+                disabled={disabled}
                 className="w-full bg-[#ff950e] text-black font-bold py-3 rounded-full hover:bg-[#e0850d] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send Tip

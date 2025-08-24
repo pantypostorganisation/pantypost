@@ -1,4 +1,3 @@
-// src/components/seller-profile/modals/UnsubscribeModal.tsx
 'use client';
 
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -27,19 +26,22 @@ export default function UnsubscribeModal({
           Confirm Unsubscription
         </h2>
         <p className="mb-6 text-center text-white text-base">
-          Are you sure you want to unsubscribe from <strong className="text-red-400">{sanitizedUsername}</strong>? 
-          This will remove your access to premium listings.
+          Are you sure you want to unsubscribe from{' '}
+          <strong className="text-red-400">{sanitizedUsername}</strong>? This will
+          remove your access to premium listings.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-end">
           <button
             onClick={onClose}
             className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+            type="button"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             className="w-full sm:w-auto px-6 py-3 rounded-full bg-red-600 text-white font-bold hover:bg-red-700 transition text-lg"
+            type="button"
           >
             Unsubscribe
           </button>
