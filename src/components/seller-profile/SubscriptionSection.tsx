@@ -2,26 +2,45 @@
 'use client';
 
 import { Crown, Lock } from 'lucide-react';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { z } from 'zod';
+import { formatCurrency } from '@/utils/url';
 
-interface SubscriptionSectionProps {
-  hasAccess: boolean | undefined;
-  subscriptionPrice: number | null;
-  username: string;
-  user: any;
-  onShowSubscribeModal: () => void;
-}
+const PropsSchema = z.object({
+  hasAccess: z.boolean().optional(),
+  subscriptionPrice: z.number().nullable().optional(),
+  username: z.string().default(''),
+  user: z
+    .object({
+      role: z.enum(['buyer', 'seller', 'admin']).optional(),
+      username: z.string().default(''),
+    })
+    .passthrough()
+    .nullable()
+    .optional(),
+  onShowSubscribeModal: z.function().args().returns(z.void()),
+});
 
-export default function SubscriptionSection({
-  hasAccess,
-  subscriptionPrice,
-  username,
-  user,
-  onShowSubscribeModal,
-}: SubscriptionSectionProps) {
-  if (!subscriptionPrice || hasAccess || user?.role !== 'buyer' || user?.username === username) {
-    return null;
-  }
+interface SubscriptionSectionProps extends z.infer<typeof PropsSchema> {}
+
+export default function SubscriptionSection(rawProps: SubscriptionSectionProps) {
+  const parsed = PropsSchema.safeParse(rawProps);
+  const { hasAccess, subscriptionPrice, username, user, onShowSubscribeModal } = parsed.success
+    ? parsed.data
+    : { hasAccess: undefined, subscriptionPrice: null, username: '', user: null, onShowSubscribeModal: () => {} };
+
+  const isBuyer = user?.role === 'buyer';
+  const isSelf = user?.username === username;
+  const priceValid = typeof subscriptionPrice === 'number' && Number.isFinite(subscriptionPrice) && subscriptionPrice > 0;
+
+  const show =
+    priceValid &&
+    !hasAccess &&
+    isBuyer &&
+    !isSelf;
+
+  if (!show) return null;
+
+  const priceLabel = formatCurrency(subscriptionPrice as number);
 
   return (
     <div className="mb-12 bg-gradient-to-r from-[#ff950e]/20 to-[#ff950e]/10 rounded-2xl p-6 sm:p-8 border border-[#ff950e]/50">
@@ -36,9 +55,10 @@ export default function SubscriptionSection({
         <button
           onClick={onShowSubscribeModal}
           className="flex items-center gap-2 bg-[#ff950e] text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-[#e0850d] transition"
+          type="button"
         >
           <Lock className="w-5 h-5" />
-          Subscribe for ${subscriptionPrice.toFixed(2)}/mo
+          Subscribe for {priceLabel}/mo
         </button>
       </div>
     </div>
