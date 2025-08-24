@@ -1,4 +1,3 @@
-// src/components/seller/wallet/SellerWithdrawHistory.tsx
 'use client';
 
 import { Clock } from 'lucide-react';
@@ -15,12 +14,12 @@ interface SellerWithdrawHistoryProps {
 export default function SellerWithdrawHistory({ sortedWithdrawals }: SellerWithdrawHistoryProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -34,13 +33,13 @@ export default function SellerWithdrawHistory({ sortedWithdrawals }: SellerWithd
         <Clock className="w-5 h-5 mr-2 text-[#ff950e]" />
         Withdrawal History
       </h2>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="text-left text-gray-400 text-sm border-b border-[#333]">
               <th className="pb-3">Amount</th>
-              <th className="pb-3">Date & Time</th>
+              <th className="pb-3">Date &amp; Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#333]">

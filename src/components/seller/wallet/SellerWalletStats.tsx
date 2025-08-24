@@ -1,11 +1,6 @@
-// src/components/seller/wallet/SellerWalletStats.tsx
 'use client';
 
-import { 
-  DollarSign, 
-  TrendingUp,
-  ArrowDownCircle
-} from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle } from 'lucide-react';
 
 interface SellerWalletStatsProps {
   balance: number;
@@ -20,8 +15,10 @@ export default function SellerWalletStats({
   totalEarnings,
   totalWithdrawn,
   sellerSales,
-  logs
+  logs,
 }: SellerWalletStatsProps) {
+  const fmt = (n: number) => n.toFixed(2);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
       {/* Current Balance */}
@@ -33,12 +30,10 @@ export default function SellerWalletStats({
           </div>
         </div>
         <div className="flex items-baseline">
-          <span className="text-3xl font-bold text-white">${balance.toFixed(2)}</span>
+          <span className="text-3xl font-bold text-white">${fmt(balance)}</span>
           <span className="ml-2 text-sm text-gray-400">USD</span>
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Available for withdrawal
-        </p>
+        <p className="mt-2 text-xs text-gray-500">Available for withdrawal</p>
       </div>
 
       {/* Total Earnings */}
@@ -50,7 +45,7 @@ export default function SellerWalletStats({
           </div>
         </div>
         <div className="flex items-baseline">
-          <span className="text-3xl font-bold text-white">${totalEarnings.toFixed(2)}</span>
+          <span className="text-3xl font-bold text-white">${fmt(totalEarnings)}</span>
           <span className="ml-2 text-sm text-gray-400">USD</span>
         </div>
         <p className="mt-2 text-xs text-gray-500">
@@ -67,7 +62,7 @@ export default function SellerWalletStats({
           </div>
         </div>
         <div className="flex items-baseline">
-          <span className="text-3xl font-bold text-white">${totalWithdrawn.toFixed(2)}</span>
+          <span className="text-3xl font-bold text-white">${fmt(totalWithdrawn)}</span>
           <span className="ml-2 text-sm text-gray-400">USD</span>
         </div>
         <p className="mt-2 text-xs text-gray-500">

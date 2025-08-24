@@ -1,4 +1,3 @@
-// src/components/seller/wallet/SellerWithdrawConfirmModal.tsx
 'use client';
 
 interface SellerWithdrawConfirmModalProps {
@@ -14,16 +13,20 @@ export default function SellerWithdrawConfirmModal({
   setShowConfirmation,
   withdrawAmount,
   isLoading,
-  handleConfirmWithdraw
+  handleConfirmWithdraw,
 }: SellerWithdrawConfirmModalProps) {
   if (!showConfirmation) return null;
+
+  const amountNum = Number.parseFloat(withdrawAmount);
+  const displayAmount = Number.isFinite(amountNum) ? amountNum.toFixed(2) : '0.00';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
       <div className="bg-[#1a1a1a] rounded-xl p-6 max-w-md w-full border border-[#333] shadow-xl">
         <h3 className="text-xl font-bold mb-4">Confirm Withdrawal</h3>
         <p className="mb-6 text-gray-300">
-          Are you sure you want to withdraw <span className="font-bold text-white">${parseFloat(withdrawAmount).toFixed(2)}</span>?
+          Are you sure you want to withdraw{' '}
+          <span className="font-bold text-white">${displayAmount}</span>?
         </p>
         <div className="flex gap-3">
           <button
