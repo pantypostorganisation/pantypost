@@ -3,32 +3,74 @@
 
 import { X, Award, TrendingUp, Crown, Star, Gift, Target, CheckCircle } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
-import { TierLevel } from '@/utils/sellerTiers';
+import type { TierLevel } from '@/utils/sellerTiers';
+import { z } from 'zod';
+import { formatCurrency } from '@/utils/url';
 
-// Define TIER_LEVELS locally with proper typing
-const TIER_LEVELS: Record<TierLevel, { minSales: number; minAmount: number }> = {
-  'None': { minSales: 0, minAmount: 0 },
-  'Tease': { minSales: 0, minAmount: 0 },
-  'Flirt': { minSales: 10, minAmount: 5000 },
-  'Obsession': { minSales: 101, minAmount: 12500 },
-  'Desire': { minSales: 251, minAmount: 75000 },
-  'Goddess': { minSales: 1001, minAmount: 150000 }
-};
+// ---- Runtime props validation + normalization ----
+const PropsSchema = z.object({
+  selectedTier: z.unknown().nullable(),
+  onClose: z.function().args().returns(z.void()),
+});
 
-interface TierDetailsModalProps {
-  selectedTier: TierLevel | null;
-  onClose: () => void;
+const VALID_TIERS: TierLevel[] = ['None', 'Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
+
+function isTierLevel(v: unknown): v is TierLevel {
+  return typeof v === 'string' && (VALID_TIERS as readonly string[]).includes(v);
 }
 
-export default function TierDetailsModal({ selectedTier, onClose }: TierDetailsModalProps) {
-  if (!selectedTier) return null;
+function normalizeTier(v: unknown): TierLevel | null {
+  if (isTierLevel(v)) return v;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    switch (s) {
+      case 'none':
+        return 'None';
+      case 'tease':
+        return 'Tease';
+      case 'flirt':
+        return 'Flirt';
+      case 'obsession':
+        return 'Obsession';
+      case 'desire':
+        return 'Desire';
+      case 'goddess':
+        return 'Goddess';
+      default:
+        return null;
+    }
+  }
+  return null;
+}
 
-  const tierInfo = TIER_LEVELS[selectedTier];
+// ---- Tier data (kept local for this modal) ----
+const TIER_LEVELS: Record<TierLevel, { minSales: number; minAmount: number }> = {
+  None: { minSales: 0, minAmount: 0 },
+  Tease: { minSales: 0, minAmount: 0 },
+  Flirt: { minSales: 10, minAmount: 5000 },
+  Obsession: { minSales: 101, minAmount: 12500 },
+  Desire: { minSales: 251, minAmount: 75000 },
+  Goddess: { minSales: 1001, minAmount: 150000 },
+};
+
+interface TierDetailsModalProps extends z.infer<typeof PropsSchema> {}
+
+export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
+  // Validate props at runtime (safe defaults if parsing fails)
+  const parsed = PropsSchema.safeParse(rawProps);
+  const selectedTierRaw = parsed.success ? parsed.data.selectedTier : null;
+  const onClose = parsed.success ? parsed.data.onClose : () => {};
+
+  const selectedTier = normalizeTier(selectedTierRaw);
+
+  // If invalid or 'None', don't render
+  if (!selectedTier || selectedTier === 'None') return null;
+
+  const tierInfo = TIER_LEVELS[selectedTier] || TIER_LEVELS.Tease;
   const tiers: TierLevel[] = ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
-  
-  // Helper function to get benefits for each tier
+
   const getBenefitsForTier = (tier: TierLevel): string[] => {
-    switch(tier) {
+    switch (tier) {
       case 'Tease':
         return ['Basic seller badge', 'Access to marketplace', 'Standard support'];
       case 'Flirt':
@@ -43,45 +85,57 @@ export default function TierDetailsModal({ selectedTier, onClose }: TierDetailsM
         return [];
     }
   };
-  
+
   const getTierIcon = (tier: TierLevel) => {
-    switch(tier) {
-      case 'Tease': return <Star className="w-8 h-8" />;
-      case 'Flirt': return <Gift className="w-8 h-8" />;
-      case 'Obsession': return <Award className="w-8 h-8" />;
-      case 'Desire': return <Crown className="w-8 h-8" />;
-      case 'Goddess': return <Target className="w-8 h-8" />;
-      default: return <Award className="w-8 h-8" />;
+    switch (tier) {
+      case 'Tease':
+        return <Star className="w-8 h-8" />;
+      case 'Flirt':
+        return <Gift className="w-8 h-8" />;
+      case 'Obsession':
+        return <Award className="w-8 h-8" />;
+      case 'Desire':
+        return <Crown className="w-8 h-8" />;
+      case 'Goddess':
+        return <Target className="w-8 h-8" />;
+      default:
+        return <Award className="w-8 h-8" />;
     }
   };
 
   const getTierColor = (tier: TierLevel) => {
-    switch(tier) {
-      case 'Tease': return 'from-gray-500 to-gray-700';
-      case 'Flirt': return 'from-blue-500 to-blue-700';
-      case 'Obsession': return 'from-purple-500 to-purple-700';
-      case 'Desire': return 'from-pink-500 to-pink-700';
-      case 'Goddess': return 'from-[#ff950e] to-[#ff6b00]';
-      default: return 'from-gray-500 to-gray-700';
+    switch (tier) {
+      case 'Tease':
+        return 'from-gray-500 to-gray-700';
+      case 'Flirt':
+        return 'from-blue-500 to-blue-700';
+      case 'Obsession':
+        return 'from-purple-500 to-purple-700';
+      case 'Desire':
+        return 'from-pink-500 to-pink-700';
+      case 'Goddess':
+        return 'from-[#ff950e] to-[#ff6b00]';
+      default:
+        return 'from-gray-500 to-gray-700';
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${selectedTier} Tier details`}
+    >
       <div className="bg-[#1a1a1a] rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
         {/* Header */}
         <div className={`bg-gradient-to-r ${getTierColor(selectedTier)} p-6 relative`}>
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white hover:text-gray-200"
-          >
+          <button onClick={onClose} className="absolute top-4 right-4 text-white hover:text-gray-200" type="button">
             <X className="w-6 h-6" />
           </button>
-          
+
           <div className="flex items-center gap-4">
-            <div className="text-white">
-              {getTierIcon(selectedTier)}
-            </div>
+            <div className="text-white">{getTierIcon(selectedTier)}</div>
             <div>
               <h2 className="text-3xl font-bold text-white">{selectedTier} Tier</h2>
               <p className="text-white/80">Seller Achievement Level</p>
@@ -100,11 +154,11 @@ export default function TierDetailsModal({ selectedTier, onClose }: TierDetailsM
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-black rounded-lg p-4">
                 <p className="text-sm text-gray-400">Minimum Sales</p>
-                <p className="text-2xl font-bold text-[#ff950e]">{tierInfo.minSales}</p>
+                <p className="text-2xl font-bold text-[#ff950e]">{tierInfo.minSales.toLocaleString()}</p>
               </div>
               <div className="bg-black rounded-lg p-4">
                 <p className="text-sm text-gray-400">Minimum Revenue</p>
-                <p className="text-2xl font-bold text-[#ff950e]">${tierInfo.minAmount}</p>
+                <p className="text-2xl font-bold text-[#ff950e]">{formatCurrency(tierInfo.minAmount)}</p>
               </div>
             </div>
           </div>
@@ -135,18 +189,12 @@ export default function TierDetailsModal({ selectedTier, onClose }: TierDetailsM
               {tiers.map((tier, index) => (
                 <div key={tier} className="flex items-center">
                   <div className={`flex flex-col items-center ${tier === selectedTier ? 'scale-110' : ''}`}>
-                    <TierBadge 
-                      tier={tier} 
-                      size="sm" 
-                      className={tier === selectedTier ? 'ring-2 ring-[#ff950e]' : 'opacity-60'}
-                    />
+                    <TierBadge tier={tier} size="sm" className={tier === selectedTier ? 'ring-2 ring-[#ff950e]' : 'opacity-60'} />
                     <span className={`text-xs mt-1 ${tier === selectedTier ? 'text-[#ff950e] font-bold' : 'text-gray-500'}`}>
                       {tier}
                     </span>
                   </div>
-                  {index < tiers.length - 1 && (
-                    <div className="w-8 h-0.5 bg-gray-700 mx-1" />
-                  )}
+                  {index < tiers.length - 1 && <div className="w-8 h-0.5 bg-gray-700 mx-1" />}
                 </div>
               ))}
             </div>
@@ -154,10 +202,7 @@ export default function TierDetailsModal({ selectedTier, onClose }: TierDetailsM
 
           {/* Action Button */}
           <div className="flex justify-center pt-4">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition"
-            >
+            <button onClick={onClose} className="px-6 py-3 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition" type="button">
               Got it!
             </button>
           </div>
