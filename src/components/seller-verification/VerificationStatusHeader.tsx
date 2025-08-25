@@ -2,6 +2,7 @@
 'use client';
 
 import { Shield } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface VerificationStatusHeaderProps {
   status: 'verified' | 'pending' | 'rejected' | 'unverified';
@@ -22,14 +23,15 @@ export default function VerificationStatusHeader({ status, title }: Verification
     }
   };
 
-  const getTextColor = () => {
-    return status === 'unverified' ? 'text-black' : 'text-white';
-  };
+  const iconColor =
+    status === 'verified' ? 'text-green-400' : status === 'pending' ? 'text-yellow-400' : status === 'rejected' ? 'text-red-400' : 'text-black';
+
+  const safeTitle = sanitizeStrict(title);
 
   return (
     <div className={`bg-gradient-to-r ${getBackgroundGradient()} px-6 py-5 flex items-center`}>
-      <Shield className={`w-8 h-8 ${status === 'verified' ? 'text-green-400' : status === 'pending' ? 'text-yellow-400' : status === 'rejected' ? 'text-red-400' : 'text-black'} mr-3`} />
-      <h1 className={`text-2xl font-bold ${getTextColor()}`}>{title}</h1>
+      <Shield className={`w-8 h-8 ${iconColor} mr-3`} aria-hidden="true" />
+      <h1 className={`text-2xl font-bold ${status === 'unverified' ? 'text-black' : 'text-white'}`}>{safeTitle}</h1>
     </div>
   );
 }

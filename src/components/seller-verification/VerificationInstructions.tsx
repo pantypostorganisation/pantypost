@@ -10,17 +10,14 @@ export default function VerificationInstructions() {
         <HelpCircle className="w-4 h-4 mr-2" />
         How to Take Your Verification Photo
       </h3>
-      
+
       <div className="flex justify-center mb-3">
-        <img 
-          src="/verification_instruction.png" 
-          alt="Verification Instructions" 
-          className="w-1/2 h-auto object-contain"
-        />
+        <img src="/verification_instruction.png" alt="Verification Instructions" className="w-1/2 h-auto object-contain" />
       </div>
-      
+
       <p className="text-sm text-gray-300 text-center">
-        Take a clear photo with your smartphone showing your face and the verification code on a piece of paper or displayed on another device.
+        Take a clear photo with your smartphone showing your face and the verification code on a piece of paper or displayed on another
+        device.
       </p>
     </div>
   );

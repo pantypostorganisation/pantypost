@@ -6,80 +6,88 @@ import { Camera, Upload, AlertCircle } from 'lucide-react';
 import { DocumentUploadFieldProps } from './utils/types';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { securityService } from '@/services/security.service';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
-function DocumentUploadField({ 
-  label, 
-  value, 
-  onFileChange, 
-  inputRef, 
+function DocumentUploadField({
+  label,
+  value,
+  onFileChange,
+  inputRef,
   required = false,
   helpText,
-  iconComponent
+  iconComponent,
 }: DocumentUploadFieldProps & { onError?: (error: string) => void }) {
   const Icon = iconComponent || Upload;
   const [error, setError] = useState<string>('');
-  
+
   // Handle secure file selection
   const handleSecureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError('');
     const file = e.target.files?.[0];
-    
+
     if (!file) return;
-    
+
     // Validate file
     const validation = securityService.validateFileUpload(file, {
       maxSize: 10 * 1024 * 1024, // 10MB for documents
       allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
     });
-    
+
     if (!validation.valid) {
       setError(validation.error || 'Invalid file');
       // Clear the input
-      if (e.target) e.target.value = '';
+      try {
+        if (e.target) e.target.value = '';
+      } catch {
+        /* no-op */
+      }
       return;
     }
-    
+
     // If valid, proceed with the original handler
     onFileChange(e);
   };
-  
+
+  const safeLabel = sanitizeStrict(label);
+  const safeHelp = helpText ? sanitizeStrict(helpText) : undefined;
+
   return (
     <div>
       <label className="text-sm text-gray-400 block mb-2">
-        {label}{required && ':'}
+        {safeLabel}
+        {required && ':'}
       </label>
       <div
         onClick={() => inputRef.current?.click()}
         className="relative border-2 border-dashed border-gray-700 hover:border-[#ff950e] rounded-lg p-4 cursor-pointer flex flex-col items-center justify-center transition h-40"
+        aria-label={`Upload ${safeLabel}`}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
       >
         {value ? (
-          <SecureImage 
-            src={value} 
-            alt={`${label} preview`} 
-            className="max-h-full max-w-full object-contain" 
-          />
+          <SecureImage src={value} alt={`${safeLabel} preview`} className="max-h-full max-w-full object-contain" />
         ) : (
           <>
-            {React.createElement(Icon, { className: "w-8 h-8 text-gray-500 mb-2" })}
+            {React.createElement(Icon, { className: 'w-8 h-8 text-gray-500 mb-2' })}
             <span className="text-xs text-gray-500">Click to upload</span>
           </>
         )}
       </div>
-      {helpText && <p className="text-xs text-gray-500 mt-1">{helpText}</p>}
+      {safeHelp && <p className="text-xs text-gray-500 mt-1">{safeHelp}</p>}
       {error && (
         <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
           <AlertCircle className="w-3 h-3" />
-          {error}
+          {sanitizeStrict(error)}
         </p>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleSecureFileChange}
-        className="hidden"
-      />
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleSecureFileChange} className="hidden" />
     </div>
   );
 }
@@ -111,7 +119,7 @@ export default function DocumentUploadSection({
   codePhotoRef,
   idFrontRef,
   idBackRef,
-  passportRef
+  passportRef,
 }: DocumentUploadSectionProps) {
   const [codePhotoError, setCodePhotoError] = useState<string>('');
 
@@ -119,23 +127,27 @@ export default function DocumentUploadSection({
   const handleSecureCodePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCodePhotoError('');
     const file = e.target.files?.[0];
-    
+
     if (!file) return;
-    
+
     // Validate file
     const validation = securityService.validateFileUpload(file, {
       maxSize: 10 * 1024 * 1024, // 10MB for documents
       allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
     });
-    
+
     if (!validation.valid) {
       setCodePhotoError(validation.error || 'Invalid file');
       // Clear the input
-      if (e.target) e.target.value = '';
+      try {
+        if (e.target) e.target.value = '';
+      } catch {
+        /* no-op */
+      }
       return;
     }
-    
+
     // If valid, proceed with the original handler
     onCodePhotoChange(e);
   };
@@ -144,21 +156,24 @@ export default function DocumentUploadSection({
     <div className="space-y-4">
       {/* Photo with code */}
       <div>
-        <label className="text-sm text-gray-400 block mb-2">
-          Photo with verification code (required):
-        </label>
+        <label className="text-sm text-gray-400 block mb-2">Photo with verification code (required):</label>
         <div className="flex items-center gap-3">
           <div
             onClick={() => codePhotoRef.current?.click()}
             className="relative border-2 border-dashed border-gray-700 hover:border-[#ff950e] rounded-lg p-4 cursor-pointer flex flex-col items-center justify-center transition"
-            style={{ height: "120px", width: "120px" }}
+            style={{ height: '120px', width: '120px' }}
+            aria-label="Upload photo with verification code"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                codePhotoRef.current?.click();
+              }
+            }}
           >
             {codePhoto ? (
-              <SecureImage 
-                src={codePhoto} 
-                alt="Code preview" 
-                className="max-h-full max-w-full object-contain" 
-              />
+              <SecureImage src={codePhoto} alt="Code preview" className="max-h-full max-w-full object-contain" />
             ) : (
               <>
                 <Camera className="w-8 h-8 text-gray-500 mb-2" />
@@ -166,32 +181,22 @@ export default function DocumentUploadSection({
               </>
             )}
           </div>
-          
+
           <div className="flex-1">
-            <p className="text-sm text-gray-300 mb-2">
-              Take a clear photo holding the code above next to your face
-            </p>
-            <p className="text-xs text-gray-500">
-              Make sure your face and the code are clearly visible
-            </p>
+            <p className="text-sm text-gray-300 mb-2">Take a clear photo holding the code above next to your face</p>
+            <p className="text-xs text-gray-500">Make sure your face and the code are clearly visible</p>
             {codePhotoError && (
               <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                {codePhotoError}
+                {sanitizeStrict(codePhotoError)}
               </p>
             )}
           </div>
-          
-          <input
-            ref={codePhotoRef}
-            type="file"
-            accept="image/*"
-            onChange={handleSecureCodePhotoChange}
-            className="hidden"
-          />
+
+          <input ref={codePhotoRef} type="file" accept="image/*" onChange={handleSecureCodePhotoChange} className="hidden" />
         </div>
       </div>
-      
+
       {/* ID Documents */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
         <DocumentUploadField
@@ -200,14 +205,9 @@ export default function DocumentUploadSection({
           onFileChange={onIdFrontChange}
           inputRef={idFrontRef}
         />
-        
-        <DocumentUploadField
-          label="ID Back (if using driver's license)"
-          value={idBack}
-          onFileChange={onIdBackChange}
-          inputRef={idBackRef}
-        />
-        
+
+        <DocumentUploadField label="ID Back (if using driver's license)" value={idBack} onFileChange={onIdBackChange} inputRef={idBackRef} />
+
         <div className="sm:col-span-2">
           <DocumentUploadField
             label="Passport (instead of driver's license)"

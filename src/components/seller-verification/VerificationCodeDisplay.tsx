@@ -2,6 +2,7 @@
 'use client';
 
 import { RefreshCw } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface VerificationCodeDisplayProps {
   code: string;
@@ -10,26 +11,26 @@ interface VerificationCodeDisplayProps {
   showRefreshIcon?: boolean;
 }
 
-export default function VerificationCodeDisplay({ 
-  code, 
-  title = "Your Unique Verification Code",
+export default function VerificationCodeDisplay({
+  code,
+  title = 'Your Unique Verification Code',
   description = "Write this code on a piece of paper. You'll need to take a photo holding this code.",
-  showRefreshIcon = false
+  showRefreshIcon = false,
 }: VerificationCodeDisplayProps) {
+  const safeCode = sanitizeStrict(code || '');
+  const safeTitle = sanitizeStrict(title);
+  const safeDescription = sanitizeStrict(description);
+
   return (
     <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
       <h4 className="font-medium text-[#ff950e] mb-2 flex items-center">
-        {showRefreshIcon && <RefreshCw className="w-4 h-4 mr-2" />}
-        {title}
+        {showRefreshIcon && <RefreshCw className="w-4 h-4 mr-2" aria-hidden="true" />}
+        {safeTitle}
       </h4>
-      <div className="bg-black py-3 px-4 rounded-lg border border-gray-700 text-center mb-2">
-        <span className="font-mono text-xl text-[#ff950e] font-bold">
-          {code}
-        </span>
+      <div className="bg-black py-3 px-4 rounded-lg border border-gray-700 text-center mb-2" aria-live="polite">
+        <span className="font-mono text-xl text-[#ff950e] font-bold">{safeCode || '—'}</span>
       </div>
-      <p className="text-sm text-gray-400">
-        {description}
-      </p>
+      <p className="text-sm text-gray-400">{safeDescription}</p>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 // src/components/seller-verification/VerificationBenefits.tsx
 'use client';
 
+import { sanitizeStrict } from '@/utils/security/sanitization';
+
 interface BenefitCardProps {
   imageSrc: string;
   imageAlt: string;
@@ -9,15 +11,15 @@ interface BenefitCardProps {
 }
 
 function BenefitCard({ imageSrc, imageAlt, title, description }: BenefitCardProps) {
+  const safeAlt = sanitizeStrict(imageAlt);
+  const safeTitle = sanitizeStrict(title);
+  const safeDesc = sanitizeStrict(description);
+
   return (
     <div className="bg-[#1a1a1a] p-4 rounded-lg border border-gray-800 flex flex-col items-center">
-      <img 
-        src={imageSrc} 
-        alt={imageAlt} 
-        className="w-7 h-7 object-contain mb-3"
-      />
-      <h3 className="font-medium mb-1">{title}</h3>
-      <p className="text-gray-400 text-xs text-center">{description}</p>
+      <img src={imageSrc} alt={safeAlt} className="w-7 h-7 object-contain mb-3" />
+      <h3 className="font-medium mb-1">{safeTitle}</h3>
+      <p className="text-gray-400 text-xs text-center">{safeDesc}</p>
     </div>
   );
 }
