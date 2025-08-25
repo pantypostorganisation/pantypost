@@ -12,14 +12,25 @@ import VerificationInstructions from '../VerificationInstructions';
 import DocumentUploadSection from '../DocumentUploadSection';
 import { VerificationStateProps } from '../utils/types';
 import { toBase64 } from '../utils/verificationHelpers';
+import { securityService } from '@/services/security.service';
+import { sanitizeStrict } from '@/utils/security/sanitization';
+import { z } from 'zod';
 
 interface UnverifiedStateProps extends VerificationStateProps {
   onSubmit: (docs: any) => void;
 }
 
-export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStateProps) {
+const PropsSchema = z.object({
+  code: z.string().default(''),
+  onSubmit: z.function().args(z.any()).returns(z.promise(z.void())).or(z.function().args(z.any()).returns(z.void())),
+});
+
+export default function UnverifiedState(rawProps: UnverifiedStateProps) {
+  const parsed = PropsSchema.safeParse(rawProps);
+  const { code, onSubmit } = parsed.success ? parsed.data : { code: '', onSubmit: async () => {} };
+
   const router = useRouter();
-  
+
   const [codePhoto, setCodePhoto] = useState<string | null>(null);
   const [idFront, setIdFront] = useState<string | null>(null);
   const [idBack, setIdBack] = useState<string | null>(null);
@@ -27,42 +38,56 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
-  
+
   const codePhotoInputRef = useRef<HTMLInputElement>(null);
   const idFrontInputRef = useRef<HTMLInputElement>(null);
   const idBackInputRef = useRef<HTMLInputElement>(null);
   const passportInputRef = useRef<HTMLInputElement>(null);
-  
-  const handleFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    setter: (val: string) => void
-  ) => {
+
+  const validateFile = (file: File) =>
+    securityService.validateFileUpload(file, {
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+    });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
     if (file) {
+      const v = validateFile(file);
+      if (!v.valid) {
+        setValidationError(v.error || 'Invalid file. Please choose a JPG/PNG/WebP under 5MB.');
+        try {
+          e.target.value = '';
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       try {
-        const base64 = await toBase64(file);
+        const base64 = (await toBase64(file)) as string;
         setter(base64);
         setValidationError(''); // Clear any previous errors
       } catch (error) {
-        console.error("Error converting file:", error);
-        setValidationError("Failed to process image. Please try again with a smaller file.");
+        console.error('Error converting file:', error);
+        setValidationError('Failed to process image. Please try again with a smaller file.');
       }
     }
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError('');
-    
+
     if (!codePhoto || (!idFront && !passport)) {
       setValidationError('Please upload all required documents.');
       return;
     }
-    
+
     setSubmitting(true);
 
     const docs = {
-      code,
+      code: sanitizeStrict(code || ''),
       codePhoto,
       idFront: idFront || undefined,
       idBack: idBack || undefined,
@@ -79,13 +104,13 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
       setValidationError('Failed to submit verification. Please try again.');
     }
   };
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white py-10 px-4 sm:px-6">
       <div className="max-w-2xl mx-auto">
         <div className="bg-[#121212] rounded-xl shadow-xl overflow-hidden border border-gray-800">
           <VerificationStatusHeader status="unverified" title="Seller Verification" />
-          
+
           <div className="p-6 sm:p-8">
             {/* Introduction */}
             <div className="mb-8">
@@ -97,23 +122,19 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
                 </p>
                 {/* Preview of the verification badge */}
                 <div className="flex-shrink-0 w-20 h-20">
-                  <img 
-                    src="/verification_badge.png" 
-                    alt="Verification Badge" 
-                    className="w-full h-full object-contain"
-                  />
+                  <img src="/verification_badge.png" alt="Verification Badge" className="w-full h-full object-contain" />
                 </div>
               </div>
-              
+
               <VerificationBenefits />
             </div>
-            
+
             {/* Verification Code */}
             <div className="mb-8">
               <h3 className="text-lg font-medium mb-4">Verification Steps</h3>
-              
-              <VerificationCodeDisplay code={code} />
-              
+
+              <VerificationCodeDisplay code={sanitizeStrict(code || '')} />
+
               <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
                 <h4 className="font-medium text-[#ff950e] mb-2">2. Required Documents</h4>
                 <ul className="text-sm text-gray-300 space-y-2">
@@ -132,10 +153,10 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
                 </ul>
               </div>
             </div>
-            
+
             {/* Verification Instruction Image */}
             <VerificationInstructions />
-            
+
             {/* Upload Form */}
             <SecureForm
               onSubmit={handleSubmit}
@@ -144,7 +165,7 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
             >
               <div className="border-t border-gray-800 pt-6">
                 <h3 className="font-medium text-white mb-4">Upload Verification Documents</h3>
-                
+
                 <DocumentUploadSection
                   codePhoto={codePhoto}
                   idFront={idFront}
@@ -159,17 +180,17 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
                   idBackRef={idBackInputRef}
                   passportRef={passportInputRef}
                 />
-                
+
                 {/* Validation Error */}
                 {validationError && (
                   <div className="mt-4 p-3 bg-red-900/20 border border-red-700 rounded-lg">
                     <p className="text-sm text-red-400 flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4" />
-                      {validationError}
+                      {sanitizeStrict(validationError)}
                     </p>
                   </div>
                 )}
-                
+
                 {/* Help Text */}
                 <div className="mt-6 bg-[#1a1a1a] rounded-lg p-4 border border-gray-800">
                   <h4 className="text-sm font-medium text-white flex items-center mb-2">
@@ -183,7 +204,7 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
                     <li>• Make sure all documents are clear and legible</li>
                   </ul>
                 </div>
-                
+
                 <div className="mt-8 flex gap-3">
                   <button
                     type="submit"
@@ -204,12 +225,8 @@ export default function UnverifiedState({ user, code, onSubmit }: UnverifiedStat
                     Back to Profile
                   </button>
                 </div>
-                
-                {submitted && (
-                  <p className="text-green-500 text-center mt-4">
-                    ✅ Verification submitted successfully! Redirecting...
-                  </p>
-                )}
+
+                {submitted && <p className="text-green-500 text-center mt-4">✅ Verification submitted successfully! Redirecting...</p>}
               </div>
             </SecureForm>
           </div>

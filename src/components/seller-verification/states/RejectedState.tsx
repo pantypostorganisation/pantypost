@@ -12,14 +12,29 @@ import VerificationInstructions from '../VerificationInstructions';
 import DocumentUploadSection from '../DocumentUploadSection';
 import { VerificationStateProps } from '../utils/types';
 import { toBase64 } from '../utils/verificationHelpers';
+import { securityService } from '@/services/security.service';
+import { z } from 'zod';
 
 interface RejectedStateProps extends VerificationStateProps {
   onSubmit: (docs: any) => void;
 }
 
-export default function RejectedState({ user, code, onSubmit }: RejectedStateProps) {
+const PropsSchema = z.object({
+  user: z
+    .object({
+      verificationRejectionReason: z.string().optional(),
+    })
+    .passthrough(),
+  code: z.string().default(''),
+  onSubmit: z.function().args(z.any()).returns(z.promise(z.void())).or(z.function().args(z.any()).returns(z.void())),
+});
+
+export default function RejectedState(rawProps: RejectedStateProps) {
+  const parsed = PropsSchema.safeParse(rawProps);
+  const { user, code, onSubmit } = parsed.success ? parsed.data : { user: {}, code: '', onSubmit: async () => {} };
+
   const router = useRouter();
-  
+
   const [codePhoto, setCodePhoto] = useState<string | null>(null);
   const [idFront, setIdFront] = useState<string | null>(null);
   const [idBack, setIdBack] = useState<string | null>(null);
@@ -27,42 +42,57 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [validationError, setValidationError] = useState<string>('');
-  
+
   const codePhotoInputRef = useRef<HTMLInputElement>(null);
   const idFrontInputRef = useRef<HTMLInputElement>(null);
   const idBackInputRef = useRef<HTMLInputElement>(null);
   const passportInputRef = useRef<HTMLInputElement>(null);
-  
-  const handleFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    setter: (val: string) => void
-  ) => {
+
+  const validateFile = (file: File) =>
+    securityService.validateFileUpload(file, {
+      maxSize: 5 * 1024 * 1024, // 5MB
+      allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+    });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    const v = validateFile(file);
+    if (!v.valid) {
+      setValidationError(v.error || 'Invalid file. Please choose a JPG/PNG/WebP under 5MB.');
       try {
-        const base64 = await toBase64(file);
-        setter(base64);
-        setValidationError(''); // Clear any previous errors
-      } catch (error) {
-        console.error("Error converting file:", error);
-        setValidationError("Failed to process image. Please try again with a smaller file.");
+        e.target.value = '';
+      } catch {
+        /* ignore */
       }
+      return;
+    }
+
+    try {
+      const base64 = await toBase64(file);
+      setter(base64 as string);
+      setValidationError(''); // Clear any previous errors
+    } catch (error) {
+      console.error('Error converting file:', error);
+      setValidationError('Failed to process image. Please try again with a smaller file.');
     }
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError('');
-    
+
     if (!codePhoto || (!idFront && !passport)) {
       setValidationError('Please upload all required documents.');
       return;
     }
-    
+
     setSubmitting(true);
 
     const docs = {
-      code,
+      code: sanitizeStrict(code || ''),
       codePhoto,
       idFront: idFront || undefined,
       idBack: idBack || undefined,
@@ -79,19 +109,19 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
       setValidationError('Failed to submit verification. Please try again.');
     }
   };
-  
+
   // Sanitize rejection reason for display
   const sanitizedRejectionReason = sanitizeStrict(
-    user.verificationRejectionReason || 
-    "Your verification documents did not meet our requirements. Please review and submit again."
+    (user as any).verificationRejectionReason ||
+      'Your verification documents did not meet our requirements. Please review and submit again.'
   );
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white py-10 px-4 sm:px-6">
       <div className="max-w-2xl mx-auto">
         <div className="bg-[#121212] rounded-xl shadow-xl overflow-hidden border border-red-800">
           <VerificationStatusHeader status="rejected" title="Verification Status" />
-          
+
           <div className="p-6 sm:p-8">
             <div className="flex flex-col items-center justify-center text-center mb-6">
               <div className="w-20 h-20 bg-red-900 bg-opacity-30 rounded-full flex items-center justify-center mb-4">
@@ -100,29 +130,27 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
               <h2 className="text-2xl font-bold text-white mb-2">Verification Rejected</h2>
               <p className="text-red-400 font-medium">Your verification request was not approved</p>
             </div>
-            
+
             {/* Rejection Reason */}
             <div className="bg-red-900 bg-opacity-20 border border-red-800 rounded-lg p-4 my-4">
               <h3 className="text-red-400 font-medium mb-2 flex items-center">
                 <AlertTriangle className="w-5 h-5 mr-2" />
                 Reason for Rejection
               </h3>
-              <p className="text-gray-300 text-sm">
-                {sanitizedRejectionReason}
-              </p>
+              <p className="text-gray-300 text-sm">{sanitizedRejectionReason}</p>
             </div>
-            
+
             {/* New verification code */}
-            <VerificationCodeDisplay 
-              code={code}
+            <VerificationCodeDisplay
+              code={sanitizeStrict(code || '')}
               title="Your New Verification Code"
               description="You must use this new code in your verification photo"
               showRefreshIcon
             />
-            
+
             {/* Verification Instruction Image */}
             <VerificationInstructions />
-            
+
             {/* Upload Form */}
             <SecureForm
               onSubmit={handleSubmit}
@@ -131,7 +159,7 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
             >
               <div className="mt-4">
                 <h3 className="font-medium text-white mb-4">Upload New Documents</h3>
-                
+
                 <DocumentUploadSection
                   codePhoto={codePhoto}
                   idFront={idFront}
@@ -146,17 +174,17 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
                   idBackRef={idBackInputRef}
                   passportRef={passportInputRef}
                 />
-                
+
                 {/* Validation Error */}
                 {validationError && (
                   <div className="mt-4 p-3 bg-red-900/20 border border-red-700 rounded-lg">
                     <p className="text-sm text-red-400 flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4" />
-                      {validationError}
+                      {sanitizeStrict(validationError)}
                     </p>
                   </div>
                 )}
-                
+
                 <div className="mt-8 flex gap-3">
                   <button
                     type="submit"
@@ -177,12 +205,8 @@ export default function RejectedState({ user, code, onSubmit }: RejectedStatePro
                     Back to Profile
                   </button>
                 </div>
-                
-                {submitted && (
-                  <p className="text-green-500 text-center mt-4">
-                    ✅ Verification submitted successfully! Redirecting...
-                  </p>
-                )}
+
+                {submitted && <p className="text-green-500 text-center mt-4">✅ Verification submitted successfully! Redirecting...</p>}
               </div>
             </SecureForm>
           </div>
