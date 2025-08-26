@@ -10,6 +10,7 @@ import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services/security.service';
 import { sanitizeStrict, sanitizeHtml, sanitizeCurrency } from '@/utils/security/sanitization';
 import { useRateLimit } from '@/utils/security/rate-limiter';
+import { reportsService } from '@/services/reports.service';
 import { messageSchemas, financialSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -602,16 +603,35 @@ export function useSellerMessages() {
   }, [activeThread, user, isBlocked, unblockUser, blockUser]);
   
   // Handle report
-  const handleReport = useCallback(() => {
+  const handleReport = useCallback(async () => {
     if (!activeThread || !user) return;
     
     if (!hasReported(user.username, activeThread)) {
-      reportUser(user.username, activeThread);
+      // Use the reports service to send to MongoDB
+      const reportData = {
+       reportedUser: activeThread,
+       reportType: 'harassment' as const,
+       description: `Buyer reported from messages by seller ${user.username}`,
+       severity: 'medium' as const,
+       relatedMessageId: threads[activeThread]?.[threads[activeThread].length - 1]?.id as string | undefined
+     };
+      
+      try {
+        const response = await reportsService.submitReport(reportData);
+        if (response.success) {
+          // Also update local state for UI
+          reportUser(user.username, activeThread);
+        }
+      } catch (error) {
+        console.error('Failed to submit report:', error);
+        // Fallback to local report
+        reportUser(user.username, activeThread);
+      }
     }
     
     // Force update
     setMessageUpdateCounter(prev => prev + 1);
-  }, [activeThread, user, hasReported, reportUser]);
+  }, [activeThread, user, hasReported, reportUser, threads]);
   
   // Handle accepting custom request with validation
   const handleAccept = useCallback(async (customRequestId: string) => {

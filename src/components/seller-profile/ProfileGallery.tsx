@@ -10,7 +10,7 @@ const PropsSchema = z.object({
   slideIndex: z.number().int().nonnegative().default(0),
   isPaused: z.boolean().default(false),
   onSlideChange: z.function().args(z.number().int().nonnegative()).returns(z.void()),
-  onTogglePause: z.function().args().returns(z.void()),
+  onTogglePause: z.function().args(z.any().optional()).returns(z.void()),
   onImageClick: z.function().args(z.string(), z.number()).returns(z.void()),
   onPrevSlide: z.function().args(z.any().optional()).returns(z.void()),
   onNextSlide: z.function().args(z.any().optional()).returns(z.void()),

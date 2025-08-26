@@ -63,7 +63,6 @@ const UserSchema = z
     username: z.string().default(''),
     role: z.enum(['buyer', 'seller', 'admin']).optional(),
   })
-  .passthrough()
   .nullable()
   .optional();
 
@@ -75,7 +74,6 @@ const SellerTierInfoSchema = z
   .object({
     tier: z.unknown().optional(),
   })
-  .passthrough()
   .nullable()
   .optional();
 

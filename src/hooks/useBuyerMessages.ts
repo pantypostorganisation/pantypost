@@ -18,6 +18,7 @@ import { useLocalStorage } from './useLocalStorage';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services';
 import { tipService } from '@/services/tip.service';
+import { reportsService } from '@/services/reports.service';
 import {
   saveRecentEmojis,
   getRecentEmojis,
@@ -620,10 +621,30 @@ export const useBuyerMessages = () => {
     }
   }, [activeThread, user, blockedUsers, unblockUser, blockUser]);
   
-  const handleReport = useCallback(() => {
-    if (!activeThread || !user) return;
-    reportUser(user.username, activeThread);
-  }, [activeThread, user, reportUser]);
+  const handleReport = useCallback(async () => {
+   if (!activeThread || !user) return;
+   
+   // Use the reports service to send to MongoDB
+   const reportData = {
+     reportedUser: activeThread,
+     reportType: 'harassment' as const,
+     description: `User reported from messages by ${user.username}`,
+     severity: 'medium' as const,
+     relatedMessageId: threads[activeThread]?.[threads[activeThread].length - 1]?.id
+   };
+   
+   try {
+     const response = await reportsService.submitReport(reportData);
+     if (response.success) {
+       // Also update local state for UI
+       reportUser(user.username, activeThread);
+     }
+   } catch (error) {
+     console.error('Failed to submit report:', error);
+     // Fallback to local report
+     reportUser(user.username, activeThread);
+   }
+ }, [activeThread, user, reportUser, threads]);
   
   // FIXED: Handle accepting custom request (by buyer when seller edits)
   const handleAccept = useCallback(async (request: any) => {

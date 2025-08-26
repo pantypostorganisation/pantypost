@@ -23,6 +23,8 @@ export const FEATURES = {
   USE_API_MESSAGES: process.env.NEXT_PUBLIC_USE_API_MESSAGES !== 'false',
   USE_API_WALLET: process.env.NEXT_PUBLIC_USE_API_WALLET !== 'false',
   USE_API_USERS: process.env.NEXT_PUBLIC_USE_API_USERS !== 'false',
+  USE_API_BANS: process.env.NEXT_PUBLIC_USE_API_BANS !== 'false',
+  USE_API_REPORTS: process.env.NEXT_PUBLIC_USE_API_REPORTS !== 'false',
   USE_MOCK_API: false, // Always false - no mocks!
 };
 

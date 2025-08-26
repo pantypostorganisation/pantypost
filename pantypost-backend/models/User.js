@@ -121,7 +121,17 @@ const userSchema = new mongoose.Schema({
     default: 0
   },
   
-  // FAVORITES FIELDS (NEW)
+  // REPORT FIELDS (NEW)
+  reportCount: {
+    type: Number,
+    default: 0
+  },
+  lastReportedAt: {
+    type: Date,
+    default: null
+  },
+  
+  // FAVORITES FIELDS
   favorites: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Favorite'
@@ -161,7 +171,7 @@ const userSchema = new mongoose.Schema({
   banExpiry: Date,
   bannedBy: String,
   
-  // ACTIVITY TRACKING - NEW FIELDS
+  // ACTIVITY TRACKING
   isOnline: {
     type: Boolean,
     default: false

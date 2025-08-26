@@ -1,14 +1,15 @@
+// src/app/admin/bans/page.tsx
 'use client';
 
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import { Shield, AlertTriangle, RefreshCw, Download } from 'lucide-react';
 import { FilterOptions, BanStats } from '@/types/ban';
-import { UserBan } from '@/context/BanContext';
-import { useBanManagement } from '@/hooks/useBanManagement';
-import { isValidBan } from '@/utils/banUtils';
+import { banService } from '@/services/ban.service';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import {
   BanListSkeleton,
   AdminStatsSkeleton
@@ -29,27 +30,10 @@ const AnalyticsContent = lazy(() => import('@/components/admin/bans/AnalyticsCon
 
 type TabKey = 'active' | 'expired' | 'appeals' | 'history' | 'analytics';
 
-// Tab content loading skeleton
-function TabContentSkeleton() {
-  return <BanListSkeleton count={5} />;
-}
-
-// Modal loading skeleton
-function ModalSkeleton() {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-      <div className="bg-[#1a1a1a] rounded-lg p-6 w-full max-w-md">
-        <div className="h-6 bg-gray-800 rounded w-32 mb-4 animate-pulse" />
-        <div className="space-y-3">
-          <div className="h-4 bg-gray-800 rounded animate-pulse" />
-          <div className="h-4 bg-gray-800 rounded w-3/4 animate-pulse" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function BanManagementPage() {
+  const { user } = useAuth();
+  const { success: showSuccess, error: showError } = useToast();
+  
   const [activeTab, setActiveTab] = useState<TabKey>('active');
   const [filters, setFilters] = useState<FilterOptions>({
     searchTerm: '',
@@ -57,370 +41,237 @@ export default function BanManagementPage() {
     sortBy: 'date',
     sortOrder: 'desc'
   });
+  
+  // Ban data from MongoDB
+  const [activeBans, setActiveBans] = useState<any[]>([]);
+  const [expiredBans, setExpiredBans] = useState<any[]>([]);
+  const [banHistory, setBanHistory] = useState<any[]>([]);
+  const [banStats, setBanStats] = useState<BanStats>({
+    totalActiveBans: 0,
+    temporaryBans: 0,
+    permanentBans: 0,
+    pendingAppeals: 0,
+    recentBans24h: 0,
+    bansByReason: {
+      harassment: 0,
+      spam: 0,
+      inappropriate_content: 0,
+      scam: 0,
+      underage: 0,
+      payment_fraud: 0,
+      other: 0
+    },
+    appealStats: {
+      totalAppeals: 0,
+      pendingAppeals: 0,
+      approvedAppeals: 0,
+      rejectedAppeals: 0
+    }
+  });
+  
+  const [selectedBan, setSelectedBan] = useState<any>(null);
+  const [expandedBans, setExpandedBans] = useState<Set<string>>(new Set());
+  const [appealReviewNotes, setAppealReviewNotes] = useState('');
+  const [selectedEvidence, setSelectedEvidence] = useState<string[]>([]);
+  const [evidenceIndex, setEvidenceIndex] = useState(0);
+  
   const [showUnbanModal, setShowUnbanModal] = useState(false);
   const [showAppealModal, setShowAppealModal] = useState(false);
-  const [showEvidenceModal, setShowEvidenceModal] = useState(false); // FIX: was missing
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const {
-    user,
-    banContext,
-    getActiveBans,
-    getExpiredBans,
-    getBanStats,
-    unbanUser,
-    reviewAppeal,
-    banHistory,
-    selectedBan,
-    setSelectedBan,
-    isLoading,
-    setIsLoading,
-    expandedBans,
-    setExpandedBans,
-    toggleBanExpansion,
-    appealReviewNotes,
-    setAppealReviewNotes,
-    selectedEvidence,
-    setSelectedEvidence,
-    evidenceIndex,
-    setEvidenceIndex,
-    refreshBanData,
-    rateLimitError
-  } = useBanManagement();
-
-  // Early return if ban context is not available
-  if (!banContext) {
-    return (
-      <RequireAuth role="admin">
-        <div className="min-h-screen bg-black text-white">
-          <main className="p-8 max-w-7xl mx-auto">
-            <div className="bg-[#1a1a1a] border border-red-800 rounded-lg p-8 text-center">
-              <AlertTriangle size={48} className="mx-auto text-red-400 mb-4" />
-              <h2 className="text-2xl font-bold text-red-400 mb-2">Ban System Unavailable</h2>
-              <p className="text-gray-400">
-                The ban management system is currently unavailable. Please refresh the page or contact support.
-              </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-4 px-6 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800]"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </main>
-        </div>
-      </RequireAuth>
-    );
-  }
-
-  // Force refresh data
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      if (refreshBanData) {
-        await refreshBanData();
-      } else {
-        window.location.reload();
-      }
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 500);
-    }
-  };
-
-  // Safe data retrieval with banContext check
-  const banStats: BanStats = (() => {
-    if (!banContext || typeof getBanStats !== 'function') {
-      return {
-        totalActiveBans: 0,
-        temporaryBans: 0,
-        permanentBans: 0,
-        pendingAppeals: 0,
-        recentBans24h: 0,
-        bansByReason: {
-          harassment: 0,
-          spam: 0,
-          inappropriate_content: 0,
-          scam: 0,
-          underage: 0,
-          payment_fraud: 0,
-          other: 0
-        },
-        appealStats: {
-          totalAppeals: 0,
-          pendingAppeals: 0,
-          approvedAppeals: 0,
-          rejectedAppeals: 0
-        }
-      };
-    }
-
-    try {
-      const stats = getBanStats();
-      return stats || {
-        totalActiveBans: 0,
-        temporaryBans: 0,
-        permanentBans: 0,
-        pendingAppeals: 0,
-        recentBans24h: 0,
-        bansByReason: {
-          harassment: 0,
-          spam: 0,
-          inappropriate_content: 0,
-          scam: 0,
-          underage: 0,
-          payment_fraud: 0,
-          other: 0
-        },
-        appealStats: {
-          totalAppeals: 0,
-          pendingAppeals: 0,
-          approvedAppeals: 0,
-          rejectedAppeals: 0
-        }
-      };
-    } catch (error) {
-      console.error('Error getting ban stats:', error);
-      return {
-        totalActiveBans: 0,
-        temporaryBans: 0,
-        permanentBans: 0,
-        pendingAppeals: 0,
-        recentBans24h: 0,
-        bansByReason: {
-          harassment: 0,
-          spam: 0,
-          inappropriate_content: 0,
-          scam: 0,
-          underage: 0,
-          payment_fraud: 0,
-          other: 0
-        },
-        appealStats: {
-          totalAppeals: 0,
-          pendingAppeals: 0,
-          approvedAppeals: 0,
-          rejectedAppeals: 0
-        }
-      };
-    }
-  })();
-
-  const activeBans = (() => {
-    if (!banContext || typeof getActiveBans !== 'function') {
-      return [];
-    }
-
-    try {
-      const bans = getActiveBans() || [];
-      console.log('[BanManagementPage] Active bans:', bans.length);
-      return bans;
-    } catch (error) {
-      console.error('Error getting active bans:', error);
-      return [];
-    }
-  })();
-
-  const expiredBans = (() => {
-    if (!banContext || typeof getExpiredBans !== 'function') {
-      return [];
-    }
-
-    try {
-      return getExpiredBans() || [];
-    } catch (error) {
-      console.error('Error getting expired bans:', error);
-      return [];
-    }
-  })();
-
-  const pendingAppeals = activeBans.filter(
-    (ban) => ban && (ban as any).appealSubmitted && (ban as any).appealStatus === 'pending'
-  );
-
-  const handleUnban = (ban: UserBan) => {
-    if (!isValidBan(ban)) {
-      alert('Invalid ban data - missing username');
-      return;
-    }
-    setSelectedBan(ban);
-    setShowUnbanModal(true);
-  };
-
-  const confirmUnban = async (reason: string) => {
-    if (!selectedBan || !selectedBan.username) {
-      alert('No ban selected or invalid ban data');
-      return;
-    }
-
-    if (rateLimitError) {
-      alert(rateLimitError);
-      return;
-    }
-
-    const sanitizedReason = sanitizeStrict(reason || 'Manually unbanned by admin');
-
+  // Fetch bans from MongoDB
+  const fetchBans = async () => {
     setIsLoading(true);
     try {
-      if (!banContext || typeof unbanUser !== 'function') {
-        alert('Unban function not available');
-        return;
+      // Fetch active bans
+      const activeBansResponse = await banService.getBans({ active: true });
+      if (activeBansResponse.success && activeBansResponse.data) {
+        // Safely access the data with type checking
+        const responseData = activeBansResponse.data as any;
+        const bansArray = responseData.bans || [];
+        
+        const transformedActiveBans = bansArray.map((ban: any) => ({
+          id: ban._id,
+          username: ban.username,
+          bannedBy: ban.bannedBy,
+          reason: ban.reason,
+          customReason: ban.customReason,
+          banType: ban.isPermanent ? 'permanent' : 'temporary',
+          duration: ban.duration,
+          notes: ban.notes,
+          startTime: ban.createdAt,
+          endTime: ban.expiresAt,
+          remainingHours: ban.duration && !ban.isPermanent ? 
+            Math.max(0, (new Date(ban.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60)) : 0,
+          appealSubmitted: ban.appealSubmitted,
+          appealText: ban.appealText,
+          appealDate: ban.appealDate,
+          appealStatus: ban.appealStatus,
+          appealEvidence: []
+        }));
+        setActiveBans(transformedActiveBans);
       }
-      const success = await unbanUser(
-        selectedBan.username,
-        user?.username || 'admin',
-        sanitizedReason
-      );
-      if (success) {
-        alert(`Successfully unbanned ${sanitizeStrict(selectedBan.username)}`);
-        setShowUnbanModal(false);
-        setSelectedBan(null);
-        handleRefresh();
-      } else {
-        alert('Failed to unban user - they may not be banned or an error occurred');
+
+      // Fetch expired bans
+      const expiredBansResponse = await banService.getBans({ active: false });
+      if (expiredBansResponse.success && expiredBansResponse.data) {
+        const responseData = expiredBansResponse.data as any;
+        setExpiredBans(responseData.bans || []);
       }
+
+      // Fetch ban stats
+      const statsResponse = await banService.getBanStats();
+      if (statsResponse.success && statsResponse.data) {
+        // Transform the data to match BanStats type
+        const statsData = statsResponse.data as any;
+        setBanStats({
+          totalActiveBans: statsData.totalActiveBans || 0,
+          temporaryBans: statsData.temporaryBans || 0,
+          permanentBans: statsData.permanentBans || 0,
+          pendingAppeals: statsData.pendingAppeals || 0,
+          recentBans24h: statsData.bansLast24h || 0,
+          bansByReason: statsData.bansByReason || {
+            harassment: 0,
+            spam: 0,
+            inappropriate_content: 0,
+            scam: 0,
+            underage: 0,
+            payment_fraud: 0,
+            other: 0
+          },
+          appealStats: statsData.appealStats || {
+            totalAppeals: 0,
+            pendingAppeals: 0,
+            approvedAppeals: 0,
+            rejectedAppeals: 0
+          }
+        });
+      }
+
+      // Build history from all bans
+      const allBans = [
+        ...(activeBansResponse.data && (activeBansResponse.data as any).bans ? (activeBansResponse.data as any).bans : []),
+        ...(expiredBansResponse.data && (expiredBansResponse.data as any).bans ? (expiredBansResponse.data as any).bans : [])
+      ];
+      const history = allBans.map((ban: any) => ({
+        id: ban._id,
+        username: ban.username,
+        action: ban.active ? 'banned' : 'unbanned',
+        details: `${ban.reason}${ban.customReason ? ': ' + ban.customReason : ''}`,
+        adminUsername: ban.bannedBy,
+        timestamp: ban.createdAt
+      }));
+      setBanHistory(history);
+
     } catch (error) {
-      console.error('Error unbanning user:', error);
-      alert('An error occurred while unbanning the user');
+      console.error('Error fetching bans:', error);
+      showError('Failed to load ban data');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAppealReview = (ban: UserBan) => {
-    if (!isValidBan(ban)) {
-      alert('Invalid ban data for appeal review');
-      return;
+  useEffect(() => {
+    fetchBans();
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchBans();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  const handleUnban = (ban: any) => {
+    setSelectedBan(ban);
+    setShowUnbanModal(true);
+  };
+
+  const confirmUnban = async (reason: string) => {
+    if (!selectedBan) return;
+
+    setIsLoading(true);
+    try {
+      const result = await banService.unbanUser(selectedBan.username, reason);
+      if (result.success) {
+        showSuccess(`Successfully unbanned ${selectedBan.username}`);
+        setShowUnbanModal(false);
+        setSelectedBan(null);
+        await fetchBans();
+      } else {
+        showError(result.error?.message || 'Failed to unban user');
+      }
+    } catch (error) {
+      console.error('Error unbanning user:', error);
+      showError('Failed to unban user');
+    } finally {
+      setIsLoading(false);
     }
-    if (!(ban as any).appealSubmitted) {
-      alert('No appeal has been submitted for this ban');
-      return;
-    }
+  };
+
+  const handleAppealReview = (ban: any) => {
     setSelectedBan(ban);
     setShowAppealModal(true);
     setAppealReviewNotes('');
   };
 
   const confirmAppealDecision = async (decision: 'approve' | 'reject' | 'escalate') => {
-    if (!selectedBan || !selectedBan.id) {
-      alert('No ban selected for appeal review');
+    if (!selectedBan || !appealReviewNotes.trim()) {
+      showError('Please provide review notes');
       return;
     }
-
-    if (!appealReviewNotes.trim()) {
-      alert('Please provide review notes explaining your decision');
-      return;
-    }
-
-    if (rateLimitError) {
-      alert(rateLimitError);
-      return;
-    }
-
-    const sanitizedNotes = sanitizeStrict(appealReviewNotes.trim());
 
     setIsLoading(true);
     try {
-      if (!banContext || typeof reviewAppeal !== 'function') {
-        alert('Review appeal function not available');
-        return;
-      }
-      const success = await reviewAppeal(
-        selectedBan.id,
-        decision,
-        sanitizedNotes,
-        user?.username || 'admin'
-      );
-      if (success) {
-        // FIX: Better grammar by mapping decisions to past tense
-        const decisionPast =
-          decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'escalated';
-        alert(`Appeal ${decisionPast} successfully`);
+      const result = await banService.reviewAppeal(selectedBan.id, decision, appealReviewNotes);
+      if (result.success) {
+        showSuccess(`Appeal ${decision}d successfully`);
         setShowAppealModal(false);
         setSelectedBan(null);
         setAppealReviewNotes('');
-        handleRefresh();
+        await fetchBans();
       } else {
-        alert('Failed to process appeal - please try again');
+        showError(result.error?.message || 'Failed to process appeal');
       }
     } catch (error) {
       console.error('Error processing appeal:', error);
-      alert('An error occurred while processing the appeal');
+      showError('Failed to process appeal');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const toggleBanExpansion = (banId: string) => {
+    setExpandedBans(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(banId)) {
+        newSet.delete(banId);
+      } else {
+        newSet.add(banId);
+      }
+      return newSet;
+    });
+  };
+
   const showEvidence = (evidence: string[]) => {
-    if (!evidence || !Array.isArray(evidence)) {
-      alert('No evidence available for this appeal');
-      return;
-    }
-
-    const validEvidence = evidence.filter((item) => typeof item === 'string' && item.length > 0);
-
-    if (validEvidence.length === 0) {
-      alert('No valid evidence files found');
-      return;
-    }
-
-    setSelectedEvidence(validEvidence);
+    setSelectedEvidence(evidence);
     setEvidenceIndex(0);
-    setShowEvidenceModal(true); // uses the newly added state
+    setShowEvidenceModal(true);
   };
 
   const exportBanData = () => {
     try {
-      const sanitizedData = {
-        activeBans:
-          activeBans.map((ban) =>
-            sanitizeObject(ban, {
-              maxDepth: 3,
-              keySanitizer: (key) => sanitizeStrict(key),
-              valueSanitizer: (value) => {
-                if (typeof value === 'string') {
-                  return sanitizeStrict(value);
-                }
-                return value;
-              }
-            })
-          ) || [],
-        expiredBans:
-          expiredBans.map((ban) =>
-            sanitizeObject(ban, {
-              maxDepth: 3,
-              keySanitizer: (key) => sanitizeStrict(key),
-              valueSanitizer: (value) => {
-                if (typeof value === 'string') {
-                  return sanitizeStrict(value);
-                }
-                return value;
-              }
-            })
-          ) || [],
-        banHistory: (banHistory || []).map((entry) =>
-          sanitizeObject(entry, {
-            maxDepth: 3,
-            keySanitizer: (key) => sanitizeStrict(key),
-            valueSanitizer: (value) => {
-              if (typeof value === 'string') {
-                return sanitizeStrict(value);
-              }
-              return value;
-            }
-          })
-        ),
-        banStats: sanitizeObject(banStats || {}, {
-          maxDepth: 3,
-          keySanitizer: (key) => sanitizeStrict(key),
-          valueSanitizer: (value) => value
-        }),
+      const exportData = {
+        activeBans,
+        expiredBans,
+        banHistory,
+        banStats,
         exportDate: new Date().toISOString(),
-        version: '1.0',
-        exportedBy: sanitizeStrict(user?.username || 'admin'),
-        totalRecords: (activeBans?.length || 0) + (expiredBans?.length || 0)
+        exportedBy: user?.username || 'admin'
       };
 
-      const blob = new Blob([JSON.stringify(sanitizedData, null, 2)], {
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
         type: 'application/json'
       });
       const url = URL.createObjectURL(blob);
@@ -432,37 +283,32 @@ export default function BanManagementPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      console.log('Ban data exported successfully');
+      showSuccess('Ban data exported successfully');
     } catch (error) {
       console.error('Error exporting ban data:', error);
-      alert('Failed to export ban data - please try again');
+      showError('Failed to export ban data');
     }
   };
 
   const handleFiltersChange = (newFilters: Partial<FilterOptions>) => {
-    const sanitizedFilters: Partial<FilterOptions> = { ...newFilters };
-
-    if ('searchTerm' in sanitizedFilters && sanitizedFilters.searchTerm) {
-      sanitizedFilters.searchTerm = securityService.sanitizeSearchQuery(
-        sanitizedFilters.searchTerm
-      );
-    }
-
-    setFilters((prev) => ({ ...prev, ...sanitizedFilters }));
+    setFilters(prev => ({ ...prev, ...newFilters }));
   };
+
+  const pendingAppeals = activeBans.filter(
+    ban => ban.appealSubmitted && ban.appealStatus === 'pending'
+  );
 
   return (
     <RequireAuth role="admin">
       <div className="min-h-screen bg-black text-white">
         <main className="p-8 max-w-7xl mx-auto">
-          {/* Header */}
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-bold text-[#ff950e] flex items-center">
                 <Shield className="mr-3" />
                 Ban Management
               </h1>
-              <p className="text-gray-400 mt-1">Manual ban oversight and appeal processing</p>
+              <p className="text-gray-400 mt-1">Manage user bans and appeals</p>
             </div>
 
             <div className="flex gap-3 flex-wrap">
@@ -484,119 +330,116 @@ export default function BanManagementPage() {
             </div>
           </div>
 
-          {/* Show rate limit error if exists */}
-          {rateLimitError && (
-            <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <p className="text-red-400">{rateLimitError}</p>
-            </div>
-          )}
+          {isLoading ? (
+            <>
+              <AdminStatsSkeleton />
+              <BanListSkeleton count={5} />
+            </>
+          ) : (
+            <>
+              <Suspense fallback={<AdminStatsSkeleton />}>
+                <BanStatsDashboard banStats={banStats} />
+              </Suspense>
 
-          {/* Lazy loaded stats dashboard */}
-          <Suspense fallback={<AdminStatsSkeleton />}>
-            <BanStatsDashboard banStats={banStats} />
-          </Suspense>
+              <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
+                <BanTabs
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  banStats={banStats}
+                  expiredCount={expiredBans.length}
+                  historyCount={banHistory.length}
+                />
+              </Suspense>
 
-          {/* Lazy loaded tabs */}
-          <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
-            <BanTabs
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              banStats={banStats}
-              expiredCount={expiredBans.length}
-              historyCount={banHistory?.length ?? 0} // FIX: guard against undefined
-            />
-          </Suspense>
+              <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
+                <BanFilters
+                  filters={filters}
+                  onFiltersChange={handleFiltersChange}
+                  showTypeFilter={['active', 'expired'].includes(activeTab)}
+                  isVisible={['active', 'expired', 'appeals'].includes(activeTab)}
+                />
+              </Suspense>
 
-          {/* Lazy loaded filters */}
-          <Suspense fallback={<div className="h-12 bg-gray-800 rounded mb-4 animate-pulse" />}>
-            <BanFilters
-              filters={filters}
-              onFiltersChange={handleFiltersChange}
-              showTypeFilter={['active', 'expired'].includes(activeTab)}
-              isVisible={['active', 'expired', 'appeals'].includes(activeTab)}
-            />
-          </Suspense>
+              <Suspense fallback={<BanListSkeleton count={5} />}>
+                {activeTab === 'active' && (
+                  <ActiveBansContent
+                    activeBans={activeBans}
+                    filters={filters}
+                    totalCount={banStats.totalActiveBans}
+                    expandedBans={expandedBans}
+                    onToggleExpand={toggleBanExpansion}
+                    onUnban={handleUnban}
+                    onReviewAppeal={handleAppealReview}
+                    onShowEvidence={showEvidence}
+                  />
+                )}
 
-          {/* Tab Content with lazy loading */}
-          <Suspense fallback={<TabContentSkeleton />}>
-            {activeTab === 'active' && (
-              <ActiveBansContent
-                activeBans={activeBans}
-                filters={filters}
-                totalCount={banStats.totalActiveBans}
-                expandedBans={expandedBans}
-                onToggleExpand={toggleBanExpansion}
-                onUnban={handleUnban}
-                onReviewAppeal={handleAppealReview}
-                onShowEvidence={showEvidence}
-              />
-            )}
+                {activeTab === 'expired' && (
+                  <ExpiredBansContent expiredBans={expiredBans} filters={filters} />
+                )}
 
-            {activeTab === 'expired' && (
-              <ExpiredBansContent expiredBans={expiredBans} filters={filters} />
-            )}
+                {activeTab === 'appeals' && (
+                  <AppealsContent
+                    pendingAppeals={pendingAppeals}
+                    onReviewAppeal={handleAppealReview}
+                    onShowEvidence={showEvidence}
+                  />
+                )}
 
-            {activeTab === 'appeals' && (
-              <AppealsContent
-                pendingAppeals={pendingAppeals}
-                onReviewAppeal={handleAppealReview}
-                onShowEvidence={showEvidence}
-              />
-            )}
+                {activeTab === 'history' && (
+                  <HistoryContent banHistory={banHistory} filters={filters} />
+                )}
 
-            {activeTab === 'history' && (
-              <HistoryContent banHistory={banHistory} filters={filters} />
-            )}
+                {activeTab === 'analytics' && <AnalyticsContent banStats={banStats} />}
+              </Suspense>
 
-            {activeTab === 'analytics' && <AnalyticsContent banStats={banStats} />}
-          </Suspense>
+              {showUnbanModal && (
+                <Suspense fallback={null}>
+                  <UnbanModal
+                    ban={selectedBan}
+                    isLoading={isLoading}
+                    onClose={() => {
+                      setShowUnbanModal(false);
+                      setSelectedBan(null);
+                    }}
+                    onConfirm={confirmUnban}
+                  />
+                </Suspense>
+              )}
 
-          {/* Modals with lazy loading */}
-          {showUnbanModal && (
-            <Suspense fallback={<ModalSkeleton />}>
-              <UnbanModal
-                ban={selectedBan}
-                isLoading={isLoading}
-                onClose={() => {
-                  setShowUnbanModal(false);
-                  setSelectedBan(null);
-                }}
-                onConfirm={confirmUnban}
-              />
-            </Suspense>
-          )}
+              {showAppealModal && (
+                <Suspense fallback={null}>
+                  <AppealReviewModal
+                    ban={selectedBan}
+                    appealReviewNotes={appealReviewNotes}
+                    setAppealReviewNotes={setAppealReviewNotes}
+                    isLoading={isLoading}
+                    onClose={() => {
+                      setShowAppealModal(false);
+                      setSelectedBan(null);
+                      setAppealReviewNotes('');
+                    }}
+                    onConfirm={confirmAppealDecision}
+                    onShowEvidence={showEvidence}
+                  />
+                </Suspense>
+              )}
 
-          {showAppealModal && (
-            <Suspense fallback={<ModalSkeleton />}>
-              <AppealReviewModal
-                ban={selectedBan}
-                appealReviewNotes={appealReviewNotes}
-                setAppealReviewNotes={setAppealReviewNotes}
-                isLoading={isLoading}
-                onClose={() => {
-                  setShowAppealModal(false);
-                  setSelectedBan(null);
-                  setAppealReviewNotes('');
-                }}
-                onConfirm={confirmAppealDecision}
-                onShowEvidence={showEvidence}
-              />
-            </Suspense>
-          )}
-
-          {showEvidenceModal && (
-            <Suspense fallback={<ModalSkeleton />}>
-              <EvidenceModal
-                evidence={selectedEvidence}
-                evidenceIndex={evidenceIndex}
-                setEvidenceIndex={setEvidenceIndex}
-                onClose={() => {
-                  setShowEvidenceModal(false);
-                  setSelectedEvidence([]);
-                  setEvidenceIndex(0);
-                }}
-              />
-            </Suspense>
+              {showEvidenceModal && (
+                <Suspense fallback={null}>
+                  <EvidenceModal
+                    evidence={selectedEvidence}
+                    evidenceIndex={evidenceIndex}
+                    setEvidenceIndex={setEvidenceIndex}
+                    onClose={() => {
+                      setShowEvidenceModal(false);
+                      setSelectedEvidence([]);
+                      setEvidenceIndex(0);
+                    }}
+                  />
+                </Suspense>
+              )}
+            </>
           )}
         </main>
       </div>

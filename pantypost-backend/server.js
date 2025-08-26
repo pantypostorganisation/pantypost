@@ -1,3 +1,4 @@
+// pantypost-backend/server.js
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -17,6 +18,7 @@ const webSocketService = require('./config/websocket');
 const User = require('./models/User');
 const Notification = require('./models/Notification');
 const Verification = require('./models/Verification');
+const Ban = require('./models/Ban');
 
 // Import middleware
 const authMiddleware = require('./middleware/auth.middleware');
@@ -37,6 +39,8 @@ const favoriteRoutes = require('./routes/favorite.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const verificationRoutes = require('./routes/verification.routes');
 const adminRoutes = require('./routes/admin.routes');
+const reportRoutes = require('./routes/report.routes');
+const banRoutes = require('./routes/ban.routes'); // NEW
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -95,6 +99,8 @@ app.get('/api/health', (req, res) => {
       favorites: true,
       notifications: true,
       verification: true,
+      reports: true,
+      bans: true
     },
   });
 });
@@ -106,7 +112,7 @@ app.use('/api/listings', listingRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/wallet', walletRoutes);
-app.use('/api/subscriptions', subscriptionRoutes); // primary
+app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tiers', tierRoutes);
@@ -115,6 +121,8 @@ app.use('/api/favorites', favoriteRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', banRoutes); // NEW - Add ban routes
+app.use('/api/reports', reportRoutes);
 
 // --- Compatibility mounts (support old clients that forget '/api') ---
 app.use('/subscriptions', subscriptionRoutes);
@@ -129,6 +137,15 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
   }
   res.json({ success: true, data: webSocketService.getConnectionStats() });
 });
+
+// Add WebSocket methods for admin notifications
+webSocketService.emitToAdmins = function(event, data) {
+  User.find({ role: 'admin' }).select('username').then(admins => {
+    admins.forEach(admin => {
+      this.emitToUser(admin.username, event, data);
+    });
+  });
+};
 
 // Notification system status endpoint (admin only)
 app.get('/api/notifications/system-status', authMiddleware, async (req, res) => {
@@ -237,6 +254,18 @@ app.get('/api/tiers/system-status', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Ban system scheduled task - check and expire bans
+setInterval(async () => {
+  try {
+    const expiredCount = await Ban.checkAndExpireBans();
+    if (expiredCount > 0) {
+      console.log(`[Ban System] Expired ${expiredCount} bans`);
+    }
+  } catch (error) {
+    console.error('[Ban System] Error checking expired bans:', error);
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
 
 // --------------------- Test Routes (unchanged) ---------------------
 app.get('/api/test/users', async (req, res) => {
@@ -498,6 +527,29 @@ async function initializeVerificationSystem() {
   }
 }
 
+// Initialize report & ban system on startup
+async function initializeReportSystem() {
+  try {
+    const Report = require('./models/Report');
+    const Ban = require('./models/Ban');
+    
+    const pendingReports = await Report.countDocuments({ status: 'pending' });
+    const activeBans = await Ban.countDocuments({ active: true });
+    
+    console.log(`✅ Report & Ban system initialized`);
+    console.log(`   - ${pendingReports} pending reports`);
+    console.log(`   - ${activeBans} active bans`);
+    
+    // Check and expire old bans
+    const expiredCount = await Ban.checkAndExpireBans();
+    if (expiredCount > 0) {
+      console.log(`   - Expired ${expiredCount} bans`);
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing report system:', error);
+  }
+}
+
 // Start server
 server.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
@@ -511,6 +563,9 @@ server.listen(PORT, async () => {
 
   await initializeVerificationSystem();
   console.log(`✔️  Verification system ready`);
+  
+  await initializeReportSystem();
+  console.log(`🛡️ Report & Ban system ready`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -528,5 +583,7 @@ server.listen(PORT, async () => {
   console.log('  - Notifications: /api/notifications/*');
   console.log('  - Verification:  /api/verification/*');
   console.log('  - Admin:         /api/admin/*');
+  console.log('  - Reports:       /api/reports/*');
+  console.log('  - Bans:          /api/admin/bans/*'); // NEW
   console.log('\n✨ Server initialization complete!\n');
 });

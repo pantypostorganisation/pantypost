@@ -46,7 +46,7 @@ function normalizeTier(v: unknown): TierLevel | null {
 }
 
 const PropsSchema = z.object({
-  sellerTierInfo: z.object({ tier: z.unknown() }).passthrough(),
+  sellerTierInfo: z.object({ tier: z.unknown() }),
   userStats: z.object({
     totalSales: z.number().int().nonnegative().catch(0),
     totalRevenue: z.number().nonnegative().catch(0),

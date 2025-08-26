@@ -1,3 +1,4 @@
+// src/app/admin/reports/page.tsx
 'use client';
 
 import { useEffect, useState, lazy, Suspense } from 'react';

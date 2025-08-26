@@ -50,8 +50,7 @@ const PropsSchema = z.object({
     .object({
       tier: z.unknown(),
       credit: z.number().optional(),
-    })
-    .passthrough(),
+    }),
   userStats: z.object({
     totalSales: z.number().int().nonnegative().catch(0),
     totalRevenue: z.number().nonnegative().catch(0),

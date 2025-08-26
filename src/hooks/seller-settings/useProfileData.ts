@@ -153,7 +153,8 @@ export function useProfileData(): UseProfileDataReturn {
         
         setBio(sanitizedBio);
         setProfilePic(sanitizedProfilePic);
-        setSubscriptionPrice(profile.subscriptionPrice || '0');
+        // Ensure subscriptionPrice is always a string
+        setSubscriptionPrice(String(profile.subscriptionPrice || '0'));
         
         // Sanitize gallery URLs
         const sanitizedGallery = (profile.galleryImages || [])
@@ -165,7 +166,7 @@ export function useProfileData(): UseProfileDataReturn {
         originalData.current = {
           bio: sanitizedBio,
           profilePic: sanitizedProfilePic,
-          subscriptionPrice: profile.subscriptionPrice || '0',
+          subscriptionPrice: String(profile.subscriptionPrice || '0'),
           galleryImages: sanitizedGallery,
         };
       } else {
@@ -179,7 +180,11 @@ export function useProfileData(): UseProfileDataReturn {
       if (!userResult.success) {
         console.error('[useProfileData] Failed to get user:', userResult.error);
       } else if (userResult.data && profileResult.data) {
-        const comp = calculateProfileCompleteness(userResult.data, profileResult.data);
+        // Ensure subscriptionPrice is a string for calculateProfileCompleteness
+        const comp = calculateProfileCompleteness(userResult.data, {
+          ...profileResult.data,
+          subscriptionPrice: String(profileResult.data.subscriptionPrice || '0')
+        });
         setCompleteness(comp);
         console.log('[useProfileData] Profile completeness calculated:', comp);
       }
@@ -374,7 +379,11 @@ export function useProfileData(): UseProfileDataReturn {
         // Recalculate completeness
         const userResult = await usersService.getUser(username);
         if (userResult.success && userResult.data) {
-          const comp = calculateProfileCompleteness(userResult.data, result.data!);
+          // Ensure subscriptionPrice is a string for calculateProfileCompleteness
+          const comp = calculateProfileCompleteness(userResult.data, {
+            ...result.data!,
+            subscriptionPrice: String(result.data!.subscriptionPrice || '0')
+          });
           setCompleteness(comp);
         }
 

@@ -25,7 +25,6 @@ const UserSchema = z
     username: z.string().default(''),
     role: z.enum(['buyer', 'seller', 'admin']).optional(),
   })
-  .passthrough()
   .nullable()
   .optional();
 
@@ -43,7 +42,7 @@ type Listing = z.infer<typeof ListingSchema>;
 interface ListingsGridProps extends z.infer<typeof PropsSchema> {}
 
 export default function ListingsGrid(props: ListingsGridProps) {
-  // Validate props defensively (no throw; we’ll use safe defaults)
+  // Validate props defensively (no throw; we'll use safe defaults)
   const parsed = PropsSchema.safeParse(props);
   const {
     standardListings = [],

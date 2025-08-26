@@ -14,6 +14,12 @@ export { authService } from './auth.service';
 // Users service - user management and profiles
 export { usersService } from './users.service';
 
+// Ban service - ban management
+export { banService } from './ban.service';
+
+// Reports service - report management
+export { reportsService } from './reports.service';
+
 // Wallet service - financial operations
 export { walletService } from './wallet.service';
 
@@ -106,6 +112,19 @@ export type {
   SellerResponseRequest,
   FlagReviewRequest
 } from './reviews.service';
+
+// Ban service types
+export type {
+  BanData,
+  BanResponse
+} from './ban.service';
+
+// Reports service types
+export type {
+  SubmitReportData,
+  ProcessReportData,
+  ReportResponse
+} from './reports.service';
 
 // Export order types from WalletContext
 export type { Order, CustomRequestPurchase, DepositLog } from '@/context/WalletContext';

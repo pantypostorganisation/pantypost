@@ -1,7 +1,9 @@
+// src/context/BanContext.tsx
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { storageService } from '@/services';
+import { banService } from '@/services/ban.service';
 import { usersService } from '@/services/users.service';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { z } from 'zod';
@@ -474,7 +476,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, []);
 
-  // Enhanced ban user function with race condition protection
+  // Enhanced ban user function with MongoDB integration
   const banUser = useCallback(async (
     username: string,
     hours: number | 'permanent',
@@ -542,6 +544,24 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return false;
       }
 
+      // Try to save to MongoDB first
+      const apiResponse = await banService.createBan({
+        username: cleanUsername,
+        reason: cleanCustomReason || reason,
+        customReason: cleanCustomReason,
+        duration: hours,
+        notes: cleanNotes,
+        relatedReportIds: reportIds,
+        bannedBy: cleanAdminUsername
+      });
+
+      if (apiResponse.success) {
+        console.log('[BanContext] Ban saved to MongoDB successfully');
+      } else {
+        console.warn('[BanContext] MongoDB save failed, continuing with localStorage', apiResponse.error);
+      }
+
+      // Always save to localStorage for immediate UI updates
       const now = new Date();
       const banId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
@@ -585,10 +605,10 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         cleanUsername,
         `Banned ${durationText} for ${reason}${cleanCustomReason ? `: ${cleanCustomReason}` : ''}`,
         cleanAdminUsername,
-        { banId }
+        { banId, mongoSaved: apiResponse.success }
       );
 
-      console.log('[BanContext] Ban created successfully');
+      console.log('[BanContext] Ban created successfully', { mongoSaved: apiResponse.success });
       return true;
     } catch (error) {
       console.error('[BanContext] Error banning user:', error);
