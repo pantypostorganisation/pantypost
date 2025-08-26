@@ -61,7 +61,7 @@ export default function WithdrawSection({
     // Validate amount
     if (!isNaN(numValue)) {
       if (numValue < 10 && value !== '') {
-        setAmountError('Minimum withdrawal is $10.00');
+        setAmountError('Minimum withdrawal is $20.00');
       } else if (numValue > balance) {
         setAmountError(`Cannot exceed balance of $${balance.toFixed(2)}`);
       }

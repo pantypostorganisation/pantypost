@@ -296,7 +296,7 @@ export const financialSchemas = {
   withdrawAmount: z
     .number()
     .positive('Amount must be positive')
-    .min(10, 'Minimum withdrawal is $10')
+    .min(10, 'Minimum withdrawal is $20')
     .refine((val) => Math.round(val * 100) / 100 === val, 'Amount must have at most 2 decimal places'),
 
   depositAmount: z

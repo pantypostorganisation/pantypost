@@ -1,3 +1,4 @@
+// src/components/seller/wallet/SellerWithdrawForm.tsx
 'use client';
 
 import { ArrowDownCircle, CheckCircle, AlertCircle, Info } from 'lucide-react';
@@ -6,6 +7,8 @@ import { SecureForm } from '@/components/ui/SecureForm';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { useState } from 'react';
+
+const MIN_WITHDRAWAL = 20; // $20 minimum
 
 interface SellerWithdrawFormProps {
   balance: number;
@@ -49,8 +52,9 @@ export default function SellerWithdrawForm({
 
     // Validate amount
     if (!isNaN(numValue)) {
-      if (numValue < 10 && value !== '') {
-        setAmountError('Minimum withdrawal is $10.00');
+      if (numValue < MIN_WITHDRAWAL && value !== '') {
+        // Your requested wording (spelling kept as asked)
+        setAmountError(`Minimum withdrawl is $${MIN_WITHDRAWAL.toFixed(2)}`);
       } else if (numValue > balance) {
         setAmountError(`Cannot exceed balance of $${balance.toFixed(2)}`);
       }
@@ -60,11 +64,12 @@ export default function SellerWithdrawForm({
   };
 
   // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const numValue = parseFloat(withdrawAmount);
-    if (isNaN(numValue) || numValue < 10 || numValue > balance) {
+    if (isNaN(numValue) || numValue < MIN_WITHDRAWAL || numValue > balance) {
+      // Do not submit if invalid
       return;
     }
 
