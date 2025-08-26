@@ -12,17 +12,15 @@ export default function TermsCheckboxes({
   termsError,
   ageError,
   onTermsChange,
-  onAgeChange
+  onAgeChange,
 }: TermsCheckboxesProps) {
   // Secure checkbox handlers
   const handleTermsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = e.target.checked;
-    onTermsChange(checked);
+    onTermsChange(!!e.target.checked);
   };
 
   const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = e.target.checked;
-    onAgeChange(checked);
+    onAgeChange(!!e.target.checked);
   };
 
   return (
@@ -36,21 +34,19 @@ export default function TermsCheckboxes({
             type="checkbox"
             checked={termsAccepted}
             onChange={handleTermsChange}
-            aria-describedby={termsError ? "terms-error" : undefined}
+            aria-describedby={termsError ? 'terms-error' : undefined}
             className="h-4 w-4 mt-1 rounded border-gray-700 text-[#ff950e] focus:ring-[#ff950e] focus:ring-offset-[#111] cursor-pointer"
           />
           <label htmlFor="termsAccepted" className="ml-3 block text-sm text-gray-300 cursor-pointer select-none">
             I agree to the{' '}
-            <SecureLink 
-              href="/terms" 
+            <SecureLink
+              href="/terms"
               className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors underline-offset-2 hover:underline"
               external={false}
             >
               Terms and Conditions
             </SecureLink>
-            {termsAccepted && (
-              <CheckCircle className="inline-block w-3 h-3 ml-1 text-green-500" />
-            )}
+            {termsAccepted && <CheckCircle className="inline-block w-3 h-3 ml-1 text-green-500" />}
           </label>
         </div>
         {termsError && (
@@ -60,7 +56,7 @@ export default function TermsCheckboxes({
           </p>
         )}
       </div>
-      
+
       {/* Age Verification Checkbox */}
       <div>
         <div className="flex items-start">
@@ -70,14 +66,12 @@ export default function TermsCheckboxes({
             type="checkbox"
             checked={ageVerified}
             onChange={handleAgeChange}
-            aria-describedby={ageError ? "age-error" : undefined}
+            aria-describedby={ageError ? 'age-error' : undefined}
             className="h-4 w-4 mt-1 rounded border-gray-700 text-[#ff950e] focus:ring-[#ff950e] focus:ring-offset-[#111] cursor-pointer"
           />
           <label htmlFor="ageVerified" className="ml-3 block text-sm text-gray-300 cursor-pointer select-none">
             I confirm that I am at least 21 years old
-            {ageVerified && (
-              <CheckCircle className="inline-block w-3 h-3 ml-1 text-green-500" />
-            )}
+            {ageVerified && <CheckCircle className="inline-block w-3 h-3 ml-1 text-green-500" />}
           </label>
         </div>
         {ageError && (

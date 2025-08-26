@@ -3,15 +3,27 @@
 
 import { Mail } from 'lucide-react';
 import { EmailFieldProps } from '@/types/signup';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
-export default function EmailField({ 
-  email, 
-  error, 
-  onChange 
+/**
+ * Notes:
+ * - We don't "sanitize" emails (to avoid stripping valid chars). We trim whitespace only.
+ * - Adds accessibility (aria-invalid / aria-describedby), maxLength, inputMode, pattern.
+ * - Error messages are rendered via SecureMessageDisplay to avoid any injection.
+ */
+export default function EmailField({
+  email,
+  error,
+  onChange,
 }: EmailFieldProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(e.target.value);
+    // Trim surrounding spaces only (do NOT strip characters needed for valid emails)
+    const next = e.target.value.replace(/\s+/g, ' ').trimStart();
+    // Limit to common max length for emails (RFC suggests 254)
+    onChange(next.slice(0, 254));
   };
+
+  const errorId = error ? 'email-error' : undefined;
 
   return (
     <div className="mb-4">
@@ -26,9 +38,16 @@ export default function EmailField({
           value={email || ''}
           onChange={handleChange}
           placeholder="you@example.com"
+          autoComplete="email"
+          inputMode="email"
+          maxLength={254}
+          aria-invalid={!!error}
+          aria-describedby={errorId}
+          // A conservative pattern; server-side validation should still be the source of truth.
+          pattern="^[^\s@]+@[^\s@]+\.[^\s@]+$"
           className={`w-full px-4 py-2.5 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all duration-200 ${
-            error 
-              ? 'border-red-500/50 focus:ring-red-500/50' 
+            error
+              ? 'border-red-500/50 focus:ring-red-500/50'
               : 'border-gray-700 focus:ring-[#ff950e]/50 focus:border-[#ff950e]'
           }`}
         />
@@ -36,14 +55,14 @@ export default function EmailField({
           <Mail className="w-4 h-4 text-gray-500" />
         </div>
       </div>
-      
+
       {error && (
-        <p className="mt-1.5 text-xs text-red-400">{error}</p>
+        <p id={errorId} className="mt-1.5 text-xs text-red-400">
+          <SecureMessageDisplay content={error} allowBasicFormatting={false} />
+        </p>
       )}
-      
-      <p className="mt-1.5 text-xs text-gray-500">
-        We'll never share your email with anyone
-      </p>
+
+      <p className="mt-1.5 text-xs text-gray-500">We'll never share your email with anyone</p>
     </div>
   );
 }

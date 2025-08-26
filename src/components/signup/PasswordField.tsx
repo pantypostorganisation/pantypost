@@ -1,10 +1,15 @@
 // src/components/signup/PasswordField.tsx
 'use client';
 
-import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { PasswordFieldProps } from '@/types/signup';
 import { SecureInput } from '@/components/ui/SecureInput';
 
+/**
+ * Uses SecureInput for controlled password fields.
+ * - sanitize={false} to avoid mutating user passwords.
+ * - Adds help text and keeps toggles/indicators managed by SecureInput.
+ */
 export default function PasswordField({
   password,
   confirmPassword,
@@ -15,7 +20,7 @@ export default function PasswordField({
   onPasswordChange,
   onConfirmChange,
   onTogglePassword,
-  onToggleConfirm
+  onToggleConfirm,
 }: PasswordFieldProps) {
   return (
     <>
@@ -66,7 +71,7 @@ export default function PasswordField({
 
       {/* Security Indicator */}
       {password && (
-        <div className="mb-4 flex items-center gap-2 text-xs text-gray-500">
+        <div className="mb-4 flex items-center gap-2 text-xs text-gray-500" aria-live="polite">
           <ShieldCheck className="w-3 h-3" />
           <span>Your password is encrypted and never stored in plain text</span>
         </div>
