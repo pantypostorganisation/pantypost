@@ -1,8 +1,13 @@
 // src/components/skeletons/ProductSkeleton.tsx
+'use client';
+
+/** Utility: clamp a numeric count to avoid runaway DOM renders */
+const clampCount = (n: number | undefined, min = 1, max = 48) =>
+  Number.isFinite(n as number) ? Math.min(max, Math.max(min, Math.floor(n as number))) : min;
 
 export function ProductCardSkeleton() {
   return (
-    <div className="bg-gray-900 rounded-lg overflow-hidden animate-pulse">
+    <div className="bg-gray-900 rounded-lg overflow-hidden animate-pulse" role="status" aria-live="polite" aria-busy="true">
       <div className="aspect-square bg-gray-800" />
       <div className="p-4 space-y-3">
         <div className="h-4 bg-gray-800 rounded w-3/4" />
@@ -17,9 +22,10 @@ export function ProductCardSkeleton() {
 }
 
 export function ProductGridSkeleton({ count = 12 }: { count?: number }) {
+  const safe = clampCount(count, 1, 48);
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {Array.from({ length: count }).map((_, i) => (
+      {Array.from({ length: safe }).map((_, i) => (
         <ProductCardSkeleton key={i} />
       ))}
     </div>
