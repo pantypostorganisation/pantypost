@@ -1,3 +1,4 @@
+// src/app/ClientLayout.tsx
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';

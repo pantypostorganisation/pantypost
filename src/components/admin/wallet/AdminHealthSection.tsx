@@ -276,9 +276,9 @@ export default function AdminHealthSection({
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white">
+                    <div className="font-medium text-white">
                       <SecureMessageDisplay content={username} allowBasicFormatting={false} />
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-400">
                       {users?.[username]?.verified ? '✅ Verified' : '⏳ Unverified'}
                     </p>
@@ -325,9 +325,9 @@ export default function AdminHealthSection({
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white">
+                    <div className="font-medium text-white">
                       <SecureMessageDisplay content={username} allowBasicFormatting={false} />
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-400">
                       {depositorRoleByUser[username] === 'admin' ? '🛡️ Admin' : '💳 Buyer'}
                     </p>
@@ -374,9 +374,9 @@ export default function AdminHealthSection({
                     {index + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white">
+                    <div className="font-medium text-white">
                       <SecureMessageDisplay content={withdrawer.seller} allowBasicFormatting={false} />
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-400">
                       {withdrawer.withdrawalCount} withdrawal{withdrawer.withdrawalCount !== 1 ? 's' : ''}
                     </p>

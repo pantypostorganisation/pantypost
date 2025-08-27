@@ -1,3 +1,4 @@
+// src/components/Header.tsx
 'use client';
 
 import Link from 'next/link';
@@ -144,6 +145,7 @@ export default function Header() {
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
+  const hasRefreshedAdminData = useRef(false); // FIX: Add ref to track if we've already refreshed
 
   // Derived values with sanitization
   const isAdminUser = isAdmin(user);
@@ -340,23 +342,44 @@ export default function Header() {
     };
   }, [isAdminUser, user]);
 
-  // ✅ Refresh admin data on mount if admin user
+  // ✅ FIX: Properly guard admin data refresh to run only once on mount
   useEffect(() => {
-    if (isAdminUser && user) {
-      console.log('[Header] Admin user detected, refreshing admin data...');
-
-      if (typeof refreshAdminData === 'function') {
-        refreshAdminData()
-          .then(() => {
-            console.log('[Header] Admin data refreshed');
-            setBalanceUpdateTrigger((prev) => prev + 1);
-          })
-          .catch((error: any) => {
-            console.error('[Header] Error refreshing admin data:', error);
-          });
-      }
+    // Only refresh once on mount if admin user
+    if (isAdminUser && user && refreshAdminData && !hasRefreshedAdminData.current) {
+      console.log('[Header] Admin user detected, refreshing admin data once on mount...');
+      
+      hasRefreshedAdminData.current = true; // Mark as refreshed
+      
+      // Use a flag to prevent multiple calls
+      let cancelled = false;
+      
+      const refreshOnce = async () => {
+        if (cancelled) return;
+        
+        try {
+          await refreshAdminData();
+          console.log('[Header] Admin data refreshed');
+          setBalanceUpdateTrigger((prev) => prev + 1);
+        } catch (error: any) {
+          console.error('[Header] Error refreshing admin data:', error);
+        }
+      };
+      
+      refreshOnce();
+      
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [isAdminUser, user, refreshAdminData]);
+    
+    // Reset the ref when user changes
+    if (!user || !isAdminUser) {
+      hasRefreshedAdminData.current = false;
+    }
+    
+    // Always return undefined when no cleanup is needed
+    return undefined;
+  }, [isAdminUser, user?.id]); // Use user.id as dependency, not full user object
 
   // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
@@ -401,10 +424,8 @@ export default function Header() {
     console.log('[Header] Force updating balances');
     setBalanceUpdateTrigger((prev) => prev + 1);
 
-    if (isAdminUser && user && refreshAdminData) {
-      refreshAdminData();
-    }
-  }, [isAdminUser, user, refreshAdminData]);
+    // Don't call refreshAdminData here - it's handled in the mount effect
+  }, []);
 
   // Rate-limited auction check
   const checkAuctionsWithRateLimit = useCallback(() => {
@@ -606,7 +627,6 @@ export default function Header() {
       clearBalanceInterval();
       clearAuctionInterval();
       window.removeEventListener('updateReports', handleUpdateReports);
-      // ✅ FIXED cleanup event name to match the addEventListener above
       window.removeEventListener('auctionEnded', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
     };

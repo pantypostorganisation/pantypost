@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
@@ -17,7 +17,8 @@ import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
 
-function AdminProfitDashboardContent() {
+// Memoize the main content component to prevent unnecessary re-renders
+const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() {
   // All hooks must be called before any conditional returns
   const {
     adminBalance,
@@ -39,6 +40,9 @@ function AdminProfitDashboardContent() {
 
   const [isReloading, setIsReloading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  
+  // Use a ref to track loading state for the guard check
+  const isReloadingRef = useRef(false);
 
   // Initialize time filter with proper error handling
   const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => {
@@ -59,13 +63,24 @@ function AdminProfitDashboardContent() {
     return () => setMounted(false);
   }, []);
 
+  // Keep the ref in sync with the state
+  useEffect(() => {
+    isReloadingRef.current = isReloading;
+  }, [isReloading]);
+
+  // Optimize the time filter effect to prevent storage writes on every render
   useEffect(() => {
     if (!mounted) return;
-    try {
-      localStorage.setItem('admin_dashboard_timefilter', timeFilter);
-    } catch {
-      // ignore storage errors
-    }
+    
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem('admin_dashboard_timefilter', timeFilter);
+      } catch {
+        // ignore storage errors
+      }
+    }, 500); // Debounce storage writes
+    
+    return () => clearTimeout(timeoutId);
   }, [timeFilter, mounted]);
 
   // ✅ Source of truth: role from backend-authenticated user
@@ -132,41 +147,49 @@ function AdminProfitDashboardContent() {
   );
   // -----------------------------------------------------------------
 
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      console.log('Admin Dashboard Data:', {
-        timeFilter,
-        allOrders: orderHistory?.length || 0,
-        filteredOrders: filteredData.orders.length,
-        pendingAuctionOrders:
-          orderHistory?.filter((o) => o?.shippingStatus === 'pending-auction').length || 0,
-        completedAuctionOrders:
-          orderHistory?.filter((o) => o?.wasAuction && o?.shippingStatus !== 'pending-auction')
-            .length || 0,
-        allDeposits: depositLogs?.length || 0,
-        filteredDeposits: filteredData.deposits.length,
-        totalDepositsAmount: getTotalDeposits ? getTotalDeposits() : 0,
-      });
-    } catch (error) {
-      console.error('Error logging dashboard data:', error);
-    }
-  }, [timeFilter, orderHistory, filteredData, depositLogs, getTotalDeposits, mounted]);
-
+  // Fixed handleForceReload function
   const handleForceReload = useCallback(async () => {
-    if (isReloading) return;
+    // Use ref for guard check to avoid stale closure
+    if (isReloadingRef.current) {
+      console.log('Reload already in progress, skipping...');
+      return;
+    }
+    
+    console.log('Starting force reload...');
     setIsReloading(true);
+    isReloadingRef.current = true;
+    
     try {
       if (reloadData && typeof reloadData === 'function') {
-        await reloadData();
+        // Add timeout to detect if reloadData hangs
+        const reloadPromise = reloadData();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Reload timeout')), 30000) // 30 second timeout
+        );
+        
+        await Promise.race([
+          Promise.all([
+            reloadPromise,
+            new Promise((resolve) => setTimeout(resolve, 1000)) // Minimum 1 second delay
+          ]),
+          timeoutPromise
+        ]);
+        
+        console.log('Force reload completed successfully');
+      } else {
+        console.warn('reloadData function not available');
+        // Still wait minimum time to show loading state
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (error) {
       console.error('Error during force reload:', error);
+      // You might want to show an error toast here
     } finally {
+      console.log('Resetting reload state');
       setIsReloading(false);
+      isReloadingRef.current = false;
     }
-  }, [isReloading, reloadData]);
+  }, [reloadData]);
 
   const handleTimeFilterChange = useCallback((filter: TimeFilter) => {
     setTimeFilter(filter);
@@ -326,7 +349,7 @@ function AdminProfitDashboardContent() {
       </div>
     </main>
   );
-}
+});
 
 export default function AdminProfitDashboard() {
   const [mounted, setMounted] = useState(false);

@@ -57,6 +57,16 @@ function getEnvNumber(key: string, defaultValue: number): number {
   return isNaN(num) ? defaultValue : num;
 }
 
+// Debug configuration - ADDED FOR WALLET CONTEXT DEBUGGING
+export const debugConfig = {
+  enabled: getEnvBool('NEXT_PUBLIC_DEBUG', isDevelopment()),
+  logWebSocket: getEnvBool('NEXT_PUBLIC_DEBUG_WEBSOCKET', false),
+  logWallet: getEnvBool('NEXT_PUBLIC_DEBUG_WALLET', false),
+  logApi: getEnvBool('NEXT_PUBLIC_DEBUG_API', false),
+  logAuth: getEnvBool('NEXT_PUBLIC_DEBUG_AUTH', false),
+  verboseErrors: getEnvBool('NEXT_PUBLIC_VERBOSE_ERRORS', isDevelopment()),
+} as const;
+
 // Application configuration
 export const appConfig = {
   name: getEnvVar('NEXT_PUBLIC_APP_NAME', 'PantyPost'),
@@ -229,7 +239,7 @@ export const limits = {
   platformFeePercentage: getEnvNumber('NEXT_PUBLIC_PLATFORM_FEE_PERCENTAGE', 10),
 } as const;
 
-// WebSocket configuration
+// WebSocket configuration - ENHANCED FOR BETTER DEBUGGING
 export const websocketConfig = {
   enabled: true, // Force enable WebSocket
   url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000'),
@@ -237,9 +247,10 @@ export const websocketConfig = {
   reconnectAttempts: 5,
   reconnectInterval: 3000,
   heartbeatInterval: 30000,
+  debug: getEnvBool('NEXT_PUBLIC_DEBUG_WEBSOCKET', false), // Added for WebSocket debugging
 } as const;
 
-// Cache configuration
+// Cache configuration - ENHANCED WITH WALLET-SPECIFIC CACHE
 export const cacheConfig = {
   enabled: getEnvBool('NEXT_PUBLIC_ENABLE_CACHE', true),
   ttlSeconds: getEnvNumber('NEXT_PUBLIC_CACHE_TTL_SECONDS', 300),
@@ -250,6 +261,8 @@ export const cacheConfig = {
     message: 1 * 60 * 1000, // 1 minute
     order: 5 * 60 * 1000, // 5 minutes
     wallet: 30 * 1000, // 30 seconds
+    adminBalance: 5 * 1000, // 5 seconds for admin balance updates
+    adminActions: 10 * 1000, // 10 seconds for admin actions
   },
 } as const;
 
@@ -302,6 +315,16 @@ export const tierConfig = {
     'Enchant': { minSales: 50, commission: 0.12 },
     'Goddess': { minSales: 100, commission: 0.10 },
   },
+} as const;
+
+// Performance optimization configuration - ADDED FOR ADMIN DASHBOARD
+export const performanceConfig = {
+  debounceDelay: getEnvNumber('NEXT_PUBLIC_DEBOUNCE_DELAY', 300),
+  throttleDelay: getEnvNumber('NEXT_PUBLIC_THROTTLE_DELAY', 1000),
+  balanceUpdateDebounce: getEnvNumber('NEXT_PUBLIC_BALANCE_UPDATE_DEBOUNCE', 1000),
+  maxConcurrentRequests: getEnvNumber('NEXT_PUBLIC_MAX_CONCURRENT_REQUESTS', 5),
+  enableMemoization: getEnvBool('NEXT_PUBLIC_ENABLE_MEMOIZATION', true),
+  enableLazyLoading: getEnvBool('NEXT_PUBLIC_ENABLE_LAZY_LOADING', true),
 } as const;
 
 // API Endpoints
@@ -362,13 +385,17 @@ export const API_ENDPOINTS = {
     DISPUTE: '/orders/:id/dispute',
   },
   
-  // Wallet
+  // Wallet - ENHANCED WITH ADMIN ENDPOINTS
   WALLET: {
     BALANCE: '/wallet/balance',
     TRANSACTIONS: '/wallet/transactions',
     DEPOSIT: '/wallet/deposit',
     WITHDRAW: '/wallet/withdraw',
     TRANSFER: '/wallet/transfer',
+    ADMIN_PLATFORM_BALANCE: '/wallet/admin-platform-balance',
+    ADMIN_ACTIONS: '/admin/actions',
+    ADMIN_ANALYTICS: '/wallet/admin/analytics',
+    PLATFORM_TRANSACTIONS: '/wallet/platform-transactions',
   },
   
   // Reviews
@@ -404,6 +431,12 @@ export const API_ENDPOINTS = {
     INFO: '/tiers/info',
     UPDATE: '/tiers/update',
     STATS: '/tiers/stats',
+  },
+  
+  // Tips - ADDED FOR TIP FUNCTIONALITY
+  TIPS: {
+    SEND: '/tips/send',
+    HISTORY: '/tips/history',
   },
 };
 
@@ -483,6 +516,8 @@ export function getAllConfig() {
     notification: notificationConfig,
     payment: paymentConfig,
     tier: tierConfig,
+    debug: debugConfig,
+    performance: performanceConfig,
   };
 }
 
@@ -490,6 +525,8 @@ export function getAllConfig() {
 if (isDevelopment() && typeof window !== 'undefined') {
   console.log('[Environment] Current configuration:', getAllConfig());
   console.log('[Environment] API Base URL:', apiConfig.baseUrl);
+  console.log('[Environment] Debug Mode:', debugConfig.enabled);
+  console.log('[Environment] WebSocket URL:', websocketConfig.url);
   
   const validation = validateConfiguration();
   if (!validation.valid) {
