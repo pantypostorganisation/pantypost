@@ -1,3 +1,4 @@
+// src/components/browse-detail/SellerProfile.tsx
 'use client';
 
 import Link from 'next/link';

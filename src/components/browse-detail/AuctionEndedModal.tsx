@@ -1,3 +1,4 @@
+// src/components/browse-detail/AuctionEndedModal.tsx
 'use client';
 
 import { AlertTriangle, Gavel, Clock, XCircle } from 'lucide-react';

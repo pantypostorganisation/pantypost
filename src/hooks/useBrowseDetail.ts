@@ -238,6 +238,8 @@ export const useBrowseDetail = () => {
         
         if (contextListing) {
           setListing(contextListing as ListingWithDetails);
+          // FIX: Initialize viewCount from the listing's views property
+          setState(prev => ({ ...prev, viewCount: contextListing.views || 0 }));
           setIsLoading(false);
         } else {
           // If not in context, fetch from service
@@ -247,6 +249,8 @@ export const useBrowseDetail = () => {
 
           if (result.success && result.data) {
             setListing(result.data as ListingWithDetails);
+            // FIX: Initialize viewCount from the fetched listing's views property
+            setState(prev => ({ ...prev, viewCount: result.data?.views || 0 }));
             
             // Refresh listings context to include this listing
             await refreshListings();
@@ -317,27 +321,46 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // Track view count
+  // Track view count - Enhanced to update from backend
   useEffect(() => {
     const trackView = async () => {
-      if (listing && !viewIncrementedRef.current) {
+      if (!listing) return;
+      
+      // Initialize view count from listing's existing views first
+      if (listing.views !== undefined && !viewIncrementedRef.current) {
+        setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
+      }
+      
+      // Then increment the view if not already done
+      if (!viewIncrementedRef.current) {
         viewIncrementedRef.current = true;
         
         try {
-          // Track views if user is logged in
+          // Track views for all users (logged in or not)
           if (user && user.username !== listing.seller) {
+            // Logged in user, not the seller
             await listingsService.updateViews({
               listingId: listing.id,
               viewerId: user.username,
             });
-
-            const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
-            if (viewsResponse.success && viewsResponse.data !== undefined) {
-              setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
-            }
+          } else if (!user) {
+            // Anonymous user
+            await listingsService.updateViews({
+              listingId: listing.id,
+            });
+          }
+          
+          // Get updated count from backend
+          const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
+          if (viewsResponse.success && viewsResponse.data !== undefined) {
+            setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
           }
         } catch (error) {
           console.error('Error tracking view:', error);
+          // If tracking fails, at least show the existing view count from the listing
+          if (listing.views !== undefined) {
+            setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
+          }
         }
       }
     };
@@ -679,6 +702,8 @@ export const useBrowseDetail = () => {
         const result = await listingsService.getListing(listing.id);
         if (result.success && result.data) {
           setListing(result.data as ListingWithDetails);
+          // Update view count from refreshed listing
+          setState(prev => ({ ...prev, viewCount: result.data?.views || prev.viewCount }));
         }
 
         setTimeout(() => {

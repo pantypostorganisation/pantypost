@@ -1,3 +1,4 @@
+// src/components/browse-detail/PurchaseSuccessModal.tsx
 'use client';
 
 import { useEffect } from 'react';

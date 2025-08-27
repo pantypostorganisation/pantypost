@@ -1,3 +1,4 @@
+// src/components/browse-detail/ImageGallery.tsx
 'use client';
 
 import { Crown, Clock, Lock, Gavel, Eye, Package, ChevronLeft, ChevronRight } from 'lucide-react';

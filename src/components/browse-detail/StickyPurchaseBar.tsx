@@ -1,3 +1,4 @@
+// src/components/browse-detail/StickyPurchaseBar.tsx
 'use client';
 
 import { ShoppingBag } from 'lucide-react';

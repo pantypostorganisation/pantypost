@@ -1,3 +1,4 @@
+// src/components/browse-detail/BidHistoryModal.tsx
 'use client';
 
 import { History, X, Gavel, Trophy, TrendingUp } from 'lucide-react';

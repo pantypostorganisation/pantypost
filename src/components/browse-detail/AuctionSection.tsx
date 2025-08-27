@@ -1,3 +1,4 @@
+// src/components/browse-detail/AuctionSection.tsx
 'use client';
 
 import { useEffect, useState } from 'react';

@@ -69,6 +69,7 @@ export type Listing = {
   isPremium?: boolean;
   tags?: string[];
   hoursWorn?: number;
+  views?: number;  // FIX: Added views property
   
   auction?: AuctionSettings;
 };
@@ -842,7 +843,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         internationalShipping: false,
         createdAt: listing.date,
         updatedAt: listing.date,
-        views: 0,
+        views: listing.views || 0,  // FIX: Include views in the conversion
         favorites: 0,
         tags: listing.tags,
         size: undefined,

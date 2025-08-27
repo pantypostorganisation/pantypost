@@ -1,3 +1,4 @@
+// src/components/browse-detail/ProducctInfo.tsx
 'use client';
 
 import { Clock } from 'lucide-react';

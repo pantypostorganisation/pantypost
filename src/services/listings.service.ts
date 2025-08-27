@@ -122,7 +122,7 @@ type CreateListingValidationData = z.infer<typeof createListingValidationSchema>
 
 /**
  * Convert backend listing format to frontend format
- * FIXED: Handle both '_id' and 'id' fields from backend
+ * FIXED: Handle both '_id' and 'id' fields from backend AND include views field
  */
 function convertBackendToFrontend(backendListing: BackendListing): Listing {
   // Handle both _id and id fields
@@ -141,6 +141,8 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing {
     isPremium: backendListing.isPremium || false,
     tags: backendListing.tags || [],
     hoursWorn: backendListing.hoursWorn,
+    // FIX: Include views field in the frontend listing
+    views: backendListing.views || 0,
   };
 
   // Convert auction data if present
@@ -670,6 +672,7 @@ export class ListingsService {
         isPremium: request.isPremium || false,
         tags: sanitizedData.tags || [],
         hoursWorn: sanitizedData.hoursWorn,
+        views: 0, // Initialize views for new listings
         auction: request.auction ? {
           isAuction: true,
           startingPrice: request.auction.startingPrice,
