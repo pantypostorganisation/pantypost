@@ -1,3 +1,4 @@
+// src/services/subscription.service.ts
 import { API_BASE_URL } from '@/services/api.config';
 
 type HeadersMap = Record<string, string>;

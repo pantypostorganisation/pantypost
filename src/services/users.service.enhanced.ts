@@ -47,6 +47,46 @@ const SECURITY_LIMITS = {
   MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
 };
 
+// Custom validator for profile picture URLs that accepts placeholders
+const profilePicValidator = z.string().refine(
+  (val) => {
+    // Accept null/empty
+    if (!val || val === '') return true;
+    
+    // Accept placeholder URLs
+    if (val.includes('placeholder')) return true;
+    
+    // Accept relative URLs from backend
+    if (val.startsWith('/uploads/')) return true;
+    
+    // Validate standard URLs
+    try {
+      const url = new URL(val);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Invalid profile picture URL' }
+);
+
+// Custom validator for gallery images
+const galleryImageValidator = z.string().refine(
+  (val) => {
+    // Accept relative URLs from backend
+    if (val.startsWith('/uploads/')) return true;
+    
+    // Validate standard URLs
+    try {
+      const url = new URL(val);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Invalid gallery image URL' }
+);
+
 // Validation schemas (local to this file)
 const userSearchSchema = z.object({
   query: z.string().max(SECURITY_LIMITS.MAX_QUERY_LENGTH).transform(sanitizeStrict).optional(),
@@ -64,10 +104,10 @@ const userSearchSchema = z.object({
 
 const userProfileUpdateSchema = z.object({
   bio: z.string().max(500).transform(sanitizeStrict).optional(),
-  profilePic: z.string().url().nullable().optional(),
+  profilePic: profilePicValidator.nullable().optional(),
   // Always KEEP this as string; convert numbers to string before sending
   subscriptionPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
-  galleryImages: z.array(z.string().url()).max(SECURITY_LIMITS.MAX_GALLERY_IMAGES).optional(),
+  galleryImages: z.array(galleryImageValidator).max(SECURITY_LIMITS.MAX_GALLERY_IMAGES).optional(),
   socialLinks: z
     .object({
       twitter: z.string().url().transform(sanitizeUrl).optional(),
@@ -138,6 +178,10 @@ function sanitizeUrlOrUndefined(url: unknown): string | undefined {
 }
 
 function sanitizeUrlOrNull(url: unknown): string | null {
+  // Special handling for placeholder URLs
+  if (typeof url === 'string' && url.includes('placeholder')) {
+    return url;
+  }
   const s = typeof url === 'string' ? sanitizeUrl(url) : null;
   return s || null;
 }

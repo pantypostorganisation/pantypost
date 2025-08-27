@@ -89,8 +89,8 @@ export default function SellerProfileSettingsPage() {
                 <div className="flex justify-center">
                   <SaveButton 
                     onClick={handleSave} 
-                    showSuccess={!!saveSuccess}
-                    showError={saveError || ''}  // <-- pass string, not boolean
+                    showSuccess={saveSuccess}
+                    showError={saveError} // Now correctly passing string | undefined
                     isLoading={isSaving}
                   />
                 </div>

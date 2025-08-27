@@ -294,7 +294,25 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     // Update allowed fields
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
-        user[field] = req.body[field];
+        // Special handling for subscriptionPrice - convert string to number
+        if (field === 'subscriptionPrice') {
+          const price = parseFloat(req.body[field]);
+          if (!isNaN(price) && price >= 0.01 && price <= 999.99) {
+            user[field] = price;
+          }
+        } else if (field === 'profilePic') {
+          // Allow both URLs and placeholder images
+          const pic = req.body[field];
+          if (pic === null || pic === '' || 
+              pic.startsWith('http://') || 
+              pic.startsWith('https://') || 
+              pic.startsWith('/uploads/') ||
+              pic.includes('placeholder')) {  // More flexible placeholder handling
+            user[field] = pic;
+          }
+        } else {
+          user[field] = req.body[field];
+        }
       }
     });
     
@@ -310,14 +328,45 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     }
     
     // Validate gallery images
-    if (req.body.galleryImages && req.body.galleryImages.length > 20) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: 'Maximum 20 gallery images allowed'
-        }
+    if (req.body.galleryImages) {
+      if (!Array.isArray(req.body.galleryImages)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Gallery images must be an array'
+          }
+        });
+      }
+      
+      if (req.body.galleryImages.length > 20) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Maximum 20 gallery images allowed'
+          }
+        });
+      }
+      
+      // Validate each image URL
+      const validUrls = req.body.galleryImages.every(url => {
+        return typeof url === 'string' && (
+          url.startsWith('http://') || 
+          url.startsWith('https://') || 
+          url.startsWith('/uploads/')
+        );
       });
+      
+      if (!validUrls) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Invalid gallery image URLs'
+          }
+        });
+      }
     }
     
     await user.save();
@@ -327,6 +376,7 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
       data: user.toSafeObject ? user.toSafeObject() : user
     });
   } catch (error) {
+    console.error('Profile update error:', error);
     res.status(500).json({
       success: false,
       error: {

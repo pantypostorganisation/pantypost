@@ -1,12 +1,13 @@
 // src/components/seller-settings/ProfileInfoCard.tsx
 'use client';
 
-import { AlertCircle } from 'lucide-react';
-import React, { RefObject, useState } from 'react';
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import React, { RefObject, useState, useEffect, useCallback } from 'react';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeCurrency } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
+import { useProfileSave } from '@/hooks/seller-settings/useProfileSave';
 import { z } from 'zod';
 
 const PropsSchema = z.object({
@@ -21,6 +22,7 @@ const PropsSchema = z.object({
   removeProfilePic: z.function().args().returns(z.void()),
   profilePicInputRef: z.any(),
   isUploading: z.boolean().optional(),
+  onSave: z.function().args().returns(z.promise(z.boolean())).optional(),
 });
 
 interface ProfileInfoCardProps extends z.infer<typeof PropsSchema> {}
@@ -36,9 +38,10 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
     subscriptionPrice,
     setSubscriptionPrice,
     handleProfilePicChange,
-    removeProfilePic, // currently unused in card; retained for future affordance
+    removeProfilePic,
     profilePicInputRef,
     isUploading = false,
+    onSave,
   } = parsed.success
     ? parsed.data
     : {
@@ -53,10 +56,14 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
         removeProfilePic: () => {},
         profilePicInputRef: { current: null } as RefObject<HTMLInputElement | null>,
         isUploading: false,
+        onSave: undefined,
       };
 
+  const { debouncedSave, isSaving, saveSuccess, saveError } = useProfileSave();
   const [fileError, setFileError] = useState<string>('');
   const [touched, setTouched] = useState<{ bio?: boolean; price?: boolean }>({});
+  const [lastSavedPrice, setLastSavedPrice] = useState(subscriptionPrice);
+  const [showPriceSaving, setShowPriceSaving] = useState(false);
 
   // Sanitize username for display
   const sanitizedUsername = username ? sanitizeStrict(username) : '';
@@ -87,15 +94,41 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
     handleProfilePicChange(e);
   };
 
-  // Handle price change with sanitization
-  const handlePriceChange = (value: string) => {
+  // Handle price change with auto-save
+  const handlePriceChange = useCallback((value: string) => {
     if (value === '') {
       setSubscriptionPrice('');
+      setShowPriceSaving(true);
+      debouncedSave({ subscriptionPrice: '0' });
     } else {
       const sanitized = sanitizeCurrency(value);
-      setSubscriptionPrice(sanitized.toString());
+      const sanitizedStr = sanitized.toString();
+      setSubscriptionPrice(sanitizedStr);
+      setShowPriceSaving(true);
+      debouncedSave({ subscriptionPrice: sanitizedStr });
     }
-  };
+  }, [setSubscriptionPrice, debouncedSave]);
+
+  // Handle bio change with auto-save
+  const handleBioChange = useCallback((value: string) => {
+    setBio(value);
+    debouncedSave({ bio: value });
+  }, [setBio, debouncedSave]);
+
+  // Track when price is actually saved
+  useEffect(() => {
+    if (saveSuccess && showPriceSaving) {
+      setLastSavedPrice(subscriptionPrice);
+      setShowPriceSaving(false);
+    }
+  }, [saveSuccess, subscriptionPrice, showPriceSaving]);
+
+  // Clear saving indicator when error occurs
+  useEffect(() => {
+    if (saveError && showPriceSaving) {
+      setShowPriceSaving(false);
+    }
+  }, [saveError, showPriceSaving]);
 
   // Keyboard access for overlay
   const onOverlayKey = (ev: React.KeyboardEvent) => {
@@ -105,8 +138,33 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
     }
   };
 
+  // Calculate if there are unsaved changes
+  const hasUnsavedChanges = subscriptionPrice !== lastSavedPrice;
+
   return (
-    <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6">
+    <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6 relative">
+      {/* Save Status Indicator */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {isSaving && (
+          <div className="flex items-center gap-2 text-yellow-500 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Saving...</span>
+          </div>
+        )}
+        {saveSuccess && !isSaving && (
+          <div className="flex items-center gap-2 text-green-500 text-sm animate-fade-in">
+            <CheckCircle className="w-4 h-4" />
+            <span>Saved</span>
+          </div>
+        )}
+        {saveError && !isSaving && (
+          <div className="flex items-center gap-2 text-red-500 text-sm">
+            <AlertCircle className="w-4 h-4" />
+            <span>{sanitizeStrict(saveError)}</span>
+          </div>
+        )}
+      </div>
+
       <h2 className="text-xl font-bold mb-6 text-white">Profile Info</h2>
 
       {/* Profile Picture Section */}
@@ -173,7 +231,7 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
           id="bio"
           name="bio"
           value={bio}
-          onChange={setBio}
+          onChange={handleBioChange}
           onBlur={() => setTouched((prev) => ({ ...prev, bio: true }))}
           className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e] h-28 resize-none"
           placeholder="Tell buyers about yourself..."
@@ -182,11 +240,25 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
           helpText="Describe yourself, your style, and what makes your items special"
           touched={touched.bio}
         />
+        {isSaving && touched.bio && (
+          <p className="text-xs text-yellow-500 mt-1">Auto-saving bio...</p>
+        )}
       </div>
 
       {/* Subscription Price */}
       <div className="mb-4 w-full">
-        <label className="block text-sm font-medium text-gray-300 mb-2">Subscription Price ($/month)</label>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Subscription Price ($/month)
+          {showPriceSaving && (
+            <span className="ml-2 text-yellow-500 text-xs">
+              <Loader2 className="inline w-3 h-3 animate-spin mr-1" />
+              Saving...
+            </span>
+          )}
+          {!showPriceSaving && hasUnsavedChanges && !isSaving && (
+            <span className="ml-2 text-orange-500 text-xs">• Unsaved</span>
+          )}
+        </label>
         <SecureInput
           id="subscriptionPrice"
           name="subscriptionPrice"
@@ -200,9 +272,19 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
           max="999.99"
           step="0.01"
           touched={touched.price}
-          helpText="This is what buyers will pay to access your premium content"
+          helpText="This is what buyers will pay to access your premium content (auto-saves as you type)"
         />
       </div>
+
+      {/* Save notification for manual save button if onSave is provided */}
+      {onSave && hasUnsavedChanges && (
+        <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+          <p className="text-sm text-yellow-500 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            You have unsaved changes. Click "Save Profile" to save all changes.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

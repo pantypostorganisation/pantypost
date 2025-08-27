@@ -40,7 +40,8 @@ const notificationRoutes = require('./routes/notification.routes');
 const verificationRoutes = require('./routes/verification.routes');
 const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
-const banRoutes = require('./routes/ban.routes'); // NEW
+const banRoutes = require('./routes/ban.routes');
+const analyticsRoutes = require('./routes/analytics.routes'); // NEW - Analytics routes
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -100,7 +101,8 @@ app.get('/api/health', (req, res) => {
       notifications: true,
       verification: true,
       reports: true,
-      bans: true
+      bans: true,
+      analytics: true // NEW - Added analytics feature flag
     },
   });
 });
@@ -121,8 +123,9 @@ app.use('/api/favorites', favoriteRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/admin', banRoutes); // NEW - Add ban routes
+app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/analytics', analyticsRoutes); // NEW - Analytics routes
 
 // --- Compatibility mounts (support old clients that forget '/api') ---
 app.use('/subscriptions', subscriptionRoutes);
@@ -584,6 +587,7 @@ server.listen(PORT, async () => {
   console.log('  - Verification:  /api/verification/*');
   console.log('  - Admin:         /api/admin/*');
   console.log('  - Reports:       /api/reports/*');
-  console.log('  - Bans:          /api/admin/bans/*'); // NEW
+  console.log('  - Bans:          /api/admin/bans/*');
+  console.log('  - Analytics:     /api/analytics/*'); // NEW - Added analytics endpoint
   console.log('\n✨ Server initialization complete!\n');
 });

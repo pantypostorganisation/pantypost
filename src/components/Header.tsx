@@ -357,6 +357,59 @@ export default function Header(): React.ReactElement | null {
     }
   }, [isAdminUser]);
 
+  // Add these handler functions for notifications
+  const handleClearOne = useCallback((notification: UINotification) => {
+    if (notification.source === 'legacy') {
+      clearSellerNotification(notification.id);
+    } else {
+      ctxClearNotification(notification.id);
+    }
+  }, [clearSellerNotification, ctxClearNotification]);
+
+  const handleRestoreOne = useCallback((notification: UINotification) => {
+    if (notification.source === 'legacy') {
+      restoreSellerNotification(notification.id);
+    } else {
+      ctxRestoreNotification(notification.id);
+    }
+  }, [restoreSellerNotification, ctxRestoreNotification]);
+
+  const handleDeleteOne = useCallback((notification: UINotification) => {
+    if (notification.source === 'legacy') {
+      permanentlyDeleteSellerNotification(notification.id);
+    } else {
+      ctxDeleteNotification(notification.id);
+    }
+  }, [permanentlyDeleteSellerNotification, ctxDeleteNotification]);
+
+  const clearAllNotifications = useCallback(() => {
+    setClearingNotifications(true);
+    processedNotifications.active.forEach((notification) => {
+      if (notification.source === 'legacy') {
+        clearSellerNotification(notification.id);
+      } else {
+        ctxClearNotification(notification.id);
+      }
+    });
+    // Also call the context clear all
+    ctxClearAll();
+    setTimeout(() => setClearingNotifications(false), 500);
+  }, [processedNotifications.active, clearSellerNotification, ctxClearNotification, ctxClearAll]);
+
+  const deleteAllClearedNotifications = useCallback(() => {
+    setDeletingNotifications(true);
+    processedNotifications.cleared.forEach((notification) => {
+      if (notification.source === 'legacy') {
+        permanentlyDeleteSellerNotification(notification.id);
+      } else {
+        ctxDeleteNotification(notification.id);
+      }
+    });
+    // Also call the context delete all cleared
+    ctxDeleteAllCleared();
+    setTimeout(() => setDeletingNotifications(false), 500);
+  }, [processedNotifications.cleared, permanentlyDeleteSellerNotification, ctxDeleteNotification, ctxDeleteAllCleared]);
+
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
   }, 30000);
@@ -649,7 +702,7 @@ export default function Header(): React.ReactElement | null {
 
               <Link href="/sellers/subscribers" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Users className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Subscribers</span>
+                <span>Analytics</span>
               </Link>
 
               <div className="relative flex items-center" ref={notifRef}>

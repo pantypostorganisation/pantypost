@@ -1,35 +1,34 @@
 // src/components/seller-settings/utils/SaveButton.tsx
 'use client';
 
-import { z } from 'zod';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
-const PropsSchema = z.object({
-  onClick: z.function().args().returns(z.void()),
-  showSuccess: z.boolean().default(false),
-  showError: z.string().optional(),
-  isLoading: z.boolean().optional(),
-});
+interface SaveButtonProps {
+  onClick: () => void | Promise<void> | Promise<boolean> | Promise<any>; // Accept various async return types
+  showSuccess?: boolean;
+  showError?: string | boolean; // Accept both string and boolean
+  isLoading?: boolean;
+}
 
-interface SaveButtonProps extends z.infer<typeof PropsSchema> {}
+export default function SaveButton({
+  onClick,
+  showSuccess = false,
+  showError,
+  isLoading = false
+}: SaveButtonProps) {
+  // Convert boolean error to string if needed
+  let errorMessage: string | undefined;
+  if (typeof showError === 'string') {
+    errorMessage = sanitizeStrict(showError);
+  } else if (showError === true) {
+    errorMessage = 'An error occurred';
+  }
 
-export default function SaveButton(rawProps: SaveButtonProps) {
-  const parsed = PropsSchema.safeParse(rawProps);
-  const {
-    onClick,
-    showSuccess = false,
-    showError,
-    isLoading = false,
-  } = parsed.success
-    ? parsed.data
-    : {
-        onClick: () => {},
-        showSuccess: false,
-        showError: undefined,
-        isLoading: false,
-      };
-
-  const cleanedError = showError ? sanitizeStrict(showError) : undefined;
+  // Handle click with proper async handling
+  const handleClick = () => {
+    // Call onClick and handle any potential promise
+    Promise.resolve(onClick()).catch(console.error);
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -46,7 +45,7 @@ export default function SaveButton(rawProps: SaveButtonProps) {
       ) : (
         <button
           type="button"
-          onClick={onClick}
+          onClick={handleClick}
           className="cursor-pointer hover:scale-[1.02] transition-transform duration-200"
           aria-label="Save all profile changes"
         >
@@ -71,13 +70,13 @@ export default function SaveButton(rawProps: SaveButtonProps) {
       )}
 
       {/* Error Message */}
-      {cleanedError && !isLoading && (
+      {errorMessage && !isLoading && (
         <div
           className="bg-red-900 text-red-100 p-3 rounded-lg mt-3 text-center max-w-xs"
           role="alert"
           aria-live="assertive"
         >
-          ❌ {cleanedError}
+          ❌ {errorMessage}
         </div>
       )}
     </div>
