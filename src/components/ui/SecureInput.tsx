@@ -1,11 +1,11 @@
-// src/components/ui/SecureInput.tsx
+'use client';
 
 import React, { useState, useEffect, forwardRef } from 'react';
 import { Eye, EyeOff, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { sanitizeStrict, sanitizeEmail } from '@/utils/security/sanitization';
-import { debounce } from '@/utils/security/validation';
 
-interface SecureInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+interface SecureInputProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   label?: string;
   error?: string;
   touched?: boolean;
@@ -50,11 +50,17 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
     ref
   ) => {
     const [showPassword, setShowPassword] = useState(false);
-    const [value, setValue] = useState(props.value as string || '');
+    const [value, setValue] = useState((props.value as string) || '');
     const [isFocused, setIsFocused] = useState(false);
 
-    // Determine input type
-    const inputType = type === 'password' && !showPassword ? 'password' : 'text';
+    // Keep internal value synchronized with external value prop
+    useEffect(() => {
+      setValue((props.value as string) ?? '');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [props.value]);
+
+    // Determine input type (preserve native types other than password)
+    const inputType = type === 'password' ? (showPassword ? 'text' : 'password') : type;
 
     // Handle input change with sanitization
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,7 +114,7 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
         if (success && touched) return 'border-green-500 focus:ring-green-500';
         return 'border-[#ff950e] focus:ring-[#ff950e]';
       }
-      
+
       if (error && touched) return 'border-red-500/50';
       if (success && touched) return 'border-green-500/50';
       return 'border-gray-700';
@@ -117,15 +123,12 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label 
-            htmlFor={id} 
-            className="block text-sm font-medium text-gray-300 mb-1.5"
-          >
+          <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-1.5">
             {label}
             {props.required && <span className="text-red-400 ml-1">*</span>}
           </label>
         )}
-        
+
         <div className="relative">
           <input
             ref={ref}
@@ -156,11 +159,7 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
               tabIndex={-1}
             >
-              {showPassword ? (
-                <EyeOff className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
 
@@ -183,7 +182,7 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
             {error}
           </p>
         )}
-        
+
         {!error && helpText && (
           <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
             <Info className="w-3 h-3" />
@@ -193,9 +192,11 @@ export const SecureInput = forwardRef<HTMLInputElement, SecureInputProps>(
 
         {/* Character count */}
         {characterCount && maxLength && (
-          <p className={`mt-1 text-xs text-right ${
-            value.length >= maxLength ? 'text-red-400' : 'text-gray-500'
-          }`}>
+          <p
+            className={`mt-1 text-xs text-right ${
+              value.length >= maxLength ? 'text-red-400' : 'text-gray-500'
+            }`}
+          >
             {value.length}/{maxLength}
           </p>
         )}
@@ -209,7 +210,8 @@ SecureInput.displayName = 'SecureInput';
 /**
  * Secure textarea component with similar features
  */
-interface SecureTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'> {
+interface SecureTextareaProps
+  extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange'> {
   label?: string;
   error?: string;
   touched?: boolean;
@@ -245,8 +247,14 @@ export const SecureTextarea = forwardRef<HTMLTextAreaElement, SecureTextareaProp
     },
     ref
   ) => {
-    const [value, setValue] = useState(props.value as string || '');
+    const [value, setValue] = useState((props.value as string) || '');
     const [isFocused, setIsFocused] = useState(false);
+
+    // Keep internal value synchronized with external value prop
+    useEffect(() => {
+      setValue((props.value as string) ?? '');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [props.value]);
 
     // Handle input change with sanitization
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -277,7 +285,7 @@ export const SecureTextarea = forwardRef<HTMLTextAreaElement, SecureTextareaProp
         if (success && touched) return 'border-green-500 focus:ring-green-500';
         return 'border-[#ff950e] focus:ring-[#ff950e]';
       }
-      
+
       if (error && touched) return 'border-red-500/50';
       if (success && touched) return 'border-green-500/50';
       return 'border-gray-700';
@@ -293,15 +301,12 @@ export const SecureTextarea = forwardRef<HTMLTextAreaElement, SecureTextareaProp
     return (
       <div className="w-full">
         {label && (
-          <label 
-            htmlFor={id} 
-            className="block text-sm font-medium text-gray-300 mb-1.5"
-          >
+          <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-1.5">
             {label}
             {props.required && <span className="text-red-400 ml-1">*</span>}
           </label>
         )}
-        
+
         <div className="relative">
           <textarea
             ref={ref}
@@ -329,7 +334,7 @@ export const SecureTextarea = forwardRef<HTMLTextAreaElement, SecureTextareaProp
             {error}
           </p>
         )}
-        
+
         {!error && helpText && (
           <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
             <Info className="w-3 h-3" />
@@ -339,9 +344,11 @@ export const SecureTextarea = forwardRef<HTMLTextAreaElement, SecureTextareaProp
 
         {/* Character count */}
         {characterCount && maxLength && (
-          <p className={`mt-1 text-xs text-right ${
-            value.length >= maxLength ? 'text-red-400' : 'text-gray-500'
-          }`}>
+          <p
+            className={`mt-1 text-xs text-right ${
+              value.length >= maxLength ? 'text-red-400' : 'text-gray-500'
+            }`}
+          >
             {value.length}/{maxLength}
           </p>
         )}

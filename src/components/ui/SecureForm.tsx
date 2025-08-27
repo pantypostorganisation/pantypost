@@ -1,9 +1,8 @@
-// src/components/ui/SecureForm.tsx
+'use client';
 
 import React, { FormEvent, useState, useEffect } from 'react';
 import { AlertCircle, ShieldCheck, Loader2 } from 'lucide-react';
-import { getRateLimiter, RATE_LIMITS, getRateLimitMessage } from '@/utils/security/rate-limiter';
-import { CSRFTokenManager as CSRFManager } from '@/utils/security/validation';
+import { getRateLimiter, getRateLimitMessage } from '@/utils/security/rate-limiter';
 
 interface SecureFormProps {
   children: React.ReactNode;
@@ -47,7 +46,9 @@ export const SecureForm: React.FC<SecureFormProps> = ({
   // Update rate limit error when props change
   useEffect(() => {
     if (isRateLimited && rateLimitWaitTime > 0) {
-      setRateLimitError(`Too many attempts. Please wait ${rateLimitWaitTime} seconds before trying again.`);
+      setRateLimitError(
+        `Too many attempts. Please wait ${rateLimitWaitTime} seconds before trying again.`
+      );
     } else {
       setRateLimitError(null);
     }
@@ -55,12 +56,12 @@ export const SecureForm: React.FC<SecureFormProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     // Don't submit if externally rate limited
     if (isRateLimited) {
       return;
     }
-    
+
     // Clear previous errors
     setRateLimitError(null);
 
@@ -68,7 +69,7 @@ export const SecureForm: React.FC<SecureFormProps> = ({
     if (rateLimitKey && rateLimitConfig && !isRateLimited) {
       const limiter = getRateLimiter();
       const result = limiter.check(rateLimitKey, rateLimitConfig);
-      
+
       if (!result.allowed) {
         setRateLimitError(getRateLimitMessage(result));
         return;
@@ -81,13 +82,13 @@ export const SecureForm: React.FC<SecureFormProps> = ({
       await onSubmit(e);
     } catch (error) {
       console.error('Form submission error:', error);
-      
+
       // If it's a rate limit error, reset the attempt
       if (rateLimitKey && error instanceof Error && error.message.includes('Rate limit')) {
         const limiter = getRateLimiter();
         limiter.reset(rateLimitKey);
       }
-      
+
       throw error;
     } finally {
       setIsSubmitting(false);
@@ -97,9 +98,7 @@ export const SecureForm: React.FC<SecureFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className={className} noValidate>
       {/* CSRF Token (hidden) */}
-      {csrfProtection && csrfToken && (
-        <input type="hidden" name="_csrf" value={csrfToken} />
-      )}
+      {csrfProtection && csrfToken && <input type="hidden" name="_csrf" value={csrfToken} />}
 
       {/* Security Badge */}
       {showSecurityBadge && (
@@ -202,28 +201,28 @@ class CSRFTokenManager {
   generateToken(): string {
     const token = this.createSecureToken();
     const expiry = Date.now() + this.tokenExpiry;
-    
+
     if (typeof window !== 'undefined') {
       sessionStorage.setItem(this.tokenKey, JSON.stringify({ token, expiry }));
     }
-    
+
     return token;
   }
 
   validateToken(token: string): boolean {
     if (typeof window === 'undefined') return false;
-    
+
     try {
       const stored = sessionStorage.getItem(this.tokenKey);
       if (!stored) return false;
-      
+
       const { token: storedToken, expiry } = JSON.parse(stored);
-      
+
       if (Date.now() > expiry) {
         sessionStorage.removeItem(this.tokenKey);
         return false;
       }
-      
+
       return token === storedToken;
     } catch {
       return false;
@@ -233,6 +232,6 @@ class CSRFTokenManager {
   private createSecureToken(): string {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
 }

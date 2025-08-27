@@ -1,4 +1,3 @@
-// src/components/ui/ErrorFallback.tsx
 'use client';
 
 import React from 'react';
@@ -41,10 +40,11 @@ export function ErrorFallback({
     // Only show details in development
     if (process.env.NODE_ENV === 'development') {
       // Even in dev, sanitize the output
-      const sanitizedDetails = typeof error.details === 'string' 
-        ? sanitizeStrict(error.details)
-        : sanitizeStrict(JSON.stringify(error.details));
-      
+      const sanitizedDetails =
+        typeof error.details === 'string'
+          ? sanitizeStrict(error.details)
+          : sanitizeStrict(JSON.stringify(error.details));
+
       return sanitizedDetails;
     }
 
@@ -58,21 +58,21 @@ export function ErrorFallback({
     <div className="p-6 text-center">
       <div className="text-4xl mb-4">{getErrorIcon()}</div>
       <h3 className="text-lg font-semibold mb-2">
-        <SecureMessageDisplay 
-          content={error.message} 
-          allowBasicFormatting={false}
-        />
+        <SecureMessageDisplay content={error.message} allowBasicFormatting={false} />
       </h3>
-      {safeErrorDetails && (
+
+      {typeof safeErrorDetails === 'string' && safeErrorDetails.length > 0 && (
         <p className="text-sm text-gray-400 mb-4">
-          <SecureMessageDisplay 
-            content={safeErrorDetails} 
+          <SecureMessageDisplay
+            content={safeErrorDetails}
             allowBasicFormatting={false}
             maxLength={200}
           />
         </p>
       )}
+
       {children}
+
       {resetError && error.retryable && (
         <button
           onClick={resetError}
