@@ -98,11 +98,15 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    // Check buyer has sufficient balance
-    if (!buyerWallet.hasBalance(actualMarkedUpPrice)) {
+    // FIX: Round to cents to avoid floating-point precision issues
+    const balanceInCents = Math.round(buyerWallet.balance * 100);
+    const priceInCents = Math.round(actualMarkedUpPrice * 100);
+
+    // Check buyer has sufficient balance (using integer cents)
+    if (balanceInCents < priceInCents) {
       return res.status(400).json({
         success: false,
-        error: `Insufficient balance. You need $${actualMarkedUpPrice.toFixed(2)} but only have $${buyerWallet.balance.toFixed(2)}`
+        error: `Insufficient balance. You need $${(priceInCents/100).toFixed(2)} but only have $${(balanceInCents/100).toFixed(2)}`
       });
     }
 

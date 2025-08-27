@@ -1,3 +1,4 @@
+// src/components/browse-detail/PurchaseSection.tsx
 'use client';
 
 import React, { useState } from 'react';
@@ -46,19 +47,34 @@ export default function PurchaseSection({
   const { getBuyerBalance, purchaseListing, reloadData } = useWallet();
   const { showToast } = useToast();
   const [isPurchasing, setIsPurchasing] = useState(false);
+  
+  // CRITICAL FIX: Add state to track if purchase was successful
+  const [purchaseCompleted, setPurchaseCompleted] = useState(false);
 
   const isSeller = user?.username === listing.seller;
   const isAdmin = user?.role === 'admin';
   const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
 
-  // Get buyer's balance
-  const buyerBalance = user ? getBuyerBalance(user.username) : 0;
-  const purchasePrice = listing.markedUpPrice || listing.price;
-  const canAfford = buyerBalance >= purchasePrice;
+  // FIX: Round to 2 decimal places to avoid floating-point issues
+  const buyerBalance = user ? Math.round(getBuyerBalance(user.username) * 100) / 100 : 0;
+  const purchasePrice = Math.round((listing.markedUpPrice || listing.price) * 100) / 100;
+  
+  // FIX: Add a small tolerance for floating-point comparison
+  const PRICE_TOLERANCE = 0.01; // 1 cent tolerance
+  const canAfford = buyerBalance >= (purchasePrice - PRICE_TOLERANCE);
+  
+  // FIX: Calculate the actual difference and ensure it's not negative or near-zero
+  const balanceNeeded = Math.max(0, purchasePrice - buyerBalance);
+  const shouldShowInsufficientBalance = !canAfford && 
+                                        balanceNeeded > PRICE_TOLERANCE && // Only show if actually short on funds
+                                        !isSeller && 
+                                        !purchaseCompleted && 
+                                        !isPurchasing && 
+                                        !isProcessing;
 
   // Real purchase handler with validation and admin guardrails
   const handleRealPurchase = async () => {
-    if (!user || isPurchasing || isProcessing) return;
+    if (!user || isPurchasing || isProcessing || purchaseCompleted) return;
 
     // Admins cannot act as buyers
     if (isAdmin) {
@@ -102,14 +118,22 @@ export default function PurchaseSection({
         user.username
       );
 
+      // FIX: Mark purchase as completed to prevent warning from showing
+      setPurchaseCompleted(true);
+      
       showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
 
       // Reload wallet/orders
       await reloadData();
-      await new Promise((r) => setTimeout(r, 1000));
+      
+      // Small delay to ensure state updates are visible
+      await new Promise((r) => setTimeout(r, 500));
 
       router.push('/buyers/my-orders');
     } catch (error) {
+      setIsPurchasing(false); // Reset on error
+      setPurchaseCompleted(false); // Reset on error
+      
       let errorMessage = 'Purchase failed. Please try again.';
       if (error instanceof Error) {
         if (error.message.includes('Missing required fields')) {
@@ -124,8 +148,6 @@ export default function PurchaseSection({
         }
       }
       showToast({ type: 'error', title: errorMessage });
-    } finally {
-      setIsPurchasing(false);
     }
   };
 
@@ -150,7 +172,7 @@ export default function PurchaseSection({
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-sm text-gray-400">Price</p>
-          <p className="text-3xl font-bold text-white">{formatMoney(Money.fromDollars(purchasePrice))}</p>
+          <p className="text-3xl font-bold text-white">${purchasePrice.toFixed(2)}</p>
         </div>
 
         {user?.role === 'buyer' && (
@@ -180,18 +202,34 @@ export default function PurchaseSection({
         </div>
       )}
 
-      {user && !isAdmin && !canAfford && !isSeller && (
+      {/* FIX: Only show insufficient balance warning if truly insufficient */}
+      {user && !isAdmin && shouldShowInsufficientBalance && (
         <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
             <div className="flex-1">
               <p className="text-red-500 font-semibold">Insufficient Balance</p>
               <p className="text-sm text-red-400 mt-1">
-                You need {formatMoney(Money.fromDollars(Math.max(0, purchasePrice - buyerBalance)))} more to purchase this item
+                You need ${balanceNeeded.toFixed(2)} more to purchase this item
               </p>
               <button onClick={() => router.push('/wallet/buyer')} className="text-sm text-[#ff950e] hover:underline mt-2">
                 Add funds to wallet →
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FIX: Show success state if purchase completed */}
+      {purchaseCompleted && (
+        <div className="bg-green-900/20 border border-green-600 rounded-lg p-4 mb-2">
+          <div className="flex items-center gap-3">
+            <ShoppingBag className="w-5 h-5 text-green-500" />
+            <div className="flex-1">
+              <p className="text-green-500 font-semibold">Purchase Complete!</p>
+              <p className="text-sm text-green-400 mt-1">
+                Redirecting to your orders...
+              </p>
             </div>
           </div>
         </div>
@@ -222,6 +260,14 @@ export default function PurchaseSection({
           <Crown className="w-5 h-5" />
           Subscribe to Purchase
         </button>
+      ) : purchaseCompleted ? (
+        <button
+          disabled
+          className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          <ShoppingBag className="w-5 h-5" />
+          Purchase Complete ✓
+        </button>
       ) : (
         <button
           onClick={handleRealPurchase}
@@ -238,9 +284,9 @@ export default function PurchaseSection({
         </button>
       )}
 
-      {user && user.role === 'buyer' && (
+      {user && user.role === 'buyer' && !purchaseCompleted && (
         <div className="text-sm text-gray-400 text-center">
-          Your balance: {formatMoney(Money.fromDollars(buyerBalance))}
+          Your balance: ${buyerBalance.toFixed(2)}
         </div>
       )}
     </div>

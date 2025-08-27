@@ -46,24 +46,35 @@ const walletSchema = new mongoose.Schema({
 
 // Add some helpful methods to the wallet
 
-// Method to check if user has enough balance
+// Method to check if user has enough balance (FIXED for floating-point)
 walletSchema.methods.hasBalance = function(amount) {
-  return this.balance >= amount;
+  // Convert to cents to avoid floating-point precision issues
+  const balanceInCents = Math.round(this.balance * 100);
+  const amountInCents = Math.round(amount * 100);
+  return balanceInCents >= amountInCents;
 };
 
 // Method to add money (deposit)
 walletSchema.methods.deposit = async function(amount) {
-  this.balance += amount;
+  // Round to 2 decimal places to avoid floating-point accumulation
+  this.balance = Math.round((this.balance + amount) * 100) / 100;
   this.lastTransaction = new Date();
   return await this.save();
 };
 
-// Method to remove money (withdraw or purchase)
+// Method to remove money (withdraw or purchase) (FIXED for floating-point)
 walletSchema.methods.withdraw = async function(amount) {
-  if (!this.hasBalance(amount)) {
+  // Check balance using cents comparison
+  const balanceInCents = Math.round(this.balance * 100);
+  const amountInCents = Math.round(amount * 100);
+  
+  if (balanceInCents < amountInCents) {
     throw new Error('Insufficient balance');
   }
-  this.balance -= amount;
+  
+  // Subtract using cents and convert back to dollars
+  const newBalanceInCents = balanceInCents - amountInCents;
+  this.balance = newBalanceInCents / 100;
   this.lastTransaction = new Date();
   return await this.save();
 };

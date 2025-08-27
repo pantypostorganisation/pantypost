@@ -362,6 +362,93 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// POST /api/listings/:id/purchase - Direct purchase endpoint (NEW)
+router.post('/:id/purchase', authMiddleware, async (req, res) => {
+  try {
+    const { buyerId } = req.body;
+    const listingId = req.params.id;
+    
+    // Validate buyer
+    const buyerUsername = buyerId || req.user.username;
+    if (!buyerUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'Buyer information required'
+      });
+    }
+    
+    // Get listing
+    const listing = await Listing.findById(listingId);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // Check if already sold
+    if (listing.status === 'sold') {
+      return res.status(400).json({
+        success: false,
+        error: 'This item has already been sold'
+      });
+    }
+    
+    // Check if it's an auction
+    if (listing.auction && listing.auction.isAuction) {
+      return res.status(400).json({
+        success: false,
+        error: 'This is an auction listing. Please use the bid system.'
+      });
+    }
+    
+    // Check if buyer is the seller
+    if (listing.seller === buyerUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'You cannot purchase your own listing'
+      });
+    }
+    
+    // Mark as sold immediately to prevent race conditions
+    listing.status = 'sold';
+    listing.buyerId = buyerUsername;
+    listing.soldAt = new Date();
+    await listing.save();
+    
+    // Emit WebSocket event immediately so UI updates right away
+    if (global.webSocketService) {
+      global.webSocketService.emitListingSold(listing, buyerUsername);
+      
+      // Also emit a specific event for the listing being removed
+      global.webSocketService.broadcast('listing:sold', {
+        listingId: listing._id.toString(),
+        id: listing._id.toString(),
+        buyer: buyerUsername,
+        seller: listing.seller,
+        timestamp: new Date()
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Purchase marked as complete',
+      data: {
+        listing: listing,
+        status: 'sold',
+        buyer: buyerUsername
+      }
+    });
+  } catch (error) {
+    console.error('[Purchase] Error in purchase endpoint:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // POST /api/listings/:id/views - Track listing view
 router.post('/:id/views', async (req, res) => {
   try {

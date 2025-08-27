@@ -134,9 +134,9 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
           </div>
         </div>
 
-        <p className="text-gray-300 text-sm mb-4 line-clamp-2">
+        <div className="text-gray-300 text-sm mb-4 line-clamp-2">
           <SecureMessageDisplay content={order.description} allowBasicFormatting={false} />
-        </p>
+        </div>
       </div>
     </div>
   );
