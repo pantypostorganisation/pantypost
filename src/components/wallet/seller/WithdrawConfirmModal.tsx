@@ -1,6 +1,6 @@
-// src/components/wallet/seller/WithdrawConfirmModal.tsx
 'use client';
 
+import React from 'react';
 import { AlertCircle } from 'lucide-react';
 
 interface WithdrawConfirmModalProps {
@@ -16,8 +16,8 @@ export default function WithdrawConfirmModal({
   setShowConfirmation,
   withdrawAmount,
   isLoading,
-  handleConfirmWithdraw
-}: WithdrawConfirmModalProps) {
+  handleConfirmWithdraw,
+}: WithdrawConfirmModalProps): React.ReactElement | null {
   if (!showConfirmation) return null;
 
   const amount = parseFloat(withdrawAmount);
@@ -32,10 +32,11 @@ export default function WithdrawConfirmModal({
           </div>
           <h3 className="text-xl font-bold text-white">Confirm Withdrawal</h3>
         </div>
-        
+
         <div className="mb-6">
           <p className="text-gray-300 mb-4">
-            Are you sure you want to withdraw <span className="font-bold text-[#ff950e]">${formattedAmount}</span> from your seller balance?
+            Are you sure you want to withdraw{' '}
+            <span className="font-bold text-[#ff950e]">${formattedAmount}</span> from your seller balance?
           </p>
           <div className="bg-[#222] rounded-lg p-3 text-sm text-gray-400">
             <p>• Funds will be sent to your registered account</p>
@@ -43,7 +44,7 @@ export default function WithdrawConfirmModal({
             <p>• You'll receive a confirmation email</p>
           </div>
         </div>
-        
+
         <div className="flex gap-3">
           <button
             onClick={() => setShowConfirmation(false)}

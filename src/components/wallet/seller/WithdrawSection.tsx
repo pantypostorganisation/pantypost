@@ -1,14 +1,11 @@
-// src/components/wallet/seller/WithdrawSection.tsx
-
 'use client';
 
+import React, { useState } from 'react';
 import { ArrowDownCircle, AlertCircle, CheckCircle } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
-import { sanitizeCurrency } from '@/utils/security/sanitization';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { useState } from 'react';
 
 interface WithdrawSectionProps {
   balance: number;
@@ -22,6 +19,8 @@ interface WithdrawSectionProps {
   onQuickAmountSelect: (amount: string) => void;
 }
 
+const MIN_WITHDRAWAL = 20;
+
 export default function WithdrawSection({
   balance,
   withdrawAmount,
@@ -31,58 +30,54 @@ export default function WithdrawSection({
   onAmountChange,
   onKeyPress,
   onWithdraw,
-  onQuickAmountSelect
-}: WithdrawSectionProps) {
+  onQuickAmountSelect,
+}: WithdrawSectionProps): React.ReactElement {
   const quickAmounts = [25, 50, 100, 250];
   const [amountError, setAmountError] = useState<string>('');
-  
+
   // Handle amount change with validation
   const handleAmountChange = (value: string) => {
     setAmountError('');
-    
+
     // Allow empty string
     if (value === '') {
-      const syntheticEvent = {
-        target: { value: '' }
-      } as React.ChangeEvent<HTMLInputElement>;
+      const syntheticEvent = { target: { value: '' } } as React.ChangeEvent<HTMLInputElement>;
       onAmountChange(syntheticEvent);
       return;
     }
-    
+
     // Check valid number format
     const regex = /^\d*\.?\d{0,2}$/;
     if (!regex.test(value)) {
       setAmountError('Please enter a valid amount');
       return;
     }
-    
+
     const numValue = parseFloat(value);
-    
+
     // Validate amount
     if (!isNaN(numValue)) {
-      if (numValue < 10 && value !== '') {
-        setAmountError('Minimum withdrawal is $20.00');
+      if (numValue < MIN_WITHDRAWAL) {
+        setAmountError(`Minimum withdrawal is $${MIN_WITHDRAWAL.toFixed(2)}`);
       } else if (numValue > balance) {
         setAmountError(`Cannot exceed balance of $${balance.toFixed(2)}`);
       }
     }
-    
+
     // Create synthetic event for compatibility
-    const syntheticEvent = {
-      target: { value }
-    } as React.ChangeEvent<HTMLInputElement>;
+    const syntheticEvent = { target: { value } } as React.ChangeEvent<HTMLInputElement>;
     onAmountChange(syntheticEvent);
   };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const numValue = parseFloat(withdrawAmount);
-    if (isNaN(numValue) || numValue < 10 || numValue > balance) {
+    if (isNaN(numValue) || numValue < MIN_WITHDRAWAL || numValue > balance) {
       return;
     }
-    
+
     onWithdraw();
   };
 
@@ -92,13 +87,8 @@ export default function WithdrawSection({
         <ArrowDownCircle className="w-5 h-5 mr-2 text-[#ff950e]" />
         Withdraw Funds
       </h2>
-      
-      <SecureForm
-        onSubmit={handleSubmit}
-        rateLimitKey="withdrawal"
-        rateLimitConfig={RATE_LIMITS.WITHDRAWAL}
-        className="mb-6"
-      >
+
+      <SecureForm onSubmit={handleSubmit} rateLimitKey="withdrawal" rateLimitConfig={RATE_LIMITS.WITHDRAWAL} className="mb-6">
         <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
           <div className="flex items-start">
             <CheckCircle className="w-5 h-5 text-blue-400 mr-2 mt-0.5 flex-shrink-0" />
@@ -122,6 +112,8 @@ export default function WithdrawSection({
                 <SecureInput
                   id="amount"
                   type="text"
+                  inputMode="decimal"
+                  pattern="^\d*\.?\d{0,2}$"
                   value={withdrawAmount}
                   onChange={handleAmountChange}
                   onKeyDown={onKeyPress}
@@ -136,11 +128,18 @@ export default function WithdrawSection({
               <button
                 type="submit"
                 className={`px-6 py-3 rounded-lg font-medium flex items-center justify-center whitespace-nowrap transition-colors ${
-                  balance <= 0 || isLoading || !!amountError || !withdrawAmount || parseFloat(withdrawAmount) <= 0
+                  balance <= 0 || isLoading || !!amountError || !withdrawAmount || Number.isNaN(parseFloat(withdrawAmount)) || parseFloat(withdrawAmount) <= 0
                     ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
                     : 'bg-[#ff950e] hover:bg-[#e88800] text-black'
                 }`}
-                disabled={balance <= 0 || isLoading || !!amountError || !withdrawAmount || parseFloat(withdrawAmount) <= 0}
+                disabled={
+                  balance <= 0 ||
+                  isLoading ||
+                  !!amountError ||
+                  !withdrawAmount ||
+                  Number.isNaN(parseFloat(withdrawAmount)) ||
+                  parseFloat(withdrawAmount) <= 0
+                }
               >
                 {isLoading ? (
                   <>
@@ -186,20 +185,19 @@ export default function WithdrawSection({
 
       {/* Status message */}
       {message && (
-        <div className={`p-4 rounded-lg flex items-center ${
-          messageType === 'success' 
-            ? 'bg-green-900/20 border border-green-500/30 text-green-400' 
-            : 'bg-red-900/20 border border-red-500/30 text-red-400'
-        }`}>
+        <div
+          className={`p-4 rounded-lg flex items-center ${
+            messageType === 'success'
+              ? 'bg-green-900/20 border border-green-500/30 text-green-400'
+              : 'bg-red-900/20 border border-red-500/30 text-red-400'
+          }`}
+        >
           {messageType === 'success' ? (
             <CheckCircle className="w-5 h-5 mr-2 flex-shrink-0" />
           ) : (
             <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
           )}
-          <SecureMessageDisplay 
-            content={message}
-            allowBasicFormatting={false}
-          />
+          <SecureMessageDisplay content={message} allowBasicFormatting={false} />
         </div>
       )}
     </div>

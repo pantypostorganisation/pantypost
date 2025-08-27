@@ -1,13 +1,13 @@
-// src/components/wallet/seller/BalanceCard.tsx
 'use client';
 
+import React from 'react';
 import { DollarSign, TrendingUp } from 'lucide-react';
 
 interface BalanceCardProps {
   balance: number;
 }
 
-export default function BalanceCard({ balance }: BalanceCardProps) {
+export default function BalanceCard({ balance }: BalanceCardProps): React.ReactElement {
   return (
     <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg col-span-1 md:col-span-2">
       <div className="flex items-center justify-between mb-4">

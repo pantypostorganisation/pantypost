@@ -1,6 +1,6 @@
-// src/components/wallet/seller/EarningsCard.tsx
 'use client';
 
+import React from 'react';
 import { TrendingUp, ArrowDownCircle } from 'lucide-react';
 
 interface EarningsCardProps {
@@ -9,7 +9,11 @@ interface EarningsCardProps {
   salesCount: number;
 }
 
-export default function EarningsCard({ totalEarnings, totalWithdrawn, salesCount }: EarningsCardProps) {
+export default function EarningsCard({
+  totalEarnings,
+  totalWithdrawn,
+  salesCount,
+}: EarningsCardProps): React.ReactElement {
   return (
     <div className="bg-[#1a1a1a] rounded-xl p-6 border border-[#333] shadow-lg space-y-4">
       <div>
@@ -26,7 +30,7 @@ export default function EarningsCard({ totalEarnings, totalWithdrawn, salesCount
           {salesCount} {salesCount === 1 ? 'sale' : 'sales'}
         </p>
       </div>
-      
+
       <div className="pt-3 border-t border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-medium text-gray-300">Withdrawn</h2>

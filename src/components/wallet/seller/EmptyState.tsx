@@ -1,13 +1,13 @@
-// src/components/wallet/seller/EmptyState.tsx
 'use client';
 
+import React from 'react';
 import { Wallet } from 'lucide-react';
 
 interface EmptyStateProps {
   showEmptyState: boolean;
 }
 
-export default function EmptyState({ showEmptyState }: EmptyStateProps) {
+export default function EmptyState({ showEmptyState }: EmptyStateProps): React.ReactElement | null {
   if (!showEmptyState) return null;
 
   return (
