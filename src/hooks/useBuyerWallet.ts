@@ -5,13 +5,10 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { WalletIntegration } from '@/services/wallet.integration';
 import { WalletValidation } from '@/services/wallet.validation';
-import { storageService } from '@/services/storage.service';
 import { Money } from '@/types/common';
 import { useRateLimit } from '@/utils/security/rate-limiter';
-import { financialSchemas } from '@/utils/validation/schemas';
-import { sanitizeCurrency, sanitizeStrict } from '@/utils/security/sanitization';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { securityService } from '@/services';
 
 interface EnhancedBuyerWalletState {
@@ -37,11 +34,10 @@ export const useBuyerWallet = () => {
   const { 
     getBuyerBalance,
     setBuyerBalance, 
-    orderHistory, // ← This can be undefined initially
-    addDeposit,  // ← This is the WalletContext API method we should use
+    orderHistory,
+    addDeposit,
     getTransactionHistory,
     checkSuspiciousActivity,
-    reconcileBalance,
     buyerBalances,
     isInitialized: walletInitialized,
   } = useWallet();
@@ -72,7 +68,7 @@ export const useBuyerWallet = () => {
   const lastActivityCheckRef = useRef<Date>(new Date());
   const initialSyncDone = useRef(false);
 
-  // ✅ EXTRA SAFE: Triple-check orderHistory with detailed logging
+  // Buyer purchases from order history
   const buyerPurchases = useMemo(() => {
     console.log('[BuyerWallet] Computing buyerPurchases:', {
       hasUser: !!user,
@@ -83,7 +79,6 @@ export const useBuyerWallet = () => {
       orderHistory: orderHistory
     });
     
-    // Multiple levels of safety checks
     if (!user?.username) {
       console.log('[BuyerWallet] No username, returning empty array');
       return [];
@@ -109,7 +104,7 @@ export const useBuyerWallet = () => {
     }
   }, [user?.username, orderHistory]);
   
-  // Sort purchases by date (newest first) - also with safe access
+  // Sort purchases by date (newest first)
   const recentPurchases = useMemo(() => {
     if (!Array.isArray(buyerPurchases) || buyerPurchases.length === 0) {
       return [];
@@ -134,7 +129,7 @@ export const useBuyerWallet = () => {
     }
   }, [buyerPurchases]);
 
-  // Calculate total spent with validation - safe access
+  // Calculate total spent
   const totalSpent = useMemo(() => {
     if (!Array.isArray(buyerPurchases)) {
       return 0;
@@ -145,7 +140,6 @@ export const useBuyerWallet = () => {
         if (!order) return sum;
         
         const price = order.markedUpPrice || order.price;
-        // Validate price is a positive number
         if (typeof price === 'number' && price > 0) {
           return sum + price;
         }
@@ -160,7 +154,6 @@ export const useBuyerWallet = () => {
   // Update state helper with sanitization
   const updateState = useCallback((updates: Partial<EnhancedBuyerWalletState>) => {
     setState(prev => {
-      // Sanitize string fields
       const sanitizedUpdates = { ...updates };
       if (updates.message) {
         sanitizedUpdates.message = sanitizeStrict(updates.message);
@@ -175,105 +168,26 @@ export const useBuyerWallet = () => {
     });
   }, []);
 
-  // Force read balance from all storage locations
-  const forceReadBalance = useCallback(async (username: string): Promise<number> => {
-    try {
-      console.log('[BuyerWallet] Force reading balance for:', username);
-      
-      // Try multiple sources to get the balance
-      let balance = 0;
-      
-      // 1. Try WalletContext first
-      const contextBalance = getBuyerBalance(username);
-      console.log('[BuyerWallet] Context balance:', contextBalance);
-      if (contextBalance > 0) {
-        balance = contextBalance;
-      }
-      
-      // 2. Try reading from collective storage
-      const buyersData = await storageService.getItem<Record<string, number>>('wallet_buyers', {});
-      console.log('[BuyerWallet] Buyers data from storage:', buyersData);
-      if (buyersData[username] !== undefined && buyersData[username] > balance) {
-        balance = buyersData[username];
-      }
-      
-      // 3. Try reading from individual key (enhanced format)
-      const individualKey = `wallet_buyer_${username}`;
-      const individualBalance = await storageService.getItem<number>(individualKey, 0);
-      console.log('[BuyerWallet] Individual balance (cents):', individualBalance);
-      if (individualBalance > 0) {
-        const dollarBalance = individualBalance / 100;
-        if (dollarBalance > balance) {
-          balance = dollarBalance;
-        }
-      }
-      
-      // 4. Check localStorage directly as fallback
-      if (typeof localStorage !== 'undefined') {
-        const lsBuyers = localStorage.getItem('wallet_buyers');
-        if (lsBuyers) {
-          try {
-            const parsed = JSON.parse(lsBuyers);
-            if (parsed[username] !== undefined && parsed[username] > balance) {
-              balance = parsed[username];
-              console.log('[BuyerWallet] Balance from localStorage:', balance);
-            }
-          } catch (e) {
-            console.error('[BuyerWallet] Error parsing localStorage:', e);
-          }
-        }
-        
-        // Also check individual key in localStorage
-        const lsIndividual = localStorage.getItem(individualKey);
-        if (lsIndividual) {
-          const cents = parseInt(lsIndividual);
-          if (!isNaN(cents) && cents > 0) {
-            const dollars = cents / 100;
-            if (dollars > balance) {
-              balance = dollars;
-              console.log('[BuyerWallet] Balance from localStorage individual:', balance);
-            }
-          }
-        }
-      }
-      
-      console.log('[BuyerWallet] Final balance after checking all sources:', balance);
-      return balance;
-    } catch (error) {
-      console.error('[BuyerWallet] Error force reading balance:', error);
-      return 0;
-    }
-  }, [getBuyerBalance]);
-
-  // Sync balance with enhanced service
+  // SERVER-SIDE ONLY: Get balance from WalletContext (no localStorage)
   const syncBalance = useCallback(async () => {
     console.log('[BuyerWallet] syncBalance called for user:', user?.username);
     if (!user?.username) return;
 
     try {
-      // Force read balance from all sources
-      const balance = await forceReadBalance(user.username);
-      console.log('[BuyerWallet] Force read balance result:', balance);
+      // Get balance from WalletContext (which gets it from API)
+      const balance = getBuyerBalance(user.username);
+      console.log('[BuyerWallet] Context balance:', balance);
       
-      // Update local state immediately
+      // Update local state
       updateState({
         balance: balance,
         availableBalance: balance,
         lastSyncTime: new Date(),
       });
       
-      // If balance is greater than what's in context, update context
-      const contextBalance = getBuyerBalance(user.username);
-      if (balance > contextBalance) {
-        console.log('[BuyerWallet] Updating context balance from', contextBalance, 'to', balance);
-        await setBuyerBalance(user.username, balance);
-      }
-      
       // Get transaction history for additional info
       try {
         const history = await getTransactionHistory(user.username, 20);
-        
-        // ✅ FIXED: Safe array access with proper checking
         const transactionArray = Array.isArray(history) ? history : [];
         
         // Calculate daily limit usage
@@ -301,7 +215,6 @@ export const useBuyerWallet = () => {
         });
       } catch (historyError) {
         console.error('[BuyerWallet] Error getting transaction history:', historyError);
-        // Don't fail the whole sync if transaction history fails
         updateState({
           transactionHistory: [],
         });
@@ -314,7 +227,7 @@ export const useBuyerWallet = () => {
         messageType: 'error'
       });
     }
-  }, [user, getBuyerBalance, setBuyerBalance, getTransactionHistory, updateState, forceReadBalance]);
+  }, [user, getBuyerBalance, getTransactionHistory, updateState]);
 
   // Initial sync when wallet is initialized and user is available
   useEffect(() => {
@@ -325,7 +238,7 @@ export const useBuyerWallet = () => {
     }
   }, [walletInitialized, user?.username, syncBalance]);
 
-  // Listen for changes in buyer balances
+  // Listen for changes in buyer balances from WalletContext
   useEffect(() => {
     if (user?.username && buyerBalances && buyerBalances[user.username] !== undefined) {
       const newBalance = buyerBalances[user.username];
@@ -339,25 +252,7 @@ export const useBuyerWallet = () => {
     }
   }, [buyerBalances, user?.username, state.balance, updateState]);
 
-  // Listen for storage events (cross-tab sync)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'wallet_buyers' || (e.key && e.key.startsWith('wallet_buyer_'))) {
-        console.log('[BuyerWallet] Storage change detected, syncing...');
-        syncBalance();
-      }
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', handleStorageChange);
-      return () => window.removeEventListener('storage', handleStorageChange);
-    }
-    
-    // Return undefined when window is not available (SSR)
-    return undefined;
-  }, [syncBalance]);
-
-  // Periodic sync (every 15 seconds) - FIXED
+  // Periodic sync (every 15 seconds)
   useEffect(() => {
     if (user?.username) {
       syncIntervalRef.current = setInterval(() => {
@@ -370,10 +265,10 @@ export const useBuyerWallet = () => {
         }
       };
     }
-    return undefined; // Added explicit return for when condition is false
+    return undefined;
   }, [user?.username, syncBalance]);
 
-  // 🔧 FIXED: Enhanced add funds - now uses WalletContext addDeposit directly
+  // Handle add funds
   const handleAddFunds = useCallback(async () => {
     // Check rate limit first
     const rateLimitResult = checkDepositLimit();
@@ -442,7 +337,7 @@ export const useBuyerWallet = () => {
         );
       }
 
-      // 🔧 FIXED: Use addDeposit directly instead of WalletIntegration.addFunds
+      // Use WalletContext addDeposit (server-side)
       console.log('[BuyerWallet] Processing deposit via WalletContext addDeposit...');
       
       const depositSuccess = await addDeposit(
@@ -456,7 +351,7 @@ export const useBuyerWallet = () => {
         // Wait a moment for the deposit to process
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Force sync balance
+        // Force sync balance from server
         await syncBalance();
         
         updateState({
@@ -494,7 +389,7 @@ export const useBuyerWallet = () => {
     }, 5000);
   }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, addDeposit, syncBalance, toast, updateState, checkDepositLimit]);
 
-  // Validate amount as user types with sanitization
+  // Validate amount as user types
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
@@ -615,7 +510,6 @@ export const useBuyerWallet = () => {
 
   // Format currency for display
   const formatCurrency = useCallback((amount: number): string => {
-    // Validate amount is a number
     if (typeof amount !== 'number' || isNaN(amount)) {
       return '$0.00';
     }

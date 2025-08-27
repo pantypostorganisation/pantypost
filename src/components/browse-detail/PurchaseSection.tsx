@@ -1,7 +1,7 @@
 // src/components/browse-detail/PurchaseSection.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Heart, Crown, ShoppingBag, AlertCircle, ShieldAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
@@ -43,8 +43,8 @@ export default function PurchaseSection({
   onSubscribeClick,
 }: PurchaseSectionProps) {
   const router = useRouter();
-  const { isSubscribed } = useListings();
-  const { getBuyerBalance, purchaseListing, reloadData } = useWallet();
+  const { isSubscribed, listings } = useListings();
+  const { getBuyerBalance, purchaseListing, reloadData, orderHistory } = useWallet();
   const { showToast } = useToast();
   const [isPurchasing, setIsPurchasing] = useState(false);
   
@@ -55,26 +55,44 @@ export default function PurchaseSection({
   const isAdmin = user?.role === 'admin';
   const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
 
-  // FIX: Round to 2 decimal places to avoid floating-point issues
-  const buyerBalance = user ? Math.round(getBuyerBalance(user.username) * 100) / 100 : 0;
-  const purchasePrice = Math.round((listing.markedUpPrice || listing.price) * 100) / 100;
+  // FIX: Check if listing still exists in active listings (if not, it's been sold)
+  const isListingStillActive = listings.some(l => l.id === listing.id);
   
-  // FIX: Add a small tolerance for floating-point comparison
-  const PRICE_TOLERANCE = 0.01; // 1 cent tolerance
-  const canAfford = buyerBalance >= (purchasePrice - PRICE_TOLERANCE);
+  // FIX: Check if current user has this item in their order history
+  useEffect(() => {
+    if (user?.username && orderHistory) {
+      const userPurchasedThis = orderHistory.some(order => 
+        order.buyer === user.username && 
+        (order.listingId === listing.id || order.title === listing.title)
+      );
+      if (userPurchasedThis) {
+        setPurchaseCompleted(true);
+      }
+    }
+  }, [user?.username, orderHistory, listing.id, listing.title]);
+
+  // FIX: Use cents for comparison to avoid floating-point issues
+  const buyerBalanceInCents = user ? Math.round(getBuyerBalance(user.username) * 100) : 0;
+  const purchasePriceInCents = Math.round((listing.markedUpPrice || listing.price) * 100);
   
-  // FIX: Calculate the actual difference and ensure it's not negative or near-zero
-  const balanceNeeded = Math.max(0, purchasePrice - buyerBalance);
+  // Compare in cents (integers) to avoid floating-point issues
+  const canAfford = buyerBalanceInCents >= purchasePriceInCents;
+  
+  // FIX: Calculate the actual difference in dollars
+  const balanceNeeded = Math.max(0, (purchasePriceInCents - buyerBalanceInCents) / 100);
+  
+  // CRITICAL FIX: Don't show warning if purchase completed or listing not active
   const shouldShowInsufficientBalance = !canAfford && 
-                                        balanceNeeded > PRICE_TOLERANCE && // Only show if actually short on funds
+                                        balanceNeeded > 0.01 &&
                                         !isSeller && 
                                         !purchaseCompleted && 
                                         !isPurchasing && 
-                                        !isProcessing;
+                                        !isProcessing &&
+                                        isListingStillActive;
 
   // Real purchase handler with validation and admin guardrails
   const handleRealPurchase = async () => {
-    if (!user || isPurchasing || isProcessing || purchaseCompleted) return;
+    if (!user || isPurchasing || isProcessing || purchaseCompleted || !isListingStillActive) return;
 
     // Admins cannot act as buyers
     if (isAdmin) {
@@ -110,7 +128,7 @@ export default function PurchaseSection({
           title: listing.title,
           description: listing.description,
           price: listing.price,
-          markedUpPrice: purchasePrice,
+          markedUpPrice: purchasePriceInCents / 100, // Convert back to dollars for the API
           imageUrls: listing.imageUrls,
           seller: listing.seller,
           tags: listing.tags || [],
@@ -154,6 +172,22 @@ export default function PurchaseSection({
   // If auction is active, purchase controls are handled by AuctionSection instead
   if (listing.auction && listing.auction.status === 'active') return null;
 
+  // If listing is no longer in active listings and user didn't purchase it
+  if (!isListingStillActive && !purchaseCompleted) {
+    return (
+      <div className="bg-gray-900 rounded-lg p-6 space-y-4">
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <ShoppingBag className="w-5 h-5 text-gray-500" />
+            <div className="flex-1">
+              <p className="text-gray-400 font-semibold">This item has been sold</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-gray-900 rounded-lg p-6 space-y-4">
       {/* Admin notice */}
@@ -172,10 +206,10 @@ export default function PurchaseSection({
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-sm text-gray-400">Price</p>
-          <p className="text-3xl font-bold text-white">${purchasePrice.toFixed(2)}</p>
+          <p className="text-3xl font-bold text-white">${(purchasePriceInCents / 100).toFixed(2)}</p>
         </div>
 
-        {user?.role === 'buyer' && (
+        {user?.role === 'buyer' && isListingStillActive && (
           <button
             onClick={toggleFavorite}
             className="p-2 rounded-lg bg-[#222] hover:bg-[#333] transition-colors"
@@ -186,7 +220,7 @@ export default function PurchaseSection({
         )}
       </div>
 
-      {listing.isPremium && !isUserSubscribed && !isSeller && !isAdmin && (
+      {listing.isPremium && !isUserSubscribed && !isSeller && !isAdmin && isListingStillActive && (
         <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
             <Crown className="w-5 h-5 text-yellow-500 mt-0.5" />
@@ -202,7 +236,7 @@ export default function PurchaseSection({
         </div>
       )}
 
-      {/* FIX: Only show insufficient balance warning if truly insufficient */}
+      {/* FIX: Only show insufficient balance warning if truly insufficient and listing active */}
       {user && !isAdmin && shouldShowInsufficientBalance && (
         <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
@@ -228,7 +262,7 @@ export default function PurchaseSection({
             <div className="flex-1">
               <p className="text-green-500 font-semibold">Purchase Complete!</p>
               <p className="text-sm text-green-400 mt-1">
-                Redirecting to your orders...
+                You own this item
               </p>
             </div>
           </div>
@@ -252,7 +286,7 @@ export default function PurchaseSection({
         <button disabled className="w-full bg-purple-900/40 text-purple-300 py-3 rounded-lg font-semibold cursor-not-allowed">
           Admin accounts cannot purchase
         </button>
-      ) : listing.isPremium && !isUserSubscribed ? (
+      ) : listing.isPremium && !isUserSubscribed && isListingStillActive ? (
         <button
           onClick={onSubscribeClick}
           className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700 transition flex items-center justify-center gap-2"
@@ -260,13 +294,13 @@ export default function PurchaseSection({
           <Crown className="w-5 h-5" />
           Subscribe to Purchase
         </button>
-      ) : purchaseCompleted ? (
+      ) : purchaseCompleted || !isListingStillActive ? (
         <button
           disabled
           className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2"
         >
           <ShoppingBag className="w-5 h-5" />
-          Purchase Complete ✓
+          {purchaseCompleted ? 'You Own This Item ✓' : 'Item Sold'}
         </button>
       ) : (
         <button
@@ -284,9 +318,9 @@ export default function PurchaseSection({
         </button>
       )}
 
-      {user && user.role === 'buyer' && !purchaseCompleted && (
+      {user && user.role === 'buyer' && !purchaseCompleted && isListingStillActive && (
         <div className="text-sm text-gray-400 text-center">
-          Your balance: ${buyerBalance.toFixed(2)}
+          Your balance: ${(buyerBalanceInCents / 100).toFixed(2)}
         </div>
       )}
     </div>

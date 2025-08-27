@@ -11,7 +11,7 @@ const walletSchema = new mongoose.Schema({
     ref: 'User'    // References the User model
   },
   
-  // The amount of money in the wallet
+  // The amount of money in the wallet (stored in dollars)
   balance: {
     type: Number,
     default: 0,    // Start with $0
@@ -46,7 +46,7 @@ const walletSchema = new mongoose.Schema({
 
 // Add some helpful methods to the wallet
 
-// Method to check if user has enough balance (FIXED for floating-point)
+// Method to check if user has enough balance (FIXED for floating-point precision)
 walletSchema.methods.hasBalance = function(amount) {
   // Convert to cents to avoid floating-point precision issues
   const balanceInCents = Math.round(this.balance * 100);
@@ -54,15 +54,16 @@ walletSchema.methods.hasBalance = function(amount) {
   return balanceInCents >= amountInCents;
 };
 
-// Method to add money (deposit)
+// Method to add money (deposit) with floating-point safety
 walletSchema.methods.deposit = async function(amount) {
   // Round to 2 decimal places to avoid floating-point accumulation
   this.balance = Math.round((this.balance + amount) * 100) / 100;
   this.lastTransaction = new Date();
+  this.updatedAt = new Date();
   return await this.save();
 };
 
-// Method to remove money (withdraw or purchase) (FIXED for floating-point)
+// Method to remove money (withdraw or purchase) with floating-point safety
 walletSchema.methods.withdraw = async function(amount) {
   // Check balance using cents comparison
   const balanceInCents = Math.round(this.balance * 100);
@@ -76,8 +77,48 @@ walletSchema.methods.withdraw = async function(amount) {
   const newBalanceInCents = balanceInCents - amountInCents;
   this.balance = newBalanceInCents / 100;
   this.lastTransaction = new Date();
+  this.updatedAt = new Date();
   return await this.save();
 };
+
+// Method to transfer money between wallets (with floating-point safety)
+walletSchema.methods.transferTo = async function(recipientWallet, amount) {
+  // Use cents for all calculations
+  const senderBalanceInCents = Math.round(this.balance * 100);
+  const recipientBalanceInCents = Math.round(recipientWallet.balance * 100);
+  const amountInCents = Math.round(amount * 100);
+  
+  if (senderBalanceInCents < amountInCents) {
+    throw new Error('Insufficient balance for transfer');
+  }
+  
+  // Update balances using cents, then convert back to dollars
+  this.balance = (senderBalanceInCents - amountInCents) / 100;
+  recipientWallet.balance = (recipientBalanceInCents + amountInCents) / 100;
+  
+  // Update timestamps
+  const now = new Date();
+  this.lastTransaction = now;
+  this.updatedAt = now;
+  recipientWallet.lastTransaction = now;
+  recipientWallet.updatedAt = now;
+  
+  // Save both wallets
+  await this.save();
+  await recipientWallet.save();
+  
+  return { sender: this, recipient: recipientWallet };
+};
+
+// Pre-save middleware to ensure balance is always rounded to 2 decimal places
+walletSchema.pre('save', function(next) {
+  if (this.isModified('balance')) {
+    // Ensure balance is always stored with max 2 decimal places
+    this.balance = Math.round(this.balance * 100) / 100;
+  }
+  this.updatedAt = new Date();
+  next();
+});
 
 // Create the model
 const Wallet = mongoose.model('Wallet', walletSchema);
