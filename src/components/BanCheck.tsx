@@ -7,25 +7,22 @@ import { useAuth } from '@/context/AuthContext';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
-import { 
-  Ban, 
-  Clock, 
-  AlertTriangle, 
-  MessageSquare, 
-  Infinity,
+import {
+  Ban as BanIcon,
+  Clock,
+  AlertTriangle,
+  MessageSquare,
+  Infinity as InfinityIcon,
   Shield,
   Calendar,
   FileText,
   Upload,
   X,
-  CheckCircle,
-  XCircle,
   RefreshCw,
-  Paperclip,
   Image as ImageIcon,
   Send,
   Info,
-  ExternalLink
+  ExternalLink,
 } from 'lucide-react';
 
 interface BanCheckProps {
@@ -33,10 +30,9 @@ interface BanCheckProps {
 }
 
 const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
-  // ✅ FIXED: All hooks are now called unconditionally at the top level
   const { user, logout } = useAuth();
   const { isUserBanned, submitAppeal, getBanInfo } = useBans();
-  
+
   const [banInfo, setBanInfo] = useState<any>(null);
   const [showAppealForm, setShowAppealForm] = useState(false);
   const [appealText, setAppealText] = useState('');
@@ -47,25 +43,23 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
   const [lastCheckTime, setLastCheckTime] = useState<number>(0);
   const [connectionError, setConnectionError] = useState(false);
   const [appealError, setAppealError] = useState('');
-  
+
   const maxRetries = 3;
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Retry with exponential backoff
+
   const checkBanStatus = useCallback(async () => {
     if (!user?.username) {
       setBanInfo(null);
       return;
     }
-    
+
     try {
       setConnectionError(false);
       const ban = isUserBanned(user.username);
       setBanInfo(ban);
       setLastCheckTime(Date.now());
       setRetryCount(0);
-      
-      // If ban was lifted, refresh the page to restore normal access
+
       if (!ban && banInfo) {
         setTimeout(() => {
           window.location.reload();
@@ -74,74 +68,65 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
     } catch (error) {
       console.error('Error checking ban status:', error);
       setConnectionError(true);
-      
+
       if (retryCount < maxRetries) {
         const backoffDelay = Math.pow(2, retryCount) * 1000;
         setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          checkBanStatus();
+          setRetryCount((prev) => prev + 1);
+          void checkBanStatus();
         }, backoffDelay);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.username, isUserBanned, retryCount, banInfo]);
 
-  // Check ban status on user change and periodically
   useEffect(() => {
-    checkBanStatus();
-    
-    // Set up periodic checking every 30 seconds
-    const interval = setInterval(checkBanStatus, 30000);
-    
-    // Listen for ban expiration events
-    const handleBanExpired = (event: CustomEvent) => {
-      if (event.detail.username === user?.username) {
-        checkBanStatus();
+    void checkBanStatus();
+
+    const interval = setInterval(() => {
+      void checkBanStatus();
+    }, 30000);
+
+    const handleBanExpired = (event: Event) => {
+      const custom = event as CustomEvent;
+      if ((custom.detail as any)?.username === user?.username) {
+        void checkBanStatus();
       }
     };
-    
-    window.addEventListener('banExpired', handleBanExpired as EventListener);
-    
+
+    window.addEventListener('banExpired', handleBanExpired);
     return () => {
       clearInterval(interval);
-      window.removeEventListener('banExpired', handleBanExpired as EventListener);
+      window.removeEventListener('banExpired', handleBanExpired);
     };
   }, [checkBanStatus, user?.username]);
 
-  // Handle file selection for appeal evidence
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const validFiles = files.filter(file => {
-      // Validate file type
+    const validFiles = files.filter((file) => {
       if (!file.type.startsWith('image/')) {
         alert(`${file.name} is not an image file`);
         return false;
       }
-      
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert(`${file.name} is too large (max 5MB)`);
         return false;
       }
-      
       return true;
     });
-    
-    // Limit to 3 files total
+
     const newFiles = [...appealFiles, ...validFiles].slice(0, 3);
     setAppealFiles(newFiles);
-    
-    // Clear input to allow re-selecting same files
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Remove file from appeal
   const removeFile = (index: number) => {
-    setAppealFiles(prev => prev.filter((_, i) => i !== index));
+    setAppealFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Handle appeal submission
   const handleSubmitAppeal = async () => {
     if (!user) {
       setAppealError('User not found');
@@ -149,40 +134,35 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
     }
 
     const trimmedAppeal = appealText.trim();
-    
+
     if (!trimmedAppeal) {
       setAppealError('Please enter an appeal message');
       return;
     }
-    
     if (trimmedAppeal.length < 10) {
       setAppealError('Appeal message must be at least 10 characters long');
       return;
     }
-    
     if (trimmedAppeal.length > 1000) {
       setAppealError('Appeal message must be less than 1000 characters');
       return;
     }
-    
+
     setIsSubmittingAppeal(true);
     setAppealError('');
-    
+
     try {
-      // Appeal text is already sanitized by SecureTextarea
       const success = await submitAppeal(user.username, trimmedAppeal, appealFiles);
-      
+
       if (success) {
         setAppealSubmitted(true);
         setShowAppealForm(false);
         setAppealText('');
         setAppealFiles([]);
-        
-        // Refresh ban info to show appeal was submitted
+
         const updatedBan = getBanInfo(user.username);
         setBanInfo(updatedBan);
-        
-        // Show success message
+
         setTimeout(() => {
           alert('Appeal submitted successfully! You will be notified of the decision.');
         }, 500);
@@ -197,93 +177,71 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
     }
   };
 
-  // Format remaining time with better precision
   const formatRemainingTime = (ban: any) => {
     if (ban.banType === 'permanent') {
       return 'This is a permanent ban';
     }
-    
+
     if (!ban.remainingHours || ban.remainingHours <= 0) {
       return 'Ban has expired - refreshing page...';
     }
-    
+
     const hours = ban.remainingHours;
-    
+
     if (hours < 1) {
       const minutes = Math.ceil(hours * 60);
       return `${minutes} minute${minutes !== 1 ? 's' : ''} remaining`;
     } else if (hours < 24) {
       const wholeHours = Math.floor(hours);
       const minutes = Math.ceil((hours - wholeHours) * 60);
-      return `${wholeHours} hour${wholeHours !== 1 ? 's' : ''} ${minutes > 0 ? `and ${minutes} minute${minutes !== 1 ? 's' : ''}` : ''} remaining`;
+      return `${wholeHours} hour${wholeHours !== 1 ? 's' : ''}${
+        minutes > 0 ? ` and ${minutes} minute${minutes !== 1 ? 's' : ''}` : ''
+      } remaining`;
     } else {
       const days = Math.floor(hours / 24);
       const remainingHours = Math.floor(hours % 24);
-      return `${days} day${days !== 1 ? 's' : ''} ${remainingHours > 0 ? `and ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}` : ''} remaining`;
+      return `${days} day${days !== 1 ? 's' : ''}${
+        remainingHours > 0 ? ` and ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}` : ''
+      } remaining`;
     }
   };
 
-  // Get ban reason display with enhanced descriptions
   const getBanReasonDisplay = (reason: string, customReason?: string) => {
     const reasonMap: Record<string, { title: string; description: string }> = {
-      harassment: {
-        title: 'Harassment',
-        description: 'Engaging in abusive or threatening behavior toward other users'
-      },
-      spam: {
-        title: 'Spam',
-        description: 'Posting repetitive, unwanted, or promotional content'
-      },
-      inappropriate_content: {
-        title: 'Inappropriate Content',
-        description: 'Sharing content that violates platform guidelines'
-      },
-      scam: {
-        title: 'Scam/Fraud',
-        description: 'Attempting to defraud or scam other users'
-      },
-      underage: {
-        title: 'Underage Violation',
-        description: 'Platform restricted to users 21 and older'
-      },
-      payment_fraud: {
-        title: 'Payment Fraud',
-        description: 'Fraudulent payment activity or chargebacks'
-      },
-      other: {
-        title: 'Other',
-        description: 'Other violations of platform terms of service'
-      }
+      harassment: { title: 'Harassment', description: 'Engaging in abusive or threatening behavior toward other users' },
+      spam: { title: 'Spam', description: 'Posting repetitive, unwanted, or promotional content' },
+      inappropriate_content: { title: 'Inappropriate Content', description: 'Sharing content that violates platform guidelines' },
+      scam: { title: 'Scam/Fraud', description: 'Attempting to defraud or scam other users' },
+      underage: { title: 'Underage Violation', description: 'Platform restricted to users 21 and older' },
+      payment_fraud: { title: 'Payment Fraud', description: 'Fraudulent payment activity or chargebacks' },
+      other: { title: 'Other', description: 'Other violations of platform terms of service' },
     };
-    
+
     const reasonInfo = reasonMap[reason] || { title: reason, description: '' };
     const displayReason = customReason ? `${reasonInfo.title}: ${sanitizeStrict(customReason)}` : reasonInfo.title;
-    
+
     return { display: displayReason, description: reasonInfo.description };
   };
 
-  // Get escalation level display
   const getEscalationDisplay = (level?: number) => {
     if (!level) return null;
-    
+
     const escalationMap: Record<number, { title: string; color: string; description: string }> = {
       1: { title: 'Level 1', color: 'text-yellow-400', description: 'First offense' },
       2: { title: 'Level 2', color: 'text-orange-400', description: 'Multiple violations' },
       3: { title: 'Level 3', color: 'text-red-400', description: 'Serious violations' },
       4: { title: 'Level 4', color: 'text-purple-400', description: 'Severe violations' },
-      5: { title: 'Level 5', color: 'text-red-600', description: 'Final warning level' }
+      5: { title: 'Level 5', color: 'text-red-600', description: 'Final warning level' },
     };
-    
+
     return escalationMap[level] || null;
   };
 
-  // ✅ FIXED: Ensure children is defined before rendering
   if (!children) {
     console.warn('BanCheck: children prop is undefined');
     return null;
   }
 
-  // If user is not banned, render children normally
   if (!banInfo) {
     return <>{children}</>;
   }
@@ -309,17 +267,15 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
             {banInfo.banType === 'permanent' ? (
-              <Infinity size={40} className="text-red-400" />
+              <InfinityIcon size={40} className="text-red-400" />
             ) : (
-              <Ban size={40} className="text-red-400" />
+              <BanIcon size={40} className="text-red-400" />
             )}
           </div>
           <h1 className="text-3xl font-bold text-red-400 mb-2">
             Account {banInfo.banType === 'permanent' ? 'Permanently' : 'Temporarily'} Suspended
           </h1>
-          <p className="text-gray-400">
-            Your access to PantyPost has been restricted
-          </p>
+          <p className="text-gray-400">Your access to PantyPost has been restricted</p>
           {escalationInfo && (
             <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-gray-900/50 rounded-full">
               <Shield size={16} className={escalationInfo.color} />
@@ -336,7 +292,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
             <Info size={20} />
             Suspension Details
           </h3>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <div className="space-y-4">
@@ -347,12 +303,10 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                   </div>
                   <div className="text-white">
                     <p className="font-medium">{reasonInfo.display}</p>
-                    {reasonInfo.description && (
-                      <p className="text-sm text-gray-400 mt-1">{reasonInfo.description}</p>
-                    )}
+                    {reasonInfo.description && <p className="text-sm text-gray-400 mt-1">{reasonInfo.description}</p>}
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex items-center gap-2 text-gray-400 mb-1">
                     <Clock size={16} />
@@ -362,10 +316,13 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                     <p className="font-medium">{formatRemainingTime(banInfo)}</p>
                     {banInfo.banType === 'temporary' && (
                       <div className="mt-2 bg-red-900/20 rounded-full h-2">
-                        <div 
+                        <div
                           className="bg-red-500 h-2 rounded-full transition-all duration-1000"
                           style={{
-                            width: `${Math.max(0, Math.min(100, (banInfo.remainingHours || 0) / (parseInt(banInfo.notes) || 24) * 100))}%`
+                            width: `${Math.max(
+                              0,
+                              Math.min(100, ((banInfo.remainingHours || 0) / ((parseInt(banInfo.notes) || 24))) * 100)
+                            )}%`,
                           }}
                         />
                       </div>
@@ -374,7 +331,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                 </div>
               </div>
             </div>
-            
+
             <div>
               <div className="space-y-4">
                 <div>
@@ -384,7 +341,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                   </div>
                   <p className="text-white">{new Date(banInfo.startTime).toLocaleString()}</p>
                 </div>
-                
+
                 {banInfo.endTime && (
                   <div>
                     <div className="flex items-center gap-2 text-gray-400 mb-1">
@@ -394,7 +351,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                     <p className="text-white">{new Date(banInfo.endTime).toLocaleString()}</p>
                   </div>
                 )}
-                
+
                 <div>
                   <div className="flex items-center gap-2 text-gray-400 mb-1">
                     <Shield size={16} />
@@ -407,7 +364,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
               </div>
             </div>
           </div>
-          
+
           {banInfo.notes && (
             <div className="mt-6 pt-4 border-t border-gray-700">
               <div className="flex items-center gap-2 text-gray-400 mb-2">
@@ -415,11 +372,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                 <span className="font-medium">Additional Information</span>
               </div>
               <div className="bg-[#1a1a1a] rounded-lg p-3">
-                <SecureMessageDisplay 
-                  content={banInfo.notes} 
-                  allowBasicFormatting={false}
-                  className="text-gray-300 text-sm"
-                />
+                <SecureMessageDisplay content={banInfo.notes} allowBasicFormatting={false} className="text-gray-300 text-sm" />
               </div>
             </div>
           )}
@@ -436,11 +389,9 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
               <p className="text-gray-300 text-sm mb-2">
                 If you believe this suspension was issued in error, you can submit an appeal for review.
               </p>
-              <p className="text-gray-400 text-xs">
-                Appeals are reviewed by our moderation team within 24-48 hours.
-              </p>
+              <p className="text-gray-400 text-xs">Appeals are reviewed by our moderation team within 24-48 hours.</p>
             </div>
-            
+
             {!showAppealForm ? (
               <div className="text-center">
                 <button
@@ -456,9 +407,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-blue-400 mb-2">
-                    Explain why this suspension should be lifted *
-                  </label>
+                  <label className="block text-sm font-medium text-blue-400 mb-2">Explain why this suspension should be lifted *</label>
                   <SecureTextarea
                     value={appealText}
                     onChange={setAppealText}
@@ -472,18 +421,14 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                     className="w-full"
                   />
                 </div>
-                
+
                 {/* Evidence Upload */}
                 <div>
-                  <label className="block text-sm font-medium text-blue-400 mb-2">
-                    Supporting Evidence (Optional)
-                  </label>
+                  <label className="block text-sm font-medium text-blue-400 mb-2">Supporting Evidence (Optional)</label>
                   <div className="border-2 border-dashed border-gray-700 rounded-lg p-4">
                     <div className="text-center">
                       <Upload size={32} className="mx-auto text-gray-500 mb-2" />
-                      <p className="text-sm text-gray-400 mb-2">
-                        Upload screenshots or images that support your appeal
-                      </p>
+                      <p className="text-sm text-gray-400 mb-2">Upload screenshots or images that support your appeal</p>
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
@@ -491,20 +436,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                       >
                         Choose Files
                       </button>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Max 3 files, 5MB each. Images only.
-                      </p>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
+                      <p className="text-xs text-gray-500 mt-2">Max 3 files, 5MB each. Images only.</p>
+                      <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileSelect} className="hidden" />
                     </div>
                   </div>
-                  
+
                   {/* Selected Files */}
                   {appealFiles.length > 0 && (
                     <div className="mt-3 space-y-2">
@@ -514,14 +450,9 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                           <div className="flex items-center gap-2">
                             <ImageIcon size={16} className="text-blue-400" />
                             <span className="text-sm text-gray-300">{file.name}</span>
-                            <span className="text-xs text-gray-500">
-                              ({(file.size / 1024 / 1024).toFixed(1)}MB)
-                            </span>
+                            <span className="text-xs text-gray-500">({(file.size / 1024 / 1024).toFixed(1)}MB)</span>
                           </div>
-                          <button
-                            onClick={() => removeFile(index)}
-                            className="text-red-400 hover:text-red-300 transition-colors"
-                          >
+                          <button onClick={() => removeFile(index)} className="text-red-400 hover:text-red-3 00 transition-colors">
                             <X size={16} />
                           </button>
                         </div>
@@ -529,7 +460,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={() => {
@@ -573,43 +504,29 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
               <MessageSquare size={20} />
               Appeal Status: {banInfo.appealStatus || 'Pending'}
             </h3>
-            
+
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
-                <span className="text-gray-300 text-sm">
-                  Your appeal has been submitted and is being reviewed by our moderation team.
-                </span>
+                <span className="text-gray-300 text-sm">Your appeal has been submitted and is being reviewed by our moderation team.</span>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
-                <span className="text-gray-400 text-sm">
-                  You will be notified of the decision via email and platform notification.
-                </span>
+                <span className="text-gray-400 text-sm">You will be notified of the decision via email and platform notification.</span>
               </div>
-              
+
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 bg-gray-600 rounded-full"></div>
-                <span className="text-gray-400 text-sm">
-                  Appeals are typically reviewed within 24-48 hours.
-                </span>
+                <span className="text-gray-400 text-sm">Appeals are typically reviewed within 24-48 hours.</span>
               </div>
             </div>
-            
+
             {banInfo.appealText && (
               <div className="mt-4 p-3 bg-[#222] rounded border-l-4 border-orange-400">
                 <div className="text-sm text-orange-400 mb-1">Your appeal message:</div>
-                <SecureMessageDisplay 
-                  content={banInfo.appealText} 
-                  allowBasicFormatting={false}
-                  className="text-sm text-gray-300"
-                />
-                {banInfo.appealDate && (
-                  <div className="text-xs text-gray-500 mt-2">
-                    Submitted: {new Date(banInfo.appealDate).toLocaleString()}
-                  </div>
-                )}
+                <SecureMessageDisplay content={banInfo.appealText} allowBasicFormatting={false} className="text-sm text-gray-300" />
+                {banInfo.appealDate && <div className="text-xs text-gray-500 mt-2">Submitted: {new Date(banInfo.appealDate).toLocaleString()}</div>}
               </div>
             )}
           </div>
@@ -626,11 +543,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
           >
             Sign Out
           </button>
-          
+
           <button
             onClick={() => {
               setRetryCount(0);
-              checkBanStatus();
+              void checkBanStatus();
             }}
             className="px-6 py-3 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors font-medium flex items-center gap-2"
             disabled={connectionError && retryCount >= maxRetries}
@@ -641,24 +558,18 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
         </div>
 
         {/* Contact Info */}
-        <div className="text-center pt-6 border-t border-gray-700">
+        <div className="text-center pt-6 border-top border-gray-700">
           <div className="text-sm text-gray-400 mb-2">
-            <p className="mb-2">
-              For urgent matters or technical issues, you can contact our support team.
-            </p>
+            <p className="mb-2">For urgent matters or technical issues, you can contact our support team.</p>
             <div>
-              Please reference your username: <strong className="text-white">
+              Please reference your username:{' '}
+              <strong className="text-white">
                 <SecureMessageDisplay content={user?.username || ''} allowBasicFormatting={false} as="span" />
               </strong>
             </div>
           </div>
-          
-          {/* Last Status Check */}
-          {lastCheckTime > 0 && (
-            <div className="text-xs text-gray-500 mt-3">
-              Last status check: {new Date(lastCheckTime).toLocaleTimeString()}
-            </div>
-          )}
+
+          {lastCheckTime > 0 && <div className="text-xs text-gray-500 mt-3">Last status check: {new Date(lastCheckTime).toLocaleTimeString()}</div>}
         </div>
 
         {/* Platform Guidelines Link */}

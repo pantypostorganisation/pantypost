@@ -2,10 +2,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, MapPin, Home, Building, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, MapPin, CheckCircle } from 'lucide-react';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
-// Import from shared types
 import type { DeliveryAddress } from '@/types/order';
 
 // Re-export for backward compatibility
@@ -23,13 +22,13 @@ type AddressConfirmationModalProps = {
 const isValidPostalCode = (postalCode: string, country: string): boolean => {
   const patterns: { [key: string]: RegExp } = {
     'United States': /^\d{5}(-\d{4})?$/,
-    'Canada': /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/,
+    Canada: /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/,
     'United Kingdom': /^[A-Za-z]{1,2}\d{1,2}[A-Za-z]?\s?\d[A-Za-z]{2}$/,
-    'Australia': /^\d{4}$/,
-    'Default': /^[\w\s-]{3,10}$/
+    Australia: /^\d{4}$/,
+    Default: /^[\w\s-]{3,10}$/,
   };
-  
-  const pattern = patterns[country] || patterns['Default'];
+
+  const pattern = patterns[country] || patterns.Default;
   return pattern.test(postalCode);
 };
 
@@ -39,14 +38,13 @@ const isValidName = (name: string): boolean => {
   return validNamePattern.test(name);
 };
 
-// Export as default
 export default function AddressConfirmationModal({
   isOpen,
   onClose,
   onConfirm,
   existingAddress,
-  orderId
-}: AddressConfirmationModalProps) {
+  orderId,
+}: AddressConfirmationModalProps): React.ReactElement | null {
   const [address, setAddress] = useState<DeliveryAddress>({
     fullName: '',
     addressLine1: '',
@@ -55,9 +53,9 @@ export default function AddressConfirmationModal({
     state: '',
     postalCode: '',
     country: '',
-    specialInstructions: ''
+    specialInstructions: '',
   });
-  
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,7 +72,7 @@ export default function AddressConfirmationModal({
         state: existingAddress.state || '',
         postalCode: existingAddress.postalCode || '',
         country: existingAddress.country || '',
-        specialInstructions: existingAddress.specialInstructions || ''
+        specialInstructions: existingAddress.specialInstructions || '',
       });
     }
   }, [existingAddress]);
@@ -83,47 +81,47 @@ export default function AddressConfirmationModal({
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
+
     // Validate full name
     if (!address.fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     } else if (!isValidName(address.fullName)) {
       newErrors.fullName = 'Please enter a valid name (letters, spaces, hyphens, and apostrophes only)';
     }
-    
+
     // Validate address line 1
     if (!address.addressLine1.trim()) {
       newErrors.addressLine1 = 'Address line 1 is required';
     } else if (address.addressLine1.length < 5) {
       newErrors.addressLine1 = 'Address must be at least 5 characters long';
     }
-    
+
     // Validate city
     if (!address.city.trim()) {
       newErrors.city = 'City is required';
     } else if (!isValidName(address.city)) {
       newErrors.city = 'Please enter a valid city name';
     }
-    
+
     // Validate state/province
     if (!address.state.trim()) {
       newErrors.state = 'State/Province is required';
     }
-    
+
     // Validate postal code
     if (!address.postalCode.trim()) {
       newErrors.postalCode = 'Postal/ZIP code is required';
     } else if (!isValidPostalCode(address.postalCode, address.country)) {
       newErrors.postalCode = 'Please enter a valid postal/ZIP code for your country';
     }
-    
+
     // Validate country
     if (!address.country.trim()) {
       newErrors.country = 'Country is required';
     } else if (!isValidName(address.country)) {
       newErrors.country = 'Please enter a valid country name';
     }
-    
+
     setErrors(newErrors);
     // Mark all fields as touched
     setTouched({
@@ -132,18 +130,18 @@ export default function AddressConfirmationModal({
       city: true,
       state: true,
       postalCode: true,
-      country: true
+      country: true,
     });
-    
+
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (validateForm()) {
       setIsSubmitting(true);
-      
+
       // Create address object for submission (SecureInput already sanitizes)
       const submissionAddress: DeliveryAddress = {
         fullName: address.fullName,
@@ -153,14 +151,14 @@ export default function AddressConfirmationModal({
         state: address.state,
         postalCode: address.postalCode,
         country: address.country,
-        specialInstructions: address.specialInstructions || undefined
+        specialInstructions: address.specialInstructions || undefined,
       };
-      
+
       // Simulate a slight delay for better UX
       setTimeout(() => {
         onConfirm(submissionAddress);
         setSubmitSuccess(true);
-        
+
         setTimeout(() => {
           onClose();
           setIsSubmitting(false);
@@ -171,21 +169,23 @@ export default function AddressConfirmationModal({
     }
   };
 
-  const handleChange = (field: keyof DeliveryAddress) => (value: string) => {
-    setAddress(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    
-    // Clear error for this field if it exists
-    if (errors[field]) {
-      setErrors(prev => {
-        const newErrors = {...prev};
-        delete newErrors[field];
-        return newErrors;
-      });
-    }
-  };
+  const handleChange =
+    (field: keyof DeliveryAddress) =>
+    (value: string): void => {
+      setAddress((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+
+      // Clear error for this field if it exists
+      if (errors[field as string]) {
+        setErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[field as string];
+          return newErrors;
+        });
+      }
+    };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4">
@@ -203,7 +203,7 @@ export default function AddressConfirmationModal({
                 <MapPin className="mr-2 text-[#ff950e]" />
                 Confirm Delivery Address
               </h2>
-              <button 
+              <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white transition-colors"
                 aria-label="Close modal"
@@ -211,7 +211,7 @@ export default function AddressConfirmationModal({
                 <X size={20} />
               </button>
             </div>
-            
+
             <SecureForm
               onSubmit={handleSubmit}
               rateLimitKey="address_confirmation"
@@ -224,28 +224,28 @@ export default function AddressConfirmationModal({
                   type="text"
                   value={address.fullName}
                   onChange={handleChange('fullName')}
-                  onBlur={() => setTouched(prev => ({ ...prev, fullName: true }))}
+                  onBlur={() => setTouched((prev) => ({ ...prev, fullName: true }))}
                   error={errors.fullName}
                   touched={touched.fullName}
                   placeholder="John Doe"
                   maxLength={100}
                   required
                 />
-                
+
                 {/* Address Line 1 */}
                 <SecureInput
                   label="Address Line 1"
                   type="text"
                   value={address.addressLine1}
                   onChange={handleChange('addressLine1')}
-                  onBlur={() => setTouched(prev => ({ ...prev, addressLine1: true }))}
+                  onBlur={() => setTouched((prev) => ({ ...prev, addressLine1: true }))}
                   error={errors.addressLine1}
                   touched={touched.addressLine1}
                   placeholder="123 Main Street"
                   maxLength={200}
                   required
                 />
-                
+
                 {/* Address Line 2 */}
                 <SecureInput
                   label="Address Line 2"
@@ -255,28 +255,28 @@ export default function AddressConfirmationModal({
                   placeholder="Apartment, suite, etc. (optional)"
                   maxLength={200}
                 />
-                
-                {/* City and State in same row */}
+
+                {/* City and State */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SecureInput
                     label="City"
                     type="text"
                     value={address.city}
                     onChange={handleChange('city')}
-                    onBlur={() => setTouched(prev => ({ ...prev, city: true }))}
+                    onBlur={() => setTouched((prev) => ({ ...prev, city: true }))}
                     error={errors.city}
                     touched={touched.city}
                     placeholder="New York"
                     maxLength={100}
                     required
                   />
-                  
+
                   <SecureInput
                     label="State/Province"
                     type="text"
                     value={address.state}
                     onChange={handleChange('state')}
-                    onBlur={() => setTouched(prev => ({ ...prev, state: true }))}
+                    onBlur={() => setTouched((prev) => ({ ...prev, state: true }))}
                     error={errors.state}
                     touched={touched.state}
                     placeholder="NY"
@@ -284,29 +284,28 @@ export default function AddressConfirmationModal({
                     required
                   />
                 </div>
-                
-                {/* Postal Code and Country in same row */}
+
+                {/* Postal Code and Country */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SecureInput
                     label="Postal/ZIP Code"
                     type="text"
                     value={address.postalCode}
                     onChange={handleChange('postalCode')}
-                    onBlur={() => setTouched(prev => ({ ...prev, postalCode: true }))}
+                    onBlur={() => setTouched((prev) => ({ ...prev, postalCode: true }))}
                     error={errors.postalCode}
                     touched={touched.postalCode}
                     placeholder="10001"
                     maxLength={20}
                     required
                   />
-                  
-                  {/* Country */}
+
                   <SecureInput
                     label="Country"
                     type="text"
                     value={address.country}
                     onChange={handleChange('country')}
-                    onBlur={() => setTouched(prev => ({ ...prev, country: true }))}
+                    onBlur={() => setTouched((prev) => ({ ...prev, country: true }))}
                     error={errors.country}
                     touched={touched.country}
                     placeholder="United States"
@@ -314,7 +313,7 @@ export default function AddressConfirmationModal({
                     required
                   />
                 </div>
-                
+
                 {/* Special Instructions */}
                 <SecureTextarea
                   label="Special Instructions"
@@ -326,7 +325,7 @@ export default function AddressConfirmationModal({
                   characterCount={true}
                   helpText="Optional"
                 />
-                
+
                 <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                   <button
                     type="button"
@@ -345,7 +344,9 @@ export default function AddressConfirmationModal({
                         <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
                         Processing...
                       </>
-                    ) : 'Confirm Address'}
+                    ) : (
+                      'Confirm Address'
+                    )}
                   </button>
                 </div>
               </div>

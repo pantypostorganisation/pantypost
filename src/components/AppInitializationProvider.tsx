@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import { InitializationResult } from '@/services/app-initializer';
+import type { InitializationResult } from '@/services/app-initializer';
 
 interface HealthStatus {
   wallet_service: boolean;
@@ -26,7 +26,7 @@ interface AppInitializationContextType {
 const AppInitializationContext = createContext<AppInitializationContextType | undefined>(undefined);
 
 // Loading component
-function InitializationLoader() {
+function InitializationLoader(): React.ReactElement {
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center">
       <div className="text-center">
@@ -39,7 +39,7 @@ function InitializationLoader() {
 }
 
 // Error component
-function InitializationError({ error, onRetry }: { error: Error; onRetry: () => void }) {
+function InitializationError({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-gray-900 rounded-lg p-8 text-center">
@@ -49,23 +49,14 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
           </svg>
         </div>
         <h1 className="text-2xl font-bold mb-2">Initialization Error</h1>
-        <p className="text-gray-400 mb-4">
-          {error.message || 'Failed to initialize the application'}
-        </p>
-        <button
-          onClick={onRetry}
-          className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-        >
+        <p className="text-gray-400 mb-4">{error.message || 'Failed to initialize the application'}</p>
+        <button onClick={onRetry} className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
           Retry
         </button>
         {process.env.NODE_ENV === 'development' && (
           <details className="mt-4 text-left">
-            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-300">
-              Technical details
-            </summary>
-            <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">
-              {error.stack}
-            </pre>
+            <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-300">Technical details</summary>
+            <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">{error.stack}</pre>
           </details>
         )}
       </div>
@@ -73,7 +64,7 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
   );
 }
 
-export function AppInitializationProvider({ children }: { children: ReactNode }) {
+export function AppInitializationProvider({ children }: { children: ReactNode }): React.ReactElement {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
@@ -90,15 +81,15 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       const sessionHealth = sessionStorage.getItem('app_health_status');
       const sessionMockEnabled = sessionStorage.getItem('app_mock_enabled');
       const sessionMockScenario = sessionStorage.getItem('app_mock_scenario');
-      
+
       if (sessionInit === 'true' && !hasInitializedRef.current) {
         console.log('[AppInitializer] Already initialized in this session, using cached state');
-        
+
         setIsInitialized(true);
         setIsInitializing(false);
         setMockApiEnabled(sessionMockEnabled === 'true');
         setMockScenario(sessionMockScenario || undefined);
-        
+
         if (sessionHealth) {
           try {
             setHealthStatus(JSON.parse(sessionHealth));
@@ -106,33 +97,33 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
             console.error('Failed to parse cached health status:', e);
           }
         }
-        
+
         hasInitializedRef.current = true;
         return;
       }
     }
-    
+
     // Prevent multiple simultaneous initializations
     if (hasInitializedRef.current) {
       console.log('[AppInitializer] Already initializing, skipping duplicate call');
       return;
     }
-    
+
     hasInitializedRef.current = true;
     setIsInitializing(true);
     setError(null);
     setWarnings([]);
-    
+
     try {
       // Import and initialize dynamically to avoid circular dependencies
       const { appInitializer } = await import('@/services/app-initializer');
       const result: InitializationResult = await appInitializer.initialize();
-      
+
       // Get app status including mock API info
       const status = appInitializer.getStatus();
       setMockApiEnabled(status.mockApiEnabled);
       setMockScenario(status.mockScenario);
-      
+
       // Check health status
       const health: HealthStatus = {
         wallet_service: true,
@@ -140,7 +131,7 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         auth_service: true,
         mock_api: status.mockApiEnabled,
       };
-      
+
       // Update health based on any errors
       if (result && !result.success && result.errors) {
         result.errors.forEach((err: string) => {
@@ -150,20 +141,19 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
           if (err.includes('mock') || err.includes('Mock')) health.mock_api = false;
         });
       }
-      
+
       // Set warnings
       if (result.warnings && result.warnings.length > 0) {
         setWarnings(result.warnings);
-        
-        // Log warnings in development
+
         if (process.env.NODE_ENV === 'development') {
           console.warn('Initialization warnings:', result.warnings);
         }
       }
-      
+
       setHealthStatus(health);
-      setIsInitialized(result?.success || false);
-      
+      setIsInitialized(!!result?.success);
+
       // Cache initialization state in session storage
       if (typeof window !== 'undefined' && result?.success) {
         sessionStorage.setItem('app_initialized', 'true');
@@ -171,13 +161,12 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         sessionStorage.setItem('app_mock_enabled', status.mockApiEnabled.toString());
         sessionStorage.setItem('app_mock_scenario', status.mockScenario || '');
       }
-      
+
       // If initialization failed with errors, throw to show error UI
       if (!result.success && result.errors.length > 0) {
         throw new Error(result.errors[0]);
       }
-      
-      // Log initialization status in development
+
       if (process.env.NODE_ENV === 'development') {
         console.log('App initialization complete:', {
           initialized: result.success,
@@ -192,7 +181,7 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       setError(err instanceof Error ? err : new Error('Initialization failed'));
       setIsInitialized(false);
       hasInitializedRef.current = false;
-      
+
       // Clear cached state on error
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('app_initialized');
@@ -206,33 +195,30 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
   };
 
   useEffect(() => {
-    initializeApp();
+    void initializeApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const reinitialize = async () => {
-    // Clear cached state
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('app_initialized');
       sessionStorage.removeItem('app_health_status');
       sessionStorage.removeItem('app_mock_enabled');
       sessionStorage.removeItem('app_mock_scenario');
     }
-    
-    // Reset ref
+
     hasInitializedRef.current = false;
-    
-    // Reset app initializer before reinitializing
+
     try {
       const { appInitializer } = await import('@/services/app-initializer');
       appInitializer.reset();
     } catch (err) {
       console.error('Failed to reset app initializer:', err);
     }
-    
+
     await initializeApp();
   };
 
-  // Show error state if initialization failed
   if (error && !isInitializing) {
     return (
       <AppInitializationContext.Provider
@@ -252,7 +238,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     );
   }
 
-  // Show loading state while initializing
   if (isInitializing && !isInitialized) {
     return (
       <AppInitializationContext.Provider
@@ -272,7 +257,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     );
   }
 
-  // Show warnings in development mode if any
   if (process.env.NODE_ENV === 'development' && warnings.length > 0 && isInitialized) {
     console.warn('🚧 Initialization completed with warnings:', warnings);
   }
@@ -291,19 +275,18 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       }}
     >
       {children}
-      {/* Dev mode indicator for mock API - Only show when explicitly enabled via env var */}
-      {process.env.NODE_ENV === 'development' && 
-       process.env.NEXT_PUBLIC_USE_MOCK_API === 'true' && 
-       mockApiEnabled && (
-        <div className="fixed top-4 right-4 z-50 bg-purple-600/20 text-purple-300 px-3 py-1 rounded-md text-xs backdrop-blur-sm">
-          🎭 Mock API: {mockScenario}
-        </div>
-      )}
+      {process.env.NODE_ENV === 'development' &&
+        process.env.NEXT_PUBLIC_USE_MOCK_API === 'true' &&
+        mockApiEnabled && (
+          <div className="fixed top-4 right-4 z-50 bg-purple-600/20 text-purple-300 px-3 py-1 rounded-md text-xs backdrop-blur-sm">
+            🎭 Mock API: {mockScenario}
+          </div>
+        )}
     </AppInitializationContext.Provider>
   );
 }
 
-export function useAppInitialization() {
+export function useAppInitialization(): AppInitializationContextType {
   const context = useContext(AppInitializationContext);
   if (!context) {
     throw new Error('useAppInitialization must be used within AppInitializationProvider');

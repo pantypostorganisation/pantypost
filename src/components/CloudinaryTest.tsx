@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services/security.service';
 
-export default function CloudinaryTest() {
+export default function CloudinaryTest(): React.ReactElement {
   const [imageUrl, setImageUrl] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -15,12 +15,11 @@ export default function CloudinaryTest() {
     if (!file) return;
 
     setError('');
-    
-    // Validate file before upload
+
     const validation = securityService.validateFileUpload(file, {
       maxSize: 5 * 1024 * 1024, // 5MB
       allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
     });
 
     if (!validation.valid) {
@@ -46,11 +45,9 @@ export default function CloudinaryTest() {
   return (
     <div className="p-8 max-w-md mx-auto">
       <h2 className="text-2xl font-bold mb-4">Cloudinary Upload Test</h2>
-      
+
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-2">
-          Select an image to upload
-        </label>
+        <label className="block text-sm font-medium mb-2">Select an image to upload</label>
         <input
           type="file"
           accept="image/*"
@@ -60,13 +57,9 @@ export default function CloudinaryTest() {
         />
       </div>
 
-      {isUploading && (
-        <div className="text-blue-600">Uploading to Cloudinary...</div>
-      )}
+      {isUploading && <div className="text-blue-600">Uploading to Cloudinary...</div>}
 
-      {error && (
-        <div className="text-red-600 text-sm">{error}</div>
-      )}
+      {error && <div className="text-red-600 text-sm">{error}</div>}
 
       {imageUrl && (
         <div className="mt-4">

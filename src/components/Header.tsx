@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   Bell,
   ShoppingBag,
-  Wallet,
+  Wallet as WalletIcon,
   MessageSquare,
   Users,
   User,
@@ -27,16 +27,15 @@ import {
   Trash2,
   Ban,
   Menu,
-  X
+  X,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { isAdmin } from '@/utils/security/permissions';
-import { useNotifications } from '@/context/NotificationContext'; // ✅ NEW
+import { useNotifications } from '@/context/NotificationContext';
 
-// UI notification union used in the dropdown
 type UINotification = {
   id: string;
   message: string;
@@ -45,7 +44,6 @@ type UINotification = {
   source: 'legacy' | 'ctx';
 };
 
-// ✅ Custom hooks for better reusability
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -53,7 +51,6 @@ const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () 
         callback();
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [ref, callback]);
@@ -62,20 +59,12 @@ const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () 
 const useInterval = (callback: () => void, delay: number | null) => {
   const savedCallback = useRef<(() => void) | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     savedCallback.current = callback;
   }, [callback]);
-
   useEffect(() => {
     if (delay === null) return;
-
-    const tick = () => {
-      if (savedCallback.current) {
-        savedCallback.current();
-      }
-    };
-
+    const tick = () => savedCallback.current && savedCallback.current();
     intervalRef.current = setInterval(tick, delay);
     return () => {
       if (intervalRef.current) {
@@ -84,7 +73,6 @@ const useInterval = (callback: () => void, delay: number | null) => {
       }
     };
   }, [delay]);
-
   return () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -93,29 +81,15 @@ const useInterval = (callback: () => void, delay: number | null) => {
   };
 };
 
-export default function Header() {
-  // ✅ FIXED: All hooks MUST be called before any conditional returns
+export default function Header(): React.ReactElement | null {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const {
-    sellerNotifications,
-    clearSellerNotification,
-    restoreSellerNotification,
-    permanentlyDeleteSellerNotification,
-    listings,
-    checkEndedAuctions
-  } = useListings();
-  const {
-    getBuyerBalance,
-    getSellerBalance,
-    adminBalance,
-    orderHistory,
-    refreshAdminData
-  } = useWallet();
+  const { sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions } =
+    useListings();
+  const { getBuyerBalance, getSellerBalance, adminBalance, orderHistory, refreshAdminData } = useWallet();
   const { getRequestsForUser } = useRequests();
   const { messages } = useMessages();
 
-  // ✅ NotificationContext (DB/WebSocket-backed)
   const {
     activeNotifications: ctxActive,
     clearedNotifications: ctxCleared,
@@ -123,10 +97,9 @@ export default function Header() {
     restoreNotification: ctxRestoreNotification,
     deleteNotification: ctxDeleteNotification,
     clearAllNotifications: ctxClearAll,
-    deleteAllCleared: ctxDeleteAllCleared
+    deleteAllCleared: ctxDeleteAllCleared,
   } = useNotifications();
 
-  // ✅ All state hooks called unconditionally
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
@@ -135,39 +108,30 @@ export default function Header() {
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
 
-  // ✅ Button loading states to prevent double-clicks
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
 
-  // Refs for cleanup and optimization
   const notifRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
-  const hasRefreshedAdminData = useRef(false); // FIX: Add ref to track if we've already refreshed
+  const hasRefreshedAdminData = useRef(false);
 
-  // Derived values with sanitization
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
-  // ✅ Click outside handlers using custom hook
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
   useClickOutside(mobileMenuRef, () => setMobileMenuOpen(false));
 
-  // Mobile detection
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // ✅ Merge legacy sellerNotifications with NotificationContext (tips come from ctx)
   const processedNotifications = useMemo(() => {
     if (!user?.username || user.role !== 'seller') {
       return { active: [] as UINotification[], cleared: [] as UINotification[] };
@@ -175,13 +139,8 @@ export default function Header() {
 
     const addNotificationEmojis = (message: string): string => {
       const sanitizedMessage = sanitizeStrict(message);
-
-      if (sanitizedMessage.includes('New sale:') && !sanitizedMessage.includes('Auction ended:')) {
-        return `💰🛍️ ${sanitizedMessage}`;
-      }
-      if (sanitizedMessage.includes('Auction ended:') && sanitizedMessage.includes('sold to')) {
-        return `💰🏆 ${sanitizedMessage}`;
-      }
+      if (sanitizedMessage.includes('New sale:') && !sanitizedMessage.includes('Auction ended:')) return `💰🛍️ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Auction ended:') && sanitizedMessage.includes('sold to')) return `💰🏆 ${sanitizedMessage}`;
       if (!sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
         if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
@@ -191,8 +150,7 @@ export default function Header() {
         if (sanitizedMessage.includes('cancelled your auction')) return `🛑 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('Reserve price not met')) return `🔨 ${sanitizedMessage}`;
         if (sanitizedMessage.includes('No bids were placed')) return `🔨 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('insufficient funds')) return `⚠️ ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('payment error')) return `⚠️ ${sanitizedMessage}`;
+        if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `⚠️ ${sanitizedMessage}`;
         if (sanitizedMessage.includes('Original highest bidder')) return `ℹ️ ${sanitizedMessage}`;
       }
       return sanitizedMessage;
@@ -205,7 +163,7 @@ export default function Header() {
       for (const n of notifications) {
         const cleanMessage = (n.message || '').replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
         const timestamp = new Date(n.timestamp || Date.now());
-        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000)); // 1 min window
+        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000)); // 1 minute window
         const key = `${cleanMessage}_${timeWindow}`;
 
         if (!seen.has(key)) {
@@ -223,12 +181,9 @@ export default function Header() {
         }
       }
 
-      return deduped.sort(
-        (a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
-      );
+      return deduped.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
     };
 
-    // Legacy (local) source
     const legacyActive: UINotification[] = (sellerNotifications || [])
       .filter((n: any) => !n.cleared)
       .map((n: any) => ({ id: n.id, message: n.message, timestamp: n.timestamp, cleared: false, source: 'legacy' as const }));
@@ -237,13 +192,12 @@ export default function Header() {
       .filter((n: any) => n.cleared)
       .map((n: any) => ({ id: n.id, message: n.message, timestamp: n.timestamp, cleared: true, source: 'legacy' as const }));
 
-    // Context (DB) source – includes TIP events
     const ctxActiveUi: UINotification[] = (ctxActive || []).map((n) => ({
       id: (n._id || n.id) as string,
       message: n.message,
       timestamp: n.createdAt,
       cleared: false,
-      source: 'ctx'
+      source: 'ctx',
     }));
 
     const ctxClearedUi: UINotification[] = (ctxCleared || []).map((n) => ({
@@ -251,21 +205,19 @@ export default function Header() {
       message: n.message,
       timestamp: n.createdAt,
       cleared: true,
-      source: 'ctx'
+      source: 'ctx',
     }));
 
     return {
       active: deduplicateNotifications([...legacyActive, ...ctxActiveUi]),
-      cleared: deduplicateNotifications([...legacyCleared, ...ctxClearedUi])
+      cleared: deduplicateNotifications([...legacyCleared, ...ctxClearedUi]),
     };
   }, [user?.username, user?.role, sellerNotifications, ctxActive, ctxCleared]);
 
-  // ✅ Enhanced balance memoization
   const buyerBalance = useMemo(() => {
     if (!username || typeof getBuyerBalance !== 'function') return 0;
     try {
       const balance = getBuyerBalance(username) || 0;
-      console.log('[Header] Buyer balance updated:', balance);
       return balance;
     } catch (error) {
       console.error('Error getting buyer balance:', error);
@@ -277,7 +229,6 @@ export default function Header() {
     if (!username || typeof getSellerBalance !== 'function') return 0;
     try {
       const balance = getSellerBalance(username) || 0;
-      console.log('[Header] Seller balance updated:', balance);
       return balance;
     } catch (error) {
       console.error('Error getting seller balance:', error);
@@ -285,46 +236,25 @@ export default function Header() {
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
 
-  // ✅ Proper platform balance for admins
   const platformBalance = useMemo(() => {
-    if (isAdminUser && user) {
-      const balance = adminBalance || 0;
-      console.log('[Header] Platform balance from context:', balance);
-      return balance;
-    }
+    if (isAdminUser && user) return adminBalance || 0;
     return 0;
   }, [isAdminUser, user, adminBalance, balanceUpdateTrigger]);
 
-  // ✅ Events for wallet/balance updates
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleAdminBalanceUpdate = (event: CustomEvent) => {
-      if (isAdminUser && user) {
-        console.log('[Header] Admin balance update event received:', event.detail);
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handleAdminBalanceUpdate = () => {
+      if (isAdminUser && user) setBalanceUpdateTrigger((prev) => prev + 1);
     };
-
-    const handlePlatformBalanceUpdate = (event: CustomEvent) => {
-      if (isAdminUser && user) {
-        console.log('[Header] Platform balance update event received:', event.detail);
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handlePlatformBalanceUpdate = () => {
+      if (isAdminUser && user) setBalanceUpdateTrigger((prev) => prev + 1);
     };
-
-    const handleBuyerBalanceUpdate = (event: CustomEvent) => {
-      if (user?.role === 'buyer') {
-        console.log('[Header] Buyer balance update event received:', event.detail);
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handleBuyerBalanceUpdate = () => {
+      if (user?.role === 'buyer') setBalanceUpdateTrigger((prev) => prev + 1);
     };
-
-    const handleSellerBalanceUpdate = (event: CustomEvent) => {
-      if (user?.role === 'seller') {
-        console.log('[Header] Seller balance update event received:', event.detail);
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handleSellerBalanceUpdate = () => {
+      if (user?.role === 'seller') setBalanceUpdateTrigger((prev) => prev + 1);
     };
 
     window.addEventListener('wallet:admin-balance-updated', handleAdminBalanceUpdate as EventListener);
@@ -342,52 +272,34 @@ export default function Header() {
     };
   }, [isAdminUser, user]);
 
-  // ✅ FIX: Properly guard admin data refresh to run only once on mount
   useEffect(() => {
-    // Only refresh once on mount if admin user
     if (isAdminUser && user && refreshAdminData && !hasRefreshedAdminData.current) {
-      console.log('[Header] Admin user detected, refreshing admin data once on mount...');
-      
-      hasRefreshedAdminData.current = true; // Mark as refreshed
-      
-      // Use a flag to prevent multiple calls
+      hasRefreshedAdminData.current = true;
       let cancelled = false;
-      
       const refreshOnce = async () => {
         if (cancelled) return;
-        
         try {
           await refreshAdminData();
-          console.log('[Header] Admin data refreshed');
           setBalanceUpdateTrigger((prev) => prev + 1);
-        } catch (error: any) {
+        } catch (error) {
           console.error('[Header] Error refreshing admin data:', error);
         }
       };
-      
-      refreshOnce();
-      
+      void refreshOnce();
       return () => {
         cancelled = true;
       };
     }
-    
-    // Reset the ref when user changes
     if (!user || !isAdminUser) {
       hasRefreshedAdminData.current = false;
     }
-    
-    // Always return undefined when no cleanup is needed
     return undefined;
-  }, [isAdminUser, user?.id]); // Use user.id as dependency, not full user object
+  }, [isAdminUser, user?.id, refreshAdminData]);
 
-  // Memoized unread message count with error handling
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
-
     try {
-      const threads: { [otherUser: string]: any[] } = {};
-
+      const threads: Record<string, any[]> = {};
       Object.values(messages)
         .flat()
         .forEach((msg: any) => {
@@ -397,52 +309,36 @@ export default function Header() {
             threads[otherParty].push(msg);
           }
         });
-
-      let totalUnreadCount = 0;
+      let total = 0;
       Object.entries(threads).forEach(([otherUser, msgs]) => {
-        const threadUnreadCount = msgs.filter(
-          (msg) => !msg.read && msg.sender === otherUser && msg.receiver === user.username
-        ).length;
-        totalUnreadCount += threadUnreadCount;
+        const count = msgs.filter((m) => !m.read && m.sender === otherUser && m.receiver === user.username).length;
+        total += count;
       });
-
-      return totalUnreadCount;
+      return total;
     } catch (error) {
       console.error('Error calculating unread count:', error);
       return 0;
     }
   }, [user?.username, messages]);
 
-  // ✅ Rate-limited balance update function
   const forceUpdateBalances = useCallback(() => {
     if (!isMountedRef.current) return;
-
     const now = Date.now();
-    if (now - lastBalanceUpdate.current < 1000) return; // 1s rate limit
-
+    if (now - lastBalanceUpdate.current < 1000) return;
     lastBalanceUpdate.current = now;
-    console.log('[Header] Force updating balances');
     setBalanceUpdateTrigger((prev) => prev + 1);
-
-    // Don't call refreshAdminData here - it's handled in the mount effect
   }, []);
 
-  // Rate-limited auction check
   const checkAuctionsWithRateLimit = useCallback(() => {
     if (!isMountedRef.current) return;
-
     const now = Date.now();
-    if (now - lastAuctionCheck.current < 10000) return; // 10s
-
+    if (now - lastAuctionCheck.current < 10000) return;
     lastAuctionCheck.current = now;
-
     try {
       if (typeof checkEndedAuctions === 'function') {
         checkEndedAuctions();
         setTimeout(() => {
-          if (isMountedRef.current) {
-            setBalanceUpdateTrigger((prev) => prev + 1);
-          }
+          if (isMountedRef.current) setBalanceUpdateTrigger((prev) => prev + 1);
         }, 1000);
       }
     } catch (err) {
@@ -450,117 +346,17 @@ export default function Header() {
     }
   }, [checkEndedAuctions]);
 
-  // Update report count with error handling
   const updateReportCount = useCallback(() => {
     if (!isAdminUser || !isMountedRef.current) return;
-
     try {
       const count = getReportCount();
-      const validCount = typeof count === 'number' && !isNaN(count) && count >= 0 ? count : 0;
-      setReportCount(validCount);
+      setReportCount(typeof count === 'number' && !isNaN(count) && count >= 0 ? count : 0);
     } catch (err) {
       console.error('Error updating report count:', err);
       setReportCount(0);
     }
   }, [isAdminUser]);
 
-  // ✅ Bulk notification actions (call BOTH sources)
-  const clearAllNotifications = useCallback(async () => {
-    if (!user || user.role !== 'seller' || !sellerNotifications || clearingNotifications) return;
-
-    setClearingNotifications(true);
-
-    try {
-      // Context-backed notifications (DB)
-      await ctxClearAll();
-
-      // Legacy local notifications
-      const uname = user.username;
-      const updatedNotifications = sellerNotifications.map((n: any) => ({ ...n, cleared: true }));
-      const notificationStore =
-        (await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {})) || {};
-      notificationStore[uname] = updatedNotifications;
-      await storageService.setItem('seller_notifications_store', notificationStore);
-
-      // Notify listeners
-      window.dispatchEvent(
-        new StorageEvent('storage', {
-          key: 'seller_notifications_store',
-          newValue: JSON.stringify(notificationStore)
-        } as StorageEventInit)
-      );
-    } catch (error) {
-      console.error('Error clearing notifications:', error);
-    } finally {
-      setClearingNotifications(false);
-    }
-  }, [user, sellerNotifications, clearingNotifications, ctxClearAll]);
-
-  const deleteAllClearedNotifications = useCallback(async () => {
-    if (!user || user.role !== 'seller' || !sellerNotifications || deletingNotifications) return;
-
-    setDeletingNotifications(true);
-
-    try {
-      // Context-backed notifications (DB)
-      await ctxDeleteAllCleared();
-
-      // Legacy local notifications
-      const uname = user.username;
-      const updatedNotifications = sellerNotifications.filter((n: any) => !n.cleared);
-      const notificationStore =
-        (await storageService.getItem<Record<string, any[]>>('seller_notifications_store', {})) || {};
-      notificationStore[uname] = updatedNotifications;
-      await storageService.setItem('seller_notifications_store', notificationStore);
-
-      window.dispatchEvent(
-        new StorageEvent('storage', {
-          key: 'seller_notifications_store',
-          newValue: JSON.stringify(notificationStore)
-        } as StorageEventInit)
-      );
-    } catch (error) {
-      console.error('Error deleting cleared notifications:', error);
-    } finally {
-      setDeletingNotifications(false);
-    }
-  }, [user, sellerNotifications, deletingNotifications, ctxDeleteAllCleared]);
-
-  // ✅ Per-item actions route to the right source
-  const handleClearOne = useCallback(
-    async (n: UINotification) => {
-      if (n.source === 'ctx') {
-        await ctxClearNotification(n.id);
-      } else {
-        clearSellerNotification(n.id);
-      }
-    },
-    [ctxClearNotification, clearSellerNotification]
-  );
-
-  const handleRestoreOne = useCallback(
-    async (n: UINotification) => {
-      if (n.source === 'ctx') {
-        await ctxRestoreNotification(n.id);
-      } else {
-        restoreSellerNotification(n.id);
-      }
-    },
-    [ctxRestoreNotification, restoreSellerNotification]
-  );
-
-  const handleDeleteOne = useCallback(
-    async (n: UINotification) => {
-      if (n.source === 'ctx') {
-        await ctxDeleteNotification(n.id);
-      } else {
-        permanentlyDeleteSellerNotification(n.id);
-      }
-    },
-    [ctxDeleteNotification, permanentlyDeleteSellerNotification]
-  );
-
-  // ✅ Intervals + events setup
   const clearBalanceInterval = useInterval(() => {
     if (isMountedRef.current) forceUpdateBalances();
   }, 30000);
@@ -569,29 +365,8 @@ export default function Header() {
     if (isMountedRef.current) checkAuctionsWithRateLimit();
   }, 30000);
 
-  // Calculate pending orders count
-  useEffect(() => {
-    if (!isMountedRef.current || !user || user.role !== 'seller') return;
-
-    try {
-      const sales = orderHistory.filter(
-        (order) =>
-          order.seller === user.username &&
-          (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
-      );
-      const requests = getRequestsForUser(user.username, 'seller');
-      const acceptedCustoms = requests.filter((req) => req.status === 'accepted');
-      setPendingOrdersCount(sales.length + acceptedCustoms.length);
-    } catch (err) {
-      console.error('Error calculating pending orders:', err);
-      setPendingOrdersCount(0);
-    }
-  }, [user, orderHistory, getRequestsForUser]);
-
-  // ✅ Main component setup
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     isMountedRef.current = true;
 
     const initTimer = setTimeout(() => {
@@ -602,20 +377,9 @@ export default function Header() {
       }
     }, 100);
 
-    const handleUpdateReports = () => {
-      if (isMountedRef.current) updateReportCount();
-    };
-
-    const handleAuctionEnd = () => {
-      if (isMountedRef.current) forceUpdateBalances();
-    };
-
-    const handleWalletUpdate = (event: CustomEvent) => {
-      console.log('[Header] Wallet update event received');
-      if (isMountedRef.current) {
-        forceUpdateBalances();
-      }
-    };
+    const handleUpdateReports = () => isMountedRef.current && updateReportCount();
+    const handleAuctionEnd = () => isMountedRef.current && forceUpdateBalances();
+    const handleWalletUpdate = () => isMountedRef.current && forceUpdateBalances();
 
     window.addEventListener('updateReports', handleUpdateReports);
     window.addEventListener('auctionEnded', handleAuctionEnd);
@@ -630,16 +394,12 @@ export default function Header() {
       window.removeEventListener('auctionEnded', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
     };
-  }, []); // run once
+  }, []); // once
 
-  // Reset notification tab when dropdown opens
   useEffect(() => {
-    if (showNotifDropdown) {
-      setActiveNotifTab('active');
-    }
+    if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
-  // ✅ Reusable mobile link renderer
   const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
     <Link
       href={href}
@@ -649,15 +409,10 @@ export default function Header() {
     >
       {icon}
       <span>{label}</span>
-      {badge && badge > 0 && (
-        <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 ml-auto">
-          {badge}
-        </span>
-      )}
+      {badge && badge > 0 && <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 ml-auto">{badge}</span>}
     </Link>
   );
 
-  // ✅ Mobile Navigation Component
   const MobileMenu = () => (
     <div className={`mobile-menu fixed inset-0 z-50 lg:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
@@ -693,7 +448,7 @@ export default function Header() {
                 <span className="text-purple-300 font-bold">ADMIN</span>
               </div>
               {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
-              {renderMobileLink('/wallet/admin', <Wallet className="w-5 h-5" />, `Wallet: $${platformBalance.toFixed(2)}`)}
+              {renderMobileLink('/wallet/admin', <WalletIcon className="w-5 h-5" />, `Wallet: $${platformBalance.toFixed(2)}`)}
             </>
           )}
 
@@ -703,7 +458,7 @@ export default function Header() {
               {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
               {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
               {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
-              {renderMobileLink('/wallet/seller', <Wallet className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
+              {renderMobileLink('/wallet/seller', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
             </>
           )}
 
@@ -712,7 +467,7 @@ export default function Header() {
               {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
               {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
               {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
-              {renderMobileLink('/wallet/buyer', <Wallet className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
+              {renderMobileLink('/wallet/buyer', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
             </>
           )}
 
@@ -734,13 +489,7 @@ export default function Header() {
     </div>
   );
 
-  // ✅ FIXED: Early return MUST be after all hooks
-  if (pathname === '/login' || pathname === '/signup') {
-    return null;
-  }
-
-  // Early return if not mounted
-  if (!isMountedRef.current) return null;
+  if (pathname === '/login' || pathname === '/signup') return null;
 
   return (
     <>
@@ -748,15 +497,10 @@ export default function Header() {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <img
-              src="/logo.png"
-              alt="PantyPost Logo"
-              className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300"
-            />
+            <img src="/logo.png" alt="PantyPost Logo" className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300" />
           </div>
         </Link>
 
-        {/* Mobile menu button */}
         {isMobile && (
           <button
             onClick={() => setMobileMenuOpen(true)}
@@ -768,7 +512,6 @@ export default function Header() {
           </button>
         )}
 
-        {/* Desktop Navigation */}
         <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
           <Link
             href="/browse"
@@ -845,7 +588,6 @@ export default function Header() {
                 <span>Wallets</span>
               </Link>
 
-              {/* Admin platform wallet balance */}
               <Link
                 href="/wallet/admin"
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
@@ -856,7 +598,7 @@ export default function Header() {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <Wallet className="w-3.5 h-3.5 text-purple-400" />
+                <WalletIcon className="w-3.5 h-3.5 text-purple-400" />
                 <span className="font-bold text-purple-300">${platformBalance.toFixed(2)}</span>
               </Link>
             </>
@@ -864,26 +606,17 @@ export default function Header() {
 
           {role === 'seller' && !isAdminUser && (
             <>
-              <Link
-                href="/sellers/my-listings"
-                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
-              >
+              <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Listings</span>
               </Link>
 
-              <Link
-                href="/sellers/profile"
-                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
-              >
+              <Link href="/sellers/profile" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Profile</span>
               </Link>
 
-              <Link
-                href="/sellers/verify"
-                className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
-              >
+              <Link href="/sellers/verify" className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs">
                 <ShieldCheck className="w-3.5 h-3.5 text-green-400 group-hover:scale-110 transition-transform" />
                 <span className="font-medium">Get Verified</span>
               </Link>
@@ -898,7 +631,7 @@ export default function Header() {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <Wallet className="w-3.5 h-3.5 text-[#ff950e]" />
+                <WalletIcon className="w-3.5 h-3.5 text-[#ff950e]" />
                 <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
@@ -914,10 +647,7 @@ export default function Header() {
                 )}
               </Link>
 
-              <Link
-                href="/sellers/subscribers"
-                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
-              >
+              <Link href="/sellers/subscribers" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Users className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Subscribers</span>
               </Link>
@@ -974,7 +704,7 @@ export default function Header() {
                         style={{ touchAction: 'manipulation' }}
                       >
                         Active ({processedNotifications.active.length})
-                        {activeNotifTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]"></div>}
+                        {activeNotifTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]" />}
                       </button>
                       <button
                         onClick={() => setActiveNotifTab('cleared')}
@@ -984,7 +714,7 @@ export default function Header() {
                         style={{ touchAction: 'manipulation' }}
                       >
                         Cleared ({processedNotifications.cleared.length})
-                        {activeNotifTab === 'cleared' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]"></div>}
+                        {activeNotifTab === 'cleared' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]" />}
                       </button>
                     </div>
 
@@ -1052,18 +782,12 @@ export default function Header() {
 
           {role === 'buyer' && !isAdminUser && (
             <>
-              <Link
-                href="/buyers/dashboard"
-                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
-              >
+              <Link href="/buyers/dashboard" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Dashboard</span>
               </Link>
 
-              <Link
-                href="/buyers/my-orders"
-                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
-              >
+              <Link href="/buyers/my-orders" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Orders</span>
               </Link>
@@ -1078,7 +802,7 @@ export default function Header() {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <Wallet className="w-3.5 h-3.5 text-purple-400" />
+                <WalletIcon className="w-3.5 h-3.5 text-purple-400" />
                 <span className="font-bold text-purple-400">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
 

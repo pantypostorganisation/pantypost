@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 const AGE_VERIFIED_KEY = 'pantypost_age_verified';
 
-export default function AgeVerificationModal() {
+export default function AgeVerificationModal(): React.ReactElement | null {
   // Initialize state based on localStorage
   const [isVerified, setIsVerified] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -21,13 +21,10 @@ export default function AgeVerificationModal() {
 
   const handleYes = () => {
     try {
-      // Save to localStorage
       localStorage.setItem(AGE_VERIFIED_KEY, 'true');
-      // Update state to hide modal
       setIsVerified(true);
     } catch (error) {
       console.error('Error saving age verification:', error);
-      // Hide modal anyway
       setIsVerified(true);
     }
   };
@@ -36,11 +33,8 @@ export default function AgeVerificationModal() {
     window.location.href = 'https://www.google.com';
   };
 
-  // Don't show modal if already verified
-  if (isVerified) {
-    return null;
-  }
-  
+  if (isVerified) return null;
+
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
       <div className="bg-[#161616] border-2 border-[#ff950e]/50 p-8 rounded-2xl max-w-md w-full shadow-2xl shadow-[#ff950e]/10">
@@ -48,9 +42,7 @@ export default function AgeVerificationModal() {
         <p className="mb-6 text-center text-gray-300">
           You must be at least 21 years old to enter this site. By entering, you confirm you are at least 21 years old.
         </p>
-        <p className="text-sm mb-6 text-center text-gray-400">
-          By entering our website, you agree to the terms & conditions.
-        </p>
+        <p className="text-sm mb-6 text-center text-gray-400">By entering our website, you agree to the terms & conditions.</p>
         <div className="flex gap-4 justify-center">
           <button
             onClick={handleYes}
