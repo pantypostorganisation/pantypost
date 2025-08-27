@@ -1,4 +1,3 @@
-// src/components/wallet/buyer/RecentPurchases.tsx
 'use client';
 
 import { ShoppingBag, ArrowRight, Package, Calendar } from 'lucide-react';
@@ -11,10 +10,10 @@ interface RecentPurchasesProps {
 export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     });
   };
 
@@ -26,7 +25,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
     <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 relative overflow-hidden group">
       {/* Background gradient effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      
+
       <div className="relative z-10">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-bold flex items-center text-white">
@@ -35,20 +34,20 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
             </div>
             Recent Purchases
           </h2>
-          
-          <a 
-            href="/buyers/my-orders" 
+
+          <a
+            href="/buyers/my-orders"
             className="text-sm text-[#ff950e] hover:text-[#e88800] flex items-center transition-all duration-200 group/link"
           >
             View All Orders
             <ArrowRight className="w-4 h-4 ml-2 group-hover/link:translate-x-1 transition-transform" />
           </a>
         </div>
-        
+
         <div className="space-y-4">
           {purchases.map((purchase, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className="bg-black/30 rounded-xl p-5 border border-gray-800 hover:border-gray-700 hover:bg-black/50 transition-all duration-200 group/item"
             >
               <div className="flex items-center justify-between">
@@ -71,7 +70,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-bold text-[#ff950e]">
-                    ${(purchase.markedUpPrice || purchase.price).toFixed(2)}
+                    ${(purchase.markedUpPrice ?? purchase.price).toFixed(2)}
                   </p>
                 </div>
               </div>

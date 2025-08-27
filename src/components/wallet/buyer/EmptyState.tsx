@@ -1,4 +1,3 @@
-// src/components/wallet/buyer/EmptyState.tsx
 'use client';
 
 import { ShoppingBag, ArrowRight } from 'lucide-react';
@@ -8,11 +7,14 @@ export default function EmptyState() {
     <div className="bg-[#1a1a1a] rounded-2xl p-12 border border-gray-800 text-center relative overflow-hidden">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 50% 50%, rgba(255, 149, 14, 0.3) 0%, transparent 50%)`
-        }} />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `radial-gradient(circle at 50% 50%, rgba(255, 149, 14, 0.3) 0%, transparent 50%)`,
+          }}
+        />
       </div>
-      
+
       <div className="relative z-10">
         <div className="bg-gradient-to-r from-gray-700 to-gray-600 p-4 rounded-2xl w-20 h-20 mx-auto mb-6 shadow-lg">
           <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto" />

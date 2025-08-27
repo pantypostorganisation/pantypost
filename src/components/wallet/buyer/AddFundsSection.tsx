@@ -1,5 +1,3 @@
-// src/components/wallet/buyer/AddFundsSection.tsx
-
 'use client';
 
 import { PlusCircle, CreditCard, CheckCircle, AlertCircle, Zap } from 'lucide-react';
@@ -37,63 +35,66 @@ export default function AddFundsSection({
   const handleAmountChange = (value: string) => {
     // Clear any previous errors
     setAmountError('');
-    
+
     // Allow empty string or valid number format
     if (value === '') {
       // Create synthetic event to maintain compatibility
-      const syntheticEvent = {
-        target: { value: '' }
-      } as React.ChangeEvent<HTMLInputElement>;
+      const syntheticEvent = { target: { value: '' } } as React.ChangeEvent<HTMLInputElement>;
       onAmountChange(syntheticEvent);
       return;
     }
-    
+
     // Check if it's a valid number format (including decimals)
     const regex = /^\d*\.?\d{0,2}$/;
     if (!regex.test(value)) {
       setAmountError('Please enter a valid amount');
       return;
     }
-    
+
     const numValue = parseFloat(value);
-    
+
     // Validate amount range
     if (!isNaN(numValue)) {
-      if (numValue < 5 && value !== '') {
+      if (numValue < 5) {
         setAmountError('Minimum amount is $5.00');
       } else if (numValue > 5000) {
         setAmountError('Maximum amount is $5,000.00');
       }
     }
-    
+
     // Create synthetic event to maintain compatibility
-    const syntheticEvent = {
-      target: { value }
-    } as React.ChangeEvent<HTMLInputElement>;
+    const syntheticEvent = { target: { value } } as React.ChangeEvent<HTMLInputElement>;
     onAmountChange(syntheticEvent);
   };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Final validation before submission
     const numValue = parseFloat(amountToAdd);
     if (isNaN(numValue) || numValue < 5 || numValue > 5000) {
       return;
     }
-    
+
     onAddFunds();
   };
 
   // Sanitize amount for display
   const displayAmount = amountToAdd ? sanitizeCurrency(amountToAdd).toFixed(2) : '0.00';
 
+  const messageClasses =
+    messageType === 'success'
+      ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+      : messageType === 'error'
+      ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+      : 'bg-gray-700/20 text-gray-300 border border-gray-600/30';
+
   return (
     <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 mb-8 relative overflow-hidden group">
       {/* Background gradient effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      
+
       <div className="relative z-10">
         <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
           <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2 rounded-lg mr-3 shadow-lg shadow-orange-500/20">
@@ -101,7 +102,7 @@ export default function AddFundsSection({
           </div>
           Add Funds
         </h2>
-        
+
         <SecureForm
           onSubmit={handleSubmit}
           rateLimitKey="deposit"
@@ -125,6 +126,8 @@ export default function AddFundsSection({
               <SecureInput
                 id="amount"
                 type="text"
+                inputMode="decimal"
+                pattern="^\d*\.?\d{0,2}$"
                 label="Amount to add (USD)"
                 value={amountToAdd}
                 onChange={handleAmountChange}
@@ -137,7 +140,7 @@ export default function AddFundsSection({
                 sanitize={false} // We handle sanitization in handleAmountChange
                 helpText="Minimum $5.00, Maximum $5,000.00"
               />
-              
+
               {/* Quick amount buttons */}
               <div className="grid grid-cols-4 gap-3 mt-4">
                 {[25, 50, 100, 200].map((quickAmount) => (
@@ -145,7 +148,7 @@ export default function AddFundsSection({
                     key={quickAmount}
                     type="button"
                     onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                    className="py-3 px-4 bg-black/50 hover:bg-black/70 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white rounded-xl transition-all duration-200 font-medium"
+                    className="py-3 px-4 bg-black/50 hover:bg黑/70 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white rounded-xl transition-all duration-200 font-medium"
                     disabled={isLoading}
                   >
                     ${quickAmount}
@@ -153,12 +156,14 @@ export default function AddFundsSection({
                 ))}
               </div>
             </div>
-            
+
             <div className="flex justify-center">
               <button
                 type="submit"
                 className="px-8 py-3 rounded-xl font-semibold flex items-center justify-center bg-gradient-to-r from-[#ff950e] to-orange-600 hover:from-[#e88800] hover:to-orange-700 text-black shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-300"
-                disabled={isLoading || !amountToAdd || parseFloat(amountToAdd) <= 0 || !!amountError}
+                disabled={
+                  isLoading || !amountToAdd || Number.isNaN(parseFloat(amountToAdd)) || parseFloat(amountToAdd) <= 0 || !!amountError
+                }
               >
                 {isLoading ? (
                   <>
@@ -177,21 +182,13 @@ export default function AddFundsSection({
         </SecureForm>
 
         {message && (
-          <div className={`mt-6 p-4 rounded-xl flex items-start ${
-            messageType === 'success' 
-              ? 'bg-green-500/10 text-green-400 border border-green-500/30' 
-              : 'bg-red-500/10 text-red-400 border border-red-500/30'
-          }`}>
+          <div className={`mt-6 p-4 rounded-xl flex items-start ${messageClasses}`}>
             {messageType === 'success' ? (
               <CheckCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
-            ) : (
+            ) : messageType === 'error' ? (
               <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
-            )}
-            <SecureMessageDisplay 
-              content={message}
-              allowBasicFormatting={false}
-              className="text-sm font-medium"
-            />
+            ) : null}
+            <SecureMessageDisplay content={message} allowBasicFormatting={false} className="text-sm font-medium" />
           </div>
         )}
       </div>

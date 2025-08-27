@@ -1,4 +1,3 @@
-// src/components/wallet/buyer/WalletHeader.tsx
 'use client';
 
 import { Wallet, TrendingUp } from 'lucide-react';
@@ -14,11 +13,9 @@ export default function WalletHeader() {
             </div>
             Buyer Wallet
           </h1>
-          <p className="text-gray-400 text-lg">
-            Manage your funds and track your spending
-          </p>
+          <p className="text-gray-400 text-lg">Manage your funds and track your spending</p>
         </div>
-        
+
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <TrendingUp className="w-4 h-4" />
           <span>Secure payments with instant processing</span>
