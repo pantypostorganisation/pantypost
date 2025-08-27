@@ -5,15 +5,15 @@ import React, { useState, useEffect } from 'react';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { WalletValidation } from '@/services/wallet.validation';
 import { WalletMockData } from '@/services/wallet.mock';
-import { formatMoney, formatLimit, formatRiskScore, formatTransactionSummary } from '@/utils/format';
+import { formatLimit, formatRiskScore, formatTransactionSummary } from '@/utils/format';
 import { Money } from '@/types/common';
 import { SecureInput } from '@/components/ui/SecureInput';
-import { 
-  Wallet, 
-  CreditCard, 
-  TrendingUp, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Wallet,
+  CreditCard,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
   XCircle,
   RefreshCw,
   Info,
@@ -21,13 +21,13 @@ import {
   Upload,
   Activity,
   Shield,
-  DollarSign
+  DollarSign,
 } from 'lucide-react';
 
 /**
  * Demo component showcasing enhanced wallet features
  */
-export default function EnhancedWalletDemo() {
+export default function EnhancedWalletDemo(): React.ReactElement {
   const {
     balance,
     availableBalance,
@@ -71,15 +71,13 @@ export default function EnhancedWalletDemo() {
     if (transactionHistory.length > 0) {
       // Simple risk calculation for demo
       const recentTransactions = transactionHistory.slice(0, 10);
-      const highValueCount = recentTransactions.filter(t => 
-        t.rawTransaction.amount > WalletValidation.LIMITS.MAX_TRANSACTION / 2
+      const highValueCount = recentTransactions.filter(
+        (t) => t.rawTransaction.amount > WalletValidation.LIMITS.MAX_TRANSACTION / 2
       ).length;
-      
-      const failedCount = recentTransactions.filter(t => 
-        t.rawTransaction.status === 'failed'
-      ).length;
-      
-      const score = Math.min(100, (highValueCount * 15) + (failedCount * 20));
+
+      const failedCount = recentTransactions.filter((t) => t.rawTransaction.status === 'failed').length;
+
+      const score = Math.min(100, highValueCount * 15 + failedCount * 20);
       setRiskScore(score);
     }
   }, [transactionHistory]);
@@ -89,7 +87,7 @@ export default function EnhancedWalletDemo() {
     setMockMode(true);
     const mockTransactions = WalletMockData.generateMockTransactions(20);
     console.log('Generated mock transactions:', mockTransactions);
-    
+
     // In real implementation, these would be saved to storage
     setTimeout(() => {
       loadTransactionHistory();
@@ -101,18 +99,18 @@ export default function EnhancedWalletDemo() {
   const currencySanitizer = (value: string): string => {
     // Remove any non-numeric characters except decimal point
     const cleaned = value.replace(/[^0-9.]/g, '');
-    
+
     // Ensure only one decimal point
     const parts = cleaned.split('.');
     if (parts.length > 2) {
       return parts[0] + '.' + parts.slice(1).join('');
     }
-    
+
     // Limit to 2 decimal places
     if (parts.length === 2 && parts[1].length > 2) {
       return parts[0] + '.' + parts[1].slice(0, 2);
     }
-    
+
     return cleaned;
   };
 
@@ -124,15 +122,10 @@ export default function EnhancedWalletDemo() {
 
   // Calculate used amount correctly
   const usedAmount = Money.fromDollars(dailyDepositLimit - remainingDepositLimit) as Money;
-  const limitDisplay = formatLimit(
-    usedAmount,
-    WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT
-  );
+  const limitDisplay = formatLimit(usedAmount, WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT);
 
   const riskDisplay = formatRiskScore(riskScore);
-  const transactionSummary = formatTransactionSummary(
-    transactionHistory.map(t => t.rawTransaction)
-  );
+  const transactionSummary = formatTransactionSummary(transactionHistory.map((t) => t.rawTransaction));
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -166,7 +159,7 @@ export default function EnhancedWalletDemo() {
             </div>
             <div className="text-2xl font-bold">{formattedBalance}</div>
           </div>
-          
+
           <div className="bg-white/10 backdrop-blur rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-white/70 text-sm">Available</span>
@@ -174,7 +167,7 @@ export default function EnhancedWalletDemo() {
             </div>
             <div className="text-2xl font-bold">{formattedAvailableBalance}</div>
           </div>
-          
+
           <div className="bg-white/10 backdrop-blur rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-white/70 text-sm">Total Spent</span>
@@ -200,7 +193,7 @@ export default function EnhancedWalletDemo() {
               <span className="text-sm font-medium">{limitDisplay.percentageFormatted}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
+              <div
                 className={`h-2 rounded-full transition-all ${
                   limitDisplay.percentage > 80 ? 'bg-orange-500' : 'bg-purple-600'
                 }`}
@@ -224,8 +217,8 @@ export default function EnhancedWalletDemo() {
                 onKeyPress={handleKeyPress}
                 placeholder="0.00"
                 className={`w-full pl-8 pr-4 py-3 ${
-                  validationErrors.length > 0 
-                    ? '!border-red-300 focus:!ring-red-500' 
+                  validationErrors.length > 0
+                    ? '!border-red-300 focus:!ring-red-500'
                     : '!border-gray-300 focus:!ring-purple-500'
                 } !bg-white !text-black`}
                 disabled={isLoading}
@@ -240,7 +233,7 @@ export default function EnhancedWalletDemo() {
 
           {/* Quick Amount Buttons */}
           <div className="grid grid-cols-4 gap-2">
-            {['25', '50', '100', '200'].map(amount => (
+            {['25', '50', '100', '200'].map((amount) => (
               <button
                 key={amount}
                 onClick={() => handleQuickAmountSelect(amount)}
@@ -273,16 +266,12 @@ export default function EnhancedWalletDemo() {
 
           {/* Status Message */}
           {message && (
-            <div className={`p-4 rounded-lg flex items-center gap-2 ${
-              messageType === 'success' 
-                ? 'bg-green-50 text-green-800' 
-                : 'bg-red-50 text-red-800'
-            }`}>
-              {messageType === 'success' ? (
-                <CheckCircle className="w-5 h-5" />
-              ) : (
-                <XCircle className="w-5 h-5" />
-              )}
+            <div
+              className={`p-4 rounded-lg flex items-center gap-2 ${
+                messageType === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+              }`}
+            >
+              {messageType === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
               {message}
             </div>
           )}
@@ -297,7 +286,7 @@ export default function EnhancedWalletDemo() {
             <Shield className="w-5 h-5 text-purple-600" />
             Security Status
           </h3>
-          
+
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div>
@@ -306,7 +295,7 @@ export default function EnhancedWalletDemo() {
               </div>
               <div className="text-2xl font-bold">{riskDisplay.score}</div>
             </div>
-            
+
             {lastSyncTime && (
               <div className="text-sm text-gray-500">
                 <Info className="w-4 h-4 inline mr-1" />
@@ -322,7 +311,7 @@ export default function EnhancedWalletDemo() {
             <Activity className="w-5 h-5 text-purple-600" />
             Transaction Summary
           </h3>
-          
+
           <div className="space-y-3">
             <div className="flex justify-between">
               <span className="text-gray-600">Total In:</span>
@@ -349,7 +338,7 @@ export default function EnhancedWalletDemo() {
             <Activity className="w-5 h-5 text-purple-600" />
             Recent Transactions
           </h3>
-          <button
+        <button
             onClick={loadTransactionHistory}
             disabled={isLoadingHistory}
             className="text-purple-600 hover:text-purple-700 text-sm font-medium"
@@ -360,12 +349,13 @@ export default function EnhancedWalletDemo() {
 
         {transactionHistory.length > 0 ? (
           <div className="space-y-2">
-            {transactionHistory.slice(0, 5).map((transaction, index) => (
-              <div key={transaction.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+            {transactionHistory.slice(0, 5).map((transaction) => (
+              <div
+                key={transaction.id}
+                className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors"
+              >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${
-                    transaction.isCredit ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
+                  <div className={`p-2 rounded-lg ${transaction.isCredit ? 'bg-green-100' : 'bg-red-100'}`}>
                     {transaction.isCredit ? (
                       <Download className="w-4 h-4 text-green-600" />
                     ) : (
@@ -378,14 +368,10 @@ export default function EnhancedWalletDemo() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-bold ${
-                    transaction.isCredit ? 'text-green-600' : 'text-red-600'
-                  }`}>
+                  <p className={`font-bold ${transaction.isCredit ? 'text-green-600' : 'text-red-600'}`}>
                     {transaction.displayAmount}
                   </p>
-                  <p className={`text-xs ${transaction.statusColor}`}>
-                    {transaction.displayStatus}
-                  </p>
+                  <p className={`text-xs ${transaction.statusColor}`}>{transaction.displayStatus}</p>
                 </div>
               </div>
             ))}
@@ -400,10 +386,7 @@ export default function EnhancedWalletDemo() {
 
       {/* Advanced Features Toggle */}
       <div className="text-center">
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="text-purple-600 hover:text-purple-700 font-medium"
-        >
+        <button onClick={() => setShowAdvanced(!showAdvanced)} className="text-purple-600 hover:text-purple-700 font-medium">
           {showAdvanced ? 'Hide' : 'Show'} Advanced Features
         </button>
       </div>
@@ -412,7 +395,7 @@ export default function EnhancedWalletDemo() {
       {showAdvanced && (
         <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
           <h3 className="text-lg font-semibold mb-4">Advanced Features</h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               onClick={generateMockData}
@@ -425,7 +408,7 @@ export default function EnhancedWalletDemo() {
                 <p className="text-sm text-gray-500">Create mock transactions for testing</p>
               </div>
             </button>
-            
+
             <button
               onClick={() => console.log('Fee structure:', WalletValidation.FEES)}
               className="p-4 bg-white rounded-lg hover:shadow-md transition-shadow flex items-center gap-3"
@@ -437,12 +420,12 @@ export default function EnhancedWalletDemo() {
               </div>
             </button>
           </div>
-          
+
           <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
             <p className="text-sm text-yellow-800">
               <AlertTriangle className="w-4 h-4 inline mr-1" />
-              This demo showcases the enhanced wallet service with proper financial safety,
-              comprehensive validation, and advanced features like risk assessment and reconciliation.
+              This demo showcases the enhanced wallet service with proper financial safety, comprehensive validation, and
+              advanced features like risk assessment and reconciliation.
             </p>
           </div>
         </div>
