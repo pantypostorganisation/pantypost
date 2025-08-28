@@ -9,7 +9,26 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['sale', 'bid', 'subscription', 'tip', 'order', 'auction_end', 'message', 'system'],
+    enum: [
+      // Original types
+      'sale', 
+      'bid', 
+      'subscription', 
+      'tip', 
+      'order', 
+      'auction_end', 
+      'message', 
+      'system',
+      // New auction-specific types
+      'auction_won',
+      'auction_winner', 
+      'auction_ended',
+      'auction_cancelled',
+      'auction_lost',
+      'auction_reserve_not_met',
+      'bid_refunded',
+      'outbid'
+    ],
     required: true
   },
   title: {
@@ -49,6 +68,10 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     enum: ['listing', 'order', 'user', 'auction', 'message', null],
     default: null
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
   createdAt: {
     type: Date,
@@ -109,6 +132,7 @@ notificationSchema.statics.createNotification = async function(data) {
       title: notification.title,
       message: notification.message,
       data: notification.data,
+      metadata: notification.metadata,
       priority: notification.priority,
       createdAt: notification.createdAt
     });
@@ -242,7 +266,7 @@ notificationSchema.statics.createAuctionEndNotification = async function(seller,
     const sellerEarnings = finalBid * 0.8; // 80% to seller after 20% platform fee
     return this.createNotification({
       recipient: seller,
-      type: 'auction_end',
+      type: 'auction_ended',
       title: 'Auction Ended!',
       message: `🏆 Auction ended: "${listing.title}" sold to ${winner} for $${finalBid.toFixed(2)}. You'll receive $${sellerEarnings.toFixed(2)} (after 20% platform fee)`,
       data: {
@@ -259,7 +283,7 @@ notificationSchema.statics.createAuctionEndNotification = async function(seller,
   } else {
     return this.createNotification({
       recipient: seller,
-      type: 'auction_end',
+      type: 'auction_ended',
       title: 'Auction Ended',
       message: `🔨 Auction ended: No valid bids for "${listing.title}"`,
       data: {

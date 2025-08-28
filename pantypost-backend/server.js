@@ -46,6 +46,9 @@ const analyticsRoutes = require('./routes/analytics.routes'); // NEW - Analytics
 // Import tier service for initialization
 const tierService = require('./services/tierService');
 
+// Import auction settlement service
+const AuctionSettlementService = require('./services/auctionSettlement');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -102,7 +105,8 @@ app.get('/api/health', (req, res) => {
       verification: true,
       reports: true,
       bans: true,
-      analytics: true // NEW - Added analytics feature flag
+      analytics: true,
+      auctions: true // Added auction feature flag
     },
   });
 });
@@ -258,6 +262,60 @@ app.get('/api/tiers/system-status', authMiddleware, async (req, res) => {
   }
 });
 
+// Auction system status endpoint (admin only)
+app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  try {
+    const Listing = require('./models/Listing');
+    
+    const totalAuctions = await Listing.countDocuments({ 'auction.isAuction': true });
+    const activeAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'active'
+    });
+    const endedAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'ended'
+    });
+    const cancelledAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'cancelled'
+    });
+    const reserveNotMetAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'reserve_not_met'
+    });
+
+    // Get auctions ending soon (within next hour)
+    const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
+    const endingSoon = await Listing.find({
+      'auction.isAuction': true,
+      'auction.status': 'active',
+      'auction.endTime': { $lte: oneHourFromNow, $gte: new Date() }
+    }).select('title auction.endTime auction.currentBid');
+
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          total: totalAuctions,
+          active: activeAuctions,
+          ended: endedAuctions,
+          cancelled: cancelledAuctions,
+          reserveNotMet: reserveNotMetAuctions
+        },
+        endingSoon,
+        timestamp: new Date(),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Ban system scheduled task - check and expire bans
 setInterval(async () => {
   try {
@@ -269,6 +327,55 @@ setInterval(async () => {
     console.error('[Ban System] Error checking expired bans:', error);
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
+
+// Auction system scheduled task - check and end expired auctions
+setInterval(async () => {
+  try {
+    const results = await AuctionSettlementService.processExpiredAuctions();
+    
+    if (results.processed > 0) {
+      // Notify admins of auction processing results if there were any errors
+      if (results.errors.length > 0 && global.webSocketService) {
+        global.webSocketService.emitToAdmins('auction:processing_errors', {
+          processed: results.processed,
+          errors: results.errors,
+          timestamp: new Date()
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[Auction System] Critical error in scheduled task:', error);
+    
+    // Notify admins of critical error
+    if (global.webSocketService) {
+      global.webSocketService.emitToAdmins('system:critical_error', {
+        system: 'auction',
+        error: error.message,
+        timestamp: new Date()
+      });
+    }
+  }
+}, 60000); // Check every minute
+
+// Manual auction processing endpoint (admin only)
+app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  
+  try {
+    const results = await AuctionSettlementService.processExpiredAuctions();
+    res.json({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // --------------------- Test Routes (unchanged) ---------------------
 app.get('/api/test/users', async (req, res) => {
@@ -553,6 +660,40 @@ async function initializeReportSystem() {
   }
 }
 
+// Initialize auction system on startup
+async function initializeAuctionSystem() {
+  try {
+    const Listing = require('./models/Listing');
+    
+    // Count active auctions
+    const activeAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'active'
+    });
+    
+    // Check for any expired auctions that need processing
+    const now = new Date();
+    const expiredAuctions = await Listing.countDocuments({
+      'auction.isAuction': true,
+      'auction.status': 'active',
+      'auction.endTime': { $lte: now }
+    });
+    
+    console.log(`✅ Auction system initialized`);
+    console.log(`   - ${activeAuctions} active auctions`);
+    console.log(`   - ${expiredAuctions} expired auctions to process`);
+    
+    // Process any expired auctions on startup
+    if (expiredAuctions > 0) {
+      console.log(`   - Processing ${expiredAuctions} expired auctions...`);
+      const results = await AuctionSettlementService.processExpiredAuctions();
+      console.log(`   - Processed: ${results.processed} (${results.successful} successful, ${results.noBids} no bids, ${results.reserveNotMet} reserve not met)`);
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing auction system:', error);
+  }
+}
+
 // Start server
 server.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
@@ -569,6 +710,9 @@ server.listen(PORT, async () => {
   
   await initializeReportSystem();
   console.log(`🛡️ Report & Ban system ready`);
+  
+  await initializeAuctionSystem();
+  console.log(`🔨 Auction system ready`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -588,6 +732,7 @@ server.listen(PORT, async () => {
   console.log('  - Admin:         /api/admin/*');
   console.log('  - Reports:       /api/reports/*');
   console.log('  - Bans:          /api/admin/bans/*');
-  console.log('  - Analytics:     /api/analytics/*'); // NEW - Added analytics endpoint
-  console.log('\n✨ Server initialization complete!\n');
+  console.log('  - Analytics:     /api/analytics/*');
+  console.log('  - Auctions:      /api/auctions/*'); // Added auction endpoints
+  console.log('\n💸 Go get you that lambo fuh nigga!\n');
 });

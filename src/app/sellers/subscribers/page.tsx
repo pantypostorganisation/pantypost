@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
+import SellerRevenueChart from '@/components/analytics/SellerRevenueChart';
 import { analyticsService } from '@/services/analytics.service';
 import type {
   SellerOverview,
@@ -527,13 +528,12 @@ export default function SellerAnalyticsPage() {
                   </div>
                 </div>
 
-                {/* Revenue Chart Placeholder */}
-                <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
-                  <h3 className="text-lg font-bold text-white mb-4">Revenue Over Time ({selectedPeriod})</h3>
-                  <div className="h-64 flex items-center justify-center bg-[#252525] rounded-lg">
-                    <p className="text-gray-500">Revenue visualization would display here</p>
-                  </div>
-                </div>
+                {/* Revenue Chart Component */}
+                <SellerRevenueChart 
+                  data={revenueData.revenueData} 
+                  period={selectedPeriod}
+                  isLoading={false}
+                />
 
                 {/* Revenue Data Table */}
                 <div className="bg-[#1a1a1a] rounded-xl border border-gray-800">

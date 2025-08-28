@@ -1,7 +1,7 @@
 // src/components/browse-detail/AuctionEndedModal.tsx
 'use client';
 
-import { AlertTriangle, Gavel, Clock, XCircle } from 'lucide-react';
+import { AlertTriangle, Gavel, Clock, XCircle, Target, RefreshCw, DollarSign } from 'lucide-react';
 import { AuctionEndedModalProps } from '@/types/browseDetail';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,13 +22,198 @@ export default function AuctionEndedModal({
   const hasBids = !!(listing.auction.bids && listing.auction.bids.length > 0);
   const isSeller = username === listing.seller;
   const hasUserBid = !!(didUserBid && !isUserHighestBidder);
+  
+  // Check reserve status
+  const hasReserve = listing.auction.reservePrice !== undefined && listing.auction.reservePrice > 0;
+  const reserveMet = !hasReserve || (listing.auction.highestBid && listing.auction.highestBid >= listing.auction.reservePrice!);
+  const isReserveNotMet = hasReserve && !reserveMet;
+  const cancelled = listing.auction.status === 'cancelled';
+  const reserveNotMetStatus = listing.auction.status === 'reserve_not_met';
 
-  // If buyer won, they'll get the winner flow elsewhere
-  if (userRole === 'buyer' && isUserHighestBidder) return null;
+  // If buyer won and reserve was met, they'll get the winner flow elsewhere
+  if (userRole === 'buyer' && isUserHighestBidder && reserveMet && !cancelled && !reserveNotMetStatus) return null;
 
-  // Generic: seller or viewer (no relevant losing-bidder state)
+  // Reserve not met - highest bidder view
+  if (userRole === 'buyer' && isUserHighestBidder && (isReserveNotMet || reserveNotMetStatus)) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reserve price not met"
+        >
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 25 }}
+            className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-3xl shadow-2xl border border-yellow-700/50 max-w-md w-full text-center"
+          >
+            <motion.div
+              initial={{ rotate: -180, scale: 0 }}
+              animate={{ rotate: 0, scale: 1 }}
+              transition={{ type: 'spring', delay: 0.2 }}
+              className="mb-6"
+            >
+              <div className="relative inline-block">
+                <Target className="mx-auto w-16 h-16 text-yellow-500 mb-4" />
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                  className="absolute inset-0 flex items-center justify-center"
+                  aria-hidden
+                >
+                  <div className="w-20 h-20 border-2 border-yellow-500/20 rounded-full" />
+                </motion.div>
+              </div>
+
+              <h2 className="text-2xl font-bold text-white mb-2">Reserve Price Not Met</h2>
+
+              <div className="text-gray-300 space-y-3">
+                <p>
+                  Although you had the highest bid of{' '}
+                  <span className="font-bold text-yellow-400">
+                    ${listing.auction.highestBid?.toFixed(2)}
+                  </span>
+                  , the auction for "
+                  <SecureMessageDisplay
+                    content={listing.title}
+                    allowBasicFormatting={false}
+                    className="text-[#ff950e] inline"
+                  />
+                  " did not meet the reserve price of{' '}
+                  <span className="font-bold text-red-400">
+                    ${listing.auction.reservePrice?.toFixed(2)}
+                  </span>
+                  .
+                </p>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg"
+                >
+                  <div className="flex items-center justify-center gap-2 text-blue-400">
+                    <RefreshCw className="w-4 h-4" />
+                    <p className="text-sm font-medium">Full Refund Processing</p>
+                  </div>
+                  <p className="text-xs text-blue-300 mt-1">
+                    Your bid amount has been refunded to your wallet
+                  </p>
+                </motion.div>
+
+                <div className="text-xs text-gray-400 p-2 bg-gray-800/50 rounded-lg">
+                  The seller set a minimum reserve price that needed to be met for the auction to complete.
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.button
+              onClick={() => onNavigate('/browse')}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-white px-4 py-3 rounded-full hover:from-yellow-500 hover:to-yellow-400 font-bold transition text-lg shadow-lg"
+              aria-label="Return to browse"
+            >
+              Find More Auctions
+            </motion.button>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  // Seller view - reserve not met
+  if (isSeller && (isReserveNotMet || reserveNotMetStatus)) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Auction ended - reserve not met"
+        >
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 25 }}
+            className="bg-gradient-to-br from-gray-900 to-gray-800 p-8 rounded-3xl shadow-2xl border border-yellow-700/50 max-w-md w-full text-center"
+          >
+            <motion.div
+              initial={{ rotate: -180, scale: 0 }}
+              animate={{ rotate: 0, scale: 1 }}
+              transition={{ type: 'spring', delay: 0.2 }}
+              className="mb-6"
+            >
+              <Target className="mx-auto w-16 h-16 text-yellow-500 mb-4" />
+
+              <h2 className="text-2xl font-bold text-white mb-2">Reserve Not Met</h2>
+
+              <div className="text-gray-300 space-y-3">
+                <p>
+                  Your auction for "
+                  <SecureMessageDisplay
+                    content={listing.title}
+                    allowBasicFormatting={false}
+                    className="text-[#ff950e] inline"
+                  />
+                  " ended with a highest bid of{' '}
+                  <span className="font-bold text-yellow-400">
+                    ${listing.auction.highestBid?.toFixed(2)}
+                  </span>
+                  , which did not meet your reserve price of{' '}
+                  <span className="font-bold text-red-400">
+                    ${listing.auction.reservePrice?.toFixed(2)}
+                  </span>
+                  .
+                </p>
+
+                <div className="p-3 bg-gray-700/50 rounded-lg">
+                  <p className="text-sm text-gray-400">
+                    The highest bidder has been refunded. You may relist this item with a lower reserve price or no reserve.
+                  </p>
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  Missed by: ${((listing.auction.reservePrice || 0) - (listing.auction.highestBid || 0)).toFixed(2)}
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="space-y-2">
+              <motion.button
+                onClick={() => onNavigate('/sellers/my-listings')}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-gradient-to-r from-[#ff950e] to-[#e88800] text-black px-4 py-3 rounded-full hover:from-[#e88800] hover:to-[#d77700] font-bold transition text-lg shadow-lg"
+                aria-label="Go to my listings"
+              >
+                Relist Item
+              </motion.button>
+              
+              <motion.button
+                onClick={() => onNavigate('/browse')}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-gray-700 text-white px-4 py-3 rounded-full hover:bg-gray-600 font-bold transition"
+                aria-label="Return to browse"
+              >
+                Back to Browse
+              </motion.button>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  // Generic: seller or viewer (no relevant losing-bidder state) for completed/cancelled auctions
   if (isSeller || (!hasUserBid && !isUserHighestBidder)) {
-    const cancelled = listing.auction.status === 'cancelled';
     return (
       <AnimatePresence>
         <motion.div
@@ -201,7 +386,10 @@ export default function AuctionEndedModal({
                   transition={{ delay: 0.5 }}
                   className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg"
                 >
-                  <p className="text-blue-400 text-sm">💰 Funds have been refunded to your wallet.</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <DollarSign className="w-4 h-4 text-blue-400" />
+                    <p className="text-blue-400 text-sm">Funds have been refunded to your wallet.</p>
+                  </div>
                 </motion.div>
               </div>
             </motion.div>

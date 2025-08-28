@@ -644,6 +644,22 @@ router.put('/:id/shipping', authMiddleware, async (req, res) => {
 
     await order.save();
 
+    // Create notification for buyer when shipped
+    if (shippingStatus === 'shipped') {
+      await Notification.create({
+        recipient: order.buyer,
+        type: 'shipping_update',
+        title: 'Order Shipped',
+        message: `Your order "${order.title}" has been shipped${trackingNumber ? ` (Tracking: ${trackingNumber})` : ''}`,
+        link: `/buyers/my-orders`,
+        metadata: {
+          orderId: order._id.toString(),
+          seller: order.seller,
+          trackingNumber
+        }
+      });
+    }
+
     // Emit WebSocket event
     if (global.webSocketService) {
       global.webSocketService.emitOrderUpdated({
@@ -669,6 +685,273 @@ router.put('/:id/shipping', authMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error('[Order] Error updating shipping:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/orders/:id/address - Update delivery address (NEW ENDPOINT)
+router.put('/:id/address', authMiddleware, async (req, res) => {
+  try {
+    const { deliveryAddress } = req.body;
+    
+    // Validate delivery address
+    if (!deliveryAddress || !deliveryAddress.fullName || !deliveryAddress.addressLine1 || 
+        !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.postalCode || 
+        !deliveryAddress.country) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid delivery address. All required fields must be provided.'
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Only buyer or admin can update delivery address
+    if (req.user.username !== order.buyer && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the buyer can update the delivery address'
+      });
+    }
+
+    // Don't allow address change if order is already shipped
+    if (order.shippingStatus === 'shipped' || order.shippingStatus === 'delivered') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot update address for shipped or delivered orders'
+      });
+    }
+
+    // Update the delivery address
+    order.deliveryAddress = {
+      fullName: deliveryAddress.fullName.trim(),
+      addressLine1: deliveryAddress.addressLine1.trim(),
+      addressLine2: deliveryAddress.addressLine2 ? deliveryAddress.addressLine2.trim() : undefined,
+      city: deliveryAddress.city.trim(),
+      state: deliveryAddress.state.trim(),
+      postalCode: deliveryAddress.postalCode.trim(),
+      country: deliveryAddress.country.trim(),
+      specialInstructions: deliveryAddress.specialInstructions ? deliveryAddress.specialInstructions.trim() : undefined
+    };
+
+    await order.save();
+
+    console.log('[Order] Address updated for order:', order._id);
+
+    // Create notification for seller about address update
+    await Notification.create({
+      recipient: order.seller,
+      type: 'address_update',
+      title: 'Delivery Address Updated',
+      message: `${order.buyer} has ${order.deliveryAddress ? 'updated' : 'added'} the delivery address for "${order.title}"`,
+      link: `/sellers/orders-to-fulfil`,
+      metadata: {
+        orderId: order._id.toString(),
+        buyer: order.buyer
+      }
+    });
+
+    // Emit WebSocket event
+    if (global.webSocketService) {
+      global.webSocketService.emitOrderUpdated({
+        _id: order._id,
+        id: order._id.toString(),
+        buyer: order.buyer,
+        seller: order.seller,
+        hasAddress: true,
+        addressUpdated: true
+      });
+
+      // Send notification to seller via WebSocket
+      global.webSocketService.emitToUser(order.seller, 'order:address-updated', {
+        orderId: order._id.toString(),
+        orderTitle: order.title,
+        buyer: order.buyer,
+        hasAddress: true
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: order._id.toString(),
+        deliveryAddress: order.deliveryAddress,
+        message: 'Delivery address updated successfully'
+      }
+    });
+
+  } catch (error) {
+    console.error('[Order] Error updating address:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update delivery address'
+    });
+  }
+});
+
+// PATCH /api/orders/:id - Update order (general update endpoint)
+router.patch('/:id', authMiddleware, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Check permissions
+    const canUpdate = req.user.username === order.buyer || 
+                     req.user.username === order.seller || 
+                     req.user.role === 'admin';
+    
+    if (!canUpdate) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have permission to update this order'
+      });
+    }
+
+    // Handle specific updates based on role
+    const updates = {};
+    
+    // Buyer can update delivery address
+    if (req.user.username === order.buyer && req.body.deliveryAddress) {
+      // Don't allow if already shipped
+      if (order.shippingStatus === 'shipped' || order.shippingStatus === 'delivered') {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot update address for shipped orders'
+        });
+      }
+      updates.deliveryAddress = req.body.deliveryAddress;
+    }
+    
+    // Seller can update shipping info
+    if (req.user.username === order.seller) {
+      if (req.body.shippingStatus) {
+        updates.shippingStatus = req.body.shippingStatus;
+        
+        if (req.body.shippingStatus === 'shipped' && !order.shippedDate) {
+          updates.shippedDate = new Date();
+        } else if (req.body.shippingStatus === 'delivered' && !order.deliveredDate) {
+          updates.deliveredDate = new Date();
+        }
+      }
+      
+      if (req.body.trackingNumber) {
+        updates.trackingNumber = req.body.trackingNumber;
+      }
+    }
+    
+    // Admin can update anything
+    if (req.user.role === 'admin') {
+      Object.assign(updates, req.body);
+    }
+
+    // Apply updates
+    Object.assign(order, updates);
+    await order.save();
+
+    // Emit WebSocket event if there were updates
+    if (Object.keys(updates).length > 0 && global.webSocketService) {
+      global.webSocketService.emitOrderUpdated({
+        _id: order._id,
+        id: order._id.toString(),
+        ...updates,
+        buyer: order.buyer,
+        seller: order.seller
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: order._id.toString(),
+        title: order.title,
+        description: order.description,
+        price: order.price,
+        markedUpPrice: order.markedUpPrice,
+        imageUrl: order.imageUrl,
+        date: order.date.toISOString(),
+        seller: order.seller,
+        buyer: order.buyer,
+        tags: order.tags,
+        listingId: order.listingId,
+        wasAuction: order.wasAuction,
+        finalBid: order.finalBid,
+        deliveryAddress: order.deliveryAddress,
+        shippingStatus: order.shippingStatus,
+        trackingNumber: order.trackingNumber,
+        shippedDate: order.shippedDate,
+        deliveredDate: order.deliveredDate,
+        paymentStatus: order.paymentStatus,
+        sellerTier: order.sellerTier
+      }
+    });
+
+  } catch (error) {
+    console.error('[Order] Error updating order:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/orders/:id - Cancel order (admin only)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only admins can cancel orders'
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Only allow cancellation of pending orders
+    if (order.shippingStatus !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'Can only cancel pending orders'
+      });
+    }
+
+    order.shippingStatus = 'cancelled';
+    await order.save();
+
+    // TODO: Process refund if payment was completed
+
+    res.json({
+      success: true,
+      data: {
+        id: order._id.toString(),
+        message: 'Order cancelled successfully'
+      }
+    });
+
+  } catch (error) {
+    console.error('[Order] Error cancelling order:', error);
     res.status(500).json({
       success: false,
       error: error.message

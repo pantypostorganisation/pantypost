@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { useAuction } from '@/context/AuctionContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
@@ -27,6 +28,7 @@ import { ApiResponse } from '@/services/api.config';
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
 const NAVIGATION_DELAY = 500;
+const AUCTION_EXPIRY_CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 const initialState: DetailState = {
   purchaseStatus: '',
@@ -84,6 +86,7 @@ export const useBrowseDetail = () => {
     purchaseListingAndRemove,
     refreshListings
   } = useListings();
+  const { processEndedAuction } = useAuction();
   
   // Add WebSocket hook
   const wsContext = useWebSocket();
@@ -99,6 +102,7 @@ export const useBrowseDetail = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  const [auctionExpiryProcessed, setAuctionExpiryProcessed] = useState(false);
   
   // Add new state for real-time bid updates
   const [realtimeBids, setRealtimeBids] = useState<BidHistoryItem[]>([]);
@@ -115,6 +119,7 @@ export const useBrowseDetail = () => {
   const mountedRef = useRef(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const auctionExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
   const viewIncrementedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -129,6 +134,11 @@ export const useBrowseDetail = () => {
   const isAuctionListing = isAuction; // Keep old variable name for compatibility
   const isAuctionEnded = isAuction && listing?.auction && !isAuctionActive(listing.auction);
 
+  // Check if reserve price is met
+  const hasReserve = !!listing?.auction?.reservePrice;
+  const currentBid = listing?.auction?.highestBid || 0;
+  const reserveMet = hasReserve && listing?.auction?.reservePrice ? currentBid >= listing.auction.reservePrice : true;
+
   // Helper functions - Define updateState early
   const updateState = useCallback((updates: Partial<DetailState> | ((prev: DetailState) => Partial<DetailState>)) => {
     if (!mountedRef.current) return;
@@ -142,7 +152,7 @@ export const useBrowseDetail = () => {
   useEffect(() => {
     if (!isConnected || !isAuction || !listingId || !mountedRef.current || !subscribe) return;
 
-    const unsubscribe = subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
+    const unsubscribeBid = subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
       // Only process bids for this specific listing
       if (data.listingId !== listingId) return;
 
@@ -211,10 +221,129 @@ export const useBrowseDetail = () => {
       }
     });
 
+    // Subscribe to auction ended events
+    const unsubscribeEnded = subscribe(WebSocketEvent.AUCTION_ENDED, (data: any) => {
+      if (data.listingId === listingId) {
+        console.log('[BrowseDetail] Auction ended event received');
+        
+        // Update the listing's auction status
+        setListing(prev => {
+          if (!prev || !prev.auction) return prev;
+          
+          return {
+            ...prev,
+            auction: {
+              ...prev.auction,
+              status: data.status === 'reserve_not_met' ? 'reserve_not_met' : 'ended'
+            }
+          } as ListingWithDetails;
+        });
+        
+        // Refresh listing data to get latest status
+        refreshListings();
+      }
+    });
+
+    // Subscribe to reserve not met events
+    const unsubscribeReserve = subscribe('auction:reserve_not_met' as WebSocketEvent, (data: any) => {
+      if (data.listingId === listingId) {
+        console.log('[BrowseDetail] Reserve not met event received');
+        
+        // Update the listing's auction status
+        setListing(prev => {
+          if (!prev || !prev.auction) return prev;
+          
+          return {
+            ...prev,
+            auction: {
+              ...prev.auction,
+              status: 'reserve_not_met'
+            }
+          } as ListingWithDetails;
+        });
+      }
+    });
+
     return () => {
-      unsubscribe();
+      unsubscribeBid();
+      unsubscribeEnded();
+      unsubscribeReserve();
     };
-  }, [isConnected, isAuction, listingId, currentUsername, subscribe, updateState]);
+  }, [isConnected, isAuction, listingId, currentUsername, subscribe, updateState, refreshListings]);
+
+  // CRITICAL: Auto-check and process expired auctions
+  useEffect(() => {
+    if (!isAuction || !listing?.auction || auctionExpiryProcessed || !mountedRef.current) return;
+
+    const checkAuctionExpiry = async () => {
+      if (!listing.auction?.endTime) return;
+      
+      const now = new Date();
+      const endTime = new Date(listing.auction.endTime);
+      
+      // Check if auction has expired and hasn't been processed yet
+      if (endTime <= now && listing.auction.status === 'active') {
+        console.log('[BrowseDetail] Auction has expired, triggering backend processing');
+        
+        // Mark as processed to prevent duplicate calls
+        setAuctionExpiryProcessed(true);
+        
+        try {
+          // Call backend to process the ended auction
+          const response = await listingsService.endAuction(listing.id);
+          
+          if (response.success) {
+            console.log('[BrowseDetail] Auction end processed successfully');
+            
+            // Update local listing status
+            setListing(prev => {
+              if (!prev || !prev.auction) return prev;
+              
+              return {
+                ...prev,
+                auction: {
+                  ...prev.auction,
+                  status: response.data?.status === 'reserve_not_met' ? 'reserve_not_met' : 'ended'
+                }
+              } as ListingWithDetails;
+            });
+            
+            // Refresh listings to get updated data
+            await refreshListings();
+            
+            // If user was highest bidder, show success modal
+            if (listing.auction.highestBidder === currentUsername) {
+              updateState({ showAuctionSuccess: true });
+              
+              // Navigate to orders after delay
+              setTimeout(() => {
+                if (mountedRef.current) {
+                  router.push('/buyers/my-orders');
+                }
+              }, 5000);
+            }
+          } else {
+            console.error('[BrowseDetail] Failed to process auction end:', response.error);
+          }
+        } catch (error) {
+          console.error('[BrowseDetail] Error processing auction end:', error);
+        }
+      }
+    };
+
+    // Check immediately
+    checkAuctionExpiry();
+
+    // Then check periodically
+    auctionExpiryTimerRef.current = setInterval(checkAuctionExpiry, AUCTION_EXPIRY_CHECK_INTERVAL);
+
+    return () => {
+      if (auctionExpiryTimerRef.current) {
+        clearInterval(auctionExpiryTimerRef.current);
+        auctionExpiryTimerRef.current = null;
+      }
+    };
+  }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState]);
 
   // Load listing using the service
   useEffect(() => {
@@ -894,6 +1023,9 @@ export const useBrowseDetail = () => {
       if (fundingTimerRef.current) {
         clearInterval(fundingTimerRef.current);
       }
+      if (auctionExpiryTimerRef.current) {
+        clearInterval(auctionExpiryTimerRef.current);
+      }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -936,6 +1068,8 @@ export const useBrowseDetail = () => {
       realtimeBids: [],
       mergedBidsHistory: [],
       lastBidUpdate: Date.now(),
+      hasReserve: false,
+      reserveMet: true,
       ...initialState,
       imageRef,
       bidInputRef,
@@ -980,6 +1114,8 @@ export const useBrowseDetail = () => {
     realtimeBids,
     mergedBidsHistory,
     lastBidUpdate,
+    hasReserve,
+    reserveMet,
     
     // State - CRITICAL: Only return bidStatus for actual auctions and when not purchasing
     purchaseStatus: state.purchaseStatus,

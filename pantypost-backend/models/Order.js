@@ -65,34 +65,39 @@ const orderSchema = new mongoose.Schema({
   },
   finalBid: Number,
   
-  // Delivery info
+  // Delivery info - FIXED: Made deliveryAddress optional at root level
   deliveryAddress: {
-    fullName: {
-      type: String,
-      required: true
+    type: {
+      fullName: {
+        type: String,
+        required: true
+      },
+      addressLine1: {
+        type: String,
+        required: true
+      },
+      addressLine2: String,
+      city: {
+        type: String,
+        required: true
+      },
+      state: {
+        type: String,
+        required: true
+      },
+      postalCode: {
+        type: String,
+        required: true
+      },
+      country: {
+        type: String,
+        required: true,
+        default: 'US'
+      },
+      specialInstructions: String
     },
-    addressLine1: {
-      type: String,
-      required: true
-    },
-    addressLine2: String,
-    city: {
-      type: String,
-      required: true
-    },
-    state: {
-      type: String,
-      required: true
-    },
-    postalCode: {
-      type: String,
-      required: true
-    },
-    country: {
-      type: String,
-      required: true,
-      default: 'US'
-    }
+    required: false, // FIXED: Made optional so orders can be created without address initially
+    default: undefined // FIXED: Explicitly set to undefined when not provided
   },
   
   // Shipping status
@@ -193,6 +198,13 @@ const orderSchema = new mongoose.Schema({
   },
   paymentCompletedAt: Date,
   
+  // Custom request fields
+  isCustomRequest: {
+    type: Boolean,
+    default: false
+  },
+  originalRequestId: String,
+  
   // 🔧 ENHANCED TRANSACTION REFERENCES
   paymentTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -223,6 +235,19 @@ orderSchema.index({ shippingStatus: 1 });
 orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ sellerTier: 1 });
 orderSchema.index({ wasAuction: 1 });
+
+// Virtual to check if address is complete
+orderSchema.virtual('hasCompleteAddress').get(function() {
+  return !!(
+    this.deliveryAddress &&
+    this.deliveryAddress.fullName &&
+    this.deliveryAddress.addressLine1 &&
+    this.deliveryAddress.city &&
+    this.deliveryAddress.state &&
+    this.deliveryAddress.postalCode &&
+    this.deliveryAddress.country
+  );
+});
 
 // Calculate tier credit (difference between marked up price and original price)
 orderSchema.methods.calculateTierCredit = function() {
@@ -256,6 +281,32 @@ orderSchema.methods.calculatePlatformProfit = function() {
 orderSchema.methods.shouldApplyTier = function() {
   // Auctions don't use tier system
   return !this.wasAuction;
+};
+
+// Method to check if address can be updated
+orderSchema.methods.canUpdateAddress = function() {
+  // Can't update address if order is already shipped or delivered
+  return this.shippingStatus !== 'shipped' && this.shippingStatus !== 'delivered';
+};
+
+// Method to safely update address
+orderSchema.methods.updateAddress = function(newAddress) {
+  if (!this.canUpdateAddress()) {
+    throw new Error('Cannot update address for shipped or delivered orders');
+  }
+  
+  this.deliveryAddress = {
+    fullName: newAddress.fullName,
+    addressLine1: newAddress.addressLine1,
+    addressLine2: newAddress.addressLine2 || undefined,
+    city: newAddress.city,
+    state: newAddress.state,
+    postalCode: newAddress.postalCode,
+    country: newAddress.country || 'US',
+    specialInstructions: newAddress.specialInstructions || undefined
+  };
+  
+  return this.deliveryAddress;
 };
 
 const Order = mongoose.model('Order', orderSchema);

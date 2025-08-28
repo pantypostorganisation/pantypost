@@ -96,7 +96,7 @@ function sanitizeDeliveryAddress(address: DeliveryAddress): DeliveryAddress {
   const sanitized: any = { ...address };
   
   // Sanitize string properties that might exist
-  const stringFields = ['fullName', 'streetAddress', 'city', 'state', 'postalCode', 'country', 'zipCode', 'apartment', 'phone'];
+  const stringFields = ['fullName', 'streetAddress', 'city', 'state', 'postalCode', 'country', 'zipCode', 'apartment', 'phone', 'addressLine1', 'addressLine2'];
   
   stringFields.forEach(field => {
     if (typeof sanitized[field] === 'string') {
@@ -164,7 +164,7 @@ export function useOrdersService(options: UseOrdersServiceOptions = {}): UseOrde
     }
   }, [autoLoad, sanitizedBuyer, sanitizedSeller, loadOrders]);
   
-  // Update order address with validation
+  // Update order address with validation - FIXED to handle boolean return
   const updateOrderAddress = useCallback(async (
     orderId: string, 
     address: DeliveryAddress
@@ -185,9 +185,10 @@ export function useOrdersService(options: UseOrdersServiceOptions = {}): UseOrde
       // Sanitize address data
       const sanitizedAddress = sanitizeDeliveryAddress(address);
       
-      const result = await ordersService.updateOrderAddress(orderId, sanitizedAddress);
+      // FIX: updateOrderAddress returns a boolean directly
+      const success = await ordersService.updateOrderAddress(orderId, sanitizedAddress);
       
-      if (result.success && result.data) {
+      if (success) {
         // Update local state with sanitized address
         setOrders(prev => prev.map(order => 
           order.id === orderId ? { ...order, deliveryAddress: sanitizedAddress } : order

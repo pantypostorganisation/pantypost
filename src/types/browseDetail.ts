@@ -40,6 +40,25 @@ export interface DetailState {
   currentImageIndex: number;
 }
 
+// Enhanced auction interface with reserve price support
+export interface AuctionWithReserve {
+  isAuction: boolean;
+  startingPrice: number;
+  reservePrice?: number;
+  endTime: string;
+  bids: Array<{
+    id: string;
+    bidder: string;
+    amount: number;
+    date: string;
+  }>;
+  highestBid?: number;
+  highestBidder?: string;
+  status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met';
+  minimumIncrement?: number;
+  reserveMet?: boolean;
+}
+
 export interface ListingWithDetails extends Listing {
   sellerProfile?: SellerProfile;
   isSellerVerified?: boolean;
@@ -50,6 +69,8 @@ export interface ListingWithDetails extends Listing {
   } | null;
   sellerAverageRating?: number | null;
   sellerReviewCount?: number;
+  // Override auction type to include reserve fields
+  auction?: AuctionWithReserve;
 }
 
 // Component Props
@@ -97,8 +118,11 @@ export interface AuctionSectionProps {
   username?: string;
   bidInputRef: React.RefObject<HTMLInputElement | null>;
   bidButtonRef: React.RefObject<HTMLButtonElement | null>;
-  realtimeBids?: BidHistoryItem[];  // Add this
-  mergedBidsHistory?: BidHistoryItem[];  // Add this
+  realtimeBids?: BidHistoryItem[];
+  mergedBidsHistory?: BidHistoryItem[];
+  hasReserve?: boolean;
+  reserveMet?: boolean;
+  viewerCount?: number;
 }
 
 export interface PurchaseSectionProps {
@@ -164,4 +188,41 @@ export interface StickyPurchaseBarProps {
 export interface PremiumLockMessageProps {
   listing: ListingWithDetails;
   userRole?: string;
+}
+
+// Additional types for reserve price handling
+export interface ReservePriceStatus {
+  hasReserve: boolean;
+  reservePrice: number | undefined;
+  currentBid: number;
+  reserveMet: boolean;
+  amountToReserve: number;
+  percentageToReserve: number;
+}
+
+export interface AuctionExpiryStatus {
+  isExpired: boolean;
+  timeRemaining: number;
+  shouldProcess: boolean;
+}
+
+// Extended listing creation/update types with reserve support
+export interface CreateAuctionRequest {
+  title: string;
+  description: string;
+  imageUrls: string[];
+  seller: string;
+  tags?: string[];
+  hoursWorn?: number;
+  auction: {
+    startingPrice: number;
+    reservePrice?: number;
+    endTime: string;
+  };
+}
+
+export interface UpdateAuctionRequest {
+  reservePrice?: number;
+  endTime?: string;
+  status?: 'active' | 'ended' | 'cancelled';
 }

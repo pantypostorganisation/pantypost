@@ -8,6 +8,7 @@ const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
+const AuctionSettlementService = require('../services/auctionSettlement');
 
 // ============= LISTING ROUTES =============
 
@@ -362,7 +363,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/purchase - Direct purchase endpoint (NEW)
+// POST /api/listings/:id/purchase - Direct purchase endpoint
 router.post('/:id/purchase', authMiddleware, async (req, res) => {
   try {
     const { buyerId } = req.body;
@@ -569,7 +570,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     const isIncrementalBid = previousHighestBidder === bidder && previousHighestBid > 0;
     
     try {
-      await listing.placeBid(bidder, bidAmount); // Use bidAmount instead of amount
+      await listing.placeBid(bidder, bidAmount);
       
       // Create database notification for seller about new bid
       await Notification.createBidNotification(listing.seller, bidder, listing, bidAmount);
@@ -689,6 +690,23 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
                 newBidder: bidder,
                 timestamp: new Date()
               });
+              
+              // Create notification for outbid user
+              await Notification.createNotification({
+                recipient: previousHighestBidder,
+                type: 'outbid',
+                title: 'You were outbid!',
+                message: `You were outbid on "${listing.title}". Your bid of $${previousHighestBid} has been refunded.`,
+                metadata: {
+                  listingId: listing._id.toString(),
+                  refundAmount: previousHighestBid,
+                  newBidAmount: bidAmount,
+                  newBidder: bidder
+                },
+                priority: 'high',
+                relatedId: listing._id.toString(),
+                relatedType: 'auction'
+              });
             }
           }
         }
@@ -722,22 +740,16 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/end-auction - End an auction (20% SELLER FEE)
-router.post('/:id/end-auction', authMiddleware, async (req, res) => {
+// POST /api/listings/:id/end-auction - End an auction using settlement service (with race condition prevention)
+router.post('/:id/end-auction', async (req, res) => {
   try {
+    // First check if auction exists and is still active
     const listing = await Listing.findById(req.params.id);
     
     if (!listing) {
       return res.status(404).json({
         success: false,
         error: 'Listing not found'
-      });
-    }
-    
-    if (listing.seller !== req.user.username && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: 'Only the seller can end their auction'
       });
     }
     
@@ -748,236 +760,114 @@ router.post('/:id/end-auction', authMiddleware, async (req, res) => {
       });
     }
     
+    // Check if already processed
     if (listing.auction.status !== 'active') {
-      return res.status(400).json({
-        success: false,
-        error: 'Auction is not active'
-      });
-    }
-    
-    if (new Date() < listing.auction.endTime && req.user.role !== 'admin') {
-      return res.status(400).json({
-        success: false,
-        error: 'Auction has not ended yet'
-      });
-    }
-    
-    // No bids
-    if (!listing.auction.highestBidder || listing.auction.currentBid === 0) {
-      listing.auction.status = 'ended';
-      listing.status = 'expired';
-      await listing.save();
-      
-      if (global.webSocketService) {
-        global.webSocketService.emitAuctionEnded(listing, null, 0);
-      }
-      
+      console.log(`[Auction] Auction ${req.params.id} already processed with status: ${listing.auction.status}`);
       return res.json({
         success: true,
-        message: 'Auction ended with no bids'
-      });
-    }
-    
-    // Reserve not met
-    if (listing.auction.reservePrice && listing.auction.currentBid < listing.auction.reservePrice) {
-      listing.auction.status = 'reserve_not_met';
-      listing.status = 'expired';
-      await listing.save();
-      
-      const bidderWallet = await Wallet.findOne({ username: listing.auction.highestBidder });
-      if (bidderWallet) {
-        const oldBalance = bidderWallet.balance;
-        await bidderWallet.deposit(listing.auction.currentBid);
-        
-        const refundTransaction = new Transaction({
-          type: 'bid_refund',
-          amount: listing.auction.currentBid,
-          from: 'platform_escrow',
-          to: listing.auction.highestBidder,
-          fromRole: 'admin',
-          toRole: 'buyer',
-          description: `Refund: Reserve not met for ${listing.title}`,
-          status: 'completed',
-          metadata: { 
-            auctionId: listing._id.toString(),
-            reason: 'reserve_not_met'
-          }
-        });
-        await refundTransaction.save();
-        
-        // Emit balance update for refund
-        if (global.webSocketService) {
-          global.webSocketService.emitBalanceUpdate(
-            listing.auction.highestBidder, 
-            'buyer', 
-            oldBalance, 
-            bidderWallet.balance, 
-            `Reserve not met refund for ${listing.title}`
-          );
+        message: 'Auction already processed',
+        data: {
+          status: listing.auction.status,
+          listingId: listing._id
         }
-      }
+      });
+    }
+    
+    // Check if auction has actually ended
+    const now = new Date();
+    if (listing.auction.endTime > now) {
+      const timeLeft = Math.floor((listing.auction.endTime - now) / 1000);
+      return res.status(400).json({
+        success: false,
+        error: `Auction has not ended yet. ${timeLeft} seconds remaining.`
+      });
+    }
+    
+    // Use atomic update to prevent race conditions
+    const updatedListing = await Listing.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        'auction.status': 'active' // Only process if still active
+      },
+      { 
+        $set: { 'auction.status': 'processing' } // Mark as processing
+      },
+      { new: false } // Return the original document
+    );
+    
+    // If no document was updated, another request already processed it
+    if (!updatedListing) {
+      console.log(`[Auction] Auction ${req.params.id} already being processed by another request`);
       
-      if (global.webSocketService) {
-        global.webSocketService.emitAuctionEnded(listing, null, listing.auction.currentBid);
-      }
-      
+      // Get the current status
+      const currentListing = await Listing.findById(req.params.id);
       return res.json({
         success: true,
-        message: 'Auction ended but reserve price was not met. Bid has been refunded.'
+        message: 'Auction already processed',
+        data: {
+          status: currentListing?.auction?.status || 'unknown',
+          listingId: req.params.id
+        }
       });
     }
     
-    // Create order for winner - UPDATED FOR 20% SELLER FEE
-    const winningBid = Math.floor(listing.auction.currentBid);
-    const winner = listing.auction.highestBidder;
-    
-    let sellerWallet = await Wallet.findOne({ username: listing.seller });
-    if (!sellerWallet) {
-      const sellerUser = await User.findOne({ username: listing.seller });
-      sellerWallet = new Wallet({
-        username: listing.seller,
-        role: sellerUser ? sellerUser.role : 'seller',
-        balance: 0
-      });
-      await sellerWallet.save();
-    }
-    
-    let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
-    if (!platformWallet) {
-      platformWallet = new Wallet({
-        username: 'platform',
-        role: 'admin',
-        balance: 0
-      });
-      await platformWallet.save();
-    }
-    
-    // UPDATED: 20% platform fee from seller (not 10%)
-    const AUCTION_PLATFORM_FEE = 0.20; // Changed from 0.10 to 0.20
-    const sellerPlatformFee = Math.round(winningBid * AUCTION_PLATFORM_FEE * 100) / 100;
-    const sellerEarnings = Math.round((winningBid - sellerPlatformFee) * 100) / 100;
-    
-    const order = new Order({
-      title: listing.title,
-      description: listing.description,
-      price: winningBid,
-      markedUpPrice: winningBid, // No markup for auctions
-      seller: listing.seller,
-      buyer: winner,
-      imageUrl: listing.imageUrls[0],
-      tags: listing.tags,
-      wasAuction: true,
-      finalBid: winningBid,
-      // UPDATED: Auction-specific fee structure (20% from seller, 0% from buyer)
-      platformFee: sellerPlatformFee,
-      sellerPlatformFee: sellerPlatformFee,
-      buyerMarkupFee: 0, // No buyer markup for auctions
-      sellerEarnings: sellerEarnings,
-      tierCreditAmount: 0, // No tier bonuses for auctions
-      sellerTier: null, // Don't apply tier for auctions
-      paymentStatus: 'completed',
-      paymentCompletedAt: new Date(),
-      deliveryAddress: {
-        fullName: 'To be provided',
-        addressLine1: 'To be provided',
-        city: 'To be provided',
-        state: 'To be provided',
-        postalCode: '00000',
-        country: 'US'
-      }
-    });
-    
-    await order.save();
-    
-    const sellerOldBalance = sellerWallet.balance;
-    const platformOldBalance = platformWallet.balance;
-    
-    await sellerWallet.deposit(sellerEarnings);
-    await platformWallet.deposit(sellerPlatformFee);
-    
-    const saleTransaction = new Transaction({
-      type: 'auction_sale',
-      amount: winningBid,
-      from: 'platform_escrow', // Money was held in escrow
-      to: listing.seller,
-      fromRole: 'system',
-      toRole: 'seller',
-      description: `Auction won: ${listing.title} (20% platform fee applied)`,
-      status: 'completed',
-      completedAt: new Date(),
-      metadata: { 
-        orderId: order._id.toString(), 
-        auctionId: listing._id.toString(),
-        originalAmount: winningBid,
-        platformFee: sellerPlatformFee,
-        sellerEarnings: sellerEarnings
-      }
-    });
-    await saleTransaction.save();
-    
-    const feeTransaction = new Transaction({
-      type: 'platform_fee',
-      amount: sellerPlatformFee,
-      from: listing.seller,
-      to: 'platform',
-      fromRole: 'seller',
-      toRole: 'admin',
-      description: `Platform fee (20%) for auction: ${listing.title}`,
-      status: 'completed',
-      completedAt: new Date(),
-      metadata: { 
-        orderId: order._id.toString(),
-        auctionId: listing._id.toString(),
-        listingTitle: listing.title,
-        seller: listing.seller,
-        buyer: winner,
-        originalPrice: winningBid,
-        sellerFee: sellerPlatformFee,
-        totalFee: sellerPlatformFee,
-        percentage: 20 // Updated to 20%
-      }
-    });
-    await feeTransaction.save();
-    
-    order.paymentTransactionId = saleTransaction._id;
-    order.feeTransactionId = feeTransaction._id;
-    await order.save();
-    
-    listing.auction.status = 'ended';
-    listing.status = 'sold';
-    listing.soldAt = new Date();
-    await listing.save();
-    
-    // Create database notification for seller
-    await Notification.createAuctionEndNotification(listing.seller, listing, winner, winningBid);
-    console.log('[Auction] Created database notification for seller');
-    
-    if (global.webSocketService) {
-      global.webSocketService.emitAuctionEnded(listing, winner, winningBid);
-      global.webSocketService.emitListingSold(listing, winner);
-      
-      // Emit proper balance update with previous balance
-      global.webSocketService.emitBalanceUpdate(
-        listing.seller, 
-        'seller', 
-        sellerOldBalance,
-        sellerWallet.balance, 
-        `Auction sale completed - received ${sellerEarnings} (after 20% fee)`
-      );
-    }
-    
-    res.json({
-      success: true,
-      message: `Auction ended successfully! Winner: ${winner} at $${winningBid}. Seller receives $${sellerEarnings} (after 20% platform fee).`,
-      data: {
-        listing: listing,
-        order: order,
-        sellerEarnings: sellerEarnings,
-        platformFee: sellerPlatformFee
-      }
-    });
+    // Now process the auction
+    const result = await AuctionSettlementService.processEndedAuction(req.params.id);
+    res.json(result);
   } catch (error) {
-    res.status(500).json({
+    console.error('[Auction] Error ending auction:', error);
+    
+    // Try to reset status if processing failed
+    try {
+      await Listing.findOneAndUpdate(
+        { 
+          _id: req.params.id,
+          'auction.status': 'processing'
+        },
+        { 
+          $set: { 'auction.status': 'active' }
+        }
+      );
+    } catch (resetError) {
+      console.error('[Auction] Failed to reset auction status:', resetError);
+    }
+    
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/listings/:id/cancel-auction - Cancel an auction
+router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // Only seller or admin can cancel
+    if (listing.seller !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to cancel this auction'
+      });
+    }
+    
+    const result = await AuctionSettlementService.cancelAuction(
+      req.params.id,
+      req.user.username
+    );
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[Auction] Error cancelling auction:', error);
+    res.status(400).json({
       success: false,
       error: error.message
     });

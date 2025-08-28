@@ -596,41 +596,41 @@ export class OrdersService {
   async updateOrderAddress(
     id: string,
     address: DeliveryAddress
-  ): Promise<ApiResponse<Order>> {
+  ): Promise<boolean> {
     try {
       // Validate ID
       if (!id || typeof id !== 'string' || id.length > 100) {
-        return {
-          success: false,
-          error: { message: 'Invalid order ID' },
-        };
+        console.error('[OrdersService] Invalid order ID');
+        return false;
       }
 
       // Validate and sanitize address
       const validation = validateSchema(deliveryAddressSchema, address);
       if (!validation.success) {
-        return {
-          success: false,
-          error: { message: Object.values(validation.errors || {})[0] || 'Invalid address' },
-        };
+        console.error('[OrdersService] Invalid address:', validation.errors);
+        return false;
       }
 
       const sanitizedAddress = validation.data!;
 
       if (FEATURES.USE_API_ORDERS) {
+        // Call the new dedicated endpoint for address updates
         const response = await apiCall<Order>(
           `${buildApiUrl(API_ENDPOINTS.ORDERS.GET, { id })}/address`,
           {
-            method: 'PATCH',
+            method: 'PUT',
             body: JSON.stringify({ deliveryAddress: sanitizedAddress }),
           }
         );
 
         if (response.success) {
           this.invalidateCache();
+          console.log('[OrdersService] Address updated via API');
+          return true;
         }
 
-        return response;
+        console.error('[OrdersService] API address update failed:', response.error);
+        return false;
       }
 
       // LocalStorage implementation
@@ -638,10 +638,8 @@ export class OrdersService {
       const orderIndex = orderHistory.findIndex(o => o.id === id);
 
       if (orderIndex === -1) {
-        return {
-          success: false,
-          error: { message: 'Order not found' },
-        };
+        console.error('[OrdersService] Order not found');
+        return false;
       }
 
       orderHistory[orderIndex] = {
@@ -653,17 +651,12 @@ export class OrdersService {
 
       // Invalidate cache
       this.invalidateCache();
-
-      return {
-        success: true,
-        data: orderHistory[orderIndex],
-      };
+      
+      console.log('[OrdersService] Address updated in localStorage');
+      return true;
     } catch (error) {
-      console.error('Update order address error:', error);
-      return {
-        success: false,
-        error: { message: 'Failed to update order address' },
-      };
+      console.error('[OrdersService] Update order address error:', error);
+      return false;
     }
   }
 

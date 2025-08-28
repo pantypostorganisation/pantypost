@@ -145,7 +145,7 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing {
     views: backendListing.views || 0,
   };
 
-  // Convert auction data if present
+  // Convert auction data if present with reserve price support
   if (backendListing.auction?.isAuction) {
     frontendListing.auction = {
       isAuction: true,
@@ -164,7 +164,8 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing {
         Math.floor(backendListing.auction.currentBid) : undefined,
       highestBidder: backendListing.auction.highestBidder,
       status: backendListing.auction.status === 'active' ? 'active' : 
-              backendListing.auction.status === 'ended' ? 'ended' : 'cancelled',
+              backendListing.auction.status === 'ended' ? 'ended' : 
+              backendListing.auction.status === 'reserve_not_met' ? 'reserve_not_met' as any : 'cancelled',
       minimumIncrement: Math.floor(backendListing.auction.bidIncrement || 1),
     };
   }
@@ -187,7 +188,7 @@ function convertFrontendToBackend(frontendListing: CreateListingRequest): any {
     hoursWorn: frontendListing.hoursWorn,
   };
 
-  // Handle auction vs regular listing
+  // Handle auction vs regular listing with reserve price
   if (frontendListing.auction) {
     backendListing.isAuction = true;
     backendListing.startingPrice = frontendListing.auction.startingPrice;
@@ -561,7 +562,7 @@ export class ListingsService {
   }
 
   /**
-   * Create new listing
+   * Create new listing with reserve price support
    * FIXED: Properly handle the backend response structure
    */
   async createListing(request: CreateListingRequest): Promise<ApiResponse<Listing>> {
@@ -618,6 +619,16 @@ export class ListingsService {
           return {
             success: false,
             error: { message: 'Invalid image URL provided' },
+          };
+        }
+      }
+
+      // Validate reserve price if auction
+      if (request.auction) {
+        if (request.auction.reservePrice && request.auction.reservePrice < request.auction.startingPrice) {
+          return {
+            success: false,
+            error: { message: 'Reserve price must be at least the starting price' },
           };
         }
       }
@@ -1124,10 +1135,8 @@ export class ListingsService {
       const sanitizedId = sanitize.strict(listingId);
 
       if (FEATURES.USE_API_LISTINGS) {
-        // Backend doesn't have a specific cancel endpoint, so we'll use a status update
-        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ 'auction.status': 'cancelled' }),
+        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}/cancel-auction`, {
+          method: 'POST',
         });
 
         if (response.success && response.data) {
@@ -1171,6 +1180,76 @@ export class ListingsService {
       return {
         success: false,
         error: { message: 'Failed to cancel auction' },
+      };
+    }
+  }
+
+  /**
+   * End auction - NEW METHOD to trigger backend processing
+   */
+  async endAuction(listingId: string): Promise<ApiResponse<any>> {
+    try {
+      // Sanitize ID
+      const sanitizedId = sanitize.strict(listingId);
+
+      if (FEATURES.USE_API_LISTINGS) {
+        console.log('[ListingsService] Ending auction via backend:', sanitizedId);
+        
+        const response = await apiCall<any>(`/listings/${sanitizedId}/end-auction`, {
+          method: 'POST',
+        });
+
+        if (response.success) {
+          // Invalidate cache to force refresh
+          this.invalidateCache();
+          
+          return {
+            success: true,
+            data: response.data,
+          };
+        } else {
+          return {
+            success: false,
+            error: { message: response.error?.message || 'Failed to end auction' },
+          };
+        }
+      }
+
+      // LocalStorage fallback - just mark as ended
+      const listings = await storageService.getItem<Listing[]>('listings', []);
+      const listing = listings.find(l => l.id === sanitizedId);
+
+      if (!listing || !listing.auction) {
+        return {
+          success: false,
+          error: { message: 'Auction not found' },
+        };
+      }
+
+      // Check if reserve is met
+      const reserveMet = !listing.auction.reservePrice || 
+        (listing.auction.highestBid && listing.auction.highestBid >= listing.auction.reservePrice);
+
+      listing.auction.status = reserveMet ? 'ended' : 'reserve_not_met' as any;
+      await storageService.setItem('listings', listings);
+
+      // Invalidate cache
+      this.invalidateCache();
+
+      return {
+        success: true,
+        data: { 
+          status: listing.auction.status,
+          reserveMet,
+          highestBid: listing.auction.highestBid,
+          highestBidder: listing.auction.highestBidder
+        },
+      };
+    } catch (error) {
+      console.error('End auction error:', error);
+      return {
+        success: false,
+        error: { message: 'Failed to end auction' },
       };
     }
   }
@@ -1233,13 +1312,16 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        const response = await apiCall<number>(`/listings/${sanitizedId}/views`);
+        const response = await apiCall<{ views: number }>(`/listings/${sanitizedId}/views`);
         
-        if (response.success && response.data !== undefined) {
-          this.viewsCache.set(sanitizedId, { count: response.data, timestamp: now });
+        if (response.success && response.data) {
+          const viewCount = (response.data as any).views || 0;
+          this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
+          return {
+            success: true,
+            data: viewCount,
+          };
         }
-        
-        return response;
       }
 
       // LocalStorage implementation

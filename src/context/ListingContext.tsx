@@ -41,7 +41,7 @@ export type Bid = {
   date: string;
 };
 
-export type AuctionStatus = 'active' | 'ended' | 'cancelled';
+export type AuctionStatus = 'active' | 'ended' | 'cancelled' | 'reserve_not_met';
 
 export type AuctionSettings = {
   isAuction: boolean;

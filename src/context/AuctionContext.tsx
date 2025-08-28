@@ -20,14 +20,16 @@ export interface AuctionData {
   listingId: string;
   seller: string;
   startingPrice: number;
+  reservePrice?: number; // Added reserve price field
   currentBid: number;
   highestBidder?: string;
   previousBidder?: string;
   endTime: string;
   bids: Bid[];
-  status: 'active' | 'ended' | 'cancelled';
+  status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met'; // Added reserve_not_met status
   winnerId?: string;
   finalPrice?: number;
+  reserveMet?: boolean; // Track if reserve is met
 }
 
 interface AuctionContextType {
@@ -44,6 +46,7 @@ interface AuctionContextType {
   getAuctionByListingId: (listingId: string) => AuctionData | null;
   getUserBidsForAuction: (listingId: string, username: string) => Bid[];
   isUserHighestBidder: (listingId: string, username: string) => boolean;
+  checkReserveMet: (listingId: string) => boolean; // New method to check if reserve is met
   
   // Loading states
   isPlacingBid: boolean;
@@ -128,7 +131,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Update auction with new bid - Enhanced to track previous bidder
+  // Update auction with new bid - Enhanced to track reserve status
   const updateAuctionWithBid = useCallback((listingId: string, bidData: any) => {
     // Handle the actual WebSocket data structure
     const bid: Bid = {
@@ -148,6 +151,10 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       const existingAuction = prev[listingId];
       previousHighestBidder = existingAuction?.highestBidder;
       
+      // Check if reserve is met
+      const reserveMet = existingAuction?.reservePrice ? 
+        bid.amount >= existingAuction.reservePrice : true;
+      
       return {
         ...prev,
         [listingId]: {
@@ -156,11 +163,13 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
           id: listingId,
           seller: existingAuction?.seller || '',
           startingPrice: existingAuction?.startingPrice || 0,
+          reservePrice: existingAuction?.reservePrice,
           currentBid: bid.amount,
           highestBidder: bid.bidder,
           previousBidder: previousHighestBidder,
           endTime: existingAuction?.endTime || '',
           status: existingAuction?.status || 'active',
+          reserveMet,
           bids: [...(existingAuction?.bids || []), bid].sort(
             (a, b) => b.amount - a.amount
           )
@@ -178,10 +187,10 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     return previousHighestBidder;
   }, []);
 
-  // Update auction status
+  // Update auction status - Enhanced for reserve not met
   const updateAuctionStatus = useCallback((
     listingId: string, 
-    status: 'ended' | 'cancelled',
+    status: 'ended' | 'cancelled' | 'reserve_not_met',
     winnerId?: string,
     finalPrice?: number
   ) => {
@@ -196,16 +205,25 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
           id: listingId,
           seller: existingAuction?.seller || '',
           startingPrice: existingAuction?.startingPrice || 0,
+          reservePrice: existingAuction?.reservePrice,
           currentBid: existingAuction?.currentBid || 0,
           endTime: existingAuction?.endTime || '',
           bids: existingAuction?.bids || [],
           status,
           ...(winnerId && { winnerId }),
-          ...(finalPrice && { finalPrice })
+          ...(finalPrice && { finalPrice }),
+          reserveMet: status === 'reserve_not_met' ? false : existingAuction?.reserveMet
         }
       };
     });
   }, []);
+
+  // Check if reserve is met
+  const checkReserveMet = useCallback((listingId: string): boolean => {
+    const auction = auctions[listingId];
+    if (!auction || !auction.reservePrice) return true; // No reserve means always met
+    return auction.currentBid >= auction.reservePrice;
+  }, [auctions]);
 
   // Load auctions on mount
   useEffect(() => {
@@ -230,7 +248,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     loadAuctions();
   }, [user]);
 
-  // Subscribe to WebSocket updates for auctions
+  // Subscribe to WebSocket updates for auctions - Enhanced with reserve handling
   useEffect(() => {
     if (!isConnected || !subscribe) return;
 
@@ -277,6 +295,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
                 amount: data.amount,
                 listingId: data.listingId,
                 balance: data.balance,
+                reason: data.reason, // Will include 'reserve_not_met' if applicable
                 timestamp: Date.now()
               }
             }));
@@ -341,17 +360,48 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Subscribe to auction ended events
+    // Subscribe to auction ended events - Enhanced with reserve handling
     unsubscribers.push(
       subscribe(WebSocketEvent.AUCTION_ENDED, async (data: any) => {
         console.log('[AuctionContext] Auction ended:', data);
         const listingId = data.listingId || data.id;
         if (listingId) {
-          updateAuctionStatus(listingId, 'ended', data.winnerId || data.winner, data.finalPrice || data.finalBid);
+          // Check the status from backend
+          const status = data.status || 'ended';
           
-          // If current user is the winner, refresh their balance
-          if (user && (data.winnerId === user.username || data.winner === user.username)) {
-            await refreshCurrentUserBalance();
+          if (status === 'reserve_not_met') {
+            updateAuctionStatus(listingId, 'reserve_not_met');
+            
+            // If current user was the highest bidder, they'll get a refund
+            const auction = auctions[listingId];
+            if (user && auction?.highestBidder === user.username) {
+              console.log('[AuctionContext] Reserve not met, user will be refunded');
+              // Balance refresh will happen when wallet:refund event arrives
+            }
+          } else {
+            updateAuctionStatus(listingId, 'ended', data.winnerId || data.winner, data.finalPrice || data.finalBid);
+            
+            // If current user is the winner, refresh their balance
+            if (user && (data.winnerId === user.username || data.winner === user.username)) {
+              await refreshCurrentUserBalance();
+            }
+          }
+        }
+      })
+    );
+
+    // Subscribe to auction:reserve_not_met events specifically
+    unsubscribers.push(
+      subscribe('auction:reserve_not_met' as WebSocketEvent, async (data: any) => {
+        console.log('[AuctionContext] Auction reserve not met:', data);
+        const listingId = data.listingId || data.id;
+        if (listingId) {
+          updateAuctionStatus(listingId, 'reserve_not_met');
+          
+          // Current user will get refund if they were the highest bidder
+          const auction = auctions[listingId];
+          if (user && auction?.highestBidder === user.username) {
+            console.log('[AuctionContext] User was highest bidder, awaiting refund for reserve not met');
           }
         }
       })
@@ -379,7 +429,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     };
   }, [isConnected, subscribe, updateAuctionWithBid, updateAuctionStatus, user, refreshCurrentUserBalance, auctions]);
 
-  // Place a bid - Using apiCall from api.config
+  // Place a bid - Enhanced with reserve price validation
   const placeBid = useCallback(async (
     listingId: string,
     bidder: string, 
@@ -411,6 +461,13 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
           timestamp: new Date().toISOString()
         });
         
+        // Check if reserve is met and show appropriate message
+        const auction = auctions[listingId];
+        if (auction?.reservePrice && amount < auction.reservePrice) {
+          console.log('[AuctionContext] Bid placed but reserve price not yet met');
+          // You might want to show a warning to the user
+        }
+        
         // Refresh current user's balance (they placed the bid)
         await refreshCurrentUserBalance();
         
@@ -432,7 +489,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsPlacingBid(false);
     }
-  }, [user, updateAuctionWithBid, refreshCurrentUserBalance]);
+  }, [user, updateAuctionWithBid, refreshCurrentUserBalance, auctions]);
 
   // Cancel auction (seller only) - Using apiCall
   const cancelAuction = useCallback(async (
@@ -489,21 +546,32 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Process ended auction
+  // Process ended auction - Enhanced with reserve checking
   const processEndedAuction = useCallback(async (listing: any): Promise<boolean> => {
     if (!listing.auction) return false;
     
     try {
-      // If there's a highest bidder, process the sale
+      // If there's a highest bidder, check reserve price
       if (listing.auction.highestBidder && listing.auction.highestBid) {
+        // Check if reserve is met
+        if (listing.auction.reservePrice && listing.auction.highestBid < listing.auction.reservePrice) {
+          console.log('[AuctionContext] Auction ended but reserve not met');
+          // Backend will handle the reserve not met status and refunds
+        }
+        
         // Call backend to process auction completion
         const response = await apiCall<any>(`/listings/${listing.id}/end-auction`, {
           method: 'POST',
         });
 
         if (response.success) {
-          // Update auction status
-          updateAuctionStatus(listing.id, 'ended', listing.auction.highestBidder, listing.auction.highestBid);
+          // Update auction status based on response
+          const status = response.data?.status || 'ended';
+          if (status === 'reserve_not_met') {
+            updateAuctionStatus(listing.id, 'reserve_not_met');
+          } else {
+            updateAuctionStatus(listing.id, 'ended', listing.auction.highestBidder, listing.auction.highestBid);
+          }
           return true;
         }
       } else {
@@ -572,6 +640,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     getAuctionByListingId,
     getUserBidsForAuction,
     isUserHighestBidder,
+    checkReserveMet, // New method added
     isPlacingBid,
     isCancellingAuction,
     isLoadingAuctions,
