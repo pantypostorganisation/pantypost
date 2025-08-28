@@ -24,6 +24,7 @@ import { securityService, sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
 import { ApiResponse } from '@/services/api.config';
+import { isAdmin } from '@/utils/security/permissions'; // ✅ ADDED
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -138,6 +139,12 @@ export const useBrowseDetail = () => {
   const hasReserve = !!listing?.auction?.reservePrice;
   const currentBid = listing?.auction?.highestBid || 0;
   const reserveMet = hasReserve && listing?.auction?.reservePrice ? currentBid >= listing.auction.reservePrice : true;
+
+  // Role guards (who can end auctions)
+  const userIsAdmin = !!isAdmin(user as any);
+  const isSellerOfListing = !!(user?.username && listing?.seller && user.username === listing.seller);
+  const canEndAuction = userIsAdmin || isSellerOfListing;
+  const isBidderView = !!(user?.role === 'buyer' && !canEndAuction);
 
   // Helper functions - Define updateState early
   const updateState = useCallback((updates: Partial<DetailState> | ((prev: DetailState) => Partial<DetailState>)) => {
@@ -283,18 +290,57 @@ export const useBrowseDetail = () => {
       
       // Check if auction has expired and hasn't been processed yet
       if (endTime <= now && listing.auction.status === 'active') {
-        console.log('[BrowseDetail] Auction has expired, triggering backend processing');
+        console.log('[BrowseDetail] Auction has expired');
         
         // Mark as processed to prevent duplicate calls
         setAuctionExpiryProcessed(true);
-        
+
+        // 🛑 Do NOT end auctions from bidder/visitor views
+        if (!canEndAuction) {
+          console.log('[BrowseDetail] Read-only viewer (bidder/visitor). Skipping POST /end-auction. Refreshing state instead.');
+          
+          // Update local UI immediately to stop bid actions
+          setListing(prev => {
+            if (!prev || !prev.auction) return prev;
+            return {
+              ...prev,
+              auction: {
+                ...prev.auction,
+                status: reserveMet ? 'ended' : ('reserve_not_met' as any)
+              }
+            } as ListingWithDetails;
+          });
+
+          // Friendly banner for bidders when reserve not met
+          if (isBidderView && !reserveMet) {
+            updateState({
+              bidStatus: {
+                success: false,
+                message: 'Auction ended — reserve not met.'
+              },
+              biddingEnabled: false
+            });
+          } else {
+            updateState({ biddingEnabled: false });
+          }
+
+          // Pull latest from backend; sockets may also update shortly
+          try {
+            await refreshListings();
+          } catch (e) {
+            // non-fatal
+          }
+          return;
+        }
+
+        // ✅ Seller or Admin: trigger backend processing
         try {
-          // Call backend to process the ended auction
+          console.log('[BrowseDetail] Privileged user detected. Triggering backend end-auction.');
           const response = await listingsService.endAuction(listing.id);
           
           if (response.success) {
             console.log('[BrowseDetail] Auction end processed successfully');
-            
+
             // Update local listing status
             setListing(prev => {
               if (!prev || !prev.auction) return prev;
@@ -311,8 +357,8 @@ export const useBrowseDetail = () => {
             // Refresh listings to get updated data
             await refreshListings();
             
-            // If user was highest bidder, show success modal
-            if (listing.auction.highestBidder === currentUsername) {
+            // If user was highest bidder (edge case: seller/admin also bidding), show success modal
+            if (listing.auction.highestBidder === currentUsername && reserveMet) {
               updateState({ showAuctionSuccess: true });
               
               // Navigate to orders after delay
@@ -323,10 +369,25 @@ export const useBrowseDetail = () => {
               }, 5000);
             }
           } else {
-            console.error('[BrowseDetail] Failed to process auction end:', response.error);
+            const msg = (response.error?.message || '').toLowerCase();
+            if (msg.includes('auction is not active')) {
+              // Treat as idempotent: already processed elsewhere
+              console.log('[BrowseDetail] Auction already finalized on server; treating as idempotent.');
+              // Refresh to reflect final state
+              await refreshListings();
+            } else {
+              console.warn('[BrowseDetail] Failed to process auction end:', response.error);
+            }
           }
         } catch (error) {
-          console.error('[BrowseDetail] Error processing auction end:', error);
+          // If backend returns 400 "Auction is not active", treat as idempotent
+          const m = (error as any)?.message?.toLowerCase?.() || '';
+          if (m.includes('auction is not active')) {
+            console.log('[BrowseDetail] Backend says not active; treating as already-ended. Refreshing.');
+            try { await refreshListings(); } catch {}
+          } else {
+            console.warn('[BrowseDetail] Error processing auction end:', error);
+          }
         }
       }
     };
@@ -343,7 +404,7 @@ export const useBrowseDetail = () => {
         auctionExpiryTimerRef.current = null;
       }
     };
-  }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState]);
+  }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState, canEndAuction, reserveMet, isBidderView]);
 
   // Load listing using the service
   useEffect(() => {
