@@ -109,6 +109,9 @@ export default function ListingDetailPage() {
     (listing.auction.isAuction || listing.auction.startingPrice !== undefined)
   );
 
+  // FIXED: Use the server's isLocked field directly instead of needsSubscription
+  const isLockedPremium = listing?.isLocked === true;
+
   // Simulate viewer count changes
   useEffect(() => {
     const interval = setInterval(() => {
@@ -402,8 +405,6 @@ export default function ListingDetailPage() {
     );
   }
 
-  const isLockedPremium = listing.isPremium && needsSubscription;
-
   return (
     <BanCheck>
       <Toaster position="top-center" />
@@ -521,8 +522,8 @@ export default function ListingDetailPage() {
                )}
              </AnimatePresence>
 
-             {/* Premium Content Lock */}
-             {needsSubscription && (
+             {/* Premium Content Lock - FIXED: Use isLocked field */}
+             {isLockedPremium && (
                <PremiumLockMessage listing={listing} userRole={user?.role} />
              )}
 
@@ -576,12 +577,12 @@ export default function ListingDetailPage() {
            onNavigate={router.push}
          />
 
-         {/* Sticky Buy Button for Mobile */}
+         {/* Sticky Buy Button for Mobile - FIXED: Use isLocked field */}
          <StickyPurchaseBar
            show={showStickyBuy}
            listing={listing}
            isProcessing={isProcessing}
-           needsSubscription={needsSubscription}
+           needsSubscription={isLockedPremium}
            isAuctionListing={isActualAuction}
            userRole={user?.role}
            onPurchase={handlePurchaseWithAnalytics}

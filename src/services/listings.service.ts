@@ -76,7 +76,7 @@ export interface PopularTag {
   count: number;
 }
 
-// UPDATED: Backend listing format with isLocked field
+// Backend listing format with isLocked field
 interface BackendListing {
   _id?: string;
   id?: string;
@@ -94,7 +94,7 @@ interface BackendListing {
   views?: number;
   createdAt: string;
   soldAt?: string;
-  isLocked?: boolean; // NEW: Server indicates premium content is locked
+  isLocked?: boolean; // Server indicates premium content is locked
   auction?: {
     isAuction: boolean;
     startingPrice: number;
@@ -113,19 +113,11 @@ interface BackendListing {
   };
 }
 
-// UPDATED: Response type for listing with premium access info
-interface ListingResponse {
-  success: boolean;
-  data?: BackendListing;
-  premiumAccess?: boolean;
-  error?: any;
-}
-
 // Cache configuration
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const VIEW_CACHE_DURATION = 30 * 1000; // 30 seconds
 
-// FIXED: Create a custom schema for listing creation that handles number conversion properly
+// Create a custom schema for listing creation that handles number conversion properly
 const createListingValidationSchema = z.object({
   title: listingSchemas.title,
   description: listingSchemas.description,
@@ -138,7 +130,7 @@ const createListingValidationSchema = z.object({
 type CreateListingValidationData = z.infer<typeof createListingValidationSchema>;
 
 /**
- * UPDATED: Convert backend listing format to frontend format with isLocked support
+ * Convert backend listing format to frontend format with isLocked support
  */
 function convertBackendToFrontend(backendListing: BackendListing): Listing & { isLocked?: boolean } {
   // Handle both _id and id fields
@@ -155,10 +147,10 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & { i
     seller: backendListing.seller,
     isVerified: backendListing.isVerified || false,
     isPremium: backendListing.isPremium || false,
+    isLocked: backendListing.isLocked || false, // Pass through isLocked flag from backend
     tags: backendListing.tags || [],
     hoursWorn: backendListing.hoursWorn,
     views: backendListing.views || 0,
-    isLocked: backendListing.isLocked || false, // NEW: Pass through isLocked flag
   };
 
   // Convert auction data if present with reserve price support
@@ -175,7 +167,7 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & { i
         amount: Math.floor(bid.amount || 0), // Ensure integer
         date: bid.date,
       })),
-      // CRITICAL FIX: Always floor the currentBid to remove any decimals
+      // Always floor the currentBid to remove any decimals
       highestBid: backendListing.auction.currentBid > 0 ? 
         Math.floor(backendListing.auction.currentBid) : undefined,
       highestBidder: backendListing.auction.highestBidder,
@@ -286,13 +278,13 @@ export class ListingsService {
           if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
         }
         
-        const response = await apiCall<BackendListing[]>(
-          `/listings?${queryParams.toString()}`
-        );
+        const response = await apiCall<any>(`/listings?${queryParams.toString()}`);
 
-        if (response.success && response.data) {
-          // Convert backend format to frontend format
-          const convertedListings = response.data.map(convertBackendToFrontend);
+        if (response.success) {
+          // Handle both direct array response and nested data structure
+          const listings = response.data?.data || response.data || [];
+          const convertedListings = listings.map(convertBackendToFrontend);
+          
           console.log('[ListingsService] Converted backend listings:', convertedListings.length);
           
           // Update cache only if no filters
@@ -303,7 +295,7 @@ export class ListingsService {
           return {
             success: true,
             data: convertedListings,
-            meta: response.meta
+            meta: response.data?.meta || response.meta
           };
         } else {
           throw new Error(response.error?.message || 'Failed to fetch listings from backend');
@@ -498,7 +490,7 @@ export class ListingsService {
   }
 
   /**
-   * UPDATED: Get single listing by ID with premium access checking
+   * Get single listing by ID with premium access checking
    */
   async getListing(id: string): Promise<ApiResponse<Listing | null>> {
     try {
@@ -508,8 +500,7 @@ export class ListingsService {
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Fetching listing from backend:', sanitizedId);
         
-        // FIXED: Call the API directly, don't expect ListingResponse format
-        const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`);
+        const response = await apiCall<any>(`/listings/${sanitizedId}`);
         
         if (!mountedRef.current) return {
           success: false,
@@ -517,19 +508,23 @@ export class ListingsService {
         };
 
         if (response.success && response.data) {
-          const convertedListing = convertBackendToFrontend(response.data);
+          // Handle both direct data and nested data structure
+          const listingData = response.data.data || response.data;
+          const convertedListing = convertBackendToFrontend(listingData);
           
-          // FIXED: Check for premiumAccess in meta, not on response directly
-          if (response.meta?.premiumAccess !== undefined) {
-            console.log('[ListingsService] Premium access for listing:', response.meta.premiumAccess);
+          // Check for premiumAccess in the response data
+          const responseAsAny = response as any;
+          const premiumAccess = response.data?.premiumAccess ?? responseAsAny.premiumAccess;
+          
+          if (premiumAccess !== undefined) {
+            console.log('[ListingsService] Premium access for listing:', premiumAccess);
           }
           
           return {
             success: true,
             data: convertedListing,
             meta: {
-              ...response.meta,
-              premiumAccess: response.meta?.premiumAccess
+              premiumAccess
             }
           };
         } else {
@@ -562,7 +557,7 @@ export class ListingsService {
     } catch (error: any) {
       console.error('Get listing error:', error);
       
-      // NEW: Handle 403 errors for premium content
+      // Handle 403 errors for premium content
       if (error.status === 403 || error.message?.includes('subscribe')) {
         return {
           success: false,
@@ -590,20 +585,21 @@ export class ListingsService {
       const sanitizedUsername = sanitize.username(username);
 
       if (FEATURES.USE_API_LISTINGS) {
-        const response = await apiCall<BackendListing[]>(
+        const response = await apiCall<any>(
           `/listings?seller=${sanitizedUsername}`
         );
         
-        if (response.success && response.data) {
-          const convertedListings = response.data.map(convertBackendToFrontend);
+        if (response.success) {
+          // Handle both direct array response and nested data structure
+          const listings = response.data?.data || response.data || [];
+          const convertedListings = listings.map(convertBackendToFrontend);
           return {
             success: true,
             data: convertedListings,
-            meta: response.meta
+            meta: response.data?.meta || response.meta
           };
         }
         
-        // FIXED: Return the response with proper type conversion
         return {
           success: false,
           error: response.error || { message: 'Failed to get seller listings' }
@@ -623,7 +619,6 @@ export class ListingsService {
 
   /**
    * Create new listing with reserve price support
-   * FIXED: Properly handle the backend response structure
    */
   async createListing(request: CreateListingRequest): Promise<ApiResponse<Listing>> {
     try {
@@ -639,7 +634,7 @@ export class ListingsService {
         };
       }
 
-      // FIXED: Ensure proper number types for validation
+      // Ensure proper number types for validation
       const validationData = {
         title: request.title,
         description: request.description,
@@ -1060,7 +1055,7 @@ export class ListingsService {
   }
 
   /**
-   * UPDATED: Place bid on auction listing with premium checking
+   * Place bid on auction listing with premium checking
    */
   async placeBid(
     listingId: string,
@@ -1100,7 +1095,7 @@ export class ListingsService {
             data: convertedListing,
           };
         } else {
-          // NEW: Handle premium content errors
+          // Handle premium content errors
           if (response.error?.requiresSubscription) {
             return {
               success: false,
@@ -1192,7 +1187,7 @@ export class ListingsService {
     } catch (error: any) {
       console.error('Place bid error:', error);
       
-      // NEW: Handle 403 errors for premium content
+      // Handle 403 errors for premium content
       if (error.status === 403 || error.message?.includes('subscribe')) {
         return {
           success: false,
@@ -1270,7 +1265,7 @@ export class ListingsService {
   }
 
   /**
-   * End auction - NEW METHOD to trigger backend processing
+   * End auction - trigger backend processing
    */
   async endAuction(listingId: string): Promise<ApiResponse<any>> {
     try {

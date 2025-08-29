@@ -1,7 +1,7 @@
 // src/app/browse/page.tsx
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import BrowseHeader from '@/components/browse/BrowseHeader';
@@ -9,8 +9,15 @@ import BrowseFilters from '@/components/browse/BrowseFilters';
 import ListingGrid from '@/components/browse/ListingGrid';
 import PaginationControls from '@/components/browse/PaginationControls';
 import EmptyState from '@/components/browse/EmptyState';
+import PopularTags from '@/components/browse/PopularTags';
 import { useBrowseListings } from '@/hooks/useBrowseListings';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import { listingsService } from '@/services/listings.service';
+
+interface PopularTag {
+  tag: string;
+  count: number;
+}
 
 export default function BrowsePage() {
   const { trackEvent, trackSearch } = useAnalytics();
@@ -18,6 +25,11 @@ export default function BrowsePage() {
   const filterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
   const previousFiltersRef = useRef<string>('');
+  
+  // Popular tags state
+  const [popularTags, setPopularTags] = useState<PopularTag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
   
   const {
     user,
@@ -77,6 +89,33 @@ export default function BrowsePage() {
       }
     };
   }, []);
+
+  // Fetch popular tags
+  useEffect(() => {
+    const fetchPopularTags = async () => {
+      if (!isMountedRef.current) return;
+      
+      setTagsLoading(true);
+      setTagsError(null);
+      try {
+        const response = await listingsService.getPopularTags(15);
+        } else if (isMountedRef.current && !response.success) {
+          setTagsError('Failed to load popular tags');
+        }
+      } catch (error) {
+        console.error('Error fetching popular tags:', error);
+        if (isMountedRef.current) {
+          setTagsError('Failed to load popular tags');
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setTagsLoading(false);
+        }
+      }
+    };
+
+    fetchPopularTags();
+  }, []); // Only fetch once on mount
 
   // Track page view
   useEffect(() => {
@@ -165,6 +204,30 @@ export default function BrowsePage() {
       }
     };
   }, [filter, searchTerm, minPrice, maxPrice, selectedHourRange, sortBy, filteredListings.length, hasActiveFilters, trackEvent]);
+
+  // Handler for tag clicks with analytics
+  const handleTagClick = useCallback((tag: string) => {
+    if (!isMountedRef.current) return;
+    
+    // Track the tag click
+    try {
+      trackEvent({
+        action: 'select_tag',
+        category: 'browse',
+        label: tag,
+        customData: {
+          source: 'popular_tags'
+        }
+      });
+    } catch (error) {
+      console.error('Failed to track tag click:', error);
+    }
+    
+    // Add tag to search term if not already present
+    if (!searchTerm.includes(tag)) {
+      setSearchTerm(searchTerm ? `${searchTerm} ${tag}` : tag);
+    }
+  }, [searchTerm, setSearchTerm, trackEvent]);
 
   // Enhanced click handler with analytics
   const handleListingClickWithAnalytics = useCallback((listingId: string) => {
@@ -276,6 +339,16 @@ export default function BrowsePage() {
             onClearFilters={resetFiltersWithAnalytics}
             hasActiveFilters={hasActiveFilters}
           />
+
+          {/* Popular Tags Section - Only show when no filters are active */}
+          {!hasActiveFilters && popularTags.length > 0 && (
+            <PopularTags
+              tags={popularTags}
+              onTagClick={handleTagClick}
+              isLoading={tagsLoading}
+              error={tagsError}
+            />
+          )}
 
           <div className="max-w-[1700px] mx-auto px-6">
             {paginatedListings.length === 0 && !isLoading ? (

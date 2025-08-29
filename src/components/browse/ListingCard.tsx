@@ -1,3 +1,4 @@
+// src/components/browse/ListingCard.tsx
 'use client';
 
 import Link from 'next/link';
@@ -22,7 +23,8 @@ export default function ListingCard({
   forceUpdateTimer,
   formatTimeRemaining
 }: ListingCardProps) {
-  const isLockedPremium = listing.isPremium && (!user?.username || !isSubscribed);
+  // FIXED: Use the server's isLocked field directly
+  const isLockedPremium = listing.isLocked === true;
   const hasAuction = isAuctionListing(listing);
 
   // Favorites functionality
@@ -240,7 +242,7 @@ export default function ListingCard({
                 }}
               />
             ) : (
-              <span className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-8 00 to-gray-700 flex items-center justify-center text-lg font-bold text-[#ff950e] border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors">
+              <span className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center text-lg font-bold text-[#ff950e] border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors">
                 {listing.seller.charAt(0).toUpperCase()}
               </span>
             )}

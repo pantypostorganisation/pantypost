@@ -43,7 +43,7 @@ export default function PurchaseSection({
   onSubscribeClick,
 }: PurchaseSectionProps) {
   const router = useRouter();
-  const { isSubscribed, listings } = useListings();
+  const { listings } = useListings();
   const { getBuyerBalance, purchaseListing, reloadData, orderHistory } = useWallet();
   const { showToast } = useToast();
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -53,10 +53,9 @@ export default function PurchaseSection({
 
   const isSeller = user?.username === listing.seller;
   const isAdmin = user?.role === 'admin';
-  const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
 
-  // Check if listing is locked for premium content
-  const isPremiumLocked = listing.isPremium && !isUserSubscribed && !isSeller && listing.isLocked;
+  // FIXED: Use the server's isLocked field directly instead of doing client-side checks
+  const isPremiumLocked = listing.isLocked === true;
 
   // FIX: Check if listing still exists in active listings (if not, it's been sold)
   const isListingStillActive = listings.some(l => l.id === listing.id);
@@ -112,7 +111,7 @@ export default function PurchaseSection({
       return;
     }
 
-    // UPDATED: Check for premium content with server-side lock
+    // FIXED: Check for premium content using server's isLocked field
     if (isPremiumLocked) {
       showToast({ 
         type: 'error', 
@@ -131,7 +130,7 @@ export default function PurchaseSection({
     setIsPurchasing(true);
 
     try {
-      // UPDATED: Include isPremium flag in purchase request
+      // Include isPremium flag in purchase request
       await purchaseListing(
         {
           id: listing.id,
@@ -142,7 +141,7 @@ export default function PurchaseSection({
           imageUrls: listing.imageUrls,
           seller: listing.seller,
           tags: listing.tags || [],
-          isPremium: listing.isPremium, // NEW: Include premium flag
+          isPremium: listing.isPremium,
         } as any,
         user.username
       );
@@ -165,7 +164,7 @@ export default function PurchaseSection({
       
       let errorMessage = 'Purchase failed. Please try again.';
       
-      // UPDATED: Handle premium content errors
+      // Handle premium content errors
       if (error.message?.includes('subscribe') || error.requiresSubscription) {
         errorMessage = 'You must be subscribed to this seller to purchase premium content.';
         setTimeout(() => {
@@ -237,7 +236,7 @@ export default function PurchaseSection({
         )}
       </div>
 
-      {/* UPDATED: Premium content lock message with server-side indication */}
+      {/* Premium content lock message with server-side indication */}
       {isPremiumLocked && (
         <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
