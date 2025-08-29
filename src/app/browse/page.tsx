@@ -99,6 +99,8 @@ export default function BrowsePage() {
       setTagsError(null);
       try {
         const response = await listingsService.getPopularTags(15);
+        if (isMountedRef.current && response.success && response.data) {
+          setPopularTags(response.data);
         } else if (isMountedRef.current && !response.success) {
           setTagsError('Failed to load popular tags');
         }
