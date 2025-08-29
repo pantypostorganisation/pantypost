@@ -7,6 +7,7 @@ import { MessageCircle, DollarSign, Tag, ExternalLink } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeUsername } from '@/utils/security/sanitization';
+import ReviewSection from './ReviewSection';
 
 interface ExpandedOrderContentProps {
   order: Order;
@@ -132,6 +133,9 @@ export default function ExpandedOrderContent({
           </div>
         </div>
       )}
+
+      {/* Review Section - NEW */}
+      <ReviewSection order={order} />
     </div>
   );
 }

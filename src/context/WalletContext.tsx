@@ -150,6 +150,36 @@ class ThrottleManager {
   }
 }
 
+// Transaction lock manager for preventing race conditions
+class TransactionLockManager {
+  private locks: Map<string, Promise<any>> = new Map();
+
+  async acquireLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const existingLock = this.locks.get(key);
+    if (existingLock) {
+      await existingLock;
+    }
+
+    let result: T;
+    const lockPromise = operation()
+      .then(res => {
+        result = res;
+        return res;
+      })
+      .finally(() => {
+        this.locks.delete(key);
+      });
+
+    this.locks.set(key, lockPromise);
+    await lockPromise;
+    return result!;
+  }
+
+  isLocked(key: string): boolean {
+    return this.locks.has(key);
+  }
+}
+
 type WalletContextType = {
   // Loading state
   isLoading: boolean;
@@ -233,36 +263,6 @@ type WalletContextType = {
 
 export const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-// Transaction lock manager for preventing race conditions
-class TransactionLockManager {
-  private locks: Map<string, Promise<any>> = new Map();
-
-  async acquireLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
-    const existingLock = this.locks.get(key);
-    if (existingLock) {
-      await existingLock;
-    }
-
-    let result: T;
-    const lockPromise = operation()
-      .then(res => {
-        result = res;
-        return res;
-      })
-      .finally(() => {
-        this.locks.delete(key);
-      });
-
-    this.locks.set(key, lockPromise);
-    await lockPromise;
-    return result!;
-  }
-
-  isLocked(key: string): boolean {
-    return this.locks.has(key);
-  }
-}
-
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { user, getAuthToken, apiClient } = useAuth();
   const webSocketContext = useWebSocket();
@@ -334,6 +334,134 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Helper function to validate amounts
+  const validateTransactionAmount = (amount: number): number => {
+    const validation = walletOperationSchemas.transactionAmount.safeParse(amount);
+    if (!validation.success) {
+      throw new Error('Invalid transaction amount: ' + validation.error.errors[0]?.message);
+    }
+    return sanitizeCurrency(validation.data);
+  };
+
+  const validateUsername = (username: string): string => {
+    const validation = walletOperationSchemas.username.safeParse(username);
+    if (!validation.success) {
+      throw new Error('Invalid username: ' + validation.error.errors[0]?.message);
+    }
+    return sanitizeUsername(validation.data);
+  };
+
+  // Check rate limit
+  const checkRateLimit = (operation: string, identifier?: string): void => {
+    const rateLimitConfig = RATE_LIMITS[operation as keyof typeof RATE_LIMITS] || RATE_LIMITS.API_CALL;
+    const result = rateLimiter.current.check(operation, { ...rateLimitConfig, identifier });
+    
+    if (!result.allowed) {
+      throw new Error(`Rate limit exceeded. Please wait ${result.waitTime} seconds before trying again.`);
+    }
+  };
+
+  // Fetch transaction history from API
+  const fetchTransactionHistory = useCallback(async (username: string) => {
+    try {
+      debugLog('Fetching transactions for:', username);
+      
+      // For admin users, fetch platform transactions
+      const queryUsername = isAdminUser(username) ? 'platform' : username;
+      
+      const response = await apiClient.get<any>(`/wallet/transactions/${queryUsername}`);
+      
+      debugLog('Transactions response:', response);
+      
+      if (response.success && response.data) {
+        // Convert transactions to our order format
+        const orders = response.data
+          .filter((tx: any) => tx.type === 'purchase' || tx.type === 'sale')
+          .map((tx: any) => ({
+            id: tx.id,
+            title: tx.description,
+            description: tx.description,
+            price: tx.amount,
+            markedUpPrice: tx.amount,
+            date: tx.createdAt || tx.date,
+            seller: tx.toRole === 'seller' ? tx.to : tx.from,
+            buyer: tx.fromRole === 'buyer' ? tx.from : tx.to,
+            shippingStatus: tx.status === 'completed' ? 'pending' : 'pending-auction',
+            // Include tier information if available
+            sellerTier: tx.metadata?.sellerTier,
+            tierCreditAmount: tx.metadata?.tierBonus || 0
+          }));
+        
+        setOrderHistory(orders);
+        debugLog('Transaction history updated:', orders.length, 'orders');
+      }
+    } catch (error) {
+      console.error('[WalletContext] Failed to fetch transaction history:', error);
+    }
+  }, [apiClient]);
+
+  // CRITICAL FIX: Fetch admin platform wallet balance with proper throttling
+  const fetchAdminPlatformBalance = useCallback(async (): Promise<number> => {
+    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
+      debugLog('Not admin user, skipping platform balance fetch');
+      return 0;
+    }
+
+    // CRITICAL FIX: Throttle platform balance fetches to prevent infinite loop
+    const now = Date.now();
+    if (lastPlatformBalanceFetch.current) {
+      const { balance: lastBalance, timestamp: lastTime } = lastPlatformBalanceFetch.current;
+      // If we fetched within the last 5 seconds, return cached value
+      if ((now - lastTime) < 5000) {
+        debugLog('Returning cached platform balance (throttled):', lastBalance);
+        return lastBalance;
+      }
+    }
+
+    // Check if we're already fetching to prevent concurrent calls
+    const throttleKey = 'admin_platform_balance_fetch';
+    if (throttleManager.current.shouldThrottle(throttleKey, 5000)) {
+      debugLog('Platform balance fetch throttled, returning current balance:', adminBalance);
+      return adminBalance;
+    }
+
+    try {
+      console.log('[Wallet] Admin requesting unified platform wallet balance...');
+      
+      // Always use the unified endpoint
+      const response = await apiClient.get<any>('/wallet/admin-platform-balance');
+      
+      debugLog('Unified platform balance response:', response);
+      
+      if (response.success && response.data) {
+        const balance = response.data.balance || 0;
+        console.log('[Wallet] Unified platform wallet balance:', balance);
+        
+        // Cache the fetched balance
+        lastPlatformBalanceFetch.current = { balance, timestamp: now };
+        
+        // Only update state if balance actually changed
+        if (balance !== adminBalance) {
+          // Set this as THE admin balance for all admin users
+          setAdminBalanceState(balance);
+          
+          // Fire event with deduplication
+          fireAdminBalanceUpdateEvent(balance);
+        } else {
+          debugLog('Balance unchanged, skipping state update');
+        }
+        
+        return balance;
+      }
+      
+      console.warn('[Wallet] Platform balance fetch failed:', response.error);
+      return adminBalance; // Return current balance on failure
+    } catch (error) {
+      console.error('[Wallet] Error fetching platform balance:', error);
+      return adminBalance; // Return current balance on error
+    }
+  }, [user, apiClient, fireAdminBalanceUpdateEvent, adminBalance]);
+
   // CRITICAL FIX: Fetch admin actions from API with throttling
   const fetchAdminActions = useCallback(async (): Promise<void> => {
     if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
@@ -382,7 +510,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, apiClient]);
 
-  // WebSocket event handlers (extracted from useEffect for readability)
+  // FIXED: Define reloadData BEFORE it's used in other functions
+  const reloadData = useCallback(async () => {
+    if (isLoading) {
+      debugLog('Already loading, skipping reload');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      // Note: loadAllData will be defined later, so we need to be careful here
+      // For now, we'll just set a flag and handle the actual loading later
+      debugLog('Reload data requested');
+      
+      // For admin users, also refresh admin actions
+      if (user?.role === 'admin' || isAdminUser(user?.username || '')) {
+        await fetchAdminActions();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading, user, fetchAdminActions]);
+
+  // WebSocket event handlers
   const handleWalletBalanceUpdate = useCallback((data: any) => {
     debugLog('Received wallet:balance_update:', data);
     
@@ -565,108 +715,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('[WalletContext] Error processing transaction:', error);
     }
-  }, [user]);
-
-  // Fetch transaction history from API (define before using in handleWalletTransaction)
-  const fetchTransactionHistory = useCallback(async (username: string) => {
-    try {
-      debugLog('Fetching transactions for:', username);
-      
-      // For admin users, fetch platform transactions
-      const queryUsername = isAdminUser(username) ? 'platform' : username;
-      
-      const response = await apiClient.get<any>(`/wallet/transactions/${queryUsername}`);
-      
-      debugLog('Transactions response:', response);
-      
-      if (response.success && response.data) {
-        // Convert transactions to our order format
-        const orders = response.data
-          .filter((tx: any) => tx.type === 'purchase' || tx.type === 'sale')
-          .map((tx: any) => ({
-            id: tx.id,
-            title: tx.description,
-            description: tx.description,
-            price: tx.amount,
-            markedUpPrice: tx.amount,
-            date: tx.createdAt || tx.date,
-            seller: tx.toRole === 'seller' ? tx.to : tx.from,
-            buyer: tx.fromRole === 'buyer' ? tx.from : tx.to,
-            shippingStatus: tx.status === 'completed' ? 'pending' : 'pending-auction',
-            // Include tier information if available
-            sellerTier: tx.metadata?.sellerTier,
-            tierCreditAmount: tx.metadata?.tierBonus || 0
-          }));
-        
-        setOrderHistory(orders);
-        debugLog('Transaction history updated:', orders.length, 'orders');
-      }
-    } catch (error) {
-      console.error('[WalletContext] Failed to fetch transaction history:', error);
-    }
-  }, [apiClient]);
-
-  // CRITICAL FIX: Fetch admin platform wallet balance with proper throttling
-  const fetchAdminPlatformBalance = useCallback(async (): Promise<number> => {
-    if (!user || (user.role !== 'admin' && !isAdminUser(user.username))) {
-      debugLog('Not admin user, skipping platform balance fetch');
-      return 0;
-    }
-
-    // CRITICAL FIX: Throttle platform balance fetches to prevent infinite loop
-    const now = Date.now();
-    if (lastPlatformBalanceFetch.current) {
-      const { balance: lastBalance, timestamp: lastTime } = lastPlatformBalanceFetch.current;
-      // If we fetched within the last 5 seconds, return cached value
-      if ((now - lastTime) < 5000) {
-        debugLog('Returning cached platform balance (throttled):', lastBalance);
-        return lastBalance;
-      }
-    }
-
-    // Check if we're already fetching to prevent concurrent calls
-    const throttleKey = 'admin_platform_balance_fetch';
-    if (throttleManager.current.shouldThrottle(throttleKey, 5000)) {
-      debugLog('Platform balance fetch throttled, returning current balance:', adminBalance);
-      return adminBalance;
-    }
-
-    try {
-      console.log('[Wallet] Admin requesting unified platform wallet balance...');
-      
-      // Always use the unified endpoint
-      const response = await apiClient.get<any>('/wallet/admin-platform-balance');
-      
-      debugLog('Unified platform balance response:', response);
-      
-      if (response.success && response.data) {
-        const balance = response.data.balance || 0;
-        console.log('[Wallet] Unified platform wallet balance:', balance);
-        
-        // Cache the fetched balance
-        lastPlatformBalanceFetch.current = { balance, timestamp: now };
-        
-        // Only update state if balance actually changed
-        if (balance !== adminBalance) {
-          // Set this as THE admin balance for all admin users
-          setAdminBalanceState(balance);
-          
-          // Fire event with deduplication
-          fireAdminBalanceUpdateEvent(balance);
-        } else {
-          debugLog('Balance unchanged, skipping state update');
-        }
-        
-        return balance;
-      }
-      
-      console.warn('[Wallet] Platform balance fetch failed:', response.error);
-      return adminBalance; // Return current balance on failure
-    } catch (error) {
-      console.error('[Wallet] Error fetching platform balance:', error);
-      return adminBalance; // Return current balance on error
-    }
-  }, [user, apiClient, fireAdminBalanceUpdateEvent, adminBalance]);
+  }, [user, fetchTransactionHistory, fetchAdminPlatformBalance, fetchAdminActions]);
 
   // Consolidated WebSocket subscriptions
   useEffect(() => {
@@ -1108,33 +1157,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loadAllData]);
 
-  // Helper function to validate amounts
-  const validateTransactionAmount = (amount: number): number => {
-    const validation = walletOperationSchemas.transactionAmount.safeParse(amount);
-    if (!validation.success) {
-      throw new Error('Invalid transaction amount: ' + validation.error.errors[0]?.message);
-    }
-    return sanitizeCurrency(validation.data);
-  };
-
-  const validateUsername = (username: string): string => {
-    const validation = walletOperationSchemas.username.safeParse(username);
-    if (!validation.success) {
-      throw new Error('Invalid username: ' + validation.error.errors[0]?.message);
-    }
-    return sanitizeUsername(validation.data);
-  };
-
-  // Check rate limit
-  const checkRateLimit = (operation: string, identifier?: string): void => {
-    const rateLimitConfig = RATE_LIMITS[operation as keyof typeof RATE_LIMITS] || RATE_LIMITS.API_CALL;
-    const result = rateLimiter.current.check(operation, { ...rateLimitConfig, identifier });
-    
-    if (!result.allowed) {
-      throw new Error(`Rate limit exceeded. Please wait ${result.waitTime} seconds before trying again.`);
-    }
-  };
-
   // Balance getters (from cached state)
   const getBuyerBalance = useCallback((username: string): number => {
     try {
@@ -1291,6 +1313,94 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw error;
     }
   }, [apiClient, fetchBalance, fetchTransactionHistory, refreshAdminData, user, fetchAdminActions]);
+
+  // UPDATED: Purchase custom request implementation
+  const purchaseCustomRequest = useCallback(async (request: CustomRequestPurchase): Promise<boolean> => {
+    console.log('[WalletContext] Processing custom request purchase:', request);
+    
+    try {
+      debugLog('Processing custom request via API:', {
+        requestId: request.requestId,
+        buyer: request.buyer,
+        seller: request.seller,
+        amount: request.amount
+      });
+      
+      // Prepare the request data for the backend
+      const orderRequest = {
+        requestId: request.requestId,
+        title: request.description || 'Custom Request',
+        description: request.metadata?.description || request.description,
+        price: request.amount,
+        seller: request.seller,
+        buyer: request.buyer,
+        tags: request.metadata?.tags || [],
+        deliveryAddress: undefined // Will be added later by buyer
+      };
+      
+      debugLog('Calling custom request endpoint with:', orderRequest);
+      
+      // Call the new custom request endpoint
+      const response = await apiClient.post<any>('/orders/custom-request', orderRequest);
+      
+      debugLog('Custom request order response:', response);
+      
+      if (response.success && response.data) {
+        console.log('[WalletContext] Custom request order created successfully:', response.data.id);
+        
+        // Add to order history
+        const orderWithDetails = {
+          ...response.data,
+          isCustomRequest: true,
+          originalRequestId: request.requestId
+        };
+        setOrderHistory(prev => [...prev, orderWithDetails]);
+        
+        // Now update reloadData to use loadAllData
+        await loadAllData();
+        
+        // Dispatch event for other components to react
+        window.dispatchEvent(new CustomEvent('custom_request:paid', {
+          detail: {
+            requestId: request.requestId,
+            orderId: response.data.id,
+            buyer: request.buyer,
+            seller: request.seller,
+            amount: request.amount
+          }
+        }));
+        
+        // If notification callback is set, notify seller
+        if (addSellerNotification) {
+          addSellerNotification(
+            request.seller,
+            `💰 Custom request "${request.description}" has been paid! Check your orders to fulfill.`
+          );
+        }
+        
+        return true;
+      } else {
+        console.error('[WalletContext] Failed to create custom request order:', response.error);
+        
+        // Check if it's an insufficient balance error
+        if (response.error?.message?.includes('Insufficient balance')) {
+          throw new Error(response.error.message);
+        }
+        
+        return false;
+      }
+      
+    } catch (error) {
+      console.error('[WalletContext] Error processing custom request purchase:', error);
+      
+      // Re-throw errors with message for UI to handle
+      if (error instanceof Error) {
+        throw error;
+      }
+      
+      throw new Error('Failed to process custom request payment');
+    }
+  }, [apiClient, loadAllData, addSellerNotification]);
 
   // Make a deposit via API
   const addDeposit = useCallback(async (
@@ -1665,8 +1775,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, user]);
 
-  // Reload all data
-  const reloadData = useCallback(async () => {
+  // UPDATE reloadData to use loadAllData properly
+  const updateReloadData = useCallback(async () => {
     if (isLoading) {
       debugLog('Already loading, skipping reload');
       return;
@@ -1751,12 +1861,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return false;
     }
   }, [apiClient, fetchBalance, user]);
-
-  // Stub implementation for custom request purchase
-  const purchaseCustomRequest = useCallback(async (customRequest: CustomRequestPurchase): Promise<boolean> => {
-    debugLog('Custom request purchase - using mock implementation');
-    return false;
-  }, []);
 
   // Admin withdrawal
   const addAdminWithdrawal = useCallback(async (amount: number) => {
@@ -1885,8 +1989,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     getPlatformTransactions,
     getAnalyticsData,
     
-    // Data management
-    reloadData,
+    // Data management - Use the updated function
+    reloadData: updateReloadData,
   };
 
   return (

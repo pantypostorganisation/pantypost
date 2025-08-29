@@ -1,10 +1,14 @@
+// src/components/seller-profile/modals/TipModal.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { Gift, DollarSign, X } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { sanitizeStrict, sanitizeCurrency } from '@/utils/security/sanitization';
+import { tipService } from '@/services/tip.service';
+import { WalletContext } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface TipModalProps {
   show: boolean;
@@ -21,33 +25,110 @@ export default function TipModal({
   show,
   username,
   tipAmount,
-  tipSuccess,
-  tipError,
+  tipSuccess: parentTipSuccess,
+  tipError: parentTipError,
   onAmountChange,
   onClose,
-  onSubmit,
+  onSubmit: parentOnSubmit,
 }: TipModalProps) {
   const [touched, setTouched] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [localTipSuccess, setLocalTipSuccess] = useState(false);
+  const [localTipError, setLocalTipError] = useState('');
+  
+  const walletContext = useContext(WalletContext);
+  const { user } = useAuth();
 
   if (!show) return null;
 
   const sanitizedUsername = sanitizeStrict(username);
+  
+  // Get user balance from wallet context
+  const userBalance = user && walletContext 
+    ? walletContext.getBuyerBalance(user.username) 
+    : 0;
 
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
       onAmountChange('');
+      setLocalTipError('');
     } else {
       const sanitized = sanitizeCurrency(value);
       onAmountChange(sanitized.toString());
+      setLocalTipError('');
     }
   };
 
   const handleSecureSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit();
+    
+    if (!user) {
+      setLocalTipError('You must be logged in to send tips');
+      return;
+    }
+    
+    if (user.role !== 'buyer') {
+      setLocalTipError('Only buyers can send tips');
+      return;
+    }
+    
+    setIsProcessing(true);
+    setLocalTipError('');
+    setLocalTipSuccess(false);
+    
+    try {
+      const amount = parseFloat(tipAmount);
+      
+      // Validate amount
+      if (isNaN(amount) || amount < 1 || amount > 500) {
+        setLocalTipError('Tip amount must be between $1 and $500');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Check balance
+      if (amount > userBalance) {
+        setLocalTipError('Insufficient balance');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Send tip via service
+      const result = await tipService.sendTip(username, amount);
+      
+      if (result.success) {
+        setLocalTipSuccess(true);
+        
+        // Reload wallet data to reflect new balance
+        if (walletContext && walletContext.reloadData) {
+          await walletContext.reloadData();
+        }
+        
+        // Call parent submit handler
+        if (parentOnSubmit) {
+          parentOnSubmit();
+        }
+        
+        // Auto-close after success
+        setTimeout(() => {
+          onAmountChange('');
+          setLocalTipSuccess(false);
+          onClose();
+        }, 2000);
+      } else {
+        setLocalTipError(result.message || 'Failed to send tip');
+      }
+    } catch (error) {
+      console.error('Error sending tip:', error);
+      setLocalTipError(error instanceof Error ? error.message : 'Failed to send tip. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const disabled = !tipAmount || Number.parseFloat(tipAmount) <= 0;
+  const disabled = !tipAmount || Number.parseFloat(tipAmount) <= 0 || isProcessing;
+  const displaySuccess = localTipSuccess || parentTipSuccess;
+  const displayError = localTipError || parentTipError;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
@@ -62,12 +143,13 @@ export default function TipModal({
             className="text-gray-400 hover:text-white transition"
             aria-label="Close"
             type="button"
+            disabled={isProcessing}
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        {tipSuccess ? (
+        {displaySuccess ? (
           <div className="text-center py-8">
             <div className="text-green-500 text-5xl mb-4">✓</div>
             <p className="text-xl text-white">Tip sent successfully!</p>
@@ -83,7 +165,7 @@ export default function TipModal({
               Show your appreciation for <strong className="text-[#ff950e]">{sanitizedUsername}</strong>
             </p>
 
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium mb-2 text-gray-300">
                 Amount ($)
               </label>
@@ -99,27 +181,82 @@ export default function TipModal({
                   className="w-full pl-10 pr-4 py-3 rounded-lg bg-black text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
                   placeholder="Enter amount"
                   min="0.01"
-                  max="9999.99"
+                  max="500"
                   step="0.01"
-                  error={tipError}
+                  error={displayError}
                   touched={touched}
                   sanitize={false}
+                  disabled={isProcessing}
                 />
               </div>
+              
+              {/* Quick amount buttons */}
+              <div className="flex gap-2 mt-3">
+                {[5, 10, 20, 50].map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => {
+                      onAmountChange(amount.toString());
+                      setTouched(true);
+                    }}
+                    disabled={isProcessing || userBalance < amount}
+                    className={`flex-1 px-3 py-1.5 rounded-lg transition-colors text-sm ${
+                      userBalance >= amount 
+                        ? 'bg-gray-800 text-white hover:bg-gray-700'
+                        : 'bg-gray-900 text-gray-600 cursor-not-allowed'
+                    }`}
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Balance info */}
+            {user && (
+              <div className="mb-4 p-3 bg-gray-900 rounded-lg text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-400">Your Balance:</span>
+                  <span className="text-white font-medium">${userBalance.toFixed(2)}</span>
+                </div>
+                {tipAmount && parseFloat(tipAmount) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">After Tip:</span>
+                    <span className={`font-medium ${
+                      userBalance - parseFloat(tipAmount) >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      ${(userBalance - parseFloat(tipAmount)).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-col gap-3">
               <button
                 type="submit"
-                disabled={disabled}
-                className="w-full bg-[#ff950e] text-black font-bold py-3 rounded-full hover:bg-[#e0850d] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={disabled || userBalance < parseFloat(tipAmount || '0')}
+                className={`w-full font-bold py-3 rounded-full transition flex items-center justify-center gap-2 ${
+                  !disabled && userBalance >= parseFloat(tipAmount || '0')
+                    ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
+                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                }`}
               >
-                Send Tip
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  'Send Tip'
+                )}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full bg-gray-700 text-white font-medium py-3 rounded-full hover:bg-gray-600 transition"
+                disabled={isProcessing}
+                className="w-full bg-gray-700 text-white font-medium py-3 rounded-full hover:bg-gray-600 transition disabled:opacity-50"
               >
                 Cancel
               </button>

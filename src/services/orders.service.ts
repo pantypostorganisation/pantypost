@@ -44,6 +44,18 @@ export interface CreateOrderRequest {
   shippingStatus?: 'pending' | 'processing' | 'shipped' | 'pending-auction';
 }
 
+// NEW: Interface for custom request conversion
+export interface CustomRequestOrderRequest {
+  requestId: string;
+  title: string;
+  description: string;
+  price: number;
+  seller: string;
+  buyer: string;
+  tags?: string[];
+  deliveryAddress?: DeliveryAddress;
+}
+
 export interface UpdateOrderStatusRequest {
   shippingStatus: 'pending' | 'processing' | 'shipped' | 'pending-auction';
   trackingNumber?: string;
@@ -99,6 +111,18 @@ const createOrderSchema = z.object({
 }, {
   message: 'Marked up price must be greater than or equal to base price',
   path: ['markedUpPrice'],
+});
+
+// NEW: Validation schema for custom request conversion
+const customRequestOrderSchema = z.object({
+  requestId: z.string().min(1).max(100),
+  title: z.string().min(1).max(200).transform(sanitizeStrict),
+  description: z.string().min(1).max(2000).transform(sanitizeStrict),
+  price: z.number().positive().min(0.01).max(100000),
+  seller: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).transform(sanitizeUsername),
+  buyer: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).transform(sanitizeUsername),
+  tags: z.array(z.string().max(30).transform(sanitizeStrict)).max(20).optional(),
+  deliveryAddress: deliveryAddressSchema.optional(),
 });
 
 const updateOrderStatusSchema = z.object({
@@ -505,6 +529,129 @@ export class OrdersService {
       return {
         success: false,
         error: { message: 'Failed to create order' },
+      };
+    }
+  }
+
+  /**
+   * NEW: Create order from custom request
+   */
+  async createOrderFromCustomRequest(request: CustomRequestOrderRequest): Promise<ApiResponse<Order>> {
+    try {
+      // Check rate limit
+      const rateLimitResult = this.rateLimiter.check(
+        `custom_request_order_${request.buyer}`,
+        { maxAttempts: 10, windowMs: 60 * 60 * 1000 } // 10 custom request orders per hour
+      );
+      if (!rateLimitResult.allowed) {
+        return {
+          success: false,
+          error: { message: `Too many custom request orders. Please wait ${rateLimitResult.waitTime} seconds.` },
+        };
+      }
+
+      // Validate and sanitize request
+      const validation = validateSchema(customRequestOrderSchema, request);
+      if (!validation.success) {
+        return {
+          success: false,
+          error: { message: Object.values(validation.errors || {})[0] || 'Invalid custom request data' },
+        };
+      }
+
+      const sanitizedRequest = validation.data!;
+
+      // Additional content security check
+      const contentCheck = securityService.checkContentSecurity(
+        `${sanitizedRequest.title} ${sanitizedRequest.description}`
+      );
+      if (!contentCheck.safe) {
+        return {
+          success: false,
+          error: { message: 'Custom request contains prohibited content' },
+        };
+      }
+
+      if (FEATURES.USE_API_ORDERS) {
+        // Use the new custom request endpoint
+        const response = await apiCall<Order>('/api/orders/custom-request', {
+          method: 'POST',
+          body: JSON.stringify(sanitizedRequest),
+        });
+
+        if (response.success) {
+          this.invalidateCache();
+          
+          // Mark the custom request as paid in localStorage
+          try {
+            const requests = await storageService.getItem<any[]>('panty_custom_requests', []);
+            const updatedRequests = requests.map(req => 
+              req.id === sanitizedRequest.requestId 
+                ? { ...req, status: 'paid', paid: true, orderId: response.data?.id }
+                : req
+            );
+            await storageService.setItem('panty_custom_requests', updatedRequests);
+          } catch (error) {
+            console.error('Failed to update custom request status:', error);
+          }
+        }
+
+        return response;
+      }
+
+      // LocalStorage fallback implementation
+      const orderHistory = await this.getOrderHistoryFromStorage();
+      
+      const newOrder: Order = {
+        id: uuidv4(),
+        title: sanitizedRequest.title,
+        description: sanitizedRequest.description,
+        price: sanitizedRequest.price,
+        markedUpPrice: Math.round(sanitizedRequest.price * 1.1 * 100) / 100, // 10% markup
+        imageUrl: '/api/placeholder/400/300',
+        date: new Date().toISOString(),
+        seller: sanitizedRequest.seller,
+        buyer: sanitizedRequest.buyer,
+        tags: sanitizedRequest.tags,
+        deliveryAddress: sanitizedRequest.deliveryAddress,
+        shippingStatus: 'pending',
+        isCustomRequest: true,
+        originalRequestId: sanitizedRequest.requestId,
+      };
+
+      orderHistory.push(newOrder);
+      await this.saveOrderHistoryToStorage(orderHistory);
+      this.invalidateCache();
+      
+      // Mark the custom request as paid in localStorage
+      try {
+        const requests = await storageService.getItem<any[]>('panty_custom_requests', []);
+        const updatedRequests = requests.map(req => 
+          req.id === sanitizedRequest.requestId 
+            ? { ...req, status: 'paid', paid: true, orderId: newOrder.id }
+            : req
+        );
+        await storageService.setItem('panty_custom_requests', updatedRequests);
+      } catch (error) {
+        console.error('Failed to update custom request status:', error);
+      }
+
+      console.log('[OrdersService] Custom request order created:', {
+        orderId: newOrder.id,
+        requestId: sanitizedRequest.requestId,
+        buyer: newOrder.buyer,
+        seller: newOrder.seller
+      });
+
+      return {
+        success: true,
+        data: newOrder,
+      };
+    } catch (error) {
+      console.error('Create custom request order error:', error);
+      return {
+        success: false,
+        error: { message: 'Failed to create order from custom request' },
       };
     }
   }

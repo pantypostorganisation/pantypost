@@ -103,7 +103,6 @@ export default function Header(): React.ReactElement | null {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
-  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
@@ -131,6 +130,24 @@ export default function Header(): React.ReactElement | null {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Calculate pending orders count for sellers
+  const pendingOrdersCount = useMemo(() => {
+    if (!user?.username || user.role !== 'seller') return 0;
+    
+    try {
+      // Filter orders for this seller that are not yet shipped
+      const sellerOrders = orderHistory.filter(order => 
+        order.seller === user.username && 
+        (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
+      );
+      
+      return sellerOrders.length;
+    } catch (error) {
+      console.error('Error calculating pending orders:', error);
+      return 0;
+    }
+  }, [user?.username, user?.role, orderHistory]);
 
   const processedNotifications = useMemo(() => {
     if (!user?.username || user.role !== 'seller') {
@@ -659,6 +676,8 @@ export default function Header(): React.ReactElement | null {
 
           {role === 'seller' && !isAdminUser && (
             <>
+              {/* Correct order: Browse, My Listings, Profile, Get Verified, Messages, Analytics, Wallet, Orders to Fulfil, Bell, Username, Logout */}
+              
               <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Listings</span>
@@ -672,20 +691,6 @@ export default function Header(): React.ReactElement | null {
               <Link href="/sellers/verify" className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs">
                 <ShieldCheck className="w-3.5 h-3.5 text-green-400 group-hover:scale-110 transition-transform" />
                 <span className="font-medium">Get Verified</span>
-              </Link>
-
-              <Link
-                href="/wallet/seller"
-                className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.location.href = '/wallet/seller';
-                }}
-                style={{ touchAction: 'manipulation' }}
-              >
-                <WalletIcon className="w-3.5 h-3.5 text-[#ff950e]" />
-                <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
               <Link href="/sellers/messages" className="relative group">
@@ -703,6 +708,30 @@ export default function Header(): React.ReactElement | null {
               <Link href="/sellers/subscribers" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Users className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Analytics</span>
+              </Link>
+
+              <Link
+                href="/wallet/seller"
+                className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.location.href = '/wallet/seller';
+                }}
+                style={{ touchAction: 'manipulation' }}
+              >
+                <WalletIcon className="w-3.5 h-3.5 text-[#ff950e]" />
+                <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
+              </Link>
+
+              <Link href="/sellers/orders-to-fulfil" className="relative group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
+                <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
+                <span>Orders to Fulfil</span>
+                {pendingOrdersCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-pulse">
+                    {pendingOrdersCount}
+                  </span>
+                )}
               </Link>
 
               <div className="relative flex items-center" ref={notifRef}>

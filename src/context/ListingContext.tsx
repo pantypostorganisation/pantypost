@@ -67,9 +67,10 @@ export type Listing = {
 
   isVerified?: boolean;
   isPremium?: boolean;
+  isLocked?: boolean;  // ADDED: Support for server-side premium content locking
   tags?: string[];
   hoursWorn?: number;
-  views?: number;  // FIX: Added views property
+  views?: number;
   
   auction?: AuctionSettings;
 };

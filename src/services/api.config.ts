@@ -312,15 +312,18 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
   return url;
 };
 
-// Error response type
+// Error response type - UPDATED with premium fields
 export interface ApiError {
   message: string;
   code?: string;
   field?: string;
   details?: any;
+  statusCode?: number;
+  requiresSubscription?: boolean;  // ADDED: For premium content errors
+  seller?: string;  // ADDED: Seller username for premium content context
 }
 
-// Success response wrapper
+// Success response wrapper - UPDATED with premium access meta
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -330,6 +333,7 @@ export interface ApiResponse<T> {
     totalPages?: number;
     totalItems?: number;
     requestId?: string;
+    premiumAccess?: boolean;  // ADDED: Indicates if user has premium access
   };
 }
 

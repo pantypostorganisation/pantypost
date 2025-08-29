@@ -1,8 +1,9 @@
 // src/hooks/profile/useSellerTips.ts
 
-import { useState } from 'react';
+import { useState, useContext, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
+import { WalletContext } from '@/context/WalletContext';
+import { tipService } from '@/services/tip.service';
 import { sanitizeUsername } from '@/utils/security/sanitization';
 import { messageSchemas } from '@/utils/validation/schemas';
 import { securityService } from '@/services/security.service';
@@ -10,7 +11,7 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export function useSellerTips(username: string) {
   const { user } = useAuth();
-  const { sendTip } = useWallet();
+  const walletContext = useContext(WalletContext);
 
   // Sanitize username
   const sanitizedUsername = sanitizeUsername(username);
@@ -22,9 +23,15 @@ export function useSellerTips(username: string) {
   const [tipAmount, setTipAmount] = useState('');
   const [tipSuccess, setTipSuccess] = useState(false);
   const [tipError, setTipError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Rate limiter
   const rateLimiter = getRateLimiter();
+
+  // Get user balance from wallet context
+  const userBalance = user && walletContext 
+    ? walletContext.getBuyerBalance(user.username) 
+    : 0;
 
   // Handlers
   const handleTipAmountChange = (value: string) => {
@@ -46,7 +53,7 @@ export function useSellerTips(username: string) {
     setTipError(''); // Clear error when user types
   };
 
-  const handleTipSubmit = () => {
+  const handleTipSubmit = useCallback(async () => {
     setTipError('');
     setTipSuccess(false);
     
@@ -85,20 +92,42 @@ export function useSellerTips(username: string) {
       return;
     }
 
-    const success = sendTip(user.username, sanitizedUsername, validationResult.value);
-    
-    if (!success) {
+    // Check balance
+    if (validationResult.value > userBalance) {
       setTipError('Insufficient wallet balance.');
       return;
     }
-    
-    setTipSuccess(true);
-    setTipAmount('');
-    setTimeout(() => {
-      setShowTipModal(false);
-      setTipSuccess(false);
-    }, 1500);
-  };
+
+    setIsProcessing(true);
+
+    try {
+      // Send tip via service
+      const result = await tipService.sendTip(sanitizedUsername, validationResult.value);
+      
+      if (result.success) {
+        setTipSuccess(true);
+        setTipAmount('');
+        
+        // Reload wallet data to reflect new balance
+        if (walletContext && walletContext.reloadData) {
+          await walletContext.reloadData();
+        }
+        
+        // Auto-close modal after success
+        setTimeout(() => {
+          setShowTipModal(false);
+          setTipSuccess(false);
+        }, 1500);
+      } else {
+        setTipError(result.message || 'Failed to send tip.');
+      }
+    } catch (error) {
+      console.error('Error sending tip:', error);
+      setTipError('Failed to send tip. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [user, tipAmount, userBalance, sanitizedUsername, walletContext, rateLimiter]);
 
   // Reset form when modal opens/closes
   const handleModalToggle = (show: boolean) => {
@@ -107,6 +136,7 @@ export function useSellerTips(username: string) {
       setTipAmount('');
       setTipError('');
       setTipSuccess(false);
+      setIsProcessing(false);
     }
   };
 
@@ -120,6 +150,10 @@ export function useSellerTips(username: string) {
     setTipAmount: handleTipAmountChange,
     tipSuccess,
     tipError,
+    isProcessing,
+    
+    // User balance
+    userBalance,
     
     // Handlers
     handleTipSubmit,

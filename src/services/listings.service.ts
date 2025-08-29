@@ -11,6 +11,14 @@ import { sanitize } from './security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { z } from 'zod';
 
+// Reference for mount checking
+let mountedRef = { current: true };
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    mountedRef.current = false;
+  });
+}
+
 export interface CreateListingRequest {
   title: string;
   description: string;
@@ -68,10 +76,10 @@ export interface PopularTag {
   count: number;
 }
 
-// Backend listing format (from your backend)
+// UPDATED: Backend listing format with isLocked field
 interface BackendListing {
   _id?: string;
-  id?: string;  // Backend might use 'id' instead of '_id'
+  id?: string;
   title: string;
   description: string;
   price?: number;
@@ -86,6 +94,7 @@ interface BackendListing {
   views?: number;
   createdAt: string;
   soldAt?: string;
+  isLocked?: boolean; // NEW: Server indicates premium content is locked
   auction?: {
     isAuction: boolean;
     startingPrice: number;
@@ -102,6 +111,14 @@ interface BackendListing {
       date: string;
     }>;
   };
+}
+
+// UPDATED: Response type for listing with premium access info
+interface ListingResponse {
+  success: boolean;
+  data?: BackendListing;
+  premiumAccess?: boolean;
+  error?: any;
 }
 
 // Cache configuration
@@ -121,14 +138,13 @@ const createListingValidationSchema = z.object({
 type CreateListingValidationData = z.infer<typeof createListingValidationSchema>;
 
 /**
- * Convert backend listing format to frontend format
- * FIXED: Handle both '_id' and 'id' fields from backend AND include views field
+ * UPDATED: Convert backend listing format to frontend format with isLocked support
  */
-function convertBackendToFrontend(backendListing: BackendListing): Listing {
+function convertBackendToFrontend(backendListing: BackendListing): Listing & { isLocked?: boolean } {
   // Handle both _id and id fields
   const listingId = backendListing._id || backendListing.id || uuidv4();
   
-  const frontendListing: Listing = {
+  const frontendListing: Listing & { isLocked?: boolean } = {
     id: listingId,
     title: backendListing.title,
     description: backendListing.description,
@@ -141,8 +157,8 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing {
     isPremium: backendListing.isPremium || false,
     tags: backendListing.tags || [],
     hoursWorn: backendListing.hoursWorn,
-    // FIX: Include views field in the frontend listing
     views: backendListing.views || 0,
+    isLocked: backendListing.isLocked || false, // NEW: Pass through isLocked flag
   };
 
   // Convert auction data if present with reserve price support
@@ -482,7 +498,7 @@ export class ListingsService {
   }
 
   /**
-   * Get single listing by ID
+   * UPDATED: Get single listing by ID with premium access checking
    */
   async getListing(id: string): Promise<ApiResponse<Listing | null>> {
     try {
@@ -492,13 +508,29 @@ export class ListingsService {
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Fetching listing from backend:', sanitizedId);
         
+        // FIXED: Call the API directly, don't expect ListingResponse format
         const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`);
         
+        if (!mountedRef.current) return {
+          success: false,
+          error: { message: 'Component unmounted' }
+        };
+
         if (response.success && response.data) {
           const convertedListing = convertBackendToFrontend(response.data);
+          
+          // FIXED: Check for premiumAccess in meta, not on response directly
+          if (response.meta?.premiumAccess !== undefined) {
+            console.log('[ListingsService] Premium access for listing:', response.meta.premiumAccess);
+          }
+          
           return {
             success: true,
             data: convertedListing,
+            meta: {
+              ...response.meta,
+              premiumAccess: response.meta?.premiumAccess
+            }
           };
         } else {
           return {
@@ -527,8 +559,21 @@ export class ListingsService {
         success: true,
         data: listing || null,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Get listing error:', error);
+      
+      // NEW: Handle 403 errors for premium content
+      if (error.status === 403 || error.message?.includes('subscribe')) {
+        return {
+          success: false,
+          error: { 
+            message: error.message || 'Premium content - subscription required',
+            requiresSubscription: true,
+            seller: error.seller
+          },
+        };
+      }
+      
       return {
         success: false,
         error: { message: 'Failed to get listing' },
@@ -545,9 +590,24 @@ export class ListingsService {
       const sanitizedUsername = sanitize.username(username);
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<Listing[]>(
+        const response = await apiCall<BackendListing[]>(
           `/listings?seller=${sanitizedUsername}`
         );
+        
+        if (response.success && response.data) {
+          const convertedListings = response.data.map(convertBackendToFrontend);
+          return {
+            success: true,
+            data: convertedListings,
+            meta: response.meta
+          };
+        }
+        
+        // FIXED: Return the response with proper type conversion
+        return {
+          success: false,
+          error: response.error || { message: 'Failed to get seller listings' }
+        };
       }
 
       // LocalStorage implementation
@@ -1000,7 +1060,7 @@ export class ListingsService {
   }
 
   /**
-   * Place bid on auction listing with proper minimum bid validation
+   * UPDATED: Place bid on auction listing with premium checking
    */
   async placeBid(
     listingId: string,
@@ -1040,6 +1100,18 @@ export class ListingsService {
             data: convertedListing,
           };
         } else {
+          // NEW: Handle premium content errors
+          if (response.error?.requiresSubscription) {
+            return {
+              success: false,
+              error: { 
+                message: response.error.message || 'Premium content - subscription required',
+                requiresSubscription: true,
+                seller: response.error.seller
+              },
+            };
+          }
+          
           return {
             success: false,
             error: { message: response.error?.message || 'Failed to place bid' },
@@ -1117,8 +1189,21 @@ export class ListingsService {
         success: true,
         data: listing,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Place bid error:', error);
+      
+      // NEW: Handle 403 errors for premium content
+      if (error.status === 403 || error.message?.includes('subscribe')) {
+        return {
+          success: false,
+          error: { 
+            message: error.message || 'Premium content - subscription required',
+            requiresSubscription: true,
+            seller: error.seller
+          },
+        };
+      }
+      
       return {
         success: false,
         error: { message: 'Failed to place bid' },

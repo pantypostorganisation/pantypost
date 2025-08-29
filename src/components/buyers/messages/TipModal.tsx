@@ -1,12 +1,15 @@
 // src/components/buyers/messages/TipModal.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { X, Heart, DollarSign, AlertCircle } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { WalletContext } from '@/context/WalletContext';
+import { tipService } from '@/services/tip.service';
+import { useAuth } from '@/context/AuthContext';
 
 interface TipModalProps {
   show: boolean;
@@ -29,13 +32,19 @@ export default function TipModal({
   tipResult,
   wallet,
   user,
-  onSendTip
+  onSendTip: parentOnSendTip // Renamed to avoid confusion
 }: TipModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [localTipResult, setLocalTipResult] = useState<{ success: boolean; message: string } | null>(null);
+  
+  // Get wallet context for balance and tip sending
+  const walletContext = useContext(WalletContext);
+  const { user: authUser } = useAuth();
   
   if (!show) return null;
 
-  const userBalance = wallet[user?.username] || 0;
+  // Get current user balance from wallet context
+  const userBalance = walletContext ? walletContext.getBuyerBalance(user?.username || '') : (wallet[user?.username] || 0);
   const tipValue = parseFloat(tipAmount) || 0;
   const canAfford = tipValue > 0 && userBalance >= tipValue;
 
@@ -72,8 +81,57 @@ export default function TipModal({
     
     console.log('TipModal: Sending tip...');
     setIsProcessing(true);
+    setLocalTipResult(null);
+    
     try {
-      await onSendTip();
+      // Validate amount
+      const amount = parseFloat(tipAmount);
+      if (isNaN(amount) || amount <= 0 || amount > 500) {
+        setLocalTipResult({
+          success: false,
+          message: 'Invalid tip amount. Must be between $1 and $500.'
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      // Use the tip service to send the tip
+      const result = await tipService.sendTip(activeThread, amount);
+      
+      if (result.success) {
+        // Update wallet context if available
+        if (walletContext && walletContext.reloadData) {
+          // Reload wallet data to reflect the new balance
+          await walletContext.reloadData();
+        }
+        
+        setLocalTipResult({
+          success: true,
+          message: result.message || `Successfully sent $${amount.toFixed(2)} tip!`
+        });
+        
+        // Clear amount after successful tip
+        setTimeout(() => {
+          setTipAmount('');
+          onClose();
+        }, 2000);
+      } else {
+        setLocalTipResult({
+          success: false,
+          message: result.message || 'Failed to send tip'
+        });
+      }
+      
+      // Call parent callback if provided
+      if (parentOnSendTip) {
+        parentOnSendTip();
+      }
+    } catch (error) {
+      console.error('TipModal: Error sending tip:', error);
+      setLocalTipResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to send tip. Please try again.'
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -81,10 +139,16 @@ export default function TipModal({
 
   // Clear result when modal closes
   useEffect(() => {
-    if (!show && tipResult?.success) {
-      setTipAmount('');
+    if (!show) {
+      setLocalTipResult(null);
+      if (tipResult?.success) {
+        setTipAmount('');
+      }
     }
   }, [show, tipResult, setTipAmount]);
+
+  // Use local result if available, otherwise use parent result
+  const displayResult = localTipResult || tipResult;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -131,7 +195,7 @@ export default function TipModal({
                   className="w-full pl-9 !bg-[#222] !text-white !border-0 focus:!ring-2 focus:!ring-[#ff950e]"
                   sanitizer={currencySanitizer}
                   maxLength={6}
-                  error={tipValue > 500 ? 'Maximum tip amount is $500' : undefined}
+                  error={tipValue > 500 ? 'Maximum tip amount is $500' : tipValue > 0 && tipValue < 1 ? 'Minimum tip amount is $1' : undefined}
                   touched={tipAmount.length > 0}
                 />
                 <DollarSign className="absolute left-3 top-[38px] w-4 h-4 text-gray-400 pointer-events-none" />
@@ -144,8 +208,12 @@ export default function TipModal({
                     key={amount}
                     type="button"
                     onClick={() => setTipAmount(amount.toString())}
-                    disabled={isProcessing}
-                    className="flex-1 px-3 py-1.5 bg-[#222] text-white rounded-lg hover:bg-[#333] transition-colors text-sm disabled:opacity-50"
+                    disabled={isProcessing || userBalance < amount}
+                    className={`flex-1 px-3 py-1.5 rounded-lg transition-colors text-sm ${
+                      userBalance >= amount 
+                        ? 'bg-[#222] text-white hover:bg-[#333]'
+                        : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
                     ${amount}
                   </button>
@@ -170,19 +238,19 @@ export default function TipModal({
             </div>
             
             {/* Result message */}
-            {tipResult && (
+            {displayResult && (
               <div className={`rounded-lg p-3 text-sm ${
-                tipResult.success 
+                displayResult.success 
                   ? 'bg-green-500/10 border border-green-500/30 text-green-400' 
                   : 'bg-red-500/10 border border-red-500/30 text-red-400'
               }`}>
                 <div className="flex items-center gap-2">
-                  {tipResult.success ? (
+                  {displayResult.success ? (
                     <Heart className="w-4 h-4" />
                   ) : (
                     <AlertCircle className="w-4 h-4" />
                   )}
-                  <p>{sanitizeStrict(tipResult.message)}</p>
+                  <p>{sanitizeStrict(displayResult.message)}</p>
                 </div>
               </div>
             )}
@@ -210,9 +278,9 @@ export default function TipModal({
             </button>
             <button
               type="submit"
-              disabled={!canAfford || isProcessing || tipValue > 500}
+              disabled={!canAfford || isProcessing || tipValue > 500 || tipValue < 1}
               className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                canAfford && !isProcessing && tipValue <= 500
+                canAfford && !isProcessing && tipValue <= 500 && tipValue >= 1
                   ? 'bg-pink-500 text-white hover:bg-pink-600'
                   : 'bg-gray-600 text-gray-400 cursor-not-allowed'
               }`}
@@ -225,7 +293,7 @@ export default function TipModal({
               ) : (
                 <>
                   <Heart size={16} />
-                  <span>{canAfford && tipValue <= 500 ? `Send $${tipValue.toFixed(2)}` : 'Enter Amount'}</span>
+                  <span>{canAfford && tipValue <= 500 && tipValue >= 1 ? `Send $${tipValue.toFixed(2)}` : 'Enter Amount'}</span>
                 </>
               )}
             </button>

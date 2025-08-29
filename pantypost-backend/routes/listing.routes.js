@@ -7,8 +7,141 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const AuctionSettlementService = require('../services/auctionSettlement');
+
+// ============= HELPER FUNCTIONS FOR PREMIUM CONTENT =============
+
+/**
+ * Check if a user is subscribed to a seller
+ */
+async function isUserSubscribedToSeller(buyer, seller) {
+  if (!buyer || !seller) return false;
+  
+  try {
+    const subscription = await Subscription.findOne({
+      subscriber: buyer,
+      creator: seller,
+      status: 'active'
+    });
+    
+    return !!subscription;
+  } catch (error) {
+    console.error('[Premium] Error checking subscription:', error);
+    return false;
+  }
+}
+
+/**
+ * Filter listing data based on premium access
+ * Returns a sanitized version of the listing for non-subscribers
+ */
+function filterPremiumContent(listing, hasAccess) {
+  // If user has access or it's not premium, return full listing
+  if (hasAccess || !listing.isPremium) {
+    return listing;
+  }
+  
+  // For premium content without access, return limited data
+  const sanitized = {
+    _id: listing._id,
+    id: listing._id || listing.id,
+    title: listing.title,
+    seller: listing.seller,
+    isPremium: true,
+    status: listing.status,
+    createdAt: listing.createdAt,
+    isVerified: listing.isVerified,
+    
+    // Obscure sensitive data
+    description: 'Premium content - Subscribe to view full details',
+    price: listing.price, // Show price but not allow purchase
+    markedUpPrice: listing.markedUpPrice,
+    
+    // Only show first image blurred (frontend will handle blur)
+    imageUrls: listing.imageUrls?.length > 0 ? [listing.imageUrls[0]] : [],
+    
+    // Hide detailed information
+    tags: [],
+    hoursWorn: undefined,
+    views: listing.views || 0,
+    
+    // Hide auction details for premium auctions
+    auction: listing.auction?.isAuction ? {
+      isAuction: true,
+      status: listing.auction.status,
+      endTime: listing.auction.endTime,
+      // Hide bid details
+      currentBid: undefined,
+      highestBidder: undefined,
+      bidCount: 0,
+      bids: []
+    } : undefined,
+    
+    // Add flag for frontend to know content is locked
+    isLocked: true
+  };
+  
+  return sanitized;
+}
+
+/**
+ * Middleware to check premium access for a specific listing
+ */
+async function checkPremiumAccess(req, res, next) {
+  try {
+    const listing = req.listing; // Assumes listing is attached by previous middleware
+    
+    if (!listing || !listing.isPremium) {
+      req.hasPremiumAccess = true;
+      return next();
+    }
+    
+    // Check if user is authenticated
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      req.hasPremiumAccess = false;
+      return next();
+    }
+    
+    // Decode token to get user (without failing the request)
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      const username = decoded.username;
+      
+      // Seller always has access to their own listings
+      if (username === listing.seller) {
+        req.hasPremiumAccess = true;
+        return next();
+      }
+      
+      // Admin always has access
+      if (decoded.role === 'admin') {
+        req.hasPremiumAccess = true;
+        return next();
+      }
+      
+      // Check subscription for buyers
+      if (decoded.role === 'buyer') {
+        req.hasPremiumAccess = await isUserSubscribedToSeller(username, listing.seller);
+      } else {
+        req.hasPremiumAccess = false;
+      }
+      
+    } catch (error) {
+      // Token invalid or expired
+      req.hasPremiumAccess = false;
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[Premium] Error in checkPremiumAccess middleware:', error);
+    req.hasPremiumAccess = false;
+    next();
+  }
+}
 
 // ============= LISTING ROUTES =============
 
@@ -149,9 +282,52 @@ router.get('/', async (req, res) => {
       Listing.countDocuments(filter)
     ]);
     
+    // Check user authentication and subscriptions for premium content filtering
+    let processedListings = listings;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        const username = decoded.username;
+        const role = decoded.role;
+        
+        // Process each listing for premium content
+        processedListings = await Promise.all(listings.map(async (listing) => {
+          if (!listing.isPremium) return listing;
+          
+          // Seller sees their own listings
+          if (username === listing.seller) return listing;
+          
+          // Admin sees everything
+          if (role === 'admin') return listing;
+          
+          // Check subscription for buyers
+          if (role === 'buyer') {
+            const hasAccess = await isUserSubscribedToSeller(username, listing.seller);
+            return filterPremiumContent(listing.toObject(), hasAccess);
+          }
+          
+          // Others get filtered content
+          return filterPremiumContent(listing.toObject(), false);
+        }));
+      } catch (error) {
+        // Invalid token - filter all premium content
+        processedListings = listings.map(listing => 
+          filterPremiumContent(listing.toObject(), false)
+        );
+      }
+    } else {
+      // No token - filter all premium content
+      processedListings = listings.map(listing => 
+        filterPremiumContent(listing.toObject(), false)
+      );
+    }
+    
     res.json({
       success: true,
-      data: listings,
+      data: processedListings,
       meta: {
         page: pageNum,
         pageSize: limitNum,
@@ -339,7 +515,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/listings/:id - Get a specific listing
+// GET /api/listings/:id - Get a specific listing with premium enforcement
 router.get('/:id', async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -351,9 +527,41 @@ router.get('/:id', async (req, res) => {
       });
     }
     
+    // Check premium access
+    let hasAccess = true;
+    
+    if (listing.isPremium) {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      
+      if (token) {
+        try {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+          const username = decoded.username;
+          const role = decoded.role;
+          
+          // Check access
+          if (username === listing.seller || role === 'admin') {
+            hasAccess = true;
+          } else if (role === 'buyer') {
+            hasAccess = await isUserSubscribedToSeller(username, listing.seller);
+          } else {
+            hasAccess = false;
+          }
+        } catch (error) {
+          hasAccess = false;
+        }
+      } else {
+        hasAccess = false;
+      }
+    }
+    
+    const responseData = filterPremiumContent(listing.toObject(), hasAccess);
+    
     res.json({
       success: true,
-      data: listing
+      data: responseData,
+      premiumAccess: hasAccess
     });
   } catch (error) {
     res.status(500).json({
@@ -363,7 +571,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/purchase - Direct purchase endpoint
+// POST /api/listings/:id/purchase - Direct purchase endpoint with premium check
 router.post('/:id/purchase', authMiddleware, async (req, res) => {
   try {
     const { buyerId } = req.body;
@@ -386,6 +594,20 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
         success: false,
         error: 'Listing not found'
       });
+    }
+    
+    // PREMIUM CHECK: Prevent purchase of premium items without subscription
+    if (listing.isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(buyerUsername, listing.seller);
+      
+      if (!isSubscribed) {
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to purchase premium content',
+          requiresSubscription: true,
+          seller: listing.seller
+        });
+      }
     }
     
     // Check if already sold
@@ -502,7 +724,7 @@ router.get('/:id/views', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/bid - Place a bid on an auction (NO BUYER FEES)
+// POST /api/listings/:id/bid - Place a bid on an auction with premium check
 router.post('/:id/bid', authMiddleware, async (req, res) => {
   try {
     const { amount } = req.body;
@@ -524,6 +746,20 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         success: false,
         error: 'Listing not found'
       });
+    }
+    
+    // PREMIUM CHECK: Prevent bidding on premium auctions without subscription
+    if (listing.isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(bidder, listing.seller);
+      
+      if (!isSubscribed) {
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to bid on premium auctions',
+          requiresSubscription: true,
+          seller: listing.seller
+        });
+      }
     }
     
     if (!listing.auction || !listing.auction.isAuction) {

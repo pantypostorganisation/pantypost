@@ -7,9 +7,32 @@ const Transaction = require('../models/Transaction');
 const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const tierService = require('../services/tierService');
 const TIER_CONFIG = require('../config/tierConfig');
+
+// ============= HELPER FUNCTIONS =============
+
+/**
+ * Check if a user is subscribed to a seller
+ */
+async function isUserSubscribedToSeller(buyer, seller) {
+  if (!buyer || !seller) return false;
+  
+  try {
+    const subscription = await Subscription.findOne({
+      subscriber: buyer,
+      creator: seller,
+      status: 'active'
+    });
+    
+    return !!subscription;
+  } catch (error) {
+    console.error('[Order] Error checking subscription:', error);
+    return false;
+  }
+}
 
 // POST /api/orders - Create new order with proper fee tracking and TIER SUPPORT
 router.post('/', authMiddleware, async (req, res) => {
@@ -25,7 +48,8 @@ router.post('/', authMiddleware, async (req, res) => {
       wasAuction,
       imageUrl,
       listingId,
-      deliveryAddress
+      deliveryAddress,
+      isPremium // NEW: Add premium flag from frontend
     } = req.body;
 
     console.log('[Order] Creating order with tier support:', {
@@ -34,7 +58,8 @@ router.post('/', authMiddleware, async (req, res) => {
       seller,
       price,
       markedUpPrice,
-      listingId
+      listingId,
+      isPremium
     });
 
     // Validate buyer is the authenticated user
@@ -51,6 +76,22 @@ router.post('/', authMiddleware, async (req, res) => {
         success: false,
         error: 'Missing required fields'
       });
+    }
+
+    // PREMIUM CHECK: If the item is premium, verify subscription
+    if (isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(buyer, seller);
+      
+      if (!isSubscribed) {
+        console.log('[Order] Premium content purchase blocked - no subscription');
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to purchase premium content',
+          requiresSubscription: true,
+          seller: seller
+        });
+      }
+      console.log('[Order] Premium content purchase allowed - user is subscribed');
     }
 
     // Get seller's current tier
@@ -250,7 +291,8 @@ router.post('/', authMiddleware, async (req, res) => {
           seller,
           buyer,
           sellerTier,
-          tierBonus
+          tierBonus,
+          isPremium // Store premium status in transaction
         }
       });
       await purchaseTransaction.save();
@@ -462,6 +504,424 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/orders/custom-request - Convert custom request to order (NEW ENDPOINT)
+router.post('/custom-request', authMiddleware, async (req, res) => {
+  try {
+    const {
+      requestId,
+      title,
+      description,
+      price,
+      seller,
+      buyer,
+      tags,
+      deliveryAddress,
+      isPremium // NEW: Add premium flag
+    } = req.body;
+
+    console.log('[Order] Converting custom request to order:', {
+      requestId,
+      title,
+      buyer,
+      seller,
+      price,
+      isPremium
+    });
+
+    // Validate buyer is the authenticated user
+    if (buyer !== req.user.username) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only create orders for yourself'
+      });
+    }
+
+    // Validate required fields
+    if (!requestId || !title || !description || !price || !seller || !buyer) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields for custom request order'
+      });
+    }
+
+    // PREMIUM CHECK: If the custom request is for premium content, verify subscription
+    if (isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(buyer, seller);
+      
+      if (!isSubscribed) {
+        console.log('[Order] Premium custom request blocked - no subscription');
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to pay for premium custom requests',
+          requiresSubscription: true,
+          seller: seller
+        });
+      }
+      console.log('[Order] Premium custom request allowed - user is subscribed');
+    }
+
+    // Get seller's current tier
+    const sellerUser = await User.findOne({ username: seller });
+    if (!sellerUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Seller not found'
+      });
+    }
+    
+    const sellerTier = sellerUser.tier || 'Tease';
+    const tierInfo = TIER_CONFIG.getTierByName(sellerTier);
+    
+    console.log('[Order] Custom request - Seller tier:', sellerTier, 'Bonus:', (tierInfo.bonusPercentage * 100).toFixed(0) + '%');
+
+    // Calculate fees with tier bonus (custom requests use regular pricing model)
+    const actualPrice = Number(price) || 0;
+    const actualMarkedUpPrice = Math.round(actualPrice * 1.1 * 100) / 100; // 10% markup for buyer
+    
+    // Calculate tier-based earnings
+    const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(actualPrice, sellerTier);
+    const platformFee = TIER_CONFIG.calculatePlatformFee(actualPrice, sellerTier);
+    const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
+    const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
+    const totalPlatformRevenue = Math.round((platformFee + buyerMarkupFee) * 100) / 100;
+
+    console.log('[Order] Custom request tier-based calculation:', {
+      price: actualPrice,
+      markedUpPrice: actualMarkedUpPrice,
+      sellerTier,
+      tierBonus,
+      sellerEarnings,
+      platformFee,
+      buyerMarkupFee,
+      totalPlatformRevenue
+    });
+
+    // Get buyer wallet
+    const buyerWallet = await Wallet.findOne({ username: buyer });
+    if (!buyerWallet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Buyer wallet not found. Please deposit funds first.'
+      });
+    }
+
+    // Check buyer has sufficient balance
+    const balanceInCents = Math.round(buyerWallet.balance * 100);
+    const priceInCents = Math.round(actualMarkedUpPrice * 100);
+
+    if (balanceInCents < priceInCents) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. You need $${(priceInCents/100).toFixed(2)} but only have $${(balanceInCents/100).toFixed(2)}`
+      });
+    }
+
+    // Get or create seller wallet
+    let sellerWallet = await Wallet.findOne({ username: seller });
+    if (!sellerWallet) {
+      sellerWallet = new Wallet({
+        username: seller,
+        role: 'seller',
+        balance: 0
+      });
+      await sellerWallet.save();
+    }
+
+    // Get or create platform wallet
+    let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    if (!platformWallet) {
+      platformWallet = new Wallet({
+        username: 'platform',
+        role: 'admin',
+        balance: 0
+      });
+      await platformWallet.save();
+    }
+
+    // Store previous balances for WebSocket events
+    const previousBuyerBalance = buyerWallet.balance;
+    const previousSellerBalance = sellerWallet.balance;
+    const previousPlatformBalance = platformWallet.balance;
+
+    // Process the transaction atomically
+    try {
+      // 1. Deduct from buyer (full marked up price)
+      await buyerWallet.withdraw(actualMarkedUpPrice);
+      console.log('[Order] Custom request - Deducted', actualMarkedUpPrice, 'from buyer', buyer);
+
+      // 2. Credit to seller (with tier bonus)
+      await sellerWallet.deposit(sellerEarnings);
+      console.log('[Order] Custom request - Credited', sellerEarnings, 'to seller', seller, '(includes', tierBonus, 'tier bonus)');
+
+      // 3. Credit platform fee to platform wallet (MINUS tier bonus that goes to seller)
+      const netPlatformRevenue = totalPlatformRevenue - tierBonus;
+      await platformWallet.deposit(netPlatformRevenue);
+      console.log('[Order] Custom request - Credited', netPlatformRevenue, 'to platform wallet');
+
+      // Create the order with custom request flag
+      const order = new Order({
+        title,
+        description,
+        price: actualPrice,
+        markedUpPrice: actualMarkedUpPrice,
+        imageUrl: '/api/placeholder/400/300', // Default image for custom requests
+        date: new Date(),
+        seller,
+        buyer,
+        tags: tags || [],
+        isCustomRequest: true,
+        originalRequestId: requestId,
+        deliveryAddress: deliveryAddress || undefined, // Make it optional initially
+        shippingStatus: 'pending',
+        paymentStatus: 'completed',
+        paymentCompletedAt: new Date(),
+        // Tier-based fee tracking
+        platformFee: platformFee,
+        buyerMarkupFee,
+        sellerPlatformFee: platformFee,
+        sellerEarnings,
+        tierCreditAmount: tierBonus,
+        sellerTier: sellerTier
+      });
+
+      await order.save();
+      console.log('[Order] Custom request order created:', order._id);
+
+      // Create database notification for seller
+      await Notification.create({
+        recipient: seller,
+        type: 'custom_request_paid',
+        title: 'Custom Request Paid!',
+        message: `${buyer} has paid for your custom request: "${title}"`,
+        link: `/sellers/orders-to-fulfil`,
+        metadata: {
+          orderId: order._id.toString(),
+          requestId,
+          buyer,
+          amount: actualMarkedUpPrice,
+          isPremium
+        }
+      });
+
+      // Send a message to the seller about the payment
+      const Message = require('../models/Message');
+      const { v4: uuidv4 } = require('uuid');
+      
+      const paymentMessage = new Message({
+        _id: uuidv4(),
+        sender: buyer,
+        receiver: seller,
+        content: `✅ Custom request "${title}" has been paid! ($${actualPrice.toFixed(2)})`,
+        type: 'normal',
+        meta: {
+          orderId: order._id.toString(),
+          requestId,
+          isPaidNotification: true,
+          isPremium
+        },
+        threadId: Message.getThreadId(buyer, seller),
+        isRead: false
+      });
+      await paymentMessage.save();
+
+      // Create transaction records
+      const purchaseTransaction = new Transaction({
+        type: 'custom_request',
+        amount: actualMarkedUpPrice,
+        from: buyer,
+        to: seller,
+        fromRole: 'buyer',
+        toRole: 'seller',
+        description: `Custom Request: ${title}`,
+        status: 'completed',
+        completedAt: new Date(),
+        metadata: {
+          orderId: order._id.toString(),
+          requestId,
+          customRequest: true,
+          listingTitle: title,
+          originalPrice: actualPrice,
+          buyerPayment: actualMarkedUpPrice,
+          sellerEarnings,
+          seller,
+          buyer,
+          sellerTier,
+          tierBonus,
+          isPremium
+        }
+      });
+      await purchaseTransaction.save();
+
+      // Create platform fee transaction
+      const feeTransaction = new Transaction({
+        type: 'platform_fee',
+        amount: totalPlatformRevenue,
+        from: buyer,
+        to: 'platform',
+        fromRole: 'buyer',
+        toRole: 'admin',
+        description: `Platform fee for custom request: ${title}`,
+        status: 'completed',
+        completedAt: new Date(),
+        metadata: {
+          orderId: order._id.toString(),
+          requestId,
+          customRequest: true,
+          buyerFee: buyerMarkupFee,
+          sellerFee: platformFee,
+          totalFee: totalPlatformRevenue,
+          originalPrice: actualPrice,
+          buyerPayment: actualMarkedUpPrice,
+          seller,
+          buyer,
+          sellerTier
+        }
+      });
+      await feeTransaction.save();
+
+      // Create tier credit transaction if there's a bonus
+      if (tierBonus > 0) {
+        const tierCreditTransaction = new Transaction({
+          type: 'tier_credit',
+          amount: tierBonus,
+          from: 'platform',
+          to: seller,
+          fromRole: 'admin',
+          toRole: 'seller',
+          description: `Tier bonus (${sellerTier}) for custom request`,
+          status: 'completed',
+          completedAt: new Date(),
+          metadata: {
+            orderId: order._id.toString(),
+            requestId,
+            customRequest: true,
+            tierBonus,
+            sellerTier,
+            bonusPercentage: tierInfo.bonusPercentage
+          }
+        });
+        await tierCreditTransaction.save();
+      }
+
+      // Update order with transaction references
+      order.paymentTransactionId = purchaseTransaction._id;
+      order.feeTransactionId = feeTransaction._id;
+      await order.save();
+
+      // UPDATE SELLER TIER after successful sale
+      const tierUpdateResult = await tierService.updateSellerTier(seller);
+      if (tierUpdateResult.changed) {
+        console.log('[Order] Custom request - Seller tier updated:', tierUpdateResult.oldTier, '->', tierUpdateResult.newTier);
+      }
+
+      // Emit WebSocket events
+      if (global.webSocketService) {
+        // Balance updates
+        global.webSocketService.emitBalanceUpdate(buyer, 'buyer', previousBuyerBalance, buyerWallet.balance, 'custom_request');
+        global.webSocketService.emitBalanceUpdate(seller, 'seller', previousSellerBalance, sellerWallet.balance, 'custom_request_sale');
+        global.webSocketService.emitBalanceUpdate('platform', 'admin', previousPlatformBalance, platformWallet.balance, 'platform_fee');
+        
+        // Transaction events
+        global.webSocketService.emitTransaction(purchaseTransaction.toObject());
+        global.webSocketService.emitTransaction(feeTransaction.toObject());
+
+        // Custom request paid event
+        global.webSocketService.emitToUser(seller, 'custom_request:paid', {
+          requestId,
+          orderId: order._id.toString(),
+          buyer,
+          title,
+          amount: actualPrice,
+          isPremium
+        });
+
+        // Emit new message event for the payment notification
+        global.webSocketService.emitNewMessage({
+          id: paymentMessage._id.toString(),
+          sender: paymentMessage.sender,
+          receiver: paymentMessage.receiver,
+          content: paymentMessage.content,
+          type: paymentMessage.type,
+          date: paymentMessage.createdAt,
+          createdAt: paymentMessage.createdAt,
+          threadId: paymentMessage.threadId,
+          meta: paymentMessage.meta,
+          isRead: false,
+          read: false
+        });
+
+        // User update if tier changed
+        if (tierUpdateResult && tierUpdateResult.changed) {
+          global.webSocketService.emitUserUpdate(seller, {
+            tier: tierUpdateResult.newTier,
+            totalSales: tierUpdateResult.stats.totalSales
+          });
+        }
+      }
+
+      console.log('[Order] Custom request processing complete');
+
+      // Return order data
+      res.json({
+        success: true,
+        data: {
+          id: order._id.toString(),
+          title: order.title,
+          description: order.description,
+          price: order.price,
+          markedUpPrice: order.markedUpPrice,
+          imageUrl: order.imageUrl,
+          date: order.date.toISOString(),
+          seller: order.seller,
+          buyer: order.buyer,
+          tags: order.tags,
+          isCustomRequest: true,
+          originalRequestId: requestId,
+          deliveryAddress: order.deliveryAddress,
+          shippingStatus: order.shippingStatus,
+          paymentStatus: order.paymentStatus,
+          platformFee: order.platformFee,
+          sellerEarnings: order.sellerEarnings,
+          tierCreditAmount: order.tierCreditAmount,
+          sellerTier
+        }
+      });
+
+    } catch (error) {
+      console.error('[Order] Custom request transaction failed:', error);
+      
+      // Attempt to rollback
+      try {
+        if (buyerWallet.balance < previousBuyerBalance) {
+          buyerWallet.balance = previousBuyerBalance;
+          await buyerWallet.save();
+        }
+        
+        if (sellerWallet.balance > previousSellerBalance) {
+          sellerWallet.balance = previousSellerBalance;
+          await sellerWallet.save();
+        }
+        
+        if (platformWallet.balance > previousPlatformBalance) {
+          platformWallet.balance = previousPlatformBalance;
+          await platformWallet.save();
+        }
+      } catch (rollbackError) {
+        console.error('[Order] Rollback failed:', rollbackError);
+      }
+
+      throw error;
+    }
+
+  } catch (error) {
+    console.error('[Order] Error converting custom request to order:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to convert custom request to order'
+    });
+  }
+});
+
 // GET /api/orders - Get orders for a user
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -522,7 +982,9 @@ router.get('/', authMiddleware, async (req, res) => {
       platformFee: order.platformFee,
       sellerEarnings: order.sellerEarnings,
       tierCreditAmount: order.tierCreditAmount,
-      sellerTier: order.sellerTier
+      sellerTier: order.sellerTier,
+      isCustomRequest: order.isCustomRequest,
+      originalRequestId: order.originalRequestId
     }));
 
     res.json({
@@ -592,7 +1054,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
         platformFee: order.platformFee,
         sellerEarnings: order.sellerEarnings,
         tierCreditAmount: order.tierCreditAmount,
-        sellerTier: order.sellerTier
+        sellerTier: order.sellerTier,
+        isCustomRequest: order.isCustomRequest,
+        originalRequestId: order.originalRequestId
       }
     });
 
@@ -692,7 +1156,7 @@ router.put('/:id/shipping', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/orders/:id/address - Update delivery address (NEW ENDPOINT)
+// PUT /api/orders/:id/address - Update delivery address
 router.put('/:id/address', authMiddleware, async (req, res) => {
   try {
     const { deliveryAddress } = req.body;
@@ -897,7 +1361,9 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         shippedDate: order.shippedDate,
         deliveredDate: order.deliveredDate,
         paymentStatus: order.paymentStatus,
-        sellerTier: order.sellerTier
+        sellerTier: order.sellerTier,
+        isCustomRequest: order.isCustomRequest,
+        originalRequestId: order.originalRequestId
       }
     });
 

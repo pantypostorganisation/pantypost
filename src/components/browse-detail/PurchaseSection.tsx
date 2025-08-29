@@ -55,6 +55,9 @@ export default function PurchaseSection({
   const isAdmin = user?.role === 'admin';
   const isUserSubscribed = user && isSubscribed(user.username, listing.seller);
 
+  // Check if listing is locked for premium content
+  const isPremiumLocked = listing.isPremium && !isUserSubscribed && !isSeller && listing.isLocked;
+
   // FIX: Check if listing still exists in active listings (if not, it's been sold)
   const isListingStillActive = listings.some(l => l.id === listing.id);
   
@@ -88,7 +91,8 @@ export default function PurchaseSection({
                                         !purchaseCompleted && 
                                         !isPurchasing && 
                                         !isProcessing &&
-                                        isListingStillActive;
+                                        isListingStillActive &&
+                                        !isPremiumLocked;
 
   // Real purchase handler with validation and admin guardrails
   const handleRealPurchase = async () => {
@@ -108,8 +112,13 @@ export default function PurchaseSection({
       return;
     }
 
-    if (listing.isPremium && !isUserSubscribed) {
-      showToast({ type: 'error', title: 'You must be subscribed to purchase premium content' });
+    // UPDATED: Check for premium content with server-side lock
+    if (isPremiumLocked) {
+      showToast({ 
+        type: 'error', 
+        title: 'Premium content locked', 
+        message: 'You must be subscribed to this seller to purchase premium content' 
+      });
       return;
     }
 
@@ -122,16 +131,18 @@ export default function PurchaseSection({
     setIsPurchasing(true);
 
     try {
+      // UPDATED: Include isPremium flag in purchase request
       await purchaseListing(
         {
           id: listing.id,
           title: listing.title,
           description: listing.description,
           price: listing.price,
-          markedUpPrice: purchasePriceInCents / 100, // Convert back to dollars for the API
+          markedUpPrice: purchasePriceInCents / 100,
           imageUrls: listing.imageUrls,
           seller: listing.seller,
           tags: listing.tags || [],
+          isPremium: listing.isPremium, // NEW: Include premium flag
         } as any,
         user.username
       );
@@ -148,23 +159,29 @@ export default function PurchaseSection({
       await new Promise((r) => setTimeout(r, 500));
 
       router.push('/buyers/my-orders');
-    } catch (error) {
-      setIsPurchasing(false); // Reset on error
-      setPurchaseCompleted(false); // Reset on error
+    } catch (error: any) {
+      setIsPurchasing(false);
+      setPurchaseCompleted(false);
       
       let errorMessage = 'Purchase failed. Please try again.';
-      if (error instanceof Error) {
-        if (error.message.includes('Missing required fields')) {
-          errorMessage = 'Order creation failed due to missing information. Please try again.';
-        } else if (error.message.includes('Insufficient balance')) {
-          errorMessage = 'Insufficient balance. Please add funds to your wallet.';
-          setTimeout(() => router.push('/wallet/buyer'), 1500);
-        } else if (error.message.includes('Rate limit exceeded')) {
-          errorMessage = 'Too many requests. Please wait a moment and try again.';
-        } else {
-          errorMessage = error.message;
-        }
+      
+      // UPDATED: Handle premium content errors
+      if (error.message?.includes('subscribe') || error.requiresSubscription) {
+        errorMessage = 'You must be subscribed to this seller to purchase premium content.';
+        setTimeout(() => {
+          router.push(`/sellers/${listing.seller}`);
+        }, 2000);
+      } else if (error.message?.includes('Missing required fields')) {
+        errorMessage = 'Order creation failed due to missing information. Please try again.';
+      } else if (error.message?.includes('Insufficient balance')) {
+        errorMessage = 'Insufficient balance. Please add funds to your wallet.';
+        setTimeout(() => router.push('/wallet/buyer'), 1500);
+      } else if (error.message?.includes('Rate limit exceeded')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.';
+      } else {
+        errorMessage = error.message || errorMessage;
       }
+      
       showToast({ type: 'error', title: errorMessage });
     }
   };
@@ -220,16 +237,16 @@ export default function PurchaseSection({
         )}
       </div>
 
-      {listing.isPremium && !isUserSubscribed && !isSeller && !isAdmin && isListingStillActive && (
+      {/* UPDATED: Premium content lock message with server-side indication */}
+      {isPremiumLocked && (
         <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
             <Crown className="w-5 h-5 text-yellow-500 mt-0.5" />
             <div className="flex-1">
-              <p className="text-yellow-500 font-semibold">Premium Content</p>
+              <p className="text-yellow-500 font-semibold">Premium Content Locked</p>
               <p className="text-sm text-yellow-400 mt-1">
-                Subscribe to{' '}
-                <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline font-semibold" /> to purchase
-                this item.
+                This content is restricted. Subscribe to{' '}
+                <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline font-semibold" /> to unlock and purchase.
               </p>
             </div>
           </div>
@@ -286,13 +303,13 @@ export default function PurchaseSection({
         <button disabled className="w-full bg-purple-900/40 text-purple-300 py-3 rounded-lg font-semibold cursor-not-allowed">
           Admin accounts cannot purchase
         </button>
-      ) : listing.isPremium && !isUserSubscribed && isListingStillActive ? (
+      ) : isPremiumLocked ? (
         <button
           onClick={onSubscribeClick}
           className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700 transition flex items-center justify-center gap-2"
         >
           <Crown className="w-5 h-5" />
-          Subscribe to Purchase
+          Subscribe to Unlock & Purchase
         </button>
       ) : purchaseCompleted || !isListingStillActive ? (
         <button
@@ -318,7 +335,7 @@ export default function PurchaseSection({
         </button>
       )}
 
-      {user && user.role === 'buyer' && !purchaseCompleted && isListingStillActive && (
+      {user && user.role === 'buyer' && !purchaseCompleted && isListingStillActive && !isPremiumLocked && (
         <div className="text-sm text-gray-400 text-center">
           Your balance: ${(buyerBalanceInCents / 100).toFixed(2)}
         </div>
