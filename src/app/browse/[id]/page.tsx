@@ -22,17 +22,19 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
+import { listingsService } from '@/services/listings.service';
 
 export default function ListingDetailPage() {
   const { trackEvent, trackPurchase } = useAnalytics();
   const isMountedRef = useRef(true);
   const trackingRef = useRef({ hasTrackedView: false, hasTrackedPurchase: false });
   const [viewerCount, setViewerCount] = useState(Math.floor(Math.random() * 10) + 3);
+  const [localListing, setLocalListing] = useState<any>(null);
   
   const {
     // Data
     user,
-    listing,
+    listing: contextListing,
     listingId,
     images,
     isAuctionListing,
@@ -94,6 +96,16 @@ export default function ListingDetailPage() {
     rateLimitError
   } = useBrowseDetail();
 
+  // Use local listing state that can be updated
+  const listing = localListing || contextListing;
+  
+  // Update local listing when context changes
+  useEffect(() => {
+    if (contextListing) {
+      setLocalListing(contextListing);
+    }
+  }, [contextListing]);
+
   // Favorites functionality
   const { isFavorited: checkIsFavorited, toggleFavorite: toggleFav, error: favError } = useFavorites();
   const { success: showSuccessToast, error: showErrorToast } = useToast();
@@ -111,6 +123,61 @@ export default function ListingDetailPage() {
 
   // FIXED: Use the server's isLocked field directly instead of needsSubscription
   const isLockedPremium = listing?.isLocked === true;
+
+  // Listen for subscription changes and refresh listing
+  useEffect(() => {
+    const handleSubscriptionChange = async (event: Event) => {
+      // Type guard to check if it's a CustomEvent
+      if (!(event instanceof CustomEvent)) return;
+      
+      console.log('[ListingDetailPage] Subscription changed:', event.detail);
+      
+      // Check if this affects the current listing
+      if (listing && event.detail.seller === listing.seller && user && event.detail.buyer === user.username) {
+        // Small delay to ensure backend has processed the change
+        setTimeout(async () => {
+          try {
+            // Refresh the specific listing
+            const result = await listingsService.getListing(listingId);
+            if (result.success && result.data) {
+              setLocalListing(result.data);
+              
+              // Show toast notification
+              if (event.detail.action === 'subscribed') {
+                toast.success('Premium content unlocked!', {
+                  duration: 3000,
+                  icon: '🔓',
+                  style: {
+                    background: '#1a1a1a',
+                    color: '#fff',
+                    border: '1px solid #22c55e',
+                  },
+                });
+              } else {
+                toast('Premium content locked', {
+                  duration: 3000,
+                  icon: '🔒',
+                  style: {
+                    background: '#1a1a1a',
+                    color: '#fff',
+                    border: '1px solid #ef4444',
+                  },
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Failed to refresh listing:', error);
+          }
+        }, 500);
+      }
+    };
+
+    window.addEventListener('subscription:changed', handleSubscriptionChange);
+    
+    return () => {
+      window.removeEventListener('subscription:changed', handleSubscriptionChange);
+    };
+  }, [listing, listingId, user]);
 
   // Simulate viewer count changes
   useEffect(() => {

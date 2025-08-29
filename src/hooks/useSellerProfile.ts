@@ -1,3 +1,4 @@
+// src/hooks/useSellerProfile.ts
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services/users.service';
@@ -244,6 +245,18 @@ export function useSellerProfile(username: string) {
         setHasAccess(true);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
+        
+        // Fire custom event for subscription change
+        if (typeof window !== 'undefined' && user?.username) {
+          window.dispatchEvent(new CustomEvent('subscription:changed', { 
+            detail: { 
+              seller: username, 
+              action: 'subscribed',
+              buyer: user.username 
+            } 
+          }));
+          console.log('[useSellerProfile] Fired subscription:changed event for subscribe');
+        }
       } else {
         console.error('Subscribe failed:', JSON.stringify(result?.error ?? result));
       }
@@ -265,6 +278,18 @@ export function useSellerProfile(username: string) {
       if (result?.success) {
         setShowUnsubscribeModal(false);
         setHasAccess(false);
+        
+        // Fire custom event for subscription change
+        if (typeof window !== 'undefined' && user?.username) {
+          window.dispatchEvent(new CustomEvent('subscription:changed', { 
+            detail: { 
+              seller: username, 
+              action: 'unsubscribed',
+              buyer: user.username 
+            } 
+          }));
+          console.log('[useSellerProfile] Fired subscription:changed event for unsubscribe');
+        }
       } else {
         console.error('Unsubscribe failed:', JSON.stringify(result?.error ?? result));
       }

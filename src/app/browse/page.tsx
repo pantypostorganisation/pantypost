@@ -67,7 +67,8 @@ export default function BrowsePage() {
     formatTimeRemaining,
     HOUR_RANGE_OPTIONS,
     PAGE_SIZE,
-    isLoading
+    isLoading,
+    refreshListings
   } = useBrowseListings();
 
   const hasActiveFilters = !!(searchTerm || minPrice || maxPrice || selectedHourRange.label !== 'Any Hours' || sortBy !== 'newest');
@@ -89,6 +90,27 @@ export default function BrowsePage() {
       }
     };
   }, []);
+
+  // Listen for subscription changes and refresh listings
+  useEffect(() => {
+    const handleSubscriptionChange = (event: CustomEvent) => {
+      console.log('[BrowsePage] Subscription changed:', event.detail);
+      
+      // Only refresh if the current user is the one who subscribed/unsubscribed
+      if (user && event.detail.buyer === user.username) {
+        // Small delay to ensure backend has processed the change
+        setTimeout(() => {
+          refreshListings();
+        }, 500);
+      }
+    };
+
+    window.addEventListener('subscription:changed', handleSubscriptionChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('subscription:changed', handleSubscriptionChange as EventListener);
+    };
+  }, [user, refreshListings]);
 
   // Fetch popular tags
   useEffect(() => {

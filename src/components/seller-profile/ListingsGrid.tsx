@@ -145,9 +145,9 @@ export default function ListingsGrid(props: ListingsGridProps) {
                     <SecureMessageDisplay content={sanitizedTitle} allowBasicFormatting={false} />
                   </h3>
 
-                  <p className="text-sm text-gray-400 mb-3 line-clamp-2 flex-grow">
+                  <div className="text-sm text-gray-400 mb-3 line-clamp-2 flex-grow">
                     <SecureMessageDisplay content={sanitizedDescription} allowBasicFormatting={false} />
-                  </p>
+                  </div>
 
                   {listing.tags && listing.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-auto mb-3">
