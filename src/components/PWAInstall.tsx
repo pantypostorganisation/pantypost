@@ -1,32 +1,46 @@
 // src/components/PWAInstall.tsx
+'use client';
 
 import { useState, useEffect } from 'react';
 import { X, Download } from 'lucide-react';
 
+// Minimal typing for the deferred install prompt event
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => void;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+};
+
 export function PWAInstall() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     // Check if iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
     const ios = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(ios);
 
-    // Check if already dismissed
-    const dismissed = localStorage.getItem('pwa-prompt-dismissed');
-    if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 60 * 60 * 1000) {
-      return;
+    // Check if already dismissed (7-day cooldown)
+    try {
+      const dismissed = localStorage.getItem('pwa-prompt-dismissed');
+      if (dismissed && Date.now() - parseInt(dismissed, 10) < 7 * 24 * 60 * 60 * 1000) {
+        return;
+      }
+    } catch {
+      // Ignore storage errors
     }
 
     // Listen for install prompt
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
-      
-      // Show prompt after a delay
-      setTimeout(() => setShowPrompt(true), 3000);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+
+      // Show prompt after a short delay
+      const t = setTimeout(() => setShowPrompt(true), 3000);
+      return () => clearTimeout(t);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -37,28 +51,41 @@ export function PWAInstall() {
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
+    try {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
 
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('PWA install prompt outcome:', outcome);
+      }
 
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
+      setDeferredPrompt(null);
+      setShowPrompt(false);
+    } catch {
+      setDeferredPrompt(null);
+      setShowPrompt(false);
     }
-
-    setDeferredPrompt(null);
-    setShowPrompt(false);
   };
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+    try {
+      localStorage.setItem('pwa-prompt-dismissed', Date.now().toString());
+    } catch {
+      // Ignore storage errors
+    }
   };
 
   if (!showPrompt || (!deferredPrompt && !isIOS)) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-gray-900 border border-gray-800 rounded-lg shadow-xl p-4 z-50">
+    <div
+      className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-gray-900 border border-gray-800 rounded-lg shadow-xl p-4 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Install PantyPost App"
+    >
       <button
         onClick={handleDismiss}
         className="absolute top-2 right-2 text-gray-500 hover:text-gray-300"
@@ -72,17 +99,13 @@ export function PWAInstall() {
           <Download className="h-8 w-8 text-[#ff950e]" />
         </div>
         <div className="flex-1">
-          <h3 className="text-white font-semibold mb-1">
-            Install PantyPost App
-          </h3>
+          <h3 className="text-white font-semibold mb-1">Install PantyPost App</h3>
           <p className="text-gray-400 text-sm mb-3">
             Install our app for a better experience with offline access and notifications.
           </p>
 
           {isIOS ? (
-            <p className="text-gray-500 text-xs">
-              Tap the share button and select "Add to Home Screen"
-            </p>
+            <p className="text-gray-500 text-xs">Tap the share button and select &quot;Add to Home Screen&quot;</p>
           ) : (
             <button
               onClick={handleInstall}

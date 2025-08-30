@@ -1,18 +1,21 @@
+// src/components/RequireAuth.tsx
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { z } from 'zod';
 
 const VALID_ROLES = ['buyer', 'seller', 'admin'] as const;
-type ValidRole = typeof VALID_ROLES[number];
+type ValidRole = (typeof VALID_ROLES)[number];
+
+const RoleSchema = z.enum(VALID_ROLES);
 
 export default function RequireAuth({
   role,
   children,
 }: {
-  role: 'buyer' | 'seller' | 'admin';
+  role: ValidRole;
   children: React.ReactNode;
 }) {
   const { user, isAuthReady } = useAuth();
@@ -23,22 +26,25 @@ export default function RequireAuth({
   useEffect(() => {
     if (!isAuthReady || hasChecked) return;
 
-    // Validate the role parameter
-    if (!VALID_ROLES.includes(role as ValidRole)) {
+    // Runtime validation of `role` prop (dev-only noise)
+    const parsed = RoleSchema.safeParse(role);
+    if (!parsed.success) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[RequireAuth] Invalid role prop supplied:', role);
+      }
       router.push('/login');
       setHasChecked(true);
       return;
     }
 
-    const userRole = user?.role;
-    const sanitizedUsername = user?.username ? sanitizeStrict(user.username).toLowerCase() : '';
+    const userRole = user?.role as ValidRole | undefined;
 
-    // NEW: strict role matching — no admin override for buyer/seller
+    // NEW: strict role matching — no admin override for buyer/seller routes
     let hasAccess = false;
-    if (role === 'admin') {
+    if (parsed.data === 'admin') {
       hasAccess = userRole === 'admin';
     } else {
-      hasAccess = userRole === role; // admin can’t view buyer/seller pages
+      hasAccess = userRole === parsed.data; // admin can’t view buyer/seller pages
     }
 
     if (!user || !hasAccess) {
@@ -52,11 +58,11 @@ export default function RequireAuth({
 
   if (!isAuthReady || !hasChecked) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center" role="status" aria-label="Checking access">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" />
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
         </div>
       </div>
     );

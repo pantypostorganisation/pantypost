@@ -1,11 +1,15 @@
 // src/components/LazyComponents.tsx
 
 import dynamic from 'next/dynamic';
+import React from 'react';
 
-// Create a simple loading spinner component first
-const LoadingSpinner = () => (
-  <div className="flex items-center justify-center p-8">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e]"></div>
+/**
+ * Minimal, reusable loading spinner for lazy components.
+ * Safe to render on server or client.
+ */
+const LoadingSpinner: React.FC = () => (
+  <div className="flex items-center justify-center p-8" role="status" aria-label="Loading">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e]" />
   </div>
 );
 
@@ -16,43 +20,41 @@ const LoadingSpinner = () => (
 /*
 export const AdminDashboard = dynamic(
   () => import('@/components/admin/AdminDashboard'),
-  { 
+  {
     loading: () => <LoadingSpinner />,
-    ssr: false 
+    ssr: false,
   }
 );
 */
 
-// For now, let's create lazy loaded versions of components you might already have:
-
 // Lazy load the CloudinaryTest component if you use it
 export const LazyCloudinaryTest = dynamic(
   () => import('@/components/CloudinaryTest'),
-  { 
+  {
     loading: () => <LoadingSpinner />,
-    ssr: false 
+    ssr: false,
   }
 );
 
 // Example for future use - Message components
 export const LazyMessageNotifications = dynamic(
   () => import('@/components/MessageNotifications'),
-  { 
+  {
     loading: () => <LoadingSpinner />,
-    ssr: false 
+    ssr: false,
   }
 );
 
 // Export the LoadingSpinner so it can be used elsewhere
 export { LoadingSpinner };
 
-// Example skeleton for charts/heavy components
-export const ChartSkeleton = () => (
+/** Skeleton for charts/heavy components */
+export const ChartSkeleton: React.FC = () => (
   <div className="h-64 bg-gray-800 animate-pulse rounded" />
 );
 
-// Example skeleton for cards
-export const CardSkeleton = () => (
+/** Skeleton for cards */
+export const CardSkeleton: React.FC = () => (
   <div className="bg-gray-900 rounded-lg p-4 animate-pulse">
     <div className="h-4 bg-gray-800 rounded w-3/4 mb-2" />
     <div className="h-4 bg-gray-800 rounded w-1/2" />

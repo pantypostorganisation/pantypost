@@ -1,7 +1,8 @@
 // src/components/VirtualList.tsx
+'use client';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 
 interface VirtualListProps<T> {
   items: T[];
@@ -16,24 +17,28 @@ export function VirtualList<T>({
   itemHeight,
   renderItem,
   className,
-  overscan = 5
+  overscan = 5,
 }: VirtualListProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
+
+  // Guards to prevent pathological values
+  const safeItemHeight = useMemo(() => (itemHeight > 0 ? itemHeight : 56), [itemHeight]);
+  const safeOverscan = useMemo(() => (overscan >= 0 && Number.isFinite(overscan) ? overscan : 5), [overscan]);
 
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => itemHeight,
-    overscan
+    estimateSize: () => safeItemHeight,
+    overscan: safeOverscan,
   });
 
   return (
-    <div ref={parentRef} className={className}>
+    <div ref={parentRef} className={className} style={{ overflow: 'auto', willChange: 'transform' }}>
       <div
         style={{
           height: `${virtualizer.getTotalSize()}px`,
           width: '100%',
-          position: 'relative'
+          position: 'relative',
         }}
       >
         {virtualizer.getVirtualItems().map((virtualItem) => (
@@ -45,7 +50,7 @@ export function VirtualList<T>({
               left: 0,
               width: '100%',
               height: `${virtualItem.size}px`,
-              transform: `translateY(${virtualItem.start}px)`
+              transform: `translateY(${virtualItem.start}px)`,
             }}
           >
             {renderItem(items[virtualItem.index], virtualItem.index)}
