@@ -328,12 +328,14 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
 
-// Auction system scheduled task - check and end expired auctions
+// CRITICAL FIX: Auction system scheduled task - check every 10 seconds instead of 60 seconds
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
     
     if (results.processed > 0) {
+      console.log(`[Auction System] Processed ${results.processed} expired auctions`);
+      
       // Notify admins of auction processing results if there were any errors
       if (results.errors.length > 0 && global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:processing_errors', {
@@ -355,7 +357,7 @@ setInterval(async () => {
       });
     }
   }
-}, 60000); // Check every minute
+}, 10000); // CHANGED: Check every 10 seconds for faster auction processing
 
 // Manual auction processing endpoint (admin only)
 app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
@@ -712,7 +714,7 @@ server.listen(PORT, async () => {
   console.log(`🛡️ Report & Ban system ready`);
   
   await initializeAuctionSystem();
-  console.log(`🔨 Auction system ready`);
+  console.log(`🔨 Auction system ready - checking every 10 seconds`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');

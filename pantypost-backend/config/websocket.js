@@ -83,6 +83,16 @@ class WebSocketService {
     this.io.to(`${roomType}:${roomId}`).emit(event, data);
   }
 
+  // Broadcast to all connected clients
+  broadcast(event, data) {
+    if (!this.io) {
+      console.error('[WebSocket] Socket.IO not initialized');
+      return;
+    }
+    console.log(`[WebSocket] Broadcasting ${event} to all clients`);
+    this.io.emit(event, data);
+  }
+
   // Small helper to safely emit a generic notification
   emitNotification(username, payload) {
     // Defensive: ensure minimal fields
@@ -203,6 +213,7 @@ class WebSocketService {
         console.log(`[WebSocket] Database updated: ${username} is now ${isOnline ? 'online' : 'offline'}`);
       }
     } catch (error) {
+      console.error(`[WebSocket] Error updating user online status:`, error);
     }
   }
 
@@ -387,10 +398,6 @@ class WebSocketService {
       this.emitToUser(message.receiver, 'message:new', message);
       console.log(`[WebSocket] Successfully emitted to receiver ${message.receiver}`);
 
-      // REMOVED: Duplicate tip notification that was causing double notifications
-      // Tip notifications are already handled by the tip route which creates
-      // both the DB notification and emits the appropriate WebSocket event
-
       // Auto-read if viewing
       if (this.isUserViewingThread(message.receiver, message.threadId)) {
         console.log(`[WebSocket] Receiver ${message.receiver} is viewing thread, auto-marking as read`);
@@ -439,13 +446,78 @@ class WebSocketService {
 
   // ===== Orders =============================================================
 
+  /**
+   * CRITICAL FIX: Properly emit order created event for auction orders
+   * This ensures the buyer's my-orders page updates when they win an auction
+   */
   emitOrderCreated(order) {
-    this.emitToUser(order.seller, 'order:created', order);
-    this.emitToUser(order.buyer, 'order:created', order);
+    console.log('[WebSocket] emitOrderCreated called for order:', {
+      id: order._id || order.id,
+      buyer: order.buyer,
+      seller: order.seller,
+      wasAuction: order.wasAuction,
+      title: order.title
+    });
+
+    // Format order data consistently for frontend
+    const orderData = {
+      _id: order._id?.toString() || order.id,
+      id: order._id?.toString() || order.id,
+      title: order.title,
+      description: order.description,
+      price: order.price,
+      markedUpPrice: order.markedUpPrice || order.price,
+      imageUrl: order.imageUrl,
+      seller: order.seller,
+      buyer: order.buyer,
+      date: order.date || order.createdAt || new Date().toISOString(),
+      tags: order.tags || [],
+      listingId: order.listingId,
+      wasAuction: order.wasAuction || false,
+      finalBid: order.finalBid,
+      shippingStatus: order.shippingStatus || 'pending',
+      paymentStatus: order.paymentStatus || 'pending',
+      deliveryAddress: order.deliveryAddress,
+      platformFee: order.platformFee,
+      sellerEarnings: order.sellerEarnings,
+      isCustomRequest: order.isCustomRequest || false
+    };
+
+    // CRITICAL: Wrap order data in expected format
+    const eventPayload = {
+      order: orderData,
+      buyer: order.buyer,
+      seller: order.seller
+    };
+
+    // Emit to seller
+    this.emitToUser(order.seller, 'order:created', eventPayload);
+    console.log(`[WebSocket] Emitted order:created to seller ${order.seller}`);
+    
+    // Emit to buyer
+    this.emitToUser(order.buyer, 'order:created', eventPayload);
+    console.log(`[WebSocket] Emitted order:created to buyer ${order.buyer}`);
+    
+    // Also broadcast for any listening components
+    this.broadcast('order:created', eventPayload);
+
+    // Send notifications
     this.emitNotification(order.buyer, {
       type: 'order',
-      title: 'Order Placed!',
-      message: `Your order for ${order.title} has been placed`,
+      title: order.wasAuction ? 'Auction Won!' : 'Order Placed!',
+      message: order.wasAuction 
+        ? `You won the auction for "${order.title}" at $${order.price}. Please provide your delivery address.`
+        : `Your order for ${order.title} has been placed`,
+      data: { orderId: order._id || order.id }
+    });
+
+    // Notify seller
+    this.emitNotification(order.seller, {
+      type: 'sale',
+      title: order.wasAuction ? 'Auction Sold!' : 'New Order!',
+      message: order.wasAuction
+        ? `Your auction "${order.title}" sold for $${order.price}`
+        : `You have a new order for "${order.title}"`,
       data: { orderId: order._id || order.id }
     });
   }
@@ -455,8 +527,22 @@ class WebSocketService {
   }
 
   emitOrderUpdated(order) {
-    this.emitToUser(order.buyer, 'order:updated', order);
-    this.emitToUser(order.seller, 'order:updated', order);
+    const orderData = {
+      _id: order._id?.toString() || order.id,
+      id: order._id?.toString() || order.id,
+      shippingStatus: order.shippingStatus,
+      trackingNumber: order.trackingNumber,
+      deliveryAddress: order.deliveryAddress
+    };
+
+    const eventPayload = {
+      order: orderData,
+      buyer: order.buyer,
+      seller: order.seller
+    };
+
+    this.emitToUser(order.buyer, 'order:updated', eventPayload);
+    this.emitToUser(order.seller, 'order:updated', eventPayload);
   }
 
   emitOrderStatusChange(order, previousStatus) {
@@ -508,6 +594,12 @@ class WebSocketService {
 
   // Include seller earnings in auction ended event
   emitAuctionEnded(listing, winner, finalBid) {
+    console.log('[WebSocket] emitAuctionEnded called:', {
+      listingId: listing._id,
+      winner,
+      finalBid
+    });
+
     let sellerEarnings = null;
     let platformFee = null;
     
@@ -526,6 +618,17 @@ class WebSocketService {
       reserveMet: finalBid >= (listing.auction.reservePrice || 0),
       endedAt: new Date()
     });
+
+    // Special notification to winner - they should refresh their orders
+    if (winner) {
+      this.emitToUser(winner, 'auction:won', {
+        listingId: listing._id?.toString(),
+        title: listing.title,
+        amount: finalBid,
+        needsAddress: true
+      });
+      console.log(`[WebSocket] Emitted auction:won to winner ${winner}`);
+    }
   }
 
   // ===== Wallet =============================================================

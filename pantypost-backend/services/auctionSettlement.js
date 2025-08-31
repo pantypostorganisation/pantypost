@@ -17,11 +17,10 @@ class AuctionSettlementService {
       throw new Error('Invalid auction listing');
     }
     
-    // FIXED: Check for already processed auctions and return success
+    // Check for already processed auctions and return success
     if (listing.auction.status !== 'active') {
       console.log(`[Auction] Auction ${listingId} already processed with status: ${listing.auction.status}`);
       
-      // Return success with the current status
       return {
         success: true,
         message: `Auction already processed with status: ${listing.auction.status}`,
@@ -42,19 +41,18 @@ class AuctionSettlementService {
     const updatedListing = await Listing.findOneAndUpdate(
       { 
         _id: listingId,
-        'auction.status': 'active' // Only process if still active
+        'auction.status': 'active'
       },
       { 
-        $set: { 'auction.status': 'processing' } // Mark as processing
+        $set: { 'auction.status': 'processing' }
       },
-      { new: false } // Return the original document
+      { new: false }
     );
     
     // If no document was updated, another request already processed it
     if (!updatedListing) {
       console.log(`[Auction] Auction ${listingId} already being processed by another request`);
       
-      // Get the current status
       const currentListing = await Listing.findById(listingId);
       return {
         success: true,
@@ -68,8 +66,32 @@ class AuctionSettlementService {
     }
     
     try {
-      // No bids case
-      if (!updatedListing.auction.highestBidder || updatedListing.auction.currentBid === 0) {
+      console.log(`[Auction] Processing auction ${listingId}:`, {
+        highestBidder: updatedListing.auction.highestBidder,
+        currentBid: updatedListing.auction.currentBid,
+        bidCount: updatedListing.auction.bidCount,
+        bidsArrayLength: updatedListing.auction.bids?.length || 0
+      });
+      
+      // CRITICAL FIX: Properly check for valid bids
+      const hasBidsInArray = updatedListing.auction.bids && updatedListing.auction.bids.length > 0;
+      const hasHighestBidder = updatedListing.auction.highestBidder && updatedListing.auction.highestBidder.length > 0;
+      const hasCurrentBid = updatedListing.auction.currentBid && updatedListing.auction.currentBid > 0;
+      
+      console.log(`[Auction] Bid validation for ${listingId}:`, {
+        hasBidsInArray,
+        bidCount: updatedListing.auction.bids?.length || 0,
+        hasHighestBidder,
+        highestBidder: updatedListing.auction.highestBidder,
+        hasCurrentBid,
+        currentBid: updatedListing.auction.currentBid
+      });
+      
+      // An auction has valid bids if there's a highest bidder with a current bid
+      const hasValidBids = hasHighestBidder && hasCurrentBid;
+      
+      if (!hasValidBids) {
+        console.log(`[Auction] No valid bids for auction ${listingId}`);
         updatedListing.auction.status = 'ended';
         updatedListing.status = 'expired';
         await updatedListing.save();
@@ -79,7 +101,7 @@ class AuctionSettlementService {
           recipient: updatedListing.seller,
           type: 'auction_ended',
           title: 'Auction Ended',
-          message: `Your auction for "${updatedListing.title}" ended without any bids`,
+          message: `Your auction for "${updatedListing.title}" ended without any valid bids`,
           metadata: { listingId: updatedListing._id }
         });
         
@@ -92,11 +114,12 @@ class AuctionSettlementService {
           });
         }
         
-        return { success: true, message: 'Auction ended with no bids' };
+        return { success: true, message: 'Auction ended with no valid bids' };
       }
       
       // Check reserve price
       if (updatedListing.auction.reservePrice && updatedListing.auction.currentBid < updatedListing.auction.reservePrice) {
+        console.log(`[Auction] Reserve not met for auction ${listingId}: bid ${updatedListing.auction.currentBid} < reserve ${updatedListing.auction.reservePrice}`);
         updatedListing.auction.status = 'reserve_not_met';
         updatedListing.status = 'expired';
         await updatedListing.save();
@@ -149,7 +172,9 @@ class AuctionSettlementService {
       }
       
       // Process winning bid
+      console.log(`[Auction] Processing winning bid for ${listingId}: winner=${updatedListing.auction.highestBidder}, amount=${updatedListing.auction.currentBid}`);
       return await this.processWinningBid(updatedListing);
+      
     } catch (error) {
       // If processing failed, try to reset status back to active
       console.error('[Auction] Error processing auction:', error);
@@ -181,7 +206,14 @@ class AuctionSettlementService {
     
     console.log(`[Auction] Processing winning bid for auction ${listing._id}: Winner=${winner}, Bid=$${winningBid}`);
     
-    // Get or create wallets
+    // CRITICAL: Check if winner's wallet exists
+    const bidderWallet = await Wallet.findOne({ username: winner });
+    if (!bidderWallet) {
+      console.error(`[Auction] Winner ${winner} has no wallet!`);
+      throw new Error(`Winner ${winner} has no wallet`);
+    }
+    
+    // Get or create seller wallet
     let sellerWallet = await Wallet.findOne({ username: listing.seller });
     if (!sellerWallet) {
       const sellerUser = await User.findOne({ username: listing.seller });
@@ -210,32 +242,29 @@ class AuctionSettlementService {
     
     console.log(`[Auction] Creating order for auction ${listing._id}`);
     
-    // CRITICAL FIX: Create order WITHOUT delivery address requirement
-    // The Order model's deliveryAddress field is already optional (required: false)
+    // Create order with wasAuction flag
     const order = new Order({
       title: listing.title,
       description: listing.description,
       price: winningBid,
-      markedUpPrice: winningBid, // No markup for auctions
+      markedUpPrice: winningBid,
       seller: listing.seller,
       buyer: winner,
       imageUrl: listing.imageUrls[0] || 'https://via.placeholder.com/300',
       tags: listing.tags || [],
       listingId: listing._id,
-      wasAuction: true,
+      wasAuction: true,  // CRITICAL: Must be true
       finalBid: winningBid,
-      // CRITICAL: Don't set deliveryAddress at all - let it be undefined
-      // deliveryAddress will be added later by the buyer
       shippingStatus: 'pending',
       paymentStatus: 'completed',
       paymentCompletedAt: new Date(),
-      // Fee fields
+      date: new Date(),
       platformFee: sellerPlatformFee,
       sellerPlatformFee: sellerPlatformFee,
-      buyerMarkupFee: 0, // No buyer fees for auctions
+      buyerMarkupFee: 0,
       sellerEarnings: sellerEarnings,
-      tierCreditAmount: 0, // No tier bonuses for auctions
-      sellerTier: null // Auctions don't use tier system
+      tierCreditAmount: 0,
+      sellerTier: null
     });
     
     await order.save();
@@ -245,7 +274,7 @@ class AuctionSettlementService {
     const sellerOldBalance = sellerWallet.balance;
     const platformOldBalance = platformWallet.balance;
     
-    // Transfer funds
+    // Transfer funds (from escrow to seller/platform)
     await sellerWallet.deposit(sellerEarnings);
     await platformWallet.deposit(sellerPlatformFee);
     
@@ -342,49 +371,47 @@ class AuctionSettlementService {
     // Refund all other bidders
     await this.refundLosingBidders(listing, winner);
     
-    // Emit WebSocket events
+    // Emit WebSocket events with complete order data
     if (global.webSocketService) {
       console.log(`[Auction] Emitting WebSocket events for auction end`);
       
-      // Auction ended event
-      global.webSocketService.emitAuctionEnded(listing, winner, winningBid);
+      // Format order data for frontend
+      const formattedOrder = {
+        id: order._id.toString(),
+        _id: order._id.toString(),
+        title: order.title,
+        description: order.description,
+        price: order.price,
+        markedUpPrice: order.markedUpPrice,
+        imageUrl: order.imageUrl,
+        seller: order.seller,
+        buyer: order.buyer,
+        date: order.date.toISOString(),
+        tags: order.tags,
+        listingId: order.listingId,
+        wasAuction: true,
+        finalBid: order.finalBid,
+        shippingStatus: order.shippingStatus,
+        paymentStatus: order.paymentStatus,
+        sellerEarnings: order.sellerEarnings,
+        platformFee: order.platformFee,
+        deliveryAddress: order.deliveryAddress
+      };
       
-      // CRITICAL: Emit order created event with full order data
+      // Emit order created event
       global.webSocketService.broadcast('order:created', {
-        order: {
-          _id: order._id.toString(),
-          id: order._id.toString(),
-          title: order.title,
-          description: order.description,
-          price: order.price,
-          markedUpPrice: order.markedUpPrice,
-          imageUrl: order.imageUrl,
-          seller: order.seller,
-          buyer: order.buyer,
-          date: order.date.toISOString(),
-          tags: order.tags,
-          wasAuction: true,
-          finalBid: order.finalBid,
-          shippingStatus: order.shippingStatus,
-          paymentStatus: order.paymentStatus,
-          sellerEarnings: order.sellerEarnings,
-          platformFee: order.platformFee
-        }
+        order: formattedOrder,
+        buyer: winner,
+        seller: listing.seller
       });
       
-      // Also emit specific order created event
+      // Also emit specific order created event if method exists
       if (global.webSocketService.emitOrderCreated) {
-        global.webSocketService.emitOrderCreated({
-          _id: order._id,
-          id: order._id.toString(),
-          title: order.title,
-          seller: order.seller,
-          buyer: order.buyer,
-          price: order.price,
-          markedUpPrice: order.markedUpPrice,
-          wasAuction: true
-        });
+        global.webSocketService.emitOrderCreated(formattedOrder);
       }
+      
+      // Emit auction ended event
+      global.webSocketService.emitAuctionEnded(listing, winner, winningBid);
       
       // Listing sold event
       global.webSocketService.emitListingSold(listing, winner);
@@ -412,7 +439,13 @@ class AuctionSettlementService {
         listingId: listing._id.toString(),
         title: listing.title,
         amount: winningBid,
-        needsAddress: true
+        needsAddress: true,
+        order: formattedOrder
+      });
+      
+      // Also emit order:new for the buyer
+      global.webSocketService.emitToUser(winner, 'order:new', {
+        order: formattedOrder
       });
     }
     
@@ -438,11 +471,13 @@ class AuctionSettlementService {
     const bidderHighestBids = new Map();
     
     // Go through all bids to find each bidder's highest bid
-    for (const bid of listing.auction.bids) {
-      if (bid.bidder !== winner) {
-        const currentHighest = bidderHighestBids.get(bid.bidder) || 0;
-        if (bid.amount > currentHighest) {
-          bidderHighestBids.set(bid.bidder, bid.amount);
+    if (listing.auction.bids && listing.auction.bids.length > 0) {
+      for (const bid of listing.auction.bids) {
+        if (bid.bidder !== winner) {
+          const currentHighest = bidderHighestBids.get(bid.bidder) || 0;
+          if (bid.amount > currentHighest) {
+            bidderHighestBids.set(bid.bidder, bid.amount);
+          }
         }
       }
     }
@@ -568,20 +603,6 @@ class AuctionSettlementService {
       });
     }
     
-    // Also refund any other bidders who may have been outbid
-    const uniqueBidders = new Set();
-    for (const bid of listing.auction.bids) {
-      if (bid.bidder !== listing.auction.highestBidder) {
-        uniqueBidders.add(bid.bidder);
-      }
-    }
-    
-    // Note: These bidders should already have been refunded when outbid,
-    // but we check just in case
-    for (const bidder of uniqueBidders) {
-      console.log(`[Auction] Checking if ${bidder} needs refund for cancelled auction`);
-    }
-    
     // Update listing status
     listing.auction.status = 'cancelled';
     listing.status = 'cancelled';
@@ -645,11 +666,11 @@ class AuctionSettlementService {
         try {
           const result = await this.processEndedAuction(listing._id);
           
-          // FIXED: Only count as processed if not already processed
+          // Only count as processed if not already processed
           if (!result.alreadyProcessed) {
             results.processed++;
             
-            if (result.message.includes('no bids')) {
+            if (result.message.includes('no valid bids')) {
               results.noBids++;
             } else if (result.message.includes('reserve not met')) {
               results.reserveNotMet++;
