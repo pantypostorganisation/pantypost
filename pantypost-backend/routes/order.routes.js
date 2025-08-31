@@ -443,11 +443,12 @@ router.post('/', authMiddleware, async (req, res) => {
 
       console.log('[Order] Order processing complete with tier support');
 
-      // Return order data with tier info
+      // CRITICAL FIX: Return order data with both _id and id fields
       res.json({
         success: true,
         data: {
-          id: order._id.toString(),
+          _id: order._id.toString(),  // Include MongoDB _id
+          id: order._id.toString(),   // Also include as id for frontend compatibility
           title: order.title,
           description: order.description,
           price: order.price,
@@ -861,11 +862,12 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
 
       console.log('[Order] Custom request processing complete');
 
-      // Return order data
+      // CRITICAL FIX: Return order data with both _id and id fields
       res.json({
         success: true,
         data: {
-          id: order._id.toString(),
+          _id: order._id.toString(),  // Include MongoDB _id
+          id: order._id.toString(),   // Also include as id for frontend compatibility
           title: order.title,
           description: order.description,
           price: order.price,
@@ -925,12 +927,18 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
 // GET /api/orders - Get orders for a user
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { role, limit = 50, page = 1, status } = req.query;
+    const { role, limit = 50, page = 1, status, buyer, seller } = req.query;
     const username = req.user.username;
     
-    // Build query based on role
+    // Build query based on role and params
     const query = {};
-    if (role === 'buyer' || req.user.role === 'buyer') {
+    
+    // CRITICAL FIX: Handle explicit buyer/seller params for filtering
+    if (buyer) {
+      query.buyer = buyer;
+    } else if (seller) {
+      query.seller = seller;
+    } else if (role === 'buyer' || req.user.role === 'buyer') {
       query.buyer = username;
     } else if (role === 'seller' || req.user.role === 'seller') {
       query.seller = username;
@@ -948,6 +956,8 @@ router.get('/', authMiddleware, async (req, res) => {
       query.shippingStatus = status;
     }
 
+    console.log('[Order] GET /api/orders query:', query);
+
     // Get orders with pagination
     const skip = (page - 1) * limit;
     const orders = await Order.find(query)
@@ -958,9 +968,12 @@ router.get('/', authMiddleware, async (req, res) => {
     // Get total count for pagination
     const total = await Order.countDocuments(query);
 
-    // Format orders for response
+    console.log(`[Order] Found ${orders.length} orders (total: ${total})`);
+
+    // CRITICAL FIX: Format orders with both _id and id fields
     const formattedOrders = orders.map(order => ({
-      id: order._id.toString(),
+      _id: order._id.toString(),  // Include MongoDB _id
+      id: order._id.toString(),   // Also include as id for frontend compatibility
       title: order.title,
       description: order.description,
       price: order.price,
@@ -1029,10 +1042,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
       });
     }
 
+    // CRITICAL FIX: Return with both _id and id fields
     res.json({
       success: true,
       data: {
-        id: order._id.toString(),
+        _id: order._id.toString(),  // Include MongoDB _id
+        id: order._id.toString(),   // Also include as id for frontend compatibility
         title: order.title,
         description: order.description,
         price: order.price,
@@ -1071,6 +1086,93 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // PUT /api/orders/:id/shipping - Update shipping status
 router.put('/:id/shipping', authMiddleware, async (req, res) => {
+  try {
+    const { shippingStatus, trackingNumber } = req.body;
+    
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Only seller or admin can update shipping
+    if (req.user.username !== order.seller && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the seller can update shipping status'
+      });
+    }
+
+    // Update shipping status
+    if (shippingStatus) {
+      order.shippingStatus = shippingStatus;
+      
+      if (shippingStatus === 'shipped' && !order.shippedDate) {
+        order.shippedDate = new Date();
+      } else if (shippingStatus === 'delivered' && !order.deliveredDate) {
+        order.deliveredDate = new Date();
+      }
+    }
+
+    if (trackingNumber) {
+      order.trackingNumber = trackingNumber;
+    }
+
+    await order.save();
+
+    // Create notification for buyer when shipped
+    if (shippingStatus === 'shipped') {
+      await Notification.create({
+        recipient: order.buyer,
+        type: 'shipping_update',
+        title: 'Order Shipped',
+        message: `Your order "${order.title}" has been shipped${trackingNumber ? ` (Tracking: ${trackingNumber})` : ''}`,
+        link: `/buyers/my-orders`,
+        metadata: {
+          orderId: order._id.toString(),
+          seller: order.seller,
+          trackingNumber
+        }
+      });
+    }
+
+    // Emit WebSocket event
+    if (global.webSocketService) {
+      global.webSocketService.emitOrderUpdated({
+        _id: order._id,
+        id: order._id.toString(),
+        shippingStatus: order.shippingStatus,
+        trackingNumber: order.trackingNumber,
+        buyer: order.buyer,
+        seller: order.seller
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: order._id.toString(),
+        shippingStatus: order.shippingStatus,
+        trackingNumber: order.trackingNumber,
+        shippedDate: order.shippedDate,
+        deliveredDate: order.deliveredDate
+      }
+    });
+
+  } catch (error) {
+    console.error('[Order] Error updating shipping:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/orders/:id/shipping - Update shipping status (alternative to PUT for frontend compatibility)
+router.post('/:id/shipping', authMiddleware, async (req, res) => {
   try {
     const { shippingStatus, trackingNumber } = req.body;
     
@@ -1263,6 +1365,113 @@ router.put('/:id/address', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/orders/:id/address - Update delivery address (alternative to PUT for frontend compatibility)
+router.post('/:id/address', authMiddleware, async (req, res) => {
+  try {
+    const { deliveryAddress } = req.body;
+    
+    // Validate delivery address
+    if (!deliveryAddress || !deliveryAddress.fullName || !deliveryAddress.addressLine1 || 
+        !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.postalCode || 
+        !deliveryAddress.country) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid delivery address. All required fields must be provided.'
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    // Only buyer or admin can update delivery address
+    if (req.user.username !== order.buyer && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the buyer can update the delivery address'
+      });
+    }
+
+    // Don't allow address change if order is already shipped
+    if (order.shippingStatus === 'shipped' || order.shippingStatus === 'delivered') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot update address for shipped or delivered orders'
+      });
+    }
+
+    // Update the delivery address
+    order.deliveryAddress = {
+      fullName: deliveryAddress.fullName.trim(),
+      addressLine1: deliveryAddress.addressLine1.trim(),
+      addressLine2: deliveryAddress.addressLine2 ? deliveryAddress.addressLine2.trim() : undefined,
+      city: deliveryAddress.city.trim(),
+      state: deliveryAddress.state.trim(),
+      postalCode: deliveryAddress.postalCode.trim(),
+      country: deliveryAddress.country.trim(),
+      specialInstructions: deliveryAddress.specialInstructions ? deliveryAddress.specialInstructions.trim() : undefined
+    };
+
+    await order.save();
+
+    console.log('[Order] Address updated for order:', order._id);
+
+    // Create notification for seller about address update
+    await Notification.create({
+      recipient: order.seller,
+      type: 'address_update',
+      title: 'Delivery Address Updated',
+      message: `${order.buyer} has ${order.deliveryAddress ? 'updated' : 'added'} the delivery address for "${order.title}"`,
+      link: `/sellers/orders-to-fulfil`,
+      metadata: {
+        orderId: order._id.toString(),
+        buyer: order.buyer
+      }
+    });
+
+    // Emit WebSocket event
+    if (global.webSocketService) {
+      global.webSocketService.emitOrderUpdated({
+        _id: order._id,
+        id: order._id.toString(),
+        buyer: order.buyer,
+        seller: order.seller,
+        hasAddress: true,
+        addressUpdated: true
+      });
+
+      // Send notification to seller via WebSocket
+      global.webSocketService.emitToUser(order.seller, 'order:address-updated', {
+        orderId: order._id.toString(),
+        orderTitle: order.title,
+        buyer: order.buyer,
+        hasAddress: true
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: order._id.toString(),
+        deliveryAddress: order.deliveryAddress,
+        message: 'Delivery address updated successfully'
+      }
+    });
+
+  } catch (error) {
+    console.error('[Order] Error updating address:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update delivery address'
+    });
+  }
+});
+
 // PATCH /api/orders/:id - Update order (general update endpoint)
 router.patch('/:id', authMiddleware, async (req, res) => {
   try {
@@ -1339,10 +1548,12 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       });
     }
 
+    // CRITICAL FIX: Return with both _id and id fields
     res.json({
       success: true,
       data: {
-        id: order._id.toString(),
+        _id: order._id.toString(),  // Include MongoDB _id
+        id: order._id.toString(),   // Also include as id for frontend compatibility
         title: order.title,
         description: order.description,
         price: order.price,

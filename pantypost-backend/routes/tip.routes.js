@@ -1,3 +1,4 @@
+// pantypost-backend/routes/tip.routes.js
 const express = require('express');
 const router = express.Router();
 const Wallet = require('../models/Wallet');

@@ -100,6 +100,8 @@ class DeduplicationManager {
       key = `${eventType}_${data.username}_${data.balance || data.newBalance}_${data.timestamp || Date.now()}`;
     } else if (eventType === 'transaction') {
       key = `${eventType}_${data.id || data.transactionId}_${data.from}_${data.to}_${data.amount}`;
+    } else if (eventType === 'order_created') {
+      key = `${eventType}_${data.id || data._id}_${data.buyer}_${data.seller}`;
     } else {
       key = `${eventType}_${JSON.stringify(data)}`;
     }
@@ -361,7 +363,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Fetch transaction history from API
+  // CRITICAL FIX: Fetch actual orders from /orders endpoint
+  const fetchOrderHistory = useCallback(async (username: string) => {
+    try {
+      debugLog('Fetching orders for:', username);
+      
+      // Use the orders endpoint with buyer parameter
+      const response = await apiClient.get<any>(`/orders?buyer=${username}`);
+      
+      debugLog('Orders response:', response);
+      
+      if (response.success && response.data) {
+        // The orders should already be in the correct format
+        setOrderHistory(response.data);
+        debugLog('Order history updated:', response.data.length, 'orders');
+      }
+    } catch (error) {
+      console.error('[WalletContext] Failed to fetch order history:', error);
+    }
+  }, [apiClient]);
+
+  // Also fetch transactions for transaction history (keep this separate)
   const fetchTransactionHistory = useCallback(async (username: string) => {
     try {
       debugLog('Fetching transactions for:', username);
@@ -373,28 +395,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       
       debugLog('Transactions response:', response);
       
-      if (response.success && response.data) {
-        // Convert transactions to our order format
-        const orders = response.data
-          .filter((tx: any) => tx.type === 'purchase' || tx.type === 'sale')
-          .map((tx: any) => ({
-            id: tx.id,
-            title: tx.description,
-            description: tx.description,
-            price: tx.amount,
-            markedUpPrice: tx.amount,
-            date: tx.createdAt || tx.date,
-            seller: tx.toRole === 'seller' ? tx.to : tx.from,
-            buyer: tx.fromRole === 'buyer' ? tx.from : tx.to,
-            shippingStatus: tx.status === 'completed' ? 'pending' : 'pending-auction',
-            // Include tier information if available
-            sellerTier: tx.metadata?.sellerTier,
-            tierCreditAmount: tx.metadata?.tierBonus || 0
-          }));
-        
-        setOrderHistory(orders);
-        debugLog('Transaction history updated:', orders.length, 'orders');
-      }
+      // Don't try to convert transactions to orders anymore
+      // Transactions and orders are separate things
+      
     } catch (error) {
       console.error('[WalletContext] Failed to fetch transaction history:', error);
     }
@@ -668,6 +671,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fireAdminBalanceUpdateEvent, adminBalance]);
 
+  // CRITICAL: Add handler for order:created events
+  const handleOrderCreated = useCallback((data: any) => {
+    debugLog('Received order:created event:', data);
+    
+    // Check for duplicate
+    if (deduplicationManager.current.isDuplicate('order_created', data)) {
+      debugLog('Skipping duplicate order created event');
+      return;
+    }
+    
+    const order = data.order || data;
+    
+    // Check if this order is for the current user
+    if (user && (order.buyer === user.username || order.seller === user.username)) {
+      // Reload orders to get the new one
+      console.log('[WalletContext] New order for current user, refreshing orders');
+      fetchOrderHistory(user.username);
+    }
+  }, [user, fetchOrderHistory]);
+
   const handleWalletTransaction = useCallback(async (data: any) => {
     debugLog('Received wallet:transaction:', data);
     
@@ -692,12 +715,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      // If transaction involves current user, refresh their transaction history (with throttling)
+      // If transaction involves current user, refresh their data
       if (user && (sanitizedFrom === user.username || sanitizedTo === user.username)) {
-        if (!throttleManager.current.shouldThrottle('transaction_history', 5000)) {
+        if (!throttleManager.current.shouldThrottle('user_data_refresh', 5000)) {
+          // Refresh both transactions and orders
           await fetchTransactionHistory(user.username);
+          await fetchOrderHistory(user.username); 
         } else {
-          debugLog('Throttled transaction history refresh');
+          debugLog('Throttled user data refresh');
         }
       }
       
@@ -715,7 +740,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('[WalletContext] Error processing transaction:', error);
     }
-  }, [user, fetchTransactionHistory, fetchAdminPlatformBalance, fetchAdminActions]);
+  }, [user, fetchTransactionHistory, fetchOrderHistory, fetchAdminPlatformBalance, fetchAdminActions]);
 
   // Consolidated WebSocket subscriptions
   useEffect(() => {
@@ -731,14 +756,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     // Subscribe to wallet:transaction events
     const unsubTransaction = subscribe('wallet:transaction' as WebSocketEvent, handleWalletTransaction);
+    
+    // CRITICAL: Subscribe to order:created events
+    const unsubOrderCreated = subscribe('order:created' as WebSocketEvent, handleOrderCreated);
 
     // Cleanup subscriptions
     return () => {
       unsubBalance();
       unsubPlatform();
       unsubTransaction();
+      unsubOrderCreated();
     };
-  }, [isConnected, subscribe, handleWalletBalanceUpdate, handlePlatformBalanceUpdate, handleWalletTransaction]);
+  }, [isConnected, subscribe, handleWalletBalanceUpdate, handlePlatformBalanceUpdate, handleWalletTransaction, handleOrderCreated]);
 
   // Listen to custom WebSocket balance updates via events (backward compatibility)
   useEffect(() => {
@@ -754,16 +783,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       debugLog('Received custom transaction event:', event.detail);
       handleWalletTransaction(event.detail);
     };
+    
+    const handleOrderEvent = (event: CustomEvent) => {
+      debugLog('Received custom order event:', event.detail);
+      handleOrderCreated(event.detail);
+    };
 
     // Listen for custom events from other components
     window.addEventListener('wallet:balance_update', handleBalanceUpdate as EventListener);
     window.addEventListener('wallet:transaction', handleTransaction as EventListener);
+    window.addEventListener('order:created', handleOrderEvent as EventListener);
 
     return () => {
       window.removeEventListener('wallet:balance_update', handleBalanceUpdate as EventListener);
       window.removeEventListener('wallet:transaction', handleTransaction as EventListener);
+      window.removeEventListener('order:created', handleOrderEvent as EventListener);
     };
-  }, [handleWalletBalanceUpdate, handleWalletTransaction]);
+  }, [handleWalletBalanceUpdate, handleWalletTransaction, handleOrderCreated]);
 
   // Helper to emit wallet balance updates
   const emitBalanceUpdate = useCallback((username: string, role: 'buyer' | 'seller' | 'admin', balance: number) => {
@@ -1057,7 +1093,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setSellerBalancesState(prev => ({ ...prev, [user.username]: balance }));
       }
       
-      // Fetch transaction history
+      // CRITICAL: Fetch actual orders, not transactions
+      await fetchOrderHistory(user.username);
+      
+      // Also fetch transaction history for reference
       await fetchTransactionHistory(user.username);
       
       debugLog('Data loaded successfully');
@@ -1067,7 +1106,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInitializationError('Failed to load wallet data');
       return false;
     }
-  }, [user, fetchBalance, fetchAdminPlatformBalance, fetchAdminAnalytics, fetchTransactionHistory, fireAdminBalanceUpdateEvent, fetchAdminActions, adminBalance]);
+  }, [user, fetchBalance, fetchAdminPlatformBalance, fetchAdminAnalytics, fetchOrderHistory, fetchTransactionHistory, fireAdminBalanceUpdateEvent, fetchAdminActions, adminBalance]);
 
   // CRITICAL FIX: Refresh admin data with proper throttling
   const refreshAdminData = useCallback(async () => {
@@ -1295,10 +1334,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           await fetchAdminActions();
         }
         
-        // Refresh transaction history for current user only
+        // Refresh order history for current user only
         if (user?.username) {
-          if (!throttleManager.current.shouldThrottle('order_transaction_history', 3000)) {
-            await fetchTransactionHistory(user.username);
+          if (!throttleManager.current.shouldThrottle('order_refresh', 3000)) {
+            await fetchOrderHistory(user.username);
           }
         }
         
@@ -1312,7 +1351,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       console.error('[WalletContext] Failed to create order:', error);
       throw error;
     }
-  }, [apiClient, fetchBalance, fetchTransactionHistory, refreshAdminData, user, fetchAdminActions]);
+  }, [apiClient, fetchBalance, fetchOrderHistory, refreshAdminData, user, fetchAdminActions]);
 
   // UPDATED: Purchase custom request implementation
   const purchaseCustomRequest = useCallback(async (request: CustomRequestPurchase): Promise<boolean> => {
@@ -1900,6 +1939,58 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [apiClient, fetchAdminPlatformBalance, user]);
 
+  // Update order address
+  const updateOrderAddress = useCallback(async (orderId: string, address: DeliveryAddress) => {
+    try {
+      debugLog('Updating order address:', orderId);
+      
+      // Use POST method since ApiClient doesn't have PUT
+      const response = await apiClient.post<any>(`/orders/${orderId}/address`, {
+        deliveryAddress: address
+      });
+      
+      if (response.success) {
+        // Update local order history
+        setOrderHistory(prev => prev.map(order => 
+          order.id === orderId ? { ...order, deliveryAddress: address } : order
+        ));
+        
+        debugLog('Order address updated successfully');
+      } else {
+        throw new Error(response.error?.message || 'Failed to update address');
+      }
+    } catch (error) {
+      console.error('[WalletContext] Error updating order address:', error);
+      throw error;
+    }
+  }, [apiClient]);
+
+  // Update shipping status
+  const updateShippingStatus = useCallback(async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+    try {
+      debugLog('Updating shipping status:', orderId, status);
+      
+      // Use POST method since ApiClient doesn't have PUT
+      const response = await apiClient.post<any>(`/orders/${orderId}/shipping`, {
+        shippingStatus: status
+      });
+      
+      if (response.success) {
+        // Update local order history
+        setOrderHistory(prev => prev.map(order => 
+          order.id === orderId ? { ...order, shippingStatus: status } : order
+        ));
+        
+        debugLog('Shipping status updated successfully');
+      } else {
+        throw new Error(response.error?.message || 'Failed to update shipping status');
+      }
+    } catch (error) {
+      console.error('[WalletContext] Error updating shipping status:', error);
+      throw error;
+    }
+  }, [apiClient]);
+
   // Auction-related stubs
   const holdBidFunds = useCallback(async (): Promise<boolean> => {
     debugLog('Auction features not fully implemented in API yet');
@@ -1962,8 +2053,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     adminCreditUser,
     adminDebitUser,
     adminActions,
-    updateOrderAddress: async () => { debugLog('Order address update not implemented yet'); },
-    updateShippingStatus: async () => { debugLog('Shipping status update not implemented yet'); },
+    updateOrderAddress,
+    updateShippingStatus,
     depositLogs,
     addDeposit,
     getDepositsForUser: (username: string) => depositLogs.filter(log => log.username === username),

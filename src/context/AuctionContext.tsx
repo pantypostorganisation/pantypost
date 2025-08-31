@@ -20,23 +20,23 @@ export interface AuctionData {
   listingId: string;
   seller: string;
   startingPrice: number;
-  reservePrice?: number; // Added reserve price field
+  reservePrice?: number;
   currentBid: number;
   highestBidder?: string;
   previousBidder?: string;
   endTime: string;
   bids: Bid[];
-  status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met'; // Added reserve_not_met status
+  status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met';
   winnerId?: string;
   finalPrice?: number;
-  reserveMet?: boolean; // Track if reserve is met
+  reserveMet?: boolean;
 }
 
 interface AuctionContextType {
   // Auction state
   auctions: Record<string, AuctionData>;
   activeAuctions: AuctionData[];
-  userBids: Record<string, Bid[]>; // Bids by user
+  userBids: Record<string, Bid[]>;
   
   // Auction actions
   placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
@@ -46,7 +46,7 @@ interface AuctionContextType {
   getAuctionByListingId: (listingId: string) => AuctionData | null;
   getUserBidsForAuction: (listingId: string, username: string) => Bid[];
   isUserHighestBidder: (listingId: string, username: string) => boolean;
-  checkReserveMet: (listingId: string) => boolean; // New method to check if reserve is met
+  checkReserveMet: (listingId: string) => boolean;
   
   // Loading states
   isPlacingBid: boolean;
@@ -67,7 +67,6 @@ const AuctionContext = createContext<AuctionContextType | null>(null);
 export function AuctionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   
-  // Fix: Handle nullable WebSocket context
   const wsContext = useWebSocket();
   const subscribe = wsContext?.subscribe || (() => () => {});
   const isConnected = wsContext?.isConnected || false;
@@ -79,32 +78,26 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
   const [isLoadingAuctions, setIsLoadingAuctions] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
   
-  // Get active auctions
   const activeAuctions = Object.values(auctions).filter(
     auction => auction.status === 'active'
   );
 
-  // Clear bid error
   const clearBidError = useCallback(() => {
     setBidError(null);
   }, []);
 
-  // Helper function to refresh ONLY current user's wallet balance
   const refreshCurrentUserBalance = useCallback(async () => {
     if (!user) return;
     
     try {
-      // Only fetch balance for the current user - this is allowed
       const response = await apiCall<any>(`/wallet/balance/${user.username}`);
       
       if (response.success && response.data) {
         const newBalance = response.data.balance || 0;
         
-        // Fire wallet update event for current user
         if (typeof window !== 'undefined') {
           console.log(`[AuctionContext] Current user balance updated: $${newBalance}`);
           
-          // Fire generic balance update event
           window.dispatchEvent(new CustomEvent('wallet:balance_update', {
             detail: { 
               username: user.username,
@@ -115,7 +108,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
             }
           }));
           
-          // Fire role-specific event
           const roleEvent = user.role === 'buyer' ? 'wallet:buyer-balance-updated' : 'wallet:seller-balance-updated';
           window.dispatchEvent(new CustomEvent(roleEvent, {
             detail: { 
@@ -131,9 +123,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Update auction with new bid - Enhanced to track reserve status
   const updateAuctionWithBid = useCallback((listingId: string, bidData: any) => {
-    // Handle the actual WebSocket data structure
     const bid: Bid = {
       id: `bid_${Date.now()}`,
       bidder: bidData.bidder || bidData.username,
@@ -144,14 +134,12 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
 
     console.log('[AuctionContext] Processing bid update:', { listingId, bid });
 
-    // Track the previous highest bidder before updating
     let previousHighestBidder: string | undefined;
     
     setAuctions(prev => {
       const existingAuction = prev[listingId];
       previousHighestBidder = existingAuction?.highestBidder;
       
-      // Check if reserve is met
       const reserveMet = existingAuction?.reservePrice ? 
         bid.amount >= existingAuction.reservePrice : true;
       
@@ -177,17 +165,14 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       };
     });
 
-    // Update user bids
     setUserBids(prev => ({
       ...prev,
       [bid.bidder]: [...(prev[bid.bidder] || []), bid]
     }));
     
-    // Return the previous bidder so we can handle updates
     return previousHighestBidder;
   }, []);
 
-  // Update auction status - Enhanced for reserve not met
   const updateAuctionStatus = useCallback((
     listingId: string, 
     status: 'ended' | 'cancelled' | 'reserve_not_met',
@@ -218,26 +203,19 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Check if reserve is met
   const checkReserveMet = useCallback((listingId: string): boolean => {
     const auction = auctions[listingId];
-    if (!auction || !auction.reservePrice) return true; // No reserve means always met
+    if (!auction || !auction.reservePrice) return true;
     return auction.currentBid >= auction.reservePrice;
   }, [auctions]);
 
-  // Load auctions on mount
   useEffect(() => {
     const loadAuctions = async () => {
       if (!user) return;
       
       setIsLoadingAuctions(true);
       try {
-        // TODO: Replace with actual API call when endpoint exists
         console.log('[AuctionContext] Loading auctions...');
-        // const response = await apiCall<any>('/auctions');
-        // if (response.success) {
-        //   setAuctions(response.data);
-        // }
       } catch (error) {
         console.error('[AuctionContext] Error loading auctions:', error);
       } finally {
@@ -248,46 +226,34 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     loadAuctions();
   }, [user]);
 
-  // Subscribe to WebSocket updates for auctions - Enhanced with reserve handling
   useEffect(() => {
     if (!isConnected || !subscribe) return;
 
     const unsubscribers: (() => void)[] = [];
 
-    // Subscribe to auction bid events
     unsubscribers.push(
       subscribe(WebSocketEvent.AUCTION_BID, async (data: any) => {
         console.log('[AuctionContext] New bid received:', data);
         
-        // Extract listing ID and bid data from the WebSocket event
         const listingId = data.listingId || data.id;
         if (listingId) {
-          // Update auction and get the previous bidder
           const previousBidder = updateAuctionWithBid(listingId, data);
           
-          // Only refresh balance if current user is involved
           if (user && data.bidder === user.username) {
-            // Current user placed a bid - refresh their balance
             await refreshCurrentUserBalance();
           }
-          
-          // Note: We don't try to refresh the outbid user's balance here
-          // The backend will send a wallet:balance_update or wallet:refund event for them
         }
       })
     );
 
-    // CRITICAL: Subscribe to wallet:refund events (for when current user is outbid)
     unsubscribers.push(
       subscribe('wallet:refund' as WebSocketEvent, async (data: any) => {
         console.log('[AuctionContext] Wallet refund received:', data);
         
-        // If this refund is for the current user, refresh their balance
         if (user && data.username === user.username) {
           console.log('[AuctionContext] Current user was refunded, refreshing balance');
           await refreshCurrentUserBalance();
           
-          // CRITICAL: Fire a custom event to notify components that balance was updated
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('wallet:user-refunded', {
               detail: { 
@@ -295,7 +261,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
                 amount: data.amount,
                 listingId: data.listingId,
                 balance: data.balance,
-                reason: data.reason, // Will include 'reserve_not_met' if applicable
+                reason: data.reason,
                 timestamp: Date.now()
               }
             }));
@@ -304,14 +270,11 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Subscribe to wallet:balance_update events
     unsubscribers.push(
       subscribe('wallet:balance_update' as WebSocketEvent, async (data: any) => {
         console.log('[AuctionContext] Balance update received:', data);
         
-        // If this is for the current user and has a balance value, update UI
         if (user && data.username === user.username && typeof data.newBalance === 'number') {
-          // Fire events to update the UI
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('wallet:balance_update', {
               detail: { 
@@ -332,7 +295,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
               }
             }));
             
-            // CRITICAL: Also fire a bid-enablement check event
             window.dispatchEvent(new CustomEvent('auction:check-bid-status', {
               detail: { 
                 username: user.username,
@@ -345,43 +307,33 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Subscribe to auction:outbid events
     unsubscribers.push(
       subscribe('auction:outbid' as WebSocketEvent, async (data: any) => {
         console.log('[AuctionContext] User was outbid:', data);
         
-        // If current user was outbid, they should get a refund
-        // The backend will handle this and send a wallet:refund event
-        // We just show a notification here if needed
         if (user && data.username === user.username) {
           console.log('[AuctionContext] Current user was outbid on', data.listingTitle);
-          // You could show a notification here
         }
       })
     );
 
-    // Subscribe to auction ended events - Enhanced with reserve handling
     unsubscribers.push(
       subscribe(WebSocketEvent.AUCTION_ENDED, async (data: any) => {
         console.log('[AuctionContext] Auction ended:', data);
         const listingId = data.listingId || data.id;
         if (listingId) {
-          // Check the status from backend
           const status = data.status || 'ended';
           
           if (status === 'reserve_not_met') {
             updateAuctionStatus(listingId, 'reserve_not_met');
             
-            // If current user was the highest bidder, they'll get a refund
             const auction = auctions[listingId];
             if (user && auction?.highestBidder === user.username) {
               console.log('[AuctionContext] Reserve not met, user will be refunded');
-              // Balance refresh will happen when wallet:refund event arrives
             }
           } else {
             updateAuctionStatus(listingId, 'ended', data.winnerId || data.winner, data.finalPrice || data.finalBid);
             
-            // If current user is the winner, refresh their balance
             if (user && (data.winnerId === user.username || data.winner === user.username)) {
               await refreshCurrentUserBalance();
             }
@@ -390,7 +342,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Subscribe to auction:reserve_not_met events specifically
     unsubscribers.push(
       subscribe('auction:reserve_not_met' as WebSocketEvent, async (data: any) => {
         console.log('[AuctionContext] Auction reserve not met:', data);
@@ -398,7 +349,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
         if (listingId) {
           updateAuctionStatus(listingId, 'reserve_not_met');
           
-          // Current user will get refund if they were the highest bidder
           const auction = auctions[listingId];
           if (user && auction?.highestBidder === user.username) {
             console.log('[AuctionContext] User was highest bidder, awaiting refund for reserve not met');
@@ -407,7 +357,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       })
     );
 
-    // Subscribe to auction cancelled events
     unsubscribers.push(
       subscribe(WebSocketEvent.AUCTION_CANCELLED, async (data: any) => {
         console.log('[AuctionContext] Auction cancelled:', data);
@@ -416,7 +365,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
           const auction = auctions[listingId];
           updateAuctionStatus(listingId, 'cancelled');
           
-          // If current user was highest bidder, refresh their balance (they get refunded)
           if (user && auction?.highestBidder === user.username) {
             await refreshCurrentUserBalance();
           }
@@ -429,7 +377,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     };
   }, [isConnected, subscribe, updateAuctionWithBid, updateAuctionStatus, user, refreshCurrentUserBalance, auctions]);
 
-  // Place a bid - Enhanced with reserve price validation
   const placeBid = useCallback(async (
     listingId: string,
     bidder: string, 
@@ -444,36 +391,29 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     setBidError(null);
 
     try {
-      // Use apiCall which handles auth properly
       const response = await apiCall<any>(`/listings/${listingId}/bid`, {
         method: 'POST',
         body: JSON.stringify({ amount }),
       });
 
       if (response.success) {
-        // Update will come through WebSocket
         console.log('[AuctionContext] Bid placed successfully:', response.data?.message || 'Success');
         
-        // Also update local state immediately for better UX
         updateAuctionWithBid(listingId, {
           bidder: bidder,
           amount: amount,
           timestamp: new Date().toISOString()
         });
         
-        // Check if reserve is met and show appropriate message
         const auction = auctions[listingId];
         if (auction?.reservePrice && amount < auction.reservePrice) {
           console.log('[AuctionContext] Bid placed but reserve price not yet met');
-          // You might want to show a warning to the user
         }
         
-        // Refresh current user's balance (they placed the bid)
         await refreshCurrentUserBalance();
         
         return true;
       } else {
-        // Extract error message string from ApiError object
         const errorMsg = typeof response.error === 'string' 
           ? response.error 
           : response.error?.message || 'Failed to place bid';
@@ -491,7 +431,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
   }, [user, updateAuctionWithBid, refreshCurrentUserBalance, auctions]);
 
-  // Cancel auction (seller only) - Using apiCall
   const cancelAuction = useCallback(async (
     listingId: string
   ): Promise<boolean> => {
@@ -507,7 +446,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       });
 
       if (response.success) {
-        // Update will come through WebSocket
         return true;
       } else {
         console.error('[AuctionContext] Cancel auction failed:', response.error);
@@ -521,7 +459,6 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // End auction (admin/system only) - Using apiCall
   const endAuction = useCallback(async (
     listingId: string
   ): Promise<boolean> => {
@@ -546,59 +483,75 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Process ended auction - Enhanced with reserve checking
+  // FIXED: Process ended auction - handle already processed auctions gracefully
   const processEndedAuction = useCallback(async (listing: any): Promise<boolean> => {
     if (!listing.auction) return false;
     
     try {
-      // If there's a highest bidder, check reserve price
-      if (listing.auction.highestBidder && listing.auction.highestBid) {
-        // Check if reserve is met
-        if (listing.auction.reservePrice && listing.auction.highestBid < listing.auction.reservePrice) {
-          console.log('[AuctionContext] Auction ended but reserve not met');
-          // Backend will handle the reserve not met status and refunds
-        }
-        
-        // Call backend to process auction completion
-        const response = await apiCall<any>(`/listings/${listing.id}/end-auction`, {
-          method: 'POST',
-        });
+      // Call backend to process auction completion
+      const response = await apiCall<any>(`/listings/${listing.id}/end-auction`, {
+        method: 'POST',
+      });
 
-        if (response.success) {
-          // Update auction status based on response
-          const status = response.data?.status || 'ended';
+      if (response.success) {
+        // Check if it was already processed (backend returns success with alreadyProcessed flag)
+        if (response.data?.alreadyProcessed) {
+          console.log('[AuctionContext] Auction was already processed:', response.data.status);
+          
+          // Update status based on the already-processed status
+          const status = response.data.status || 'ended';
           if (status === 'reserve_not_met') {
             updateAuctionStatus(listing.id, 'reserve_not_met');
-          } else {
+          } else if (status === 'ended' || status === 'sold') {
             updateAuctionStatus(listing.id, 'ended', listing.auction.highestBidder, listing.auction.highestBid);
           }
-          return true;
+          
+          return true; // Return true since it's handled (even if already processed)
         }
-      } else {
-        // No bids - just mark as ended
-        const response = await apiCall<any>(`/listings/${listing.id}/end-auction`, {
-          method: 'POST',
-        });
         
-        if (response.success) {
+        // Not already processed - update status based on response
+        const status = response.data?.status || 'ended';
+        if (status === 'reserve_not_met') {
+          updateAuctionStatus(listing.id, 'reserve_not_met');
+        } else if (listing.auction.highestBidder && listing.auction.highestBid) {
+          updateAuctionStatus(listing.id, 'ended', listing.auction.highestBidder, listing.auction.highestBid);
+        } else {
           updateAuctionStatus(listing.id, 'ended');
-          return true;
         }
+        
+        return true;
       }
       
+      // FIXED: Check if error is about auction not being active (already processed)
+      if (response.error?.message?.includes('Auction is not active') || 
+          response.error?.message?.includes('already processed')) {
+        console.log('[AuctionContext] Auction already processed, ignoring error');
+        
+        // Update status to ended since it's already been processed
+        updateAuctionStatus(listing.id, 'ended');
+        return true; // Return true to indicate it's handled
+      }
+      
+      console.error('[AuctionContext] Failed to process ended auction:', response.error);
       return false;
-    } catch (error) {
+    } catch (error: any) {
+      // FIXED: Check if error message indicates already processed
+      if (error.message?.includes('Auction is not active') || 
+          error.message?.includes('already processed')) {
+        console.log('[AuctionContext] Auction already processed (from catch), ignoring error');
+        updateAuctionStatus(listing.id, 'ended');
+        return true;
+      }
+      
       console.error('[AuctionContext] Error processing ended auction:', error);
       return false;
     }
   }, [updateAuctionStatus]);
 
-  // Get auction by listing ID
   const getAuctionByListingId = useCallback((listingId: string): AuctionData | null => {
     return auctions[listingId] || null;
   }, [auctions]);
 
-  // Get user's bids for an auction
   const getUserBidsForAuction = useCallback((listingId: string, username: string): Bid[] => {
     const auction = auctions[listingId];
     if (!auction) return [];
@@ -606,27 +559,21 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     return auction.bids.filter(bid => bid.bidder === username);
   }, [auctions]);
 
-  // Check if user is highest bidder
   const isUserHighestBidder = useCallback((listingId: string, username: string): boolean => {
     const auction = auctions[listingId];
     return auction?.highestBidder === username;
   }, [auctions]);
 
-  // Subscribe to auction updates
   const subscribeToAuction = useCallback((listingId: string) => {
     if (!isConnected) return;
     
-    // Send subscription message via WebSocket
     console.log('[AuctionContext] Subscribing to auction:', listingId);
-    // TODO: Implement WebSocket subscription
   }, [isConnected]);
 
-  // Unsubscribe from auction updates
   const unsubscribeFromAuction = useCallback((listingId: string) => {
     if (!isConnected) return;
     
     console.log('[AuctionContext] Unsubscribing from auction:', listingId);
-    // TODO: Implement WebSocket unsubscription
   }, [isConnected]);
 
   const value: AuctionContextType = {
@@ -640,7 +587,7 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
     getAuctionByListingId,
     getUserBidsForAuction,
     isUserHighestBidder,
-    checkReserveMet, // New method added
+    checkReserveMet,
     isPlacingBid,
     isCancellingAuction,
     isLoadingAuctions,

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useWebSocket } from '@/context/WebSocketContext';
 import { ordersService } from '@/services/orders.service';
 import type { Order } from '@/types/order';
 import { useListings } from '@/context/ListingContext';
@@ -45,6 +46,8 @@ const OrderSchema = z.object({
   sellerEarnings: z.number().optional(),
   paymentStatus: z.enum(['pending', 'completed', 'failed', 'refunded']).optional(),
   paymentCompletedAt: z.string().optional(),
+  isCustomRequest: z.boolean().optional(),
+  originalRequestId: z.string().optional(),
 }).transform((data) => ({
   // ✅ CRITICAL: Ensure we always have an id field
   id: data.id || data._id || `order-${Date.now()}-${Math.random()}`,
@@ -70,6 +73,8 @@ const OrderSchema = z.object({
   sellerEarnings: data.sellerEarnings,
   paymentStatus: data.paymentStatus,
   paymentCompletedAt: data.paymentCompletedAt,
+  isCustomRequest: data.isCustomRequest || false,
+  originalRequestId: data.originalRequestId,
 }));
 
 type ValidatedOrder = z.infer<typeof OrderSchema>;
@@ -124,6 +129,11 @@ function sanitizeOrder(order: any): ValidatedOrder | null {
 export function useMyOrders() {
   const { user } = useAuth();
   const { users } = useListings();
+  
+  // FIXED: Add WebSocket context
+  const wsContext = useWebSocket();
+  const subscribe = wsContext?.subscribe || (() => () => {});
+  const isConnected = wsContext?.isConnected || false;
   
   // ✅ SIMPLIFIED: Single source of truth for orders
   const [orders, setOrders] = useState<Order[]>([]);
@@ -189,7 +199,7 @@ export function useMyOrders() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.username, isLoading]);
+  }, [user?.username]);
   
   // ✅ AUTOMATIC: Load orders on mount and when user changes
   useEffect(() => {
@@ -199,6 +209,138 @@ export function useMyOrders() {
       setOrders([]);
       setErrors([]);
     }
+  }, [user?.username]);
+
+  // FIXED: Subscribe to WebSocket events for real-time order updates
+  useEffect(() => {
+    if (!isConnected || !subscribe || !user?.username) return;
+
+    console.log('[useMyOrders] Setting up WebSocket subscriptions for order events');
+
+    const unsubscribers: (() => void)[] = [];
+
+    // Listen for new orders created (including auction wins)
+    unsubscribers.push(
+      subscribe('order:created' as any, (data: any) => {
+        console.log('[useMyOrders] Received order:created event:', data);
+        
+        // Check if this order is for the current user
+        const order = data.order || data;
+        if (order && (order.buyer === user.username || order.seller === user.username)) {
+          console.log('[useMyOrders] New order is for current user, refreshing orders');
+          // Reload orders to get the new one
+          loadOrders();
+        }
+      })
+    );
+
+    // Listen for order updates
+    unsubscribers.push(
+      subscribe('order:updated' as any, (data: any) => {
+        console.log('[useMyOrders] Received order:updated event:', data);
+        
+        // Refresh orders if this update is relevant to the current user
+        const order = data.order || data;
+        if (order && (order.buyer === user.username || order.seller === user.username)) {
+          console.log('[useMyOrders] Order update is for current user, refreshing orders');
+          loadOrders();
+        }
+      })
+    );
+
+    // Listen for auction ended events (which create orders)
+    unsubscribers.push(
+      subscribe('auction:ended' as any, (data: any) => {
+        console.log('[useMyOrders] Received auction:ended event:', data);
+        
+        // If the current user won the auction, refresh orders
+        if (data.winner === user.username || data.winnerId === user.username) {
+          console.log('[useMyOrders] Current user won the auction, refreshing orders');
+          // Add a small delay to ensure the backend has created the order
+          setTimeout(() => {
+            loadOrders();
+          }, 1000);
+        }
+      })
+    );
+
+    // Listen specifically for auction won events
+    unsubscribers.push(
+      subscribe('auction:won' as any, (data: any) => {
+        console.log('[useMyOrders] Received auction:won event:', data);
+        
+        // This is specifically for the current user winning an auction
+        console.log('[useMyOrders] User won auction, refreshing orders immediately');
+        // Refresh immediately since the order is already created
+        loadOrders();
+      })
+    );
+
+    // Listen for custom request paid events
+    unsubscribers.push(
+      subscribe('custom_request:paid' as any, (data: any) => {
+        console.log('[useMyOrders] Received custom_request:paid event:', data);
+        
+        // If this is for the current user, refresh orders
+        if (data.buyer === user.username || data.seller === user.username) {
+          console.log('[useMyOrders] Custom request is for current user, refreshing orders');
+          loadOrders();
+        }
+      })
+    );
+
+    // Listen for address update events
+    unsubscribers.push(
+      subscribe('order:address-updated' as any, (data: any) => {
+        console.log('[useMyOrders] Received order:address-updated event:', data);
+        
+        // Refresh orders to get the updated address
+        if (data.buyer === user.username || data.seller === user.username) {
+          loadOrders();
+        }
+      })
+    );
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+    };
+  }, [isConnected, subscribe, user?.username, loadOrders]);
+
+  // FIXED: Also listen for custom events from ListingContext
+  useEffect(() => {
+    if (!user?.username) return;
+
+    const handleOrderCreated = (event: CustomEvent) => {
+      console.log('[useMyOrders] Received order:created custom event:', event.detail);
+      const order = event.detail?.order;
+      if (order && (order.buyer === user.username || order.seller === user.username)) {
+        console.log('[useMyOrders] New order is for current user, refreshing');
+        loadOrders();
+      }
+    };
+
+    const handleListingRemoved = (event: CustomEvent) => {
+      console.log('[useMyOrders] Received listing:removed custom event:', event.detail);
+      // If a listing was removed due to auction sale, refresh orders
+      if (event.detail?.reason === 'auction-sold') {
+        console.log('[useMyOrders] Listing removed due to auction sale, refreshing orders');
+        setTimeout(() => {
+          loadOrders();
+        }, 1500); // Give backend time to create the order
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('order:created', handleOrderCreated as EventListener);
+      window.addEventListener('listing:removed', handleListingRemoved as EventListener);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('order:created', handleOrderCreated as EventListener);
+        window.removeEventListener('listing:removed', handleListingRemoved as EventListener);
+      }
+    };
   }, [user?.username, loadOrders]);
 
   // ✅ SIMPLIFIED: Use single orders array

@@ -1,3 +1,4 @@
+// pantypost-backend/middleware/auth.middleware.js
 // This file handles checking if users are logged in
 
 const jwt = require('jsonwebtoken');
