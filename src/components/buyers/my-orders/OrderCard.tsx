@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Order } from '@/context/WalletContext';
+import { Order } from '@/types/order'; // Use the existing Order type from your types
 import { useListings } from '@/context/ListingContext';
 import { getUserProfilePic } from '@/utils/profileUtils';
 import OrderHeader from './OrderHeader';
@@ -48,10 +48,25 @@ export default function OrderCard({
     loadProfilePic();
   }, [order.seller]);
 
+  // CRITICAL FIX: Ensure order has an ID (handle both _id and id fields from backend)
+  const orderId = order.id || (order as any)._id || `order-${Date.now()}`;
+
+  // Show special status for auction orders without address
+  const needsAddress = order.wasAuction && !hasDeliveryAddress;
+
   return (
     <div
       className={`relative border rounded-2xl bg-gradient-to-br overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 ${styles.gradientStyle} ${styles.borderStyle}`}
     >
+      {/* Auction Won Badge */}
+      {order.wasAuction && needsAddress && (
+        <div className="absolute top-4 right-4 z-10">
+          <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+            🏆 Won! Add Address
+          </div>
+        </div>
+      )}
+
       {/* Order Header */}
       <div className="p-6">
         <OrderHeader
@@ -66,7 +81,7 @@ export default function OrderCard({
           hasDeliveryAddress={hasDeliveryAddress}
           isExpanded={isExpanded}
           onOpenAddressModal={onOpenAddressModal}
-          onToggleExpanded={onToggleExpanded}
+          onToggleExpanded={() => onToggleExpanded(orderId)}
         />
       </div>
 

@@ -1,4 +1,4 @@
-// pantypost-backend/models/Listing.js
+// backend/models/Listing.js
 const mongoose = require('mongoose');
 
 // Create listing schema
@@ -88,6 +88,8 @@ const listingSchema = new mongoose.Schema({
     default: Date.now
   },
   soldAt: Date,
+  soldTo: String,
+  soldPrice: Number,
   
   // AUCTION FIELDS
   auction: {
@@ -110,10 +112,14 @@ const listingSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    highestBid: {  // CRITICAL: Add this field to store the highest bid
+      type: Number,
+      default: 0
+    },
     bidIncrement: {
       type: Number,
       default: 1, // Always use whole dollars
-      min: 1      // Changed from 0.01 to 1 - no decimals allowed!
+      min: 1      // No decimals allowed
     },
     highestBidder: {
       type: String,
@@ -127,7 +133,7 @@ const listingSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ['active', 'ended', 'cancelled', 'reserve_not_met'],
+      enum: ['active', 'ended', 'cancelled', 'reserve_not_met', 'processing', 'error'],
       default: 'active'
     },
     bidCount: {
@@ -158,6 +164,7 @@ listingSchema.index({ seller: 1, status: 1 });
 listingSchema.index({ tags: 1 });
 listingSchema.index({ 'auction.endTime': 1, 'auction.status': 1 });
 listingSchema.index({ status: 1, createdAt: -1 });
+listingSchema.index({ 'auction.isAuction': 1, 'auction.status': 1 });
 
 // Virtual to check if auction is still active
 listingSchema.virtual('auction.isActive').get(function() {
@@ -168,7 +175,7 @@ listingSchema.virtual('auction.isActive').get(function() {
 // Virtual to check if reserve price is met
 listingSchema.virtual('auction.reserveMet').get(function() {
   if (!this.auction || !this.auction.reservePrice) return true;
-  return this.auction.currentBid >= this.auction.reservePrice;
+  return (this.auction.highestBid || this.auction.currentBid) >= this.auction.reservePrice;
 });
 
 // Method to place a bid
@@ -182,7 +189,7 @@ listingSchema.methods.placeBid = async function(bidder, amount) {
   }
   
   // Calculate minimum bid with integer math
-  const currentBid = Math.floor(this.auction.currentBid || 0);
+  const currentBid = Math.floor(this.auction.highestBid || this.auction.currentBid || 0);
   const increment = Math.floor(this.auction.bidIncrement || 1);
   const startingPrice = Math.floor(this.auction.startingPrice || 0);
   
@@ -199,8 +206,9 @@ listingSchema.methods.placeBid = async function(bidder, amount) {
     throw new Error('Cannot bid on your own auction');
   }
   
-  // Update auction with integer values
+  // Update auction with integer values - UPDATE BOTH FIELDS
   this.auction.currentBid = amount;
+  this.auction.highestBid = amount;  // CRITICAL: Always update highestBid too
   this.auction.highestBidder = bidder;
   this.auction.bidCount += 1;
   

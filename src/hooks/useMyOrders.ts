@@ -211,7 +211,53 @@ export function useMyOrders() {
     }
   }, [user?.username]);
 
-  // FIXED: Subscribe to WebSocket events for real-time order updates
+  // CRITICAL FIX: Poll for new orders after auction win
+  useEffect(() => {
+    if (!user?.username) return;
+    
+    let pollInterval: NodeJS.Timeout | undefined;
+    
+    // Check for auction win indicator in URL or session
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromAuction = urlParams.get('from') === 'auction' || 
+                       sessionStorage.getItem('recent_auction_win') === 'true';
+    
+    if (fromAuction) {
+      console.log('[useMyOrders] Detected auction win, polling for order');
+      
+      // Poll every 2 seconds for up to 20 seconds
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      pollInterval = setInterval(async () => {
+        attempts++;
+        console.log(`[useMyOrders] Polling attempt ${attempts}/${maxAttempts}`);
+        
+        await loadOrders();
+        
+        // Check if we have any auction orders
+        const hasAuctionOrder = orders.some(o => o.wasAuction);
+        
+        if (hasAuctionOrder || attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          sessionStorage.removeItem('recent_auction_win');
+          
+          // Clear URL param
+          const url = new URL(window.location.href);
+          url.searchParams.delete('from');
+          window.history.replaceState({}, '', url.toString());
+        }
+      }, 2000);
+    }
+    
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [user?.username, loadOrders, orders]);
+
+  // CRITICAL FIX: Enhanced WebSocket event handling for orders
   useEffect(() => {
     if (!isConnected || !subscribe || !user?.username) return;
 
@@ -224,12 +270,31 @@ export function useMyOrders() {
       subscribe('order:created' as any, (data: any) => {
         console.log('[useMyOrders] Received order:created event:', data);
         
-        // Check if this order is for the current user
+        // Extract order from different possible data structures
         const order = data.order || data;
+        
+        // Check if this order is for the current user
         if (order && (order.buyer === user.username || order.seller === user.username)) {
           console.log('[useMyOrders] New order is for current user, refreshing orders');
-          // Reload orders to get the new one
-          loadOrders();
+          // Add a small delay to ensure backend has saved the order
+          setTimeout(() => {
+            loadOrders();
+          }, 500);
+        }
+      })
+    );
+
+    // Also listen for order:new event (some backends use this)
+    unsubscribers.push(
+      subscribe('order:new' as any, (data: any) => {
+        console.log('[useMyOrders] Received order:new event:', data);
+        
+        const order = data.order || data;
+        if (order && order.buyer === user.username) {
+          console.log('[useMyOrders] New order for current user, refreshing');
+          setTimeout(() => {
+            loadOrders();
+          }, 500);
         }
       })
     );
@@ -239,7 +304,6 @@ export function useMyOrders() {
       subscribe('order:updated' as any, (data: any) => {
         console.log('[useMyOrders] Received order:updated event:', data);
         
-        // Refresh orders if this update is relevant to the current user
         const order = data.order || data;
         if (order && (order.buyer === user.username || order.seller === user.username)) {
           console.log('[useMyOrders] Order update is for current user, refreshing orders');
@@ -253,13 +317,13 @@ export function useMyOrders() {
       subscribe('auction:ended' as any, (data: any) => {
         console.log('[useMyOrders] Received auction:ended event:', data);
         
-        // If the current user won the auction, refresh orders
+        // If there's a winner and it's the current user, refresh orders
         if (data.winner === user.username || data.winnerId === user.username) {
           console.log('[useMyOrders] Current user won the auction, refreshing orders');
-          // Add a small delay to ensure the backend has created the order
+          // Add delay to ensure order is created
           setTimeout(() => {
             loadOrders();
-          }, 1000);
+          }, 2000);
         }
       })
     );
@@ -269,10 +333,27 @@ export function useMyOrders() {
       subscribe('auction:won' as any, (data: any) => {
         console.log('[useMyOrders] Received auction:won event:', data);
         
-        // This is specifically for the current user winning an auction
-        console.log('[useMyOrders] User won auction, refreshing orders immediately');
-        // Refresh immediately since the order is already created
-        loadOrders();
+        // If the data includes an order, add it directly
+        if (data.order) {
+          const sanitized = sanitizeOrder(data.order);
+          if (sanitized) {
+            setOrders(prev => {
+              // Check if order already exists
+              const exists = prev.some(o => o.id === sanitized.id);
+              if (!exists) {
+                console.log('[useMyOrders] Adding auction order directly from event');
+                return [sanitized as Order, ...prev];
+              }
+              return prev;
+            });
+          }
+        } else {
+          // Otherwise refresh from API
+          console.log('[useMyOrders] User won auction, refreshing orders from API');
+          setTimeout(() => {
+            loadOrders();
+          }, 1500);
+        }
       })
     );
 
@@ -281,7 +362,6 @@ export function useMyOrders() {
       subscribe('custom_request:paid' as any, (data: any) => {
         console.log('[useMyOrders] Received custom_request:paid event:', data);
         
-        // If this is for the current user, refresh orders
         if (data.buyer === user.username || data.seller === user.username) {
           console.log('[useMyOrders] Custom request is for current user, refreshing orders');
           loadOrders();
@@ -294,7 +374,6 @@ export function useMyOrders() {
       subscribe('order:address-updated' as any, (data: any) => {
         console.log('[useMyOrders] Received order:address-updated event:', data);
         
-        // Refresh orders to get the updated address
         if (data.buyer === user.username || data.seller === user.username) {
           loadOrders();
         }
@@ -306,17 +385,27 @@ export function useMyOrders() {
     };
   }, [isConnected, subscribe, user?.username, loadOrders]);
 
-  // FIXED: Also listen for custom events from ListingContext
+  // FIXED: Also listen for custom events from ListingContext and other sources
   useEffect(() => {
     if (!user?.username) return;
 
     const handleOrderCreated = (event: CustomEvent) => {
       console.log('[useMyOrders] Received order:created custom event:', event.detail);
-      const order = event.detail?.order;
+      const order = event.detail?.order || event.detail;
       if (order && (order.buyer === user.username || order.seller === user.username)) {
         console.log('[useMyOrders] New order is for current user, refreshing');
-        loadOrders();
+        setTimeout(() => {
+          loadOrders();
+        }, 500);
       }
+    };
+
+    const handleAuctionWon = (event: CustomEvent) => {
+      console.log('[useMyOrders] Received auction:won custom event:', event.detail);
+      // Always refresh when auction is won
+      setTimeout(() => {
+        loadOrders();
+      }, 1500);
     };
 
     const handleListingRemoved = (event: CustomEvent) => {
@@ -326,18 +415,20 @@ export function useMyOrders() {
         console.log('[useMyOrders] Listing removed due to auction sale, refreshing orders');
         setTimeout(() => {
           loadOrders();
-        }, 1500); // Give backend time to create the order
+        }, 2000);
       }
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('order:created', handleOrderCreated as EventListener);
+      window.addEventListener('auction:won', handleAuctionWon as EventListener);
       window.addEventListener('listing:removed', handleListingRemoved as EventListener);
     }
 
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('order:created', handleOrderCreated as EventListener);
+        window.removeEventListener('auction:won', handleAuctionWon as EventListener);
         window.removeEventListener('listing:removed', handleListingRemoved as EventListener);
       }
     };

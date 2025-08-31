@@ -19,6 +19,7 @@ const User = require('./models/User');
 const Notification = require('./models/Notification');
 const Verification = require('./models/Verification');
 const Ban = require('./models/Ban');
+const Listing = require('./models/Listing');
 
 // Import middleware
 const authMiddleware = require('./middleware/auth.middleware');
@@ -41,7 +42,7 @@ const verificationRoutes = require('./routes/verification.routes');
 const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
-const analyticsRoutes = require('./routes/analytics.routes'); // NEW - Analytics routes
+const analyticsRoutes = require('./routes/analytics.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -106,7 +107,7 @@ app.get('/api/health', (req, res) => {
       reports: true,
       bans: true,
       analytics: true,
-      auctions: true // Added auction feature flag
+      auctions: true
     },
   });
 });
@@ -129,7 +130,7 @@ app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
-app.use('/api/analytics', analyticsRoutes); // NEW - Analytics routes
+app.use('/api/analytics', analyticsRoutes);
 
 // --- Compatibility mounts (support old clients that forget '/api') ---
 app.use('/subscriptions', subscriptionRoutes);
@@ -208,7 +209,7 @@ app.get('/api/verification/system-status', authMiddleware, async (req, res) => {
       },
       {
         $project: {
-          processingTime: { $divide: [{ $subtract: ['$reviewedAt', '$submittedAt'] }, 1000 * 60 * 60] }, // hours
+          processingTime: { $divide: [{ $subtract: ['$reviewedAt', '$submittedAt'] }, 1000 * 60 * 60] },
         },
       },
       {
@@ -269,8 +270,6 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
   }
 
   try {
-    const Listing = require('./models/Listing');
-    
     const totalAuctions = await Listing.countDocuments({ 'auction.isAuction': true });
     const activeAuctions = await Listing.countDocuments({ 
       'auction.isAuction': true,
@@ -287,6 +286,14 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
     const reserveNotMetAuctions = await Listing.countDocuments({ 
       'auction.isAuction': true,
       'auction.status': 'reserve_not_met'
+    });
+    const processingAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'processing'
+    });
+    const errorAuctions = await Listing.countDocuments({ 
+      'auction.isAuction': true,
+      'auction.status': 'error'
     });
 
     // Get auctions ending soon (within next hour)
@@ -305,7 +312,9 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
           active: activeAuctions,
           ended: endedAuctions,
           cancelled: cancelledAuctions,
-          reserveNotMet: reserveNotMetAuctions
+          reserveNotMet: reserveNotMetAuctions,
+          processing: processingAuctions,
+          error: errorAuctions
         },
         endingSoon,
         timestamp: new Date(),
@@ -328,7 +337,94 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
 
-// CRITICAL FIX: Auction system scheduled task - check every 10 seconds instead of 60 seconds
+// PERMANENT FIX: Cleanup stuck auctions every 5 minutes
+setInterval(async () => {
+  try {
+    const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
+    
+    // Reset auctions that have been stuck in processing for over an hour
+    const resetResult = await Listing.updateMany(
+      {
+        'auction.isAuction': true,
+        'auction.status': 'processing',
+        'auction.endTime': { $lte: oneHourAgo }
+      },
+      {
+        $set: { 'auction.status': 'active' }
+      }
+    );
+    
+    if (resetResult.modifiedCount > 0) {
+      console.log(`[Auction] Reset ${resetResult.modifiedCount} stuck auctions`);
+      
+      // Notify admins about stuck auctions being reset
+      if (global.webSocketService) {
+        global.webSocketService.emitToAdmins('auction:stuck_reset', {
+          count: resetResult.modifiedCount,
+          timestamp: new Date()
+        });
+      }
+    }
+    
+    // Also reset error status auctions older than 30 minutes
+    const thirtyMinutesAgo = new Date(Date.now() - 1800000);
+    const errorResetResult = await Listing.updateMany(
+      {
+        'auction.isAuction': true,
+        'auction.status': 'error',
+        'auction.endTime': { $lte: thirtyMinutesAgo }
+      },
+      {
+        $set: { 'auction.status': 'active' }
+      }
+    );
+    
+    if (errorResetResult.modifiedCount > 0) {
+      console.log(`[Auction] Reset ${errorResetResult.modifiedCount} error status auctions`);
+    }
+  } catch (error) {
+    console.error('[Auction] Error resetting stuck auctions:', error);
+  }
+}, 5 * 60 * 1000); // Every 5 minutes
+
+// INSTANT AUCTION PROCESSOR - Checks every second for just-expired auctions
+// This ensures auctions are processed within 1 second of expiring
+setInterval(async () => {
+  try {
+    const now = new Date();
+    const fiveSecondsAgo = new Date(now - 5000);
+    
+    // Find auctions that JUST expired (within last 5 seconds)
+    const justExpired = await Listing.findOne({
+      'auction.isAuction': true,
+      'auction.status': 'active',
+      'auction.endTime': { 
+        $lte: now,
+        $gte: fiveSecondsAgo
+      }
+    });
+    
+    if (justExpired) {
+      console.log(`[Auction] Instant processing auction ${justExpired._id} that just expired`);
+      
+      // Process immediately without waiting
+      AuctionSettlementService.processEndedAuction(justExpired._id)
+        .then(result => {
+          if (!result.alreadyProcessed) {
+            console.log(`[Auction] Instantly processed auction ${justExpired._id}`);
+          }
+        })
+        .catch(err => {
+          // Don't log - let the main processor handle errors
+        });
+    }
+  } catch (error) {
+    // Silent catch - main processor will handle any we miss
+  }
+}, 1000); // Check every second for instant processing
+
+// Main auction processor - catches anything the instant processor misses
+// Reduced to 3 seconds for faster processing but less aggressive than instant
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
@@ -357,7 +453,7 @@ setInterval(async () => {
       });
     }
   }
-}, 10000); // CHANGED: Check every 10 seconds for faster auction processing
+}, 3000); // Check every 3 seconds as backup
 
 // Manual auction processing endpoint (admin only)
 app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
@@ -379,7 +475,53 @@ app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
   }
 });
 
-// --------------------- Test Routes (unchanged) ---------------------
+// Instant auction check endpoint - can be called by frontend
+app.get('/api/auctions/check/:id', async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing || !listing.auction || !listing.auction.isAuction) {
+      return res.status(404).json({
+        success: false,
+        error: 'Auction not found'
+      });
+    }
+    
+    const now = new Date();
+    const isExpired = now >= listing.auction.endTime;
+    const needsProcessing = isExpired && listing.auction.status === 'active';
+    
+    if (needsProcessing) {
+      // Trigger immediate processing
+      console.log(`[Auction] Frontend triggered check for expired auction ${listing._id}`);
+      
+      AuctionSettlementService.processEndedAuction(listing._id)
+        .then(result => {
+          console.log(`[Auction] Frontend-triggered processing completed for ${listing._id}`);
+        })
+        .catch(err => {
+          console.error(`[Auction] Frontend-triggered processing failed for ${listing._id}:`, err);
+        });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        status: listing.auction.status,
+        isExpired,
+        needsProcessing,
+        endTime: listing.auction.endTime
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// --------------------- Test Routes ---------------------
 app.get('/api/test/users', async (req, res) => {
   try {
     const users = await User.find({}).select('-password');
@@ -665,8 +807,6 @@ async function initializeReportSystem() {
 // Initialize auction system on startup
 async function initializeAuctionSystem() {
   try {
-    const Listing = require('./models/Listing');
-    
     // Count active auctions
     const activeAuctions = await Listing.countDocuments({ 
       'auction.isAuction': true,
@@ -714,7 +854,7 @@ server.listen(PORT, async () => {
   console.log(`🛡️ Report & Ban system ready`);
   
   await initializeAuctionSystem();
-  console.log(`🔨 Auction system ready - checking every 10 seconds`);
+  console.log(`🔨 Auction system ready - instant processing enabled (1s checks)`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -735,6 +875,6 @@ server.listen(PORT, async () => {
   console.log('  - Reports:       /api/reports/*');
   console.log('  - Bans:          /api/admin/bans/*');
   console.log('  - Analytics:     /api/analytics/*');
-  console.log('  - Auctions:      /api/auctions/*'); // Added auction endpoints
+  console.log('  - Auctions:      /api/auctions/*');
   console.log('\n💸 Go get you that lambo fuh nigga!\n');
 });

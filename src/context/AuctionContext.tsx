@@ -509,8 +509,24 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
           return true; // Return true since it's handled (even if already processed)
         }
         
-        // Not already processed - update status based on response
-        const status = response.data?.status || 'ended';
+        // Process the response data
+        const responseData = response.data || {};
+        
+        // Check if order was created successfully
+        if (responseData.order || responseData.data?.order) {
+          const order = responseData.order || responseData.data?.order;
+          console.log('[AuctionContext] Order created successfully:', order);
+          
+          // Fire event for order creation
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('order:created', {
+              detail: { order }
+            }));
+          }
+        }
+        
+        // Update status based on response
+        const status = responseData.status || responseData.data?.status || 'ended';
         if (status === 'reserve_not_met') {
           updateAuctionStatus(listing.id, 'reserve_not_met');
         } else if (listing.auction.highestBidder && listing.auction.highestBid) {
@@ -522,10 +538,12 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
         return true;
       }
       
-      // FIXED: Check if error is about auction not being active (already processed)
-      if (response.error?.message?.includes('Auction is not active') || 
-          response.error?.message?.includes('already processed')) {
-        console.log('[AuctionContext] Auction already processed, ignoring error');
+      // FIXED: Check if error indicates already processed
+      const errorMessage = response.error?.message?.toLowerCase() || '';
+      if (errorMessage.includes('auction is not active') || 
+          errorMessage.includes('already processed') ||
+          errorMessage.includes('auction already processed')) {
+        console.log('[AuctionContext] Auction already processed, treating as success');
         
         // Update status to ended since it's already been processed
         updateAuctionStatus(listing.id, 'ended');
@@ -536,9 +554,11 @@ export function AuctionProvider({ children }: { children: ReactNode }) {
       return false;
     } catch (error: any) {
       // FIXED: Check if error message indicates already processed
-      if (error.message?.includes('Auction is not active') || 
-          error.message?.includes('already processed')) {
-        console.log('[AuctionContext] Auction already processed (from catch), ignoring error');
+      const errorMessage = error.message?.toLowerCase?.() || '';
+      if (errorMessage.includes('auction is not active') || 
+          errorMessage.includes('already processed') ||
+          errorMessage.includes('auction already processed')) {
+        console.log('[AuctionContext] Auction already processed (from catch), treating as success');
         updateAuctionStatus(listing.id, 'ended');
         return true;
       }

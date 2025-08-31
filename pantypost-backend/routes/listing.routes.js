@@ -1,4 +1,4 @@
-// pantypost-backend/routes/listing.routes.js
+// backend/routes/listing.routes.js
 const express = require('express');
 const router = express.Router();
 const Listing = require('../models/Listing');
@@ -482,6 +482,7 @@ router.post('/', authMiddleware, async (req, res) => {
         reservePrice: listingData.reservePrice ? Math.floor(listingData.reservePrice) : undefined,
         endTime: new Date(listingData.endTime),
         currentBid: 0,
+        highestBid: 0,  // Initialize highestBid
         bidCount: 0,
         bids: [],
         status: 'active',
@@ -777,7 +778,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     }
     
     // Validate minimum bid with integer math
-    const currentBid = Math.floor(listing.auction.currentBid || 0);
+    const currentBid = Math.floor(listing.auction.highestBid || listing.auction.currentBid || 0);
     const startingPrice = Math.floor(listing.auction.startingPrice || 0);
     const minimumBid = currentBid > 0 ? currentBid + 1 : startingPrice;
     
@@ -797,7 +798,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     }
     
     const previousHighestBidder = listing.auction.highestBidder;
-    const previousHighestBid = Math.floor(listing.auction.currentBid || 0);
+    const previousHighestBid = Math.floor(listing.auction.highestBid || listing.auction.currentBid || 0);
     
     // Store the current balance before withdrawal
     const bidderPreviousBalance = buyerWallet.balance;
@@ -806,7 +807,20 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     const isIncrementalBid = previousHighestBidder === bidder && previousHighestBid > 0;
     
     try {
-      await listing.placeBid(bidder, bidAmount);
+      // CRITICAL FIX: Update BOTH currentBid and highestBid fields
+      listing.auction.currentBid = bidAmount;
+      listing.auction.highestBid = bidAmount;  // ALWAYS update highestBid
+      listing.auction.highestBidder = bidder;
+      listing.auction.bidCount += 1;
+      
+      // Add to bids array
+      listing.auction.bids.push({
+        bidder: bidder,
+        amount: bidAmount,
+        date: new Date()
+      });
+      
+      await listing.save();
       
       // Create database notification for seller about new bid
       await Notification.createBidNotification(listing.seller, bidder, listing, bidAmount);
@@ -1061,11 +1075,11 @@ router.post('/:id/end-auction', async (req, res) => {
           'auction.status': 'processing'
         },
         { 
-          $set: { 'auction.status': 'active' }
+          $set: { 'auction.status': 'error' }  // Set to error state, not active
         }
       );
     } catch (resetError) {
-      console.error('[Auction] Failed to reset auction status:', resetError);
+      console.error('[Auction] Failed to set error status:', resetError);
     }
     
     res.status(400).json({

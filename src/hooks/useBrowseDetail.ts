@@ -24,12 +24,12 @@ import { securityService, sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
 import { ApiResponse } from '@/services/api.config';
-import { isAdmin } from '@/utils/security/permissions'; // ✅ ADDED
+import { isAdmin } from '@/utils/security/permissions';
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
 const NAVIGATION_DELAY = 500;
-const AUCTION_EXPIRY_CHECK_INTERVAL = 5000; // Check every 5 seconds
+const AUCTION_EXPIRY_CHECK_INTERVAL = 5000;
 
 const initialState: DetailState = {
   purchaseStatus: '',
@@ -51,7 +51,6 @@ const initialState: DetailState = {
   currentImageIndex: 0
 };
 
-// Type definitions
 interface Review {
   seller: string;
   reviewer: string;
@@ -89,7 +88,6 @@ export const useBrowseDetail = () => {
   } = useListings();
   const { processEndedAuction } = useAuction();
   
-  // Add WebSocket hook
   const wsContext = useWebSocket();
   const subscribe = wsContext?.subscribe || (() => () => {});
   const isConnected = wsContext?.isConnected || false;
@@ -104,12 +102,10 @@ export const useBrowseDetail = () => {
   const [error, setError] = useState<string | null>(null);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
   const [auctionExpiryProcessed, setAuctionExpiryProcessed] = useState(false);
-  
-  // Add new state for real-time bid updates
   const [realtimeBids, setRealtimeBids] = useState<BidHistoryItem[]>([]);
   const [lastBidUpdate, setLastBidUpdate] = useState<number>(Date.now());
   
-  // Refs - CRITICAL: Add isPurchasingRef to track purchase state
+  // Refs
   const isPurchasingRef = useRef(false);
   const hasPurchasedRef = useRef(false);
   const lastProcessedPaymentRef = useRef<string | null>(null);
@@ -124,29 +120,30 @@ export const useBrowseDetail = () => {
   const hasMarkedRef = useRef(false);
   const viewIncrementedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isProcessingAuctionEndRef = useRef(false);
 
-  // Core data - sanitize ID
+  // Core data
   const rawListingId = params?.id as string;
   const listingId = rawListingId ? sanitize.strict(rawListingId) : '';
   const currentUsername = user?.username || null;
 
-  // CRITICAL: Determine if this is actually an auction
+  // Determine if auction
   const isAuction = !!(listing?.auction?.isAuction || (listing?.auction && listing.auction.startingPrice !== undefined));
-  const isAuctionListing = isAuction; // Keep old variable name for compatibility
+  const isAuctionListing = isAuction;
   const isAuctionEnded = isAuction && listing?.auction && !isAuctionActive(listing.auction);
 
-  // Check if reserve price is met
+  // Reserve price checks
   const hasReserve = !!listing?.auction?.reservePrice;
   const currentBid = listing?.auction?.highestBid || 0;
   const reserveMet = hasReserve && listing?.auction?.reservePrice ? currentBid >= listing.auction.reservePrice : true;
 
-  // Role guards (who can end auctions)
+  // Role guards
   const userIsAdmin = !!isAdmin(user as any);
   const isSellerOfListing = !!(user?.username && listing?.seller && user.username === listing.seller);
   const canEndAuction = userIsAdmin || isSellerOfListing;
   const isBidderView = !!(user?.role === 'buyer' && !canEndAuction);
 
-  // Helper functions - Define updateState early
+  // Helper functions
   const updateState = useCallback((updates: Partial<DetailState> | ((prev: DetailState) => Partial<DetailState>)) => {
     if (!mountedRef.current) return;
     setState(prev => {
@@ -155,24 +152,21 @@ export const useBrowseDetail = () => {
     });
   }, []);
 
-  // WebSocket subscription for real-time bid updates
+  // WebSocket subscriptions for real-time updates
   useEffect(() => {
     if (!isConnected || !isAuction || !listingId || !mountedRef.current || !subscribe) return;
 
     const unsubscribeBid = subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
-      // Only process bids for this specific listing
       if (data.listingId !== listingId) return;
 
       console.log('[BrowseDetail] Real-time bid received:', data);
 
-      // Create new bid object for history display
       const newBidForHistory: BidHistoryItem = {
         bidder: data.bidder || data.username,
         amount: data.amount || 0,
         date: data.timestamp || new Date().toISOString()
       };
 
-      // Create proper Bid object for listing auction
       const newBidForListing = {
         id: data.id || `bid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         bidder: data.bidder || data.username,
@@ -180,13 +174,12 @@ export const useBrowseDetail = () => {
         date: data.timestamp || new Date().toISOString()
       };
 
-      // Update the listing's auction data
       setListing(prev => {
         if (!prev || !prev.auction) return prev;
         
         const updatedBids = [...(prev.auction.bids || []), newBidForListing]
           .sort((a, b) => b.amount - a.amount)
-          .slice(0, 20); // Keep top 20 bids in memory
+          .slice(0, 20);
         
         return {
           ...prev,
@@ -199,27 +192,23 @@ export const useBrowseDetail = () => {
         } as ListingWithDetails;
       });
 
-      // Update realtime bids for inline display
       setRealtimeBids(prev => {
         const updated = [newBidForHistory, ...prev]
           .filter((bid, index, self) => 
             index === self.findIndex(b => b.bidder === bid.bidder && b.amount === bid.amount)
           )
           .sort((a, b) => b.amount - a.amount)
-          .slice(0, 5); // Keep only last 5 for inline display
+          .slice(0, 5);
         return updated;
       });
 
-      // Update the state's bid history
       updateState(prevState => ({
         bidsHistory: [newBidForHistory, ...prevState.bidsHistory]
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       }));
 
-      // Trigger re-render
       setLastBidUpdate(Date.now());
 
-      // Show success message if it's from current user
       if (newBidForHistory.bidder === currentUsername) {
         updateState({ 
           bidSuccess: 'Your bid was placed successfully!',
@@ -228,12 +217,10 @@ export const useBrowseDetail = () => {
       }
     });
 
-    // Subscribe to auction ended events
     const unsubscribeEnded = subscribe(WebSocketEvent.AUCTION_ENDED, (data: any) => {
       if (data.listingId === listingId) {
         console.log('[BrowseDetail] Auction ended event received');
         
-        // Update the listing's auction status
         setListing(prev => {
           if (!prev || !prev.auction) return prev;
           
@@ -246,17 +233,14 @@ export const useBrowseDetail = () => {
           } as ListingWithDetails;
         });
         
-        // Refresh listing data to get latest status
         refreshListings();
       }
     });
 
-    // Subscribe to reserve not met events
     const unsubscribeReserve = subscribe('auction:reserve_not_met' as WebSocketEvent, (data: any) => {
       if (data.listingId === listingId) {
         console.log('[BrowseDetail] Reserve not met event received');
         
-        // Update the listing's auction status
         setListing(prev => {
           if (!prev || !prev.auction) return prev;
           
@@ -271,16 +255,38 @@ export const useBrowseDetail = () => {
       }
     });
 
+    // Listen for auction won event
+    const unsubscribeWon = subscribe('auction:won' as WebSocketEvent, (data: any) => {
+      console.log('[BrowseDetail] Auction won event received:', data);
+      
+      // Check if this is for the current listing and user
+      if (data.listingId === listingId || data.listingId === listing?.id) {
+        if (currentUsername && (data.winner === currentUsername || data.winnerId === currentUsername)) {
+          console.log('[BrowseDetail] Current user won the auction!');
+          updateState({ showAuctionSuccess: true });
+          
+          // Navigate to orders after a delay
+          setTimeout(() => {
+            if (mountedRef.current) {
+              router.push('/buyers/my-orders');
+            }
+          }, 5000);
+        }
+      }
+    });
+
     return () => {
       unsubscribeBid();
       unsubscribeEnded();
       unsubscribeReserve();
+      unsubscribeWon();
     };
-  }, [isConnected, isAuction, listingId, currentUsername, subscribe, updateState, refreshListings]);
+  }, [isConnected, isAuction, listingId, currentUsername, subscribe, updateState, refreshListings, router, listing?.id]);
 
-  // CRITICAL: Auto-check and process expired auctions
+  // Auto-check and process expired auctions
   useEffect(() => {
     if (!isAuction || !listing?.auction || auctionExpiryProcessed || !mountedRef.current) return;
+    if (isProcessingAuctionEndRef.current) return;
 
     const checkAuctionExpiry = async () => {
       if (!listing.auction?.endTime) return;
@@ -288,80 +294,41 @@ export const useBrowseDetail = () => {
       const now = new Date();
       const endTime = new Date(listing.auction.endTime);
       
-      // Check if auction has expired and hasn't been processed yet
       if (endTime <= now && listing.auction.status === 'active') {
-        console.log('[BrowseDetail] Auction has expired');
+        console.log('[BrowseDetail] Auction has expired, needs processing');
         
-        // Mark as processed to prevent duplicate calls
-        setAuctionExpiryProcessed(true);
-
-        // 🛑 Do NOT end auctions from bidder/visitor views
-        if (!canEndAuction) {
-          console.log('[BrowseDetail] Read-only viewer (bidder/visitor). Skipping POST /end-auction. Refreshing state instead.');
-          
-          // Update local UI immediately to stop bid actions
-          setListing(prev => {
-            if (!prev || !prev.auction) return prev;
-            return {
-              ...prev,
-              auction: {
-                ...prev.auction,
-                status: reserveMet ? 'ended' : ('reserve_not_met' as any)
-              }
-            } as ListingWithDetails;
-          });
-
-          // Friendly banner for bidders when reserve not met
-          if (isBidderView && !reserveMet) {
-            updateState({
-              bidStatus: {
-                success: false,
-                message: 'Auction ended — reserve not met.'
-              },
-              biddingEnabled: false
-            });
-          } else {
-            updateState({ biddingEnabled: false });
-          }
-
-          // Pull latest from backend; sockets may also update shortly
-          try {
-            await refreshListings();
-          } catch (e) {
-            // non-fatal
-          }
+        if (isProcessingAuctionEndRef.current) {
+          console.log('[BrowseDetail] Already processing auction end');
           return;
         }
+        
+        isProcessingAuctionEndRef.current = true;
+        setAuctionExpiryProcessed(true);
 
-        // ✅ Seller or Admin: trigger backend processing
+        setListing(prev => {
+          if (!prev || !prev.auction) return prev;
+          return {
+            ...prev,
+            auction: {
+              ...prev.auction,
+              status: reserveMet ? 'ended' : ('reserve_not_met' as any)
+            }
+          } as ListingWithDetails;
+        });
+
+        updateState({ biddingEnabled: false });
+
+        // Always trigger backend processing
         try {
-          console.log('[BrowseDetail] Privileged user detected. Triggering backend end-auction.');
+          console.log('[BrowseDetail] Triggering backend auction end processing');
           const response = await listingsService.endAuction(listing.id);
           
           if (response.success) {
             console.log('[BrowseDetail] Auction end processed successfully');
-
-            // Update local listing status
-            setListing(prev => {
-              if (!prev || !prev.auction) return prev;
-              
-              return {
-                ...prev,
-                auction: {
-                  ...prev.auction,
-                  status: response.data?.status === 'reserve_not_met' ? 'reserve_not_met' : 'ended'
-                }
-              } as ListingWithDetails;
-            });
-            
-            // Refresh listings to get updated data
             await refreshListings();
             
-            // If user was highest bidder (edge case: seller/admin also bidding), show success modal
             if (listing.auction.highestBidder === currentUsername && reserveMet) {
               updateState({ showAuctionSuccess: true });
-              
-              // Navigate to orders after delay
               setTimeout(() => {
                 if (mountedRef.current) {
                   router.push('/buyers/my-orders');
@@ -370,32 +337,28 @@ export const useBrowseDetail = () => {
             }
           } else {
             const msg = (response.error?.message || '').toLowerCase();
-            if (msg.includes('auction is not active')) {
-              // Treat as idempotent: already processed elsewhere
-              console.log('[BrowseDetail] Auction already finalized on server; treating as idempotent.');
-              // Refresh to reflect final state
+            if (msg.includes('already processed') || msg.includes('auction is not active')) {
+              console.log('[BrowseDetail] Auction already processed on backend');
               await refreshListings();
             } else {
               console.warn('[BrowseDetail] Failed to process auction end:', response.error);
             }
           }
         } catch (error) {
-          // If backend returns 400 "Auction is not active", treat as idempotent
           const m = (error as any)?.message?.toLowerCase?.() || '';
-          if (m.includes('auction is not active')) {
-            console.log('[BrowseDetail] Backend says not active; treating as already-ended. Refreshing.');
+          if (m.includes('already processed') || m.includes('auction is not active')) {
+            console.log('[BrowseDetail] Auction already ended, refreshing');
             try { await refreshListings(); } catch {}
           } else {
             console.warn('[BrowseDetail] Error processing auction end:', error);
           }
+        } finally {
+          isProcessingAuctionEndRef.current = false;
         }
       }
     };
 
-    // Check immediately
     checkAuctionExpiry();
-
-    // Then check periodically
     auctionExpiryTimerRef.current = setInterval(checkAuctionExpiry, AUCTION_EXPIRY_CHECK_INTERVAL);
 
     return () => {
@@ -404,45 +367,37 @@ export const useBrowseDetail = () => {
         auctionExpiryTimerRef.current = null;
       }
     };
-  }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState, canEndAuction, reserveMet, isBidderView]);
+  }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState, reserveMet]);
 
-  // Load listing using the service
+  // Load listing
   useEffect(() => {
     const loadListing = async () => {
       if (!listingId) return;
 
-      // Cancel any pending request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
 
-      // Create new abort controller
       abortControllerRef.current = new AbortController();
 
       setIsLoading(true);
       setError(null);
 
       try {
-        // First, check if listing is in the context
         const contextListing = listings.find(l => l.id === listingId);
         
         if (contextListing) {
           setListing(contextListing as ListingWithDetails);
-          // FIX: Initialize viewCount from the listing's views property
           setState(prev => ({ ...prev, viewCount: contextListing.views || 0 }));
           setIsLoading(false);
         } else {
-          // If not in context, fetch from service
           const result = await listingsService.getListing(listingId);
           
           if (!mountedRef.current) return;
 
           if (result.success && result.data) {
             setListing(result.data as ListingWithDetails);
-            // FIX: Initialize viewCount from the fetched listing's views property
             setState(prev => ({ ...prev, viewCount: result.data?.views || 0 }));
-            
-            // Refresh listings context to include this listing
             await refreshListings();
           } else {
             setError(result.error?.message || 'Listing not found');
@@ -471,7 +426,6 @@ export const useBrowseDetail = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load reviews
         const reviewsData = await storageService.getItem<Review[]>('reviews', []);
         setReviews(reviewsData);
       } catch (error) {
@@ -511,43 +465,36 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // Track view count - Enhanced to update from backend
+  // Track view count
   useEffect(() => {
     const trackView = async () => {
       if (!listing) return;
       
-      // Initialize view count from listing's existing views first
       if (listing.views !== undefined && !viewIncrementedRef.current) {
         setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
       }
       
-      // Then increment the view if not already done
       if (!viewIncrementedRef.current) {
         viewIncrementedRef.current = true;
         
         try {
-          // Track views for all users (logged in or not)
           if (user && user.username !== listing.seller) {
-            // Logged in user, not the seller
             await listingsService.updateViews({
               listingId: listing.id,
               viewerId: user.username,
             });
           } else if (!user) {
-            // Anonymous user
             await listingsService.updateViews({
               listingId: listing.id,
             });
           }
           
-          // Get updated count from backend
           const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
           if (viewsResponse.success && viewsResponse.data !== undefined) {
             setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
           }
         } catch (error) {
           console.error('Error tracking view:', error);
-          // If tracking fails, at least show the existing view count from the listing
           if (listing.views !== undefined) {
             setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
           }
@@ -580,9 +527,8 @@ export const useBrowseDetail = () => {
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuction, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
-  // UPDATED: Check current user funds with fresh balance
+  // Check current user funds
   const checkCurrentUserFunds = useCallback(() => {
-    // GATE 1: Not an auction? Clear bid status and return
     if (!isAuction || !listing?.auction) {
       updateState({ 
         biddingEnabled: true,
@@ -591,10 +537,8 @@ export const useBrowseDetail = () => {
       return;
     }
     
-    // GATE 2: Skip if not a buyer
     if (!user || user.role !== "buyer") return;
     
-    // GATE 3: Skip if currently purchasing or already purchased
     if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
       updateState({ 
         biddingEnabled: true,
@@ -603,7 +547,6 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    // CRITICAL: Always get fresh balance, not cached
     const balance = getBuyerBalance(user.username);
     console.log('[useBrowseDetail] Checking funds - current balance:', balance);
     
@@ -630,7 +573,7 @@ export const useBrowseDetail = () => {
 
   const formatBidDate = useCallback((date: string) => formatRelativeTime(date), []);
 
-  // Suggested bid amount calculation - ONLY for auctions
+  // Suggested bid amount calculation
   const suggestedBidAmount = useMemo(() => {
     if (!isAuction || !listing?.auction) return null;
     
@@ -647,11 +590,9 @@ export const useBrowseDetail = () => {
       const messagesKey = `messages`;
       const allMessages = await storageService.getItem<Record<string, Message[]>>(messagesKey, {});
       
-      // Get conversation key
       const conversationKey = [receiverUsername, senderUsername].sort().join('-');
       const messages = allMessages[conversationKey] || [];
       
-      // Mark messages as read
       const updatedMessages = messages.map(msg => {
         if (msg.receiver === receiverUsername && msg.sender === senderUsername && !msg.read) {
           return { ...msg, read: true, isRead: true };
@@ -666,18 +607,15 @@ export const useBrowseDetail = () => {
     }
   }, []);
 
-  // NEW: Listen for wallet balance updates and refunds
+  // Listen for wallet balance updates and refunds
   useEffect(() => {
     if (!isAuction || !user || user.role !== 'buyer') return;
     
     const handleBalanceUpdate = (event: CustomEvent) => {
       console.log('[useBrowseDetail] Balance update received:', event.detail);
       
-      // Re-check funds when balance is updated
       if (event.detail.username === user.username) {
         checkCurrentUserFunds();
-        
-        // Clear any bid errors since balance has changed
         updateState({ 
           bidError: null,
           bidSuccess: null
@@ -688,7 +626,6 @@ export const useBrowseDetail = () => {
     const handleUserRefunded = (event: CustomEvent) => {
       console.log('[useBrowseDetail] User refunded:', event.detail);
       
-      // If this refund is for the current listing, show a message
       if (event.detail.username === user.username && 
           event.detail.listingId === listing?.id) {
         updateState({ 
@@ -700,7 +637,6 @@ export const useBrowseDetail = () => {
           bidSuccess: null
         });
         
-        // Re-check funds after refund
         setTimeout(() => {
           checkCurrentUserFunds();
         }, 100);
@@ -712,7 +648,6 @@ export const useBrowseDetail = () => {
       checkCurrentUserFunds();
     };
     
-    // Listen for balance update events
     window.addEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
     window.addEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
     window.addEventListener('auction:check-bid-status', handleCheckBidStatus);
@@ -736,10 +671,8 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    // Clear rate limit error
     setRateLimitError(null);
 
-    // Check rate limit
     const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
     if (!rateLimitResult.allowed) {
       setRateLimitError(`Too many requests. Please wait ${rateLimitResult.waitTime} seconds.`);
@@ -750,11 +683,9 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    // FIX 2: Get FRESH balance at click time (not from render)
     const freshBalance = getBuyerBalance(user.username);
     const requiredAmount = getBuyerDebitAmount(listing);
     
-    // FIX 3: Use shared pricing utility for consistent calculation
     if (!hasSufficientBalance(freshBalance, listing)) {
       const amountNeeded = getAmountNeeded(freshBalance, listing);
       updateState({ 
@@ -764,22 +695,19 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    // CRITICAL: Set purchase flags BEFORE any state updates
     isPurchasingRef.current = true;
     hasPurchasedRef.current = false;
 
-    // Clear all bid-related state immediately
     updateState({ 
       isProcessing: true, 
       purchaseStatus: 'Processing...', 
-      bidStatus: {},  // Clear any bid status
-      biddingEnabled: true,  // Reset bidding state
+      bidStatus: {},
+      biddingEnabled: true,
       bidError: null,
       bidSuccess: null
     });
 
     try {
-      // Use the new purchaseListingAndRemove method that handles both purchase and removal
       const success = await purchaseListingAndRemove(listing, user.username);
       
       if (success) {
@@ -788,7 +716,7 @@ export const useBrowseDetail = () => {
           showPurchaseSuccess: true,
           purchaseStatus: 'Purchase successful!',
           isProcessing: false,
-          bidStatus: {}, // Keep bid status clear
+          bidStatus: {},
           biddingEnabled: true
         });
         
@@ -819,14 +747,11 @@ export const useBrowseDetail = () => {
   }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState, rateLimiter, getBuyerBalance]);
 
   const handleBidSubmit = useCallback(async () => {
-    // GATE: Only allow bidding on actual auctions
     if (!isAuction || !listing || state.isBidding || !user || user.role !== 'buyer') return;
 
-    // Clear errors
     setRateLimitError(null);
     updateState({ bidError: null, bidSuccess: null });
 
-    // Validate and sanitize bid amount
     const bidValidation = securityService.validateAmount(state.bidAmount, {
       min: 0.01,
       max: 10000
@@ -842,7 +767,6 @@ export const useBrowseDetail = () => {
 
     const bidValue = bidValidation.value;
 
-    // Additional validation for auction rules
     const currentBid = listing.auction?.highestBid || 0;
     const startingBid = listing.auction?.startingPrice || 0;
     const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
@@ -855,7 +779,6 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    // Check rate limit
     const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
     if (!rateLimitResult.allowed) {
       setRateLimitError(`Too many bids. Please wait ${rateLimitResult.waitTime} seconds.`);
@@ -873,7 +796,6 @@ export const useBrowseDetail = () => {
     });
 
     try {
-      // Use ListingContext's placeBid method
       const success = await listingsPlaceBid(listing.id, user.username, bidValue);
       
       if (success) {
@@ -888,11 +810,9 @@ export const useBrowseDetail = () => {
           }
         });
 
-        // Refresh listing to get updated bid data
         const result = await listingsService.getListing(listing.id);
         if (result.success && result.data) {
           setListing(result.data as ListingWithDetails);
-          // Update view count from refreshed listing
           setState(prev => ({ ...prev, viewCount: result.data?.views || prev.viewCount }));
         }
 
@@ -919,16 +839,13 @@ export const useBrowseDetail = () => {
   }, [isAuction, listing, state.isBidding, state.bidAmount, user, listingsPlaceBid, updateState, rateLimiter]);
 
   const handleImageNavigation = useCallback((newIndex: number) => {
-    // Validate index
     const sanitizedIndex = Math.floor(newIndex);
     if (sanitizedIndex >= 0 && sanitizedIndex < images.length) {
       updateState({ currentImageIndex: sanitizedIndex });
     }
   }, [images.length, updateState]);
 
-  // Handle bid amount change with sanitization
   const handleBidAmountChange = useCallback((value: string) => {
-    // Allow typing but sanitize for display
     updateState({ bidAmount: value });
   }, [updateState]);
 
@@ -963,10 +880,8 @@ export const useBrowseDetail = () => {
     }
   }, [listing?.seller, currentUsername, markMessagesAsRead]);
 
-  // CRITICAL: Only populate bid history for actual auctions
   useEffect(() => {
     if (isAuction && listing?.auction?.bids) {
-      // Convert Bid[] to BidHistoryItem[]
       const historyItems: BidHistoryItem[] = listing.auction.bids.map(bid => ({
         bidder: bid.bidder,
         amount: bid.amount,
@@ -993,9 +908,7 @@ export const useBrowseDetail = () => {
     }
   }, [isAuction, isAuctionEnded, user?.role, isUserHighestBidder, state.showAuctionSuccess, router, updateState]);
 
-  // CRITICAL: Only check funds for actual auctions, with all proper gates
   useEffect(() => {
-    // GATE: Not an auction? Don't even set up the interval
     if (!isAuction) {
       updateState({ 
         biddingEnabled: true,
@@ -1004,10 +917,8 @@ export const useBrowseDetail = () => {
       return;
     }
     
-    // Skip if auction has ended
     if (isAuctionEnded) return;
     
-    // Skip if purchase is in progress or already purchased
     if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
       updateState({ 
         biddingEnabled: true,
@@ -1018,7 +929,6 @@ export const useBrowseDetail = () => {
     
     checkCurrentUserFunds();
     
-    // FIX 4: Properly use and clean up the funding timer ref
     fundingTimerRef.current = setInterval(() => {
       checkCurrentUserFunds();
     }, FUNDING_CHECK_INTERVAL);
@@ -1043,7 +953,6 @@ export const useBrowseDetail = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [updateState]);
 
-  // Timer for auction updates - ONLY for actual auctions
   useEffect(() => {
     if (!isAuction || isAuctionEnded || !mountedRef.current) {
       if (timerRef.current) {
@@ -1104,7 +1013,6 @@ export const useBrowseDetail = () => {
     } : null;
   }, [listing, users, orderHistory, sellerAverageRating, sellerReviews.length]);
 
-  // FIX: Use the updated calculateTotalPayable that doesn't add 10%
   const calculateTotalPayableFixed = useCallback((amount: number) => {
     return getAuctionTotalPayable(amount);
   }, []);
@@ -1157,12 +1065,11 @@ export const useBrowseDetail = () => {
 
   // Return everything
   return {
-    // Data
     user,
     listing,
     listingId,
     images,
-    isAuctionListing: isAuction, // Use the properly gated value
+    isAuctionListing: isAuction,
     isAuctionEnded: isAuctionEnded || false,
     didUserBid,
     isUserHighestBidder,
@@ -1177,8 +1084,6 @@ export const useBrowseDetail = () => {
     lastBidUpdate,
     hasReserve,
     reserveMet,
-    
-    // State - CRITICAL: Only return bidStatus for actual auctions and when not purchasing
     purchaseStatus: state.purchaseStatus,
     isProcessing: state.isProcessing,
     showPurchaseSuccess: state.showPurchaseSuccess,
@@ -1186,7 +1091,6 @@ export const useBrowseDetail = () => {
     sellerProfile: state.sellerProfile,
     showStickyBuy: state.showStickyBuy,
     bidAmount: state.bidAmount,
-    // GATE bidStatus: only for auctions, and clear during any purchase flow
     bidStatus: (isAuction && !isPurchasingRef.current && !hasPurchasedRef.current && !state.isProcessing) ? state.bidStatus : {},
     biddingEnabled: state.biddingEnabled,
     bidsHistory: state.bidsHistory,
@@ -1197,13 +1101,9 @@ export const useBrowseDetail = () => {
     bidError: state.bidError,
     bidSuccess: state.bidSuccess,
     currentImageIndex: state.currentImageIndex,
-    
-    // Refs
     imageRef,
     bidInputRef,
     bidButtonRef,
-    
-    // Handlers
     handlePurchase,
     handleBidSubmit,
     handleImageNavigation,
@@ -1212,18 +1112,12 @@ export const useBrowseDetail = () => {
     getTimerProgress,
     formatTimeRemaining: (endTime: string) => formatTimeRemaining(endTime),
     formatBidDate,
-    calculateTotalPayable: calculateTotalPayableFixed, // Use the fixed version
-    
-    // Navigation
+    calculateTotalPayable: calculateTotalPayableFixed,
     router,
-    
-    // Seller info
     sellerTierInfo: sellerInfo?.tierInfo,
     isVerified: sellerInfo?.isVerified || false,
     sellerAverageRating: sellerInfo?.averageRating,
     sellerReviewCount: sellerInfo?.reviewCount || 0,
-    
-    // Loading/error state
     isLoading: false,
     error,
     rateLimitError
