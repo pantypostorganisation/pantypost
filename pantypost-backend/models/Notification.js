@@ -27,7 +27,14 @@ const notificationSchema = new mongoose.Schema({
       'auction_lost',
       'auction_reserve_not_met',
       'bid_refunded',
-      'outbid'
+      'outbid',
+      // ADDED: Order and shipping related types
+      'shipping_update',
+      'address_update',
+      'custom_request_paid',
+      'order_shipped',
+      'order_delivered',
+      'order_processing'
     ],
     required: true
   },
@@ -310,6 +317,69 @@ notificationSchema.statics.createOrderNotification = async function(seller, orde
     },
     priority: 'high',
     relatedId: order._id,
+    relatedType: 'order'
+  });
+};
+
+// ADDED: Helper for shipping notifications
+notificationSchema.statics.createShippingNotification = async function(recipient, order, status) {
+  const messages = {
+    processing: `📦 Your order "${order.title}" is being processed`,
+    shipped: `🚚 Your order "${order.title}" has been shipped${order.trackingNumber ? ` (Tracking: ${order.trackingNumber})` : ''}`,
+    delivered: `✅ Your order "${order.title}" has been delivered`
+  };
+
+  return this.createNotification({
+    recipient,
+    type: 'shipping_update',
+    title: 'Shipping Update',
+    message: messages[status] || `Order "${order.title}" status updated to ${status}`,
+    data: {
+      orderId: order._id || order.id,
+      orderTitle: order.title,
+      status,
+      trackingNumber: order.trackingNumber
+    },
+    priority: status === 'shipped' ? 'high' : 'normal',
+    relatedId: order._id || order.id,
+    relatedType: 'order'
+  });
+};
+
+// ADDED: Helper for address update notifications
+notificationSchema.statics.createAddressUpdateNotification = async function(seller, order, buyer) {
+  return this.createNotification({
+    recipient: seller,
+    type: 'address_update',
+    title: 'Delivery Address Updated',
+    message: `📍 ${buyer} has updated the delivery address for "${order.title}"`,
+    data: {
+      orderId: order._id || order.id,
+      orderTitle: order.title,
+      buyer
+    },
+    priority: 'normal',
+    relatedId: order._id || order.id,
+    relatedType: 'order'
+  });
+};
+
+// ADDED: Helper for custom request payment notifications
+notificationSchema.statics.createCustomRequestPaidNotification = async function(seller, buyer, request) {
+  return this.createNotification({
+    recipient: seller,
+    type: 'custom_request_paid',
+    title: 'Custom Request Paid!',
+    message: `💰 ${buyer} has paid for your custom request: "${request.title}"`,
+    data: {
+      requestId: request.id,
+      orderId: request.orderId,
+      buyer,
+      title: request.title,
+      amount: request.amount
+    },
+    priority: 'high',
+    relatedId: request.orderId,
     relatedType: 'order'
   });
 };

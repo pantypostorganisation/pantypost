@@ -6,6 +6,7 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
+import { useToast } from '@/context/ToastContext';
 import AddressConfirmationModal from '@/components/AddressConfirmationModal';
 
 // Seller orders UI
@@ -15,33 +16,78 @@ import AddressDisplay from '@/components/seller/orders/AddressDisplay';
 import ShippingControls from '@/components/seller/orders/ShippingControls';
 
 import type { DeliveryAddress, Order } from '@/types/order';
-import { Clock, Package, Truck, Gavel, Settings, ShoppingBag } from 'lucide-react';
+import { Clock, Package, Truck, Gavel, Settings, ShoppingBag, AlertCircle } from 'lucide-react';
 
 export default function OrdersToFulfilPage() {
   const { user, apiClient } = useAuth();
   const { updateOrderAddress, updateShippingStatus } = useWallet();
+  const { showToast } = useToast();
 
   const [addressModalOpen, setAddressModalOpen] = useState(false);
   const [sellerOrderHistory, setSellerOrderHistory] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch seller orders directly from backend to ensure this page shows orders to fulfil
   useEffect(() => {
     const fetchSellerOrders = async () => {
+      if (!user?.username) {
+        setIsLoading(false);
+        return;
+      }
+      
+      setIsLoading(true);
+      setError(null);
+      
       try {
-        if (!user?.username) return;
         const response = await apiClient.get<any>(`/orders?seller=${encodeURIComponent(user.username)}`);
+        
         if (response?.success && Array.isArray(response.data)) {
           setSellerOrderHistory(response.data);
+          console.log('[OrdersToFulfilPage] Loaded orders:', response.data.length);
+        } else {
+          console.error('[OrdersToFulfilPage] Invalid response format:', response);
+          setError('Failed to load orders. Please refresh the page.');
         }
       } catch (err) {
         console.error('[OrdersToFulfilPage] Failed to fetch seller orders:', err);
+        setError('Failed to load orders. Please check your connection and try again.');
+      } finally {
+        setIsLoading(false);
       }
     };
+    
     fetchSellerOrders();
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(fetchSellerOrders, 30000);
+    
+    return () => clearInterval(interval);
   }, [user?.username, apiClient]);
+
+  // Listen for order updates via WebSocket
+  useEffect(() => {
+    const handleOrderUpdate = (event: CustomEvent) => {
+      const { orderId, shippingStatus, hasAddress } = event.detail;
+      
+      setSellerOrderHistory(prev => prev.map(order => {
+        if (order.id === orderId) {
+          return {
+            ...order,
+            shippingStatus: shippingStatus || order.shippingStatus,
+            deliveryAddress: hasAddress ? order.deliveryAddress : undefined
+          };
+        }
+        return order;
+      }));
+    };
+
+    window.addEventListener('order:updated' as any, handleOrderUpdate);
+    return () => window.removeEventListener('order:updated' as any, handleOrderUpdate);
+  }, []);
 
   // Filter & group for UI
   const { userOrders, auctionOrders, customRequestOrders, directOrders } = useMemo(() => {
@@ -99,15 +145,29 @@ export default function OrdersToFulfilPage() {
   }, []);
 
   const handleConfirmAddress = useCallback(
-    (address: DeliveryAddress) => {
+    async (address: DeliveryAddress) => {
       if (selectedOrder) {
-        // Persist via context
-        updateOrderAddress(selectedOrder, address);
+        try {
+          // Persist via context
+          await updateOrderAddress(selectedOrder, address);
+          showToast({ 
+            type: 'success',
+            title: 'Success',
+            message: 'Address updated successfully' 
+          });
+        } catch (error) {
+          console.error('[OrdersToFulfilPage] Failed to update address:', error);
+          showToast({ 
+            type: 'error',
+            title: 'Error',
+            message: 'Failed to update address. Please try again.' 
+          });
+        }
       }
       setAddressModalOpen(false);
       setSelectedOrder(null);
     },
-    [selectedOrder, updateOrderAddress]
+    [selectedOrder, updateOrderAddress, showToast]
   );
 
   const getSelectedOrderAddress = useCallback((): DeliveryAddress | null => {
@@ -147,10 +207,103 @@ export default function OrdersToFulfilPage() {
       navigator.clipboard.writeText(text);
       setCopiedText('address');
       setTimeout(() => setCopiedText(null), 1500);
+      showToast({ 
+        type: 'success',
+        title: 'Copied',
+        message: 'Address copied to clipboard' 
+      });
     } catch (e) {
       console.error('Clipboard copy failed:', e);
+      showToast({ 
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to copy address' 
+      });
     }
-  }, []);
+  }, [showToast]);
+
+  // Enhanced shipping status change handler
+  const handleShippingStatusChange = useCallback(
+    async (orderId: string, status: 'pending' | 'processing' | 'shipped') => {
+      try {
+        await updateShippingStatus(orderId, status);
+        
+        // Update local state immediately for better UX
+        setSellerOrderHistory(prev => prev.map(order => 
+          order.id === orderId 
+            ? { ...order, shippingStatus: status }
+            : order
+        ));
+        
+        // Show success message
+        const statusMessages = {
+          pending: 'Order marked as pending',
+          processing: 'Order marked as processing',
+          shipped: 'Order marked as shipped! Buyer has been notified.'
+        };
+        
+        showToast({ 
+          type: 'success',
+          title: 'Status Updated',
+          message: statusMessages[status] 
+        });
+      } catch (error) {
+        console.error('[OrdersToFulfilPage] Failed to update shipping status:', error);
+        showToast({ 
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to update shipping status. Please try again.' 
+        });
+      }
+    },
+    [updateShippingStatus, showToast]
+  );
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <RequireAuth role="seller">
+        <BanCheck>
+          <div className="max-w-6xl mx-auto px-4 py-10">
+            <div className="flex items-center gap-3 mb-6">
+              <ShoppingBag className="w-7 h-7 text-orange-400 animate-pulse" />
+              <h1 className="text-3xl font-bold text-white">Orders to fulfil</h1>
+            </div>
+            <div className="text-center py-16">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff950e]"></div>
+              <p className="text-gray-400 mt-4">Loading your orders...</p>
+            </div>
+          </div>
+        </BanCheck>
+      </RequireAuth>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <RequireAuth role="seller">
+        <BanCheck>
+          <div className="max-w-6xl mx-auto px-4 py-10">
+            <div className="flex items-center gap-3 mb-6">
+              <ShoppingBag className="w-7 h-7 text-orange-400" />
+              <h1 className="text-3xl font-bold text-white">Orders to fulfil</h1>
+            </div>
+            <div className="text-center py-16 bg-red-900/20 rounded-2xl border border-red-500/30">
+              <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <h3 className="text-red-300 text-xl mb-2">{error}</h3>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </BanCheck>
+      </RequireAuth>
+    );
+  }
 
   return (
     <RequireAuth role="seller">
@@ -200,7 +353,7 @@ export default function OrdersToFulfilPage() {
                 renderShippingControls={(order) => (
                   <ShippingControls
                     order={order}
-                    onStatusChange={(orderId, status) => updateShippingStatus(orderId, status)}
+                    onStatusChange={handleShippingStatusChange}
                   />
                 )}
                 getShippingStatusBadge={getShippingStatusBadge}
@@ -226,7 +379,7 @@ export default function OrdersToFulfilPage() {
                 renderShippingControls={(order) => (
                   <ShippingControls
                     order={order}
-                    onStatusChange={(orderId, status) => updateShippingStatus(orderId, status)}
+                    onStatusChange={handleShippingStatusChange}
                   />
                 )}
                 getShippingStatusBadge={getShippingStatusBadge}
@@ -252,7 +405,7 @@ export default function OrdersToFulfilPage() {
                 renderShippingControls={(order) => (
                   <ShippingControls
                     order={order}
-                    onStatusChange={(orderId, status) => updateShippingStatus(orderId, status)}
+                    onStatusChange={handleShippingStatusChange}
                   />
                 )}
                 getShippingStatusBadge={getShippingStatusBadge}

@@ -60,39 +60,6 @@ function formatDeliveryAddressForResponse(addr) {
 }
 
 /**
- * Safely create a Notification without crashing the API on enum mismatch.
- * If `type` is rejected by the model enum, we retry once with a fallback type.
- */
-async function createNotificationSafe(doc, fallbackType = 'shipping_update') {
-  try {
-    await Notification.create(doc);
-    return { ok: true, typeUsed: doc.type };
-  } catch (err) {
-    const isEnumError =
-      err?.name === 'ValidationError' &&
-      /is not a valid enum value for path `type`/i.test(err?.message || '');
-    if (isEnumError) {
-      try {
-        const retryDoc = { ...doc, type: fallbackType };
-        await Notification.create(retryDoc);
-        console.warn(
-          '[Order] Notification type fallback:',
-          doc.type,
-          '->',
-          fallbackType
-        );
-        return { ok: true, typeUsed: fallbackType, fallback: true };
-      } catch (retryErr) {
-        console.error('[Order] Notification fallback failed:', retryErr?.message || retryErr);
-        return { ok: false, error: retryErr };
-      }
-    }
-    console.error('[Order] Notification create failed:', err?.message || err);
-    return { ok: false, error: err };
-  }
-}
-
-/**
  * Check if a user is subscribed to a seller
  */
 async function isUserSubscribedToSeller(buyer, seller) {
@@ -605,19 +572,12 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
 
       await order.save();
 
-      await Notification.create({
-        recipient: seller,
-        type: 'custom_request_paid',
-        title: 'Custom Request Paid!',
-        message: `${buyer} has paid for your custom request: "${title}"`,
-        link: `/sellers/orders-to-fulfil`,
-        metadata: {
-          orderId: order._id.toString(),
-          requestId,
-          buyer,
-          amount: actualMarkedUpPrice,
-          isPremium
-        }
+      // Use the new helper for custom request paid notification
+      await Notification.createCustomRequestPaidNotification(seller, buyer, {
+        id: requestId,
+        orderId: order._id.toString(),
+        title,
+        amount: actualMarkedUpPrice
       });
 
       const Message = require('../models/Message');
@@ -963,19 +923,9 @@ router.put('/:id/shipping', authMiddleware, async (req, res) => {
 
     await order.save();
 
-    if (shippingStatus === 'shipped') {
-      await Notification.create({
-        recipient: order.buyer,
-        type: 'shipping_update',
-        title: 'Order Shipped',
-        message: `Your order "${order.title}" has been shipped${trackingNumber ? ` (Tracking: ${trackingNumber})` : ''}`,
-        link: `/buyers/my-orders`,
-        metadata: {
-          orderId: order._id.toString(),
-          seller: order.seller,
-          trackingNumber
-        }
-      });
+    // Use the new helper method for shipping notifications
+    if (shippingStatus === 'shipped' || shippingStatus === 'processing' || shippingStatus === 'delivered') {
+      await Notification.createShippingNotification(order.buyer, order, shippingStatus);
     }
 
     if (global.webSocketService) {
@@ -1026,19 +976,9 @@ router.post('/:id/shipping', authMiddleware, async (req, res) => {
 
     await order.save();
 
-    if (shippingStatus === 'shipped') {
-      await Notification.create({
-        recipient: order.buyer,
-        type: 'shipping_update',
-        title: 'Order Shipped',
-        message: `Your order "${order.title}" has been shipped${trackingNumber ? ` (Tracking: ${trackingNumber})` : ''}`,
-        link: `/buyers/my-orders`,
-        metadata: {
-          orderId: order._id.toString(),
-          seller: order.seller,
-          trackingNumber
-        }
-      });
+    // Use the new helper method for shipping notifications
+    if (shippingStatus === 'shipped' || shippingStatus === 'processing' || shippingStatus === 'delivered') {
+      await Notification.createShippingNotification(order.buyer, order, shippingStatus);
     }
 
     if (global.webSocketService) {
@@ -1115,21 +1055,8 @@ router.put('/:id/address', authMiddleware, async (req, res) => {
 
     console.log('[Order] Address updated for order:', order._id);
 
-    // SAFE notification (fallback to a valid enum on failure, do not crash API)
-    await createNotificationSafe(
-      {
-        recipient: order.seller,
-        type: 'address_update',
-        title: 'Delivery Address Updated',
-        message: `${order.buyer} has ${order.deliveryAddress ? 'updated' : 'added'} the delivery address for "${order.title}"`,
-        link: `/sellers/orders-to-fulfil`,
-        metadata: {
-          orderId: order._id.toString(),
-          buyer: order.buyer
-        }
-      },
-      'shipping_update'
-    );
+    // Use the new helper method for address update notifications
+    await Notification.createAddressUpdateNotification(order.seller, order, order.buyer);
 
     if (global.webSocketService) {
       global.webSocketService.emitOrderUpdated({
@@ -1212,21 +1139,8 @@ router.post('/:id/address', authMiddleware, async (req, res) => {
 
     console.log('[Order] Address updated for order:', order._id);
 
-    // SAFE notification (fallback and no-crash)
-    await createNotificationSafe(
-      {
-        recipient: order.seller,
-        type: 'address_update',
-        title: 'Delivery Address Updated',
-        message: `${order.buyer} has ${order.deliveryAddress ? 'updated' : 'added'} the delivery address for "${order.title}"`,
-        link: `/sellers/orders-to-fulfil`,
-        metadata: {
-          orderId: order._id.toString(),
-          buyer: order.buyer
-        }
-      },
-      'shipping_update'
-    );
+    // Use the new helper method for address update notifications
+    await Notification.createAddressUpdateNotification(order.seller, order, order.buyer);
 
     if (global.webSocketService) {
       global.webSocketService.emitOrderUpdated({
