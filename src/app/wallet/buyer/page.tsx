@@ -1,3 +1,4 @@
+// src/app/wallet/buyer/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';

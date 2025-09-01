@@ -1,7 +1,7 @@
 // src/utils/format.ts
 
 import { Money, ISOTimestamp } from '@/types/common';
-import { Transaction } from '@/services/wallet.service.enhanced';
+import { Transaction } from '@/services/wallet.service';
 
 // Define types locally from the Transaction interface
 type TransactionType = Transaction['type'];

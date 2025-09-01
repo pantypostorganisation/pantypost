@@ -1,7 +1,49 @@
 // src/services/wallet.validation.ts
 
 import { Money, UserId } from '@/types/common';
-import { Transaction, TransactionMetadata } from './wallet.service.enhanced';
+
+// Transaction types (moved from deleted wallet.service.enhanced.ts)
+export interface Transaction {
+  id: string;
+  type: 'deposit' | 'withdrawal' | 'purchase' | 'sale' | 'tip' | 'subscription' | 
+        'admin_credit' | 'admin_debit' | 'refund' | 'fee' | 'tier_credit';
+  amount: Money;
+  from?: UserId;
+  to?: UserId;
+  fromRole?: 'buyer' | 'seller' | 'admin';
+  toRole?: 'buyer' | 'seller' | 'admin';
+  description: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  createdAt: string;
+  completedAt?: string;
+  failedAt?: string;
+  errorMessage?: string;
+  metadata?: TransactionMetadata;
+  idempotencyKey?: string;
+  reversalOf?: string;
+  reversedBy?: string;
+}
+
+export interface TransactionMetadata {
+  orderId?: string;
+  listingId?: string;
+  subscriptionId?: string;
+  paymentMethod?: string;
+  bankAccount?: string | {
+    accountNumber: string;
+    routingNumber: string;
+    accountHolderName?: string;
+    country?: string;
+  };
+  notes?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  platformFee?: Money;
+  tierCreditAmount?: Money;
+  originalAmount?: Money;
+  adminUser?: string;
+  reason?: string;
+}
 
 /**
  * Financial validation rules and utilities

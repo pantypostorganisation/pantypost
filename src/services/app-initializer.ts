@@ -1,9 +1,7 @@
 // src/services/app-initializer.ts
 
-import { authService, walletService, storageService } from '@/services';
+import { authService, storageService } from '@/services';
 import { runOrdersMigration } from '@/utils/ordersMigration';
-// REMOVED: import { getMockConfig } from './mock/mock.config';
-// REMOVED: import { mockInterceptor } from './mock/mock-interceptor';
 import { validateConfiguration, getAllConfig, isDevelopment } from '@/config/environment';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
 import { securityService } from './security.service';
@@ -130,8 +128,8 @@ export class AppInitializer {
         errors.push(`Storage initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 4. REMOVED MOCK API INITIALIZATION
-      console.log('[AppInitializer] Mock API disabled - using real backend');
+      // 4. Backend API is now the primary data source
+      console.log('[AppInitializer] Using backend API for all data operations');
 
       // 5. Initialize auth service
       try {
@@ -141,17 +139,11 @@ export class AppInitializer {
         errors.push(`Auth initialization failed: ${this.sanitizeError(error)}`);
       }
 
-      // 6. Initialize wallet service
-      try {
-        console.log('[AppInitializer] Initializing wallet service...');
-        if (typeof walletService?.initialize === 'function') {
-          await walletService.initialize();
-        }
-      } catch (error) {
-        warnings.push(`Wallet initialization warning: ${this.sanitizeError(error)}`);
-      }
+      // 6. REMOVED: Wallet service no longer needs initialization
+      // The wallet service now makes direct API calls and doesn't need initialization
+      console.log('[AppInitializer] Wallet service will fetch data from API on demand');
 
-      // 7. Clean up corrupted data before migration
+      // 7. Clean up corrupted local data before migration
       try {
         console.log('[AppInitializer] Cleaning up corrupted data...');
         await this.cleanupCorruptedData();

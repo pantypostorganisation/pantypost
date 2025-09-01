@@ -2,13 +2,12 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import type { InitializationResult } from '@/services/app-initializer';
 
 interface HealthStatus {
   wallet_service: boolean;
   storage_service: boolean;
   auth_service: boolean;
-  mock_api?: boolean;
+  websocket_service: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -18,8 +17,6 @@ interface AppInitializationContextType {
   healthStatus: HealthStatus | null;
   error: Error | null;
   warnings: string[];
-  mockApiEnabled: boolean;
-  mockScenario?: string;
   reinitialize: () => Promise<void>;
 }
 
@@ -32,7 +29,7 @@ function InitializationLoader(): React.ReactElement {
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
         <p className="text-gray-400">Initializing PantyPost...</p>
-        <p className="text-xs text-gray-600 mt-2">Setting up services...</p>
+        <p className="text-xs text-gray-600 mt-2">Connecting to server...</p>
       </div>
     </div>
   );
@@ -48,10 +45,10 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold mb-2">Initialization Error</h1>
-        <p className="text-gray-400 mb-4">{error.message || 'Failed to initialize the application'}</p>
+        <h1 className="text-2xl font-bold mb-2">Connection Error</h1>
+        <p className="text-gray-400 mb-4">{error.message || 'Failed to connect to the server'}</p>
         <button onClick={onRetry} className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-          Retry
+          Retry Connection
         </button>
         {process.env.NODE_ENV === 'development' && (
           <details className="mt-4 text-left">
@@ -70,8 +67,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [mockApiEnabled, setMockApiEnabled] = useState(false);
-  const [mockScenario, setMockScenario] = useState<string | undefined>();
   const hasInitializedRef = useRef(false);
 
   const initializeApp = async () => {
@@ -79,16 +74,12 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     if (typeof window !== 'undefined') {
       const sessionInit = sessionStorage.getItem('app_initialized');
       const sessionHealth = sessionStorage.getItem('app_health_status');
-      const sessionMockEnabled = sessionStorage.getItem('app_mock_enabled');
-      const sessionMockScenario = sessionStorage.getItem('app_mock_scenario');
 
       if (sessionInit === 'true' && !hasInitializedRef.current) {
         console.log('[AppInitializer] Already initialized in this session, using cached state');
 
         setIsInitialized(true);
         setIsInitializing(false);
-        setMockApiEnabled(sessionMockEnabled === 'true');
-        setMockScenario(sessionMockScenario || undefined);
 
         if (sessionHealth) {
           try {
@@ -115,69 +106,50 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     setWarnings([]);
 
     try {
-      // Import and initialize dynamically to avoid circular dependencies
-      const { appInitializer } = await import('@/services/app-initializer');
-      const result: InitializationResult = await appInitializer.initialize();
+      // Check API health
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      console.log('[AppInitializer] Checking API health at:', apiUrl);
+      
+      const healthResponse = await fetch(`${apiUrl}/api/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch(err => {
+        console.error('[AppInitializer] Health check failed:', err);
+        throw new Error('Cannot connect to backend server. Please ensure the API is running.');
+      });
 
-      // Get app status including mock API info
-      const status = appInitializer.getStatus();
-      setMockApiEnabled(status.mockApiEnabled);
-      setMockScenario(status.mockScenario);
+      if (!healthResponse || !healthResponse.ok) {
+        throw new Error('Backend server is not responding correctly');
+      }
 
-      // Check health status
+      const healthData = await healthResponse.json();
+      console.log('[AppInitializer] API health check passed:', healthData);
+
+      // Set health status based on backend response
       const health: HealthStatus = {
-        wallet_service: true,
-        storage_service: true,
-        auth_service: true,
-        mock_api: status.mockApiEnabled,
+        wallet_service: healthData.services?.wallet || true,
+        storage_service: healthData.services?.storage || true,
+        auth_service: healthData.services?.auth || true,
+        websocket_service: healthData.services?.websocket || true,
       };
 
-      // Update health based on any errors
-      if (result && !result.success && result.errors) {
-        result.errors.forEach((err: string) => {
-          if (err.includes('wallet') || err.includes('Wallet')) health.wallet_service = false;
-          if (err.includes('storage') || err.includes('Storage')) health.storage_service = false;
-          if (err.includes('auth') || err.includes('Auth')) health.auth_service = false;
-          if (err.includes('mock') || err.includes('Mock')) health.mock_api = false;
-        });
-      }
-
-      // Set warnings
-      if (result.warnings && result.warnings.length > 0) {
-        setWarnings(result.warnings);
-
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Initialization warnings:', result.warnings);
-        }
-      }
-
       setHealthStatus(health);
-      setIsInitialized(!!result?.success);
+      setIsInitialized(true);
 
       // Cache initialization state in session storage
-      if (typeof window !== 'undefined' && result?.success) {
+      if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_initialized', 'true');
         sessionStorage.setItem('app_health_status', JSON.stringify(health));
-        sessionStorage.setItem('app_mock_enabled', status.mockApiEnabled.toString());
-        sessionStorage.setItem('app_mock_scenario', status.mockScenario || '');
       }
 
-      // If initialization failed with errors, throw to show error UI
-      if (!result.success && result.errors.length > 0) {
-        throw new Error(result.errors[0]);
-      }
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('App initialization complete:', {
-          initialized: result.success,
-          mockApiEnabled: status.mockApiEnabled,
-          mockScenario: status.mockScenario,
-          health,
-          warnings: result.warnings,
-        });
-      }
+      console.log('[AppInitializer] Initialization complete:', {
+        initialized: true,
+        health,
+      });
     } catch (err) {
-      console.error('App initialization failed:', err);
+      console.error('[AppInitializer] Initialization failed:', err);
       setError(err instanceof Error ? err : new Error('Initialization failed'));
       setIsInitialized(false);
       hasInitializedRef.current = false;
@@ -186,8 +158,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('app_initialized');
         sessionStorage.removeItem('app_health_status');
-        sessionStorage.removeItem('app_mock_enabled');
-        sessionStorage.removeItem('app_mock_scenario');
       }
     } finally {
       setIsInitializing(false);
@@ -196,26 +166,15 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     void initializeApp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const reinitialize = async () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('app_initialized');
       sessionStorage.removeItem('app_health_status');
-      sessionStorage.removeItem('app_mock_enabled');
-      sessionStorage.removeItem('app_mock_scenario');
     }
 
     hasInitializedRef.current = false;
-
-    try {
-      const { appInitializer } = await import('@/services/app-initializer');
-      appInitializer.reset();
-    } catch (err) {
-      console.error('Failed to reset app initializer:', err);
-    }
-
     await initializeApp();
   };
 
@@ -228,8 +187,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
           healthStatus,
           error,
           warnings,
-          mockApiEnabled,
-          mockScenario,
           reinitialize,
         }}
       >
@@ -247,8 +204,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
           healthStatus,
           error,
           warnings,
-          mockApiEnabled,
-          mockScenario,
           reinitialize,
         }}
       >
@@ -269,19 +224,10 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         healthStatus,
         error,
         warnings,
-        mockApiEnabled,
-        mockScenario,
         reinitialize,
       }}
     >
       {children}
-      {process.env.NODE_ENV === 'development' &&
-        process.env.NEXT_PUBLIC_USE_MOCK_API === 'true' &&
-        mockApiEnabled && (
-          <div className="fixed top-4 right-4 z-50 bg-purple-600/20 text-purple-300 px-3 py-1 rounded-md text-xs backdrop-blur-sm">
-            🎭 Mock API: {mockScenario}
-          </div>
-        )}
     </AppInitializationContext.Provider>
   );
 }
