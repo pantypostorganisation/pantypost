@@ -32,7 +32,7 @@ export default function TipModal({
   tipResult,
   wallet,
   user,
-  onSendTip: parentOnSendTip // Renamed to avoid confusion
+  onSendTip: parentCallback // Renamed to clarify it's just a callback, not the sender
 }: TipModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [localTipResult, setLocalTipResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -77,6 +77,8 @@ export default function TipModal({
 
   const handleSendTip = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
     if (!canAfford || isProcessing) return;
     
     console.log('TipModal: Sending tip...');
@@ -95,7 +97,7 @@ export default function TipModal({
         return;
       }
 
-      // Use the tip service to send the tip
+      // Use the tip service to send the tip (only once!)
       const result = await tipService.sendTip(activeThread, amount);
       
       if (result.success) {
@@ -115,16 +117,16 @@ export default function TipModal({
           setTipAmount('');
           onClose();
         }, 2000);
+        
+        // Call parent callback to handle any UI updates (but NOT to send another tip!)
+        if (parentCallback) {
+          parentCallback();
+        }
       } else {
         setLocalTipResult({
           success: false,
           message: result.message || 'Failed to send tip'
         });
-      }
-      
-      // Call parent callback if provided
-      if (parentOnSendTip) {
-        parentOnSendTip();
       }
     } catch (error) {
       console.error('TipModal: Error sending tip:', error);

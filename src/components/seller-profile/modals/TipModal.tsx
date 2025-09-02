@@ -62,6 +62,11 @@ export default function TipModal({
   const handleSecureSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent double submission
+    if (isProcessing) {
+      return;
+    }
+    
     if (!user) {
       setLocalTipError('You must be logged in to send tips');
       return;
@@ -93,7 +98,7 @@ export default function TipModal({
         return;
       }
       
-      // Send tip via service
+      // Send tip via service - only once
       const result = await tipService.sendTip(username, amount);
       
       if (result.success) {
@@ -104,10 +109,8 @@ export default function TipModal({
           await walletContext.reloadData();
         }
         
-        // Call parent submit handler
-        if (parentOnSubmit) {
-          parentOnSubmit();
-        }
+        // REMOVED: parentOnSubmit() call that was causing double sending
+        // The parent component should handle success through props or context
         
         // Auto-close after success
         setTimeout(() => {

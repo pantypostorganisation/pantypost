@@ -4,7 +4,6 @@ import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services/users.service';
 import { listingsService } from '@/services/listings.service';
 import { reviewsService } from '@/services/reviews.service';
-import { tipService } from '@/services/tip.service';
 import { API_BASE_URL } from '@/services/api.config';
 import { sanitizeUrl } from '@/utils/security/sanitization';
 import { getSellerTierMemoized, TierInfo } from '@/utils/sellerTiers';
@@ -298,25 +297,12 @@ export function useSellerProfile(username: string) {
     }
   };
 
-  const handleTipSubmit = async () => {
-    if (!tipAmount || parseFloat(tipAmount) <= 0) {
-      setTipError('Please enter a valid amount');
-      return;
-    }
-
-    try {
-      const result = await tipService.sendTip(username, parseFloat(tipAmount));
-      if (result.success) {
-        setTipSuccess(true);
-        setTimeout(() => {
-          setShowTipModal(false);
-          setTipSuccess(false);
-          setTipAmount('');
-        }, 2000);
-      }
-    } catch (error) {
-      setTipError('Failed to send tip');
-    }
+  // FIXED: Removed duplicate tip sending logic - now just a placeholder
+  // The actual tip sending is handled in the TipModal component
+  const handleTipSubmit = () => {
+    // This is just a placeholder function
+    // The actual tip sending logic is in the TipModal component
+    console.log('Tip submit handler called - handled by TipModal component');
   };
 
   const handleReviewSubmit = async () => {

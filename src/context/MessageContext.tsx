@@ -30,6 +30,7 @@ type Message = {
     tipAmount?: number;
   };
   threadId?: string;
+  _optimisticId?: string; // Track optimistic messages
 };
 
 // Enhanced ReportLog type with processing status
@@ -60,6 +61,7 @@ type MessageOptions = {
     imageUrl?: string;
     tipAmount?: number;
   };
+  _optimisticId?: string; // Track optimistic ID
 };
 
 // Thread type for organized message threads
@@ -149,6 +151,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<string>>(new Set());
+  const optimisticMessageMap = useRef<Map<string, string>>(new Map()); // optimisticId -> realId
   const subscriptionsRef = useRef<(() => void)[]>([]);
 
   // Initialize service on mount
@@ -239,7 +242,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     loadData();
   }, []);
 
-  // FIXED: WebSocket listener for new messages - prevent duplicates
+  // FIXED: WebSocket listener for new messages - handle optimistic updates properly
   useEffect(() => {
     // Clean up previous subscriptions
     subscriptionsRef.current.forEach(unsub => unsub());
@@ -285,18 +288,64 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           type: data.type || 'normal',
           meta: data.meta,
           threadId: data.threadId || conversationKey,
+          _optimisticId: data._optimisticId
         };
         
-        console.log('[MessageContext] Adding new message to conversation:', conversationKey);
+        console.log('[MessageContext] Processing message for conversation:', conversationKey);
         
         // Update messages state
         setMessages(prev => {
           const existingMessages = prev[conversationKey] || [];
           
-          // Check if message already exists (by ID)
-          const isDuplicate = existingMessages.some(m => 
-            (m.id && m.id === newMessage.id)
-          );
+          // Check if this is a confirmation of an optimistic message
+          if (data._optimisticId) {
+            // Store the mapping
+            optimisticMessageMap.current.set(data._optimisticId, newMessage.id!);
+            
+            // Remove the optimistic message and add the confirmed one
+            const withoutOptimistic = existingMessages.filter(m => 
+              m._optimisticId !== data._optimisticId
+            );
+            
+            // Check if the confirmed message already exists
+            const isDuplicate = withoutOptimistic.some(m => 
+              m.id && m.id === newMessage.id
+            );
+            
+            if (isDuplicate) {
+              console.log('[MessageContext] Confirmed message already exists, skipping');
+              return prev;
+            }
+            
+            const updatedMessages = {
+              ...prev,
+              [conversationKey]: [...withoutOptimistic, newMessage],
+            };
+            
+            console.log('[MessageContext] Replaced optimistic message with confirmed message');
+            
+            // Save to storage
+            storageService.setItem('panty_messages', updatedMessages).catch(err => 
+              console.error('[MessageContext] Failed to save messages:', err)
+            );
+            
+            return updatedMessages;
+          }
+          
+          // Check if message already exists (by ID or by content+timestamp for duplicates)
+          const isDuplicate = existingMessages.some(m => {
+            if (m.id && m.id === newMessage.id) return true;
+            
+            // Check for duplicate by content and approximate time (within 2 seconds)
+            if (m.sender === newMessage.sender && 
+                m.receiver === newMessage.receiver &&
+                m.content === newMessage.content) {
+              const timeDiff = Math.abs(new Date(m.date).getTime() - new Date(newMessage.date).getTime());
+              return timeDiff < 2000;
+            }
+            
+            return false;
+          });
           
           if (isDuplicate) {
             console.log('[MessageContext] Duplicate message detected, skipping');
@@ -308,7 +357,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             [conversationKey]: [...existingMessages, newMessage],
           };
           
-          console.log('[MessageContext] Updated messages state with new message');
+          console.log('[MessageContext] Added new message to conversation');
           
           // Save to storage
           storageService.setItem('panty_messages', updatedMessages).catch(err => 
@@ -373,7 +422,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const updatedMessages = { ...prev };
           if (updatedMessages[data.threadId]) {
             updatedMessages[data.threadId] = updatedMessages[data.threadId].map(msg => {
-              if (data.messageIds.includes(msg.id)) {
+              // Check both real ID and optimistic ID mapping
+              const realId = msg._optimisticId ? 
+                optimisticMessageMap.current.get(msg._optimisticId) || msg.id : 
+                msg.id;
+                
+              if (realId && data.messageIds.includes(realId)) {
                 return { ...msg, isRead: true, read: true };
               }
               return msg;
@@ -388,6 +442,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           return updatedMessages;
         });
         
+        // Emit DOM event for read status update
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
+        }
+        
         // Force a re-render
         setUpdateTrigger(prev => prev + 1);
       }
@@ -401,72 +460,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       subscriptionsRef.current = [];
     };
   }, [subscribe, isConnected]);
-
-  // Also listen for custom DOM events as fallback
-  useEffect(() => {
-    const handleNewMessage = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const data = customEvent.detail;
-      
-      console.log('[MessageContext] New message via DOM event:', data);
-      
-      if (data && data.sender && data.receiver) {
-        const conversationKey = getConversationKey(data.sender, data.receiver);
-        
-        // Check if we've already processed this message
-        if (data.id && processedMessageIds.current.has(data.id)) {
-          return;
-        }
-        
-        if (data.id) {
-          processedMessageIds.current.add(data.id);
-        }
-        
-        setMessages(prev => {
-          const existingMessages = prev[conversationKey] || [];
-          
-          // Check if message already exists
-          if (data.id && existingMessages.some(m => m.id === data.id)) {
-            return prev;
-          }
-          
-          const newMessage: Message = {
-            id: data.id || uuidv4(),
-            sender: data.sender,
-            receiver: data.receiver,
-            content: data.content || '',
-            date: data.date || data.createdAt || new Date().toISOString(),
-            isRead: data.isRead || false,
-            read: data.read || false,
-            type: data.type || 'normal',
-            meta: data.meta,
-            threadId: data.threadId || conversationKey,
-          };
-          
-          const updated = {
-            ...prev,
-            [conversationKey]: [...existingMessages, newMessage],
-          };
-          
-          // Save to storage
-          storageService.setItem('panty_messages', updated).catch(err => 
-            console.error('[MessageContext] Failed to save messages:', err)
-          );
-          
-          return updated;
-        });
-        
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
-      }
-    };
-
-    window.addEventListener('message:new', handleNewMessage);
-
-    return () => {
-      window.removeEventListener('message:new', handleNewMessage);
-    };
-  }, []);
 
   // Save data whenever it changes
   useEffect(() => {
@@ -499,7 +492,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [messageNotifications, isLoading]);
 
-  // FIXED: Send message without adding duplicate to local state
+  // FIXED: Send message with optimistic ID tracking
   const sendMessage = useCallback(async (
     sender: string,
     receiver: string,
@@ -545,13 +538,17 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
 
     try {
-      const result = await messagesService.sendMessage({
+      // Include optimistic ID if provided
+      const messageData = {
         sender,
         receiver,
         content: sanitizedContent,
         type: options?.type,
         meta: sanitizedMeta,
-      });
+        _optimisticId: options?._optimisticId
+      };
+      
+      const result = await messagesService.sendMessage(messageData);
 
       if (result.success && result.data) {
         // DON'T add the message to local state here - let WebSocket handle it

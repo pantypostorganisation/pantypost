@@ -17,7 +17,6 @@ import { getUserProfileData } from '@/utils/profileUtils';
 import { useLocalStorage } from './useLocalStorage';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services';
-import { tipService } from '@/services/tip.service';
 import { reportsService } from '@/services/reports.service';
 import {
   saveRecentEmojis,
@@ -150,8 +149,6 @@ export const useBuyerMessages = () => {
     return walletContext.getBuyerBalance(username);
   }, [walletContext]);
   
-  // REMOVED sendTip callback - we don't need it anymore since tipService handles everything
-  
   // FIXED: Memoize wallet object properly
   const wallet = useMemo(() => {
     if (!user || !walletContext) return {};
@@ -183,7 +180,7 @@ export const useBuyerMessages = () => {
     markMessageAsReadAndUpdateUI(message);
   }, [markMessageAsReadAndUpdateUI]);
   
-  // CRITICAL: Listen for new messages and handle optimistic updates
+  // CRITICAL: Listen for new messages and handle optimistic updates properly
   useEffect(() => {
     const handleNewMessage = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -300,7 +297,7 @@ export const useBuyerMessages = () => {
     return () => clearInterval(interval);
   }, []);
   
-  // ENHANCED: Merge real messages with optimistic messages
+  // ENHANCED: Merge real messages with optimistic messages and deduplicate
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
     
@@ -328,10 +325,80 @@ export const useBuyerMessages = () => {
         }
       });
       
-      // Sort messages in each thread by date
-      Object.values(result).forEach((thread) =>
-        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      );
+      // Deduplicate and sort messages in each thread
+      Object.keys(result).forEach((otherParty) => {
+        const seenIds = new Set<string>();
+        const seenOptimisticIds = new Set<string>();
+        const deduplicated: Message[] = [];
+        
+        // Sort by date first
+        result[otherParty].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        // Then deduplicate
+        result[otherParty].forEach((msg) => {
+          const optMsg = msg as OptimisticMessage;
+          
+          // Handle optimistic messages
+          if (optMsg._optimistic && optMsg._tempId) {
+            // Check if we already have the real version of this optimistic message
+            const realId = optimisticMessageIds.current.get(optMsg._tempId);
+            if (realId && seenIds.has(realId)) {
+              // Skip this optimistic message, we have the real one
+              return;
+            }
+            
+            // Check if we already have this optimistic message
+            if (seenOptimisticIds.has(optMsg._tempId)) {
+              return;
+            }
+            
+            seenOptimisticIds.add(optMsg._tempId);
+            deduplicated.push(msg);
+          } 
+          // Handle regular messages
+          else if (msg.id) {
+            // Check if this is a real version of an optimistic message we already have
+            const hasOptimistic = Array.from(optimisticMessageIds.current.entries()).some(
+              ([tempId, realId]) => realId === msg.id && seenOptimisticIds.has(tempId)
+            );
+            
+            if (hasOptimistic) {
+              // Remove the optimistic version and add the real one
+              const tempId = Array.from(optimisticMessageIds.current.entries())
+                .find(([_, realId]) => realId === msg.id)?.[0];
+              
+              if (tempId) {
+                const optIndex = deduplicated.findIndex(
+                  m => (m as OptimisticMessage)._tempId === tempId
+                );
+                if (optIndex !== -1) {
+                  deduplicated.splice(optIndex, 1);
+                }
+              }
+            }
+            
+            // Add if not seen
+            if (!seenIds.has(msg.id)) {
+              seenIds.add(msg.id);
+              deduplicated.push(msg);
+            }
+          } else {
+            // Message without ID - include it but watch for duplicates by content/time
+            const isDuplicate = deduplicated.some(existing => 
+              existing.sender === msg.sender &&
+              existing.receiver === msg.receiver &&
+              existing.content === msg.content &&
+              Math.abs(new Date(existing.date).getTime() - new Date(msg.date).getTime()) < 1000
+            );
+            
+            if (!isDuplicate) {
+              deduplicated.push(msg);
+            }
+          }
+        });
+        
+        result[otherParty] = deduplicated;
+      });
     }
     
     console.log('[useBuyerMessages] Threads updated, count:', Object.keys(result).length);
@@ -588,7 +655,8 @@ export const useBuyerMessages = () => {
         messageContent,
         {
           type: selectedImage ? 'image' : 'normal',
-          meta: selectedImage ? { imageUrl: selectedImage } : undefined
+          meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+          _optimisticId: tempId
         }
       );
     } catch (error) {
@@ -701,7 +769,7 @@ export const useBuyerMessages = () => {
         }));
         
         // Send actual message in background
-        sendMessage(user.username, request.seller, confirmMessage, { type: 'normal' });
+        sendMessage(user.username, request.seller, confirmMessage, { type: 'normal', _optimisticId: tempId });
         
         // Force update
         setMessageUpdateCounter(prev => prev + 1);
@@ -736,7 +804,7 @@ export const useBuyerMessages = () => {
       }));
       
       // Send actual message in background
-      sendMessage(user.username, request.seller, confirmMessage, { type: 'normal' });
+      sendMessage(user.username, request.seller, confirmMessage, { type: 'normal', _optimisticId: tempId });
       
       // Force update
       setMessageUpdateCounter(prev => prev + 1);
@@ -773,7 +841,7 @@ export const useBuyerMessages = () => {
     }));
     
     // Send actual message in background
-    sendMessage(user.username, request.seller, declineMessage, { type: 'normal' });
+    sendMessage(user.username, request.seller, declineMessage, { type: 'normal', _optimisticId: tempId });
     
     // Force update
     setMessageUpdateCounter(prev => prev + 1);
@@ -845,7 +913,8 @@ export const useBuyerMessages = () => {
       updateMessage,
       {
         type: 'customRequest',
-        meta: optimisticMsg.meta
+        meta: optimisticMsg.meta,
+        _optimisticId: tempId
       }
     );
     
@@ -983,7 +1052,7 @@ export const useBuyerMessages = () => {
         }));
         
         // Send actual message in background
-        sendMessage(user.username, payingRequest.seller, paymentMessage, { type: 'normal' });
+        sendMessage(user.username, payingRequest.seller, paymentMessage, { type: 'normal', _optimisticId: tempId });
         
         // Close modal and clear state
         console.log('Closing modal...');
@@ -1059,94 +1128,46 @@ export const useBuyerMessages = () => {
     inputRef.current?.focus();
   }, [recentEmojis, setRecentEmojis]);
   
-  // FIXED: Removed the duplicate tip processing logic
+  // FIXED: handleSendTip now just handles UI updates after tip is sent
+  // The actual tip sending is done entirely by the TipModal component
   const handleSendTip = useCallback(async () => {
-    if (!activeThread || !tipAmount || !user) return;
+    if (!activeThread || !user) return;
     
+    // This function is now just a callback for after the tip is sent
+    // The TipModal handles all the actual tip sending logic
+    
+    // Send a message about the tip (optimistically)
     const amount = parseFloat(tipAmount);
-    if (isNaN(amount) || amount <= 0 || amount > 500) {
-      setTipResult({
-        success: false,
-        message: 'Please enter a valid amount between $1 and $500'
-      });
-      return;
-    }
-    
-    // Check wallet balance
-    const userBalance = wallet[user.username] || 0;
-    if (userBalance < amount) {
-      setTipResult({
-        success: false,
-        message: 'Insufficient wallet balance'
-      });
-      return;
-    }
-    
-    try {
-      // Use the tip service for backend integration - it handles everything including wallet updates
-      const result = await tipService.sendTip(activeThread, amount);
+    if (!isNaN(amount) && amount > 0) {
+      const tempId = uuidv4();
+      const threadId = getConversationKey(user.username, activeThread);
+      const tipMessage = `💝 I just sent you a $${amount.toFixed(2)} tip! Thank you!`;
       
-      if (result.success) {
-        // DON'T update wallet again - the backend already did it!
-        // Just refresh the wallet data to get the latest balance
-        if (walletContext && walletContext.reloadData) {
-          await walletContext.reloadData();
-        }
-        
-        setTipResult({
-          success: true,
-          message: `Sent $${amount.toFixed(2)} tip to ${activeThread}!`
-        });
-        
-        // Send a message about the tip (optimistically)
-        const tempId = uuidv4();
-        const threadId = getConversationKey(user.username, activeThread);
-        const tipMessage = `💝 I just sent you a $${amount.toFixed(2)} tip! Thank you!`;
-        
-        const optimisticMsg: OptimisticMessage = {
-          id: tempId,
-          _tempId: tempId,
-          _optimistic: true,
-          sender: user.username,
-          receiver: activeThread,
-          content: tipMessage,
-          date: new Date().toISOString(),
-          isRead: false,
-          read: false,
-          type: 'normal'
-        };
-        
-        setOptimisticMessages(prev => ({
-          ...prev,
-          [threadId]: [...(prev[threadId] || []), optimisticMsg]
-        }));
-        
-        // Send actual message in background
-        sendMessage(user.username, activeThread, tipMessage, { type: 'normal' });
-        
-        // Force update
-        setMessageUpdateCounter(prev => prev + 1);
-        
-        // Reset form after delay
-        setTimeout(() => {
-          setShowTipModal(false);
-          setTipAmount('');
-          setTipResult(null);
-        }, 2000);
-      } else {
-        setTipResult({
-          success: false,
-          message: result.message || 'Failed to send tip'
-        });
-      }
-    } catch (error) {
-      console.error('Error sending tip:', error);
-      setTipResult({
-        success: false,
-        message: 'Failed to send tip. Please try again.'
-      });
+      const optimisticMsg: OptimisticMessage = {
+        id: tempId,
+        _tempId: tempId,
+        _optimistic: true,
+        sender: user.username,
+        receiver: activeThread,
+        content: tipMessage,
+        date: new Date().toISOString(),
+        isRead: false,
+        read: false,
+        type: 'normal'
+      };
+      
+      setOptimisticMessages(prev => ({
+        ...prev,
+        [threadId]: [...(prev[threadId] || []), optimisticMsg]
+      }));
+      
+      // Send actual message in background
+      sendMessage(user.username, activeThread, tipMessage, { type: 'normal', _optimisticId: tempId });
+      
+      // Force update
+      setMessageUpdateCounter(prev => prev + 1);
     }
-  }, [activeThread, tipAmount, user, wallet, walletContext, sendMessage]);
+  }, [activeThread, tipAmount, user, sendMessage]);
   
   const validateCustomRequest = useCallback((): boolean => {
     const errors: Partial<CustomRequestForm> = {};
@@ -1222,7 +1243,8 @@ export const useBuyerMessages = () => {
     // Send actual message in background
     sendMessage(user.username, activeThread, requestMessage, {
       type: 'customRequest',
-      meta: optimisticMsg.meta
+      meta: optimisticMsg.meta,
+      _optimisticId: tempId
     });
     
     closeCustomRequestModal();

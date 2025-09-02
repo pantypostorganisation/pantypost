@@ -1,3 +1,4 @@
+// src/components/buyers/messages/ConversationView.tsx
 import React, { useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { WalletContext } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';

@@ -136,8 +136,8 @@ __turbopack_context__.s({
     "uploadMultipleToCloudinary": ()=>uploadMultipleToCloudinary,
     "uploadToCloudinary": ()=>uploadToCloudinary
 });
-const CLOUD_NAME = ("TURBOPACK compile-time value", "your_cloud_name") || '';
-const UPLOAD_PRESET = ("TURBOPACK compile-time value", "your_upload_preset") || '';
+const CLOUD_NAME = ("TURBOPACK compile-time value", "ddanxxkwz") || '';
+const UPLOAD_PRESET = ("TURBOPACK compile-time value", "pantypost_upload") || '';
 // Check if Cloudinary is properly configured
 const isCloudinaryConfigured = ()=>{
     return CLOUD_NAME && UPLOAD_PRESET && CLOUD_NAME !== 'your_cloud_name' && UPLOAD_PRESET !== 'your_upload_preset';
@@ -193,15 +193,34 @@ const uploadToCloudinary = async (file)=>{
         throw new Error(`Invalid file: ${file.name}. Must be JPEG, PNG, WebP, or GIF under 10MB.`);
     }
     // Check if we should use mock data
-    if (!isCloudinaryConfigured()) {
-        console.warn('Cloudinary not configured. Using local image data for development.');
-        // Simulate upload delay
-        await new Promise((resolve)=>setTimeout(resolve, 500 + Math.random() * 1000));
-        return await generateMockUploadResult(file, 0);
-    }
-    //TURBOPACK unreachable
+    if (!isCloudinaryConfigured()) //TURBOPACK unreachable
     ;
-    const formData = undefined;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    try {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Upload failed: ${response.statusText || error}`);
+        }
+        const data = await response.json();
+        return {
+            url: data.secure_url,
+            publicId: data.public_id,
+            format: data.format,
+            width: data.width,
+            height: data.height,
+            bytes: data.bytes,
+            createdAt: data.created_at
+        };
+    } catch (error) {
+        console.error('Cloudinary upload error:', error);
+        throw error instanceof Error ? error : new Error('Upload failed');
+    }
 };
 const uploadMultipleToCloudinary = async (files, onProgress)=>{
     // Validate all files first
@@ -211,25 +230,31 @@ const uploadMultipleToCloudinary = async (files, onProgress)=>{
         throw new Error(`Invalid files detected: ${invalidFileNames}. ` + `All files must be JPEG, PNG, WebP, or GIF under 10MB each.`);
     }
     // Check if we should use mock data
-    if (!isCloudinaryConfigured()) {
-        console.warn('Cloudinary not configured. Using local image data for development.');
-        const results = [];
-        for(let i = 0; i < files.length; i++){
-            // Simulate upload delay
-            await new Promise((resolve)=>setTimeout(resolve, 300 + Math.random() * 700));
-            results.push(await generateMockUploadResult(files[i], i));
+    if (!isCloudinaryConfigured()) //TURBOPACK unreachable
+    ;
+    const results = [];
+    const totalFiles = files.length;
+    for(let i = 0; i < files.length; i++){
+        try {
+            const result = await uploadToCloudinary(files[i]);
+            results.push(result);
             if (onProgress) {
-                const progress = (i + 1) / files.length * 100;
+                const progress = (i + 1) / totalFiles * 100;
                 onProgress(progress);
             }
+        } catch (error) {
+            console.error(`Failed to upload file ${i + 1}:`, error);
+            // Clean up any successful uploads if one fails
+            if (results.length > 0 && isCloudinaryConfigured()) {
+                console.log('Rolling back successful uploads:', results.map((r)=>r.publicId));
+                // Attempt to delete successfully uploaded images
+                await batchDeleteFromCloudinary(results.map((r)=>r.publicId));
+            }
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            throw new Error(`Failed to upload file ${files[i].name}: ${errorMessage}`);
         }
-        return results;
     }
-    //TURBOPACK unreachable
-    ;
-    const results = undefined;
-    const totalFiles = undefined;
-    let i;
+    return results;
 };
 const deleteFromCloudinary = async (publicId)=>{
     // If using mock data, just return success
@@ -240,8 +265,29 @@ const deleteFromCloudinary = async (publicId)=>{
             publicId: publicId
         };
     }
-    //TURBOPACK unreachable
-    ;
+    try {
+        // For now, make a request to the mock API endpoint
+        const response = await fetch('/api/cloudinary/delete', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                publicId
+            })
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(()=>({
+                    message: 'Delete failed'
+                }));
+            throw new Error(error.message || `Delete failed: ${response.statusText}`);
+        }
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Delete from Cloudinary error:', error);
+        throw error instanceof Error ? error : new Error('Delete failed');
+    }
 };
 const batchDeleteFromCloudinary = async (publicIds)=>{
     const results = {
@@ -389,14 +435,11 @@ const isCloudinaryUrl = (url)=>{
     return url.includes('cloudinary.com') && url.includes(CLOUD_NAME);
 };
 const checkCloudinaryConfig = ()=>{
-    if (!isCloudinaryConfigured()) {
-        return {
-            configured: false,
-            message: 'Cloudinary is not configured. Using mock images for development. To enable real image uploads, please update your .env.local file with valid Cloudinary credentials.'
-        };
-    }
-    //TURBOPACK unreachable
+    if (!isCloudinaryConfigured()) //TURBOPACK unreachable
     ;
+    return {
+        configured: true
+    };
 };
 }),
 "[project]/src/hooks/useSellerMessages.ts [app-ssr] (ecmascript)": ((__turbopack_context__) => {

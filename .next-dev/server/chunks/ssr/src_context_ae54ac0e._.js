@@ -5847,6 +5847,7 @@ const MessageProvider = ({ children })=>{
     };
     // Track processed message IDs to prevent duplicates
     const processedMessageIds = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(new Set());
+    const optimisticMessageMap = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(new Map()); // optimisticId -> realId
     const subscriptionsRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])([]);
     // Initialize service on mount
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
@@ -5864,7 +5865,7 @@ const MessageProvider = ({ children })=>{
         };
         loadData();
     }, []);
-    // FIXED: WebSocket listener for new messages - prevent duplicates
+    // FIXED: WebSocket listener for new messages - handle optimistic updates properly
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         // Clean up previous subscriptions
         subscriptionsRef.current.forEach((unsub)=>unsub());
@@ -5902,14 +5903,47 @@ const MessageProvider = ({ children })=>{
                     read: data.read || false,
                     type: data.type || 'normal',
                     meta: data.meta,
-                    threadId: data.threadId || conversationKey
+                    threadId: data.threadId || conversationKey,
+                    _optimisticId: data._optimisticId
                 };
-                console.log('[MessageContext] Adding new message to conversation:', conversationKey);
+                console.log('[MessageContext] Processing message for conversation:', conversationKey);
                 // Update messages state
                 setMessages((prev)=>{
                     const existingMessages = prev[conversationKey] || [];
-                    // Check if message already exists (by ID)
-                    const isDuplicate = existingMessages.some((m)=>m.id && m.id === newMessage.id);
+                    // Check if this is a confirmation of an optimistic message
+                    if (data._optimisticId) {
+                        // Store the mapping
+                        optimisticMessageMap.current.set(data._optimisticId, newMessage.id);
+                        // Remove the optimistic message and add the confirmed one
+                        const withoutOptimistic = existingMessages.filter((m)=>m._optimisticId !== data._optimisticId);
+                        // Check if the confirmed message already exists
+                        const isDuplicate = withoutOptimistic.some((m)=>m.id && m.id === newMessage.id);
+                        if (isDuplicate) {
+                            console.log('[MessageContext] Confirmed message already exists, skipping');
+                            return prev;
+                        }
+                        const updatedMessages = {
+                            ...prev,
+                            [conversationKey]: [
+                                ...withoutOptimistic,
+                                newMessage
+                            ]
+                        };
+                        console.log('[MessageContext] Replaced optimistic message with confirmed message');
+                        // Save to storage
+                        __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_messages', updatedMessages).catch((err)=>console.error('[MessageContext] Failed to save messages:', err));
+                        return updatedMessages;
+                    }
+                    // Check if message already exists (by ID or by content+timestamp for duplicates)
+                    const isDuplicate = existingMessages.some((m)=>{
+                        if (m.id && m.id === newMessage.id) return true;
+                        // Check for duplicate by content and approximate time (within 2 seconds)
+                        if (m.sender === newMessage.sender && m.receiver === newMessage.receiver && m.content === newMessage.content) {
+                            const timeDiff = Math.abs(new Date(m.date).getTime() - new Date(newMessage.date).getTime());
+                            return timeDiff < 2000;
+                        }
+                        return false;
+                    });
                     if (isDuplicate) {
                         console.log('[MessageContext] Duplicate message detected, skipping');
                         return prev;
@@ -5921,7 +5955,7 @@ const MessageProvider = ({ children })=>{
                             newMessage
                         ]
                     };
-                    console.log('[MessageContext] Updated messages state with new message');
+                    console.log('[MessageContext] Added new message to conversation');
                     // Save to storage
                     __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_messages', updatedMessages).catch((err)=>console.error('[MessageContext] Failed to save messages:', err));
                     return updatedMessages;
@@ -5981,7 +6015,9 @@ const MessageProvider = ({ children })=>{
                     };
                     if (updatedMessages[data.threadId]) {
                         updatedMessages[data.threadId] = updatedMessages[data.threadId].map((msg)=>{
-                            if (data.messageIds.includes(msg.id)) {
+                            // Check both real ID and optimistic ID mapping
+                            const realId = msg._optimisticId ? optimisticMessageMap.current.get(msg._optimisticId) || msg.id : msg.id;
+                            if (realId && data.messageIds.includes(realId)) {
                                 return {
                                     ...msg,
                                     isRead: true,
@@ -5995,6 +6031,9 @@ const MessageProvider = ({ children })=>{
                     __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_messages', updatedMessages).catch((err)=>console.error('[MessageContext] Failed to save messages after read update:', err));
                     return updatedMessages;
                 });
+                // Emit DOM event for read status update
+                if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
+                ;
                 // Force a re-render
                 setUpdateTrigger((prev)=>prev + 1);
             }
@@ -6012,59 +6051,6 @@ const MessageProvider = ({ children })=>{
         subscribe,
         isConnected
     ]);
-    // Also listen for custom DOM events as fallback
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
-        const handleNewMessage = (event)=>{
-            const customEvent = event;
-            const data = customEvent.detail;
-            console.log('[MessageContext] New message via DOM event:', data);
-            if (data && data.sender && data.receiver) {
-                const conversationKey = getConversationKey(data.sender, data.receiver);
-                // Check if we've already processed this message
-                if (data.id && processedMessageIds.current.has(data.id)) {
-                    return;
-                }
-                if (data.id) {
-                    processedMessageIds.current.add(data.id);
-                }
-                setMessages((prev)=>{
-                    const existingMessages = prev[conversationKey] || [];
-                    // Check if message already exists
-                    if (data.id && existingMessages.some((m)=>m.id === data.id)) {
-                        return prev;
-                    }
-                    const newMessage = {
-                        id: data.id || (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$uuid$2f$dist$2f$esm$2f$v4$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__v4$3e$__["v4"])(),
-                        sender: data.sender,
-                        receiver: data.receiver,
-                        content: data.content || '',
-                        date: data.date || data.createdAt || new Date().toISOString(),
-                        isRead: data.isRead || false,
-                        read: data.read || false,
-                        type: data.type || 'normal',
-                        meta: data.meta,
-                        threadId: data.threadId || conversationKey
-                    };
-                    const updated = {
-                        ...prev,
-                        [conversationKey]: [
-                            ...existingMessages,
-                            newMessage
-                        ]
-                    };
-                    // Save to storage
-                    __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_messages', updated).catch((err)=>console.error('[MessageContext] Failed to save messages:', err));
-                    return updated;
-                });
-                // Force a re-render
-                setUpdateTrigger((prev)=>prev + 1);
-            }
-        };
-        window.addEventListener('message:new', handleNewMessage);
-        return ()=>{
-            window.removeEventListener('message:new', handleNewMessage);
-        };
-    }, []);
     // Save data whenever it changes
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
@@ -6101,7 +6087,7 @@ const MessageProvider = ({ children })=>{
         messageNotifications,
         isLoading
     ]);
-    // FIXED: Send message without adding duplicate to local state
+    // FIXED: Send message with optimistic ID tracking
     const sendMessage = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async (sender, receiver, content, options)=>{
         // Validate inputs
         if (!sender || !receiver) {
@@ -6137,13 +6123,16 @@ const MessageProvider = ({ children })=>{
             };
         }
         try {
-            const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$messages$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["messagesService"].sendMessage({
+            // Include optimistic ID if provided
+            const messageData = {
                 sender,
                 receiver,
                 content: sanitizedContent,
                 type: options?.type,
-                meta: sanitizedMeta
-            });
+                meta: sanitizedMeta,
+                _optimisticId: options?._optimisticId
+            };
+            const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$messages$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["messagesService"].sendMessage(messageData);
             if (result.success && result.data) {
                 // DON'T add the message to local state here - let WebSocket handle it
                 // This prevents duplicates
@@ -6440,7 +6429,7 @@ const MessageProvider = ({ children })=>{
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/MessageContext.tsx",
-        lineNumber: 843,
+        lineNumber: 840,
         columnNumber: 5
     }, ("TURBOPACK compile-time value", void 0));
 };
