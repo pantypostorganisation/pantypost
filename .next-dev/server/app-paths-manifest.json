@@ -1,8 +1,16 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/buyers/my-orders/page": "app/buyers/my-orders/page.js",
-  "/icon.png/route": "app/icon.png/route.js",
+  "/admin/bans/page": "app/admin/bans/page.js",
+  "/admin/messages/page": "app/admin/messages/page.js",
+  "/admin/reports/page": "app/admin/reports/page.js",
+  "/admin/resolved/page": "app/admin/resolved/page.js",
+  "/admin/verification-requests/page": "app/admin/verification-requests/page.js",
+  "/admin/wallet-management/page": "app/admin/wallet-management/page.js",
+  "/browse/page": "app/browse/page.js",
   "/login/page": "app/login/page.js",
   "/page": "app/page.js",
-  "/sellers/orders-to-fulfil/page": "app/sellers/orders-to-fulfil/page.js"
+  "/sellers/messages/page": "app/sellers/messages/page.js",
+  "/sellers/my-listings/page": "app/sellers/my-listings/page.js",
+  "/sellers/profile/page": "app/sellers/profile/page.js",
+  "/sellers/subscribers/page": "app/sellers/subscribers/page.js"
 }

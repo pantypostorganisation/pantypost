@@ -5,7 +5,6 @@
 
 var { k: __turbopack_refresh__, m: module } = __turbopack_context__;
 {
-// src/context/AuthContext.tsx
 __turbopack_context__.s({
     "AuthProvider": ()=>AuthProvider,
     "getGlobalAuthToken": ()=>getGlobalAuthToken,
@@ -17,6 +16,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/compiled/react/index.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/navigation.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/config/environment.ts [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__ = __turbopack_context__.i("[project]/node_modules/zod/v3/external.js [app-client] (ecmascript) <export * as z>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/sanitization.ts [app-client] (ecmascript)");
 ;
 ;
 var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.signature();
@@ -24,6 +25,50 @@ var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.sign
 ;
 ;
 ;
+;
+;
+// ==================== SCHEMAS ====================
+const LoginPayloadSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    username: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1).max(60),
+    password: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    role: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].enum([
+        'buyer',
+        'seller',
+        'admin'
+    ]).optional()
+});
+// ==================== HELPERS ====================
+function safeNow() {
+    try {
+        return Date.now();
+    } catch (e) {
+        return new Date().getTime();
+    }
+}
+/**
+ * Safely parse JSON; return null if empty/invalid.
+ */ async function safeParseJson(resp) {
+    try {
+        const text = await resp.text();
+        if (!text) return null;
+        return JSON.parse(text);
+    } catch (e) {
+        return null;
+    }
+}
+/**
+ * Derive absolute expiry from `expiresIn` (seconds or ms).
+ * Fallback to defaultMs when not provided.
+ */ function deriveExpiry(expiresIn, defaultMs) {
+    const now = safeNow();
+    if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+        // Heuristic: values <= 24*60*60*100 (i.e., less than 1 day if treated as ms)
+        // are likely seconds; multiply by 1000. Otherwise assume ms.
+        const asMs = expiresIn < 86_400 ? expiresIn * 1000 : expiresIn;
+        return now + asMs;
+    }
+    return now + defaultMs;
+}
 // ==================== API CLIENT ====================
 class ApiClient {
     /**
@@ -62,15 +107,17 @@ class ApiClient {
                         refreshToken: tokens.refreshToken
                     })
                 });
-                if (!response.ok) {
-                    throw new Error('Failed to refresh token');
-                }
-                const data = await response.json();
-                if (data.success && data.data) {
+                // Gracefully parse JSON (may be empty on some implementations)
+                const data = await safeParseJson(response);
+                if (response.ok && (data === null || data === void 0 ? void 0 : data.success) && (data === null || data === void 0 ? void 0 : data.data)) {
+                    var // try both common fields
+                    _data_data_expiresIn;
+                    const expiresAt = deriveExpiry((_data_data_expiresIn = data.data.expiresIn) !== null && _data_data_expiresIn !== void 0 ? _data_data_expiresIn : data.data.tokenExpiresIn, 30 * 60 * 1000 // fallback 30 minutes
+                    );
                     const newTokens = {
                         token: data.data.token,
-                        refreshToken: data.data.refreshToken,
-                        expiresAt: Date.now() + 30 * 60 * 1000
+                        refreshToken: data.data.refreshToken || tokens.refreshToken,
+                        expiresAt
                     };
                     this.authContext.setTokens(newTokens);
                     // Fire token update event for WebSocket
@@ -87,12 +134,11 @@ class ApiClient {
                     }
                     return newTokens;
                 }
+                // If refresh failed, clear tokens
                 throw new Error('Invalid refresh response');
             } catch (error) {
                 console.error('Token refresh failed:', error);
-                // Clear tokens on refresh failure
                 this.authContext.setTokens(null);
-                // Fire token cleared event
                 if ("TURBOPACK compile-time truthy", 1) {
                     window.dispatchEvent(new CustomEvent('auth-token-cleared'));
                 }
@@ -109,7 +155,7 @@ class ApiClient {
             return null;
         }
         // Check if token is expired or about to expire (5 minutes buffer)
-        const isExpiringSoon = tokens.expiresAt <= Date.now() + 5 * 60 * 1000;
+        const isExpiringSoon = tokens.expiresAt <= safeNow() + 5 * 60 * 1000;
         if (isExpiringSoon) {
             const newTokens = await this.refreshTokens();
             return (newTokens === null || newTokens === void 0 ? void 0 : newTokens.token) || null;
@@ -132,27 +178,46 @@ class ApiClient {
         if (token) {
             headerObj['Authorization'] = "Bearer ".concat(token);
         }
-        try {
-            const url = this.buildUrl(endpoint);
-            const response = await fetch(url, {
+        const url = this.buildUrl(endpoint);
+        const doFetch = async ()=>{
+            var _json_error;
+            const resp = await fetch(url, {
                 ...options,
                 headers: headerObj
             });
-            const data = await response.json();
+            const json = await safeParseJson(resp);
+            // If server returns our standard shape, just return it as-is
+            if (json && typeof json.success === 'boolean') {
+                return json;
+            }
+            // Otherwise normalize a minimal shape
+            if (resp.ok) {
+                return {
+                    success: true,
+                    data: json
+                };
+            }
+            return {
+                success: false,
+                error: {
+                    code: resp.status || 'HTTP_ERROR',
+                    message: (json === null || json === void 0 ? void 0 : (_json_error = json.error) === null || _json_error === void 0 ? void 0 : _json_error.message) || resp.statusText || 'Request failed'
+                }
+            };
+        };
+        try {
+            var _error, _this;
+            const result = await doFetch();
             // Handle 401 Unauthorized - try to refresh token once
-            if (response.status === 401 && token) {
+            if (!result.success && ((_this = result) === null || _this === void 0 ? void 0 : (_error = _this.error) === null || _error === void 0 ? void 0 : _error.code) === 401 && token) {
                 const newTokens = await this.refreshTokens();
                 if (newTokens) {
-                    // Retry request with new token
                     headerObj['Authorization'] = "Bearer ".concat(newTokens.token);
-                    const retryResponse = await fetch(url, {
-                        ...options,
-                        headers: headerObj
-                    });
-                    return await retryResponse.json();
+                    const retry = await doFetch();
+                    return retry;
                 }
             }
-            return data;
+            return result;
         } catch (error) {
             console.error('API request failed:', error);
             return {
@@ -195,7 +260,7 @@ class ApiClient {
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "baseURL", void 0);
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "authContext", void 0);
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "refreshPromise", null);
-        this.baseURL = baseURL;
+        this.baseURL = baseURL.replace(/\/+$/, ''); // strip trailing slashes
         this.authContext = authContext;
     }
 }
@@ -277,6 +342,29 @@ function AuthProvider(param) {
     const tokenStorageRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(new TokenStorage());
     // API client instance with auth context
     const apiClientRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
+    // Refresh session - fetch current user
+    const refreshSession = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
+        "AuthProvider.useCallback[refreshSession]": async ()=>{
+            const tokens = tokenStorageRef.current.getTokens();
+            if (!(tokens === null || tokens === void 0 ? void 0 : tokens.token)) {
+                setUser(null);
+                return;
+            }
+            try {
+                const response = await apiClientRef.current.get('/auth/me');
+                if (response.success && response.data) {
+                    setUser(response.data);
+                } else {
+                    setUser(null);
+                    tokenStorageRef.current.clear();
+                }
+            } catch (error) {
+                console.error('Failed to refresh session:', error);
+                setUser(null);
+                tokenStorageRef.current.clear();
+            }
+        }
+    }["AuthProvider.useCallback[refreshSession]"], []);
     // Initialize API client
     if (!apiClientRef.current) {
         apiClientRef.current = new ApiClient(API_BASE_URL, {
@@ -301,29 +389,6 @@ function AuthProvider(param) {
             return (tokens === null || tokens === void 0 ? void 0 : tokens.token) || null;
         }
     }["AuthProvider.useCallback[getAuthToken]"], []);
-    // Refresh session - fetch current user
-    const refreshSession = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "AuthProvider.useCallback[refreshSession]": async ()=>{
-            const tokens = tokenStorageRef.current.getTokens();
-            if (!(tokens === null || tokens === void 0 ? void 0 : tokens.token)) {
-                setUser(null);
-                return;
-            }
-            try {
-                const response = await apiClientRef.current.get('/auth/me');
-                if (response.success && response.data) {
-                    setUser(response.data);
-                } else {
-                    setUser(null);
-                    tokenStorageRef.current.clear();
-                }
-            } catch (error) {
-                console.error('Failed to refresh session:', error);
-                setUser(null);
-                tokenStorageRef.current.clear();
-            }
-        }
-    }["AuthProvider.useCallback[refreshSession]"], []);
     // Initialize auth state on mount
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AuthProvider.useEffect": ()=>{
@@ -342,10 +407,9 @@ function AuthProvider(param) {
                 }
             }["AuthProvider.useEffect.initAuth"];
             initAuth();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         }
-    }["AuthProvider.useEffect"], [
-        refreshSession
-    ]);
+    }["AuthProvider.useEffect"], []); // refreshSession is stable here; intentional single-run
     const login = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "AuthProvider.useCallback[login]": async function(username, password) {
             let role = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : 'buyer';
@@ -358,24 +422,41 @@ function AuthProvider(param) {
             setError(null);
             try {
                 var _response_data;
-                // Use the API client which handles URL construction properly
-                const response = await apiClientRef.current.post('/auth/login', {
+                // Validate & sanitize inputs
+                const parsed = LoginPayloadSchema.safeParse({
                     username,
                     password,
                     role
                 });
+                if (!parsed.success) {
+                    setError('Please enter a valid username and password.');
+                    setLoading(false);
+                    return false;
+                }
+                const cleanUsername = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"] ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(parsed.data.username) : parsed.data.username.trim();
+                const payload = {
+                    username: cleanUsername,
+                    password: parsed.data.password,
+                    role: parsed.data.role
+                };
+                // Use the API client which handles URL construction properly
+                const response = await apiClientRef.current.post('/auth/login', payload);
                 console.log('[Auth] Login response:', {
                     success: response.success,
                     hasUser: !!((_response_data = response.data) === null || _response_data === void 0 ? void 0 : _response_data.user)
                 });
                 if (response.success && response.data) {
-                    // Calculate token expiration (7 days as per backend)
+                    var // try common fields the backend might send
+                    _response_data_expiresIn;
+                    // Calculate token expiration (prefer backend hints)
+                    const expiresAt = deriveExpiry((_response_data_expiresIn = response.data.expiresIn) !== null && _response_data_expiresIn !== void 0 ? _response_data_expiresIn : response.data.tokenExpiresIn, 7 * 24 * 60 * 60 * 1000 // fallback 7 days
+                    );
                     const tokens = {
                         token: response.data.token,
                         refreshToken: response.data.refreshToken,
-                        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+                        expiresAt
                     };
-                    // Store tokens securely (this will fire the WebSocket event)
+                    // Store tokens securely (fires auth-token-updated)
                     tokenStorageRef.current.setTokens(tokens);
                     // Set user state
                     setUser(response.data.user);
@@ -383,8 +464,8 @@ function AuthProvider(param) {
                     setLoading(false);
                     return true;
                 } else {
-                    var _response_error;
-                    const errorMessage = ((_response_error = response.error) === null || _response_error === void 0 ? void 0 : _response_error.message) || 'Login failed';
+                    var _error, _this;
+                    const errorMessage = ((_this = response) === null || _this === void 0 ? void 0 : (_error = _this.error) === null || _error === void 0 ? void 0 : _error.message) || 'Login failed';
                     setError(errorMessage);
                     setLoading(false);
                     return false;
@@ -403,12 +484,13 @@ function AuthProvider(param) {
             try {
                 const token = getAuthToken();
                 if (token) {
+                    // Even if the server returns 204, our client handles it safely
                     await apiClientRef.current.post('/auth/logout');
                 }
             } catch (error) {
                 console.error('[Auth] Logout API error:', error);
             }
-            // Clear local state regardless of API response (this will fire the WebSocket event)
+            // Clear local state regardless of API response (fires auth-token-cleared)
             tokenStorageRef.current.clear();
             setUser(null);
             setError(null);
@@ -463,11 +545,11 @@ function AuthProvider(param) {
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/AuthContext.tsx",
-        lineNumber: 539,
-        columnNumber: 5
+        lineNumber: 656,
+        columnNumber: 10
     }, this);
 }
-_s(AuthProvider, "4PjeSuIT9KigWneBAJ8HJGVJ+Xo=", false, function() {
+_s(AuthProvider, "BHh11CWJcV6yimzqBiAVzHDPq0w=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["usePathname"],
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRouter"]

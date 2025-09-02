@@ -1,9 +1,18 @@
-// src/context/AuthContext.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+  useCallback,
+  useRef,
+} from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { apiConfig } from '@/config/environment';
+import { z } from 'zod';
+import { sanitizeUsername } from '@/utils/security/sanitization';
 
 // ==================== TYPES ====================
 
@@ -34,13 +43,17 @@ export interface User {
 interface AuthTokens {
   token: string;
   refreshToken: string;
-  expiresAt: number; // Unix timestamp
+  expiresAt: number; // Unix timestamp (ms)
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthReady: boolean;
-  login: (username: string, password: string, role?: 'buyer' | 'seller' | 'admin') => Promise<boolean>;
+  login: (
+    username: string,
+    password: string,
+    role?: 'buyer' | 'seller' | 'admin'
+  ) => Promise<boolean>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   isLoggedIn: boolean;
@@ -50,25 +63,77 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
   getAuthToken: () => string | null;
   apiClient: ApiClient;
-  token: string | null; // Added for compatibility
+  token: string | null; // compatibility
+}
+
+// ==================== SCHEMAS ====================
+
+const LoginPayloadSchema = z.object({
+  username: z.string().min(1).max(60),
+  password: z.string().min(1),
+  role: z.enum(['buyer', 'seller', 'admin']).optional(),
+});
+
+type LoginPayload = z.infer<typeof LoginPayloadSchema>;
+
+// ==================== HELPERS ====================
+
+function safeNow(): number {
+  try {
+    return Date.now();
+  } catch {
+    return new Date().getTime();
+  }
+}
+
+/**
+ * Safely parse JSON; return null if empty/invalid.
+ */
+async function safeParseJson<T>(resp: Response): Promise<T | null> {
+  try {
+    const text = await resp.text();
+    if (!text) return null;
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derive absolute expiry from `expiresIn` (seconds or ms).
+ * Fallback to defaultMs when not provided.
+ */
+function deriveExpiry(expiresIn: unknown, defaultMs: number): number {
+  const now = safeNow();
+  if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+    // Heuristic: values <= 24*60*60*100 (i.e., less than 1 day if treated as ms)
+    // are likely seconds; multiply by 1000. Otherwise assume ms.
+    const asMs = expiresIn < 86_400 ? expiresIn * 1000 : expiresIn;
+    return now + asMs;
+  }
+  return now + defaultMs;
 }
 
 // ==================== API CLIENT ====================
 
 class ApiClient {
   private baseURL: string;
-  private authContext: { getTokens: () => AuthTokens | null; setTokens: (tokens: AuthTokens | null) => void; onTokenRefresh?: () => Promise<void> };
+  private authContext: {
+    getTokens: () => AuthTokens | null;
+    setTokens: (tokens: AuthTokens | null) => void;
+    onTokenRefresh?: () => Promise<void>;
+  };
   private refreshPromise: Promise<AuthTokens | null> | null = null;
 
   constructor(
-    baseURL: string, 
-    authContext: { 
-      getTokens: () => AuthTokens | null; 
+    baseURL: string,
+    authContext: {
+      getTokens: () => AuthTokens | null;
       setTokens: (tokens: AuthTokens | null) => void;
       onTokenRefresh?: () => Promise<void>;
     }
   ) {
-    this.baseURL = baseURL;
+    this.baseURL = baseURL.replace(/\/+$/, ''); // strip trailing slashes
     this.authContext = authContext;
   }
 
@@ -80,15 +145,15 @@ class ApiClient {
     if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
       return endpoint;
     }
-    
+
     // Ensure endpoint starts with /
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    
+
     // If baseURL already ends with /api, don't add it again
     if (this.baseURL.endsWith('/api')) {
       return `${this.baseURL}${path}`;
     }
-    
+
     // Otherwise, add /api prefix to the path
     return `${this.baseURL}/api${path}`;
   }
@@ -112,46 +177,51 @@ class ApiClient {
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to refresh token');
-        }
+        // Gracefully parse JSON (may be empty on some implementations)
+        const data = await safeParseJson<any>(response);
 
-        const data = await response.json();
-        if (data.success && data.data) {
+        if (response.ok && data?.success && data?.data) {
+          const expiresAt = deriveExpiry(
+            // try both common fields
+            data.data.expiresIn ?? data.data.tokenExpiresIn,
+            30 * 60 * 1000 // fallback 30 minutes
+          );
+
           const newTokens: AuthTokens = {
             token: data.data.token,
-            refreshToken: data.data.refreshToken,
-            expiresAt: Date.now() + (30 * 60 * 1000), // 30 minutes
+            refreshToken: data.data.refreshToken || tokens.refreshToken,
+            expiresAt,
           };
-          
+
           this.authContext.setTokens(newTokens);
-          
+
           // Fire token update event for WebSocket
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('auth-token-updated', { 
-              detail: { token: newTokens.token } 
-            }));
+            window.dispatchEvent(
+              new CustomEvent('auth-token-updated', {
+                detail: { token: newTokens.token },
+              })
+            );
           }
-          
+
           // Call the refresh callback if provided
           if (this.authContext.onTokenRefresh) {
             await this.authContext.onTokenRefresh();
           }
-          
+
           return newTokens;
         }
-        
+
+        // If refresh failed, clear tokens
         throw new Error('Invalid refresh response');
       } catch (error) {
         console.error('Token refresh failed:', error);
-        // Clear tokens on refresh failure
         this.authContext.setTokens(null);
-        
-        // Fire token cleared event
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth-token-cleared'));
         }
-        
+
         return null;
       } finally {
         this.refreshPromise = null;
@@ -163,14 +233,14 @@ class ApiClient {
 
   private async getValidToken(): Promise<string | null> {
     const tokens = this.authContext.getTokens();
-    
+
     if (!tokens) {
       return null;
     }
 
     // Check if token is expired or about to expire (5 minutes buffer)
-    const isExpiringSoon = tokens.expiresAt <= Date.now() + (5 * 60 * 1000);
-    
+    const isExpiringSoon = tokens.expiresAt <= safeNow() + 5 * 60 * 1000;
+
     if (isExpiringSoon) {
       const newTokens = await this.refreshTokens();
       return newTokens?.token || null;
@@ -180,11 +250,11 @@ class ApiClient {
   }
 
   async request<T = any>(
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<{ success: boolean; data?: T; error?: any }> {
     const token = await this.getValidToken();
-    
+
     // Create headers as a plain object first
     const headerObj: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -192,12 +262,13 @@ class ApiClient {
 
     // Add existing headers from options
     if (options.headers) {
-      const existingHeaders = options.headers instanceof Headers 
-        ? Object.fromEntries(options.headers.entries())
-        : Array.isArray(options.headers)
-        ? Object.fromEntries(options.headers)
-        : options.headers as Record<string, string>;
-      
+      const existingHeaders =
+        options.headers instanceof Headers
+          ? Object.fromEntries(options.headers.entries())
+          : Array.isArray(options.headers)
+          ? Object.fromEntries(options.headers)
+          : (options.headers as Record<string, string>);
+
       Object.assign(headerObj, existingHeaders);
     }
 
@@ -206,31 +277,44 @@ class ApiClient {
       headerObj['Authorization'] = `Bearer ${token}`;
     }
 
-    try {
-      const url = this.buildUrl(endpoint);
-      
-      const response = await fetch(url, {
-        ...options,
-        headers: headerObj,
-      });
+    const url = this.buildUrl(endpoint);
 
-      const data = await response.json();
+    const doFetch = async () => {
+      const resp = await fetch(url, { ...options, headers: headerObj });
+      const json = await safeParseJson<any>(resp);
+
+      // If server returns our standard shape, just return it as-is
+      if (json && typeof json.success === 'boolean') {
+        return json;
+      }
+
+      // Otherwise normalize a minimal shape
+      if (resp.ok) {
+        return { success: true, data: json as T };
+      }
+      return {
+        success: false,
+        error: {
+          code: resp.status || 'HTTP_ERROR',
+          message: json?.error?.message || resp.statusText || 'Request failed',
+        },
+      };
+    };
+
+    try {
+      const result = await doFetch();
 
       // Handle 401 Unauthorized - try to refresh token once
-      if (response.status === 401 && token) {
+      if (!result.success && (result as any)?.error?.code === 401 && token) {
         const newTokens = await this.refreshTokens();
         if (newTokens) {
-          // Retry request with new token
           headerObj['Authorization'] = `Bearer ${newTokens.token}`;
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers: headerObj,
-          });
-          return await retryResponse.json();
+          const retry = await doFetch();
+          return retry;
         }
       }
 
-      return data;
+      return result;
     } catch (error) {
       console.error('API request failed:', error);
       return {
@@ -274,7 +358,8 @@ class ApiClient {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Get API base URL from environment config
-const API_BASE_URL = apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL =
+  apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {
@@ -290,9 +375,11 @@ class TokenStorage {
           // Fire initial token event if we have tokens
           if (this.memoryTokens?.token) {
             setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('auth-token-updated', { 
-                detail: { token: this.memoryTokens!.token } 
-              }));
+              window.dispatchEvent(
+                new CustomEvent('auth-token-updated', {
+                  detail: { token: this.memoryTokens!.token },
+                })
+              );
             }, 100);
           }
         }
@@ -304,15 +391,17 @@ class TokenStorage {
 
   setTokens(tokens: AuthTokens | null) {
     this.memoryTokens = tokens;
-    
+
     if (typeof window !== 'undefined') {
       if (tokens) {
         try {
           sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
           // Fire token update event
-          window.dispatchEvent(new CustomEvent('auth-token-updated', { 
-            detail: { token: tokens.token } 
-          }));
+          window.dispatchEvent(
+            new CustomEvent('auth-token-updated', {
+              detail: { token: tokens.token },
+            })
+          );
         } catch (error) {
           console.error('Failed to store tokens:', error);
         }
@@ -345,13 +434,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
-  
+
   // Token storage instance
   const tokenStorageRef = useRef(new TokenStorage());
-  
+
   // API client instance with auth context
   const apiClientRef = useRef<ApiClient | null>(null);
-  
+
+  // Refresh session - fetch current user
+  const refreshSession = useCallback(async () => {
+    const tokens = tokenStorageRef.current.getTokens();
+    if (!tokens?.token) {
+      setUser(null);
+      return;
+    }
+
+    try {
+      const response = await apiClientRef.current!.get<User>('/auth/me');
+
+      if (response.success && response.data) {
+        setUser(response.data);
+      } else {
+        setUser(null);
+        tokenStorageRef.current.clear();
+      }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+      setUser(null);
+      tokenStorageRef.current.clear();
+    }
+  }, []);
+
   // Initialize API client
   if (!apiClientRef.current) {
     apiClientRef.current = new ApiClient(API_BASE_URL, {
@@ -375,36 +488,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return tokens?.token || null;
   }, []);
 
-  // Refresh session - fetch current user
-  const refreshSession = useCallback(async () => {
-    const tokens = tokenStorageRef.current.getTokens();
-    if (!tokens?.token) {
-      setUser(null);
-      return;
-    }
-
-    try {
-      const response = await apiClientRef.current!.get<User>('/auth/me');
-      
-      if (response.success && response.data) {
-        setUser(response.data);
-      } else {
-        setUser(null);
-        tokenStorageRef.current.clear();
-      }
-    } catch (error) {
-      console.error('Failed to refresh session:', error);
-      setUser(null);
-      tokenStorageRef.current.clear();
-    }
-  }, []);
-
   // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
       console.log('[Auth] Initializing...');
       console.log('[Auth] API_BASE_URL:', API_BASE_URL);
-      
+
       try {
         await refreshSession();
       } catch (error) {
@@ -416,108 +505,137 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-  }, [refreshSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // refreshSession is stable here; intentional single-run
 
-  const login = useCallback(async (
-    username: string, 
-    password: string,
-    role: 'buyer' | 'seller' | 'admin' = 'buyer'
-  ): Promise<boolean> => {
-    console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
-    
-    setLoading(true);
-    setError(null);
+  const login = useCallback(
+    async (
+      username: string,
+      password: string,
+      role: 'buyer' | 'seller' | 'admin' = 'buyer'
+    ): Promise<boolean> => {
+      console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
 
-    try {
-      // Use the API client which handles URL construction properly
-      const response = await apiClientRef.current!.post('/auth/login', {
-        username,
-        password,
-        role
-      });
+      setLoading(true);
+      setError(null);
 
-      console.log('[Auth] Login response:', { 
-        success: response.success, 
-        hasUser: !!response.data?.user 
-      });
+      try {
+        // Validate & sanitize inputs
+        const parsed = LoginPayloadSchema.safeParse({ username, password, role });
+        if (!parsed.success) {
+          setError('Please enter a valid username and password.');
+          setLoading(false);
+          return false;
+        }
 
-      if (response.success && response.data) {
-        // Calculate token expiration (7 days as per backend)
-        const tokens: AuthTokens = {
-          token: response.data.token,
-          refreshToken: response.data.refreshToken,
-          expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
+        const cleanUsername = sanitizeUsername
+          ? sanitizeUsername(parsed.data.username)
+          : parsed.data.username.trim();
+
+        const payload: LoginPayload = {
+          username: cleanUsername,
+          password: parsed.data.password,
+          role: parsed.data.role, // optional on backend; we pass it if present
         };
-        
-        // Store tokens securely (this will fire the WebSocket event)
-        tokenStorageRef.current.setTokens(tokens);
-        
-        // Set user state
-        setUser(response.data.user);
-        
-        console.log('[Auth] Login successful');
-        setLoading(false);
-        return true;
-      } else {
-        const errorMessage = response.error?.message || 'Login failed';
-        setError(errorMessage);
+
+        // Use the API client which handles URL construction properly
+        const response = await apiClientRef.current!.post('/auth/login', payload);
+
+        console.log('[Auth] Login response:', {
+          success: response.success,
+          hasUser: !!response.data?.user,
+        });
+
+        if (response.success && response.data) {
+          // Calculate token expiration (prefer backend hints)
+          const expiresAt =
+            deriveExpiry(
+              // try common fields the backend might send
+              response.data.expiresIn ?? response.data.tokenExpiresIn,
+              7 * 24 * 60 * 60 * 1000 // fallback 7 days
+            );
+
+          const tokens: AuthTokens = {
+            token: response.data.token,
+            refreshToken: response.data.refreshToken,
+            expiresAt,
+          };
+
+          // Store tokens securely (fires auth-token-updated)
+          tokenStorageRef.current.setTokens(tokens);
+
+          // Set user state
+          setUser(response.data.user);
+
+          console.log('[Auth] Login successful');
+          setLoading(false);
+          return true;
+        } else {
+          const errorMessage = (response as any)?.error?.message || 'Login failed';
+          setError(errorMessage);
+          setLoading(false);
+          return false;
+        }
+      } catch (error) {
+        console.error('[Auth] Login error:', error);
+        setError('Network error. Please check your connection and try again.');
         setLoading(false);
         return false;
       }
-    } catch (error) {
-      console.error('[Auth] Login error:', error);
-      setError('Network error. Please check your connection and try again.');
-      setLoading(false);
-      return false;
-    }
-  }, []);
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
     console.log('[Auth] Logging out...');
-    
+
     try {
       const token = getAuthToken();
       if (token) {
+        // Even if the server returns 204, our client handles it safely
         await apiClientRef.current!.post('/auth/logout');
       }
     } catch (error) {
       console.error('[Auth] Logout API error:', error);
     }
 
-    // Clear local state regardless of API response (this will fire the WebSocket event)
+    // Clear local state regardless of API response (fires auth-token-cleared)
     tokenStorageRef.current.clear();
     setUser(null);
     setError(null);
-    
+
     // Redirect to login page
     router.push('/login');
-    
+
     console.log('[Auth] Logout complete');
   }, [getAuthToken, router]);
 
   // Update user function
-  const updateUser = useCallback(async (updates: Partial<User>) => {
-    if (!user) {
-      setError('No user to update');
-      return;
-    }
-
-    try {
-      const response = await apiClientRef.current!.patch<User>(
-        `/users/${user.username}/profile`,
-        updates
-      );
-
-      if (response.success && response.data) {
-        setUser(response.data);
-      } else {
-        setError(response.error?.message || 'Failed to update user');
+  const updateUser = useCallback(
+    async (updates: Partial<User>) => {
+      if (!user) {
+        setError('No user to update');
+        return;
       }
-    } catch (error: any) {
-      console.error('Update user error:', error);
-      setError(error.message || 'Failed to update user');
-    }
-  }, [user]);
+
+      try {
+        const response = await apiClientRef.current!.patch<User>(
+          `/users/${user.username}/profile`,
+          updates
+        );
+
+        if (response.success && response.data) {
+          setUser(response.data);
+        } else {
+          setError(response.error?.message || 'Failed to update user');
+        }
+      } catch (error: any) {
+        console.error('Update user error:', error);
+        setError(error.message || 'Failed to update user');
+      }
+    },
+    [user]
+  );
 
   const contextValue: AuthContextType = {
     user,
@@ -532,14 +650,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshSession,
     getAuthToken,
     apiClient: apiClientRef.current!,
-    token: getAuthToken(), // Add token to context
+    token: getAuthToken(), // compatibility; use getAuthToken() for up-to-date value
   };
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
@@ -553,7 +667,7 @@ export function useAuth() {
 // Export getAuthToken globally for WebSocket access
 export const getGlobalAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
-  
+
   try {
     const stored = sessionStorage.getItem('auth_tokens');
     if (stored) {
@@ -563,6 +677,6 @@ export const getGlobalAuthToken = (): string | null => {
   } catch (error) {
     console.error('Failed to get global auth token:', error);
   }
-  
+
   return null;
 };

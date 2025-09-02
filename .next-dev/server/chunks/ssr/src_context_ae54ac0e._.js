@@ -3,7 +3,6 @@ module.exports = {
 "[project]/src/context/AuthContext.tsx [app-ssr] (ecmascript)": ((__turbopack_context__) => {
 "use strict";
 
-// src/context/AuthContext.tsx
 __turbopack_context__.s({
     "AuthProvider": ()=>AuthProvider,
     "getGlobalAuthToken": ()=>getGlobalAuthToken,
@@ -13,18 +12,64 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react.js [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/navigation.js [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/config/environment.ts [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__ = __turbopack_context__.i("[project]/node_modules/zod/v3/external.js [app-ssr] (ecmascript) <export * as z>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/sanitization.ts [app-ssr] (ecmascript)");
 'use client';
 ;
 ;
 ;
 ;
+;
+;
+// ==================== SCHEMAS ====================
+const LoginPayloadSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    username: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1).max(60),
+    password: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    role: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].enum([
+        'buyer',
+        'seller',
+        'admin'
+    ]).optional()
+});
+// ==================== HELPERS ====================
+function safeNow() {
+    try {
+        return Date.now();
+    } catch  {
+        return new Date().getTime();
+    }
+}
+/**
+ * Safely parse JSON; return null if empty/invalid.
+ */ async function safeParseJson(resp) {
+    try {
+        const text = await resp.text();
+        if (!text) return null;
+        return JSON.parse(text);
+    } catch  {
+        return null;
+    }
+}
+/**
+ * Derive absolute expiry from `expiresIn` (seconds or ms).
+ * Fallback to defaultMs when not provided.
+ */ function deriveExpiry(expiresIn, defaultMs) {
+    const now = safeNow();
+    if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
+        // Heuristic: values <= 24*60*60*100 (i.e., less than 1 day if treated as ms)
+        // are likely seconds; multiply by 1000. Otherwise assume ms.
+        const asMs = expiresIn < 86_400 ? expiresIn * 1000 : expiresIn;
+        return now + asMs;
+    }
+    return now + defaultMs;
+}
 // ==================== API CLIENT ====================
 class ApiClient {
     baseURL;
     authContext;
     refreshPromise = null;
     constructor(baseURL, authContext){
-        this.baseURL = baseURL;
+        this.baseURL = baseURL.replace(/\/+$/, ''); // strip trailing slashes
         this.authContext = authContext;
     }
     /**
@@ -63,15 +108,16 @@ class ApiClient {
                         refreshToken: tokens.refreshToken
                     })
                 });
-                if (!response.ok) {
-                    throw new Error('Failed to refresh token');
-                }
-                const data = await response.json();
-                if (data.success && data.data) {
+                // Gracefully parse JSON (may be empty on some implementations)
+                const data = await safeParseJson(response);
+                if (response.ok && data?.success && data?.data) {
+                    const expiresAt = deriveExpiry(// try both common fields
+                    data.data.expiresIn ?? data.data.tokenExpiresIn, 30 * 60 * 1000 // fallback 30 minutes
+                    );
                     const newTokens = {
                         token: data.data.token,
-                        refreshToken: data.data.refreshToken,
-                        expiresAt: Date.now() + 30 * 60 * 1000
+                        refreshToken: data.data.refreshToken || tokens.refreshToken,
+                        expiresAt
                     };
                     this.authContext.setTokens(newTokens);
                     // Fire token update event for WebSocket
@@ -83,12 +129,11 @@ class ApiClient {
                     }
                     return newTokens;
                 }
+                // If refresh failed, clear tokens
                 throw new Error('Invalid refresh response');
             } catch (error) {
                 console.error('Token refresh failed:', error);
-                // Clear tokens on refresh failure
                 this.authContext.setTokens(null);
-                // Fire token cleared event
                 if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
                 ;
                 return null;
@@ -104,7 +149,7 @@ class ApiClient {
             return null;
         }
         // Check if token is expired or about to expire (5 minutes buffer)
-        const isExpiringSoon = tokens.expiresAt <= Date.now() + 5 * 60 * 1000;
+        const isExpiringSoon = tokens.expiresAt <= safeNow() + 5 * 60 * 1000;
         if (isExpiringSoon) {
             const newTokens = await this.refreshTokens();
             return newTokens?.token || null;
@@ -126,27 +171,44 @@ class ApiClient {
         if (token) {
             headerObj['Authorization'] = `Bearer ${token}`;
         }
-        try {
-            const url = this.buildUrl(endpoint);
-            const response = await fetch(url, {
+        const url = this.buildUrl(endpoint);
+        const doFetch = async ()=>{
+            const resp = await fetch(url, {
                 ...options,
                 headers: headerObj
             });
-            const data = await response.json();
+            const json = await safeParseJson(resp);
+            // If server returns our standard shape, just return it as-is
+            if (json && typeof json.success === 'boolean') {
+                return json;
+            }
+            // Otherwise normalize a minimal shape
+            if (resp.ok) {
+                return {
+                    success: true,
+                    data: json
+                };
+            }
+            return {
+                success: false,
+                error: {
+                    code: resp.status || 'HTTP_ERROR',
+                    message: json?.error?.message || resp.statusText || 'Request failed'
+                }
+            };
+        };
+        try {
+            const result = await doFetch();
             // Handle 401 Unauthorized - try to refresh token once
-            if (response.status === 401 && token) {
+            if (!result.success && result?.error?.code === 401 && token) {
                 const newTokens = await this.refreshTokens();
                 if (newTokens) {
-                    // Retry request with new token
                     headerObj['Authorization'] = `Bearer ${newTokens.token}`;
-                    const retryResponse = await fetch(url, {
-                        ...options,
-                        headers: headerObj
-                    });
-                    return await retryResponse.json();
+                    const retry = await doFetch();
+                    return retry;
                 }
             }
-            return data;
+            return result;
         } catch (error) {
             console.error('API request failed:', error);
             return {
@@ -223,26 +285,6 @@ function AuthProvider({ children }) {
     const tokenStorageRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(new TokenStorage());
     // API client instance with auth context
     const apiClientRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
-    // Initialize API client
-    if (!apiClientRef.current) {
-        apiClientRef.current = new ApiClient(API_BASE_URL, {
-            getTokens: ()=>tokenStorageRef.current.getTokens(),
-            setTokens: (tokens)=>tokenStorageRef.current.setTokens(tokens),
-            onTokenRefresh: async ()=>{
-                // Refresh user data after token refresh
-                await refreshSession();
-            }
-        });
-    }
-    // Clear error
-    const clearError = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
-        setError(null);
-    }, []);
-    // Get auth token
-    const getAuthToken = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
-        const tokens = tokenStorageRef.current.getTokens();
-        return tokens?.token || null;
-    }, []);
     // Refresh session - fetch current user
     const refreshSession = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async ()=>{
         const tokens = tokenStorageRef.current.getTokens();
@@ -264,6 +306,26 @@ function AuthProvider({ children }) {
             tokenStorageRef.current.clear();
         }
     }, []);
+    // Initialize API client
+    if (!apiClientRef.current) {
+        apiClientRef.current = new ApiClient(API_BASE_URL, {
+            getTokens: ()=>tokenStorageRef.current.getTokens(),
+            setTokens: (tokens)=>tokenStorageRef.current.setTokens(tokens),
+            onTokenRefresh: async ()=>{
+                // Refresh user data after token refresh
+                await refreshSession();
+            }
+        });
+    }
+    // Clear error
+    const clearError = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
+        setError(null);
+    }, []);
+    // Get auth token
+    const getAuthToken = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
+        const tokens = tokenStorageRef.current.getTokens();
+        return tokens?.token || null;
+    }, []);
     // Initialize auth state on mount
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         const initAuth = async ()=>{
@@ -279,9 +341,8 @@ function AuthProvider({ children }) {
             }
         };
         initAuth();
-    }, [
-        refreshSession
-    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // refreshSession is stable here; intentional single-run
     const login = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async (username, password, role = 'buyer')=>{
         console.log('[Auth] Login attempt:', {
             username,
@@ -291,24 +352,40 @@ function AuthProvider({ children }) {
         setLoading(true);
         setError(null);
         try {
-            // Use the API client which handles URL construction properly
-            const response = await apiClientRef.current.post('/auth/login', {
+            // Validate & sanitize inputs
+            const parsed = LoginPayloadSchema.safeParse({
                 username,
                 password,
                 role
             });
+            if (!parsed.success) {
+                setError('Please enter a valid username and password.');
+                setLoading(false);
+                return false;
+            }
+            const cleanUsername = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"] ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(parsed.data.username) : parsed.data.username.trim();
+            const payload = {
+                username: cleanUsername,
+                password: parsed.data.password,
+                role: parsed.data.role
+            };
+            // Use the API client which handles URL construction properly
+            const response = await apiClientRef.current.post('/auth/login', payload);
             console.log('[Auth] Login response:', {
                 success: response.success,
                 hasUser: !!response.data?.user
             });
             if (response.success && response.data) {
-                // Calculate token expiration (7 days as per backend)
+                // Calculate token expiration (prefer backend hints)
+                const expiresAt = deriveExpiry(// try common fields the backend might send
+                response.data.expiresIn ?? response.data.tokenExpiresIn, 7 * 24 * 60 * 60 * 1000 // fallback 7 days
+                );
                 const tokens = {
                     token: response.data.token,
                     refreshToken: response.data.refreshToken,
-                    expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000
+                    expiresAt
                 };
-                // Store tokens securely (this will fire the WebSocket event)
+                // Store tokens securely (fires auth-token-updated)
                 tokenStorageRef.current.setTokens(tokens);
                 // Set user state
                 setUser(response.data.user);
@@ -316,7 +393,7 @@ function AuthProvider({ children }) {
                 setLoading(false);
                 return true;
             } else {
-                const errorMessage = response.error?.message || 'Login failed';
+                const errorMessage = response?.error?.message || 'Login failed';
                 setError(errorMessage);
                 setLoading(false);
                 return false;
@@ -333,12 +410,13 @@ function AuthProvider({ children }) {
         try {
             const token = getAuthToken();
             if (token) {
+                // Even if the server returns 204, our client handles it safely
                 await apiClientRef.current.post('/auth/logout');
             }
         } catch (error) {
             console.error('[Auth] Logout API error:', error);
         }
-        // Clear local state regardless of API response (this will fire the WebSocket event)
+        // Clear local state regardless of API response (fires auth-token-cleared)
         tokenStorageRef.current.clear();
         setUser(null);
         setError(null);
@@ -389,8 +467,8 @@ function AuthProvider({ children }) {
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/AuthContext.tsx",
-        lineNumber: 539,
-        columnNumber: 5
+        lineNumber: 656,
+        columnNumber: 10
     }, this);
 }
 function useAuth() {
