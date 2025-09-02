@@ -1,26 +1,31 @@
 {
-    "CodeGPT.apiKey": "CodeGPT Plus Beta",
-    "yaml.validate": false,
-    "problems.exclude": {
-        "**/.github/**": true,
-        "**/*.yml": true,
-        "**/*.yaml": true,
-        "**/production-deployment.yml": true,
-        "**/.github/workflows/**": true
-    },
-    "files.associations": {
-        "**/.github/workflows/*.yml": "yaml",
-        "**/.github/workflows/*.yaml": "yaml"
-    },
-    "yaml.schemas": {},
-    "yaml.completion": false,
-    "yaml.hover": false,
-    "yaml.format.enable": false,
-    "files.exclude": {},
-    "search.exclude": {
-        "**/.github/workflows": true
-    },
-    "files.watcherExclude": {
-        "**/.github/workflows/**": true
-    }
+  "files.exclude": {
+    "**/.next": true,
+    "**/.next-dev": true,
+    "**/.next-static": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/out": true
+  },
+  "search.exclude": {
+    "**/.next": true,
+    "**/.next-dev": true,
+    "**/.next-static": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/out": true,
+    "**/node_modules": true
+  },
+  "files.watcherExclude": {
+    "**/.next/**": true,
+    "**/.next-dev/**": true,
+    "**/.next-static/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/out/**": true,
+    "**/node_modules/**": true
+  },
+  "files.associations": {
+    "**/.next-dev/trace": "plaintext"
+  }
 }
