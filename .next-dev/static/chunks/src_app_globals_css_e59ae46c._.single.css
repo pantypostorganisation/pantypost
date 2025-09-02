@@ -6715,11 +6715,6 @@
     font-style: italic;
   }
 
-  .line-through {
-    -webkit-text-decoration-line: line-through;
-    text-decoration-line: line-through;
-  }
-
   .underline {
     -webkit-text-decoration-line: underline;
     text-decoration-line: underline;

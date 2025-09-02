@@ -2,17 +2,33 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Shield, Star, CreditCard, Lock } from 'lucide-react';
+import Image from 'next/image';
+import { Shield, CreditCard, Lock } from 'lucide-react';
 import { itemVariants, containerVariants } from '@/utils/motion.config';
+import type { LucideIcon } from 'lucide-react';
+
+// Define proper types for the badges
+type IconBadge = {
+  type: 'icon';
+  Icon: LucideIcon;
+  text: string;
+};
+
+type ImageBadge = {
+  type: 'image';
+  src: string;
+  text: string;
+};
+
+type TrustBadge = IconBadge | ImageBadge;
 
 export default function TrustBadges() {
-  // Define badges directly here instead of importing from constants
-  // This ensures the icons are properly imported and available
-  const trustBadges = [
-    { Icon: Shield, text: 'Secure & Private' },
-    { Icon: Star, text: 'Verified Sellers' },
-    { Icon: CreditCard, text: 'Safe Payments' },
-    { Icon: Lock, text: 'Encrypted' },
+  // Define badges with proper typing
+  const trustBadges: TrustBadge[] = [
+    { type: 'icon', Icon: Shield, text: 'Secure & Private' },
+    { type: 'image', src: '/verification_badge.png', text: 'Verified Sellers' },
+    { type: 'icon', Icon: CreditCard, text: 'Safe Payments' },
+    { type: 'icon', Icon: Lock, text: 'Encrypted' },
   ];
 
   return (
@@ -34,7 +50,19 @@ export default function TrustBadges() {
           role="img"
           aria-label={`Trust indicator: ${badge.text}`}
         >
-          <badge.Icon className="w-3.5 h-3.5 text-[#ff950e] group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
+          {badge.type === 'image' ? (
+            <div className="w-3.5 h-3.5 relative group-hover:scale-110 transition-transform duration-200">
+              <Image
+                src={badge.src}
+                alt="Verification Badge"
+                width={14}
+                height={14}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <badge.Icon className="w-3.5 h-3.5 text-[#ff950e] group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
+          )}
           <span className="font-medium select-none">{badge.text}</span>
         </motion.span>
       ))}
