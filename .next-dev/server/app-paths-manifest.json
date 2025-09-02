@@ -1,5 +1,11 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
+  "/browse/[id]/page": "app/browse/[id]/page.js",
+  "/browse/page": "app/browse/page.js",
+  "/buyers/my-orders/page": "app/buyers/my-orders/page.js",
   "/icon.png/route": "app/icon.png/route.js",
-  "/page": "app/page.js"
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/sellers/my-listings/page": "app/sellers/my-listings/page.js",
+  "/wallet/admin/page": "app/wallet/admin/page.js"
 }
