@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 21, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/src/middleware.ts"],"sourcesContent":["// src/middleware.ts\r\nimport { NextResponse } from 'next/server';\r\nimport type { NextRequest } from 'next/server';\r\n\r\nexport function middleware(request: NextRequest) {\r\n  // Force dynamic rendering by adding a header\r\n  const response = NextResponse.next();\r\n  response.headers.set('x-middleware-cache', 'no-cache');\r\n  return response;\r\n}\r\n\r\nexport const config = {\r\n  matcher: '/:path*',\r\n};"],"names":[],"mappings":"AAAA,oBAAoB;;;;;AACpB;AAAA;;AAGO,SAAS,WAAW,OAAoB;IAC7C,6CAA6C;IAC7C,MAAM,WAAW,6LAAA,CAAA,eAAY,CAAC,IAAI;IAClC,SAAS,OAAO,CAAC,GAAG,CAAC,sBAAsB;IAC3C,OAAO;AACT;AAEO,MAAM,SAAS;IACpB,SAAS;AACX"}}]
+}

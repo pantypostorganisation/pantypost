@@ -1,7 +1,15 @@
 // src/components/AppInitializationProvider.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+  useRef,
+  useCallback,
+} from 'react';
 
 interface HealthStatus {
   wallet_service: boolean;
@@ -21,6 +29,45 @@ interface AppInitializationContextType {
 }
 
 const AppInitializationContext = createContext<AppInitializationContextType | undefined>(undefined);
+
+// ---------- Helpers ----------
+const DEFAULT_BASE = 'http://localhost:5000';
+const DEFAULT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT ?? 10000);
+
+function normalizeBaseUrl(url?: string | null) {
+  const s = (url ?? '').trim();
+  if (!s) return DEFAULT_BASE;
+  return s.replace(/\/+$/, ''); // strip trailing slash(es)
+}
+
+/**
+ * Build the health URL robustly regardless of whether the env contains '/api' already.
+ * Priority: NEXT_PUBLIC_API_URL (kept for backward-compat), then NEXT_PUBLIC_API_BASE_URL.
+ */
+function buildHealthUrl() {
+  const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+  const rawApiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').trim();
+
+  // Prefer API_URL if provided; otherwise fallback to API_BASE_URL; otherwise default.
+  const base = normalizeBaseUrl(rawApiUrl || rawApiBase || DEFAULT_BASE);
+
+  // If base already ends with '/api', just add '/health'; otherwise add '/api/health'.
+  if (base.toLowerCase().endsWith('/api')) {
+    return `${base}/health`;
+  }
+  return `${base}/api/health`;
+}
+
+async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), Math.max(3000, timeoutMs)); // minimum 3s
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal, credentials: 'omit', mode: 'cors' });
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+}
 
 // Loading component
 function InitializationLoader(): React.ReactElement {
@@ -69,15 +116,14 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
   const [warnings, setWarnings] = useState<string[]>([]);
   const hasInitializedRef = useRef(false);
 
-  const initializeApp = async () => {
-    // Check if already initialized in this session
+  const initializeApp = useCallback(async () => {
+    // Use cached session state if available and we haven't initialized in-memory yet
     if (typeof window !== 'undefined') {
       const sessionInit = sessionStorage.getItem('app_initialized');
       const sessionHealth = sessionStorage.getItem('app_health_status');
 
       if (sessionInit === 'true' && !hasInitializedRef.current) {
-        console.log('[AppInitializer] Already initialized in this session, using cached state');
-
+        console.log('[AppInitializer] Using cached initialization state');
         setIsInitialized(true);
         setIsInitializing(false);
 
@@ -85,7 +131,7 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
           try {
             setHealthStatus(JSON.parse(sessionHealth));
           } catch (e) {
-            console.error('Failed to parse cached health status:', e);
+            console.error('[AppInitializer] Failed to parse cached health status:', e);
           }
         }
 
@@ -94,9 +140,9 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       }
     }
 
-    // Prevent multiple simultaneous initializations
+    // Prevent duplicate concurrent inits
     if (hasInitializedRef.current) {
-      console.log('[AppInitializer] Already initializing, skipping duplicate call');
+      console.log('[AppInitializer] Initialization already in-flight; skipping duplicate call');
       return;
     }
 
@@ -106,55 +152,62 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     setWarnings([]);
 
     try {
-      // Check API health
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      console.log('[AppInitializer] Checking API health at:', apiUrl);
-      
-      const healthResponse = await fetch(`${apiUrl}/api/health`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
+      const healthUrl = buildHealthUrl();
+      console.log('[AppInitializer] Checking API health at:', healthUrl);
+
+      const res = await fetchWithTimeout(
+        healthUrl,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
         },
-      }).catch(err => {
-        console.error('[AppInitializer] Health check failed:', err);
+        DEFAULT_TIMEOUT_MS
+      ).catch((err) => {
+        console.error('[AppInitializer] Health check fetch failed:', err);
         throw new Error('Cannot connect to backend server. Please ensure the API is running.');
       });
 
-      if (!healthResponse || !healthResponse.ok) {
-        throw new Error('Backend server is not responding correctly');
+      if (!res || !res.ok) {
+        const statusText = res ? `${res.status} ${res.statusText}` : 'no response';
+        throw new Error(`Backend server is not responding correctly (${statusText})`);
       }
 
-      const healthData = await healthResponse.json();
-      console.log('[AppInitializer] API health check passed:', healthData);
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Backend server is not responding correctly (invalid JSON)');
+      }
 
-      // Set health status based on backend response
+      console.log('[AppInitializer] API health check response:', data);
+
+      // Accept either data.services or data.features as service map
+      const services = (data?.services ?? data?.features ?? {}) as Record<string, any>;
+
       const health: HealthStatus = {
-        wallet_service: healthData.services?.wallet || true,
-        storage_service: healthData.services?.storage || true,
-        auth_service: healthData.services?.auth || true,
-        websocket_service: healthData.services?.websocket || true,
+        wallet_service: services.wallet ?? true,
+        storage_service: services.storage ?? true,
+        auth_service: services.auth ?? true,
+        websocket_service: services.websocket ?? true,
+        // keep any extra flags the backend may add:
+        ...Object.fromEntries(Object.entries(services).map(([k, v]) => [k, Boolean(v)])),
       };
 
       setHealthStatus(health);
       setIsInitialized(true);
 
-      // Cache initialization state in session storage
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('app_initialized', 'true');
         sessionStorage.setItem('app_health_status', JSON.stringify(health));
       }
 
-      console.log('[AppInitializer] Initialization complete:', {
-        initialized: true,
-        health,
-      });
+      console.log('[AppInitializer] Initialization complete:', { initialized: true, health });
     } catch (err) {
       console.error('[AppInitializer] Initialization failed:', err);
       setError(err instanceof Error ? err : new Error('Initialization failed'));
       setIsInitialized(false);
       hasInitializedRef.current = false;
 
-      // Clear cached state on error
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('app_initialized');
         sessionStorage.removeItem('app_health_status');
@@ -162,18 +215,17 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     } finally {
       setIsInitializing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void initializeApp();
-  }, []);
+  }, [initializeApp]);
 
   const reinitialize = async () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('app_initialized');
       sessionStorage.removeItem('app_health_status');
     }
-
     hasInitializedRef.current = false;
     await initializeApp();
   };

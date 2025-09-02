@@ -23,82 +23,46 @@ const ContentSecurityPolicy = `
 
 // Enhanced security headers
 const securityHeaders = [
-  {
-    key: 'X-DNS-Prefetch-Control',
-    value: 'on'
-  },
-  {
-    key: 'Strict-Transport-Security',
-    value: 'max-age=63072000; includeSubDomains; preload'
-  },
-  {
-    key: 'X-XSS-Protection',
-    value: '1; mode=block'
-  },
-  {
-    key: 'X-Frame-Options',
-    value: 'SAMEORIGIN'
-  },
-  {
-    key: 'X-Content-Type-Options',
-    value: 'nosniff'
-  },
-  {
-    key: 'Referrer-Policy',
-    value: 'strict-origin-when-cross-origin'
-  },
-  {
-    key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), payment=()'
-  },
-  {
-    key: 'X-Permitted-Cross-Domain-Policies',
-    value: 'none'
-  },
-  {
-    key: 'Cross-Origin-Opener-Policy',
-    value: 'same-origin'
-  },
-  {
-    key: 'Cross-Origin-Resource-Policy',
-    value: 'cross-origin'
-  },
-  {
-    key: 'Cross-Origin-Embedder-Policy',
-    value: 'unsafe-none'
-  },
-  {
-    key: 'Content-Security-Policy',
-    value: ContentSecurityPolicy
-  }
+  { key: 'X-DNS-Prefetch-Control', value: 'on' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'X-XSS-Protection', value: '1; mode=block' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+  { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
+  { key: 'Content-Security-Policy', value: ContentSecurityPolicy }
 ];
 
 // Performance optimization headers
 const performanceHeaders = [
-  {
-    key: 'Cache-Control',
-    value: 'public, max-age=31536000, immutable'
-  }
+  { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }
 ];
 
 const nextConfig: NextConfig = {
+  // 👇 NEW: write build artifacts to a fresh folder (avoids OneDrive-locked `.next`)
+  distDir: '.next-dev',
+
   // Build output configuration
   output: 'standalone',
-  
+
   // Performance optimizations
   poweredByHeader: false,
   compress: true,
-  
+
   // ESLint configuration
   eslint: {
     ignoreDuringBuilds: true,
   },
-  
+
   // TypeScript configuration
   typescript: {
     ignoreBuildErrors: true,
   },
-  
+
   // Enhanced image configuration
   images: {
     remotePatterns: [
@@ -142,7 +106,7 @@ const nextConfig: NextConfig = {
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
-  
+
   // Turbopack configuration (moved from experimental)
   turbopack: {
     rules: {
@@ -152,87 +116,55 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  
+
   // Experimental features for performance
   experimental: {
     optimizeCss: true,
     optimizePackageImports: ['lucide-react', 'framer-motion', 'react-icons'],
   },
-  
+
   // Security and performance headers
   async headers() {
     return [
       // Apply security headers to all routes
-      {
-        source: '/:path*',
-        headers: securityHeaders,
-      },
+      { source: '/:path*', headers: securityHeaders },
       // Apply performance headers to static assets
-      {
-        source: '/_next/static/:path*',
-        headers: performanceHeaders,
-      },
-      {
-        source: '/images/:path*',
-        headers: performanceHeaders,
-      },
-      {
-        source: '/icons/:path*',
-        headers: performanceHeaders,
-      },
+      { source: '/_next/static/:path*', headers: performanceHeaders },
+      { source: '/images/:path*', headers: performanceHeaders },
+      { source: '/icons/:path*', headers: performanceHeaders },
       // Service Worker headers
       {
         source: '/sw.js',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=0, must-revalidate'
-          },
-          {
-            key: 'Service-Worker-Allowed',
-            value: '/'
-          }
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' }
         ]
       },
       // Manifest headers
       {
         source: '/manifest.json',
         headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=86400'
-          }
+          { key: 'Cache-Control', value: 'public, max-age=86400' }
         ]
       }
     ];
   },
-  
+
   // Enhanced redirects for SEO
   async redirects() {
     return [
-      {
-        source: '/home',
-        destination: '/',
-        permanent: true,
-      },
-      {
-        source: '/shop',
-        destination: '/browse',
-        permanent: true,
-      }
+      { source: '/home', destination: '/', permanent: true },
+      { source: '/shop', destination: '/browse', permanent: true }
     ];
   },
-  
+
   // Enhanced rewrites for clean URLs
   async rewrites() {
     return [
-      {
-        source: '/sitemap.xml',
-        destination: '/api/sitemap',
-      },
+      { source: '/sitemap.xml', destination: '/api/sitemap' },
     ];
   },
-  
+
   // Bundle analyzer and webpack optimizations
   webpack: (config, { isServer, dev }) => {
     // Bundle analyzer
@@ -248,7 +180,7 @@ const nextConfig: NextConfig = {
         })
       );
     }
-    
+
     // Performance optimizations
     if (!dev) {
       config.optimization = {
@@ -266,10 +198,10 @@ const nextConfig: NextConfig = {
         },
       };
     }
-    
+
     return config;
   },
-  
+
   // Environment variables for build optimization
   env: {
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),

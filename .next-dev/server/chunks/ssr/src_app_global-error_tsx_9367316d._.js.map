@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 5, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/gerom/OneDrive/Documents/pantypost/src/app/global-error.tsx"],"sourcesContent":["// src/app/global-error.tsx\r\n'use client';\r\n\r\nexport default function GlobalError({\r\n  error,\r\n  reset,\r\n}: {\r\n  error: Error & { digest?: string };\r\n  reset: () => void;\r\n}) {\r\n  return (\r\n    <html>\r\n      <body>\r\n        <h2>Something went wrong!</h2>\r\n        <button onClick={() => reset()}>Try again</button>\r\n      </body>\r\n    </html>\r\n  );\r\n}"],"names":[],"mappings":"AAAA,2BAA2B;;;;;AAC3B;;AAEe,SAAS,YAAY,EAClC,KAAK,EACL,KAAK,EAIN;IACC,qBACE,8OAAC;kBACC,cAAA,8OAAC;;8BACC,8OAAC;8BAAG;;;;;;8BACJ,8OAAC;oBAAO,SAAS,IAAM;8BAAS;;;;;;;;;;;;;;;;;AAIxC","debugId":null}}]
+}

@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -15,20 +19,33 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@types/*": ["./src/types/*"],
-      "@utils/*": ["./src/utils/*"],
-      "@services/*": ["./src/services/*"],
-      "@components/*": ["./src/components/*"],
-      "@context/*": ["./src/context/*"],
-      "@hooks/*": ["./src/hooks/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@types/*": [
+        "./src/types/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@components/*": [
+        "./src/components/*"
+      ],
+      "@context/*": [
+        "./src/context/*"
+      ],
+      "@hooks/*": [
+        "./src/hooks/*"
+      ]
     },
     "plugins": [
       {
         "name": "next"
       }
     ],
-    
     // Strict checks (keeping core ones, disabling problematic ones)
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -37,7 +54,6 @@
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
-    
     // Additional checks (relaxed for production)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -46,40 +62,35 @@
     "noUncheckedIndexedAccess": false,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": false,
-    
     // IMPORTANT: Disable this to fix optional property errors
     "exactOptionalPropertyTypes": false,
-    
     // Module resolution
     "forceConsistentCasingInFileNames": true,
     "preserveConstEnums": true,
     "allowSyntheticDefaultImports": true,
-    
     // Emit
     "removeComments": false,
     "sourceMap": true,
     "declaration": false,
     "declarationMap": false,
-    
     // Interop constraints
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
-    
     // Advanced
     "skipDefaultLibCheck": true,
     "preserveWatchOutput": true,
-    
     // Next.js specific
     "downlevelIteration": true,
     "emitDecoratorMetadata": false,
     "experimentalDecorators": false
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "scripts/**/*.js"
+    "next-env.d.ts",
+    "scripts/**/*.js",
+    ".next-dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
