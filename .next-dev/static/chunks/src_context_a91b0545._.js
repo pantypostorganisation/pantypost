@@ -4764,7 +4764,6 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
 
 var { k: __turbopack_refresh__, m: module } = __turbopack_context__;
 {
-// src/context/AuctionContext.tsx
 __turbopack_context__.s({
     "AuctionProvider": ()=>AuctionProvider,
     "useAuction": ()=>useAuction
@@ -4776,6 +4775,9 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$WebSocketC
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$websocket$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/types/websocket.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i("[project]/src/services/api.config.ts [app-client] (ecmascript) <module evaluation>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/src/services/api.config.ts [app-client] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__ = __turbopack_context__.i("[project]/node_modules/zod/v3/external.js [app-client] (ecmascript) <export * as z>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$rate$2d$limiter$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/rate-limiter.ts [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$permissions$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/permissions.ts [app-client] (ecmascript)");
 ;
 var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.signature();
 'use client';
@@ -4784,7 +4786,69 @@ var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.sign
 ;
 ;
 ;
+;
+;
+;
 const AuctionContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createContext"])(null);
+// -----------------------------
+// Validation Schemas (Zod)
+// -----------------------------
+const BidEventSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    listingId: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1).optional(),
+    id: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    bidder: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1).optional(),
+    username: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1).optional(),
+    amount: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().finite().nonnegative().optional(),
+    bid: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+        amount: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().finite().nonnegative()
+    }).optional(),
+    timestamp: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional()
+});
+const RefundEventSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    username: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    amount: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().finite().nonnegative(),
+    listingId: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1).optional(),
+    balance: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().finite().nonnegative().optional(),
+    reason: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional()
+});
+const BalanceUpdateEventSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    username: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    newBalance: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().finite(),
+    role: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional()
+});
+const AuctionEndedEventSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    listingId: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    id: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    status: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].enum([
+        'ended',
+        'cancelled',
+        'reserve_not_met'
+    ]).optional(),
+    winnerId: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    winner: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    finalPrice: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().optional(),
+    finalBid: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().optional()
+});
+// -----------------------------
+// Utilities
+// -----------------------------
+function makeBidId() {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+        return crypto.randomUUID();
+    }
+    return "bid_".concat(Date.now(), "_").concat(Math.floor(Math.random() * 1e6));
+}
+function coerceNumber(n) {
+    let fallback = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 0;
+    const v = typeof n === 'number' ? n : Number(n);
+    return Number.isFinite(v) ? v : fallback;
+}
+// Local, safe defaults for bid spam protection
+const BID_LIMIT = {
+    maxAttempts: 5,
+    windowMs: 10_000,
+    blockDuration: 10_000
+};
 function AuctionProvider(param) {
     let { children } = param;
     _s();
@@ -4798,7 +4862,22 @@ function AuctionProvider(param) {
     const [isCancellingAuction, setIsCancellingAuction] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [isLoadingAuctions, setIsLoadingAuctions] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [bidError, setBidError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
-    const activeAuctions = Object.values(auctions).filter((auction)=>auction.status === 'active');
+    // Keep a ref to latest auctions to avoid effect dependency churn
+    const auctionsRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(auctions);
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
+        "AuctionProvider.useEffect": ()=>{
+            auctionsRef.current = auctions;
+        }
+    }["AuctionProvider.useEffect"], [
+        auctions
+    ]);
+    const activeAuctions = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
+        "AuctionProvider.useMemo[activeAuctions]": ()=>Object.values(auctions).filter({
+                "AuctionProvider.useMemo[activeAuctions]": (a)=>a.status === 'active'
+            }["AuctionProvider.useMemo[activeAuctions]"])
+    }["AuctionProvider.useMemo[activeAuctions]"], [
+        auctions
+    ]);
     const clearBidError = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "AuctionProvider.useCallback[clearBidError]": ()=>{
             setBidError(null);
@@ -4808,7 +4887,9 @@ function AuctionProvider(param) {
         "AuctionProvider.useCallback[refreshCurrentUserBalance]": async ()=>{
             if (!user) return;
             try {
-                const response = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["apiCall"])("/wallet/balance/".concat(user.username));
+                const response = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["apiCall"])("/wallet/balance/".concat(user.username), {
+                    method: 'GET'
+                });
                 if (response.success && response.data) {
                     const newBalance = response.data.balance || 0;
                     if ("TURBOPACK compile-time truthy", 1) {
@@ -4840,13 +4921,26 @@ function AuctionProvider(param) {
         user
     ]);
     const updateAuctionWithBid = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "AuctionProvider.useCallback[updateAuctionWithBid]": (listingId, bidData)=>{
-            var _bidData_bid;
+        "AuctionProvider.useCallback[updateAuctionWithBid]": (listingId, rawData)=>{
+            var _data_bid;
+            const parsed = BidEventSchema.safeParse(rawData);
+            if (!parsed.success) {
+                var _parsed_error;
+                console.warn('[AuctionContext] Ignoring malformed bid event', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                return undefined;
+            }
+            const data = parsed.data;
+            const amount = typeof data.amount === 'number' ? data.amount : coerceNumber((_data_bid = data.bid) === null || _data_bid === void 0 ? void 0 : _data_bid.amount, 0);
+            const bidder = (data.bidder || data.username || '').trim();
+            if (!listingId || !bidder || !Number.isFinite(amount)) {
+                console.warn('[AuctionContext] Incomplete bid payload; skipping update');
+                return undefined;
+            }
             const bid = {
-                id: "bid_".concat(Date.now()),
-                bidder: bidData.bidder || bidData.username,
-                amount: bidData.amount || ((_bidData_bid = bidData.bid) === null || _bidData_bid === void 0 ? void 0 : _bidData_bid.amount) || 0,
-                timestamp: bidData.timestamp || new Date().toISOString(),
+                id: makeBidId(),
+                bidder,
+                amount,
+                timestamp: data.timestamp || new Date().toISOString(),
                 isWinning: true
             };
             console.log('[AuctionContext] Processing bid update:', {
@@ -4917,7 +5011,7 @@ function AuctionProvider(param) {
                             ...winnerId && {
                                 winnerId
                             },
-                            ...finalPrice && {
+                            ...typeof finalPrice === 'number' && Number.isFinite(finalPrice) && {
                                 finalPrice
                             },
                             reserveMet: status === 'reserve_not_met' ? false : existingAuction === null || existingAuction === void 0 ? void 0 : existingAuction.reserveMet
@@ -4936,6 +5030,7 @@ function AuctionProvider(param) {
     }["AuctionProvider.useCallback[checkReserveMet]"], [
         auctions
     ]);
+    // Initial load (kept minimal; extend if needed)
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AuctionProvider.useEffect": ()=>{
             const loadAuctions = {
@@ -4944,6 +5039,7 @@ function AuctionProvider(param) {
                     setIsLoadingAuctions(true);
                     try {
                         console.log('[AuctionContext] Loading auctions...');
+                    // (Intentionally left without fetching to avoid regressions)
                     } catch (error) {
                         console.error('[AuctionContext] Error loading auctions:', error);
                     } finally{
@@ -4956,25 +5052,39 @@ function AuctionProvider(param) {
     }["AuctionProvider.useEffect"], [
         user
     ]);
+    // WebSocket subscriptions (stabilized: no dependency on auctions state)
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AuctionProvider.useEffect": ()=>{
             if (!isConnected || !subscribe) return;
             const unsubscribers = [];
+            // New bid
             unsubscribers.push(subscribe(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$websocket$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WebSocketEvent"].AUCTION_BID, {
-                "AuctionProvider.useEffect": async (data)=>{
-                    console.log('[AuctionContext] New bid received:', data);
-                    const listingId = data.listingId || data.id;
-                    if (listingId) {
-                        const previousBidder = updateAuctionWithBid(listingId, data);
-                        if (user && data.bidder === user.username) {
-                            await refreshCurrentUserBalance();
-                        }
+                "AuctionProvider.useEffect": async (raw)=>{
+                    const parsed = BidEventSchema.safeParse(raw);
+                    if (!parsed.success) {
+                        var _parsed_error;
+                        console.warn('[AuctionContext] Ignoring malformed AUCTION_BID', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                        return;
+                    }
+                    const data = parsed.data;
+                    const listingId = (data.listingId || data.id || '').toString();
+                    if (!listingId) return;
+                    updateAuctionWithBid(listingId, data);
+                    if (user && (data.bidder === user.username || data.username === user.username)) {
+                        await refreshCurrentUserBalance();
                     }
                 }
             }["AuctionProvider.useEffect"]));
+            // Wallet refund
             unsubscribers.push(subscribe('wallet:refund', {
-                "AuctionProvider.useEffect": async (data)=>{
-                    console.log('[AuctionContext] Wallet refund received:', data);
+                "AuctionProvider.useEffect": async (raw)=>{
+                    const parsed = RefundEventSchema.safeParse(raw);
+                    if (!parsed.success) {
+                        var _parsed_error;
+                        console.warn('[AuctionContext] Ignoring malformed wallet:refund', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                        return;
+                    }
+                    const data = parsed.data;
                     if (user && data.username === user.username) {
                         console.log('[AuctionContext] Current user was refunded, refreshing balance');
                         await refreshCurrentUserBalance();
@@ -4993,9 +5103,16 @@ function AuctionProvider(param) {
                     }
                 }
             }["AuctionProvider.useEffect"]));
+            // Balance update passthrough (dedupe + fan-out)
             unsubscribers.push(subscribe('wallet:balance_update', {
-                "AuctionProvider.useEffect": async (data)=>{
-                    console.log('[AuctionContext] Balance update received:', data);
+                "AuctionProvider.useEffect": async (raw)=>{
+                    const parsed = BalanceUpdateEventSchema.safeParse(raw);
+                    if (!parsed.success) {
+                        var _parsed_error;
+                        console.warn('[AuctionContext] Ignoring malformed wallet:balance_update', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                        return;
+                    }
+                    const data = parsed.data;
                     if (user && data.username === user.username && typeof data.newBalance === 'number') {
                         if ("TURBOPACK compile-time truthy", 1) {
                             window.dispatchEvent(new CustomEvent('wallet:balance_update', {
@@ -5026,65 +5143,92 @@ function AuctionProvider(param) {
                     }
                 }
             }["AuctionProvider.useEffect"]));
+            // Outbid notice (no-op other than logging for now)
             unsubscribers.push(subscribe('auction:outbid', {
                 "AuctionProvider.useEffect": async (data)=>{
                     console.log('[AuctionContext] User was outbid:', data);
-                    if (user && data.username === user.username) {
-                        console.log('[AuctionContext] Current user was outbid on', data.listingTitle);
+                    if (user && (data === null || data === void 0 ? void 0 : data.username) === user.username) {
+                        console.log('[AuctionContext] Current user was outbid on', data === null || data === void 0 ? void 0 : data.listingTitle);
                     }
                 }
             }["AuctionProvider.useEffect"]));
+            // Auction ended
             unsubscribers.push(subscribe(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$websocket$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WebSocketEvent"].AUCTION_ENDED, {
-                "AuctionProvider.useEffect": async (data)=>{
-                    console.log('[AuctionContext] Auction ended:', data);
-                    const listingId = data.listingId || data.id;
-                    if (listingId) {
-                        const status = data.status || 'ended';
-                        if (status === 'reserve_not_met') {
-                            updateAuctionStatus(listingId, 'reserve_not_met');
-                            const auction = auctions[listingId];
-                            if (user && (auction === null || auction === void 0 ? void 0 : auction.highestBidder) === user.username) {
-                                console.log('[AuctionContext] Reserve not met, user will be refunded');
-                            }
-                        } else {
-                            updateAuctionStatus(listingId, 'ended', data.winnerId || data.winner, data.finalPrice || data.finalBid);
-                            if (user && (data.winnerId === user.username || data.winner === user.username)) {
-                                await refreshCurrentUserBalance();
-                            }
-                        }
+                "AuctionProvider.useEffect": async (raw)=>{
+                    const parsed = AuctionEndedEventSchema.safeParse(raw);
+                    if (!parsed.success) {
+                        var _parsed_error;
+                        console.warn('[AuctionContext] Ignoring malformed AUCTION_ENDED', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                        return;
                     }
-                }
-            }["AuctionProvider.useEffect"]));
-            unsubscribers.push(subscribe('auction:reserve_not_met', {
-                "AuctionProvider.useEffect": async (data)=>{
-                    console.log('[AuctionContext] Auction reserve not met:', data);
-                    const listingId = data.listingId || data.id;
-                    if (listingId) {
+                    const data = parsed.data;
+                    const listingId = (data.listingId || data.id || '').toString();
+                    if (!listingId) return;
+                    const status = data.status || 'ended';
+                    if (status === 'reserve_not_met') {
                         updateAuctionStatus(listingId, 'reserve_not_met');
-                        const auction = auctions[listingId];
+                        const auction = auctionsRef.current[listingId];
                         if (user && (auction === null || auction === void 0 ? void 0 : auction.highestBidder) === user.username) {
-                            console.log('[AuctionContext] User was highest bidder, awaiting refund for reserve not met');
+                            console.log('[AuctionContext] Reserve not met, user will be refunded');
                         }
-                    }
-                }
-            }["AuctionProvider.useEffect"]));
-            unsubscribers.push(subscribe(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$websocket$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WebSocketEvent"].AUCTION_CANCELLED, {
-                "AuctionProvider.useEffect": async (data)=>{
-                    console.log('[AuctionContext] Auction cancelled:', data);
-                    const listingId = data.listingId || data.id;
-                    if (listingId) {
-                        const auction = auctions[listingId];
-                        updateAuctionStatus(listingId, 'cancelled');
-                        if (user && (auction === null || auction === void 0 ? void 0 : auction.highestBidder) === user.username) {
+                    } else {
+                        const winner = data.winnerId || data.winner;
+                        const final = typeof data.finalPrice === 'number' ? data.finalPrice : typeof data.finalBid === 'number' ? data.finalBid : undefined;
+                        updateAuctionStatus(listingId, 'ended', winner, final);
+                        if (user && winner === user.username) {
                             await refreshCurrentUserBalance();
                         }
+                    }
+                }
+            }["AuctionProvider.useEffect"]));
+            // Reserve not met
+            unsubscribers.push(subscribe('auction:reserve_not_met', {
+                "AuctionProvider.useEffect": async (raw)=>{
+                    const parsed = AuctionEndedEventSchema.safeParse(raw);
+                    if (!parsed.success) {
+                        var _parsed_error;
+                        console.warn('[AuctionContext] Ignoring malformed auction:reserve_not_met', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                        return;
+                    }
+                    const data = parsed.data;
+                    const listingId = (data.listingId || data.id || '').toString();
+                    if (!listingId) return;
+                    updateAuctionStatus(listingId, 'reserve_not_met');
+                    const auction = auctionsRef.current[listingId];
+                    if (user && (auction === null || auction === void 0 ? void 0 : auction.highestBidder) === user.username) {
+                        console.log('[AuctionContext] User was highest bidder, awaiting refund for reserve not met');
+                    }
+                }
+            }["AuctionProvider.useEffect"]));
+            // Cancelled
+            unsubscribers.push(subscribe(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$websocket$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WebSocketEvent"].AUCTION_CANCELLED, {
+                "AuctionProvider.useEffect": async (raw)=>{
+                    const parsed = AuctionEndedEventSchema.safeParse(raw);
+                    if (!parsed.success) {
+                        var _parsed_error;
+                        console.warn('[AuctionContext] Ignoring malformed AUCTION_CANCELLED', (_parsed_error = parsed.error) === null || _parsed_error === void 0 ? void 0 : _parsed_error.flatten());
+                        return;
+                    }
+                    const data = parsed.data;
+                    const listingId = (data.listingId || data.id || '').toString();
+                    if (!listingId) return;
+                    const auction = auctionsRef.current[listingId];
+                    updateAuctionStatus(listingId, 'cancelled');
+                    if (user && (auction === null || auction === void 0 ? void 0 : auction.highestBidder) === user.username) {
+                        await refreshCurrentUserBalance();
                     }
                 }
             }["AuctionProvider.useEffect"]));
             return ({
                 "AuctionProvider.useEffect": ()=>{
                     unsubscribers.forEach({
-                        "AuctionProvider.useEffect": (unsub)=>unsub()
+                        "AuctionProvider.useEffect": (unsub)=>{
+                            try {
+                                unsub();
+                            } catch (e) {
+                            // swallow teardown errors
+                            }
+                        }
                     }["AuctionProvider.useEffect"]);
                 }
             })["AuctionProvider.useEffect"];
@@ -5094,9 +5238,8 @@ function AuctionProvider(param) {
         subscribe,
         updateAuctionWithBid,
         updateAuctionStatus,
-        user,
         refreshCurrentUserBalance,
-        auctions
+        user
     ]);
     const placeBid = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "AuctionProvider.useCallback[placeBid]": async (listingId, bidder, amount)=>{
@@ -5104,25 +5247,51 @@ function AuctionProvider(param) {
                 setBidError('You must be logged in to bid');
                 return false;
             }
+            // Gentle client-side rate limit against spam clicks
+            try {
+                const limiter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$rate$2d$limiter$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["getRateLimiter"])(); // no args
+                const key = "auction:bid:".concat(user.username);
+                limiter.check(key, {
+                    maxAttempts: BID_LIMIT.maxAttempts,
+                    windowMs: BID_LIMIT.windowMs,
+                    blockDuration: BID_LIMIT.blockDuration
+                });
+            } catch (e) {
+                setBidError('Too many bid attempts. Please wait a moment.');
+                return false;
+            }
+            // Coerce & validate amount
+            const amt = coerceNumber(amount, NaN);
+            if (!Number.isFinite(amt) || amt < 0) {
+                setBidError('Invalid bid amount');
+                return false;
+            }
+            // Ensure bidder matches logged-in user (UI safety)
+            if (bidder && user.username && bidder !== user.username) {
+                console.warn('[AuctionContext] Bidder mismatch; normalizing to current user');
+            }
             setIsPlacingBid(true);
             setBidError(null);
             try {
                 const response = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["apiCall"])("/listings/".concat(listingId, "/bid"), {
                     method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
-                        amount
+                        amount: amt
                     })
                 });
                 if (response.success) {
                     var _response_data;
                     console.log('[AuctionContext] Bid placed successfully:', ((_response_data = response.data) === null || _response_data === void 0 ? void 0 : _response_data.message) || 'Success');
                     updateAuctionWithBid(listingId, {
-                        bidder: bidder,
-                        amount: amount,
+                        bidder: user.username,
+                        amount: amt,
                         timestamp: new Date().toISOString()
                     });
-                    const auction = auctions[listingId];
-                    if ((auction === null || auction === void 0 ? void 0 : auction.reservePrice) && amount < auction.reservePrice) {
+                    const auction = auctionsRef.current[listingId];
+                    if ((auction === null || auction === void 0 ? void 0 : auction.reservePrice) && amt < auction.reservePrice) {
                         console.log('[AuctionContext] Bid placed but reserve price not yet met');
                     }
                     await refreshCurrentUserBalance();
@@ -5135,7 +5304,7 @@ function AuctionProvider(param) {
                     return false;
                 }
             } catch (error) {
-                const errorMsg = error.message || 'Network error while placing bid';
+                const errorMsg = (error === null || error === void 0 ? void 0 : error.message) || 'Network error while placing bid';
                 setBidError(errorMsg);
                 console.error('[AuctionContext] Bid error:', error);
                 return false;
@@ -5146,18 +5315,18 @@ function AuctionProvider(param) {
     }["AuctionProvider.useCallback[placeBid]"], [
         user,
         updateAuctionWithBid,
-        refreshCurrentUserBalance,
-        auctions
+        refreshCurrentUserBalance
     ]);
     const cancelAuction = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "AuctionProvider.useCallback[cancelAuction]": async (listingId)=>{
-            if (!user) {
-                return false;
-            }
+            if (!user) return false;
             setIsCancellingAuction(true);
             try {
                 const response = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["apiCall"])("/listings/".concat(listingId, "/cancel-auction"), {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 if (response.success) {
                     return true;
@@ -5177,12 +5346,15 @@ function AuctionProvider(param) {
     ]);
     const endAuction = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "AuctionProvider.useCallback[endAuction]": async (listingId)=>{
-            if (!user || user.role !== 'admin') {
+            if (!user || !(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$permissions$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isAdmin"])(user)) {
                 return false;
             }
             try {
                 const response = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["apiCall"])("/listings/".concat(listingId, "/end-auction"), {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 if (response.success) {
                     return true;
@@ -5198,36 +5370,42 @@ function AuctionProvider(param) {
     }["AuctionProvider.useCallback[endAuction]"], [
         user
     ]);
-    // FIXED: Process ended auction - handle already processed auctions gracefully
+    // Process ended auction - handle already processed auctions gracefully
     const processEndedAuction = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "AuctionProvider.useCallback[processEndedAuction]": async (listing)=>{
-            if (!listing.auction) return false;
+            if (!(listing === null || listing === void 0 ? void 0 : listing.auction)) return false;
             try {
-                var _response_error_message, _response_error;
+                var _response_error;
                 // Call backend to process auction completion
                 const response = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["apiCall"])("/listings/".concat(listing.id, "/end-auction"), {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 if (response.success) {
-                    var _response_data, _responseData_data, _responseData_data1;
+                    var _response_data, _response_data_data, _response_data1, _responseData_data, _responseData_data1;
                     // Check if it was already processed (backend returns success with alreadyProcessed flag)
-                    if ((_response_data = response.data) === null || _response_data === void 0 ? void 0 : _response_data.alreadyProcessed) {
-                        console.log('[AuctionContext] Auction was already processed:', response.data.status);
+                    const alreadyProcessed = ((_response_data = response.data) === null || _response_data === void 0 ? void 0 : _response_data.alreadyProcessed) || ((_response_data1 = response.data) === null || _response_data1 === void 0 ? void 0 : (_response_data_data = _response_data1.data) === null || _response_data_data === void 0 ? void 0 : _response_data_data.alreadyProcessed) || false;
+                    if (alreadyProcessed) {
+                        var _response_data2, _response_data3, _response_data_data1, _response_data4;
+                        console.log('[AuctionContext] Auction was already processed:', (_response_data2 = response.data) === null || _response_data2 === void 0 ? void 0 : _response_data2.status);
                         // Update status based on the already-processed status
-                        const status = response.data.status || 'ended';
+                        const status = ((_response_data3 = response.data) === null || _response_data3 === void 0 ? void 0 : _response_data3.status) || ((_response_data4 = response.data) === null || _response_data4 === void 0 ? void 0 : (_response_data_data1 = _response_data4.data) === null || _response_data_data1 === void 0 ? void 0 : _response_data_data1.status) || 'ended';
                         if (status === 'reserve_not_met') {
                             updateAuctionStatus(listing.id, 'reserve_not_met');
-                        } else if (status === 'ended' || status === 'sold') {
+                        } else if (listing.auction.highestBidder && listing.auction.highestBid) {
                             updateAuctionStatus(listing.id, 'ended', listing.auction.highestBidder, listing.auction.highestBid);
+                        } else {
+                            updateAuctionStatus(listing.id, 'ended');
                         }
-                        return true; // Return true since it's handled (even if already processed)
+                        return true; // handled
                     }
                     // Process the response data
                     const responseData = response.data || {};
                     // Check if order was created successfully
-                    if (responseData.order || ((_responseData_data = responseData.data) === null || _responseData_data === void 0 ? void 0 : _responseData_data.order)) {
-                        var _responseData_data2;
-                        const order = responseData.order || ((_responseData_data2 = responseData.data) === null || _responseData_data2 === void 0 ? void 0 : _responseData_data2.order);
+                    const order = responseData.order || ((_responseData_data = responseData.data) === null || _responseData_data === void 0 ? void 0 : _responseData_data.order);
+                    if (order) {
                         console.log('[AuctionContext] Order created successfully:', order);
                         // Fire event for order creation
                         if ("TURBOPACK compile-time truthy", 1) {
@@ -5249,21 +5427,18 @@ function AuctionProvider(param) {
                     }
                     return true;
                 }
-                // FIXED: Check if error indicates already processed
-                const errorMessage = ((_response_error = response.error) === null || _response_error === void 0 ? void 0 : (_response_error_message = _response_error.message) === null || _response_error_message === void 0 ? void 0 : _response_error_message.toLowerCase()) || '';
-                if (errorMessage.includes('auction is not active') || errorMessage.includes('already processed') || errorMessage.includes('auction already processed')) {
+                // Error path: treat known messages as already-processed
+                const msg = (typeof response.error === 'string' ? response.error : ((_response_error = response.error) === null || _response_error === void 0 ? void 0 : _response_error.message) || '').toLowerCase();
+                if (msg.includes('auction is not active') || msg.includes('already processed') || msg.includes('auction already processed')) {
                     console.log('[AuctionContext] Auction already processed, treating as success');
-                    // Update status to ended since it's already been processed
                     updateAuctionStatus(listing.id, 'ended');
-                    return true; // Return true to indicate it's handled
+                    return true;
                 }
                 console.error('[AuctionContext] Failed to process ended auction:', response.error);
                 return false;
             } catch (error) {
-                var _error_message_toLowerCase, _error_message;
-                // FIXED: Check if error message indicates already processed
-                const errorMessage = ((_error_message = error.message) === null || _error_message === void 0 ? void 0 : (_error_message_toLowerCase = _error_message.toLowerCase) === null || _error_message_toLowerCase === void 0 ? void 0 : _error_message_toLowerCase.call(_error_message)) || '';
-                if (errorMessage.includes('auction is not active') || errorMessage.includes('already processed') || errorMessage.includes('auction already processed')) {
+                const msg = ((error === null || error === void 0 ? void 0 : error.message) || '').toLowerCase();
+                if (msg.includes('auction is not active') || msg.includes('already processed') || msg.includes('auction already processed')) {
                     console.log('[AuctionContext] Auction already processed (from catch), treating as success');
                     updateAuctionStatus(listing.id, 'ended');
                     return true;
@@ -5276,9 +5451,7 @@ function AuctionProvider(param) {
         updateAuctionStatus
     ]);
     const getAuctionByListingId = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "AuctionProvider.useCallback[getAuctionByListingId]": (listingId)=>{
-            return auctions[listingId] || null;
-        }
+        "AuctionProvider.useCallback[getAuctionByListingId]": (listingId)=>auctions[listingId] || null
     }["AuctionProvider.useCallback[getAuctionByListingId]"], [
         auctions
     ]);
@@ -5305,6 +5478,7 @@ function AuctionProvider(param) {
         "AuctionProvider.useCallback[subscribeToAuction]": (listingId)=>{
             if (!isConnected) return;
             console.log('[AuctionContext] Subscribing to auction:', listingId);
+        // Hook for future: if your WS supports rooms, join here.
         }
     }["AuctionProvider.useCallback[subscribeToAuction]"], [
         isConnected
@@ -5313,6 +5487,7 @@ function AuctionProvider(param) {
         "AuctionProvider.useCallback[unsubscribeFromAuction]": (listingId)=>{
             if (!isConnected) return;
             console.log('[AuctionContext] Unsubscribing from auction:', listingId);
+        // Hook for future: if your WS supports rooms, leave here.
         }
     }["AuctionProvider.useCallback[unsubscribeFromAuction]"], [
         isConnected
@@ -5342,11 +5517,11 @@ function AuctionProvider(param) {
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/AuctionContext.tsx",
-        lineNumber: 621,
-        columnNumber: 5
+        lineNumber: 871,
+        columnNumber: 10
     }, this);
 }
-_s(AuctionProvider, "zb3YToHEI20WTvhUYclIQeS+q7E=", false, function() {
+_s(AuctionProvider, "aNlqO2YGy/LhFC4LJ3u6X+njmP0=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAuth"],
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$WebSocketContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useWebSocket"]
