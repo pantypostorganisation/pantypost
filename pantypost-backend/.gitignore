@@ -1,46 +1,41 @@
 # Dependencies
 node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Next.js build caches (dev + prod)
+.next/
+.next-dev/
+.next-static/
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Uploaded files
-uploads/
-!uploads/.gitkeep
-
-# Temporary files
-temp/
-tmp/
-
-# Build files
+# Build outputs
 dist/
 build/
+out/
 
-# Test coverage
+# Framework/host caches
+.turbo/
+.vercel/
+
+# Testing / coverage
 coverage/
 .nyc_output/
 
-# Package lock files (optional - some teams prefer to commit these)
-# package-lock.json
-# yarn.lock
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Env & local config
+.env
+.env.*
+!.env.example
+
+# Editor files
+.DS_Store
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
