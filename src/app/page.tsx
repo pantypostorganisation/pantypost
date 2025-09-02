@@ -10,6 +10,34 @@ import FeaturesSection from '@/components/homepage/FeaturesSection';
 import CTASection from '@/components/homepage/CTASection';
 import Footer from '@/components/homepage/Footer';
 
+// Enhanced loading skeleton for Featured Random section
+const FeaturedRandomSkeleton = () => (
+  <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+    <div className="flex items-center justify-between mb-8">
+      <div>
+        <div className="h-8 bg-gray-800/50 rounded w-48 animate-pulse mb-2"></div>
+        <div className="h-4 bg-gray-800/30 rounded w-64 animate-pulse"></div>
+      </div>
+      <div className="h-4 bg-gray-800/30 rounded w-20 animate-pulse"></div>
+    </div>
+    <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="bg-[#131313] rounded-xl border border-white/10 overflow-hidden">
+          <div className="aspect-[4/3] bg-gray-800/50 animate-pulse"></div>
+          <div className="p-4 space-y-3">
+            <div className="h-5 bg-gray-800/50 rounded animate-pulse"></div>
+            <div className="h-3 bg-gray-800/30 rounded w-2/3 animate-pulse"></div>
+            <div className="h-6 bg-gray-800/50 rounded w-1/3 animate-pulse"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+);
+
+// Import the Featured Random component
+import FeaturedRandom from '@/components/homepage/FeaturedRandom';
+
 // Enhanced loading fallback components with pulse animations
 const SectionSkeleton = ({ height = "h-96" }: { height?: string }) => (
   <div className={`${height} bg-gradient-to-b from-[#101010] to-black flex items-center justify-center`}>
@@ -103,6 +131,11 @@ export default function Home() {
         {/* Trust Signals Section with Error Boundary */}
         <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
           <TrustSignalsSection />
+        </SectionWrapper>
+        
+        {/* Featured Random Listings Section */}
+        <SectionWrapper sectionName="Featured Listings" fallbackHeight="h-96">
+          <FeaturedRandom />
         </SectionWrapper>
         
         {/* Features Section with Error Boundary */}
