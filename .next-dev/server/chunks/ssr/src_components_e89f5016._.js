@@ -26,7 +26,7 @@ function normalizeBaseUrl(url) {
  * Build the health URL robustly regardless of whether the env contains '/api' already.
  * Priority: NEXT_PUBLIC_API_URL (kept for backward-compat), then NEXT_PUBLIC_API_BASE_URL.
  */ function buildHealthUrl() {
-    const rawApiUrl = (("TURBOPACK compile-time value", "http://localhost:5000/api") ?? '').trim();
+    const rawApiUrl = (("TURBOPACK compile-time value", "http://localhost:5000") ?? '').trim();
     const rawApiBase = (("TURBOPACK compile-time value", "http://localhost:5000") ?? '').trim();
     // Prefer API_URL if provided; otherwise fallback to API_BASE_URL; otherwise default.
     const base = normalizeBaseUrl(rawApiUrl || rawApiBase || DEFAULT_BASE);
@@ -780,7 +780,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$
 ;
 ;
 ;
-const SecureMessageDisplay = ({ content, allowBasicFormatting = true, allowMarkdown = false, className = '', maxLength, as: Component = 'div' })=>{
+const SecureMessageDisplay = ({ content, allowBasicFormatting = true, allowMarkdown = false, className = '', maxLength, as: Component = 'span' })=>{
     const sanitizedContent = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>{
         if (!content) return '';
         let processed = content;
@@ -809,9 +809,9 @@ const SecureMessageDisplay = ({ content, allowBasicFormatting = true, allowMarkd
     if (!sanitizedContent) {
         return null;
     }
-    // For inline usage (span), we should ensure we're not using block-level formatting
+    // For inline usage or when component is span, never use dangerouslySetInnerHTML
     const isInline = Component === 'span';
-    // For content with HTML, use dangerouslySetInnerHTML safely
+    // Only use dangerouslySetInnerHTML for block-level elements with formatting
     if ((allowBasicFormatting || allowMarkdown) && !isInline) {
         return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(Component, {
             className: className,
@@ -4777,7 +4777,7 @@ function MessageNotifications() {
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                     className: "flex-1 min-w-0",
                                     children: [
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                             className: "font-semibold",
                                             children: notif.messageCount > 1 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Fragment"], {
                                                 children: [
@@ -4786,7 +4786,8 @@ function MessageNotifications() {
                                                     ' ',
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SecureMessageDisplay"], {
                                                         content: buyerSafe,
-                                                        allowBasicFormatting: false
+                                                        allowBasicFormatting: false,
+                                                        as: "span"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/MessageNotifications.tsx",
                                                         lineNumber: 79,
@@ -4799,7 +4800,8 @@ function MessageNotifications() {
                                                     ' ',
                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SecureMessageDisplay"], {
                                                         content: buyerSafe,
-                                                        allowBasicFormatting: false
+                                                        allowBasicFormatting: false,
+                                                        as: "span"
                                                     }, void 0, false, {
                                                         fileName: "[project]/src/components/MessageNotifications.tsx",
                                                         lineNumber: 84,
@@ -4816,18 +4818,19 @@ function MessageNotifications() {
                                             content: notif.lastMessage,
                                             className: "text-sm opacity-90 truncate mt-1",
                                             allowBasicFormatting: false,
-                                            maxLength: 100
+                                            maxLength: 100,
+                                            as: "div"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/MessageNotifications.tsx",
                                             lineNumber: 88,
                                             columnNumber: 19
                                         }, this),
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                             className: "text-xs opacity-75 mt-1",
                                             children: new Date(notif.timestamp).toLocaleTimeString()
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/MessageNotifications.tsx",
-                                            lineNumber: 94,
+                                            lineNumber: 95,
                                             columnNumber: 19
                                         }, this)
                                     ]
@@ -4853,12 +4856,12 @@ function MessageNotifications() {
                                 className: "w-4 h-4"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/MessageNotifications.tsx",
-                                lineNumber: 107,
+                                lineNumber: 108,
                                 columnNumber: 17
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/src/components/MessageNotifications.tsx",
-                            lineNumber: 99,
+                            lineNumber: 100,
                             columnNumber: 15
                         }, this)
                     ]

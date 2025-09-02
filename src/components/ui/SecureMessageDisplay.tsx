@@ -23,7 +23,7 @@ export const SecureMessageDisplay: React.FC<SecureMessageDisplayProps> = ({
   allowMarkdown = false,
   className = '',
   maxLength,
-  as: Component = 'div',
+  as: Component = 'span', // Changed default from 'div' to 'span' for inline usage
 }) => {
   const sanitizedContent = useMemo(() => {
     if (!content) return '';
@@ -52,10 +52,10 @@ export const SecureMessageDisplay: React.FC<SecureMessageDisplayProps> = ({
     return null;
   }
 
-  // For inline usage (span), we should ensure we're not using block-level formatting
+  // For inline usage or when component is span, never use dangerouslySetInnerHTML
   const isInline = Component === 'span';
   
-  // For content with HTML, use dangerouslySetInnerHTML safely
+  // Only use dangerouslySetInnerHTML for block-level elements with formatting
   if ((allowBasicFormatting || allowMarkdown) && !isInline) {
     return (
       <Component

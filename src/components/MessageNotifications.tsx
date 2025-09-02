@@ -72,28 +72,29 @@ export default function MessageNotifications() {
               <div className="flex items-start flex-1">
                 <MessageCircle className="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold">
+                  <div className="font-semibold">
                     {notif.messageCount > 1 ? (
                       <>
                         {notif.messageCount} new messages from{' '}
-                        <SecureMessageDisplay content={buyerSafe} allowBasicFormatting={false} />
+                        <SecureMessageDisplay content={buyerSafe} allowBasicFormatting={false} as="span" />
                       </>
                     ) : (
                       <>
                         New message from{' '}
-                        <SecureMessageDisplay content={buyerSafe} allowBasicFormatting={false} />
+                        <SecureMessageDisplay content={buyerSafe} allowBasicFormatting={false} as="span" />
                       </>
                     )}
-                  </p>
+                  </div>
                   <SecureMessageDisplay
                     content={notif.lastMessage}
                     className="text-sm opacity-90 truncate mt-1"
                     allowBasicFormatting={false}
                     maxLength={100}
+                    as="div"
                   />
-                  <p className="text-xs opacity-75 mt-1">
+                  <div className="text-xs opacity-75 mt-1">
                     {new Date(notif.timestamp).toLocaleTimeString()}
-                  </p>
+                  </div>
                 </div>
               </div>
               <button

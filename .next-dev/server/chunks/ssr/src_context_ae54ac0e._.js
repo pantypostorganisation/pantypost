@@ -251,7 +251,7 @@ class ApiClient {
 // ==================== AUTH CONTEXT ====================
 const AuthContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["createContext"])(undefined);
 // Get API base URL from environment config
-const API_BASE_URL = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["apiConfig"]?.baseUrl || ("TURBOPACK compile-time value", "http://localhost:5000/api") || 'http://localhost:5000';
+const API_BASE_URL = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["apiConfig"]?.baseUrl || ("TURBOPACK compile-time value", "http://localhost:5000") || 'http://localhost:5000';
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {
     memoryTokens = null;
@@ -1792,6 +1792,7 @@ const WebSocketProvider = ({ children })=>{
     const wsService = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$websocket$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["getWebSocketService"])());
     const currentToken = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
     const hasInitialized = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(false);
+    const pendingSubscriptions = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])([]); // Store pending subscriptions
     // Listen for auth token events from AuthContext
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         if ("TURBOPACK compile-time truthy", 1) return;
@@ -1842,6 +1843,19 @@ const WebSocketProvider = ({ children })=>{
                 setIsConnected(true);
                 setConnectionState(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$types$2f$websocket$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["WebSocketState"].CONNECTED);
                 console.log('[WebSocket] Connected');
+                // Process any pending subscriptions
+                if (pendingSubscriptions.current.length > 0) {
+                    console.log('[WebSocket] Processing', pendingSubscriptions.current.length, 'pending subscriptions');
+                    const pending = [
+                        ...pendingSubscriptions.current
+                    ];
+                    pendingSubscriptions.current = [];
+                    pending.forEach(({ event, handler })=>{
+                        if (wsService.current) {
+                            wsService.current.on(event, handler);
+                        }
+                    });
+                }
                 // Send initial online status
                 updateOnlineStatus(true);
             });
@@ -1872,7 +1886,7 @@ const WebSocketProvider = ({ children })=>{
                 if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
                 ;
             });
-            // CRITICAL FIX: Subscribe to auction and order events
+            // Subscribe to order events
             const unsubOrderCreated = wsService.current.on('order:created', (data)=>{
                 console.log('[WebSocket Context] Order created event received:', data);
                 if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
@@ -1883,6 +1897,7 @@ const WebSocketProvider = ({ children })=>{
                 if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
                 ;
             });
+            // Subscribe to auction events
             const unsubAuctionWon = wsService.current.on('auction:won', (data)=>{
                 console.log('[WebSocket Context] Auction won event received:', data);
                 if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
@@ -1909,6 +1924,32 @@ const WebSocketProvider = ({ children })=>{
                 if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
                 ;
             });
+            // Subscribe to notification events
+            const unsubNotificationNew = wsService.current.on('notification:new', (data)=>{
+                console.log('[WebSocket Context] New notification:', data);
+                if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
+                ;
+            });
+            const unsubNotificationCleared = wsService.current.on('notification:cleared', (data)=>{
+                console.log('[WebSocket Context] Notification cleared:', data);
+                if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
+                ;
+            });
+            const unsubNotificationAllCleared = wsService.current.on('notification:all_cleared', (data)=>{
+                console.log('[WebSocket Context] All notifications cleared:', data);
+                if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
+                ;
+            });
+            const unsubNotificationRestored = wsService.current.on('notification:restored', (data)=>{
+                console.log('[WebSocket Context] Notification restored:', data);
+                if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
+                ;
+            });
+            const unsubNotificationDeleted = wsService.current.on('notification:deleted', (data)=>{
+                console.log('[WebSocket Context] Notification deleted:', data);
+                if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
+                ;
+            });
             // Connect
             wsService.current.connect();
             // Store cleanup functions
@@ -1929,6 +1970,11 @@ const WebSocketProvider = ({ children })=>{
                 unsubListingSold();
                 unsubWalletUpdate();
                 unsubWalletTransaction();
+                unsubNotificationNew();
+                unsubNotificationCleared();
+                unsubNotificationAllCleared();
+                unsubNotificationRestored();
+                unsubNotificationDeleted();
             };
         } catch (error) {
             console.error('[WebSocket] Initialization error:', error);
@@ -2037,13 +2083,24 @@ const WebSocketProvider = ({ children })=>{
     const disconnect = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
         wsService.current?.disconnect();
     }, []);
+    // FIXED: Subscribe method that queues subscriptions if service not ready
     const subscribe = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((event, handler)=>{
         if (!wsService.current) {
-            console.warn('[WebSocket] Service not initialized - delaying subscription for:', event);
-            // Return a no-op unsubscribe function but don't fail
-            // The subscription will be established when the service initializes
-            return ()=>{};
+            console.log('[WebSocket] Service not initialized - queueing subscription for:', event);
+            // Queue the subscription for later
+            pendingSubscriptions.current.push({
+                event,
+                handler
+            });
+            // Return a cleanup function that removes from pending if not yet processed
+            return ()=>{
+                const index = pendingSubscriptions.current.findIndex((sub)=>sub.event === event && sub.handler === handler);
+                if (index !== -1) {
+                    pendingSubscriptions.current.splice(index, 1);
+                }
+            };
         }
+        // Service is ready, subscribe immediately
         return wsService.current.on(event, handler);
     }, []);
     const sendMessage = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((event, data)=>{
@@ -2109,7 +2166,7 @@ const WebSocketProvider = ({ children })=>{
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/WebSocketContext.tsx",
-        lineNumber: 476,
+        lineNumber: 544,
         columnNumber: 5
     }, ("TURBOPACK compile-time value", void 0));
 };

@@ -69,6 +69,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const wsService = useRef(getWebSocketService());
   const currentToken = useRef<string | null>(null);
   const hasInitialized = useRef(false);
+  const pendingSubscriptions = useRef<Array<{ event: string; handler: WebSocketHandler }>>([]); // Store pending subscriptions
 
   // Listen for auth token events from AuthContext
   useEffect(() => {
@@ -165,6 +166,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setConnectionState(WebSocketState.CONNECTED);
         console.log('[WebSocket] Connected');
         
+        // Process any pending subscriptions
+        if (pendingSubscriptions.current.length > 0) {
+          console.log('[WebSocket] Processing', pendingSubscriptions.current.length, 'pending subscriptions');
+          const pending = [...pendingSubscriptions.current];
+          pendingSubscriptions.current = [];
+          
+          pending.forEach(({ event, handler }) => {
+            if (wsService.current) {
+              wsService.current.on(event as WebSocketEvent, handler);
+            }
+          });
+        }
+        
         // Send initial online status
         updateOnlineStatus(true);
       });
@@ -218,7 +232,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       });
 
-      // CRITICAL FIX: Subscribe to auction and order events
+      // Subscribe to order events
       const unsubOrderCreated = wsService.current.on('order:created' as WebSocketEvent, (data: any) => {
         console.log('[WebSocket Context] Order created event received:', data);
         if (typeof window !== 'undefined') {
@@ -233,6 +247,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       });
 
+      // Subscribe to auction events
       const unsubAuctionWon = wsService.current.on('auction:won' as WebSocketEvent, (data: any) => {
         console.log('[WebSocket Context] Auction won event received:', data);
         if (typeof window !== 'undefined') {
@@ -269,6 +284,42 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
       });
 
+      // Subscribe to notification events
+      const unsubNotificationNew = wsService.current.on('notification:new' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket Context] New notification:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('notification:new', { detail: data }));
+        }
+      });
+
+      const unsubNotificationCleared = wsService.current.on('notification:cleared' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket Context] Notification cleared:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('notification:cleared', { detail: data }));
+        }
+      });
+
+      const unsubNotificationAllCleared = wsService.current.on('notification:all_cleared' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket Context] All notifications cleared:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('notification:all_cleared', { detail: data }));
+        }
+      });
+
+      const unsubNotificationRestored = wsService.current.on('notification:restored' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket Context] Notification restored:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('notification:restored', { detail: data }));
+        }
+      });
+
+      const unsubNotificationDeleted = wsService.current.on('notification:deleted' as WebSocketEvent, (data: any) => {
+        console.log('[WebSocket Context] Notification deleted:', data);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('notification:deleted', { detail: data }));
+        }
+      });
+
       // Connect
       wsService.current.connect();
 
@@ -290,6 +341,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         unsubListingSold();
         unsubWalletUpdate();
         unsubWalletTransaction();
+        unsubNotificationNew();
+        unsubNotificationCleared();
+        unsubNotificationAllCleared();
+        unsubNotificationRestored();
+        unsubNotificationDeleted();
       };
     } catch (error) {
       console.error('[WebSocket] Initialization error:', error);
@@ -404,16 +460,28 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     wsService.current?.disconnect();
   }, []);
 
+  // FIXED: Subscribe method that queues subscriptions if service not ready
   const subscribe = useCallback(<T = any>(
     event: WebSocketEvent | string, 
     handler: WebSocketHandler<T>
   ): (() => void) => {
     if (!wsService.current) {
-      console.warn('[WebSocket] Service not initialized - delaying subscription for:', event);
-      // Return a no-op unsubscribe function but don't fail
-      // The subscription will be established when the service initializes
-      return () => {};
+      console.log('[WebSocket] Service not initialized - queueing subscription for:', event);
+      // Queue the subscription for later
+      pendingSubscriptions.current.push({ event, handler });
+      
+      // Return a cleanup function that removes from pending if not yet processed
+      return () => {
+        const index = pendingSubscriptions.current.findIndex(
+          sub => sub.event === event && sub.handler === handler
+        );
+        if (index !== -1) {
+          pendingSubscriptions.current.splice(index, 1);
+        }
+      };
     }
+    
+    // Service is ready, subscribe immediately
     return wsService.current.on<T>(event as WebSocketEvent, handler);
   }, []);
 
