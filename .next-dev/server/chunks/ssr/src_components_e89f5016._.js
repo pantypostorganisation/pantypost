@@ -26,7 +26,7 @@ function normalizeBaseUrl(url) {
  * Build the health URL robustly regardless of whether the env contains '/api' already.
  * Priority: NEXT_PUBLIC_API_URL (kept for backward-compat), then NEXT_PUBLIC_API_BASE_URL.
  */ function buildHealthUrl() {
-    const rawApiUrl = (("TURBOPACK compile-time value", "http://localhost:5000") ?? '').trim();
+    const rawApiUrl = (("TURBOPACK compile-time value", "http://localhost:5000/api") ?? '').trim();
     const rawApiBase = (("TURBOPACK compile-time value", "http://localhost:5000") ?? '').trim();
     // Prefer API_URL if provided; otherwise fallback to API_BASE_URL; otherwise default.
     const base = normalizeBaseUrl(rawApiUrl || rawApiBase || DEFAULT_BASE);

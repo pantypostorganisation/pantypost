@@ -1,5 +1,11 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/icon.png/route": "app/icon.png/route.js",
+  "/admin/bans/page": "app/admin/bans/page.js",
+  "/admin/messages/page": "app/admin/messages/page.js",
+  "/admin/resolved/page": "app/admin/resolved/page.js",
+  "/admin/verification-requests/page": "app/admin/verification-requests/page.js",
+  "/admin/wallet-management/page": "app/admin/wallet-management/page.js",
+  "/browse/page": "app/browse/page.js",
+  "/login/page": "app/login/page.js",
   "/page": "app/page.js"
 }

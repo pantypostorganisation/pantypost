@@ -267,7 +267,7 @@ class ApiClient {
 // ==================== AUTH CONTEXT ====================
 const AuthContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createContext"])(undefined);
 // Get API base URL from environment config
-const API_BASE_URL = (__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === null || __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === void 0 ? void 0 : __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"].baseUrl) || ("TURBOPACK compile-time value", "http://localhost:5000") || 'http://localhost:5000';
+const API_BASE_URL = (__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === null || __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === void 0 ? void 0 : __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"].baseUrl) || ("TURBOPACK compile-time value", "http://localhost:5000/api") || 'http://localhost:5000';
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {
     setTokens(tokens) {
@@ -1042,11 +1042,11 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
 
 var { k: __turbopack_refresh__, m: module } = __turbopack_context__;
 {
-// src/context/BanContext.tsx
 __turbopack_context__.s({
     "BanProvider": ()=>BanProvider,
     "useBans": ()=>useBans
 });
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$polyfills$2f$process$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = /*#__PURE__*/ __turbopack_context__.i("[project]/node_modules/next/dist/build/polyfills/process.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/compiled/react/jsx-dev-runtime.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/compiled/react/index.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$index$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i("[project]/src/services/index.ts [app-client] (ecmascript) <module evaluation>");
@@ -1055,6 +1055,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$ban$2e$se
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$users$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/services/users.service.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/sanitization.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__ = __turbopack_context__.i("[project]/node_modules/zod/v3/external.js [app-client] (ecmascript) <export * as z>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/context/AuthContext.tsx [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$permissions$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/permissions.ts [app-client] (ecmascript)");
 ;
 var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.signature();
 'use client';
@@ -1064,9 +1066,18 @@ var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.sign
 ;
 ;
 ;
+;
+;
+// ================== Constants ==================
+const STORAGE_KEYS = {
+    BANS: 'panty_user_bans',
+    HISTORY: 'panty_ban_history',
+    REVIEWS: 'panty_appeal_reviews',
+    IP_BANS: 'panty_ip_bans'
+};
 /**
  * Reserved usernames that should never be bannable (system/service accounts).
- * NOTE: This is NOT a list of human admins. Real admin checks are done via role.
+ * NOTE: Not human admins; real admin checks use role via isAdmin(user).
  */ const RESERVED_USERNAMES = [
     'system',
     'platform',
@@ -1075,28 +1086,24 @@ var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.sign
     'moderator',
     'mod'
 ];
-/**
- * Helper: check if a username is reserved (exact match, case-insensitive).
- * We use exact matches to avoid false positives like "notadmin123".
- */ const isProtectedUsername = (username)=>{
+/** Exact-match, case-insensitive protection for reserved accounts */ const isProtectedUsername = (username)=>{
     const clean = (username || '').toLowerCase().trim();
     return RESERVED_USERNAMES.includes(clean);
 };
-// Helper function to check if a user is an admin via the users service
+// Ask backend for role (defensive, in case caller doesn’t pass role)
 const checkUserRole = async (username)=>{
     try {
+        var _result_data;
         const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$users$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["usersService"].getUser(username);
-        if (result.success && result.data && result.data.role) {
-            return result.data.role;
-        }
+        if (result.success && ((_result_data = result.data) === null || _result_data === void 0 ? void 0 : _result_data.role)) return result.data.role;
         return null;
-    } catch (error) {
-        console.error('[BanContext] Error checking user role:', error);
+    } catch (err) {
+        console.error('[BanContext] Error checking user role:', err);
         return null;
     }
 };
 const BanContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createContext"])(undefined);
-// Validation schemas
+// ================== Validation Schemas ==================
 const banReasonSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].enum([
     'harassment',
     'spam',
@@ -1113,12 +1120,12 @@ const banDurationSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_m
 const appealTextSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(10).max(1000);
 const customReasonSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(5).max(500);
 const banNotesSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().max(1000);
-const ipAddressSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().regex(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/);
+// Simple IPv4, conservative; adjust if you need IPv6
+const ipAddressSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().regex(/^(?:\d{1,3}\.){3}\d{1,3}$/);
 // ---- Conservative mock data detector/scrubber ----
 const isMockString = (val)=>{
     if (!val) return false;
     const v = String(val).trim().toLowerCase();
-    // Limit to obvious dev/demo patterns so we don't remove real users
     const patterns = [
         'spammer',
         'scammer',
@@ -1160,10 +1167,10 @@ const scrubMocks = async (bans, history, reviews, ipBans)=>{
     };
     if (removed.bans || removed.history || removed.reviews || removed.ipBans) {
         console.warn('[BanContext] Removed mock/dev data from storage:', removed);
-        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_user_bans', cleanBans);
-        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_ban_history', cleanHistory);
-        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_appeal_reviews', cleanReviews);
-        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_ip_bans', cleanIPBans);
+        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.BANS, cleanBans);
+        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.HISTORY, cleanHistory);
+        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.REVIEWS, cleanReviews);
+        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.IP_BANS, cleanIPBans);
     }
     return {
         cleanBans,
@@ -1173,41 +1180,50 @@ const scrubMocks = async (bans, history, reviews, ipBans)=>{
     };
 };
 // --------------------------------------------------
-// Compress images for appeal evidence
-const compressImage = (file)=>{
-    return new Promise((resolve, reject)=>{
-        const reader = new FileReader();
-        reader.onload = (event)=>{
-            var _event_target;
-            const img = new Image();
-            img.onload = ()=>{
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                // Calculate new dimensions (max 800px)
-                const maxDimension = 800;
-                let { width, height } = img;
-                if (width > height) {
-                    if (width > maxDimension) {
-                        height = height * maxDimension / width;
-                        width = maxDimension;
+// Image compression for appeal evidence (defensive checks)
+const compressImage = (file)=>new Promise((resolve, reject)=>{
+        try {
+            if (!file || !file.type.startsWith('image/')) {
+                return reject(new Error('Invalid file type'));
+            }
+            // Limit ~5MB files to avoid memory issues
+            if (typeof file.size === 'number' && file.size > 5 * 1024 * 1024) {
+                console.warn('[BanContext] Evidence file is large; compressing aggressively');
+            }
+            const reader = new FileReader();
+            reader.onload = (event)=>{
+                var _event_target;
+                const img = new Image();
+                img.onload = ()=>{
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const maxDimension = 800;
+                    let { width, height } = img;
+                    if (width > height) {
+                        if (width > maxDimension) {
+                            height = height * maxDimension / width;
+                            width = maxDimension;
+                        }
+                    } else {
+                        if (height > maxDimension) {
+                            width = width * maxDimension / height;
+                            height = maxDimension;
+                        }
                     }
-                } else {
-                    if (height > maxDimension) {
-                        width = width * maxDimension / height;
-                        height = maxDimension;
-                    }
-                }
-                canvas.width = width;
-                canvas.height = height;
-                ctx === null || ctx === void 0 ? void 0 : ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx === null || ctx === void 0 ? void 0 : ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7));
+                };
+                img.onerror = ()=>reject(new Error('Image load failed'));
+                img.src = (_event_target = event.target) === null || _event_target === void 0 ? void 0 : _event_target.result;
             };
-            img.src = (_event_target = event.target) === null || _event_target === void 0 ? void 0 : _event_target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+            reader.onerror = ()=>reject(new Error('File read failed'));
+            reader.readAsDataURL(file);
+        } catch (e) {
+            reject(e);
+        }
     });
-};
 const BanProvider = (param)=>{
     let { children } = param;
     _s();
@@ -1216,10 +1232,24 @@ const BanProvider = (param)=>{
     const [appealReviews, setAppealReviews] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [ipBans, setIPBans] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [isInitialized, setIsInitialized] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
-    // Track active timers to prevent memory leaks
+    const { user } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAuth"])();
+    // Track active timers to prevent leaks
     const activeTimers = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(new Map());
-    // Use ref to prevent re-creation
+    // Saving guard
     const isSavingRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(false);
+    // Dev override to allow non-admin actions locally when explicitly enabled
+    const canAdminAct = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
+        "BanProvider.useCallback[canAdminAct]": (action)=>{
+            const devBypass = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$polyfills$2f$process$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"].env.NEXT_PUBLIC_ALLOW_LOCAL_BAN === '1';
+            if (devBypass && user) {
+                console.warn("[BanContext] Dev override enabled for action: ".concat(action, " by ").concat(user.username));
+                return true;
+            }
+            return !!(user && (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$permissions$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isAdmin"])(user));
+        }
+    }["BanProvider.useCallback[canAdminAct]"], [
+        user
+    ]);
     // Force refresh function
     const refreshBanData = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[refreshBanData]": async ()=>{
@@ -1228,7 +1258,7 @@ const BanProvider = (param)=>{
             await loadData(true);
         }
     }["BanProvider.useCallback[refreshBanData]"], []);
-    // Load data from localStorage on mount using service
+    // Load from storage using service
     const loadData = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[loadData]": async function() {
             let forceRefresh = arguments.length > 0 && arguments[0] !== void 0 ? arguments[0] : false;
@@ -1239,19 +1269,18 @@ const BanProvider = (param)=>{
                 console.log('[BanContext] Loading ban data...', {
                     forceRefresh
                 });
-                const storedBans = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('panty_user_bans', []);
-                const storedHistory = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('panty_ban_history', []);
-                const storedAppealReviews = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('panty_appeal_reviews', []);
-                const storedIPBans = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('panty_ip_bans', []);
-                // Always scrub any mock/dev remnants
+                const storedBans = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem(STORAGE_KEYS.BANS, []);
+                const storedHistory = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem(STORAGE_KEYS.HISTORY, []);
+                const storedAppealReviews = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem(STORAGE_KEYS.REVIEWS, []);
+                const storedIPBans = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem(STORAGE_KEYS.IP_BANS, []);
+                // Scrub any clear mock remnants
                 const { cleanBans, cleanHistory, cleanReviews, cleanIPBans } = await scrubMocks(storedBans || [], storedHistory || [], storedAppealReviews || [], storedIPBans || []);
-                // Update expired bans before setting
+                // Auto-expire any temporary bans already past endTime
                 const now = new Date();
                 const updatedBans = cleanBans.map({
                     "BanProvider.useCallback[loadData].updatedBans": (ban)=>{
                         if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-                            const endTime = new Date(ban.endTime);
-                            if (now >= endTime) {
+                            if (now >= new Date(ban.endTime)) {
                                 console.log("[BanContext] Auto-expiring ban for ".concat(ban.username));
                                 return {
                                     ...ban,
@@ -1266,21 +1295,16 @@ const BanProvider = (param)=>{
                 setBanHistory(cleanHistory);
                 setAppealReviews(cleanReviews);
                 setIPBans(cleanIPBans);
-                console.log('[BanContext] Data loaded:', {
-                    activeBans: updatedBans.filter({
-                        "BanProvider.useCallback[loadData]": (b)=>b.active
-                    }["BanProvider.useCallback[loadData]"]).length,
-                    totalBans: updatedBans.length
-                });
-                // Save updated bans if any expired
-                if (updatedBans.some({
-                    "BanProvider.useCallback[loadData]": (ban, idx)=>{
-                        var _cleanBans_idx;
-                        return ban.active !== ((_cleanBans_idx = cleanBans[idx]) === null || _cleanBans_idx === void 0 ? void 0 : _cleanBans_idx.active);
+                // Persist only if any changed
+                const anyExpiredChanged = updatedBans.length === cleanBans.length && updatedBans.some({
+                    "BanProvider.useCallback[loadData]": (b, i)=>{
+                        var _cleanBans_i;
+                        return b.active !== ((_cleanBans_i = cleanBans[i]) === null || _cleanBans_i === void 0 ? void 0 : _cleanBans_i.active);
                     }
-                }["BanProvider.useCallback[loadData]"])) {
+                }["BanProvider.useCallback[loadData]"]);
+                if (anyExpiredChanged) {
                     isSavingRef.current = true;
-                    await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_user_bans', updatedBans);
+                    await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.BANS, updatedBans);
                     isSavingRef.current = false;
                 }
                 // Schedule expiration for active temporary bans
@@ -1291,6 +1315,12 @@ const BanProvider = (param)=>{
                         }
                     }
                 }["BanProvider.useCallback[loadData]"]);
+                console.log('[BanContext] Data loaded:', {
+                    activeBans: updatedBans.filter({
+                        "BanProvider.useCallback[loadData]": (b)=>b.active
+                    }["BanProvider.useCallback[loadData]"]).length,
+                    totalBans: updatedBans.length
+                });
                 setIsInitialized(true);
             } catch (error) {
                 console.error('[BanContext] Error loading ban data:', error);
@@ -1307,18 +1337,12 @@ const BanProvider = (param)=>{
     }["BanProvider.useEffect"], [
         loadData
     ]);
-    // Save to localStorage using service - with protection against loops
+    // Persistors (guarded to avoid loops)
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "BanProvider.useEffect": ()=>{
             if ("object" !== 'undefined' && isInitialized && !isSavingRef.current) {
-                console.log('[BanContext] Saving bans to storage:', {
-                    activeBans: bans.filter({
-                        "BanProvider.useEffect": (b)=>b.active
-                    }["BanProvider.useEffect"]).length,
-                    totalBans: bans.length
-                });
                 isSavingRef.current = true;
-                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_user_bans', bans).then({
+                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.BANS, bans).finally({
                     "BanProvider.useEffect": ()=>{
                         isSavingRef.current = false;
                     }
@@ -1332,7 +1356,7 @@ const BanProvider = (param)=>{
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "BanProvider.useEffect": ()=>{
             if ("object" !== 'undefined' && isInitialized && !isSavingRef.current) {
-                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_ban_history', banHistory);
+                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.HISTORY, banHistory);
             }
         }
     }["BanProvider.useEffect"], [
@@ -1342,7 +1366,7 @@ const BanProvider = (param)=>{
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "BanProvider.useEffect": ()=>{
             if ("object" !== 'undefined' && isInitialized && !isSavingRef.current) {
-                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_appeal_reviews', appealReviews);
+                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.REVIEWS, appealReviews);
             }
         }
     }["BanProvider.useEffect"], [
@@ -1352,7 +1376,7 @@ const BanProvider = (param)=>{
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "BanProvider.useEffect": ()=>{
             if ("object" !== 'undefined' && isInitialized && !isSavingRef.current) {
-                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_ip_bans', ipBans);
+                __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.IP_BANS, ipBans);
             }
         }
     }["BanProvider.useEffect"], [
@@ -1365,76 +1389,62 @@ const BanProvider = (param)=>{
             return ({
                 "BanProvider.useEffect": ()=>{
                     activeTimers.current.forEach({
-                        "BanProvider.useEffect": (timer)=>{
-                            clearTimeout(timer);
-                        }
+                        "BanProvider.useEffect": (t)=>clearTimeout(t)
                     }["BanProvider.useEffect"]);
                     activeTimers.current.clear();
                 }
             })["BanProvider.useEffect"];
         }
     }["BanProvider.useEffect"], []);
-    // Enhanced validation function - now async to check user role
+    // ---------- Validation (async because we may look up role) ----------
     const validateBanInput = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[validateBanInput]": async (username, hours, reason, targetUserRole)=>{
-            // Validate username
-            const sanitizedUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username);
-            if (!sanitizedUsername) {
-                return {
-                    valid: false,
-                    error: 'Invalid username format'
-                };
-            }
-            // Prevent banning reserved/system accounts by exact match
-            if (isProtectedUsername(username)) {
+            const sanitized = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username);
+            if (!sanitized) return {
+                valid: false,
+                error: 'Invalid username format'
+            };
+            // Avoid banning reserved/system accounts
+            if (isProtectedUsername(sanitized)) {
                 return {
                     valid: false,
                     error: 'This account is protected and cannot be banned'
                 };
             }
-            // If role is provided, block admin immediately (fast path)
+            // Block admins
             if (targetUserRole === 'admin') {
                 return {
                     valid: false,
                     error: 'Admin accounts cannot be banned'
                 };
             }
-            // If no role provided, query the user service for true role
             if (!targetUserRole) {
-                const userRole = await checkUserRole(username);
-                if (userRole === 'admin') {
-                    return {
-                        valid: false,
-                        error: 'Admin accounts cannot be banned'
-                    };
-                }
-            }
-            // Validate duration
-            const durationValidation = banDurationSchema.safeParse(hours);
-            if (!durationValidation.success) {
-                return {
+                const role = await checkUserRole(sanitized);
+                if (role === 'admin') return {
                     valid: false,
-                    error: 'Invalid ban duration (max 1 year)'
+                    error: 'Admin accounts cannot be banned'
                 };
             }
-            // Validate reason
-            const reasonValidation = banReasonSchema.safeParse(reason);
-            if (!reasonValidation.success) {
-                return {
-                    valid: false,
-                    error: 'Invalid ban reason'
-                };
-            }
+            const dur = banDurationSchema.safeParse(hours);
+            if (!dur.success) return {
+                valid: false,
+                error: 'Invalid ban duration (max 1 year)'
+            };
+            const reasonOk = banReasonSchema.safeParse(reason);
+            if (!reasonOk.success) return {
+                valid: false,
+                error: 'Invalid ban reason'
+            };
             return {
                 valid: true
             };
         }
     }["BanProvider.useCallback[validateBanInput]"], []);
-    // Add to ban history
+    // ---------- History helper ----------
     const addBanHistory = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[addBanHistory]": (action, username, details, adminUsername, metadata)=>{
             const historyEntry = {
-                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                id: Date.now().toString() + Math.random().toString(36).slice(2, 11),
                 username: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username,
                 action,
                 details: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(details),
@@ -1450,106 +1460,167 @@ const BanProvider = (param)=>{
             }["BanProvider.useCallback[addBanHistory]"]);
         }
     }["BanProvider.useCallback[addBanHistory]"], []);
-    // Schedule automatic expiration
-    const scheduleExpiration = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "BanProvider.useCallback[scheduleExpiration]": (ban)=>{
-            if (ban.banType === 'permanent' || !ban.endTime || !ban.active) return;
-            const timeUntilExpiry = new Date(ban.endTime).getTime() - Date.now();
-            if (timeUntilExpiry > 0) {
-                console.log("[BanContext] Scheduling expiration for ".concat(ban.username, " in ").concat(Math.round(timeUntilExpiry / 1000 / 60), " minutes"));
-                const timer = setTimeout({
-                    "BanProvider.useCallback[scheduleExpiration].timer": ()=>{
-                        console.log("[BanContext] Auto-expiring ban for ".concat(ban.username));
-                        unbanUser(ban.username, 'system', 'Automatic expiration');
-                        // Dispatch event for UI updates
-                        if ("TURBOPACK compile-time truthy", 1) {
-                            window.dispatchEvent(new CustomEvent('banExpired', {
-                                detail: {
-                                    banId: ban.id,
-                                    username: ban.username
-                                }
-                            }));
-                        }
-                        // Clean up timer reference
-                        activeTimers.current.delete(ban.id);
-                    }
-                }["BanProvider.useCallback[scheduleExpiration].timer"], timeUntilExpiry);
-                // Store timer reference
-                activeTimers.current.set(ban.id, timer);
-            }
-        }
-    }["BanProvider.useCallback[scheduleExpiration]"], []);
-    // Clear expiration timer
+    // ---------- Unban first (used by scheduler) ----------
     const clearExpirationTimer = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[clearExpirationTimer]": (banId)=>{
-            const timer = activeTimers.current.get(banId);
-            if (timer) {
-                clearTimeout(timer);
+            const t = activeTimers.current.get(banId);
+            if (t) {
+                clearTimeout(t);
                 activeTimers.current.delete(banId);
             }
         }
     }["BanProvider.useCallback[clearExpirationTimer]"], []);
-    // Enhanced ban user function with MongoDB integration
+    const unbanUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
+        "BanProvider.useCallback[unbanUser]": async (username, adminUsername, reason)=>{
+            // Admin-only
+            if (!canAdminAct('unban')) {
+                console.warn('[BanContext] Unban blocked: admin privileges required');
+                return false;
+            }
+            try {
+                const cleanUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username;
+                const cleanAdmin = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(adminUsername || (user === null || user === void 0 ? void 0 : user.username) || 'system');
+                const cleanReason = reason ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(reason) : 'Ban lifted by admin';
+                const banToUnban = bans.find({
+                    "BanProvider.useCallback[unbanUser].banToUnban": (b)=>b.username === cleanUsername && b.active
+                }["BanProvider.useCallback[unbanUser].banToUnban"]);
+                if (!banToUnban) {
+                    console.warn('[BanContext] No active ban found for', cleanUsername);
+                    return false;
+                }
+                // stop any scheduled expiration
+                clearExpirationTimer(banToUnban.id);
+                const updated = bans.map({
+                    "BanProvider.useCallback[unbanUser].updated": (b)=>b.id === banToUnban.id ? {
+                            ...b,
+                            active: false
+                        } : b
+                }["BanProvider.useCallback[unbanUser].updated"]);
+                // Persist first to avoid race
+                isSavingRef.current = true;
+                await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(STORAGE_KEYS.BANS, updated);
+                isSavingRef.current = false;
+                setBans(updated);
+                addBanHistory('unbanned', cleanUsername, cleanReason, cleanAdmin);
+                // UI event
+                if ("TURBOPACK compile-time truthy", 1) {
+                    window.dispatchEvent(new CustomEvent('banUpdated', {
+                        detail: {
+                            banId: banToUnban.id,
+                            username: cleanUsername,
+                            action: 'unbanned'
+                        }
+                    }));
+                }
+                console.log('[BanContext] User unbanned:', cleanUsername);
+                return true;
+            } catch (err) {
+                console.error('[BanContext] Error unbanning user:', err);
+                isSavingRef.current = false;
+                return false;
+            }
+        }
+    }["BanProvider.useCallback[unbanUser]"], [
+        bans,
+        addBanHistory,
+        clearExpirationTimer,
+        canAdminAct,
+        user === null || user === void 0 ? void 0 : user.username
+    ]);
+    // ---------- Scheduler ----------
+    const scheduleExpiration = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
+        "BanProvider.useCallback[scheduleExpiration]": (ban)=>{
+            if (ban.banType === 'permanent' || !ban.endTime || !ban.active) return;
+            const ms = new Date(ban.endTime).getTime() - Date.now();
+            if (ms <= 0) return;
+            console.log("[BanContext] Scheduling expiration for ".concat(ban.username, " in ~").concat(Math.round(ms / 60000), " minutes"));
+            const t = setTimeout({
+                "BanProvider.useCallback[scheduleExpiration].t": async ()=>{
+                    console.log("[BanContext] Auto-expiring ban for ".concat(ban.username));
+                    await unbanUser(ban.username, 'system', 'Automatic expiration');
+                    if ("TURBOPACK compile-time truthy", 1) {
+                        window.dispatchEvent(new CustomEvent('banExpired', {
+                            detail: {
+                                banId: ban.id,
+                                username: ban.username
+                            }
+                        }));
+                    }
+                    activeTimers.current.delete(ban.id);
+                }
+            }["BanProvider.useCallback[scheduleExpiration].t"], ms);
+            activeTimers.current.set(ban.id, t);
+        }
+    }["BanProvider.useCallback[scheduleExpiration]"], [
+        unbanUser
+    ]);
+    // ---------- Ban user ----------
     const banUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "BanProvider.useCallback[banUser]": async function(username, hours, reason, customReason) {
-            let adminUsername = arguments.length > 4 && arguments[4] !== void 0 ? arguments[4] : 'system', reportIds = arguments.length > 5 && arguments[5] !== void 0 ? arguments[5] : [], notes = arguments.length > 6 ? arguments[6] : void 0, targetUserRole = arguments.length > 7 ? arguments[7] : void 0;
+        "BanProvider.useCallback[banUser]": async function(username, hours, reason, customReason, adminUsername) {
+            let reportIds = arguments.length > 5 && arguments[5] !== void 0 ? arguments[5] : [], notes = arguments.length > 6 ? arguments[6] : void 0, targetUserRole = arguments.length > 7 ? arguments[7] : void 0;
+            // Admin-only
+            if (!canAdminAct('ban')) {
+                console.warn('[BanContext] Ban blocked: admin privileges required');
+                if ("TURBOPACK compile-time truthy", 1) {
+                    alert('Only admins can ban users.');
+                }
+                return false;
+            }
             console.log('[BanContext] Attempting to ban user:', {
                 username,
                 hours,
                 reason,
                 targetUserRole
             });
-            // Validate input
             const validation = await validateBanInput(username, hours, reason, targetUserRole);
             if (!validation.valid) {
                 console.error('[BanContext] Ban validation failed:', validation.error);
                 if (validation.error === 'Admin accounts cannot be banned' || validation.error === 'This account is protected and cannot be banned') {
-                    // Show user-friendly error
-                    if ("TURBOPACK compile-time truthy", 1) {
-                        alert(validation.error);
-                    }
+                    if ("TURBOPACK compile-time truthy", 1) alert(validation.error);
                 }
                 return false;
             }
             // Sanitize inputs
             const cleanUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username;
-            const cleanCustomReason = customReason ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(customReason) : undefined;
-            const cleanAdminUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(adminUsername) || adminUsername;
+            const cleanAdmin = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(adminUsername || (user === null || user === void 0 ? void 0 : user.username) || 'system');
             const cleanNotes = notes ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(notes) : undefined;
-            // Validate optional fields
-            if (cleanCustomReason && cleanCustomReason.length < 5) {
-                console.error('[BanContext] Custom reason too short');
-                return false;
+            let cleanCustomReason;
+            if (customReason) {
+                const cr = customReasonSchema.safeParse(customReason);
+                if (!cr.success) {
+                    console.error('[BanContext] Custom reason too short/long');
+                    return false;
+                }
+                cleanCustomReason = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(cr.data);
             }
-            // Race condition protection
+            // Lock to avoid duplicate bans
             const lockKey = "ban_user_".concat(cleanUsername);
             const existingLock = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem(lockKey, null);
             if (existingLock) {
                 try {
-                    const lockData = existingLock;
-                    if (Date.now() - lockData.timestamp < 30000) {
-                        console.warn("[BanContext] Ban operation already in progress for ".concat(cleanUsername));
+                    const age = Date.now() - (existingLock.timestamp || 0);
+                    if (age < 30_000) {
+                        console.warn("[BanContext] Ban already in progress for ".concat(cleanUsername));
                         return false;
                     }
                 } catch (e) {
-                // Invalid lock data, proceed
+                // ignore bad lock
                 }
             }
-            // Set lock
             await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem(lockKey, {
                 timestamp: Date.now(),
-                adminUser: cleanAdminUsername
+                adminUser: cleanAdmin
             });
             try {
-                // Check if user is already banned
-                const existingBan = bans.find({
-                    "BanProvider.useCallback[banUser].existingBan": (ban)=>ban.username === cleanUsername && ban.active
-                }["BanProvider.useCallback[banUser].existingBan"]);
-                if (existingBan) {
-                    console.warn("[BanContext] User ".concat(cleanUsername, " is already banned"));
+                // Already banned?
+                const already = bans.find({
+                    "BanProvider.useCallback[banUser].already": (b)=>b.username === cleanUsername && b.active
+                }["BanProvider.useCallback[banUser].already"]);
+                if (already) {
+                    console.warn("[BanContext] ".concat(cleanUsername, " is already banned"));
                     return false;
                 }
-                // Try to save to MongoDB first
+                // Save to DB (best-effort)
                 const apiResponse = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$ban$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["banService"].createBan({
                     username: cleanUsername,
                     reason: cleanCustomReason || reason,
@@ -1557,16 +1628,14 @@ const BanProvider = (param)=>{
                     duration: hours,
                     notes: cleanNotes,
                     relatedReportIds: reportIds,
-                    bannedBy: cleanAdminUsername
+                    bannedBy: cleanAdmin
                 });
-                if (apiResponse.success) {
-                    console.log('[BanContext] Ban saved to MongoDB successfully');
-                } else {
-                    console.warn('[BanContext] MongoDB save failed, continuing with localStorage', apiResponse.error);
+                if (!apiResponse.success) {
+                    console.warn('[BanContext] MongoDB save failed; continuing with local cache', apiResponse.error);
                 }
-                // Always save to localStorage for immediate UI updates
                 const now = new Date();
-                const banId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+                const banId = Date.now().toString() + Math.random().toString(36).slice(2, 11);
+                const end = hours === 'permanent' ? undefined : new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
                 const newBan = {
                     id: banId,
                     username: cleanUsername,
@@ -1574,38 +1643,26 @@ const BanProvider = (param)=>{
                     reason,
                     customReason: cleanCustomReason,
                     startTime: now.toISOString(),
-                    endTime: hours === 'permanent' ? undefined : new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString(),
+                    endTime: end,
                     remainingHours: hours === 'permanent' ? undefined : hours,
-                    bannedBy: cleanAdminUsername,
+                    bannedBy: cleanAdmin,
                     active: true,
                     appealable: true,
                     notes: cleanNotes,
                     reportIds: reportIds,
                     appealStatus: undefined
                 };
-                console.log('[BanContext] Creating new ban:', newBan);
                 setBans({
-                    "BanProvider.useCallback[banUser]": (prev)=>{
-                        const updated = [
+                    "BanProvider.useCallback[banUser]": (prev)=>[
                             ...prev,
                             newBan
-                        ];
-                        console.log('[BanContext] Updated bans list:', {
-                            total: updated.length,
-                            active: updated.filter({
-                                "BanProvider.useCallback[banUser]": (b)=>b.active
-                            }["BanProvider.useCallback[banUser]"]).length
-                        });
-                        return updated;
-                    }
+                        ]
                 }["BanProvider.useCallback[banUser]"]);
-                // Schedule expiration if temporary
                 if (newBan.banType === 'temporary' && newBan.endTime) {
                     scheduleExpiration(newBan);
                 }
-                // Add to history
                 const durationText = hours === 'permanent' ? 'permanently' : "for ".concat(hours, " hours");
-                addBanHistory('banned', cleanUsername, "Banned ".concat(durationText, " for ").concat(reason).concat(cleanCustomReason ? ": ".concat(cleanCustomReason) : ''), cleanAdminUsername, {
+                addBanHistory('banned', cleanUsername, "Banned ".concat(durationText, " for ").concat(reason).concat(cleanCustomReason ? ": ".concat(cleanCustomReason) : ''), cleanAdmin, {
                     banId,
                     mongoSaved: apiResponse.success
                 });
@@ -1617,7 +1674,6 @@ const BanProvider = (param)=>{
                 console.error('[BanContext] Error banning user:', error);
                 return false;
             } finally{
-                // Always release lock
                 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].removeItem(lockKey);
             }
         }
@@ -1625,92 +1681,21 @@ const BanProvider = (param)=>{
         bans,
         addBanHistory,
         scheduleExpiration,
-        validateBanInput
+        validateBanInput,
+        canAdminAct,
+        user === null || user === void 0 ? void 0 : user.username
     ]);
-    // Enhanced unban function - now async to ensure proper persistence
-    const unbanUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "BanProvider.useCallback[unbanUser]": async function(username) {
-            let adminUsername = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 'system', reason = arguments.length > 2 ? arguments[2] : void 0;
-            try {
-                const cleanUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username;
-                const cleanAdminUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(adminUsername) || adminUsername;
-                const cleanReason = reason ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(reason) : undefined;
-                console.log('[BanContext] Unbanning user:', {
-                    username: cleanUsername,
-                    admin: cleanAdminUsername
-                });
-                // Find the ban to unban
-                const banToUnban = bans.find({
-                    "BanProvider.useCallback[unbanUser].banToUnban": (ban)=>ban.username === cleanUsername && ban.active
-                }["BanProvider.useCallback[unbanUser].banToUnban"]);
-                if (!banToUnban) {
-                    console.warn('[BanContext] No active ban found for user:', cleanUsername);
-                    return false;
-                }
-                // Clear any active timer first
-                clearExpirationTimer(banToUnban.id);
-                // Update the ban to set active to false
-                const updatedBans = bans.map({
-                    "BanProvider.useCallback[unbanUser].updatedBans": (ban)=>{
-                        if (ban.id === banToUnban.id) {
-                            return {
-                                ...ban,
-                                active: false
-                            };
-                        }
-                        return ban;
-                    }
-                }["BanProvider.useCallback[unbanUser].updatedBans"]);
-                // Save to storage BEFORE updating state to ensure persistence
-                isSavingRef.current = true;
-                await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_user_bans', updatedBans);
-                // Now update state
-                setBans(updatedBans);
-                // Add to history
-                addBanHistory('unbanned', cleanUsername, cleanReason || 'Ban lifted by admin', cleanAdminUsername);
-                // Save history
-                const updatedHistory = [
-                    ...banHistory,
-                    {
-                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                        username: cleanUsername,
-                        action: 'unbanned',
-                        details: cleanReason || 'Ban lifted by admin',
-                        timestamp: new Date().toISOString(),
-                        adminUsername: cleanAdminUsername,
-                        metadata: {}
-                    }
-                ];
-                await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('panty_ban_history', updatedHistory);
-                isSavingRef.current = false;
-                console.log('[BanContext] User unbanned successfully');
-                // Dispatch event for UI updates
-                if ("TURBOPACK compile-time truthy", 1) {
-                    window.dispatchEvent(new CustomEvent('banUpdated', {
-                        detail: {
-                            banId: banToUnban.id,
-                            username: cleanUsername,
-                            action: 'unbanned'
-                        }
-                    }));
-                }
-                return true;
-            } catch (error) {
-                console.error('[BanContext] Error unbanning user:', error);
-                isSavingRef.current = false;
-                return false;
-            }
-        }
-    }["BanProvider.useCallback[unbanUser]"], [
-        bans,
-        banHistory,
-        addBanHistory,
-        clearExpirationTimer
-    ]);
-    // Enhanced appeal submission with evidence
+    // ---------- Appeals ----------
     const submitAppeal = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[submitAppeal]": async (username, appealText, evidence)=>{
             try {
+                // Allow the banned user themselves OR an admin acting on their behalf
+                const requester = user === null || user === void 0 ? void 0 : user.username;
+                const isSelf = requester && (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(requester) === (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username);
+                if (!isSelf && !canAdminAct('submitAppeal')) {
+                    console.warn('[BanContext] Appeal submission blocked: not the user or admin');
+                    return false;
+                }
                 const cleanUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username;
                 const appealValidation = appealTextSchema.safeParse(appealText);
                 if (!appealValidation.success) {
@@ -1719,16 +1704,15 @@ const BanProvider = (param)=>{
                 }
                 const cleanAppealText = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(appealValidation.data);
                 let appealEvidence = [];
-                // Process evidence files
                 if (evidence && evidence.length > 0) {
                     try {
-                        appealEvidence = await Promise.all(evidence.slice(0, 3).map({
-                            "BanProvider.useCallback[submitAppeal]": (file)=>compressImage(file)
-                        }["BanProvider.useCallback[submitAppeal]"]) // Max 3 files
-                        );
-                    } catch (error) {
-                        console.error('Error processing appeal evidence:', error);
-                    // Continue without evidence if processing fails
+                        // Only first 3 images
+                        const trimmed = evidence.slice(0, 3);
+                        appealEvidence = await Promise.all(trimmed.map({
+                            "BanProvider.useCallback[submitAppeal]": (f)=>compressImage(f)
+                        }["BanProvider.useCallback[submitAppeal]"]));
+                    } catch (err) {
+                        console.error('[BanContext] Evidence processing failed:', err);
                     }
                 }
                 setBans({
@@ -1747,28 +1731,34 @@ const BanProvider = (param)=>{
                     evidenceCount: appealEvidence.length
                 });
                 return true;
-            } catch (error) {
-                console.error('Error submitting appeal:', error);
+            } catch (err) {
+                console.error('[BanContext] Error submitting appeal:', err);
                 return false;
             }
         }
     }["BanProvider.useCallback[submitAppeal]"], [
-        addBanHistory
+        addBanHistory,
+        canAdminAct,
+        user === null || user === void 0 ? void 0 : user.username
     ]);
-    // Enhanced appeal review system
     const reviewAppeal = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[reviewAppeal]": (banId, decision, reviewNotes, adminUsername)=>{
+            // Admin-only
+            if (!canAdminAct('reviewAppeal')) {
+                console.warn('[BanContext] Review appeal blocked: admin privileges required');
+                return false;
+            }
             try {
-                const cleanReviewNotes = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(reviewNotes);
-                const cleanAdminUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(adminUsername) || adminUsername;
+                const cleanNotes = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(reviewNotes);
+                const cleanAdmin = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(adminUsername || (user === null || user === void 0 ? void 0 : user.username) || 'system');
                 const review = {
-                    reviewId: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                    reviewId: Date.now().toString() + Math.random().toString(36).slice(2, 11),
                     banId,
-                    reviewerAdmin: cleanAdminUsername,
-                    reviewNotes: cleanReviewNotes,
+                    reviewerAdmin: cleanAdmin,
+                    reviewNotes: cleanNotes,
                     decision,
                     reviewDate: new Date().toISOString(),
-                    escalationReason: decision === 'escalate' ? cleanReviewNotes : undefined
+                    escalationReason: decision === 'escalate' ? cleanNotes : undefined
                 };
                 setAppealReviews({
                     "BanProvider.useCallback[reviewAppeal]": (prev)=>[
@@ -1780,25 +1770,24 @@ const BanProvider = (param)=>{
                     "BanProvider.useCallback[reviewAppeal].ban": (b)=>b.id === banId
                 }["BanProvider.useCallback[reviewAppeal].ban"]);
                 if (!ban) return false;
-                if (decision === 'approve') {
-                    return approveAppeal(banId, cleanAdminUsername);
-                } else if (decision === 'reject') {
-                    return rejectAppeal(banId, cleanAdminUsername, cleanReviewNotes);
-                } else if (decision === 'escalate') {
-                    return escalateAppeal(banId, cleanAdminUsername, cleanReviewNotes);
-                }
+                if (decision === 'approve') return approveAppeal(banId, cleanAdmin);
+                if (decision === 'reject') return rejectAppeal(banId, cleanAdmin, cleanNotes);
+                if (decision === 'escalate') return escalateAppeal(banId, cleanAdmin, cleanNotes);
                 return true;
-            } catch (error) {
-                console.error('Error reviewing appeal:', error);
+            } catch (err) {
+                console.error('[BanContext] Error reviewing appeal:', err);
                 return false;
             }
         }
     }["BanProvider.useCallback[reviewAppeal]"], [
-        bans
+        bans,
+        canAdminAct,
+        user === null || user === void 0 ? void 0 : user.username
     ]);
-    // Approve appeal
     const approveAppeal = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[approveAppeal]": (banId, adminUsername)=>{
+            // Admin-only
+            if (!canAdminAct('approveAppeal')) return false;
             try {
                 const ban = bans.find({
                     "BanProvider.useCallback[approveAppeal].ban": (b)=>b.id === banId
@@ -1813,23 +1802,24 @@ const BanProvider = (param)=>{
                                 } : b
                         }["BanProvider.useCallback[approveAppeal]"])
                 }["BanProvider.useCallback[approveAppeal]"]);
-                // Clear any active timer
                 clearExpirationTimer(banId);
                 addBanHistory('appeal_approved', ban.username, 'Appeal approved and ban lifted', adminUsername);
                 return true;
-            } catch (error) {
-                console.error('Error approving appeal:', error);
+            } catch (err) {
+                console.error('[BanContext] Error approving appeal:', err);
                 return false;
             }
         }
     }["BanProvider.useCallback[approveAppeal]"], [
         bans,
         addBanHistory,
-        clearExpirationTimer
+        clearExpirationTimer,
+        canAdminAct
     ]);
-    // Reject appeal
     const rejectAppeal = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[rejectAppeal]": (banId, adminUsername, reason)=>{
+            // Admin-only
+            if (!canAdminAct('rejectAppeal')) return false;
             try {
                 const ban = bans.find({
                     "BanProvider.useCallback[rejectAppeal].ban": (b)=>b.id === banId
@@ -1848,18 +1838,20 @@ const BanProvider = (param)=>{
                 }["BanProvider.useCallback[rejectAppeal]"]);
                 addBanHistory('appeal_rejected', ban.username, reason || 'Appeal rejected', adminUsername);
                 return true;
-            } catch (error) {
-                console.error('Error rejecting appeal:', error);
+            } catch (err) {
+                console.error('[BanContext] Error rejecting appeal:', err);
                 return false;
             }
         }
     }["BanProvider.useCallback[rejectAppeal]"], [
         bans,
-        addBanHistory
+        addBanHistory,
+        canAdminAct
     ]);
-    // Escalate appeal
     const escalateAppeal = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[escalateAppeal]": (banId, adminUsername, escalationReason)=>{
+            // Admin-only
+            if (!canAdminAct('escalateAppeal')) return false;
             try {
                 const ban = bans.find({
                     "BanProvider.useCallback[escalateAppeal].ban": (b)=>b.id === banId
@@ -1873,20 +1865,26 @@ const BanProvider = (param)=>{
                                 } : b
                         }["BanProvider.useCallback[escalateAppeal]"])
                 }["BanProvider.useCallback[escalateAppeal]"]);
-                addBanHistory('appeal_escalated', ban.username, "Appeal escalated: ".concat(escalationReason), adminUsername);
+                addBanHistory('appeal_escalated', ban.username, "Appeal escalated: ".concat((0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeStrict"])(escalationReason)), adminUsername);
                 return true;
-            } catch (error) {
-                console.error('Error escalating appeal:', error);
+            } catch (err) {
+                console.error('[BanContext] Error escalating appeal:', err);
                 return false;
             }
         }
     }["BanProvider.useCallback[escalateAppeal]"], [
         bans,
-        addBanHistory
+        addBanHistory,
+        canAdminAct
     ]);
-    // IP ban functionality
+    // ---------- IP banning ----------
     const banUserIP = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[banUserIP]": (username, ipAddress, reason)=>{
+            // Admin-only
+            if (!canAdminAct('banUserIP')) {
+                console.warn('[BanContext] IP ban blocked: admin privileges required');
+                return false;
+            }
             try {
                 const cleanUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username;
                 const ipValidation = ipAddressSchema.safeParse(ipAddress);
@@ -1907,19 +1905,19 @@ const BanProvider = (param)=>{
                 setIPBans({
                     "BanProvider.useCallback[banUserIP]": (prev)=>{
                         const existing = prev.find({
-                            "BanProvider.useCallback[banUserIP].existing": (ban)=>ban.ipAddress === ipValidation.data
+                            "BanProvider.useCallback[banUserIP].existing": (b)=>b.ipAddress === ipValidation.data
                         }["BanProvider.useCallback[banUserIP].existing"]);
                         if (existing) {
                             return prev.map({
-                                "BanProvider.useCallback[banUserIP]": (ban)=>ban.ipAddress === ipValidation.data ? {
-                                        ...ban,
+                                "BanProvider.useCallback[banUserIP]": (b)=>b.ipAddress === ipValidation.data ? {
+                                        ...b,
                                         bannedUsernames: [
                                             ...new Set([
-                                                ...ban.bannedUsernames,
+                                                ...b.bannedUsernames,
                                                 cleanUsername
                                             ])
                                         ]
-                                    } : ban
+                                    } : b
                             }["BanProvider.useCallback[banUserIP]"]);
                         }
                         return [
@@ -1929,13 +1927,14 @@ const BanProvider = (param)=>{
                     }
                 }["BanProvider.useCallback[banUserIP]"]);
                 return true;
-            } catch (error) {
-                console.error('Error banning IP:', error);
+            } catch (err) {
+                console.error('[BanContext] Error banning IP:', err);
                 return false;
             }
         }
-    }["BanProvider.useCallback[banUserIP]"], []);
-    // Check if IP is banned
+    }["BanProvider.useCallback[banUserIP]"], [
+        canAdminAct
+    ]);
     const isIPBanned = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[isIPBanned]": (ipAddress)=>{
             const now = new Date();
@@ -1946,26 +1945,24 @@ const BanProvider = (param)=>{
     }["BanProvider.useCallback[isIPBanned]"], [
         ipBans
     ]);
-    // Check if user is banned (with real-time expiration check)
+    // ---------- Queries ----------
     const isUserBanned = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[isUserBanned]": (username)=>{
+            const cleanUsername = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username) || username;
             const activeBan = bans.find({
-                "BanProvider.useCallback[isUserBanned].activeBan": (ban)=>ban.username === username && ban.active
+                "BanProvider.useCallback[isUserBanned].activeBan": (b)=>b.username === cleanUsername && b.active
             }["BanProvider.useCallback[isUserBanned].activeBan"]);
             if (!activeBan) return null;
-            // Check if temporary ban has expired
             if (activeBan.banType === 'temporary' && activeBan.endTime) {
                 const now = new Date();
-                const endTime = new Date(activeBan.endTime);
-                if (now >= endTime) {
-                    // Ban has expired, automatically unban
-                    unbanUser(username, 'system', 'Temporary ban expired');
+                const end = new Date(activeBan.endTime);
+                if (now >= end) {
+                    // Auto unban expired
+                    unbanUser(cleanUsername, 'system', 'Temporary ban expired');
                     return null;
                 }
-                // Update remaining hours
-                const remainingMs = endTime.getTime() - now.getTime();
-                const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
-                activeBan.remainingHours = Math.max(0, remainingHours);
+                const remainingMs = end.getTime() - now.getTime();
+                activeBan.remainingHours = Math.max(0, Math.ceil(remainingMs / 3_600_000));
             }
             return activeBan;
         }
@@ -1973,7 +1970,6 @@ const BanProvider = (param)=>{
         bans,
         unbanUser
     ]);
-    // Get ban info (same as isUserBanned but clearer name)
     const getBanInfo = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[getBanInfo]": (username)=>{
             return isUserBanned(username);
@@ -1981,95 +1977,82 @@ const BanProvider = (param)=>{
     }["BanProvider.useCallback[getBanInfo]"], [
         isUserBanned
     ]);
-    // Get active bans
     const getActiveBans = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[getActiveBans]": ()=>{
-            const activeBans = bans.filter({
-                "BanProvider.useCallback[getActiveBans].activeBans": (ban)=>ban.active
-            }["BanProvider.useCallback[getActiveBans].activeBans"]).map({
-                "BanProvider.useCallback[getActiveBans].activeBans": (ban)=>{
-                    // Update remaining hours for temporary bans
-                    if (ban.banType === 'temporary' && ban.endTime) {
+            const active = bans.filter({
+                "BanProvider.useCallback[getActiveBans].active": (b)=>b.active
+            }["BanProvider.useCallback[getActiveBans].active"]).map({
+                "BanProvider.useCallback[getActiveBans].active": (b)=>{
+                    if (b.banType === 'temporary' && b.endTime) {
                         const now = new Date();
-                        const endTime = new Date(ban.endTime);
-                        const remainingMs = endTime.getTime() - now.getTime();
-                        const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
-                        ban.remainingHours = Math.max(0, remainingHours);
+                        const end = new Date(b.endTime);
+                        const remainingMs = end.getTime() - now.getTime();
+                        b.remainingHours = Math.max(0, Math.ceil(remainingMs / 3_600_000));
                     }
-                    return ban;
+                    return b;
                 }
-            }["BanProvider.useCallback[getActiveBans].activeBans"]);
+            }["BanProvider.useCallback[getActiveBans].active"]);
             console.log('[BanContext] Getting active bans:', {
                 total: bans.length,
-                active: activeBans.length,
-                usernames: activeBans.map({
+                active: active.length,
+                usernames: active.map({
                     "BanProvider.useCallback[getActiveBans]": (b)=>b.username
                 }["BanProvider.useCallback[getActiveBans]"])
             });
-            return activeBans;
+            return active;
         }
     }["BanProvider.useCallback[getActiveBans]"], [
         bans
     ]);
-    // Get expired bans
     const getExpiredBans = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[getExpiredBans]": ()=>{
             return bans.filter({
-                "BanProvider.useCallback[getExpiredBans]": (ban)=>!ban.active
+                "BanProvider.useCallback[getExpiredBans]": (b)=>!b.active
             }["BanProvider.useCallback[getExpiredBans]"]);
         }
     }["BanProvider.useCallback[getExpiredBans]"], [
         bans
     ]);
-    // Get user's ban history
     const getUserBanHistory = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "BanProvider.useCallback[getUserBanHistory]": (username)=>{
-            return bans.filter({
-                "BanProvider.useCallback[getUserBanHistory]": (ban)=>ban.username === username
-            }["BanProvider.useCallback[getUserBanHistory]"]);
-        }
+        "BanProvider.useCallback[getUserBanHistory]": (username)=>bans.filter({
+                "BanProvider.useCallback[getUserBanHistory]": (b)=>b.username === username
+            }["BanProvider.useCallback[getUserBanHistory]"])
     }["BanProvider.useCallback[getUserBanHistory]"], [
         bans
     ]);
-    // Update expired bans
     const updateExpiredBans = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[updateExpiredBans]": ()=>{
             const now = new Date();
-            let hasChanges = false;
+            let changed = false;
             setBans({
                 "BanProvider.useCallback[updateExpiredBans]": (prev)=>prev.map({
-                        "BanProvider.useCallback[updateExpiredBans]": (ban)=>{
-                            if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-                                const endTime = new Date(ban.endTime);
-                                if (now >= endTime) {
-                                    clearExpirationTimer(ban.id);
-                                    hasChanges = true;
-                                    addBanHistory('unbanned', ban.username, 'Temporary ban expired automatically', 'system');
+                        "BanProvider.useCallback[updateExpiredBans]": (b)=>{
+                            if (b.active && b.banType === 'temporary' && b.endTime) {
+                                if (now >= new Date(b.endTime)) {
+                                    clearExpirationTimer(b.id);
+                                    changed = true;
+                                    addBanHistory('unbanned', b.username, 'Temporary ban expired automatically', 'system');
                                     return {
-                                        ...ban,
+                                        ...b,
                                         active: false
                                     };
                                 }
                             }
-                            return ban;
+                            return b;
                         }
                     }["BanProvider.useCallback[updateExpiredBans]"])
             }["BanProvider.useCallback[updateExpiredBans]"]);
-            if (hasChanges) {
-                console.log('[BanContext] Expired bans updated');
-            }
+            if (changed) console.log('[BanContext] Expired bans updated');
         }
     }["BanProvider.useCallback[updateExpiredBans]"], [
         addBanHistory,
         clearExpirationTimer
     ]);
-    // Get comprehensive ban statistics
     const getBanStats = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "BanProvider.useCallback[getBanStats]": ()=>{
-            const activeBans = getActiveBans();
+            const active = getActiveBans();
             const now = new Date();
-            const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            // Count bans by reason
+            const hours24Ago = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             const bansByReason = {
                 harassment: 0,
                 spam: 0,
@@ -2079,40 +2062,39 @@ const BanProvider = (param)=>{
                 payment_fraud: 0,
                 other: 0
             };
-            activeBans.forEach({
-                "BanProvider.useCallback[getBanStats]": (ban)=>{
-                    bansByReason[ban.reason]++;
+            active.forEach({
+                "BanProvider.useCallback[getBanStats]": (b)=>{
+                    bansByReason[b.reason]++;
                 }
             }["BanProvider.useCallback[getBanStats]"]);
-            // Appeal statistics
             const allAppeals = bans.filter({
-                "BanProvider.useCallback[getBanStats].allAppeals": (ban)=>ban.appealSubmitted
+                "BanProvider.useCallback[getBanStats].allAppeals": (b)=>b.appealSubmitted
             }["BanProvider.useCallback[getBanStats].allAppeals"]);
             const appealStats = {
                 totalAppeals: allAppeals.length,
                 pendingAppeals: allAppeals.filter({
-                    "BanProvider.useCallback[getBanStats]": (ban)=>ban.appealStatus === 'pending'
+                    "BanProvider.useCallback[getBanStats]": (b)=>b.appealStatus === 'pending'
                 }["BanProvider.useCallback[getBanStats]"]).length,
                 approvedAppeals: banHistory.filter({
-                    "BanProvider.useCallback[getBanStats]": (entry)=>entry.action === 'appeal_approved'
+                    "BanProvider.useCallback[getBanStats]": (h)=>h.action === 'appeal_approved'
                 }["BanProvider.useCallback[getBanStats]"]).length,
                 rejectedAppeals: banHistory.filter({
-                    "BanProvider.useCallback[getBanStats]": (entry)=>entry.action === 'appeal_rejected'
+                    "BanProvider.useCallback[getBanStats]": (h)=>h.action === 'appeal_rejected'
                 }["BanProvider.useCallback[getBanStats]"]).length
             };
             const stats = {
-                totalActiveBans: activeBans.length,
-                temporaryBans: activeBans.filter({
-                    "BanProvider.useCallback[getBanStats]": (ban)=>ban.banType === 'temporary'
+                totalActiveBans: active.length,
+                temporaryBans: active.filter({
+                    "BanProvider.useCallback[getBanStats]": (b)=>b.banType === 'temporary'
                 }["BanProvider.useCallback[getBanStats]"]).length,
-                permanentBans: activeBans.filter({
-                    "BanProvider.useCallback[getBanStats]": (ban)=>ban.banType === 'permanent'
+                permanentBans: active.filter({
+                    "BanProvider.useCallback[getBanStats]": (b)=>b.banType === 'permanent'
                 }["BanProvider.useCallback[getBanStats]"]).length,
-                pendingAppeals: activeBans.filter({
-                    "BanProvider.useCallback[getBanStats]": (ban)=>ban.appealSubmitted && ban.appealStatus === 'pending'
+                pendingAppeals: active.filter({
+                    "BanProvider.useCallback[getBanStats]": (b)=>b.appealSubmitted && b.appealStatus === 'pending'
                 }["BanProvider.useCallback[getBanStats]"]).length,
                 recentBans24h: bans.filter({
-                    "BanProvider.useCallback[getBanStats]": (ban)=>new Date(ban.startTime) >= twentyFourHoursAgo
+                    "BanProvider.useCallback[getBanStats]": (b)=>new Date(b.startTime) >= hours24Ago
                 }["BanProvider.useCallback[getBanStats]"]).length,
                 bansByReason,
                 appealStats
@@ -2155,21 +2137,25 @@ const BanProvider = (param)=>{
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/BanContext.tsx",
-        lineNumber: 1030,
+        lineNumber: 1161,
         columnNumber: 5
     }, ("TURBOPACK compile-time value", void 0));
 };
-_s(BanProvider, "WnchSP6LTk0ULnqUThYQAO14+mA=");
+_s(BanProvider, "iBFImX4DRJ2hMofSNmnnbYZaE+Y=", false, function() {
+    return [
+        __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAuth"]
+    ];
+});
 _c = BanProvider;
 const useBans = ()=>{
     _s1();
-    const context = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useContext"])(BanContext);
-    if (!context) {
+    const ctx = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useContext"])(BanContext);
+    if (!ctx) {
         throw new Error('useBans must be used within a BanProvider');
     }
-    return context;
+    return ctx;
 };
-_s1(useBans, "b9L3QQ+jgeyIrH0NfHrJ8nn7VMU=");
+_s1(useBans, "/dMy7t63NXD4eYACoT93CePwGrg=");
 var _c;
 __turbopack_context__.k.register(_c, "BanProvider");
 if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelpers !== null) {
