@@ -267,7 +267,7 @@ class ApiClient {
 // ==================== AUTH CONTEXT ====================
 const AuthContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["createContext"])(undefined);
 // Get API base URL from environment config
-const API_BASE_URL = (__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === null || __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === void 0 ? void 0 : __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"].baseUrl) || ("TURBOPACK compile-time value", "http://localhost:5000/api") || 'http://localhost:5000';
+const API_BASE_URL = (__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === null || __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"] === void 0 ? void 0 : __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["apiConfig"].baseUrl) || ("TURBOPACK compile-time value", "http://localhost:5000") || 'http://localhost:5000';
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {
     setTokens(tokens) {

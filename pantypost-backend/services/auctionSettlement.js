@@ -182,7 +182,8 @@ class AuctionSettlementService {
         updatedListing.isActive = false;
         await updatedListing.save();
         
-        // Refund highest bidder
+        // CRITICAL FIX: Only refund the final highest bidder, not all bidders
+        // All other bidders were already refunded when they were outbid
         await this.refundBidder(
           finalBidder,
           finalBidAmount,
@@ -190,7 +191,7 @@ class AuctionSettlementService {
           'Reserve price not met'
         );
         
-        // Notify seller and bidder
+        // Notify seller and final bidder
         await Notification.create({
           recipient: updatedListing.seller,
           type: 'auction_reserve_not_met',
@@ -529,8 +530,10 @@ class AuctionSettlementService {
     
     console.log(`[Auction] Notifications created for seller and winner`);
     
-    // Refund all other bidders
-    await this.refundLosingBidders(listing, winner);
+    // CRITICAL FIX: DO NOT REFUND OTHER BIDDERS HERE
+    // They were already refunded when they were outbid during the auction
+    // Only the winner's funds remain held, and they are now being used for the purchase
+    console.log(`[Auction] Skipping refund of losing bidders - they were already refunded when outbid`);
     
     // Emit WebSocket events with complete order data
     if (global.webSocketService) {
@@ -617,52 +620,14 @@ class AuctionSettlementService {
   }
   
   /**
-   * Refund losing bidders
+   * REMOVED: refundLosingBidders function
+   * This function was causing the double refund issue.
+   * Losing bidders are already refunded in real-time when they are outbid.
+   * We should NOT refund them again when the auction ends.
    */
-  static async refundLosingBidders(listing, winner) {
-    // Track unique bidders and their highest bids
-    const bidderHighestBids = new Map();
-    
-    // Go through all bids to find each bidder's highest bid
-    if (listing.auction.bids && listing.auction.bids.length > 0) {
-      for (const bid of listing.auction.bids) {
-        if (bid.bidder !== winner) {
-          const currentHighest = bidderHighestBids.get(bid.bidder) || 0;
-          if (bid.amount > currentHighest) {
-            bidderHighestBids.set(bid.bidder, bid.amount);
-          }
-        }
-      }
-    }
-    
-    // Process refunds for each losing bidder
-    for (const [bidder, highestBid] of bidderHighestBids) {
-      await this.refundBidder(
-        bidder,
-        highestBid,
-        listing._id,
-        `Outbid in auction: ${listing.title}`
-      );
-      
-      // Notify the losing bidder
-      await Notification.create({
-        recipient: bidder,
-        type: 'auction_lost',
-        title: 'Auction Ended',
-        message: `The auction for "${listing.title}" has ended. Your bid of $${highestBid} has been refunded.`,
-        metadata: { 
-          listingId: listing._id,
-          refundAmount: highestBid,
-          winningBid: listing.auction.currentBid || listing.auction.highestBid
-        }
-      });
-    }
-    
-    console.log(`[Auction] Refunded ${bidderHighestBids.size} losing bidders for auction: ${listing.title}`);
-  }
   
   /**
-   * Refund a single bidder
+   * Refund a single bidder (used for reserve not met, cancellation, etc.)
    */
   static async refundBidder(username, amount, listingId, reason) {
     try {
@@ -726,7 +691,7 @@ class AuctionSettlementService {
   }
   
   /**
-   * Cancel auction and refund all bidders
+   * Cancel auction and refund highest bidder only
    */
   static async cancelAuction(listingId, cancelledBy) {
     const listing = await Listing.findById(listingId);
@@ -739,7 +704,7 @@ class AuctionSettlementService {
       throw new Error('Auction is not active');
     }
     
-    // Refund highest bidder if there is one
+    // Refund only the highest bidder if there is one (others were already refunded when outbid)
     const bidAmount = listing.auction.highestBid || listing.auction.currentBid || 0;
     if (listing.auction.highestBidder && bidAmount > 0) {
       await this.refundBidder(

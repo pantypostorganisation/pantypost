@@ -355,8 +355,8 @@ const FEATURES = {
     USE_API_MESSAGES: ("TURBOPACK compile-time value", "true") !== 'false',
     USE_API_WALLET: ("TURBOPACK compile-time value", "true") !== 'false',
     USE_API_USERS: ("TURBOPACK compile-time value", "true") !== 'false',
-    USE_API_BANS: process.env.NEXT_PUBLIC_USE_API_BANS !== 'false',
-    USE_API_REPORTS: process.env.NEXT_PUBLIC_USE_API_REPORTS !== 'false',
+    USE_API_BANS: ("TURBOPACK compile-time value", "true") !== 'false',
+    USE_API_REPORTS: ("TURBOPACK compile-time value", "true") !== 'false',
     USE_MOCK_API: false
 };
 const API_ENDPOINTS = {
@@ -465,7 +465,7 @@ const API_ENDPOINTS = {
 };
 const REQUEST_CONFIG = {
     TIMEOUT: parseInt(("TURBOPACK compile-time value", "30000") || '30000'),
-    RETRY_ATTEMPTS: parseInt(process.env.NEXT_PUBLIC_API_RETRY_ATTEMPTS || '3'),
+    RETRY_ATTEMPTS: parseInt(("TURBOPACK compile-time value", "3") || '3'),
     RETRY_DELAY: 1000,
     MAX_REQUEST_SIZE: 5 * 1024 * 1024,
     MAX_URL_LENGTH: 2048,
@@ -6522,8 +6522,8 @@ class ListingsService {
             }
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('upload_preset', ("TURBOPACK compile-time value", "your_upload_preset") || '');
-            const response = await fetch(`https://api.cloudinary.com/v1_1/${("TURBOPACK compile-time value", "your_cloud_name")}/image/upload`, {
+            formData.append('upload_preset', ("TURBOPACK compile-time value", "pantypost_upload") || '');
+            const response = await fetch(`https://api.cloudinary.com/v1_1/${("TURBOPACK compile-time value", "ddanxxkwz")}/image/upload`, {
                 method: 'POST',
                 body: formData
             });
