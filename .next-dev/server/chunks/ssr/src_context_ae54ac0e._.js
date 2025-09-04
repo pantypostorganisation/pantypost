@@ -251,7 +251,7 @@ class ApiClient {
 // ==================== AUTH CONTEXT ====================
 const AuthContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["createContext"])(undefined);
 // Get API base URL from environment config
-const API_BASE_URL = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["apiConfig"]?.baseUrl || ("TURBOPACK compile-time value", "http://localhost:5000") || 'http://localhost:5000';
+const API_BASE_URL = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$config$2f$environment$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["apiConfig"]?.baseUrl || ("TURBOPACK compile-time value", "http://localhost:5000/api") || 'http://localhost:5000';
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {
     memoryTokens = null;
@@ -7066,7 +7066,6 @@ function LoadingButton({ isLoading, children, loadingText, className = '', ...pr
 "[project]/src/context/FavoritesContext.tsx [app-ssr] (ecmascript)": ((__turbopack_context__) => {
 "use strict";
 
-// src/context/FavoritesContext.tsx
 __turbopack_context__.s({
     "FavoritesProvider": ()=>FavoritesProvider,
     "useFavorites": ()=>useFavorites
@@ -7081,6 +7080,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$rate$2d$limiter$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/rate-limiter.ts [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i("[project]/src/services/api.config.ts [app-ssr] (ecmascript) <module evaluation>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/src/services/api.config.ts [app-ssr] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__ = __turbopack_context__.i("[project]/node_modules/zod/v3/external.js [app-ssr] (ecmascript) <export * as z>");
 'use client';
 ;
 ;
@@ -7090,18 +7090,89 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$co
 ;
 ;
 ;
+;
 const FavoritesContext = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["createContext"])(undefined);
+// ================ Validation Schemas ================
+// Very defensive; we only ensure minimal fields + types are correct.
+// URL validation for profilePicture is intentionally relaxed to avoid breaking existing data.
+const StoredFavoriteSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    sellerId: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    sellerUsername: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    addedAt: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    profilePicture: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    tier: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    isVerified: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].boolean().default(false)
+});
+const SellerInputSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+    id: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    username: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
+    profilePicture: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    tier: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+    isVerified: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].boolean()
+});
+// ================ Limits / Helpers ================
+const FAV_LIMIT = {
+    maxAttempts: 30,
+    windowMs: 60_000,
+    blockDuration: 60_000
+};
+function dedupeBySellerId(list) {
+    const seen = new Set();
+    const out = [];
+    for (const f of list){
+        if (!seen.has(f.sellerId)) {
+            seen.add(f.sellerId);
+            out.push(f);
+        }
+    }
+    return out;
+}
+/**
+ * Rate-limit wrapper that works whether limiter.check()
+ * throws on limit OR returns { allowed, waitTime }.
+ */ function checkRateLimitSafe(limiter, key, opts) {
+    try {
+        const res = limiter?.check?.(key, opts);
+        // If it returns an object
+        if (typeof res === 'object' && res !== null) {
+            if (res.allowed === false) {
+                // waitTime may be provided in seconds or ms; normalize to seconds
+                const waitSeconds = typeof res.waitTime === 'number' ? Math.max(1, Math.ceil(res.waitTime)) : undefined;
+                return {
+                    allowed: false,
+                    waitTime: waitSeconds
+                };
+            }
+            return {
+                allowed: true
+            };
+        }
+        // If no return (assume not limited)
+        return {
+            allowed: true
+        };
+    } catch (e) {
+        // If it throws on limit, try to extract wait time
+        const ms = e?.waitTimeMs ?? e?.retryAfterMs ?? (typeof e?.waitTime === 'number' && e.waitTime > 10 ? e.waitTime * 1000 : undefined);
+        const seconds = ms ? Math.max(1, Math.ceil(ms / 1000)) : undefined;
+        return {
+            allowed: false,
+            waitTime: seconds
+        };
+    }
+}
 function FavoritesProvider({ children }) {
     const { user } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useAuth"])();
     const [favorites, setFavorites] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])([]);
     const [loadingFavorites, setLoadingFavorites] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
     const [error, setError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(null);
-    const rateLimiter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$rate$2d$limiter$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["getRateLimiter"])();
-    // Storage key based on username
+    // Create limiter once; safe even under React strict mode
+    const rateLimiter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$rate$2d$limiter$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["getRateLimiter"])(), []);
+    // Storage key based on username (sanitized)
     const getStorageKey = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((username)=>{
         return `favorites_${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(username)}`;
     }, []);
-    // Load favorites from API or localStorage
+    // ------------- Load favorites (API or local) -------------
     const loadFavorites = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async ()=>{
         if (!user?.username) {
             setFavorites([]);
@@ -7113,29 +7184,63 @@ function FavoritesProvider({ children }) {
                 // Load from API
                 const response = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$favorites$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["favoritesService"].getFavorites(user.username);
                 if (response.success && response.data) {
-                    setFavorites(response.data);
-                    // Also save to localStorage for offline access
+                    // Validate + sanitize response
+                    const cleaned = (Array.isArray(response.data) ? response.data : []).map((f)=>{
+                        const parsed = StoredFavoriteSchema.safeParse(f);
+                        if (!parsed.success) return null;
+                        const v = parsed.data;
+                        return {
+                            sellerId: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.sellerId),
+                            sellerUsername: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(v.sellerUsername),
+                            addedAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.addedAt),
+                            profilePicture: v.profilePicture,
+                            tier: v.tier,
+                            isVerified: !!v.isVerified
+                        };
+                    }).filter(Boolean);
+                    const deduped = dedupeBySellerId(cleaned);
+                    setFavorites(deduped);
+                    // Cache for offline
                     const storageKey = getStorageKey(user.username);
-                    await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, response.data);
-                } else if (response.error) {
-                    setError(response.error.message);
-                    // Fallback to localStorage
+                    await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, deduped);
+                } else {
+                    // API error → fallback to local
+                    setError(response.error?.message || 'Failed to load favorites from server');
                     const storageKey = getStorageKey(user.username);
-                    const storedFavorites = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].getItem(storageKey, []);
-                    setFavorites(storedFavorites);
+                    const stored = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].getItem(storageKey, []);
+                    const validated = (Array.isArray(stored) ? stored : []).map((f)=>{
+                        const parsed = StoredFavoriteSchema.safeParse(f);
+                        if (!parsed.success) return null;
+                        const v = parsed.data;
+                        return {
+                            sellerId: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.sellerId),
+                            sellerUsername: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(v.sellerUsername),
+                            addedAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.addedAt),
+                            profilePicture: v.profilePicture,
+                            tier: v.tier,
+                            isVerified: !!v.isVerified
+                        };
+                    }).filter(Boolean);
+                    setFavorites(dedupeBySellerId(validated));
                 }
             } else {
-                // Load from localStorage only
+                // LocalStorage only
                 const storageKey = getStorageKey(user.username);
-                const storedFavorites = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].getItem(storageKey, []);
-                // Validate and sanitize loaded data
-                const validatedFavorites = storedFavorites.filter((fav)=>fav.sellerId && fav.sellerUsername && fav.addedAt).map((fav)=>({
-                        ...fav,
-                        sellerId: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(fav.sellerId),
-                        sellerUsername: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(fav.sellerUsername),
-                        addedAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(fav.addedAt)
-                    }));
-                setFavorites(validatedFavorites);
+                const stored = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].getItem(storageKey, []);
+                const validated = (Array.isArray(stored) ? stored : []).map((f)=>{
+                    const parsed = StoredFavoriteSchema.safeParse(f);
+                    if (!parsed.success) return null;
+                    const v = parsed.data;
+                    return {
+                        sellerId: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.sellerId),
+                        sellerUsername: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(v.sellerUsername),
+                        addedAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.addedAt),
+                        profilePicture: v.profilePicture,
+                        tier: v.tier,
+                        isVerified: !!v.isVerified
+                    };
+                }).filter(Boolean);
+                setFavorites(dedupeBySellerId(validated));
             }
         } catch (err) {
             console.error('Error loading favorites:', err);
@@ -7154,42 +7259,51 @@ function FavoritesProvider({ children }) {
     }, [
         loadFavorites
     ]);
-    // Check if seller is favorited
-    const isFavorited = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((sellerId)=>{
-        return favorites.some((fav)=>fav.sellerId === sellerId);
-    }, [
+    // ------------- Helpers -------------
+    const isFavorited = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((sellerId)=>favorites.some((fav)=>fav.sellerId === sellerId), [
         favorites
     ]);
-    // Toggle favorite status
+    // ------------- Toggle favorite -------------
     const toggleFavorite = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async (seller)=>{
         if (!user?.username) {
             setError('Please log in to add favorites');
             return false;
         }
-        // Rate limiting
-        const rateLimitResult = rateLimiter.check('FAVORITES_TOGGLE', {
-            maxAttempts: 30,
-            windowMs: 60 * 1000 // 30 toggles per minute
-        });
-        if (!rateLimitResult.allowed) {
-            setError(`Too many actions. Please wait ${rateLimitResult.waitTime} seconds.`);
+        // Validate & sanitize seller input
+        const parsed = SellerInputSchema.safeParse(seller);
+        if (!parsed.success) {
+            setError('Invalid seller data');
+            return false;
+        }
+        const cleanSeller = {
+            id: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(parsed.data.id),
+            username: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(parsed.data.username),
+            profilePicture: parsed.data.profilePicture,
+            tier: parsed.data.tier,
+            isVerified: !!parsed.data.isVerified
+        };
+        // Rate limiting (per-user key)
+        const rlKey = `favorites:toggle:${(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(user.username)}`;
+        const rl = checkRateLimitSafe(rateLimiter, rlKey, FAV_LIMIT);
+        if (!rl.allowed) {
+            const secs = rl.waitTime ?? Math.ceil(FAV_LIMIT.blockDuration / 1000);
+            setError(`Too many actions. Please wait ${secs} seconds.`);
             return false;
         }
         try {
             const storageKey = getStorageKey(user.username);
-            const currentFavorites = [
+            const current = [
                 ...favorites
             ];
-            const existingIndex = currentFavorites.findIndex((fav)=>fav.sellerId === seller.id);
+            const existingIndex = current.findIndex((f)=>f.sellerId === cleanSeller.id);
             if (__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$api$2e$config$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$locals$3e$__["FEATURES"].USE_API_USERS) {
-                // Use API
                 if (existingIndex >= 0) {
-                    // Remove from favorites via API
-                    const response = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$favorites$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["favoritesService"].removeFavorite(seller.id);
+                    // Remove via API
+                    const response = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$favorites$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["favoritesService"].removeFavorite(cleanSeller.id);
                     if (response.success) {
-                        const newFavorites = currentFavorites.filter((fav)=>fav.sellerId !== seller.id);
-                        setFavorites(newFavorites);
-                        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, newFavorites);
+                        const next = current.filter((f)=>f.sellerId !== cleanSeller.id);
+                        setFavorites(next);
+                        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, next);
                         setError(null);
                         return true;
                     } else {
@@ -7197,21 +7311,36 @@ function FavoritesProvider({ children }) {
                         return false;
                     }
                 } else {
-                    // Add to favorites via API
+                    // Add via API
                     const response = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$favorites$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["favoritesService"].addFavorite({
-                        sellerId: seller.id,
-                        sellerUsername: seller.username,
-                        profilePicture: seller.profilePicture,
-                        tier: seller.tier,
-                        isVerified: seller.isVerified
+                        sellerId: cleanSeller.id,
+                        sellerUsername: cleanSeller.username,
+                        profilePicture: cleanSeller.profilePicture,
+                        tier: cleanSeller.tier,
+                        isVerified: cleanSeller.isVerified
                     });
                     if (response.success && response.data) {
-                        const newFavorites = [
-                            ...currentFavorites,
-                            response.data
-                        ];
-                        setFavorites(newFavorites);
-                        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, newFavorites);
+                        // Validate API response item before storing
+                        const parsedItem = StoredFavoriteSchema.safeParse(response.data);
+                        if (!parsedItem.success) {
+                            setError('Invalid server response for favorite item');
+                            return false;
+                        }
+                        const v = parsedItem.data;
+                        const newFav = {
+                            sellerId: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.sellerId),
+                            sellerUsername: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(v.sellerUsername),
+                            addedAt: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(v.addedAt || new Date().toISOString()),
+                            profilePicture: v.profilePicture,
+                            tier: v.tier,
+                            isVerified: !!v.isVerified
+                        };
+                        const next = dedupeBySellerId([
+                            ...current,
+                            newFav
+                        ]);
+                        setFavorites(next);
+                        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, next);
                         setError(null);
                         return true;
                     } else {
@@ -7220,36 +7349,35 @@ function FavoritesProvider({ children }) {
                     }
                 }
             } else {
-                // LocalStorage only
-                let newFavorites;
+                // Local only
+                let next;
                 if (existingIndex >= 0) {
-                    // Remove from favorites
-                    newFavorites = currentFavorites.filter((fav)=>fav.sellerId !== seller.id);
+                    // Remove locally
+                    next = current.filter((f)=>f.sellerId !== cleanSeller.id);
                 } else {
-                    // Add to favorites
-                    const newFavorite = {
-                        sellerId: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(seller.id),
-                        sellerUsername: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeUsername"])(seller.username),
+                    // Add locally
+                    const newFav = {
+                        sellerId: cleanSeller.id,
+                        sellerUsername: cleanSeller.username,
                         addedAt: new Date().toISOString(),
-                        profilePicture: seller.profilePicture,
-                        tier: seller.tier,
-                        isVerified: seller.isVerified
+                        profilePicture: cleanSeller.profilePicture,
+                        tier: cleanSeller.tier,
+                        isVerified: cleanSeller.isVerified
                     };
-                    newFavorites = [
-                        ...currentFavorites,
-                        newFavorite
-                    ];
+                    next = dedupeBySellerId([
+                        ...current,
+                        newFav
+                    ]);
                 }
-                // Save to storage
-                const success = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, newFavorites);
-                if (success) {
-                    setFavorites(newFavorites);
-                    setError(null);
-                    return true;
-                } else {
+                const saved = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["storageService"].setItem(storageKey, next);
+                // Some storage services return void; treat undefined as success.
+                if (saved === false) {
                     setError('Failed to update favorites');
                     return false;
                 }
+                setFavorites(next);
+                setError(null);
+                return true;
             }
         } catch (err) {
             console.error('Error toggling favorite:', err);
@@ -7262,9 +7390,7 @@ function FavoritesProvider({ children }) {
         getStorageKey,
         rateLimiter
     ]);
-    const clearError = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
-        setError(null);
-    }, []);
+    const clearError = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>setError(null), []);
     const refreshFavorites = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(async ()=>{
         await loadFavorites();
     }, [
@@ -7285,8 +7411,8 @@ function FavoritesProvider({ children }) {
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/FavoritesContext.tsx",
-        lineNumber: 239,
-        columnNumber: 5
+        lineNumber: 388,
+        columnNumber: 10
     }, this);
 }
 function useFavorites() {

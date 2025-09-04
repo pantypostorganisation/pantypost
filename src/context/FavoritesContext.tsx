@@ -1,13 +1,23 @@
-// src/context/FavoritesContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+  useMemo,
+} from 'react';
 import { useAuth } from './AuthContext';
 import { storageService } from '@/services';
 import { favoritesService } from '@/services/favorites.service';
 import { sanitizeUsername, sanitizeStrict } from '@/utils/security/sanitization';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 import { FEATURES } from '@/services/api.config';
+import { z } from 'zod';
+
+// ================= Types =================
 
 export interface FavoriteSeller {
   sellerId: string;
@@ -37,19 +47,98 @@ interface FavoritesContextType {
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
 
+// ================ Validation Schemas ================
+
+// Very defensive; we only ensure minimal fields + types are correct.
+// URL validation for profilePicture is intentionally relaxed to avoid breaking existing data.
+const StoredFavoriteSchema = z.object({
+  sellerId: z.string().min(1),
+  sellerUsername: z.string().min(1),
+  addedAt: z.string().min(1),
+  profilePicture: z.string().optional(),
+  tier: z.string().optional(),
+  isVerified: z.boolean().default(false),
+});
+
+const SellerInputSchema = z.object({
+  id: z.string().min(1),
+  username: z.string().min(1),
+  profilePicture: z.string().optional(),
+  tier: z.string().optional(),
+  isVerified: z.boolean(),
+});
+
+// ================ Limits / Helpers ================
+
+const FAV_LIMIT = {
+  maxAttempts: 30,
+  windowMs: 60_000, // 30 toggles per minute
+  blockDuration: 60_000, // optional cool-down
+};
+
+function dedupeBySellerId(list: FavoriteSeller[]): FavoriteSeller[] {
+  const seen = new Set<string>();
+  const out: FavoriteSeller[] = [];
+  for (const f of list) {
+    if (!seen.has(f.sellerId)) {
+      seen.add(f.sellerId);
+      out.push(f);
+    }
+  }
+  return out;
+}
+
+/**
+ * Rate-limit wrapper that works whether limiter.check()
+ * throws on limit OR returns { allowed, waitTime }.
+ */
+function checkRateLimitSafe(
+  limiter: any,
+  key: string,
+  opts: { maxAttempts: number; windowMs: number; blockDuration?: number }
+): { allowed: boolean; waitTime?: number } {
+  try {
+    const res = limiter?.check?.(key, opts);
+    // If it returns an object
+    if (typeof res === 'object' && res !== null) {
+      if (res.allowed === false) {
+        // waitTime may be provided in seconds or ms; normalize to seconds
+        const waitSeconds =
+          typeof res.waitTime === 'number'
+            ? Math.max(1, Math.ceil(res.waitTime))
+            : undefined;
+        return { allowed: false, waitTime: waitSeconds };
+      }
+      return { allowed: true };
+    }
+    // If no return (assume not limited)
+    return { allowed: true };
+  } catch (e: any) {
+    // If it throws on limit, try to extract wait time
+    const ms =
+      e?.waitTimeMs ??
+      e?.retryAfterMs ??
+      (typeof e?.waitTime === 'number' && e.waitTime > 10 ? e.waitTime * 1000 : undefined);
+    const seconds = ms ? Math.max(1, Math.ceil(ms / 1000)) : undefined;
+    return { allowed: false, waitTime: seconds };
+  }
+}
+
 export function FavoritesProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [favorites, setFavorites] = useState<FavoriteSeller[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const rateLimiter = getRateLimiter();
 
-  // Storage key based on username
+  // Create limiter once; safe even under React strict mode
+  const rateLimiter = useMemo(() => getRateLimiter(), []);
+
+  // Storage key based on username (sanitized)
   const getStorageKey = useCallback((username: string) => {
     return `favorites_${sanitizeUsername(username)}`;
   }, []);
 
-  // Load favorites from API or localStorage
+  // ------------- Load favorites (API or local) -------------
   const loadFavorites = useCallback(async () => {
     if (!user?.username) {
       setFavorites([]);
@@ -61,36 +150,73 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
       if (FEATURES.USE_API_USERS) {
         // Load from API
         const response = await favoritesService.getFavorites(user.username);
-        
+
         if (response.success && response.data) {
-          setFavorites(response.data);
-          
-          // Also save to localStorage for offline access
+          // Validate + sanitize response
+          const cleaned = (Array.isArray(response.data) ? response.data : [])
+            .map((f) => {
+              const parsed = StoredFavoriteSchema.safeParse(f);
+              if (!parsed.success) return null;
+              const v = parsed.data;
+              return {
+                sellerId: sanitizeStrict(v.sellerId),
+                sellerUsername: sanitizeUsername(v.sellerUsername),
+                addedAt: sanitizeStrict(v.addedAt),
+                profilePicture: v.profilePicture,
+                tier: v.tier,
+                isVerified: !!v.isVerified,
+              } as FavoriteSeller;
+            })
+            .filter(Boolean) as FavoriteSeller[];
+
+          const deduped = dedupeBySellerId(cleaned);
+          setFavorites(deduped);
+
+          // Cache for offline
           const storageKey = getStorageKey(user.username);
-          await storageService.setItem(storageKey, response.data);
-        } else if (response.error) {
-          setError(response.error.message);
-          // Fallback to localStorage
+          await storageService.setItem(storageKey, deduped);
+        } else {
+          // API error → fallback to local
+          setError(response.error?.message || 'Failed to load favorites from server');
           const storageKey = getStorageKey(user.username);
-          const storedFavorites = await storageService.getItem<FavoriteSeller[]>(storageKey, []);
-          setFavorites(storedFavorites);
+          const stored = await storageService.getItem<FavoriteSeller[]>(storageKey, []);
+          const validated = (Array.isArray(stored) ? stored : [])
+            .map((f) => {
+              const parsed = StoredFavoriteSchema.safeParse(f);
+              if (!parsed.success) return null;
+              const v = parsed.data;
+              return {
+                sellerId: sanitizeStrict(v.sellerId),
+                sellerUsername: sanitizeUsername(v.sellerUsername),
+                addedAt: sanitizeStrict(v.addedAt),
+                profilePicture: v.profilePicture,
+                tier: v.tier,
+                isVerified: !!v.isVerified,
+              } as FavoriteSeller;
+            })
+            .filter(Boolean) as FavoriteSeller[];
+          setFavorites(dedupeBySellerId(validated));
         }
       } else {
-        // Load from localStorage only
+        // LocalStorage only
         const storageKey = getStorageKey(user.username);
-        const storedFavorites = await storageService.getItem<FavoriteSeller[]>(storageKey, []);
-        
-        // Validate and sanitize loaded data
-        const validatedFavorites = storedFavorites.filter(fav => 
-          fav.sellerId && fav.sellerUsername && fav.addedAt
-        ).map(fav => ({
-          ...fav,
-          sellerId: sanitizeStrict(fav.sellerId),
-          sellerUsername: sanitizeUsername(fav.sellerUsername),
-          addedAt: sanitizeStrict(fav.addedAt),
-        }));
-
-        setFavorites(validatedFavorites);
+        const stored = await storageService.getItem<FavoriteSeller[]>(storageKey, []);
+        const validated = (Array.isArray(stored) ? stored : [])
+          .map((f) => {
+            const parsed = StoredFavoriteSchema.safeParse(f);
+            if (!parsed.success) return null;
+            const v = parsed.data;
+            return {
+              sellerId: sanitizeStrict(v.sellerId),
+              sellerUsername: sanitizeUsername(v.sellerUsername),
+              addedAt: sanitizeStrict(v.addedAt),
+              profilePicture: v.profilePicture,
+              tier: v.tier,
+              isVerified: !!v.isVerified,
+            } as FavoriteSeller;
+          })
+          .filter(Boolean) as FavoriteSeller[];
+        setFavorites(dedupeBySellerId(validated));
       }
     } catch (err) {
       console.error('Error loading favorites:', err);
@@ -106,119 +232,143 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     loadFavorites();
   }, [loadFavorites]);
 
-  // Check if seller is favorited
-  const isFavorited = useCallback((sellerId: string): boolean => {
-    return favorites.some(fav => fav.sellerId === sellerId);
-  }, [favorites]);
+  // ------------- Helpers -------------
+  const isFavorited = useCallback(
+    (sellerId: string): boolean => favorites.some((fav) => fav.sellerId === sellerId),
+    [favorites]
+  );
 
-  // Toggle favorite status
-  const toggleFavorite = useCallback(async (seller: {
-    id: string;
-    username: string;
-    profilePicture?: string;
-    tier?: string;
-    isVerified: boolean;
-  }): Promise<boolean> => {
-    if (!user?.username) {
-      setError('Please log in to add favorites');
-      return false;
-    }
+  // ------------- Toggle favorite -------------
+  const toggleFavorite = useCallback(
+    async (seller: {
+      id: string;
+      username: string;
+      profilePicture?: string;
+      tier?: string;
+      isVerified: boolean;
+    }): Promise<boolean> => {
+      if (!user?.username) {
+        setError('Please log in to add favorites');
+        return false;
+      }
 
-    // Rate limiting
-    const rateLimitResult = rateLimiter.check('FAVORITES_TOGGLE', {
-      maxAttempts: 30,
-      windowMs: 60 * 1000 // 30 toggles per minute
-    });
+      // Validate & sanitize seller input
+      const parsed = SellerInputSchema.safeParse(seller);
+      if (!parsed.success) {
+        setError('Invalid seller data');
+        return false;
+      }
+      const cleanSeller = {
+        id: sanitizeStrict(parsed.data.id),
+        username: sanitizeUsername(parsed.data.username),
+        profilePicture: parsed.data.profilePicture,
+        tier: parsed.data.tier,
+        isVerified: !!parsed.data.isVerified,
+      };
 
-    if (!rateLimitResult.allowed) {
-      setError(`Too many actions. Please wait ${rateLimitResult.waitTime} seconds.`);
-      return false;
-    }
+      // Rate limiting (per-user key)
+      const rlKey = `favorites:toggle:${sanitizeUsername(user.username)}`;
+      const rl = checkRateLimitSafe(rateLimiter, rlKey, FAV_LIMIT);
+      if (!rl.allowed) {
+        const secs = rl.waitTime ?? Math.ceil(FAV_LIMIT.blockDuration / 1000);
+        setError(`Too many actions. Please wait ${secs} seconds.`);
+        return false;
+      }
 
-    try {
-      const storageKey = getStorageKey(user.username);
-      const currentFavorites = [...favorites];
-      const existingIndex = currentFavorites.findIndex(fav => fav.sellerId === seller.id);
+      try {
+        const storageKey = getStorageKey(user.username);
+        const current = [...favorites];
+        const existingIndex = current.findIndex((f) => f.sellerId === cleanSeller.id);
 
-      if (FEATURES.USE_API_USERS) {
-        // Use API
-        if (existingIndex >= 0) {
-          // Remove from favorites via API
-          const response = await favoritesService.removeFavorite(seller.id);
-          
-          if (response.success) {
-            const newFavorites = currentFavorites.filter(fav => fav.sellerId !== seller.id);
-            setFavorites(newFavorites);
-            await storageService.setItem(storageKey, newFavorites);
-            setError(null);
-            return true;
+        if (FEATURES.USE_API_USERS) {
+          if (existingIndex >= 0) {
+            // Remove via API
+            const response = await favoritesService.removeFavorite(cleanSeller.id);
+            if (response.success) {
+              const next = current.filter((f) => f.sellerId !== cleanSeller.id);
+              setFavorites(next);
+              await storageService.setItem(storageKey, next);
+              setError(null);
+              return true;
+            } else {
+              setError(response.error?.message || 'Failed to remove favorite');
+              return false;
+            }
           } else {
-            setError(response.error?.message || 'Failed to remove favorite');
-            return false;
+            // Add via API
+            const response = await favoritesService.addFavorite({
+              sellerId: cleanSeller.id,
+              sellerUsername: cleanSeller.username,
+              profilePicture: cleanSeller.profilePicture,
+              tier: cleanSeller.tier,
+              isVerified: cleanSeller.isVerified,
+            });
+
+            if (response.success && response.data) {
+              // Validate API response item before storing
+              const parsedItem = StoredFavoriteSchema.safeParse(response.data);
+              if (!parsedItem.success) {
+                setError('Invalid server response for favorite item');
+                return false;
+              }
+              const v = parsedItem.data;
+              const newFav: FavoriteSeller = {
+                sellerId: sanitizeStrict(v.sellerId),
+                sellerUsername: sanitizeUsername(v.sellerUsername),
+                addedAt: sanitizeStrict(v.addedAt || new Date().toISOString()),
+                profilePicture: v.profilePicture,
+                tier: v.tier,
+                isVerified: !!v.isVerified,
+              };
+              const next = dedupeBySellerId([...current, newFav]);
+              setFavorites(next);
+              await storageService.setItem(storageKey, next);
+              setError(null);
+              return true;
+            } else {
+              setError(response.error?.message || 'Failed to add favorite');
+              return false;
+            }
           }
         } else {
-          // Add to favorites via API
-          const response = await favoritesService.addFavorite({
-            sellerId: seller.id,
-            sellerUsername: seller.username,
-            profilePicture: seller.profilePicture,
-            tier: seller.tier,
-            isVerified: seller.isVerified
-          });
-          
-          if (response.success && response.data) {
-            const newFavorites = [...currentFavorites, response.data];
-            setFavorites(newFavorites);
-            await storageService.setItem(storageKey, newFavorites);
-            setError(null);
-            return true;
+          // Local only
+          let next: FavoriteSeller[];
+          if (existingIndex >= 0) {
+            // Remove locally
+            next = current.filter((f) => f.sellerId !== cleanSeller.id);
           } else {
-            setError(response.error?.message || 'Failed to add favorite');
+            // Add locally
+            const newFav: FavoriteSeller = {
+              sellerId: cleanSeller.id,
+              sellerUsername: cleanSeller.username,
+              addedAt: new Date().toISOString(),
+              profilePicture: cleanSeller.profilePicture,
+              tier: cleanSeller.tier,
+              isVerified: cleanSeller.isVerified,
+            };
+            next = dedupeBySellerId([...current, newFav]);
+          }
+
+          const saved = await storageService.setItem(storageKey, next as any);
+          // Some storage services return void; treat undefined as success.
+          if (saved === false) {
+            setError('Failed to update favorites');
             return false;
           }
-        }
-      } else {
-        // LocalStorage only
-        let newFavorites: FavoriteSeller[];
-
-        if (existingIndex >= 0) {
-          // Remove from favorites
-          newFavorites = currentFavorites.filter(fav => fav.sellerId !== seller.id);
-        } else {
-          // Add to favorites
-          const newFavorite: FavoriteSeller = {
-            sellerId: sanitizeStrict(seller.id),
-            sellerUsername: sanitizeUsername(seller.username),
-            addedAt: new Date().toISOString(),
-            profilePicture: seller.profilePicture,
-            tier: seller.tier,
-            isVerified: seller.isVerified,
-          };
-          newFavorites = [...currentFavorites, newFavorite];
-        }
-
-        // Save to storage
-        const success = await storageService.setItem(storageKey, newFavorites);
-        
-        if (success) {
-          setFavorites(newFavorites);
+          setFavorites(next);
           setError(null);
           return true;
-        } else {
-          setError('Failed to update favorites');
-          return false;
         }
+      } catch (err) {
+        console.error('Error toggling favorite:', err);
+        setError('Failed to update favorites');
+        return false;
       }
-    } catch (err) {
-      console.error('Error toggling favorite:', err);
-      setError('Failed to update favorites');
-      return false;
-    }
-  }, [user?.username, favorites, getStorageKey, rateLimiter]);
+    },
+    [user?.username, favorites, getStorageKey, rateLimiter]
+  );
 
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
+  const clearError = useCallback(() => setError(null), []);
 
   const refreshFavorites = useCallback(async () => {
     await loadFavorites();
@@ -235,11 +385,7 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     refreshFavorites,
   };
 
-  return (
-    <FavoritesContext.Provider value={contextValue}>
-      {children}
-    </FavoritesContext.Provider>
-  );
+  return <FavoritesContext.Provider value={contextValue}>{children}</FavoritesContext.Provider>;
 }
 
 export function useFavorites() {
