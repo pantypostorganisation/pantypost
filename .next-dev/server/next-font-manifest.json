@@ -3,30 +3,6 @@
     "[project]/src/app/_not-found/page": [
       "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
     ],
-    "[project]/src/app/browse/[id]/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/browse/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/buyers/messages/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/buyers/my-orders/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/login/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/sellers/my-listings/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
-    "[project]/src/app/sellers/orders-to-fulfil/page": [
-      "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
-    ],
     "[project]/src/app/sellers/profile/page": [
       "static/media/06ba6ef833b337bc-s.p.0faac26c.woff2"
     ]

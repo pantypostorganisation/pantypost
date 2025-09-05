@@ -158,8 +158,8 @@ export function useProfileSettings() {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Upload gallery images to backend
-  const uploadGalleryImages = async () => {
+  // Internal async upload function
+  const uploadGalleryImagesAsync = async () => {
     if (selectedFiles.length === 0) return;
 
     // Check rate limit
@@ -251,8 +251,14 @@ export function useProfileSettings() {
     }
   };
 
-  // Remove gallery image from backend
-  const removeGalleryImage = async (index: number) => {
+  // Wrapped upload function that returns void
+  const uploadGalleryImages = () => {
+    // Call async function but don't return the promise
+    uploadGalleryImagesAsync();
+  };
+
+  // Internal async remove function
+  const removeGalleryImageAsync = async (index: number) => {
     if (index < 0 || index >= galleryImages.length) return;
     
     try {
@@ -302,8 +308,14 @@ export function useProfileSettings() {
     }
   };
 
-  // Clear all gallery images
-  const clearAllGalleryImages = async () => {
+  // Wrapped remove function that returns void
+  const removeGalleryImage = (index: number) => {
+    // Call async function but don't return the promise
+    removeGalleryImageAsync(index);
+  };
+
+  // Internal async clear function
+  const clearAllGalleryImagesAsync = async () => {
     if (window.confirm("Are you sure you want to remove all gallery images?")) {
       try {
         // Remove all images one by one from backend
@@ -331,6 +343,12 @@ export function useProfileSettings() {
         }
       }
     }
+  };
+
+  // Wrapped clear function that returns void
+  const clearAllGalleryImages = () => {
+    // Call async function but don't return the promise
+    clearAllGalleryImagesAsync();
   };
 
   // Enhanced save handler that includes gallery
@@ -376,7 +394,7 @@ export function useProfileSettings() {
     removeProfilePic: profileData.removeProfilePic,
     profilePicInputRef,
     
-    // Gallery
+    // Gallery - Now returning void functions
     galleryImages,
     selectedFiles,
     galleryUploading,
@@ -384,9 +402,9 @@ export function useProfileSettings() {
     multipleFileInputRef,
     handleMultipleFileChange,
     removeSelectedFile,
-    uploadGalleryImages,
-    removeGalleryImage,
-    clearAllGalleryImages,
+    uploadGalleryImages,  // Returns void
+    removeGalleryImage,   // Returns void  
+    clearAllGalleryImages, // Returns void
     validationError,
     
     // Tier info

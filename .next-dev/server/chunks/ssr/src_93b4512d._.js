@@ -1875,505 +1875,435 @@ __turbopack_context__.s({
     "default": ()=>GalleryManager
 });
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react-jsx-dev-runtime.js [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trash$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Trash2$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/trash-2.js [app-ssr] (ecmascript) <export default as Trash2>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$upload$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Upload$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/upload.js [app-ssr] (ecmascript) <export default as Upload>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$x$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__X$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/x.js [app-ssr] (ecmascript) <export default as X>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$image$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Image$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/image.js [app-ssr] (ecmascript) <export default as Image>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$circle$2d$plus$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__PlusCircle$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/circle-plus.js [app-ssr] (ecmascript) <export default as PlusCircle>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$circle$2d$alert$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__AlertCircle$3e$__ = __turbopack_context__.i("[project]/node_modules/lucide-react/dist/esm/icons/circle-alert.js [app-ssr] (ecmascript) <export default as AlertCircle>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react.js [app-ssr] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/components/ui/SecureMessageDisplay.tsx [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/utils/security/sanitization.ts [app-ssr] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$module__evaluation$3e$__ = __turbopack_context__.i("[project]/src/services/security.service.ts [app-ssr] (ecmascript) <module evaluation>");
-var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/src/services/security.service.ts [app-ssr] (ecmascript) <locals>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__ = __turbopack_context__.i("[project]/node_modules/zod/v3/external.js [app-ssr] (ecmascript) <export * as z>");
 'use client';
 ;
 ;
 ;
 ;
-;
-;
-;
-// ---- Props validation (keep function signatures, validate primitives) ----
+const MAX_GALLERY_IMAGES = 20;
 const PropsSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
     galleryImages: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].array(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string()).default([]),
-    selectedFiles: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].array(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].any()).default([]),
+    selectedFiles: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].array(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].instanceof(File)).default([]),
     isUploading: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].boolean().default(false),
-    uploadProgress: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().min(0).max(100).optional(),
-    multipleFileInputRef: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].any(),
+    uploadProgress: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().min(0).max(100).default(0),
+    multipleFileInputRef: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].custom(),
     handleMultipleFileChange: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].any()).returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void()),
     uploadGalleryImages: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args().returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void()),
-    removeGalleryImage: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().int().nonnegative()).returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void()),
-    removeSelectedFile: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number().int().nonnegative()).returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void()),
+    removeGalleryImage: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number()).returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void()),
+    removeSelectedFile: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].number()).returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void()),
     clearAllGalleryImages: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].function().args().returns(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v3$2f$external$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].void())
 });
-// Helper: build a real FileList from an array of Files using DataTransfer
-function filesToFileList(files) {
-    const dt = new DataTransfer();
-    for (const f of files)dt.items.add(f);
-    return dt.files;
-}
-// Child component that manages its own object URL & cleanup for each File preview
-function SelectedFilePreview({ file, index, onRemove, disabled }) {
-    const [url, setUrl] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])('');
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
-        const objectUrl = URL.createObjectURL(file);
-        setUrl(objectUrl);
-        return ()=>{
-            try {
-                URL.revokeObjectURL(objectUrl);
-            } catch  {
-            // ignore
-            }
-        };
-    }, [
-        file
-    ]);
-    return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-        className: "relative group border border-gray-700 rounded-lg overflow-hidden",
-        children: [
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SecureImage"], {
-                src: url,
-                alt: `Selected ${index + 1}`,
-                className: "w-full h-28 object-cover"
-            }, void 0, false, {
-                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 62,
-                columnNumber: 7
-            }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                type: "button",
-                onClick: ()=>onRemove(index),
-                className: "absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100 disabled:opacity-50",
-                disabled: disabled,
-                "aria-label": "Remove selected image",
-                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$x$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__X$3e$__["X"], {
-                    className: "w-4 h-4"
-                }, void 0, false, {
-                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                    lineNumber: 70,
-                    columnNumber: 9
-                }, this)
-            }, void 0, false, {
-                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 63,
-                columnNumber: 7
-            }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: "absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2 text-xs text-white truncate",
-                children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(file.name)
-            }, void 0, false, {
-                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 72,
-                columnNumber: 7
-            }, this)
-        ]
-    }, void 0, true, {
-        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-        lineNumber: 61,
-        columnNumber: 5
-    }, this);
-}
-function GalleryManager(rawProps) {
-    const parsed = PropsSchema.safeParse(rawProps);
-    const { galleryImages = [], selectedFiles = [], isUploading = false, uploadProgress = 0, multipleFileInputRef, handleMultipleFileChange, uploadGalleryImages, removeGalleryImage, removeSelectedFile, clearAllGalleryImages } = parsed.success ? parsed.data : {
-        galleryImages: [],
-        selectedFiles: [],
-        isUploading: false,
-        uploadProgress: 0,
-        multipleFileInputRef: {
-            current: null
-        },
-        handleMultipleFileChange: ()=>{},
-        uploadGalleryImages: ()=>{},
-        removeGalleryImage: ()=>{},
-        removeSelectedFile: ()=>{},
-        clearAllGalleryImages: ()=>{}
+function GalleryManager(props) {
+    const parsed = PropsSchema.safeParse(props);
+    const { galleryImages = [], selectedFiles = [], isUploading = false, uploadProgress = 0, multipleFileInputRef, handleMultipleFileChange, uploadGalleryImages, removeGalleryImage, removeSelectedFile, clearAllGalleryImages } = parsed.success ? parsed.data : props;
+    // Wrap async functions to handle Promise return
+    const handleUploadClick = ()=>{
+        // Call the async function but don't await it (returns void)
+        uploadGalleryImages();
     };
-    const [fileError, setFileError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])('');
-    // Sanitize upload progress for display and bar width
-    const sanitizedProgress = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeNumber"])(uploadProgress ?? 0, 0, 100, 0);
-    // Handle secure file selection with validation
-    const handleSecureFileChange = (e)=>{
-        setFileError('');
-        const files = Array.from(e.target.files || []);
-        if (files.length === 0) return;
-        const validFiles = [];
-        const errors = [];
-        files.forEach((file)=>{
-            const validation = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateFileUpload(file, {
-                maxSize: 5 * 1024 * 1024,
-                allowedTypes: [
-                    'image/jpeg',
-                    'image/jpg',
-                    'image/png',
-                    'image/webp',
-                    'image/gif'
-                ],
-                allowedExtensions: [
-                    'jpg',
-                    'jpeg',
-                    'png',
-                    'webp',
-                    'gif'
-                ]
-            });
-            if (validation.valid) {
-                validFiles.push(file);
-            } else {
-                errors.push(validation.error || 'Invalid file');
-            }
-        });
-        if (errors.length > 0) {
-            setFileError(`${errors[0]}${errors.length > 1 ? ` (and ${errors.length - 1} more)` : ''}`);
-        }
-        if (validFiles.length > 0) {
-            // Build a proper FileList to pass along to the original handler
-            const fileList = filesToFileList(validFiles);
-            const syntheticEvent = {
-                ...e,
-                target: {
-                    ...e.target,
-                    files: fileList
-                }
-            };
-            handleMultipleFileChange(syntheticEvent);
-        } else {
-            // Clear the input if all were invalid
-            if (e.target) {
-                try {
-                    e.target.value = '';
-                } catch  {
-                /* read-only in some browsers; ignore */ }
-            }
-        }
+    const handleRemoveGalleryImage = (index)=>{
+        // Call the function without awaiting
+        removeGalleryImage(index);
     };
-    const galleryCount = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>Number.isFinite(galleryImages.length) ? galleryImages.length : 0, [
-        galleryImages.length
-    ]);
+    const handleClearAll = ()=>{
+        // Call the function without awaiting
+        clearAllGalleryImages();
+    };
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-        className: "bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6",
+        className: "bg-[#1a1a1a] rounded-xl p-6 border border-gray-800",
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: "flex justify-between items-center mb-6",
+                className: "flex items-center justify-between mb-4",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
-                        className: "text-xl font-bold text-white flex items-center",
+                        className: "text-xl font-bold text-white flex items-center gap-2",
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$image$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Image$3e$__["Image"], {
-                                className: "w-5 h-5 mr-2 text-[#ff950e]"
+                                className: "w-5 h-5 text-[#ff950e]"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 173,
+                                lineNumber: 61,
                                 columnNumber: 11
                             }, this),
                             "Photo Gallery"
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 172,
+                        lineNumber: 60,
                         columnNumber: 9
                     }, this),
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "flex gap-2",
-                        children: galleryImages.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SecureImage"], {
-                            src: "/Clear_All.png",
-                            alt: "Clear All",
-                            onClick: !isUploading ? clearAllGalleryImages : undefined,
-                            className: `w-16 h-auto object-contain transition-transform duration-200 ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.02]'}`
-                        }, void 0, false, {
-                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                            lineNumber: 179,
-                            columnNumber: 13
-                        }, this)
-                    }, void 0, false, {
-                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 177,
-                        columnNumber: 9
-                    }, this)
-                ]
-            }, void 0, true, {
-                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 171,
-                columnNumber: 7
-            }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                className: "text-gray-400 text-sm mb-4",
-                children: "Add photos to your public gallery. These will be visible to all visitors on your profile page. Gallery changes are saved automatically."
-            }, void 0, false, {
-                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 191,
-                columnNumber: 7
-            }, this),
-            isUploading && sanitizedProgress > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: "mb-4",
-                children: [
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "flex items-center justify-between text-sm text-gray-300 mb-1",
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                        className: "text-sm text-gray-400",
                         children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                children: "Uploading to cloud storage..."
-                            }, void 0, false, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 200,
-                                columnNumber: 13
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                children: [
-                                    sanitizedProgress,
-                                    "%"
-                                ]
-                            }, void 0, true, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 201,
-                                columnNumber: 13
-                            }, this)
+                            galleryImages.length,
+                            " / ",
+                            MAX_GALLERY_IMAGES,
+                            " images"
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 199,
-                        columnNumber: 11
-                    }, this),
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "w-full bg-gray-800 rounded-full h-2",
-                        children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                            className: "bg-[#ff950e] h-2 rounded-full transition-all duration-300",
-                            style: {
-                                width: `${sanitizedProgress}%`
-                            }
-                        }, void 0, false, {
-                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                            lineNumber: 204,
-                            columnNumber: 13
-                        }, this)
-                    }, void 0, false, {
-                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 203,
-                        columnNumber: 11
+                        lineNumber: 64,
+                        columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 198,
-                columnNumber: 9
+                lineNumber: 59,
+                columnNumber: 7
             }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+            galleryImages.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "mb-6",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "flex flex-col sm:flex-row sm:items-center gap-3 mb-4",
-                        children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "flex-1",
-                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
-                                    htmlFor: "gallery-upload",
-                                    className: `flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black transition w-full ${isUploading ? 'border-gray-800 opacity-60 cursor-not-allowed' : 'border-gray-700 hover:border-[#ff950e] cursor-pointer'}`,
-                                    children: [
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
-                                            id: "gallery-upload",
-                                            ref: multipleFileInputRef,
-                                            type: "file",
-                                            accept: "image/*",
-                                            multiple: true,
-                                            onChange: handleSecureFileChange,
-                                            className: "hidden",
-                                            disabled: isUploading
-                                        }, void 0, false, {
-                                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                            lineNumber: 219,
-                                            columnNumber: 15
-                                        }, this),
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$circle$2d$plus$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__PlusCircle$3e$__["PlusCircle"], {
-                                            className: "w-5 h-5 text-[#ff950e]"
-                                        }, void 0, false, {
-                                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                            lineNumber: 229,
-                                            columnNumber: 15
-                                        }, this),
-                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                            className: "text-gray-300",
-                                            children: "Select multiple images..."
-                                        }, void 0, false, {
-                                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                            lineNumber: 230,
-                                            columnNumber: 15
-                                        }, this)
-                                    ]
-                                }, void 0, true, {
-                                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                    lineNumber: 213,
-                                    columnNumber: 13
-                                }, this)
-                            }, void 0, false, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 212,
-                                columnNumber: 11
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SecureImage"], {
-                                src: "/Add_To_Gallery.png",
-                                alt: "Add to Gallery",
-                                onClick: selectedFiles.length > 0 && !isUploading ? uploadGalleryImages : undefined,
-                                className: `w-12 h-auto object-contain transition-transform duration-200 ${selectedFiles.length === 0 || isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.02]'}`
-                            }, void 0, false, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 234,
-                                columnNumber: 11
-                            }, this)
-                        ]
-                    }, void 0, true, {
-                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 211,
-                        columnNumber: 9
-                    }, this),
-                    fileError && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "text-xs text-red-400 flex items-center gap-1 mb-2",
-                        role: "alert",
-                        "aria-live": "assertive",
-                        children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$circle$2d$alert$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__AlertCircle$3e$__["AlertCircle"], {
-                                className: "w-3 h-3"
-                            }, void 0, false, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 247,
-                                columnNumber: 13
-                            }, this),
-                            (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(fileError)
-                        ]
-                    }, void 0, true, {
-                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 246,
-                        columnNumber: 11
-                    }, this),
-                    selectedFiles.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "mb-6",
+                        className: "flex items-center justify-between mb-3",
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                                className: "text-sm font-medium text-gray-300 mb-3",
-                                children: "Selected Images:"
+                                className: "text-sm font-medium text-gray-300",
+                                children: "Current Gallery"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 255,
+                                lineNumber: 73,
                                 columnNumber: 13
                             }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "grid grid-cols-2 sm:grid-cols-3 gap-3",
-                                children: selectedFiles.map((file, index)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(SelectedFilePreview, {
-                                        file: file,
-                                        index: index,
-                                        onRemove: removeSelectedFile,
-                                        disabled: isUploading
-                                    }, `${file.name}-${index}`, false, {
-                                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                        lineNumber: 258,
-                                        columnNumber: 17
-                                    }, this))
+                            galleryImages.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                onClick: handleClearAll,
+                                className: "text-xs text-red-500 hover:text-red-400 transition",
+                                disabled: isUploading,
+                                type: "button",
+                                children: "Clear All"
                             }, void 0, false, {
                                 fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 256,
-                                columnNumber: 13
+                                lineNumber: 75,
+                                columnNumber: 15
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 254,
+                        lineNumber: 72,
                         columnNumber: 11
-                    }, this)
-                ]
-            }, void 0, true, {
-                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 210,
-                columnNumber: 7
-            }, this),
-            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                children: [
-                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                        className: "text-lg font-medium text-white mb-3 flex items-center",
-                        children: [
-                            "Your Gallery (",
-                            galleryCount,
-                            " photos)"
-                        ]
-                    }, void 0, true, {
-                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 273,
-                        columnNumber: 9
                     }, this),
-                    galleryImages.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "border border-dashed border-gray-700 rounded-lg p-8 text-center",
-                        children: [
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$image$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Image$3e$__["Image"], {
-                                className: "w-12 h-12 text-gray-600 mx-auto mb-3"
-                            }, void 0, false, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 277,
-                                columnNumber: 13
-                            }, this),
-                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                className: "text-gray-500",
-                                children: "Your gallery is empty. Add some photos to showcase your style!"
-                            }, void 0, false, {
-                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 278,
-                                columnNumber: 13
-                            }, this)
-                        ]
-                    }, void 0, true, {
-                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 276,
-                        columnNumber: 11
-                    }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "grid grid-cols-2 sm:grid-cols-3 gap-3",
-                        children: galleryImages.map((img, index)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "relative group",
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        className: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3",
+                        children: galleryImages.map((image, index)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                className: "relative group aspect-square",
                                 children: [
-                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$SecureMessageDisplay$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["SecureImage"], {
-                                        src: img,
+                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("img", {
+                                        src: image,
                                         alt: `Gallery ${index + 1}`,
-                                        className: "w-full h-40 object-cover rounded-lg border border-gray-700"
+                                        className: "w-full h-full object-cover rounded-lg border border-gray-700",
+                                        loading: "lazy"
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                        lineNumber: 284,
+                                        lineNumber: 88,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                                        type: "button",
-                                        onClick: ()=>removeGalleryImage(index),
-                                        className: "absolute top-2 right-2 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50",
+                                        onClick: ()=>handleRemoveGalleryImage(index),
+                                        className: "absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700",
+                                        title: "Remove image",
                                         disabled: isUploading,
-                                        "aria-label": "Remove image from gallery",
+                                        type: "button",
                                         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$x$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__X$3e$__["X"], {
-                                            size: 16,
-                                            className: "text-white"
+                                            className: "w-4 h-4"
                                         }, void 0, false, {
                                             fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                            lineNumber: 292,
+                                            lineNumber: 101,
                                             columnNumber: 19
                                         }, this)
                                     }, void 0, false, {
                                         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                        lineNumber: 285,
+                                        lineNumber: 94,
                                         columnNumber: 17
                                     }, this)
                                 ]
-                            }, `${img}-${index}`, true, {
+                            }, index, true, {
                                 fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                                lineNumber: 283,
+                                lineNumber: 87,
                                 columnNumber: 15
                             }, this))
                     }, void 0, false, {
                         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                        lineNumber: 281,
+                        lineNumber: 85,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-                lineNumber: 272,
+                lineNumber: 71,
+                columnNumber: 9
+            }, this),
+            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                className: "space-y-4",
+                children: [
+                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        className: "border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-600 transition",
+                        children: [
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$image$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Image$3e$__["Image"], {
+                                className: "w-12 h-12 text-gray-500 mx-auto mb-3"
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 112,
+                                columnNumber: 11
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                className: "text-gray-400 mb-2",
+                                children: galleryImages.length === 0 ? "Add photos to your gallery" : `Add more photos (${MAX_GALLERY_IMAGES - galleryImages.length} remaining)`
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 113,
+                                columnNumber: 11
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
+                                ref: multipleFileInputRef,
+                                type: "file",
+                                multiple: true,
+                                accept: "image/*",
+                                onChange: handleMultipleFileChange,
+                                className: "hidden",
+                                disabled: isUploading || galleryImages.length >= MAX_GALLERY_IMAGES
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 118,
+                                columnNumber: 11
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                onClick: ()=>multipleFileInputRef?.current?.click(),
+                                disabled: isUploading || galleryImages.length >= MAX_GALLERY_IMAGES,
+                                className: "bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed",
+                                type: "button",
+                                children: "Select Images"
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 127,
+                                columnNumber: 11
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                                className: "text-xs text-gray-500 mt-2",
+                                children: "JPEG, JPG, PNG, or WebP • Max 10MB per file"
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 135,
+                                columnNumber: 11
+                            }, this)
+                        ]
+                    }, void 0, true, {
+                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                        lineNumber: 111,
+                        columnNumber: 9
+                    }, this),
+                    selectedFiles.length > 0 && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        children: [
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
+                                className: "text-sm font-medium text-gray-300 mb-2",
+                                children: [
+                                    "Selected Files (",
+                                    selectedFiles.length,
+                                    ")"
+                                ]
+                            }, void 0, true, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 143,
+                                columnNumber: 13
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                className: "space-y-2 max-h-40 overflow-y-auto",
+                                children: selectedFiles.map((file, index)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                        className: "flex items-center justify-between p-2 bg-gray-800 rounded-lg",
+                                        children: [
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                className: "flex items-center gap-2",
+                                                children: [
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$image$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Image$3e$__["Image"], {
+                                                        className: "w-4 h-4 text-gray-400"
+                                                    }, void 0, false, {
+                                                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                        lineNumber: 153,
+                                                        columnNumber: 21
+                                                    }, this),
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                        className: "text-sm text-gray-300 truncate max-w-[200px]",
+                                                        children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$utils$2f$security$2f$sanitization$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["sanitizeStrict"])(file.name)
+                                                    }, void 0, false, {
+                                                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                        lineNumber: 154,
+                                                        columnNumber: 21
+                                                    }, this),
+                                                    /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                        className: "text-xs text-gray-500",
+                                                        children: [
+                                                            "(",
+                                                            (file.size / 1024 / 1024).toFixed(2),
+                                                            " MB)"
+                                                        ]
+                                                    }, void 0, true, {
+                                                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                        lineNumber: 157,
+                                                        columnNumber: 21
+                                                    }, this)
+                                                ]
+                                            }, void 0, true, {
+                                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                lineNumber: 152,
+                                                columnNumber: 19
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                                onClick: ()=>removeSelectedFile(index),
+                                                className: "text-red-500 hover:text-red-400 transition p-1",
+                                                disabled: isUploading,
+                                                type: "button",
+                                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$trash$2d$2$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Trash2$3e$__["Trash2"], {
+                                                    className: "w-4 h-4"
+                                                }, void 0, false, {
+                                                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                    lineNumber: 167,
+                                                    columnNumber: 21
+                                                }, this)
+                                            }, void 0, false, {
+                                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                lineNumber: 161,
+                                                columnNumber: 19
+                                            }, this)
+                                        ]
+                                    }, index, true, {
+                                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                        lineNumber: 148,
+                                        columnNumber: 17
+                                    }, this))
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 146,
+                                columnNumber: 13
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                className: "mt-4",
+                                children: isUploading ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    className: "space-y-2",
+                                    children: [
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                            className: "flex items-center justify-between text-sm",
+                                            children: [
+                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                    className: "text-gray-400",
+                                                    children: "Uploading..."
+                                                }, void 0, false, {
+                                                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                    lineNumber: 178,
+                                                    columnNumber: 21
+                                                }, this),
+                                                /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                    className: "text-[#ff950e]",
+                                                    children: [
+                                                        uploadProgress,
+                                                        "%"
+                                                    ]
+                                                }, void 0, true, {
+                                                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                    lineNumber: 179,
+                                                    columnNumber: 21
+                                                }, this)
+                                            ]
+                                        }, void 0, true, {
+                                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                            lineNumber: 177,
+                                            columnNumber: 19
+                                        }, this),
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                            className: "w-full bg-gray-700 rounded-full h-2 overflow-hidden",
+                                            children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                                className: "bg-[#ff950e] h-full transition-all duration-300",
+                                                style: {
+                                                    width: `${uploadProgress}%`
+                                                }
+                                            }, void 0, false, {
+                                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                                lineNumber: 182,
+                                                columnNumber: 21
+                                            }, this)
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                            lineNumber: 181,
+                                            columnNumber: 19
+                                        }, this)
+                                    ]
+                                }, void 0, true, {
+                                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                    lineNumber: 176,
+                                    columnNumber: 17
+                                }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                    onClick: handleUploadClick,
+                                    disabled: selectedFiles.length === 0,
+                                    className: "w-full bg-[#ff950e] text-black font-bold py-2 rounded-lg hover:bg-[#e0850d] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2",
+                                    type: "button",
+                                    children: [
+                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$react$2f$dist$2f$esm$2f$icons$2f$upload$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__$3c$export__default__as__Upload$3e$__["Upload"], {
+                                            className: "w-4 h-4"
+                                        }, void 0, false, {
+                                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                            lineNumber: 195,
+                                            columnNumber: 19
+                                        }, this),
+                                        "Upload ",
+                                        selectedFiles.length,
+                                        " ",
+                                        selectedFiles.length === 1 ? 'Image' : 'Images'
+                                    ]
+                                }, void 0, true, {
+                                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                    lineNumber: 189,
+                                    columnNumber: 17
+                                }, this)
+                            }, void 0, false, {
+                                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                                lineNumber: 174,
+                                columnNumber: 13
+                            }, this)
+                        ]
+                    }, void 0, true, {
+                        fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                        lineNumber: 142,
+                        columnNumber: 11
+                    }, this)
+                ]
+            }, void 0, true, {
+                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                lineNumber: 110,
+                columnNumber: 7
+            }, this),
+            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                className: "mt-4 p-3 bg-gray-800 rounded-lg",
+                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
+                    className: "text-xs text-gray-400",
+                    children: [
+                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("strong", {
+                            className: "text-gray-300",
+                            children: "Tips:"
+                        }, void 0, false, {
+                            fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                            lineNumber: 207,
+                            columnNumber: 11
+                        }, this),
+                        " High-quality photos help attract more buyers. Consider adding variety with different angles and styles. All images are automatically optimized for web display."
+                    ]
+                }, void 0, true, {
+                    fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                    lineNumber: 206,
+                    columnNumber: 9
+                }, this)
+            }, void 0, false, {
+                fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
+                lineNumber: 205,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/src/components/seller-settings/GalleryManager.tsx",
-        lineNumber: 170,
+        lineNumber: 58,
         columnNumber: 5
     }, this);
 }
@@ -3898,8 +3828,8 @@ __turbopack_context__.s({
     "uploadMultipleToCloudinary": ()=>uploadMultipleToCloudinary,
     "uploadToCloudinary": ()=>uploadToCloudinary
 });
-const CLOUD_NAME = ("TURBOPACK compile-time value", "your_cloud_name") || '';
-const UPLOAD_PRESET = ("TURBOPACK compile-time value", "your_upload_preset") || '';
+const CLOUD_NAME = ("TURBOPACK compile-time value", "ddanxxkwz") || '';
+const UPLOAD_PRESET = ("TURBOPACK compile-time value", "pantypost_upload") || '';
 // Check if Cloudinary is properly configured
 const isCloudinaryConfigured = ()=>{
     return CLOUD_NAME && UPLOAD_PRESET && CLOUD_NAME !== 'your_cloud_name' && UPLOAD_PRESET !== 'your_upload_preset';
@@ -3955,15 +3885,34 @@ const uploadToCloudinary = async (file)=>{
         throw new Error(`Invalid file: ${file.name}. Must be JPEG, PNG, WebP, or GIF under 10MB.`);
     }
     // Check if we should use mock data
-    if (!isCloudinaryConfigured()) {
-        console.warn('Cloudinary not configured. Using local image data for development.');
-        // Simulate upload delay
-        await new Promise((resolve)=>setTimeout(resolve, 500 + Math.random() * 1000));
-        return await generateMockUploadResult(file, 0);
-    }
-    //TURBOPACK unreachable
+    if (!isCloudinaryConfigured()) //TURBOPACK unreachable
     ;
-    const formData = undefined;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    try {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Upload failed: ${response.statusText || error}`);
+        }
+        const data = await response.json();
+        return {
+            url: data.secure_url,
+            publicId: data.public_id,
+            format: data.format,
+            width: data.width,
+            height: data.height,
+            bytes: data.bytes,
+            createdAt: data.created_at
+        };
+    } catch (error) {
+        console.error('Cloudinary upload error:', error);
+        throw error instanceof Error ? error : new Error('Upload failed');
+    }
 };
 const uploadMultipleToCloudinary = async (files, onProgress)=>{
     // Validate all files first
@@ -3973,25 +3922,31 @@ const uploadMultipleToCloudinary = async (files, onProgress)=>{
         throw new Error(`Invalid files detected: ${invalidFileNames}. ` + `All files must be JPEG, PNG, WebP, or GIF under 10MB each.`);
     }
     // Check if we should use mock data
-    if (!isCloudinaryConfigured()) {
-        console.warn('Cloudinary not configured. Using local image data for development.');
-        const results = [];
-        for(let i = 0; i < files.length; i++){
-            // Simulate upload delay
-            await new Promise((resolve)=>setTimeout(resolve, 300 + Math.random() * 700));
-            results.push(await generateMockUploadResult(files[i], i));
+    if (!isCloudinaryConfigured()) //TURBOPACK unreachable
+    ;
+    const results = [];
+    const totalFiles = files.length;
+    for(let i = 0; i < files.length; i++){
+        try {
+            const result = await uploadToCloudinary(files[i]);
+            results.push(result);
             if (onProgress) {
-                const progress = (i + 1) / files.length * 100;
+                const progress = (i + 1) / totalFiles * 100;
                 onProgress(progress);
             }
+        } catch (error) {
+            console.error(`Failed to upload file ${i + 1}:`, error);
+            // Clean up any successful uploads if one fails
+            if (results.length > 0 && isCloudinaryConfigured()) {
+                console.log('Rolling back successful uploads:', results.map((r)=>r.publicId));
+                // Attempt to delete successfully uploaded images
+                await batchDeleteFromCloudinary(results.map((r)=>r.publicId));
+            }
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            throw new Error(`Failed to upload file ${files[i].name}: ${errorMessage}`);
         }
-        return results;
     }
-    //TURBOPACK unreachable
-    ;
-    const results = undefined;
-    const totalFiles = undefined;
-    let i;
+    return results;
 };
 const deleteFromCloudinary = async (publicId)=>{
     // If using mock data, just return success
@@ -4002,8 +3957,29 @@ const deleteFromCloudinary = async (publicId)=>{
             publicId: publicId
         };
     }
-    //TURBOPACK unreachable
-    ;
+    try {
+        // For now, make a request to the mock API endpoint
+        const response = await fetch('/api/cloudinary/delete', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                publicId
+            })
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(()=>({
+                    message: 'Delete failed'
+                }));
+            throw new Error(error.message || `Delete failed: ${response.statusText}`);
+        }
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Delete from Cloudinary error:', error);
+        throw error instanceof Error ? error : new Error('Delete failed');
+    }
 };
 const batchDeleteFromCloudinary = async (publicIds)=>{
     const results = {
@@ -4151,14 +4127,11 @@ const isCloudinaryUrl = (url)=>{
     return url.includes('cloudinary.com') && url.includes(CLOUD_NAME);
 };
 const checkCloudinaryConfig = ()=>{
-    if (!isCloudinaryConfigured()) {
-        return {
-            configured: false,
-            message: 'Cloudinary is not configured. Using mock images for development. To enable real image uploads, please update your .env.local file with valid Cloudinary credentials.'
-        };
-    }
-    //TURBOPACK unreachable
+    if (!isCloudinaryConfigured()) //TURBOPACK unreachable
     ;
+    return {
+        configured: true
+    };
 };
 }),
 "[project]/src/hooks/seller-settings/useProfileData.ts [app-ssr] (ecmascript)": ((__turbopack_context__) => {
@@ -4943,8 +4916,8 @@ function useProfileSettings() {
     const removeSelectedFile = (index)=>{
         setSelectedFiles((prev)=>prev.filter((_, i)=>i !== index));
     };
-    // Upload gallery images to backend
-    const uploadGalleryImages = async ()=>{
+    // Internal async upload function
+    const uploadGalleryImagesAsync = async ()=>{
         if (selectedFiles.length === 0) return;
         // Check rate limit
         if (user?.username) {
@@ -5021,8 +4994,13 @@ function useProfileSettings() {
             setTimeout(()=>setUploadProgress(0), 1000);
         }
     };
-    // Remove gallery image from backend
-    const removeGalleryImage = async (index)=>{
+    // Wrapped upload function that returns void
+    const uploadGalleryImages = ()=>{
+        // Call async function but don't return the promise
+        uploadGalleryImagesAsync();
+    };
+    // Internal async remove function
+    const removeGalleryImageAsync = async (index)=>{
         if (index < 0 || index >= galleryImages.length) return;
         try {
             // Call backend to remove image
@@ -5064,8 +5042,13 @@ function useProfileSettings() {
             }
         }
     };
-    // Clear all gallery images
-    const clearAllGalleryImages = async ()=>{
+    // Wrapped remove function that returns void
+    const removeGalleryImage = (index)=>{
+        // Call async function but don't return the promise
+        removeGalleryImageAsync(index);
+    };
+    // Internal async clear function
+    const clearAllGalleryImagesAsync = async ()=>{
         if (window.confirm("Are you sure you want to remove all gallery images?")) {
             try {
                 // Remove all images one by one from backend
@@ -5090,6 +5073,11 @@ function useProfileSettings() {
                 }
             }
         }
+    };
+    // Wrapped clear function that returns void
+    const clearAllGalleryImages = ()=>{
+        // Call async function but don't return the promise
+        clearAllGalleryImagesAsync();
     };
     // Enhanced save handler that includes gallery
     const handleSave = async ()=>{
@@ -5128,7 +5116,7 @@ function useProfileSettings() {
         handleProfilePicChange: profileData.handleProfilePicChange,
         removeProfilePic: profileData.removeProfilePic,
         profilePicInputRef,
-        // Gallery
+        // Gallery - Now returning void functions
         galleryImages,
         selectedFiles,
         galleryUploading,

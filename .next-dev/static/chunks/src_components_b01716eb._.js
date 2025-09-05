@@ -32,7 +32,7 @@ function normalizeBaseUrl(url) {
  * Priority: NEXT_PUBLIC_API_URL (kept for backward-compat), then NEXT_PUBLIC_API_BASE_URL.
  */ function buildHealthUrl() {
     var _process_env_NEXT_PUBLIC_API_URL;
-    const rawApiUrl = ((_process_env_NEXT_PUBLIC_API_URL = ("TURBOPACK compile-time value", "http://localhost:5000/api")) !== null && _process_env_NEXT_PUBLIC_API_URL !== void 0 ? _process_env_NEXT_PUBLIC_API_URL : '').trim();
+    const rawApiUrl = ((_process_env_NEXT_PUBLIC_API_URL = ("TURBOPACK compile-time value", "http://localhost:5000")) !== null && _process_env_NEXT_PUBLIC_API_URL !== void 0 ? _process_env_NEXT_PUBLIC_API_URL : '').trim();
     var _process_env_NEXT_PUBLIC_API_BASE_URL;
     const rawApiBase = ((_process_env_NEXT_PUBLIC_API_BASE_URL = ("TURBOPACK compile-time value", "http://localhost:5000")) !== null && _process_env_NEXT_PUBLIC_API_BASE_URL !== void 0 ? _process_env_NEXT_PUBLIC_API_BASE_URL : '').trim();
     // Prefer API_URL if provided; otherwise fallback to API_BASE_URL; otherwise default.

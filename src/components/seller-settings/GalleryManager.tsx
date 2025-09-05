@@ -1,83 +1,30 @@
 // src/components/seller-settings/GalleryManager.tsx
 'use client';
 
-import { X, Image as ImageLucide, PlusCircle, AlertCircle } from 'lucide-react';
-import React, { RefObject, useEffect, useMemo, useState } from 'react';
-import { SecureImage } from '@/components/ui/SecureMessageDisplay';
-import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
-import { securityService } from '@/services/security.service';
+import { RefObject } from 'react';
+import { Trash2, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { z } from 'zod';
 
-// ---- Props validation (keep function signatures, validate primitives) ----
+const MAX_GALLERY_IMAGES = 20;
+
 const PropsSchema = z.object({
   galleryImages: z.array(z.string()).default([]),
-  selectedFiles: z.array(z.any()).default([]), // File[] at runtime
+  selectedFiles: z.array(z.instanceof(File)).default([]),
   isUploading: z.boolean().default(false),
-  uploadProgress: z.number().min(0).max(100).optional(),
-  multipleFileInputRef: z.any(), // RefObject<HTMLInputElement | null>, left as any for runtime
+  uploadProgress: z.number().min(0).max(100).default(0),
+  multipleFileInputRef: z.custom<RefObject<HTMLInputElement | null>>(), // Fixed: Allow null
   handleMultipleFileChange: z.function().args(z.any()).returns(z.void()),
   uploadGalleryImages: z.function().args().returns(z.void()),
-  removeGalleryImage: z.function().args(z.number().int().nonnegative()).returns(z.void()),
-  removeSelectedFile: z.function().args(z.number().int().nonnegative()).returns(z.void()),
+  removeGalleryImage: z.function().args(z.number()).returns(z.void()),
+  removeSelectedFile: z.function().args(z.number()).returns(z.void()),
   clearAllGalleryImages: z.function().args().returns(z.void()),
 });
 
 interface GalleryManagerProps extends z.infer<typeof PropsSchema> {}
 
-// Helper: build a real FileList from an array of Files using DataTransfer
-function filesToFileList(files: File[]): FileList {
-  const dt = new DataTransfer();
-  for (const f of files) dt.items.add(f);
-  return dt.files;
-}
-
-// Child component that manages its own object URL & cleanup for each File preview
-function SelectedFilePreview({
-  file,
-  index,
-  onRemove,
-  disabled,
-}: {
-  file: File;
-  index: number;
-  onRemove: (i: number) => void;
-  disabled: boolean;
-}) {
-  const [url, setUrl] = useState<string>('');
-
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => {
-      try {
-        URL.revokeObjectURL(objectUrl);
-      } catch {
-        // ignore
-      }
-    };
-  }, [file]);
-
-  return (
-    <div className="relative group border border-gray-700 rounded-lg overflow-hidden">
-      <SecureImage src={url} alt={`Selected ${index + 1}`} className="w-full h-28 object-cover" />
-      <button
-        type="button"
-        onClick={() => onRemove(index)}
-        className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100 disabled:opacity-50"
-        disabled={disabled}
-        aria-label="Remove selected image"
-      >
-        <X className="w-4 h-4" />
-      </button>
-      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 py-1 px-2 text-xs text-white truncate">
-        {sanitizeStrict(file.name)}
-      </div>
-    </div>
-  );
-}
-
-export default function GalleryManager(rawProps: GalleryManagerProps) {
-  const parsed = PropsSchema.safeParse(rawProps);
+export default function GalleryManager(props: GalleryManagerProps) {
+  const parsed = PropsSchema.safeParse(props);
   const {
     galleryImages = [],
     selectedFiles = [],
@@ -89,212 +36,177 @@ export default function GalleryManager(rawProps: GalleryManagerProps) {
     removeGalleryImage,
     removeSelectedFile,
     clearAllGalleryImages,
-  } = parsed.success
-    ? parsed.data
-    : {
-        galleryImages: [],
-        selectedFiles: [],
-        isUploading: false,
-        uploadProgress: 0,
-        multipleFileInputRef: { current: null } as RefObject<HTMLInputElement | null>,
-        handleMultipleFileChange: () => {},
-        uploadGalleryImages: () => {},
-        removeGalleryImage: () => {},
-        removeSelectedFile: () => {},
-        clearAllGalleryImages: () => {},
-      };
+  } = parsed.success ? parsed.data : props;
 
-  const [fileError, setFileError] = useState<string>('');
-
-  // Sanitize upload progress for display and bar width
-  const sanitizedProgress = sanitizeNumber(uploadProgress ?? 0, 0, 100, 0);
-
-  // Handle secure file selection with validation
-  const handleSecureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFileError('');
-    const files = Array.from(e.target.files || []);
-
-    if (files.length === 0) return;
-
-    const validFiles: File[] = [];
-    const errors: string[] = [];
-
-    files.forEach((file) => {
-      const validation = securityService.validateFileUpload(file, {
-        maxSize: 5 * 1024 * 1024, // 5MB
-        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-      });
-
-      if (validation.valid) {
-        validFiles.push(file);
-      } else {
-        errors.push(validation.error || 'Invalid file');
-      }
-    });
-
-    if (errors.length > 0) {
-      setFileError(`${errors[0]}${errors.length > 1 ? ` (and ${errors.length - 1} more)` : ''}`);
-    }
-
-    if (validFiles.length > 0) {
-      // Build a proper FileList to pass along to the original handler
-      const fileList = filesToFileList(validFiles);
-      const syntheticEvent = {
-        ...e,
-        target: {
-          ...e.target,
-          files: fileList,
-        },
-      } as React.ChangeEvent<HTMLInputElement>;
-
-      handleMultipleFileChange(syntheticEvent);
-    } else {
-      // Clear the input if all were invalid
-      if (e.target) {
-        try {
-          e.target.value = '';
-        } catch {
-          /* read-only in some browsers; ignore */
-        }
-      }
-    }
+  // Wrap async functions to handle Promise return
+  const handleUploadClick = () => {
+    // Call the async function but don't await it (returns void)
+    uploadGalleryImages();
   };
 
-  const galleryCount = useMemo(
-    () => (Number.isFinite(galleryImages.length) ? galleryImages.length : 0),
-    [galleryImages.length]
-  );
+  const handleRemoveGalleryImage = (index: number) => {
+    // Call the function without awaiting
+    removeGalleryImage(index);
+  };
+
+  const handleClearAll = () => {
+    // Call the function without awaiting
+    clearAllGalleryImages();
+  };
 
   return (
-    <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-white flex items-center">
-          <ImageLucide className="w-5 h-5 mr-2 text-[#ff950e]" />
+    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <ImageIcon className="w-5 h-5 text-[#ff950e]" />
           Photo Gallery
         </h2>
-
-        <div className="flex gap-2">
-          {galleryImages.length > 0 && (
-            <SecureImage
-              src="/Clear_All.png"
-              alt="Clear All"
-              onClick={!isUploading ? clearAllGalleryImages : undefined}
-              className={`w-16 h-auto object-contain transition-transform duration-200 ${
-                isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.02]'
-              }`}
-            />
-          )}
-        </div>
+        <span className="text-sm text-gray-400">
+          {galleryImages.length} / {MAX_GALLERY_IMAGES} images
+        </span>
       </div>
 
-      <p className="text-gray-400 text-sm mb-4">
-        Add photos to your public gallery. These will be visible to all visitors on your profile page. Gallery changes are
-        saved automatically.
-      </p>
-
-      {/* Upload Progress */}
-      {isUploading && sanitizedProgress > 0 && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-sm text-gray-300 mb-1">
-            <span>Uploading to cloud storage...</span>
-            <span>{sanitizedProgress}%</span>
+      {/* Gallery Images Display */}
+      {galleryImages.length > 0 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-gray-300">Current Gallery</h3>
+            {galleryImages.length > 0 && (
+              <button
+                onClick={handleClearAll}
+                className="text-xs text-red-500 hover:text-red-400 transition"
+                disabled={isUploading}
+                type="button"
+              >
+                Clear All
+              </button>
+            )}
           </div>
-          <div className="w-full bg-gray-800 rounded-full h-2">
-            <div className="bg-[#ff950e] h-2 rounded-full transition-all duration-300" style={{ width: `${sanitizedProgress}%` }} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {galleryImages.map((image, index) => (
+              <div key={index} className="relative group aspect-square">
+                <img
+                  src={image}
+                  alt={`Gallery ${index + 1}`}
+                  className="w-full h-full object-cover rounded-lg border border-gray-700"
+                  loading="lazy"
+                />
+                <button
+                  onClick={() => handleRemoveGalleryImage(index)}
+                  className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                  title="Remove image"
+                  disabled={isUploading}
+                  type="button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* File Selection & Upload */}
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-          <div className="flex-1">
-            <label
-              htmlFor="gallery-upload"
-              className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black transition w-full ${
-                isUploading ? 'border-gray-800 opacity-60 cursor-not-allowed' : 'border-gray-700 hover:border-[#ff950e] cursor-pointer'
-              }`}
-            >
-              <input
-                id="gallery-upload"
-                ref={multipleFileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleSecureFileChange}
-                className="hidden"
-                disabled={isUploading}
-              />
-              <PlusCircle className="w-5 h-5 text-[#ff950e]" />
-              <span className="text-gray-300">Select multiple images...</span>
-            </label>
-          </div>
-
-          <SecureImage
-            src="/Add_To_Gallery.png"
-            alt="Add to Gallery"
-            onClick={selectedFiles.length > 0 && !isUploading ? uploadGalleryImages : undefined}
-            className={`w-12 h-auto object-contain transition-transform duration-200 ${
-              selectedFiles.length === 0 || isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.02]'
-            }`}
-          />
-        </div>
-
-        {/* File error message */}
-        {fileError && (
-          <p className="text-xs text-red-400 flex items-center gap-1 mb-2" role="alert" aria-live="assertive">
-            <AlertCircle className="w-3 h-3" />
-            {sanitizeStrict(fileError)}
+      {/* File Upload Section */}
+      <div className="space-y-4">
+        <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-600 transition">
+          <ImageIcon className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+          <p className="text-gray-400 mb-2">
+            {galleryImages.length === 0 
+              ? "Add photos to your gallery" 
+              : `Add more photos (${MAX_GALLERY_IMAGES - galleryImages.length} remaining)`}
           </p>
-        )}
+          <input
+            ref={multipleFileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleMultipleFileChange}
+            className="hidden"
+            disabled={isUploading || galleryImages.length >= MAX_GALLERY_IMAGES}
+          />
+          <button
+            onClick={() => multipleFileInputRef?.current?.click()}
+            disabled={isUploading || galleryImages.length >= MAX_GALLERY_IMAGES}
+            className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+          >
+            Select Images
+          </button>
+          <p className="text-xs text-gray-500 mt-2">
+            JPEG, JPG, PNG, or WebP • Max 10MB per file
+          </p>
+        </div>
 
         {/* Selected Files Preview */}
         {selectedFiles.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">Selected Images:</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <h3 className="text-sm font-medium text-gray-300 mb-2">
+              Selected Files ({selectedFiles.length})
+            </h3>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
               {selectedFiles.map((file, index) => (
-                <SelectedFilePreview
-                  key={`${file.name}-${index}`}
-                  file={file as File}
-                  index={index}
-                  onRemove={removeSelectedFile}
-                  disabled={isUploading}
-                />
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2 bg-gray-800 rounded-lg"
+                >
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-300 truncate max-w-[200px]">
+                      {sanitizeStrict(file.name)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => removeSelectedFile(index)}
+                    className="text-red-500 hover:text-red-400 transition p-1"
+                    disabled={isUploading}
+                    type="button"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               ))}
+            </div>
+
+            {/* Upload Button and Progress */}
+            <div className="mt-4">
+              {isUploading ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Uploading...</span>
+                    <span className="text-[#ff950e]">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-[#ff950e] h-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleUploadClick}
+                  disabled={selectedFiles.length === 0}
+                  className="w-full bg-[#ff950e] text-black font-bold py-2 rounded-lg hover:bg-[#e0850d] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  type="button"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload {selectedFiles.length} {selectedFiles.length === 1 ? 'Image' : 'Images'}
+                </button>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Current Gallery */}
-      <div>
-        <h3 className="text-lg font-medium text-white mb-3 flex items-center">Your Gallery ({galleryCount} photos)</h3>
-
-        {galleryImages.length === 0 ? (
-          <div className="border border-dashed border-gray-700 rounded-lg p-8 text-center">
-            <ImageLucide className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500">Your gallery is empty. Add some photos to showcase your style!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {galleryImages.map((img, index) => (
-              <div key={`${img}-${index}`} className="relative group">
-                <SecureImage src={img} alt={`Gallery ${index + 1}`} className="w-full h-40 object-cover rounded-lg border border-gray-700" />
-                <button
-                  type="button"
-                  onClick={() => removeGalleryImage(index)}
-                  className="absolute top-2 right-2 bg-red-600 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                  disabled={isUploading}
-                  aria-label="Remove image from gallery"
-                >
-                  <X size={16} className="text-white" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Info Text */}
+      <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+        <p className="text-xs text-gray-400">
+          <strong className="text-gray-300">Tips:</strong> High-quality photos help attract more buyers. 
+          Consider adding variety with different angles and styles. All images are automatically optimized for web display.
+        </p>
       </div>
     </div>
   );
