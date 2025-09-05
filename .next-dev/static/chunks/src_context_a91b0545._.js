@@ -5703,7 +5703,6 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
 
 var { k: __turbopack_refresh__, m: module } = __turbopack_context__;
 {
-// src/context/ListingContext.tsx
 __turbopack_context__.s({
     "ListingProvider": ()=>ListingProvider,
     "useListings": ()=>useListings
@@ -5736,24 +5735,20 @@ var _s = __turbopack_context__.k.signature(), _s1 = __turbopack_context__.k.sign
 ;
 ;
 ;
-// FIX 2: Add deduplication manager for sold listings
+// ============ Sold-listing dedup manager (browser-safe timers) ============
 class SoldListingDeduplicationManager {
     startCleanup() {
         this.cleanupInterval = setInterval(()=>{
             const now = Date.now();
             const expiredKeys = [];
             this.processedListings.forEach((timestamp, listingId)=>{
-                if (now - timestamp > this.expiryMs) {
-                    expiredKeys.push(listingId);
-                }
+                if (now - timestamp > this.expiryMs) expiredKeys.push(listingId);
             });
             expiredKeys.forEach((key)=>this.processedListings.delete(key));
-        }, 30000); // Cleanup every 30 seconds
+        }, 30_000);
     }
     isDuplicate(listingId) {
-        if (this.processedListings.has(listingId)) {
-            return true;
-        }
+        if (this.processedListings.has(listingId)) return true;
         this.processedListings.set(listingId, Date.now());
         return false;
     }
@@ -5764,7 +5759,7 @@ class SoldListingDeduplicationManager {
         }
         this.processedListings.clear();
     }
-    constructor(expiryMs = 60000){
+    constructor(expiryMs = 60_000){
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "processedListings", new Map());
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "cleanupInterval", null);
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f40$swc$2f$helpers$2f$esm$2f$_define_property$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["_"])(this, "expiryMs", void 0);
@@ -5778,7 +5773,6 @@ const ListingProvider = (param)=>{
     _s();
     const { user, updateUser } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAuth"])();
     const webSocketContext = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$WebSocketContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useWebSocket"])();
-    // Extract properties from WebSocket context safely
     const subscribe = webSocketContext === null || webSocketContext === void 0 ? void 0 : webSocketContext.subscribe;
     const isConnected = (webSocketContext === null || webSocketContext === void 0 ? void 0 : webSocketContext.isConnected) || false;
     const [users, setUsers] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])({});
@@ -5789,15 +5783,12 @@ const ListingProvider = (param)=>{
     const [isLoading, setIsLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [error, setError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     const [latestOrder, setLatestOrder] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
-    // FIX 2: Add ref for deduplication manager
     const soldListingDeduplicator = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(new SoldListingDeduplicationManager());
-    // Add deduplication mechanism for listing updates
     const listingUpdateDeduplicator = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(new Map());
-    const DEBOUNCE_TIME = 500; // 500ms debounce
-    // Add request deduplication for API calls
+    const DEBOUNCE_TIME = 500;
     const apiRequestCache = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(new Map());
-    const API_CACHE_TIME = 1000; // Cache API responses for 1 second
-    // Helper function to normalize notification items to the new format
+    const API_CACHE_TIME = 1000;
+    // ---------- Notification helpers ----------
     const normalizeNotification = (item)=>{
         if (typeof item === 'string') {
             return {
@@ -5809,21 +5800,23 @@ const ListingProvider = (param)=>{
         }
         return {
             ...item,
-            message: __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(item.message) // Sanitize message
+            message: __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(item.message)
         };
     };
-    // Helper function to save notification store
     const saveNotificationStore = async (store)=>{
-        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('seller_notifications_store', store);
+        try {
+            await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('seller_notifications_store', store);
+        } catch (e) {
+            console.error('[ListingContext] Failed saving notification store', e);
+        }
     };
-    // Memoized notification function to avoid infinite render loop
     const addSellerNotification = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "ListingProvider.useCallback[addSellerNotification]": (seller, message)=>{
-            if (!seller) {
-                console.warn("Attempted to add notification without seller ID");
+            const safeSeller = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(seller);
+            if (!safeSeller) {
+                console.warn('[ListingContext] Attempted to add notification with invalid seller');
                 return;
             }
-            // Sanitize the notification message
             const sanitizedMessage = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(message);
             const newNotification = {
                 id: (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$uuid$2f$dist$2f$esm$2d$browser$2f$v4$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__v4$3e$__["v4"])(),
@@ -5833,14 +5826,15 @@ const ListingProvider = (param)=>{
             };
             setNotificationStore({
                 "ListingProvider.useCallback[addSellerNotification]": (prev)=>{
-                    const sellerNotifications = prev[seller] || [];
+                    const sellerNotifications = prev[safeSeller] || [];
                     const updated = {
                         ...prev,
-                        [seller]: [
-                            ...sellerNotifications,
+                        [safeSeller]: [
+                            ...sellerNotifications.map(normalizeNotification),
                             newNotification
                         ]
                     };
+                    // fire-and-forget
                     saveNotificationStore(updated);
                     return updated;
                 }
@@ -5848,9 +5842,7 @@ const ListingProvider = (param)=>{
         }
     }["ListingProvider.useCallback[addSellerNotification]"], []);
     const { subscribeToSellerWithPayment, setAddSellerNotificationCallback, purchaseListing, orderHistory, unsubscribeFromSeller: walletUnsubscribeFromSeller } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$WalletContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useWallet"])();
-    // Get auction functions from AuctionContext
     const { placeBid: auctionPlaceBid, cancelAuction: auctionCancelAuction, processEndedAuction } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuctionContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAuction"])();
-    // On mount, set the notification callback in WalletContext
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             if (setAddSellerNotificationCallback) {
@@ -5861,52 +5853,29 @@ const ListingProvider = (param)=>{
         setAddSellerNotificationCallback,
         addSellerNotification
     ]);
-    // FIX: Optimized WebSocket subscription with debouncing
+    // ---------- WebSocket: listing sold ----------
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             if (!isConnected || !subscribe) return;
-            console.log('[ListingContext] Setting up WebSocket subscription for listing:sold events');
             const unsubscribe = subscribe('listing:sold', {
                 "ListingProvider.useEffect.unsubscribe": (data)=>{
-                    console.log('[ListingContext] Received listing:sold event:', data);
                     var _data_listingId;
-                    // Handle both possible field names for the listing ID
                     const id = (_data_listingId = data.listingId) !== null && _data_listingId !== void 0 ? _data_listingId : data.id;
-                    if (!id) {
-                        console.error('[ListingContext] No listing ID in sold event:', data);
-                        return;
-                    }
-                    // Debounce duplicate events
+                    if (!id) return;
                     const now = Date.now();
-                    const lastUpdate = listingUpdateDeduplicator.current.get(id);
-                    if (lastUpdate && now - lastUpdate < DEBOUNCE_TIME) {
-                        console.log('[ListingContext] Skipping duplicate sold event (debounced):', id);
-                        return;
-                    }
+                    const last = listingUpdateDeduplicator.current.get(id);
+                    if (last && now - last < DEBOUNCE_TIME) return;
                     listingUpdateDeduplicator.current.set(id, now);
-                    // Check if we've already processed this sold listing
-                    if (soldListingDeduplicator.current.isDuplicate(id)) {
-                        console.log('[ListingContext] Skipping duplicate sold listing:', id);
-                        return;
-                    }
-                    // Use setState with callback to prevent multiple state updates
+                    if (soldListingDeduplicator.current.isDuplicate(id)) return;
                     setListings({
                         "ListingProvider.useEffect.unsubscribe": (prev)=>{
-                            // Check if listing exists before filtering
-                            const exists = prev.some({
-                                "ListingProvider.useEffect.unsubscribe.exists": (listing)=>listing.id === id
-                            }["ListingProvider.useEffect.unsubscribe.exists"]);
-                            if (!exists) {
-                                console.log('[ListingContext] Listing not found in current state:', id);
-                                return prev;
-                            }
+                            if (!prev.some({
+                                "ListingProvider.useEffect.unsubscribe": (l)=>l.id === id
+                            }["ListingProvider.useEffect.unsubscribe"])) return prev;
                             const filtered = prev.filter({
-                                "ListingProvider.useEffect.unsubscribe.filtered": (listing)=>listing.id !== id
+                                "ListingProvider.useEffect.unsubscribe.filtered": (l)=>l.id !== id
                             }["ListingProvider.useEffect.unsubscribe.filtered"]);
-                            console.log('[ListingContext] Removed sold listing:', id);
-                            // Fire custom event for any components that need to know
                             if ("TURBOPACK compile-time truthy", 1) {
-                                // Debounce the custom event as well
                                 setTimeout({
                                     "ListingProvider.useEffect.unsubscribe": ()=>{
                                         window.dispatchEvent(new CustomEvent('listing:removed', {
@@ -5926,7 +5895,6 @@ const ListingProvider = (param)=>{
             return ({
                 "ListingProvider.useEffect": ()=>{
                     unsubscribe();
-                    // Clean up deduplicator on unmount
                     listingUpdateDeduplicator.current.clear();
                 }
             })["ListingProvider.useEffect"];
@@ -5935,19 +5903,15 @@ const ListingProvider = (param)=>{
         isConnected,
         subscribe
     ]);
-    // Subscribe to order:created events
+    // ---------- WebSocket: order created ----------
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             if (!isConnected || !subscribe) return;
-            console.log('[ListingContext] Setting up WebSocket subscription for order:created events');
             const unsubscribe = subscribe('order:created', {
                 "ListingProvider.useEffect.unsubscribe": (data)=>{
-                    console.log('[ListingContext] Received order:created event:', data);
-                    // Store the latest order so it's immediately available
-                    if (data.order || data) {
-                        const order = data.order || data;
+                    const order = (data === null || data === void 0 ? void 0 : data.order) || data;
+                    if (order) {
                         setLatestOrder(order);
-                        // Fire custom event for any components that need to know
                         if ("TURBOPACK compile-time truthy", 1) {
                             window.dispatchEvent(new CustomEvent('order:created', {
                                 detail: {
@@ -5968,7 +5932,7 @@ const ListingProvider = (param)=>{
         isConnected,
         subscribe
     ]);
-    // Cleanup deduplication manager on unmount
+    // Cleanup dedup manager on unmount
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             return ({
@@ -5978,7 +5942,7 @@ const ListingProvider = (param)=>{
             })["ListingProvider.useEffect"];
         }
     }["ListingProvider.useEffect"], []);
-    // Listen for notification changes in localStorage (for header live updates)
+    // Listen for notification changes (multi-tab)
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             function handleStorageChange(e) {
@@ -5996,27 +5960,20 @@ const ListingProvider = (param)=>{
             })["ListingProvider.useEffect"];
         }
     }["ListingProvider.useEffect"], []);
-    // Migration function to convert old notifications to new format
-    const migrateNotifications = (notifications)=>{
-        return notifications.map(normalizeNotification);
-    };
-    // Cached fetch function for individual listings
+    const migrateNotifications = (notifications)=>notifications.map(normalizeNotification);
+    // Cached fetch (per listing)
     const fetchListingWithCache = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "ListingProvider.useCallback[fetchListingWithCache]": async (listingId)=>{
             const now = Date.now();
             const cached = apiRequestCache.current.get(listingId);
-            // Return cached promise if it's still fresh
             if (cached && now - cached.timestamp < API_CACHE_TIME) {
-                console.log('[ListingContext] Using cached listing request for:', listingId);
                 return cached.promise;
             }
-            // Create new request
             const promise = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].getListing(listingId);
             apiRequestCache.current.set(listingId, {
                 timestamp: now,
                 promise
             });
-            // Clean up old cache entries
             setTimeout({
                 "ListingProvider.useCallback[fetchListingWithCache]": ()=>{
                     const cleanupTime = Date.now();
@@ -6030,52 +5987,37 @@ const ListingProvider = (param)=>{
             return promise;
         }
     }["ListingProvider.useCallback[fetchListingWithCache]"], []);
-    // Add a cache for the getListings API call
+    // Cache for getListings
     const listingsCache = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
-    const LISTINGS_CACHE_TIME = 1000; // Cache for 1 second
-    // Load initial data using services with caching
+    const LISTINGS_CACHE_TIME = 1000;
+    // ---------- Initial load ----------
     const loadData = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "ListingProvider.useCallback[loadData]": async ()=>{
             if ("TURBOPACK compile-time falsy", 0) //TURBOPACK unreachable
             ;
-            // Check if we're already loading to prevent duplicate calls
-            if (isLoading) {
-                console.log('[ListingContext] Already loading, skipping duplicate call');
-                return;
-            }
+            if (isLoading) return;
             setIsLoading(true);
             setError(null);
             try {
-                // Load users - FIXED: Handle new UsersResponse format with proper type checking
+                // Users (supports array or { users: [] })
                 const usersResult = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$users$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["usersService"].getUsers();
                 if (usersResult.success && usersResult.data) {
-                    // Convert UsersResponse back to Record<string, User> format for backward compatibility
                     const usersMap = {};
                     if (Array.isArray(usersResult.data)) {
-                        // Handle case where data is directly an array
                         usersResult.data.forEach({
-                            "ListingProvider.useCallback[loadData]": (user)=>{
-                                usersMap[user.username] = user;
-                            }
+                            "ListingProvider.useCallback[loadData]": (u)=>usersMap[u.username] = u
                         }["ListingProvider.useCallback[loadData]"]);
-                    } else if (usersResult.data && typeof usersResult.data === 'object' && 'users' in usersResult.data) {
-                        // Handle case where data is UsersResponse object - check if users property exists and is array
-                        const usersResponse = usersResult.data;
-                        if (Array.isArray(usersResponse.users)) {
-                            usersResponse.users.forEach({
-                                "ListingProvider.useCallback[loadData]": (user)=>{
-                                    usersMap[user.username] = user;
-                                }
-                            }["ListingProvider.useCallback[loadData]"]);
-                        }
+                    } else if (usersResult.data && typeof usersResult.data === 'object' && 'users' in usersResult.data && Array.isArray(usersResult.data.users)) {
+                        usersResult.data.users.forEach({
+                            "ListingProvider.useCallback[loadData]": (u)=>usersMap[u.username] = u
+                        }["ListingProvider.useCallback[loadData]"]);
                     }
                     setUsers(usersMap);
                 }
-                // Load listings using the service with caching
+                // Listings
                 const now = Date.now();
                 let listingsResult;
                 if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
-                    console.log('[ListingContext] Using cached listings for initial load');
                     listingsResult = await listingsCache.current.promise;
                 } else {
                     const promise = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].getListings();
@@ -6091,10 +6033,10 @@ const ListingProvider = (param)=>{
                     var _listingsResult_error;
                     throw new Error(((_listingsResult_error = listingsResult.error) === null || _listingsResult_error === void 0 ? void 0 : _listingsResult_error.message) || 'Failed to load listings');
                 }
-                // Load subscriptions
+                // Subscriptions
                 const storedSubs = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('subscriptions', {});
                 setSubscriptions(storedSubs);
-                // Load notifications
+                // Notifications
                 const storedNotifications = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('seller_notifications_store', {});
                 const migrated = {};
                 Object.keys(storedNotifications).forEach({
@@ -6107,24 +6049,23 @@ const ListingProvider = (param)=>{
                 setNotificationStore(migrated);
                 await saveNotificationStore(migrated);
                 setIsAuthReady(true);
-            } catch (error) {
-                console.error('Error loading ListingContext data:', error);
-                setError(error instanceof Error ? error.message : 'Failed to load data');
+            } catch (err) {
+                console.error('Error loading ListingContext data:', err);
+                setError((err === null || err === void 0 ? void 0 : err.message) || 'Failed to load data');
                 setIsAuthReady(true);
-                listingsCache.current = null; // Clear cache on error
+                listingsCache.current = null;
             } finally{
                 setIsLoading(false);
             }
         }
     }["ListingProvider.useCallback[loadData]"], [
         isLoading
-    ]); // Add isLoading as dependency to prevent duplicate calls
-    // Load data on mount with proper cleanup
+    ]);
+    // Debounced mount-load (browser-safe timer types)
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             let mounted = true;
             let timeoutId;
-            // Debounce the initial load slightly to prevent multiple rapid calls
             timeoutId = setTimeout({
                 "ListingProvider.useEffect": ()=>{
                     if (mounted && !isAuthReady && !isLoading) {
@@ -6138,33 +6079,31 @@ const ListingProvider = (param)=>{
                     clearTimeout(timeoutId);
                 }
             })["ListingProvider.useEffect"];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         }
-    }["ListingProvider.useEffect"], []); // Empty dependency array - only run once on mount
+    }["ListingProvider.useEffect"], []);
     const persistUsers = async (updated)=>{
         setUsers(updated);
         await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('all_users_v2', updated);
     };
-    // Refresh listings with caching
+    // ---------- Refresh listings (cached) ----------
     const refreshListings = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "ListingProvider.useCallback[refreshListings]": async ()=>{
             const now = Date.now();
-            // Return cached promise if it's still fresh
             if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
-                console.log('[ListingContext] Using cached listings request');
                 try {
                     const result = await listingsCache.current.promise;
                     if (result.success && result.data) {
                         setListings(result.data);
                     }
                     return;
-                } catch (error) {
-                // If cached request failed, continue with new request
+                } catch (e) {
+                // fall through to fetch fresh
                 }
             }
             setIsLoading(true);
             setError(null);
             try {
-                // Create and cache the new promise
                 const promise = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].getListings();
                 listingsCache.current = {
                     timestamp: now,
@@ -6177,16 +6116,16 @@ const ListingProvider = (param)=>{
                     var _listingsResult_error;
                     throw new Error(((_listingsResult_error = listingsResult.error) === null || _listingsResult_error === void 0 ? void 0 : _listingsResult_error.message) || 'Failed to refresh listings');
                 }
-            } catch (error) {
-                console.error('Error refreshing listings:', error);
-                setError(error instanceof Error ? error.message : 'Failed to refresh listings');
-                listingsCache.current = null; // Clear cache on error
+            } catch (err) {
+                console.error('Error refreshing listings:', err);
+                setError((err === null || err === void 0 ? void 0 : err.message) || 'Failed to refresh listings');
+                listingsCache.current = null;
             } finally{
                 setIsLoading(false);
             }
         }
     }["ListingProvider.useCallback[refreshListings]"], []);
-    // Check for ended auctions on load and at regular intervals
+    // ---------- Auction checks ----------
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "ListingProvider.useEffect": ()=>{
             checkEndedAuctions();
@@ -6194,26 +6133,20 @@ const ListingProvider = (param)=>{
                 "ListingProvider.useEffect.interval": ()=>{
                     checkEndedAuctions();
                 }
-            }["ListingProvider.useEffect.interval"], 60000);
+            }["ListingProvider.useEffect.interval"], 60_000);
             return ({
                 "ListingProvider.useEffect": ()=>clearInterval(interval)
             })["ListingProvider.useEffect"];
         }
     }["ListingProvider.useEffect"], [
         listings
-    ]);
-    // Use listings service for adding listings
+    ]); // eslint-disable-line react-hooks/exhaustive-deps
+    // ---------- Create listing ----------
     const addListing = async (listing)=>{
-        console.log('🔍 addListing called with user:', user);
         if (!user || user.role !== 'seller') {
-            console.error('❌ addListing failed: user is not a seller', {
-                user: user === null || user === void 0 ? void 0 : user.username,
-                role: user === null || user === void 0 ? void 0 : user.role
-            });
             alert('You must be logged in as a seller to create listings.');
             return;
         }
-        // Validate and sanitize listing data
         const validationResult = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateAndSanitize({
             title: listing.title,
             description: listing.description,
@@ -6232,19 +6165,12 @@ const ListingProvider = (param)=>{
             tags: (tags)=>tags === null || tags === void 0 ? void 0 : tags.map((tag)=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(tag))
         });
         if (!validationResult.success) {
-            console.error('Validation failed:', validationResult.errors);
             alert('Please check your listing details:\n' + Object.values(validationResult.errors || {}).join('\n'));
             return;
         }
         const myListings = listings.filter((l)=>l.seller === user.username);
         const isVerified = user.isVerified || user.verificationStatus === 'verified';
         const maxListings = isVerified ? 25 : 2;
-        console.log('📊 Listing check:', {
-            currentListings: myListings.length,
-            maxListings,
-            isVerified,
-            username: user.username
-        });
         if (myListings.length >= maxListings) {
             alert(isVerified ? 'You have reached the maximum of 25 listings for verified sellers.' : 'Unverified sellers can only have 2 active listings. Please verify your account to add more.');
             return;
@@ -6266,15 +6192,15 @@ const ListingProvider = (param)=>{
                         ...prev,
                         result.data
                     ]);
-                console.log('✅ Created new listing:', result.data);
-                window.dispatchEvent(new CustomEvent('listingCreated', {
-                    detail: {
-                        listing: result.data
-                    }
-                }));
+                if ("TURBOPACK compile-time truthy", 1) {
+                    window.dispatchEvent(new CustomEvent('listingCreated', {
+                        detail: {
+                            listing: result.data
+                        }
+                    }));
+                }
             } else {
                 var _result_error;
-                console.error('Failed to create listing:', result.error);
                 alert(((_result_error = result.error) === null || _result_error === void 0 ? void 0 : _result_error.message) || 'Failed to create listing. Please try again.');
             }
         } catch (error) {
@@ -6282,13 +6208,12 @@ const ListingProvider = (param)=>{
             alert('An error occurred while creating the listing.');
         }
     };
-    // Add an auction listing
+    // ---------- Create auction listing ----------
     const addAuctionListing = async (listing, auctionSettings)=>{
         if (!user || user.role !== 'seller') {
             alert('You must be logged in as a seller to create auction listings.');
             return;
         }
-        // Validate and sanitize listing data
         const listingValidation = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateAndSanitize({
             title: listing.title,
             description: listing.description,
@@ -6307,14 +6232,12 @@ const ListingProvider = (param)=>{
             tags: (tags)=>tags === null || tags === void 0 ? void 0 : tags.map((tag)=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(tag))
         });
         if (!listingValidation.success) {
-            console.error('Listing validation failed:', listingValidation.errors);
             alert('Please check your listing details:\n' + Object.values(listingValidation.errors || {}).join('\n'));
             return;
         }
-        // Validate auction settings
         const amountValidation = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateAmount(auctionSettings.startingPrice, {
             min: 0.01,
-            max: 10000
+            max: 10_000
         });
         if (!amountValidation.valid) {
             alert(amountValidation.error || 'Invalid starting price');
@@ -6323,7 +6246,7 @@ const ListingProvider = (param)=>{
         if (auctionSettings.reservePrice) {
             const reserveValidation = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateAmount(auctionSettings.reservePrice, {
                 min: auctionSettings.startingPrice,
-                max: 10000
+                max: 10_000
             });
             if (!reserveValidation.valid) {
                 alert('Reserve price must be at least the starting price');
@@ -6356,11 +6279,13 @@ const ListingProvider = (param)=>{
                         result.data
                     ]);
                 addSellerNotification(user.username, "🔨 You've created a new auction: \"".concat(sanitizedListing.title, '" starting at $').concat(auctionSettings.startingPrice.toFixed(2)));
-                window.dispatchEvent(new CustomEvent('listingCreated', {
-                    detail: {
-                        listing: result.data
-                    }
-                }));
+                if ("TURBOPACK compile-time truthy", 1) {
+                    window.dispatchEvent(new CustomEvent('listingCreated', {
+                        detail: {
+                            listing: result.data
+                        }
+                    }));
+                }
             } else {
                 var _result_error;
                 alert(((_result_error = result.error) === null || _result_error === void 0 ? void 0 : _result_error.message) || 'Failed to create auction listing. Please try again.');
@@ -6370,12 +6295,12 @@ const ListingProvider = (param)=>{
             alert('An error occurred while creating the auction listing.');
         }
     };
+    // ---------- Remove listing ----------
     const removeListing = async (id)=>{
         try {
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].deleteListing(id);
             if (result.success) {
-                setListings((prev)=>prev.filter((listing)=>listing.id !== id));
-                // FIX 2: Fire event when listing is removed
+                setListings((prev)=>prev.filter((l)=>l.id !== id));
                 if ("TURBOPACK compile-time truthy", 1) {
                     window.dispatchEvent(new CustomEvent('listing:removed', {
                         detail: {
@@ -6383,27 +6308,27 @@ const ListingProvider = (param)=>{
                             reason: 'deleted'
                         }
                     }));
+                    window.dispatchEvent(new CustomEvent('listingDeleted', {
+                        detail: {
+                            listingId: id
+                        }
+                    }));
                 }
-                window.dispatchEvent(new CustomEvent('listingDeleted', {
-                    detail: {
-                        listingId: id
-                    }
-                }));
             } else {
                 var _result_error;
                 throw new Error(((_result_error = result.error) === null || _result_error === void 0 ? void 0 : _result_error.message) || 'Failed to delete listing');
             }
         } catch (error) {
             console.error('Error removing listing:', error);
-            alert(error instanceof Error ? error.message : 'Failed to remove listing');
+            alert((error === null || error === void 0 ? void 0 : error.message) || 'Failed to remove listing');
         }
     };
+    // ---------- Purchase + remove ----------
     const purchaseListingAndRemove = async (listing, buyerUsername)=>{
         try {
             var _listing_hoursWorn;
-            // Sanitize buyer username
             const sanitizedBuyer = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(buyerUsername);
-            // Convert ListingContext's Listing to the format that WalletContext expects
+            if (!sanitizedBuyer) return false;
             const listingForWallet = {
                 id: listing.id,
                 title: listing.title,
@@ -6432,14 +6357,10 @@ const ListingProvider = (param)=>{
                 verified: listing.isVerified,
                 nsfw: false
             };
-            // First, process the purchase through wallet
             const success = await purchaseListing(listingForWallet, sanitizedBuyer);
             if (success) {
-                // If purchase was successful, remove the listing
-                // FIX 2: Add to deduplication manager before removing
                 soldListingDeduplicator.current.isDuplicate(listing.id);
                 await removeListing(listing.id);
-                console.log('✅ Listing purchased and removed:', listing.id);
             }
             return success;
         } catch (error) {
@@ -6447,38 +6368,39 @@ const ListingProvider = (param)=>{
             return false;
         }
     };
+    // ---------- Update listing ----------
     const updateListing = async (id, updatedListing)=>{
         try {
-            // Sanitize updated fields if they exist
             const sanitizedUpdate = {
                 ...updatedListing
             };
-            if (updatedListing.title) {
-                sanitizedUpdate.title = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(updatedListing.title);
-            }
-            if (updatedListing.description) {
-                sanitizedUpdate.description = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(updatedListing.description);
-            }
-            if (updatedListing.tags) {
+            if (updatedListing.title) sanitizedUpdate.title = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(updatedListing.title);
+            if (updatedListing.description) sanitizedUpdate.description = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(updatedListing.description);
+            if (Array.isArray(updatedListing.tags)) {
                 sanitizedUpdate.tags = updatedListing.tags.map((tag)=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(tag));
             }
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].updateListing(id, sanitizedUpdate);
             if (result.success && result.data) {
-                setListings((prev)=>prev.map((listing)=>listing.id === id ? result.data : listing));
+                setListings((prev)=>prev.map((l)=>l.id === id ? result.data : l));
             } else {
                 var _result_error;
                 throw new Error(((_result_error = result.error) === null || _result_error === void 0 ? void 0 : _result_error.message) || 'Failed to update listing');
             }
         } catch (error) {
             console.error('Error updating listing:', error);
-            alert(error instanceof Error ? error.message : 'Failed to update listing');
+            alert((error === null || error === void 0 ? void 0 : error.message) || 'Failed to update listing');
         }
     };
-    // CRITICAL FIX: Update placeBid to not call hooks inside
+    // ---------- Bidding ----------
     const placeBid = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
         "ListingProvider.useCallback[placeBid]": async (listingId, bidder, amount)=>{
             try {
                 var _listing_auction, _listing_auction1;
+                const cleanBidder = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(bidder);
+                if (!cleanBidder || !Number.isFinite(amount) || amount <= 0) {
+                    console.error('[ListingContext] Invalid bid input');
+                    return false;
+                }
                 const listing = listings.find({
                     "ListingProvider.useCallback[placeBid].listing": (l)=>l.id === listingId
                 }["ListingProvider.useCallback[placeBid].listing"]);
@@ -6486,23 +6408,19 @@ const ListingProvider = (param)=>{
                     console.error('[ListingContext] Listing not found:', listingId);
                     return false;
                 }
-                // Check if this is an incremental bid (user raising their own bid)
-                const isCurrentHighestBidder = ((_listing_auction = listing.auction) === null || _listing_auction === void 0 ? void 0 : _listing_auction.highestBidder) === bidder;
+                const isCurrentHighestBidder = ((_listing_auction = listing.auction) === null || _listing_auction === void 0 ? void 0 : _listing_auction.highestBidder) === cleanBidder;
                 const currentHighestBid = ((_listing_auction1 = listing.auction) === null || _listing_auction1 === void 0 ? void 0 : _listing_auction1.highestBid) || 0;
                 if (isCurrentHighestBidder && currentHighestBid > 0) {
-                    // For incremental bids, only charge the difference (no fee)
                     const bidDifference = amount - currentHighestBid;
-                    // NOTE: Balance validation should be done in the component that calls placeBid
-                    // We don't validate balance here to avoid using hooks inside this function
-                    console.log("[ListingContext] Processing incremental bid: difference=".concat(bidDifference));
+                    if (!(bidDifference > 0)) {
+                        console.warn('[ListingContext] Incremental bid must exceed current highest bid');
+                        return false;
+                    }
                 }
-                // Delegate to AuctionContext
-                const success = await auctionPlaceBid(listingId, bidder, amount);
+                const success = await auctionPlaceBid(listingId, cleanBidder, amount);
                 if (success) {
-                    // Refresh listings to get updated bid info
                     await refreshListings();
-                    // Add seller notification
-                    addSellerNotification(listing.seller, "💰 New bid! ".concat(bidder, " bid $").concat(amount.toFixed(2), ' on "').concat(listing.title, '"'));
+                    addSellerNotification(listing.seller, "💰 New bid! ".concat(cleanBidder, " bid $").concat(amount.toFixed(2), ' on "').concat(listing.title, '"'));
                 }
                 return success;
             } catch (error) {
@@ -6516,38 +6434,27 @@ const ListingProvider = (param)=>{
         refreshListings,
         addSellerNotification
     ]);
-    const getAuctionListings = ()=>{
-        return listings.filter((listing)=>{
-            var _listing_auction;
-            return (_listing_auction = listing.auction) === null || _listing_auction === void 0 ? void 0 : _listing_auction.isAuction;
+    const getAuctionListings = ()=>listings.filter((l)=>{
+            var _l_auction;
+            return (_l_auction = l.auction) === null || _l_auction === void 0 ? void 0 : _l_auction.isAuction;
         });
-    };
-    const getActiveAuctions = ()=>{
-        return listings.filter((listing)=>{
-            var _listing_auction;
-            return ((_listing_auction = listing.auction) === null || _listing_auction === void 0 ? void 0 : _listing_auction.isAuction) && listing.auction.status === 'active';
+    const getActiveAuctions = ()=>listings.filter((l)=>{
+            var _l_auction;
+            return ((_l_auction = l.auction) === null || _l_auction === void 0 ? void 0 : _l_auction.isAuction) && l.auction.status === 'active';
         });
-    };
-    const getEndedAuctions = ()=>{
-        return listings.filter((listing)=>{
-            var _listing_auction;
-            return ((_listing_auction = listing.auction) === null || _listing_auction === void 0 ? void 0 : _listing_auction.isAuction) && listing.auction.status === 'ended';
+    const getEndedAuctions = ()=>listings.filter((l)=>{
+            var _l_auction;
+            return ((_l_auction = l.auction) === null || _l_auction === void 0 ? void 0 : _l_auction.isAuction) && l.auction.status === 'ended';
         });
-    };
-    // FIX: Updated checkEndedAuctions to only run for sellers and admins
+    // Only sellers/admins check ended auctions
     const checkEndedAuctions = async ()=>{
-        // Only check ended auctions if user is a seller or admin
-        if (!user || user.role !== 'seller' && user.role !== 'admin') {
-            return; // Skip auction checks for buyers
-        }
+        if (!user || user.role !== 'seller' && user.role !== 'admin') return;
         const activeAuctions = getActiveAuctions();
         const now = new Date();
         for (const listing of activeAuctions){
-            // Only process auctions where the current user is the seller
             if (listing.auction && new Date(listing.auction.endTime) <= now && (user.username === listing.seller || user.role === 'admin')) {
                 const processed = await processEndedAuction(listing);
                 if (processed) {
-                    // Update listing status locally
                     setListings((prev)=>prev.map((l)=>l.id === listing.id ? {
                                 ...l,
                                 auction: {
@@ -6555,12 +6462,9 @@ const ListingProvider = (param)=>{
                                     status: 'ended'
                                 }
                             } : l));
-                    // Remove the listing if it was sold
                     if (listing.auction.highestBidder) {
-                        // FIX 2: Add to deduplication manager before removing
                         soldListingDeduplicator.current.isDuplicate(listing.id);
                         setListings((prev)=>prev.filter((l)=>l.id !== listing.id));
-                        // FIX 2: Fire event for sold auction
                         if ("TURBOPACK compile-time truthy", 1) {
                             window.dispatchEvent(new CustomEvent('listing:removed', {
                                 detail: {
@@ -6570,9 +6474,8 @@ const ListingProvider = (param)=>{
                             }));
                         }
                     }
-                    // Notify seller with updated message for 20% fee
                     if (listing.auction.highestBidder && listing.auction.highestBid) {
-                        const sellerEarnings = listing.auction.highestBid * 0.8; // 80% to seller
+                        const sellerEarnings = listing.auction.highestBid * 0.8;
                         addSellerNotification(listing.seller, '🏆 Auction ended: "'.concat(listing.title, '" sold to ').concat(listing.auction.highestBidder, " for $").concat(listing.auction.highestBid.toFixed(2), ". You'll receive $").concat(sellerEarnings.toFixed(2), " (after 20% platform fee)"));
                     } else {
                         addSellerNotification(listing.seller, '🔨 Auction ended: No valid bids for "'.concat(listing.title, '"'));
@@ -6581,7 +6484,7 @@ const ListingProvider = (param)=>{
             }
         }
     };
-    // NEW: Use AuctionContext for cancelling auctions
+    // ---------- Cancel auction ----------
     const cancelAuction = async (listingId)=>{
         if (!user) return false;
         const listing = listings.find((l)=>l.id === listingId);
@@ -6589,7 +6492,6 @@ const ListingProvider = (param)=>{
         if (user.role !== 'admin' && user.username !== listing.seller) return false;
         const success = await auctionCancelAuction(listingId);
         if (success) {
-            // Update listing locally
             setListings((prev)=>prev.map((l)=>l.id === listingId ? {
                         ...l,
                         auction: {
@@ -6601,14 +6503,13 @@ const ListingProvider = (param)=>{
         }
         return success;
     };
-    // Draft management functions (unchanged)
+    // ---------- Drafts ----------
     const saveDraft = async (draft)=>{
         if (!user || user.role !== 'seller') {
             console.error('Only sellers can save drafts');
             return false;
         }
         try {
-            // Sanitize draft fields - Access from formState
             const sanitizedDraft = {
                 ...draft,
                 formState: {
@@ -6620,16 +6521,14 @@ const ListingProvider = (param)=>{
                 seller: user.username
             };
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].saveDraft(sanitizedDraft);
-            return result.success;
+            return !!result.success;
         } catch (error) {
             console.error('Error saving draft:', error);
             return false;
         }
     };
     const getDrafts = async ()=>{
-        if (!user || user.role !== 'seller') {
-            return [];
-        }
+        if (!user || user.role !== 'seller') return [];
         try {
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].getDrafts(user.username);
             return result.success && result.data ? result.data : [];
@@ -6641,15 +6540,14 @@ const ListingProvider = (param)=>{
     const deleteDraft = async (draftId)=>{
         try {
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].deleteDraft(draftId);
-            return result.success;
+            return !!result.success;
         } catch (error) {
             console.error('Error deleting draft:', error);
             return false;
         }
     };
-    // Image management functions (unchanged)
+    // ---------- Images ----------
     const uploadImage = async (file)=>{
-        // Validate file before upload
         const fileValidation = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateFileUpload(file, {
             maxSize: 5 * 1024 * 1024,
             allowedTypes: [
@@ -6679,22 +6577,20 @@ const ListingProvider = (param)=>{
     };
     const deleteImage = async (imageUrl)=>{
         try {
-            // Validate URL before deletion
             const sanitizedUrl = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].url(imageUrl);
             if (!sanitizedUrl) {
                 console.error('Invalid image URL');
                 return false;
             }
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$listings$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["listingsService"].deleteImage(sanitizedUrl);
-            return result.success;
+            return !!result.success;
         } catch (error) {
             console.error('Error deleting image:', error);
             return false;
         }
     };
-    // Subscription functions (unchanged)
+    // ---------- Subscriptions ----------
     const subscribeToSeller = async (buyer, seller, price)=>{
-        // Validate subscription price
         const priceValidation = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["securityService"].validateAmount(price, {
             min: 0.01,
             max: 1000
@@ -6703,9 +6599,9 @@ const ListingProvider = (param)=>{
             console.error('Invalid subscription price:', priceValidation.error);
             return false;
         }
-        // Sanitize usernames
         const sanitizedBuyer = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(buyer);
         const sanitizedSeller = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(seller);
+        if (!sanitizedBuyer || !sanitizedSeller) return false;
         const success = await subscribeToSellerWithPayment(sanitizedBuyer, sanitizedSeller, price);
         if (success) {
             setSubscriptions((prev)=>{
@@ -6719,45 +6615,33 @@ const ListingProvider = (param)=>{
                 __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('subscriptions', updated);
                 return updated;
             });
-            // NEW: Store subscription details with the actual price paid
-            const subscriptionDetails = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('subscription_details', {});
+            const subscriptionDetails = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('subscription_details', {}) || {};
             const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
-            // Remove any existing subscription to this seller
-            const filteredSubs = buyerSubs.filter((sub)=>sub.seller !== sanitizedSeller);
-            // Add new subscription with price
-            filteredSubs.push({
+            const filtered = buyerSubs.filter((sub)=>sub.seller !== sanitizedSeller);
+            filtered.push({
                 seller: sanitizedSeller,
-                price: price,
+                price,
                 subscribedAt: new Date().toISOString()
             });
-            subscriptionDetails[sanitizedBuyer] = filteredSubs;
+            subscriptionDetails[sanitizedBuyer] = filtered;
             await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('subscription_details', subscriptionDetails);
             addSellerNotification(sanitizedSeller, "🎉 ".concat(sanitizedBuyer, " subscribed to you!"));
         }
         return success;
     };
-    // Unsubscribe from seller with API support (unchanged)
     const unsubscribeFromSeller = async (buyer, seller)=>{
         try {
-            // Sanitize usernames
             const sanitizedBuyer = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(buyer);
             const sanitizedSeller = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(seller);
-            console.log('[ListingContext] Unsubscribing from seller:', {
-                buyer: sanitizedBuyer,
-                seller: sanitizedSeller
-            });
-            // First, call the wallet context's unsubscribe method to handle the backend API call
+            if (!sanitizedBuyer || !sanitizedSeller) return;
             let success = false;
-            // Check if the unsubscribeFromSeller method exists in wallet context
             if (walletUnsubscribeFromSeller && typeof walletUnsubscribeFromSeller === 'function') {
                 success = await walletUnsubscribeFromSeller(sanitizedBuyer, sanitizedSeller);
-                console.log('[ListingContext] Wallet unsubscribe result:', success);
             } else {
-                console.warn('[ListingContext] Wallet unsubscribeFromSeller method not available, updating local state only');
-                success = true; // Allow local state update even if wallet method isn't available
+                console.warn('[ListingContext] Wallet unsubscribe method not available; local update only');
+                success = true;
             }
             if (success) {
-                // Update local subscriptions state
                 setSubscriptions((prev)=>{
                     const updated = {
                         ...prev,
@@ -6766,17 +6650,12 @@ const ListingProvider = (param)=>{
                     __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('subscriptions', updated);
                     return updated;
                 });
-                // Also remove from subscription details
-                const subscriptionDetails = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('subscription_details', {});
+                const subscriptionDetails = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].getItem('subscription_details', {}) || {};
                 const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
-                const filteredSubs = buyerSubs.filter((sub)=>sub.seller !== sanitizedSeller);
-                subscriptionDetails[sanitizedBuyer] = filteredSubs;
+                subscriptionDetails[sanitizedBuyer] = buyerSubs.filter((sub)=>sub.seller !== sanitizedSeller);
                 await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$storage$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["storageService"].setItem('subscription_details', subscriptionDetails);
-                // Add notification to seller
                 addSellerNotification(sanitizedSeller, "".concat(sanitizedBuyer, " unsubscribed from your content"));
-                console.log('[ListingContext] Successfully unsubscribed and updated local state');
             } else {
-                console.error('[ListingContext] Failed to unsubscribe from seller');
                 throw new Error('Failed to unsubscribe. Please try again.');
             }
         } catch (error) {
@@ -6786,37 +6665,33 @@ const ListingProvider = (param)=>{
     };
     const isSubscribed = (buyer, seller)=>{
         var _subscriptions_sanitizedBuyer;
-        // Sanitize usernames
         const sanitizedBuyer = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(buyer);
         const sanitizedSeller = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(seller);
+        if (!sanitizedBuyer || !sanitizedSeller) return false;
         var _subscriptions_sanitizedBuyer_includes;
         return (_subscriptions_sanitizedBuyer_includes = (_subscriptions_sanitizedBuyer = subscriptions[sanitizedBuyer]) === null || _subscriptions_sanitizedBuyer === void 0 ? void 0 : _subscriptions_sanitizedBuyer.includes(sanitizedSeller)) !== null && _subscriptions_sanitizedBuyer_includes !== void 0 ? _subscriptions_sanitizedBuyer_includes : false;
     };
-    // Notification functions (unchanged)
+    // ---------- Seller notifications (current) ----------
     const getCurrentSellerNotifications = ()=>{
-        if (!user || user.role !== 'seller') {
-            return [];
-        }
-        const userNotifications = notificationStore[user.username] || [];
+        if (!user || user.role !== 'seller') return [];
+        const safeUser = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(user.username);
+        if (!safeUser) return [];
+        const userNotifications = notificationStore[safeUser] || [];
         return userNotifications.map(normalizeNotification);
     };
     const clearSellerNotification = (notificationId)=>{
-        if (!user || user.role !== 'seller') {
-            return;
-        }
-        const username = user.username;
+        if (!user || user.role !== 'seller') return;
+        const username = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(user.username);
+        if (!username) return;
         const userNotifications = notificationStore[username] || [];
         setNotificationStore((prev)=>{
             const updatedNotifications = userNotifications.map((item, index)=>{
                 const notification = normalizeNotification(item);
                 const shouldClear = typeof notificationId === 'string' ? notification.id === notificationId : index === notificationId;
-                if (shouldClear) {
-                    return {
-                        ...notification,
-                        cleared: true
-                    };
-                }
-                return notification;
+                return shouldClear ? {
+                    ...notification,
+                    cleared: true
+                } : notification;
             });
             const updated = {
                 ...prev,
@@ -6827,21 +6702,17 @@ const ListingProvider = (param)=>{
         });
     };
     const restoreSellerNotification = (notificationId)=>{
-        if (!user || user.role !== 'seller') {
-            return;
-        }
-        const username = user.username;
+        if (!user || user.role !== 'seller') return;
+        const username = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(user.username);
+        if (!username) return;
         const userNotifications = notificationStore[username] || [];
         setNotificationStore((prev)=>{
             const updatedNotifications = userNotifications.map((item)=>{
                 const notification = normalizeNotification(item);
-                if (notification.id === notificationId) {
-                    return {
-                        ...notification,
-                        cleared: false
-                    };
-                }
-                return notification;
+                return notification.id === notificationId ? {
+                    ...notification,
+                    cleared: false
+                } : notification;
             });
             const updated = {
                 ...prev,
@@ -6852,10 +6723,9 @@ const ListingProvider = (param)=>{
         });
     };
     const permanentlyDeleteSellerNotification = (notificationId)=>{
-        if (!user || user.role !== 'seller') {
-            return;
-        }
-        const username = user.username;
+        if (!user || user.role !== 'seller') return;
+        const username = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(user.username);
+        if (!username) return;
         const userNotifications = notificationStore[username] || [];
         setNotificationStore((prev)=>{
             const updatedNotifications = userNotifications.filter((item)=>{
@@ -6870,10 +6740,9 @@ const ListingProvider = (param)=>{
             return updated;
         });
     };
-    // Verification functions (unchanged)
+    // ---------- Verification ----------
     const requestVerification = async (docs)=>{
         if (!user) return;
-        console.log('🔍 requestVerification called with user:', user.username);
         const code = docs.code || "VERIF-".concat(user.username, "-").concat(Math.floor(100000 + Math.random() * 900000));
         try {
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$users$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["usersService"].requestVerification(user.username, {
@@ -6889,7 +6758,6 @@ const ListingProvider = (param)=>{
                         code
                     }
                 });
-                // Also update the legacy users store for admin functionality
                 const updatedUser = {
                     ...user,
                     verificationStatus: 'pending',
@@ -6903,9 +6771,7 @@ const ListingProvider = (param)=>{
                     ...users,
                     [user.username]: updatedUser
                 });
-                console.log('✅ Verification request submitted for:', user.username);
             } else {
-                console.error('Failed to submit verification request:', result.error);
                 alert('Failed to submit verification request. Please try again.');
             }
         } catch (error) {
@@ -6914,16 +6780,21 @@ const ListingProvider = (param)=>{
         }
     };
     const setVerificationStatus = async (username, status, rejectionReason)=>{
-        // Sanitize inputs
+        // client gate: admin only
+        if (!user || user.role !== 'admin') {
+            console.warn('[ListingContext] setVerificationStatus blocked: admin only');
+            return;
+        }
         const sanitizedUsername = __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].username(username);
         const sanitizedReason = rejectionReason ? __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$security$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["sanitize"].strict(rejectionReason) : undefined;
+        if (!sanitizedUsername) return;
         const existingUser = users[sanitizedUsername];
         if (!existingUser) return;
         try {
             const result = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$services$2f$users$2e$service$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["usersService"].updateVerificationStatus(sanitizedUsername, {
                 status,
                 rejectionReason: sanitizedReason,
-                adminUsername: (user === null || user === void 0 ? void 0 : user.username) || 'admin'
+                adminUsername: user.username
             });
             if (result.success) {
                 const updatedUser = {
@@ -6933,7 +6804,6 @@ const ListingProvider = (param)=>{
                     verificationReviewedAt: new Date().toISOString(),
                     verificationRejectionReason: sanitizedReason
                 };
-                // Also update AuthContext if this is the current user
                 if ((user === null || user === void 0 ? void 0 : user.username) === sanitizedUsername) {
                     await updateUser({
                         verificationStatus: status,
@@ -6945,19 +6815,11 @@ const ListingProvider = (param)=>{
                     ...users,
                     [sanitizedUsername]: updatedUser
                 });
-                setListings((prev)=>{
-                    return prev.map((listing)=>{
-                        if (listing.seller === sanitizedUsername) {
-                            return {
-                                ...listing,
-                                isVerified: status === 'verified'
-                            };
-                        }
-                        return listing;
-                    });
-                });
+                setListings((prev)=>prev.map((l)=>l.seller === sanitizedUsername ? {
+                            ...l,
+                            isVerified: status === 'verified'
+                        } : l));
             } else {
-                console.error('Failed to update verification status:', result.error);
                 alert('Failed to update verification status. Please try again.');
             }
         } catch (error) {
@@ -7007,11 +6869,11 @@ const ListingProvider = (param)=>{
         children: children
     }, void 0, false, {
         fileName: "[project]/src/context/ListingContext.tsx",
-        lineNumber: 1467,
+        lineNumber: 1296,
         columnNumber: 5
     }, ("TURBOPACK compile-time value", void 0));
 };
-_s(ListingProvider, "Jfu+PotgU6E3+HRhOlyeLMj2mUA=", false, function() {
+_s(ListingProvider, "sPK3JJytMdecSYRqiUEL85eAlog=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$AuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAuth"],
         __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$context$2f$WebSocketContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useWebSocket"],
