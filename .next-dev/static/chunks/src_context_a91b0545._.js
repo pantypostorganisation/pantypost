@@ -4303,10 +4303,13 @@ function WalletProvider(param) {
                         country: 'US'
                     }
                 });
-                // Notification
-                if (addSellerNotification) {
-                    addSellerNotification(validatedSeller, 'New sale: "'.concat(listing.title, '" for ').concat(listing.price.toFixed(2)));
-                }
+                // Notification - REMOVED: Backend already sends notification with proper formatting
+                // if (addSellerNotification) {
+                //   addSellerNotification(
+                //     validatedSeller,
+                //     `New sale: "${listing.title}" for ${listing.price.toFixed(2)}`
+                //   );
+                // }
                 debugLog('Purchase successful');
                 return true;
             } catch (error) {

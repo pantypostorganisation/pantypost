@@ -2491,7 +2491,7 @@ var _s = __turbopack_context__.k.signature();
 ;
 ;
 // Get backend URL from environment
-const BACKEND_URL = ("TURBOPACK compile-time value", "http://localhost:5000/api") || 'http://localhost:5000';
+const BACKEND_URL = ("TURBOPACK compile-time value", "http://localhost:5000") || 'http://localhost:5000';
 // Helper to convert relative URL to absolute backend URL
 const toAbsoluteUrl = (url)=>{
     if (!url) return undefined;

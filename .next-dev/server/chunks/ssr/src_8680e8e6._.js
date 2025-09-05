@@ -2291,7 +2291,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$lucide$2d$re
 ;
 ;
 // Get backend URL from environment
-const BACKEND_URL = ("TURBOPACK compile-time value", "http://localhost:5000/api") || 'http://localhost:5000';
+const BACKEND_URL = ("TURBOPACK compile-time value", "http://localhost:5000") || 'http://localhost:5000';
 // Helper to convert relative URL to absolute backend URL
 const toAbsoluteUrl = (url)=>{
     if (!url) return undefined;

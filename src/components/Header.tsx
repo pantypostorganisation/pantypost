@@ -1,4 +1,3 @@
-// src/components/Header.tsx
 'use client';
 
 import Link from 'next/link';
@@ -156,20 +155,25 @@ export default function Header(): React.ReactElement | null {
 
     const addNotificationEmojis = (message: string): string => {
       const sanitizedMessage = sanitizeStrict(message);
-      if (sanitizedMessage.includes('New sale:') && !sanitizedMessage.includes('Auction ended:')) return `💰🛍️ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Auction ended:') && sanitizedMessage.includes('sold to')) return `💰🏆 ${sanitizedMessage}`;
-      if (!sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
-        if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('New bid')) return `💰 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('created a new auction')) return `🔨 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('cancelled your auction')) return `🛑 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('Reserve price not met')) return `🔨 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('No bids were placed')) return `🔨 ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `⚠️ ${sanitizedMessage}`;
-        if (sanitizedMessage.includes('Original highest bidder')) return `ℹ️ ${sanitizedMessage}`;
+      
+      // Check if the message already starts with emoji characters
+      // If it does, return it as-is (backend already added emojis)
+      if (sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
+        return sanitizedMessage;
       }
+      
+      // Only add emojis if they're not already present
+      if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('New bid')) return `💰 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('created a new auction')) return `🔨 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('cancelled your auction')) return `🛑 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Reserve price not met')) return `🔨 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('No bids were placed')) return `🔨 ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `⚠️ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Original highest bidder')) return `ℹ️ ${sanitizedMessage}`;
+      
       return sanitizedMessage;
     };
 

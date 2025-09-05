@@ -252,6 +252,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
       await order.save();
 
+      // CRITICAL: Create the sale notification ONCE using the standardized method
+      // This creates the notification with the proper emoji format: 💰🛍️ New sale: ...
       await Notification.createSaleNotification(seller, buyer, { 
         _id: order._id, 
         title: order.title 
@@ -366,6 +368,8 @@ router.post('/', authMiddleware, async (req, res) => {
         global.webSocketService.emitTransaction(purchaseTransaction.toObject());
         global.webSocketService.emitTransaction(feeTransaction.toObject());
 
+        // NOTE: This emitOrderCreated is for updating order lists in the UI, not for creating notifications
+        // The notification has already been created above via Notification.createSaleNotification
         if (global.webSocketService.emitOrderCreated) {
           global.webSocketService.emitOrderCreated({
             _id: order._id,
