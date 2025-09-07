@@ -1,3 +1,4 @@
+// src/context/AuthContext.tsx
 'use client';
 
 import React, {
@@ -453,6 +454,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiClientRef.current!.get<User>('/auth/me');
 
       if (response.success && response.data) {
+        // Check if user is banned
+        const banCheckResponse = await apiClientRef.current!.get(
+          `/users/${response.data.username}/ban-status`
+        );
+        
+        if (banCheckResponse.success && banCheckResponse.data?.isBanned) {
+          // User is banned - clear session
+          console.log('[Auth] User is banned, clearing session');
+          tokenStorageRef.current.clear();
+          setUser(null);
+          return;
+        }
+
         setUser(response.data);
       } else {
         setUser(null);
@@ -547,6 +561,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (response.success && response.data) {
+          // Check if the user is banned before completing login
+          const banCheckResponse = await apiClientRef.current!.get(
+            `/users/${response.data.user.username}/ban-status`
+          );
+          
+          if (banCheckResponse.success && banCheckResponse.data?.isBanned) {
+            // User is banned - don't complete login
+            const banInfo = banCheckResponse.data;
+            let errorMessage = 'Your account has been suspended.';
+            
+            if (banInfo.reason) {
+              errorMessage += ` Reason: ${banInfo.reason}`;
+            }
+            
+            if (banInfo.isPermanent) {
+              errorMessage += ' This is a permanent suspension.';
+            } else if (banInfo.expiresAt) {
+              const expiryDate = new Date(banInfo.expiresAt).toLocaleDateString();
+              errorMessage += ` Suspension expires: ${expiryDate}`;
+            }
+            
+            setError(errorMessage);
+            setLoading(false);
+            return false;
+          }
+
           // Calculate token expiration (prefer backend hints)
           const expiresAt =
             deriveExpiry(

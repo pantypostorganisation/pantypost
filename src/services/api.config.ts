@@ -126,6 +126,17 @@ export const API_ENDPOINTS = {
     FLAG: '/reviews/:reviewId/flag',
   },
   
+  // Report endpoints
+  REPORTS: {
+    SUBMIT: '/reports/submit',
+    LIST: '/reports',
+    GET: '/reports/:id',
+    UPDATE: '/reports/:id',
+    PROCESS: '/reports/:id/process',
+    BY_USER: '/reports/user/:username',
+    STATS: '/reports/stats',
+  },
+  
   // Upload endpoints
   UPLOAD: {
     IMAGE: '/upload/image',

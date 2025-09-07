@@ -288,11 +288,12 @@ export class EnhancedUsersService {
     }
 
     if (FEATURES.USE_API_USERS) {
-      // Build URL directly to avoid parameter issues
-      const url = `${API_BASE_URL}/api/users/${encodeURIComponent(username)}/profile`;
+      // Fix: Remove the extra slash - API_BASE_URL already ends with /
+      const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+      const url = `${baseUrl}/api/users/${encodeURIComponent(username)}/profile`;
       console.log('[EnhancedUsersService._fetchUser] API URL:', url);
 
-      const response = await apiCall<User>(url);
+      const response = await apiCall<any>(url);
 
       if (response.success && response.data) {
         // Sanitize user data
@@ -561,8 +562,9 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        // Build the full profile URL directly
-        const fullUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile/full`;
+        // Build the full profile URL directly - fix double slash
+        const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+        const fullUrl = `${baseUrl}/api/users/${encodeURIComponent(sanitizedUsername)}/profile/full`;
         console.log('[EnhancedUsersService.getUserProfile] API URL:', fullUrl);
 
         const response = await apiCall<ProfileResponse | any>(fullUrl);
@@ -778,7 +780,8 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/profile`;
+        const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+        const url = `${baseUrl}/api/users/${encodeURIComponent(sanitizedUsername)}/profile`;
         const response = await apiCall<UserProfile>(url, {
           method: 'PATCH',
           body: JSON.stringify(sanitizedUpdates),
@@ -946,7 +949,8 @@ export class EnhancedUsersService {
       };
 
       if (FEATURES.USE_API_USERS) {
-        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(
+        const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+        const preferencesUrl = `${baseUrl}/api/users/${encodeURIComponent(
           sanitizedUsername,
         )}/settings/preferences`;
         console.log('[EnhancedUsersService.getUserPreferences] API URL:', preferencesUrl);
@@ -1032,7 +1036,8 @@ export class EnhancedUsersService {
       const sanitizedUpdates = validation.data!;
 
       if (FEATURES.USE_API_USERS) {
-        const preferencesUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(
+        const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+        const preferencesUrl = `${baseUrl}/api/users/${encodeURIComponent(
           sanitizedUsername,
         )}/settings/preferences`;
 
@@ -1167,7 +1172,8 @@ export class EnhancedUsersService {
       const sanitizedLimit = Math.min(Math.max(1, limit), SECURITY_LIMITS.MAX_PAGE_SIZE);
 
       if (FEATURES.USE_API_USERS) {
-        const activityUrl = `${API_BASE_URL}/api/users/${encodeURIComponent(
+        const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+        const activityUrl = `${baseUrl}/api/users/${encodeURIComponent(
           sanitizedUsername,
         )}/profile/activity?limit=${sanitizedLimit}`;
 
@@ -1367,7 +1373,8 @@ export class EnhancedUsersService {
       }
 
       if (FEATURES.USE_API_USERS) {
-        const url = `${API_BASE_URL}/api/users/${encodeURIComponent(sanitizedUsername)}/verification`;
+        const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+        const url = `${baseUrl}/api/users/${encodeURIComponent(sanitizedUsername)}/verification`;
 
         return await apiCall<void>(url, {
           method: 'POST',

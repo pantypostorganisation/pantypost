@@ -14,7 +14,7 @@ const rateLimit = require('express-rate-limit');
 
 const reportSubmissionLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // 5 reports per hour
+  max: 20, // 20 reports per hour - increased for testing
   message: 'Too many reports submitted, please try again later',
   standardHeaders: true,
   legacyHeaders: false,

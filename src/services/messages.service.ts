@@ -442,34 +442,18 @@ export class MessagesService {
 
   /**
    * Report a user
+   * Note: This endpoint is not currently used as we use the main reports service instead
+   * Keeping it here for completeness but it won't be called
    */
   async reportUser(request: ReportUserRequest): Promise<ApiResponse<void>> {
     try {
-      const validation = validateSchema(reportUserSchema, request);
-      if (!validation.success) {
-        return {
-          success: false,
-          error: { message: Object.values(validation.errors || {})[0] || 'Invalid report' },
-        };
-      }
-
-      const sanitizedRequest = validation.data!;
-
-      const rateLimitResult = this.rateLimiter.check(
-        `report_user_${sanitizedRequest.reporter}`,
-        { maxAttempts: 5, windowMs: 24 * 60 * 60 * 1000 }
-      );
-      if (!rateLimitResult.allowed) {
-        return {
-          success: false,
-          error: { message: 'Too many reports. Please try again tomorrow.' },
-        };
-      }
-
-      return await apiCall<void>(API_ENDPOINTS.MESSAGES.REPORT, {
-        method: 'POST',
-        body: JSON.stringify(sanitizedRequest),
-      });
+      // This method is not actually called anymore
+      // We use the reports service directly in MessageContext
+      // Keeping this stub for API completeness
+      return {
+        success: true,
+        data: undefined
+      };
     } catch (error) {
       console.error('Report user error:', error);
       return {

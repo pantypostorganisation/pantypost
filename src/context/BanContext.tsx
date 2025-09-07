@@ -1,3 +1,4 @@
+// src/context/BanContext.tsx
 'use client';
 
 import {
@@ -9,13 +10,13 @@ import {
   useCallback,
   useRef,
 } from 'react';
-import { storageService } from '@/services';
 import { banService } from '@/services/ban.service';
 import { usersService } from '@/services/users.service';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { z } from 'zod';
 import { useAuth } from './AuthContext';
 import { isAdmin } from '@/utils/security/permissions';
+import { FEATURES } from '@/services/api.config';
 
 // ================== Types ==================
 export type BanType = 'temporary' | 'permanent';
@@ -87,12 +88,6 @@ export type IPBan = {
 };
 
 // ================== Constants ==================
-const STORAGE_KEYS = {
-  BANS: 'panty_user_bans',
-  HISTORY: 'panty_ban_history',
-  REVIEWS: 'panty_appeal_reviews',
-  IP_BANS: 'panty_ip_bans',
-} as const;
 
 /**
  * Reserved usernames that should never be bannable (system/service accounts).
@@ -106,7 +101,7 @@ const isProtectedUsername = (username: string): boolean => {
   return RESERVED_USERNAMES.includes(clean as (typeof RESERVED_USERNAMES)[number]);
 };
 
-// Ask backend for role (defensive, in case caller doesn’t pass role)
+// Ask backend for role (defensive, in case caller doesn't pass role)
 const checkUserRole = async (
   username: string
 ): Promise<'buyer' | 'seller' | 'admin' | null> => {
@@ -191,6 +186,7 @@ type BanContextType = {
 
   // Force refresh
   refreshBanData: () => Promise<void>;
+  isLoading: boolean;
 };
 
 const BanContext = createContext<BanContextType | undefined>(undefined);
@@ -209,87 +205,9 @@ const banReasonSchema = z.enum([
 const banDurationSchema = z.union([z.literal('permanent'), z.number().positive().max(8760)]);
 const appealTextSchema = z.string().min(10).max(1000);
 const customReasonSchema = z.string().min(5).max(500);
-const banNotesSchema = z.string().max(1000);
 
 // Simple IPv4, conservative; adjust if you need IPv6
 const ipAddressSchema = z.string().regex(/^(?:\d{1,3}\.){3}\d{1,3}$/);
-
-// ---- Conservative mock data detector/scrubber ----
-const isMockString = (val?: string) => {
-  if (!val) return false;
-  const v = String(val).trim().toLowerCase();
-  const patterns = [
-    'spammer',
-    'scammer',
-    'troublemaker',
-    'oldbanner',
-    'mock',
-    'sample',
-    'demo',
-    'test',
-    'lorem',
-    'ipsum',
-    'john_doe',
-    'jane_doe',
-  ];
-  return patterns.some((p) => v.includes(p));
-};
-
-const isMockBan = (b: UserBan) => {
-  return (
-    isMockString(b.username) ||
-    isMockString(b.bannedBy) ||
-    isMockString(b.customReason) ||
-    isMockString(b.notes) ||
-    (b.id && (b.id.startsWith('mock_') || b.id.includes('sample') || b.id.includes('test')))
-  );
-};
-
-const isMockHistory = (h: BanHistory) => {
-  return (
-    isMockString(h.username) ||
-    isMockString(h.details) ||
-    isMockString(h.adminUsername) ||
-    (h.id && (h.id.startsWith('mock_') || h.id.includes('sample') || h.id.includes('test')))
-  );
-};
-
-const scrubMocks = async (
-  bans: UserBan[],
-  history: BanHistory[],
-  reviews: AppealReview[],
-  ipBans: IPBan[]
-) => {
-  const cleanBans = bans.filter((b) => !isMockBan(b));
-  const cleanHistory = history.filter((h) => !isMockHistory(h));
-  const cleanReviews = reviews.filter(
-    (r) =>
-      !(
-        r.reviewId?.startsWith?.('mock_') ||
-        isMockString(r.reviewerAdmin) ||
-        isMockString(r.reviewNotes)
-      )
-  );
-  const cleanIPBans = ipBans.filter((ip) => !(ip.ipAddress?.startsWith?.('0.0.0') || isMockString(ip.reason)));
-
-  const removed = {
-    bans: bans.length - cleanBans.length,
-    history: history.length - cleanHistory.length,
-    reviews: reviews.length - cleanReviews.length,
-    ipBans: ipBans.length - cleanIPBans.length,
-  };
-
-  if (removed.bans || removed.history || removed.reviews || removed.ipBans) {
-    console.warn('[BanContext] Removed mock/dev data from storage:', removed);
-    await storageService.setItem(STORAGE_KEYS.BANS, cleanBans);
-    await storageService.setItem(STORAGE_KEYS.HISTORY, cleanHistory);
-    await storageService.setItem(STORAGE_KEYS.REVIEWS, cleanReviews);
-    await storageService.setItem(STORAGE_KEYS.IP_BANS, cleanIPBans);
-  }
-
-  return { cleanBans, cleanHistory, cleanReviews, cleanIPBans };
-};
-// --------------------------------------------------
 
 // Image compression for appeal evidence (defensive checks)
 const compressImage = (file: File): Promise<string> =>
@@ -346,14 +264,12 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [appealReviews, setAppealReviews] = useState<AppealReview[]>([]);
   const [ipBans, setIPBans] = useState<IPBan[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const { user } = useAuth();
 
   // Track active timers to prevent leaks
   const activeTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  // Saving guard
-  const isSavingRef = useRef(false);
 
   // Dev override to allow non-admin actions locally when explicitly enabled
   const canAdminAct = useCallback(
@@ -368,117 +284,104 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     [user]
   );
 
-  // Force refresh function
+  // Force refresh function - fetch from backend
   const refreshBanData = useCallback(async () => {
-    console.log('[BanContext] Force refreshing ban data...');
-    setIsInitialized(false);
-    await loadData(true);
-  }, []);
+    // Only fetch bans if API is enabled and user is admin
+    if (!FEATURES.USE_API_BANS) {
+      console.log('[BanContext] API bans disabled');
+      setIsInitialized(true);
+      return;
+    }
 
-  // Load from storage using service
-  const loadData = useCallback(
-    async (forceRefresh = false) => {
-      if (typeof window === 'undefined') return;
-      if (isInitialized && !forceRefresh) return;
-
-      try {
-        console.log('[BanContext] Loading ban data...', { forceRefresh });
-
-        const storedBans = await storageService.getItem<UserBan[]>(STORAGE_KEYS.BANS, []);
-        const storedHistory = await storageService.getItem<BanHistory[]>(STORAGE_KEYS.HISTORY, []);
-        const storedAppealReviews = await storageService.getItem<AppealReview[]>(
-          STORAGE_KEYS.REVIEWS,
-          []
-        );
-        const storedIPBans = await storageService.getItem<IPBan[]>(STORAGE_KEYS.IP_BANS, []);
-
-        // Scrub any clear mock remnants
-        const { cleanBans, cleanHistory, cleanReviews, cleanIPBans } = await scrubMocks(
-          storedBans || [],
-          storedHistory || [],
-          storedAppealReviews || [],
-          storedIPBans || []
-        );
-
-        // Auto-expire any temporary bans already past endTime
-        const now = new Date();
-        const updatedBans = cleanBans.map((ban) => {
-          if (ban.active && ban.banType === 'temporary' && ban.endTime) {
-            if (now >= new Date(ban.endTime)) {
-              console.log(`[BanContext] Auto-expiring ban for ${ban.username}`);
-              return { ...ban, active: false };
-            }
+    // Only admins can fetch all bans
+    if (!user || !isAdmin(user)) {
+      console.log('[BanContext] Skipping ban fetch - user is not admin');
+      
+      // Non-admin users should check their own ban status
+      if (user) {
+        try {
+          const response = await banService.checkUserBan(user.username);
+          if (response.success && response.data) {
+            const ban = response.data;
+            const mappedBan: UserBan = {
+              id: ban._id || ban.id || `ban_${Date.now()}`,
+              username: ban.username,
+              banType: ban.isPermanent || ban.duration === 'permanent' ? 'permanent' : 'temporary',
+              reason: ban.reason || 'other',
+              customReason: ban.customReason,
+              startTime: ban.createdAt || ban.startTime || new Date().toISOString(),
+              endTime: ban.expiresAt || ban.endTime,
+              bannedBy: ban.bannedBy || 'admin',
+              active: true,
+              appealable: ban.appealable !== false,
+              notes: ban.notes,
+            };
+            setBans([mappedBan]);
           }
-          return ban;
-        });
-
-        setBans(updatedBans);
-        setBanHistory(cleanHistory);
-        setAppealReviews(cleanReviews);
-        setIPBans(cleanIPBans);
-
-        // Persist only if any changed
-        const anyExpiredChanged =
-          updatedBans.length === cleanBans.length &&
-          updatedBans.some((b, i) => b.active !== cleanBans[i]?.active);
-        if (anyExpiredChanged) {
-          isSavingRef.current = true;
-          await storageService.setItem(STORAGE_KEYS.BANS, updatedBans);
-          isSavingRef.current = false;
+        } catch (error) {
+          console.log('[BanContext] User is not banned or error checking ban status');
         }
+      }
+      
+      setIsInitialized(true);
+      return;
+    }
+    
+    console.log('[BanContext] Force refreshing ban data from backend...');
+    setIsLoading(true);
+    try {
+      const response = await banService.getBans({ active: true });
+      
+      if (response.success && response.data) {
+        // Map backend bans to frontend format
+        const backendBans = Array.isArray(response.data.bans) ? response.data.bans : 
+                           Array.isArray(response.data) ? response.data : [];
+        
+        const mappedBans: UserBan[] = backendBans.map((ban: any) => ({
+          id: ban._id || ban.id || `ban_${Date.now()}_${Math.random()}`,
+          username: ban.username,
+          banType: ban.isPermanent || ban.duration === 'permanent' ? 'permanent' : 'temporary',
+          reason: ban.reason || 'other',
+          customReason: ban.customReason,
+          startTime: ban.createdAt || ban.startTime || new Date().toISOString(),
+          endTime: ban.expiresAt || ban.endTime,
+          remainingHours: ban.remainingHours,
+          bannedBy: ban.bannedBy || 'admin',
+          active: ban.active !== false, // Default to true
+          appealable: ban.appealable !== false,
+          appealSubmitted: ban.appealSubmitted,
+          appealText: ban.appealText,
+          appealDate: ban.appealDate,
+          appealStatus: ban.appealStatus,
+          notes: ban.notes,
+          reportIds: ban.relatedReportIds || ban.reportIds || [],
+        }));
 
+        setBans(mappedBans);
+        
         // Schedule expiration for active temporary bans
-        updatedBans.forEach((ban) => {
+        mappedBans.forEach((ban) => {
           if (ban.active && ban.banType === 'temporary' && ban.endTime) {
             scheduleExpiration(ban);
           }
         });
-
-        console.log('[BanContext] Data loaded:', {
-          activeBans: updatedBans.filter((b) => b.active).length,
-          totalBans: updatedBans.length,
-        });
-
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('[BanContext] Error loading ban data:', error);
-        setIsInitialized(true);
+        
+        console.log('[BanContext] Loaded bans from backend:', mappedBans.length);
       }
-    },
-    [isInitialized]
-  );
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Persistors (guarded to avoid loops)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
-      isSavingRef.current = true;
-      storageService.setItem(STORAGE_KEYS.BANS, bans).finally(() => {
-        isSavingRef.current = false;
-      });
+    } catch (error) {
+      console.error('[BanContext] Error loading bans from backend:', error);
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
     }
-  }, [bans, isInitialized]);
+  }, [user]);
 
+  // Load from backend on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
-      storageService.setItem(STORAGE_KEYS.HISTORY, banHistory);
+    if (!isInitialized && user !== undefined) {
+      refreshBanData();
     }
-  }, [banHistory, isInitialized]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
-      storageService.setItem(STORAGE_KEYS.REVIEWS, appealReviews);
-    }
-  }, [appealReviews, isInitialized]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized && !isSavingRef.current) {
-      storageService.setItem(STORAGE_KEYS.IP_BANS, ipBans);
-    }
-  }, [ipBans, isInitialized]);
+  }, [isInitialized, user, refreshBanData]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -547,7 +450,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     []
   );
 
-  // ---------- Unban first (used by scheduler) ----------
+  // ---------- Unban ----------
   const clearExpirationTimer = useCallback((banId: string) => {
     const t = activeTimers.current.get(banId);
     if (t) {
@@ -569,39 +472,37 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const cleanAdmin = sanitizeUsername(adminUsername || user?.username || 'system')!;
         const cleanReason = reason ? sanitizeStrict(reason) : 'Ban lifted by admin';
 
-        const banToUnban = bans.find((b) => b.username === cleanUsername && b.active);
-        if (!banToUnban) {
-          console.warn('[BanContext] No active ban found for', cleanUsername);
-          return false;
+        // Call backend to unban
+        const response = await banService.unbanUser(cleanUsername, cleanReason);
+        
+        if (response.success) {
+          // Update local state
+          const banToUnban = bans.find((b) => b.username === cleanUsername && b.active);
+          if (banToUnban) {
+            clearExpirationTimer(banToUnban.id);
+            setBans(prev => prev.map(b => 
+              b.id === banToUnban.id ? { ...b, active: false } : b
+            ));
+          }
+          
+          addBanHistory('unbanned', cleanUsername, cleanReason, cleanAdmin);
+
+          // UI event
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('banUpdated', {
+                detail: { username: cleanUsername, action: 'unbanned' },
+              })
+            );
+          }
+
+          console.log('[BanContext] User unbanned:', cleanUsername);
+          return true;
         }
-
-        // stop any scheduled expiration
-        clearExpirationTimer(banToUnban.id);
-
-        const updated = bans.map((b) => (b.id === banToUnban.id ? { ...b, active: false } : b));
-
-        // Persist first to avoid race
-        isSavingRef.current = true;
-        await storageService.setItem(STORAGE_KEYS.BANS, updated);
-        isSavingRef.current = false;
-
-        setBans(updated);
-        addBanHistory('unbanned', cleanUsername, cleanReason, cleanAdmin);
-
-        // UI event
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('banUpdated', {
-              detail: { banId: banToUnban.id, username: cleanUsername, action: 'unbanned' },
-            })
-          );
-        }
-
-        console.log('[BanContext] User unbanned:', cleanUsername);
-        return true;
+        
+        return false;
       } catch (err) {
         console.error('[BanContext] Error unbanning user:', err);
-        isSavingRef.current = false;
         return false;
       }
     },
@@ -695,25 +596,6 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         cleanCustomReason = sanitizeStrict(cr.data);
       }
 
-      // Lock to avoid duplicate bans
-      const lockKey = `ban_user_${cleanUsername}`;
-      const existingLock = await storageService.getItem<any>(lockKey, null);
-      if (existingLock) {
-        try {
-          const age = Date.now() - (existingLock.timestamp || 0);
-          if (age < 30_000) {
-            console.warn(`[BanContext] Ban already in progress for ${cleanUsername}`);
-            return false;
-          }
-        } catch {
-          // ignore bad lock
-        }
-      }
-      await storageService.setItem(lockKey, {
-        timestamp: Date.now(),
-        adminUser: cleanAdmin,
-      });
-
       try {
         // Already banned?
         const already = bans.find((b) => b.username === cleanUsername && b.active);
@@ -722,7 +604,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return false;
         }
 
-        // Save to DB (best-effort)
+        // Save to backend
         const apiResponse = await banService.createBan({
           username: cleanUsername,
           reason: cleanCustomReason || reason,
@@ -732,12 +614,16 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           relatedReportIds: reportIds,
           bannedBy: cleanAdmin,
         });
+        
         if (!apiResponse.success) {
-          console.warn('[BanContext] MongoDB save failed; continuing with local cache', apiResponse.error);
+          console.error('[BanContext] Failed to save ban to backend:', apiResponse.error);
+          alert('Failed to ban user. Please try again.');
+          return false;
         }
 
+        // Create local ban object
         const now = new Date();
-        const banId = Date.now().toString() + Math.random().toString(36).slice(2, 11);
+        const banId = apiResponse.data?.id || Date.now().toString() + Math.random().toString(36).slice(2, 11);
         const end =
           hours === 'permanent'
             ? undefined
@@ -772,16 +658,14 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           cleanUsername,
           `Banned ${durationText} for ${reason}${cleanCustomReason ? `: ${cleanCustomReason}` : ''}`,
           cleanAdmin,
-          { banId, mongoSaved: apiResponse.success }
+          { banId }
         );
 
-        console.log('[BanContext] Ban created successfully', { mongoSaved: apiResponse.success });
+        console.log('[BanContext] Ban created successfully and saved to backend');
         return true;
       } catch (error) {
         console.error('[BanContext] Error banning user:', error);
         return false;
-      } finally {
-        await storageService.removeItem(lockKey);
       }
     },
     [bans, addBanHistory, scheduleExpiration, validateBanInput, canAdminAct, user?.username]
@@ -818,38 +702,52 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
 
-        setBans((prev) =>
-          prev.map((ban) =>
-            ban.username === cleanUsername && ban.active && ban.appealable
-              ? {
-                  ...ban,
-                  appealSubmitted: true,
-                  appealText: cleanAppealText,
-                  appealDate: new Date().toISOString(),
-                  appealStatus: 'pending' as AppealStatus,
-                  appealEvidence,
-                }
-              : ban
-          )
-        );
+        // Find the ban
+        const ban = bans.find((b) => b.username === cleanUsername && b.active);
+        if (!ban) {
+          console.error('[BanContext] No active ban found for user');
+          return false;
+        }
 
-        addBanHistory(
-          'appeal_submitted',
-          cleanUsername,
-          `Appeal submitted: "${cleanAppealText.substring(0, 100)}${
-            cleanAppealText.length > 100 ? '...' : ''
-          }"`,
-          cleanUsername,
-          { evidenceCount: appealEvidence.length }
-        );
+        // Submit appeal to backend
+        const response = await banService.submitAppeal(ban.id, cleanAppealText, appealEvidence);
+        
+        if (response.success) {
+          setBans((prev) =>
+            prev.map((b) =>
+              b.id === ban.id
+                ? {
+                    ...b,
+                    appealSubmitted: true,
+                    appealText: cleanAppealText,
+                    appealDate: new Date().toISOString(),
+                    appealStatus: 'pending' as AppealStatus,
+                    appealEvidence,
+                  }
+                : b
+            )
+          );
 
-        return true;
+          addBanHistory(
+            'appeal_submitted',
+            cleanUsername,
+            `Appeal submitted: "${cleanAppealText.substring(0, 100)}${
+              cleanAppealText.length > 100 ? '...' : ''
+            }"`,
+            cleanUsername,
+            { evidenceCount: appealEvidence.length }
+          );
+
+          return true;
+        }
+        
+        return false;
       } catch (err) {
         console.error('[BanContext] Error submitting appeal:', err);
         return false;
       }
     },
-    [addBanHistory, canAdminAct, user?.username]
+    [bans, addBanHistory, canAdminAct, user?.username]
   );
 
   const reviewAppeal = useCallback(
@@ -868,6 +766,13 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
         const cleanNotes = sanitizeStrict(reviewNotes);
         const cleanAdmin = sanitizeUsername(adminUsername || user?.username || 'system')!;
+
+        // Call backend to review appeal
+        banService.reviewAppeal(banId, decision, cleanNotes).then(response => {
+          if (!response.success) {
+            console.error('[BanContext] Failed to save appeal review to backend');
+          }
+        });
 
         const review: AppealReview = {
           reviewId: Date.now().toString() + Math.random().toString(36).slice(2, 11),
@@ -982,7 +887,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     [bans, addBanHistory, canAdminAct]
   );
 
-  // ---------- IP banning ----------
+  // ---------- IP banning (still local for now) ----------
   const banUserIP = useCallback(
     (username: string, ipAddress: string, reason: string): boolean => {
       // Admin-only
@@ -1184,6 +1089,7 @@ export const BanProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getBanStats,
         validateBanInput,
         refreshBanData,
+        isLoading,
       }}
     >
       {children}

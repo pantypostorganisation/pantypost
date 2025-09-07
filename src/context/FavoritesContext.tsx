@@ -1,3 +1,4 @@
+// src/context/FavoritesContext.tsx
 'use client';
 
 import React, {

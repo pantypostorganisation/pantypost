@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Ban = require('../models/Ban');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const jwt = require('jsonwebtoken');
@@ -54,6 +55,58 @@ router.get('/', async (req, res) => {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: error.message
       }
+    });
+  }
+});
+
+// GET /api/users/:username/ban-status - Check user ban status (PUBLIC - users can check their own status)
+router.get('/:username/ban-status', async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    // Find active ban for this user
+    const ban = await Ban.findOne({ 
+      username, 
+      active: true 
+    });
+    
+    if (ban) {
+      // Check if temporary ban has expired
+      if (!ban.isPermanent && ban.expiresAt && new Date(ban.expiresAt) < new Date()) {
+        // Ban has expired, mark it as inactive
+        ban.active = false;
+        await ban.save();
+        
+        return res.json({
+          success: true,
+          data: { isBanned: false }
+        });
+      }
+      
+      return res.json({
+        success: true,
+        data: {
+          isBanned: true,
+          reason: ban.reason,
+          customReason: ban.customReason,
+          bannedBy: ban.bannedBy,
+          createdAt: ban.createdAt,
+          expiresAt: ban.expiresAt,
+          isPermanent: ban.isPermanent,
+          duration: ban.duration
+        }
+      });
+    }
+    
+    return res.json({
+      success: true,
+      data: { isBanned: false }
+    });
+  } catch (error) {
+    console.error('Error checking ban status:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to check ban status' }
     });
   }
 });

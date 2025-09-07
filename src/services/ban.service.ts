@@ -1,15 +1,15 @@
 // src/services/ban.service.ts
-import { apiCall, API_BASE_URL, FEATURES, buildApiUrl } from './api.config';
+import { apiCall, FEATURES, buildApiUrl } from './api.config';
 import { storageService } from './storage.service';
 
 export interface BanData {
   username: string;
   reason: string;
   customReason?: string;
-  duration?: number | 'permanent'; // Fixed: Allow 'permanent' as well as number
+  duration?: number | 'permanent';
   isPermanent?: boolean;
   notes?: string;
-  relatedReportIds?: string[]; // Changed to array to match usage
+  relatedReportIds?: string[];
   bannedBy?: string;
 }
 
@@ -31,7 +31,8 @@ class BanService {
     }
     
     try {
-      const response = await apiCall(`${API_BASE_URL}/api/admin/bans`, {
+      // Use the API endpoint directly without double slash
+      const response = await apiCall('/admin/bans', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -79,6 +80,22 @@ class BanService {
       });
     } catch (error) {
       console.error('[BanService] Error fetching bans:', error);
+      return { success: false, error };
+    }
+  }
+
+  // Check if a specific user is banned (accessible by the user themselves)
+  async checkUserBan(username: string): Promise<BanResponse> {
+    if (!FEATURES.USE_API_BANS) {
+      return { success: false, error: { message: 'API bans disabled' } };
+    }
+
+    try {
+      return await apiCall(buildApiUrl('/users/:username/ban-status', { username }), {
+        method: 'GET'
+      });
+    } catch (error) {
+      console.error('[BanService] Error checking user ban status:', error);
       return { success: false, error };
     }
   }

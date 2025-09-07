@@ -1,3 +1,4 @@
+// src/components/admin/reports/ReportsList.tsx
 'use client';
 
 import { useMemo } from 'react';
@@ -40,7 +41,7 @@ export default function ReportsList({
 
   return (
     <div className="space-y-4">
-      {safeReports.map((report) => {
+      {safeReports.map((report, index) => {
         // Validate report structure
         if (!report || typeof report.id !== 'string' || !report.id || typeof report.reportee !== 'string' || !report.reportee) {
           return null;
@@ -56,7 +57,7 @@ export default function ReportsList({
 
         return (
           <ReportCard
-            key={reportId}
+            key={`${reportId}_${index}`}  // Add index to ensure uniqueness even with duplicate IDs
             report={report}
             isExpanded={isExpanded}
             onToggle={() => toggleExpanded(reportId)}
