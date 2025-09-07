@@ -1,16 +1,20 @@
-// src/context/MessageContext.tsx
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { v4 as uuidv4 } from 'uuid';
 import { messagesService, storageService } from '@/services';
 import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
 
-// Import WebSocket context
+// WebSocket
 import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 
-// Enhanced Message type with id and isRead
+// Rate limiter (reuse your shared util)
+import { getRateLimiter } from '@/utils/security/rate-limiter';
+
+// ------------ Types ------------
 type Message = {
   id?: string;
   sender: string;
@@ -30,10 +34,9 @@ type Message = {
     tipAmount?: number;
   };
   threadId?: string;
-  _optimisticId?: string; // Track optimistic messages
+  _optimisticId?: string;
 };
 
-// Enhanced ReportLog type with processing status
 type ReportLog = {
   id?: string;
   reporter: string;
@@ -61,22 +64,17 @@ type MessageOptions = {
     imageUrl?: string;
     tipAmount?: number;
   };
-  _optimisticId?: string; // Track optimistic ID
+  _optimisticId?: string;
 };
 
-// Thread type for organized message threads
-type MessageThread = {
-  [otherParty: string]: Message[];
-};
+type MessageThread = { [otherParty: string]: Message[] };
 
-// Thread info type for additional thread metadata
 type ThreadInfo = {
   unreadCount: number;
   lastMessage: Message | null;
   otherParty: string;
 };
 
-// Message notification type
 type MessageNotification = {
   buyer: string;
   messageCount: number;
@@ -84,16 +82,10 @@ type MessageNotification = {
   timestamp: string;
 };
 
-// Enhanced MessageContextType with additional methods
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
   isLoading: boolean;
-  sendMessage: (
-    sender: string,
-    receiver: string,
-    content: string,
-    options?: MessageOptions
-  ) => Promise<void>;
+  sendMessage: (sender: string, receiver: string, content: string, options?: MessageOptions) => Promise<void>;
   sendCustomRequest: (
     buyer: string,
     seller: string,
@@ -124,7 +116,7 @@ type MessageContextType = {
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
 
-// Helper to create a consistent conversation key
+// Keep conversation key logic unchanged to avoid breaking stored keys
 const getConversationKey = (userA: string, userB: string): string => {
   return [userA, userB].sort().join('-');
 };
@@ -136,6 +128,9 @@ const customRequestMetaSchema = z.object({
   message: messageSchemas.customRequest.shape.description,
 });
 
+// Helpers
+const CLIP = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
+
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<{ [conversationKey: string]: Message[] }>({});
   const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
@@ -145,107 +140,73 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isLoading, setIsLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
-  // Use WebSocket context - with safe fallback
+  // WebSocket
   const wsContext = useWebSocket ? useWebSocket() : null;
   const { subscribe, isConnected } = wsContext || { subscribe: null, isConnected: false };
-  
-  // Track processed message IDs to prevent duplicates
+
+  // Deduping & optimistic mapping
   const processedMessageIds = useRef<Set<string>>(new Set());
-  const optimisticMessageMap = useRef<Map<string, string>>(new Map()); // optimisticId -> realId
+  const optimisticMessageMap = useRef<Map<string, string>>(new Map());
   const subscriptionsRef = useRef<(() => void)[]>([]);
 
-  // Initialize service on mount
+  // Rate limiter
+  const rateLimiter = useRef(getRateLimiter()).current;
+
+  // Initialize service
   useEffect(() => {
     messagesService.initialize();
   }, []);
 
-  // Load initial data using services
+  // Load initial data
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
         setIsLoading(false);
         return;
       }
-
       try {
         setIsLoading(true);
 
-        // Load messages
         const storedMessages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
-
-        // Ensure we have a valid object
         if (storedMessages && typeof storedMessages === 'object') {
-          // Migrate old format if needed
-          const needsMigration = Object.values(storedMessages).some(
-            value => !Array.isArray(value) || (value.length > 0 && !value[0].sender)
-          );
-
-          if (needsMigration) {
-            console.log('Migrating message format...');
-            const migrated: { [key: string]: Message[] } = {};
-
-            Object.entries(storedMessages).forEach(([key, msgs]) => {
-              if (Array.isArray(msgs)) {
-                msgs.forEach((msg: any) => {
-                  if (msg.sender && msg.receiver) {
-                    const conversationKey = getConversationKey(msg.sender, msg.receiver);
-                    if (!migrated[conversationKey]) {
-                      migrated[conversationKey] = [];
-                    }
-                    migrated[conversationKey].push({
-                      ...msg,
-                      content: sanitizeStrict(msg.content || '')
-                    });
-                  }
-                });
-              }
-            });
-
-            setMessages(migrated);
-            await storageService.setItem('panty_messages', migrated);
-          } else {
-            // Sanitize existing messages
-            const sanitized: { [key: string]: Message[] } = {};
-            Object.entries(storedMessages).forEach(([key, msgs]) => {
-              sanitized[key] = msgs.map(msg => ({
-                ...msg,
-                content: sanitizeStrict(msg.content || '')
-              }));
-            });
-            setMessages(sanitized);
-          }
+          const sanitized: { [key: string]: Message[] } = {};
+          Object.entries(storedMessages).forEach(([key, msgs]) => {
+            sanitized[key] = Array.isArray(msgs)
+              ? msgs.map((msg) => ({
+                  ...msg,
+                  content: sanitizeStrict(msg.content || ''),
+                  meta: msg.meta
+                    ? {
+                        ...msg.meta,
+                        title: msg.meta.title ? sanitizeStrict(msg.meta.title) : undefined,
+                        message: msg.meta.message ? sanitizeStrict(msg.meta.message) : undefined,
+                        tags: msg.meta.tags?.map((t) => sanitizeStrict(t).slice(0, 30)),
+                      }
+                    : undefined,
+                }))
+              : [];
+          });
+          setMessages(sanitized);
         }
 
-        // Load blocked users
-        const blocked = await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {});
-        setBlockedUsers(blocked || {});
-
-        // Load reported users
-        const reported = await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {});
-        setReportedUsers(reported || {});
-
-        // Load report logs
-        const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
-        setReportLogs(reports || []);
-
-        // Load message notifications
-        const notifications = await storageService.getItem<{ [seller: string]: MessageNotification[] }>('panty_message_notifications', {});
-        setMessageNotifications(notifications || {});
-
-      } catch (error) {
-        console.error('Error loading message data:', error);
+        setBlockedUsers((await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {})) || {});
+        setReportedUsers((await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {})) || {});
+        setReportLogs((await storageService.getItem<ReportLog[]>('panty_report_logs', [])) || {});
+        setMessageNotifications(
+          (await storageService.getItem<{ [seller: string]: MessageNotification[] }>('panty_message_notifications', {})) || {}
+        );
+      } catch (err) {
+        console.error('Error loading message data:', err);
       } finally {
         setIsLoading(false);
       }
     };
-
     loadData();
   }, []);
 
-  // FIXED: WebSocket listener for new messages - handle optimistic updates properly
+  // WebSocket subscriptions
   useEffect(() => {
-    // Clean up previous subscriptions
-    subscriptionsRef.current.forEach(unsub => unsub());
+    subscriptionsRef.current.forEach((unsub) => unsub());
     subscriptionsRef.current = [];
 
     if (!subscribe) {
@@ -253,215 +214,145 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
-    console.log('[MessageContext] Setting up WebSocket listeners, connected:', isConnected);
-
-    // Subscribe to new message events
+    // message:new
     const unsubscribeNewMessage = subscribe('message:new' as WebSocketEvent, (data: any) => {
-      console.log('[MessageContext] New message received via WebSocket:', data);
-      
-      if (data && data.sender && data.receiver) {
-        const conversationKey = getConversationKey(data.sender, data.receiver);
-        
-        // Check if we've already processed this message ID
-        if (data.id && processedMessageIds.current.has(data.id)) {
-          console.log('[MessageContext] Message already processed, skipping:', data.id);
-          return;
-        }
-        
-        if (data.id) {
-          processedMessageIds.current.add(data.id);
-          // Clean up old IDs to prevent memory leak
-          if (processedMessageIds.current.size > 1000) {
-            const idsArray = Array.from(processedMessageIds.current);
-            processedMessageIds.current = new Set(idsArray.slice(-500));
-          }
-        }
-        
-        const newMessage: Message = {
-          id: data.id || uuidv4(),
-          sender: data.sender,
-          receiver: data.receiver,
-          content: data.content || '',
-          date: data.date || data.createdAt || new Date().toISOString(),
-          isRead: data.isRead || false,
-          read: data.read || false,
-          type: data.type || 'normal',
-          meta: data.meta,
-          threadId: data.threadId || conversationKey,
-          _optimisticId: data._optimisticId
-        };
-        
-        console.log('[MessageContext] Processing message for conversation:', conversationKey);
-        
-        // Update messages state
-        setMessages(prev => {
-          const existingMessages = prev[conversationKey] || [];
-          
-          // Check if this is a confirmation of an optimistic message
-          if (data._optimisticId) {
-            // Store the mapping
-            optimisticMessageMap.current.set(data._optimisticId, newMessage.id!);
-            
-            // Remove the optimistic message and add the confirmed one
-            const withoutOptimistic = existingMessages.filter(m => 
-              m._optimisticId !== data._optimisticId
-            );
-            
-            // Check if the confirmed message already exists
-            const isDuplicate = withoutOptimistic.some(m => 
-              m.id && m.id === newMessage.id
-            );
-            
-            if (isDuplicate) {
-              console.log('[MessageContext] Confirmed message already exists, skipping');
-              return prev;
-            }
-            
-            const updatedMessages = {
-              ...prev,
-              [conversationKey]: [...withoutOptimistic, newMessage],
-            };
-            
-            console.log('[MessageContext] Replaced optimistic message with confirmed message');
-            
-            // Save to storage
-            storageService.setItem('panty_messages', updatedMessages).catch(err => 
-              console.error('[MessageContext] Failed to save messages:', err)
-            );
-            
-            return updatedMessages;
-          }
-          
-          // Check if message already exists (by ID or by content+timestamp for duplicates)
-          const isDuplicate = existingMessages.some(m => {
-            if (m.id && m.id === newMessage.id) return true;
-            
-            // Check for duplicate by content and approximate time (within 2 seconds)
-            if (m.sender === newMessage.sender && 
-                m.receiver === newMessage.receiver &&
-                m.content === newMessage.content) {
-              const timeDiff = Math.abs(new Date(m.date).getTime() - new Date(newMessage.date).getTime());
-              return timeDiff < 2000;
-            }
-            
-            return false;
-          });
-          
-          if (isDuplicate) {
-            console.log('[MessageContext] Duplicate message detected, skipping');
-            return prev;
-          }
-          
-          const updatedMessages = {
-            ...prev,
-            [conversationKey]: [...existingMessages, newMessage],
-          };
-          
-          console.log('[MessageContext] Added new message to conversation');
-          
-          // Save to storage
-          storageService.setItem('panty_messages', updatedMessages).catch(err => 
-            console.error('[MessageContext] Failed to save messages:', err)
-          );
-          
-          return updatedMessages;
-        });
-        
-        // Force a re-render to ensure UI updates
-        setUpdateTrigger(prev => {
-          console.log('[MessageContext] Triggering update:', prev + 1);
-          return prev + 1;
-        });
-        
-        // Update notifications if it's not a custom request
-        if (data.type !== 'customRequest') {
-          setMessageNotifications(prev => {
-            const sellerNotifs = prev[data.receiver] || [];
-            const existingIndex = sellerNotifs.findIndex((n: MessageNotification) => n.buyer === data.sender);
+      if (!data || !data.sender || !data.receiver) return;
 
-            if (existingIndex >= 0) {
-              const updated = [...sellerNotifs];
-              updated[existingIndex] = {
-                buyer: data.sender,
-                messageCount: updated[existingIndex].messageCount + 1,
-                lastMessage: data.content.substring(0, 50) + (data.content.length > 50 ? '...' : ''),
-                timestamp: new Date().toISOString()
-              };
-              return {
-                ...prev,
-                [data.receiver]: updated
-              };
-            } else {
-              return {
-                ...prev,
-                [data.receiver]: [...sellerNotifs, {
-                  buyer: data.sender,
-                  messageCount: 1,
-                  lastMessage: data.content.substring(0, 50) + (data.content.length > 50 ? '...' : ''),
-                  timestamp: new Date().toISOString()
-                }]
-              };
-            }
-          });
+      const conversationKey = getConversationKey(data.sender, data.receiver);
+
+      // dedupe by id
+      if (data.id && processedMessageIds.current.has(data.id)) return;
+      if (data.id) {
+        processedMessageIds.current.add(data.id);
+        // trim memory
+        if (processedMessageIds.current.size > 1000) {
+          const last = Array.from(processedMessageIds.current).slice(-500);
+          processedMessageIds.current = new Set(last);
         }
-        
-        // Emit a custom event for components to listen to
-        if (typeof window !== 'undefined') {
-          console.log('[MessageContext] Dispatching DOM event for new message');
-          window.dispatchEvent(new CustomEvent('message:new', { detail: newMessage }));
+      }
+
+      // Sanitize payload
+      const safeContent = sanitizeStrict(data.content || '');
+      const safeMeta = data.meta
+        ? {
+            ...data.meta,
+            title: data.meta.title ? sanitizeStrict(data.meta.title) : undefined,
+            message: data.meta.message ? sanitizeStrict(data.meta.message) : undefined,
+            tags: Array.isArray(data.meta.tags) ? data.meta.tags.map((t: string) => sanitizeStrict(t).slice(0, 30)) : undefined,
+          }
+        : undefined;
+
+      const newMessage: Message = {
+        id: data.id || uuidv4(),
+        sender: data.sender,
+        receiver: data.receiver,
+        content: safeContent,
+        date: data.date || data.createdAt || new Date().toISOString(),
+        isRead: !!data.isRead,
+        read: !!data.read,
+        type: data.type || 'normal',
+        meta: safeMeta,
+        threadId: data.threadId || conversationKey,
+        _optimisticId: data._optimisticId,
+      };
+
+      setMessages((prev) => {
+        const existing = prev[conversationKey] || [];
+
+        // Replace optimistic
+        if (data._optimisticId) {
+          optimisticMessageMap.current.set(data._optimisticId, newMessage.id!);
+          const withoutOptimistic = existing.filter((m) => m._optimisticId !== data._optimisticId);
+          const dup = withoutOptimistic.some((m) => m.id && m.id === newMessage.id);
+          if (dup) return prev;
+
+          const updated = { ...prev, [conversationKey]: [...withoutOptimistic, newMessage] };
+          storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
+          return updated;
         }
+
+        // Check duplicate by id or by content+time (~2s)
+        const isDup = existing.some((m) => {
+          if (m.id && newMessage.id && m.id === newMessage.id) return true;
+          if (m.sender === newMessage.sender && m.receiver === newMessage.receiver && m.content === newMessage.content) {
+            const Δ = Math.abs(new Date(m.date).getTime() - new Date(newMessage.date).getTime());
+            return Δ < 2000;
+          }
+          return false;
+        });
+        if (isDup) return prev;
+
+        const updated = { ...prev, [conversationKey]: [...existing, newMessage] };
+        storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
+        return updated;
+      });
+
+      setUpdateTrigger((n) => n + 1);
+
+      // Notifications (sanitize preview)
+      if (data.type !== 'customRequest') {
+        const preview = CLIP(safeContent, 50);
+        setMessageNotifications((prev) => {
+          const arr = prev[data.receiver] || [];
+          const idx = arr.findIndex((n) => n.buyer === data.sender);
+          if (idx >= 0) {
+            const updated = [...arr];
+            updated[idx] = {
+              buyer: data.sender,
+              messageCount: updated[idx].messageCount + 1,
+              lastMessage: preview,
+              timestamp: new Date().toISOString(),
+            };
+            return { ...prev, [data.receiver]: updated };
+          }
+          return {
+            ...prev,
+            [data.receiver]: [
+              ...arr,
+              { buyer: data.sender, messageCount: 1, lastMessage: preview, timestamp: new Date().toISOString() },
+            ],
+          };
+        });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('message:new', { detail: newMessage }));
       }
     });
 
-    // Also listen for message:read events
+    // message:read
     const unsubscribeRead = subscribe('message:read' as WebSocketEvent, (data: any) => {
-      console.log('[MessageContext] Messages marked as read via WebSocket:', data);
-      
-      if (data && data.threadId && data.messageIds) {
-        setMessages(prev => {
-          const updatedMessages = { ...prev };
-          if (updatedMessages[data.threadId]) {
-            updatedMessages[data.threadId] = updatedMessages[data.threadId].map(msg => {
-              // Check both real ID and optimistic ID mapping
-              const realId = msg._optimisticId ? 
-                optimisticMessageMap.current.get(msg._optimisticId) || msg.id : 
-                msg.id;
-                
-              if (realId && data.messageIds.includes(realId)) {
-                return { ...msg, isRead: true, read: true };
-              }
-              return msg;
-            });
-          }
-          
-          // Save to storage
-          storageService.setItem('panty_messages', updatedMessages).catch(err => 
-            console.error('[MessageContext] Failed to save messages after read update:', err)
-          );
-          
-          return updatedMessages;
-        });
-        
-        // Emit DOM event for read status update
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
+      if (!data || !data.threadId || !Array.isArray(data.messageIds)) return;
+
+      setMessages((prev) => {
+        const updated = { ...prev };
+        if (updated[data.threadId]) {
+          updated[data.threadId] = updated[data.threadId].map((msg) => {
+            const realId = msg._optimisticId ? optimisticMessageMap.current.get(msg._optimisticId) || msg.id : msg.id;
+            if (realId && data.messageIds.includes(realId)) {
+              return { ...msg, isRead: true, read: true };
+            }
+            return msg;
+          });
         }
-        
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
+        storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
+        return updated;
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
       }
+      setUpdateTrigger((n) => n + 1);
     });
 
     subscriptionsRef.current = [unsubscribeNewMessage, unsubscribeRead];
-
     return () => {
-      console.log('[MessageContext] Cleaning up WebSocket listeners');
-      subscriptionsRef.current.forEach(unsub => unsub());
+      subscriptionsRef.current.forEach((unsub) => unsub());
       subscriptionsRef.current = [];
     };
   }, [subscribe, isConnected]);
 
-  // Save data whenever it changes
+  // Persist on changes
   useEffect(() => {
     if (typeof window !== 'undefined' && !isLoading) {
       storageService.setItem('panty_messages', messages);
@@ -492,225 +383,191 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [messageNotifications, isLoading]);
 
-  // FIXED: Send message with optimistic ID tracking
-  const sendMessage = useCallback(async (
-    sender: string,
-    receiver: string,
-    content: string,
-    options?: MessageOptions
-  ) => {
-    // Validate inputs
-    if (!sender || !receiver) {
-      console.error('Invalid sender or receiver');
-      return;
-    }
+  // ------------- Actions -------------
 
-    if (!content.trim() && !options?.meta?.imageUrl) {
-      console.error('Cannot send empty message without image');
-      return;
-    }
+  // Send message (rate-limited + block checks + sanitization)
+  const sendMessage = useCallback(
+    async (sender: string, receiver: string, content: string, options?: MessageOptions) => {
+      const cleanSender = sanitizeUsername(sender) || sender;
+      const cleanReceiver = sanitizeUsername(receiver) || receiver;
 
-    // For image messages, allow empty content or provide default
-    let sanitizedContent = content;
-    if (options?.type === 'image' && !content.trim() && options?.meta?.imageUrl) {
-      sanitizedContent = 'Image shared';
-    }
-
-    // Validate message content only if we have content to validate
-    if (sanitizedContent.trim()) {
-      const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
-      if (!contentValidation.success) {
-        console.error('Invalid message content:', contentValidation.error);
+      if (!cleanSender || !cleanReceiver) {
+        console.error('Invalid sender or receiver');
         return;
       }
-      sanitizedContent = contentValidation.data;
-    }
 
-    // Validate and sanitize meta fields if present
-    let sanitizedMeta = options?.meta;
-    if (sanitizedMeta) {
-      sanitizedMeta = {
-        ...sanitizedMeta,
-        title: sanitizedMeta.title ? sanitizeStrict(sanitizedMeta.title) : undefined,
-        message: sanitizedMeta.message ? sanitizeStrict(sanitizedMeta.message) : undefined,
-        tags: sanitizedMeta.tags?.map(tag => sanitizeStrict(tag).slice(0, 30)),
-      };
-    }
-
-    try {
-      // Include optimistic ID if provided
-      const messageData = {
-        sender,
-        receiver,
-        content: sanitizedContent,
-        type: options?.type,
-        meta: sanitizedMeta,
-        _optimisticId: options?._optimisticId
-      };
-      
-      const result = await messagesService.sendMessage(messageData);
-
-      if (result.success && result.data) {
-        // DON'T add the message to local state here - let WebSocket handle it
-        // This prevents duplicates
-        console.log('Message sent successfully, waiting for WebSocket confirmation');
-        
-        // Only update notifications locally since WebSocket won't handle this
-        if (options?.type !== 'customRequest') {
-          setMessageNotifications(prev => {
-            const sellerNotifs = prev[receiver] || [];
-            const existingIndex = sellerNotifs.findIndex(n => n.buyer === sender);
-
-            if (existingIndex >= 0) {
-              const updated = [...sellerNotifs];
-              updated[existingIndex] = {
-                buyer: sender,
-                messageCount: updated[existingIndex].messageCount + 1,
-                lastMessage: sanitizedContent.substring(0, 50) + (sanitizedContent.length > 50 ? '...' : ''),
-                timestamp: new Date().toISOString()
-              };
-              return {
-                ...prev,
-                [receiver]: updated
-              };
-            } else {
-              return {
-                ...prev,
-                [receiver]: [...sellerNotifs, {
-                  buyer: sender,
-                  messageCount: 1,
-                  lastMessage: sanitizedContent.substring(0, 50) + (sanitizedContent.length > 50 ? '...' : ''),
-                  timestamp: new Date().toISOString()
-                }]
-              };
-            }
-          });
-        }
+      // Block checks (both directions)
+      const recvBlocked = blockedUsers[cleanReceiver]?.includes(cleanSender);
+      const sndBlocked = blockedUsers[cleanSender]?.includes(cleanReceiver);
+      if (recvBlocked || sndBlocked) {
+        console.warn('[MessageContext] Message blocked due to user block settings');
+        return;
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
-  }, []);
 
-  const sendCustomRequest = useCallback((
-    buyer: string,
-    seller: string,
-    content: string,
-    title: string,
-    price: number,
-    tags: string[],
-    listingId: string
-  ) => {
-    // Validate custom request data
-    const validation = customRequestMetaSchema.safeParse({
-      title,
-      price,
-      message: content,
-    });
+      // Rate limit per sender
+      const rate = rateLimiter.check(`MESSAGE_SEND:${cleanSender}`, { maxAttempts: 20, windowMs: 30_000 });
+      if (!rate.allowed) {
+        console.warn(`[MessageContext] Rate limit exceeded. Try again in ${rate.waitTime}s`);
+        return;
+      }
 
-    if (!validation.success) {
-      console.error('Invalid custom request:', validation.error);
-      return;
-    }
+      // Allow image-only messages
+      let sanitizedContent = content;
+      if (options?.type === 'image' && !sanitizedContent.trim() && options?.meta?.imageUrl) {
+        sanitizedContent = 'Image shared';
+      }
 
-    sendMessage(buyer, seller, validation.data.message, {
-      type: 'customRequest',
-      meta: {
-        id: uuidv4(),
-        title: validation.data.title,
-        price: validation.data.price,
-        tags: tags.map(tag => sanitizeStrict(tag).slice(0, 30)),
-        message: validation.data.message,
-      },
-    });
-  }, [sendMessage]);
-
-  const getMessagesForUsers = useCallback((userA: string, userB: string): Message[] => {
-    const conversationKey = getConversationKey(userA, userB);
-    return messages[conversationKey] || [];
-  }, [messages, updateTrigger]); // Add updateTrigger to dependencies
-
-  const getThreadsForUser = useCallback((username: string, role?: 'buyer' | 'seller'): MessageThread => {
-    const threads: MessageThread = {};
-
-    Object.entries(messages).forEach(([key, msgs]) => {
-      msgs.forEach(msg => {
-        if (msg.sender === username || msg.receiver === username) {
-          const otherParty = msg.sender === username ? msg.receiver : msg.sender;
-          if (!threads[otherParty]) {
-            threads[otherParty] = [];
-          }
-          threads[otherParty].push(msg);
+      if (sanitizedContent.trim()) {
+        const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
+        if (!contentValidation.success) {
+          console.error('Invalid message content:', contentValidation.error);
+          return;
         }
+        sanitizedContent = contentValidation.data;
+      }
+
+      // Sanitize meta
+      let sanitizedMeta = options?.meta;
+      if (sanitizedMeta) {
+        sanitizedMeta = {
+          ...sanitizedMeta,
+          title: sanitizedMeta.title ? sanitizeStrict(sanitizedMeta.title) : undefined,
+          message: sanitizedMeta.message ? sanitizeStrict(sanitizedMeta.message) : undefined,
+          tags: sanitizedMeta.tags?.map((t) => sanitizeStrict(t).slice(0, 30)),
+        };
+      }
+
+      try {
+        const payload = {
+          sender: cleanSender,
+          receiver: cleanReceiver,
+          content: sanitizedContent,
+          type: options?.type,
+          meta: sanitizedMeta,
+          _optimisticId: options?._optimisticId,
+        };
+        const result = await messagesService.sendMessage(payload);
+
+        if (result.success && result.data) {
+          // Rely on WebSocket echo to add the message (prevents duplicates).
+          // Update notification preview locally.
+          if (options?.type !== 'customRequest') {
+            const preview = CLIP(sanitizeStrict(sanitizedContent), 50);
+            setMessageNotifications((prev) => {
+              const arr = prev[cleanReceiver] || [];
+              const idx = arr.findIndex((n) => n.buyer === cleanSender);
+              if (idx >= 0) {
+                const updated = [...arr];
+                updated[idx] = {
+                  buyer: cleanSender,
+                  messageCount: updated[idx].messageCount + 1,
+                  lastMessage: preview,
+                  timestamp: new Date().toISOString(),
+                };
+                return { ...prev, [cleanReceiver]: updated };
+              }
+              return {
+                ...prev,
+                [cleanReceiver]: [...arr, { buyer: cleanSender, messageCount: 1, lastMessage: preview, timestamp: new Date().toISOString() }],
+              };
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
+    },
+    [blockedUsers, rateLimiter]
+  );
+
+  const sendCustomRequest = useCallback(
+    (buyer: string, seller: string, content: string, title: string, price: number, tags: string[], listingId: string) => {
+      const validation = customRequestMetaSchema.safeParse({ title, price, message: content });
+      if (!validation.success) {
+        console.error('Invalid custom request:', validation.error);
+        return;
+      }
+      sendMessage(buyer, seller, validation.data.message, {
+        type: 'customRequest',
+        meta: {
+          id: uuidv4(),
+          title: validation.data.title,
+          price: validation.data.price,
+          tags: tags.map((t) => sanitizeStrict(t).slice(0, 30)),
+          message: validation.data.message,
+        },
       });
-    });
+    },
+    [sendMessage]
+  );
 
-    Object.values(threads).forEach(thread => {
-      thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    });
+  const getMessagesForUsers = useCallback(
+    (userA: string, userB: string): Message[] => {
+      const conversationKey = getConversationKey(userA, userB);
+      return messages[conversationKey] || [];
+    },
+    [messages, updateTrigger]
+  );
 
-    return threads;
-  }, [messages, updateTrigger]); // Add updateTrigger to dependencies
+  const getThreadsForUser = useCallback(
+    (username: string, role?: 'buyer' | 'seller'): MessageThread => {
+      const threads: MessageThread = {};
+      Object.entries(messages).forEach(([_, msgs]) => {
+        msgs.forEach((msg) => {
+          if (msg.sender === username || msg.receiver === username) {
+            const other = msg.sender === username ? msg.receiver : msg.sender;
+            (threads[other] ||= []).push(msg);
+          }
+        });
+      });
+      Object.values(threads).forEach((thread) => {
+        thread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      });
+      return threads;
+    },
+    [messages, updateTrigger]
+  );
 
-  const getThreadInfo = useCallback((username: string, otherParty: string): ThreadInfo => {
-    const conversationKey = getConversationKey(username, otherParty);
-    const threadMessages = messages[conversationKey] || [];
+  const getThreadInfo = useCallback(
+    (username: string, otherParty: string): ThreadInfo => {
+      const conversationKey = getConversationKey(username, otherParty);
+      const threadMessages = messages[conversationKey] || [];
+      const unreadCount = threadMessages.filter((m) => m.receiver === username && !m.read && !m.isRead).length;
+      const lastMessage = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
+      return { unreadCount, lastMessage, otherParty };
+    },
+    [messages, updateTrigger]
+  );
 
-    const unreadCount = threadMessages.filter(
-      msg => msg.receiver === username && !msg.read && !msg.isRead
-    ).length;
-
-    const lastMessage = threadMessages.length > 0 ?
-      threadMessages[threadMessages.length - 1] : null;
-
-    return {
-      unreadCount,
-      lastMessage,
-      otherParty
-    };
-  }, [messages, updateTrigger]); // Add updateTrigger to dependencies
-
-  const getAllThreadsInfo = useCallback((username: string, role?: 'buyer' | 'seller'): { [otherParty: string]: ThreadInfo } => {
-    const threads = getThreadsForUser(username, role);
-    const threadInfos: { [otherParty: string]: ThreadInfo } = {};
-
-    Object.keys(threads).forEach(otherParty => {
-      threadInfos[otherParty] = getThreadInfo(username, otherParty);
-    });
-
-    return threadInfos;
-  }, [getThreadsForUser, getThreadInfo]);
+  const getAllThreadsInfo = useCallback(
+    (username: string, role?: 'buyer' | 'seller') => {
+      const threads = getThreadsForUser(username, role);
+      const info: { [otherParty: string]: ThreadInfo } = {};
+      Object.keys(threads).forEach((other) => {
+        info[other] = getThreadInfo(username, other);
+      });
+      return info;
+    },
+    [getThreadsForUser, getThreadInfo]
+  );
 
   const markMessagesAsRead = useCallback(async (userA: string, userB: string) => {
     try {
       const result = await messagesService.markMessagesAsRead(userA, userB);
       if (result.success) {
         const conversationKey = getConversationKey(userA, userB);
-        setMessages(prev => {
-          const conversationMessages = prev[conversationKey] || [];
-          const updatedMessages = conversationMessages.map(msg =>
-            msg.receiver === userA && msg.sender === userB && !msg.read
-              ? { ...msg, read: true, isRead: true }
-              : msg
+        setMessages((prev) => {
+          const conv = prev[conversationKey] || [];
+          const updatedConv = conv.map((msg) =>
+            msg.receiver === userA && msg.sender === userB && !msg.read ? { ...msg, read: true, isRead: true } : msg
           );
-
-          const updated = {
-            ...prev,
-            [conversationKey]: updatedMessages,
-          };
-          
-          // Save to storage
-          storageService.setItem('panty_messages', updated).catch(err => 
-            console.error('[MessageContext] Failed to save messages after marking read:', err)
-          );
-          
+        const updated = { ...prev, [conversationKey]: updatedConv };
+          storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
           return updated;
         });
 
         clearMessageNotifications(userA, userB);
-        
-        // Force a re-render
-        setUpdateTrigger(prev => prev + 1);
+        setUpdateTrigger((n) => n + 1);
       }
     } catch (error) {
       console.error('Error marking messages as read:', error);
@@ -718,37 +575,23 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, []);
 
   const clearMessageNotifications = useCallback((seller: string, buyer: string) => {
-    setMessageNotifications(prev => {
-      const sellerNotifs = prev[seller] || [];
-      const filtered = sellerNotifs.filter(n => n.buyer !== buyer);
-
-      if (filtered.length === sellerNotifs.length) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [seller]: filtered
-      };
+    setMessageNotifications((prev) => {
+      const arr = prev[seller] || [];
+      const filtered = arr.filter((n) => n.buyer !== buyer);
+      if (filtered.length === arr.length) return prev;
+      return { ...prev, [seller]: filtered };
     });
   }, []);
 
   const blockUser = useCallback(async (blocker: string, blockee: string) => {
     try {
-      const result = await messagesService.blockUser({
-        blocker,
-        blocked: blockee,
-      });
-
+      const cleanBlocker = sanitizeUsername(blocker) || blocker;
+      const cleanBlockee = sanitizeUsername(blockee) || blockee;
+      const result = await messagesService.blockUser({ blocker: cleanBlocker, blocked: cleanBlockee });
       if (result.success) {
-        setBlockedUsers(prev => {
-          const blockerList = prev[blocker] || [];
-          if (!blockerList.includes(blockee)) {
-            return {
-              ...prev,
-              [blocker]: [...blockerList, blockee],
-            };
-          }
+        setBlockedUsers((prev) => {
+          const list = prev[cleanBlocker] || [];
+          if (!list.includes(cleanBlockee)) return { ...prev, [cleanBlocker]: [...list, cleanBlockee] };
           return prev;
         });
       }
@@ -759,18 +602,13 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const unblockUser = useCallback(async (blocker: string, blockee: string) => {
     try {
-      const result = await messagesService.unblockUser({
-        blocker,
-        blocked: blockee,
-      });
-
+      const cleanBlocker = sanitizeUsername(blocker) || blocker;
+      const cleanBlockee = sanitizeUsername(blockee) || blockee;
+      const result = await messagesService.unblockUser({ blocker: cleanBlocker, blocked: cleanBlockee });
       if (result.success) {
-        setBlockedUsers(prev => {
-          const blockerList = prev[blocker] || [];
-          return {
-            ...prev,
-            [blocker]: blockerList.filter(b => b !== blockee),
-          };
+        setBlockedUsers((prev) => {
+          const list = prev[cleanBlocker] || [];
+          return { ...prev, [cleanBlocker]: list.filter((b) => b !== cleanBlockee) };
         });
       }
     } catch (error) {
@@ -778,62 +616,60 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, []);
 
-  const reportUser = useCallback(async (reporter: string, reportee: string) => {
-    const conversationKey = getConversationKey(reporter, reportee);
-    const reportMessages = messages[conversationKey] || [];
+  const reportUser = useCallback(
+    async (reporter: string, reportee: string) => {
+      const conversationKey = getConversationKey(reporter, reportee);
+      const reportMessages = messages[conversationKey] || [];
+      try {
+        const cleanReporter = sanitizeUsername(reporter) || reporter;
+        const cleanReportee = sanitizeUsername(reportee) || reportee;
 
-    try {
-      const result = await messagesService.reportUser({
-        reporter,
-        reportee,
-        messages: reportMessages,
-      });
+        const result = await messagesService.reportUser({ reporter: cleanReporter, reportee: cleanReportee, messages: reportMessages });
+        if (result.success) {
+          setReportedUsers((prev) => {
+            const list = prev[cleanReporter] || [];
+            if (!list.includes(cleanReportee)) return { ...prev, [cleanReporter]: [...list, cleanReportee] };
+            return prev;
+          });
 
-      if (result.success) {
-        setReportedUsers(prev => {
-          const reporterList = prev[reporter] || [];
-          if (!reporterList.includes(reportee)) {
-            return {
-              ...prev,
-              [reporter]: [...reporterList, reportee],
-            };
-          }
-          return prev;
-        });
-
-        const newReport: ReportLog = {
-          id: uuidv4(),
-          reporter,
-          reportee,
-          messages: reportMessages,
-          date: new Date().toISOString(),
-          processed: false,
-          category: 'other'
-        };
-
-        setReportLogs(prev => [...prev, newReport]);
+          const newReport: ReportLog = {
+            id: uuidv4(),
+            reporter: cleanReporter,
+            reportee: cleanReportee,
+            messages: reportMessages,
+            date: new Date().toISOString(),
+            processed: false,
+            category: 'other',
+          };
+          setReportLogs((prev) => [...prev, newReport]);
+        }
+      } catch (error) {
+        console.error('Error reporting user:', error);
       }
-    } catch (error) {
-      console.error('Error reporting user:', error);
-    }
-  }, [messages]);
+    },
+    [messages]
+  );
 
-  const isBlocked = useCallback((blocker: string, blockee: string): boolean => {
-    return blockedUsers[blocker]?.includes(blockee) ?? false;
-  }, [blockedUsers]);
+  const isBlocked = useCallback(
+    (blocker: string, blockee: string) => {
+      return blockedUsers[blocker]?.includes(blockee) ?? false;
+    },
+    [blockedUsers]
+  );
 
-  const hasReported = useCallback((reporter: string, reportee: string): boolean => {
-    return reportedUsers[reporter]?.includes(reportee) ?? false;
-  }, [reportedUsers]);
+  const hasReported = useCallback(
+    (reporter: string, reportee: string) => {
+      return reportedUsers[reporter]?.includes(reportee) ?? false;
+    },
+    [reportedUsers]
+  );
 
-  const getReportCount = useCallback((): number => {
-    return reportLogs.filter(report => !report.processed).length;
+  const getReportCount = useCallback(() => {
+    return reportLogs.filter((r) => !r.processed).length;
   }, [reportLogs]);
 
-  // Add a method to force refresh messages
   const refreshMessages = useCallback(() => {
-    console.log('[MessageContext] Force refresh triggered');
-    setUpdateTrigger(prev => prev + 1);
+    setUpdateTrigger((n) => n + 1);
   }, []);
 
   return (
@@ -869,29 +705,19 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
 export const useMessages = () => {
   const context = useContext(MessageContext);
-  if (!context) {
-    throw new Error('useMessages must be used within a MessageProvider');
-  }
+  if (!context) throw new Error('useMessages must be used within a MessageProvider');
   return context;
 };
 
-// Enhanced external getReportCount function for header use
+// External (header) helper
 export const getReportCount = async (): Promise<number> => {
   try {
     if (typeof window === 'undefined') return 0;
-
     const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
     if (!Array.isArray(reports)) return 0;
-
-    const pendingReports = reports.filter(report =>
-      report &&
-      typeof report === 'object' &&
-      !report.processed
-    );
-
-    return pendingReports.length;
-  } catch (error) {
-    console.error('Error getting external report count:', error);
+    return reports.filter((r) => r && typeof r === 'object' && !r.processed).length;
+  } catch (e) {
+    console.error('Error getting external report count:', e);
     return 0;
   }
 };
