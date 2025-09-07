@@ -6,6 +6,7 @@ import { useWebSocket } from './WebSocketContext';
 import { notificationService } from '@/services/notification.service';
 import type { Notification } from '@/types/notification';
 import { WebSocketEvent } from '@/types/websocket';
+import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 
 interface NotificationContextType {
   activeNotifications: Notification[];
@@ -33,6 +34,37 @@ export const useNotifications = () => {
   return ctx;
 };
 
+// ---------- helpers ----------
+const getId = (n: Partial<Notification> | any) => n?._id || n?.id || undefined;
+
+// Shallow-sanitize: sanitize string leaves one level deep (keeps numbers/objects intact)
+const sanitizeDataPayload = (val: any) => {
+  if (!val || typeof val !== 'object') return val;
+  const out: any = Array.isArray(val) ? [] : {};
+  Object.entries(val).forEach(([k, v]) => {
+    if (typeof v === 'string') out[k] = sanitizeStrict(v);
+    else out[k] = v; // keep non-strings as-is
+  });
+  return out;
+};
+
+const sanitizeNotification = (n: any, fallbackRecipient?: string): Notification => {
+  const id = getId(n);
+  return {
+    id,
+    _id: id,
+    recipient: sanitizeUsername(n?.recipient) || fallbackRecipient || '',
+    type: typeof n?.type === 'string' ? sanitizeStrict(n.type) : 'system',
+    title: n?.title ? sanitizeStrict(n.title) : 'Notification',
+    message: n?.message ? sanitizeStrict(n.message) : '',
+    data: sanitizeDataPayload(n?.data),
+    read: !!n?.read,
+    cleared: !!n?.cleared,
+    priority: (typeof n?.priority === 'string' ? sanitizeStrict(n.priority) : 'normal') as any,
+    createdAt: typeof n?.createdAt === 'string' ? n.createdAt : new Date().toISOString(),
+  } as Notification;
+};
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const ws = useWebSocket();
@@ -47,8 +79,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const isMountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   const FETCH_COOLDOWN = 1000;
-  
-  // Track processed notification IDs to prevent duplicates
+
+  // Track processed IDs to prevent dupes
   const processedNotificationIds = useRef<Set<string>>(new Set());
 
   const loadNotifications = useCallback(async () => {
@@ -60,22 +92,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setIsLoading(true);
     setError(null);
     try {
-      const activeRes = await notificationService.getActiveNotifications(50);
-      if (activeRes.success && Array.isArray(activeRes.data) && isMountedRef.current) {
-        setActiveNotifications(activeRes.data);
-        setUnreadCount(activeRes.data.filter(n => !n.read).length);
-        
-        // Track all loaded notification IDs
-        activeRes.data.forEach(n => {
-          const id = n._id || n.id;
+      const [activeRes, clearedRes] = await Promise.all([
+        notificationService.getActiveNotifications(50),
+        notificationService.getClearedNotifications(50),
+      ]);
+
+      if (isMountedRef.current && activeRes.success && Array.isArray(activeRes.data)) {
+        const sanitizedActive = activeRes.data.map((n: any) =>
+          sanitizeNotification(n, user.username)
+        );
+        setActiveNotifications(sanitizedActive);
+        setUnreadCount(sanitizedActive.filter((n) => !n.read).length);
+        sanitizedActive.forEach((n) => {
+          const id = getId(n);
           if (id) processedNotificationIds.current.add(id);
         });
       }
-      const clearedRes = await notificationService.getClearedNotifications(50);
-      if (clearedRes.success && Array.isArray(clearedRes.data) && isMountedRef.current) {
-        setClearedNotifications(clearedRes.data);
+
+      if (isMountedRef.current && clearedRes.success && Array.isArray(clearedRes.data)) {
+        const sanitizedCleared = clearedRes.data.map((n: any) =>
+          sanitizeNotification(n, user.username)
+        );
+        setClearedNotifications(sanitizedCleared);
       }
-    } catch (e) {
+    } catch {
       if (isMountedRef.current) setError('Failed to load notifications');
     } finally {
       if (isMountedRef.current) setIsLoading(false);
@@ -91,134 +131,120 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setClearedNotifications([]);
       setUnreadCount(0);
     }
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [user, loadNotifications]);
 
-  // FIXED: Only listen to the primary notification:new event from backend
+  // WebSocket listeners
   useEffect(() => {
     if (!subscribe || !user) return;
     const unsubs: Array<() => void> = [];
 
-    // PRIMARY: This is the ONLY source for tip notifications
-    // The backend's Notification.createTipNotification automatically emits this
-    unsubs.push(subscribe('notification:new' as WebSocketEvent, (data: any) => {
-      if (!isMountedRef.current) return;
-      
-      console.log('[NotificationContext] notification:new received', data);
-      
-      // Check if we've already processed this notification
-      const notificationId = data.id || data._id;
-      if (notificationId && processedNotificationIds.current.has(notificationId)) {
-        console.log('[NotificationContext] Skipping duplicate notification:', notificationId);
-        return;
-      }
-      
-      // Add to processed set
-      if (notificationId) {
-        processedNotificationIds.current.add(notificationId);
-        
-        // Clean up old IDs to prevent memory leak
-        if (processedNotificationIds.current.size > 200) {
-          const idsArray = Array.from(processedNotificationIds.current);
-          processedNotificationIds.current = new Set(idsArray.slice(-100));
+    // Primary event from backend
+    unsubs.push(
+      subscribe('notification:new' as WebSocketEvent, (data: any) => {
+        if (!isMountedRef.current) return;
+
+        const rawId = getId(data);
+        if (rawId && processedNotificationIds.current.has(rawId)) {
+          // already handled
+          return;
         }
-      }
-      
-      const n: Notification = {
-        id: notificationId,
-        _id: notificationId,
-        recipient: data.recipient || user.username,
-        type: data.type,
-        title: data.title,
-        message: data.message,
-        data: data.data,
-        read: false,
-        cleared: false,
-        priority: data.priority || 'normal',
-        createdAt: data.createdAt || new Date().toISOString()
-      };
-      
-      // Check if notification already exists in state
-      setActiveNotifications(prev => {
-        const exists = prev.some(existing => 
-          (existing._id || existing.id) === notificationId
-        );
-        
-        if (exists) {
-          console.log('[NotificationContext] Notification already in state:', notificationId);
-          return prev;
+        if (rawId) {
+          processedNotificationIds.current.add(rawId);
+          // memory cap
+          if (processedNotificationIds.current.size > 400) {
+            const ids = Array.from(processedNotificationIds.current);
+            processedNotificationIds.current = new Set(ids.slice(-200));
+          }
         }
-        
-        return [n, ...prev];
-      });
-      
-      setUnreadCount(c => c + 1);
-    }));
 
-    // REMOVED: Legacy tip_received listener - no longer needed
-    // REMOVED: message:new tip listener - no longer needed
-    
-    // Clear/restore/delete event handlers remain the same
-    unsubs.push(subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
-      const id = data?.notificationId;
-      setActiveNotifications(prev => {
-        const found = prev.find(n => (n._id || n.id) === id);
-        if (found) {
-          setClearedNotifications(c => [found, ...c]);
-          if (!found.read) setUnreadCount(u => Math.max(0, u - 1));
-        }
-        return prev.filter(n => (n._id || n.id) !== id);
-      });
-    }));
+        const n = sanitizeNotification(data, user.username);
 
-    unsubs.push(subscribe('notification:all_cleared' as WebSocketEvent, () => {
-      setActiveNotifications(prevActive => {
-        setClearedNotifications(prevCleared => [
-          ...prevActive.map(n => ({ ...n, cleared: true })),
-          ...prevCleared
-        ]);
-        setUnreadCount(0);
-        return [];
-      });
-    }));
+        // de-dupe state
+        setActiveNotifications((prev) => {
+          if (rawId && prev.some((x) => getId(x) === rawId)) return prev;
+          return [n, ...prev];
+        });
 
-    unsubs.push(subscribe('notification:restored' as WebSocketEvent, (data: any) => {
-      const id = data?.notificationId;
-      setClearedNotifications(prev => {
-        const found = prev.find(n => (n._id || n.id) === id);
-        if (found) {
-          setActiveNotifications(active => {
-            // Check if already exists to prevent duplicates
-            const exists = active.some(n => (n._id || n.id) === id);
-            if (exists) return active;
-            return [found, ...active];
-          });
-          if (!found.read) setUnreadCount(c => c + 1);
-        }
-        return prev.filter(n => (n._id || n.id) !== id);
-      });
-    }));
+        if (!n.read) setUnreadCount((c) => c + 1);
+      })
+    );
 
-    unsubs.push(subscribe('notification:deleted' as WebSocketEvent, (data: any) => {
-      const id = data?.notificationId;
-      setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== id));
-    }));
+    // Keep management events
+    unsubs.push(
+      subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
+        const id = getId(data?.notificationId ? { id: data.notificationId } : data);
+        if (!id) return;
 
-    return () => unsubs.forEach(fn => fn());
+        setActiveNotifications((prev) => {
+          const found = prev.find((n) => getId(n) === id);
+          if (found) {
+            setClearedNotifications((c) => [{ ...found, cleared: true }, ...c]);
+            if (!found.read) setUnreadCount((u) => Math.max(0, u - 1));
+          }
+          return prev.filter((n) => getId(n) !== id);
+        });
+      })
+    );
+
+    unsubs.push(
+      subscribe('notification:all_cleared' as WebSocketEvent, () => {
+        setActiveNotifications((prevActive) => {
+          setClearedNotifications((prevCleared) => [
+            ...prevActive.map((n) => ({ ...n, cleared: true })),
+            ...prevCleared,
+          ]);
+          setUnreadCount(0);
+          return [];
+        });
+      })
+    );
+
+    unsubs.push(
+      subscribe('notification:restored' as WebSocketEvent, (data: any) => {
+        const id = getId(data?.notificationId ? { id: data.notificationId } : data);
+        if (!id) return;
+
+        setClearedNotifications((prev) => {
+          const found = prev.find((n) => getId(n) === id);
+          if (found) {
+            setActiveNotifications((active) => {
+              if (active.some((n) => getId(n) === id)) return active;
+              return [found, ...active];
+            });
+            if (!found.read) setUnreadCount((c) => c + 1);
+          }
+          return prev.filter((n) => getId(n) !== id);
+        });
+      })
+    );
+
+    unsubs.push(
+      subscribe('notification:deleted' as WebSocketEvent, (data: any) => {
+        const id = getId(data?.notificationId ? { id: data.notificationId } : data);
+        if (!id) return;
+        setClearedNotifications((prev) => prev.filter((n) => getId(n) !== id));
+      })
+    );
+
+    return () => unsubs.forEach((fn) => fn());
   }, [subscribe, user]);
 
-  // Actions
+  // -------- Actions (API + state) --------
+
   const clearNotification = useCallback(async (id: string) => {
     try {
       const res = await notificationService.clearNotification(id);
       if (res.success) {
-        setActiveNotifications(prev => {
-          const found = prev.find(n => (n._id || n.id) === id);
+        setActiveNotifications((prev) => {
+          const found = prev.find((n) => getId(n) === id);
           if (found) {
-            setClearedNotifications(c => [{ ...found, cleared: true }, ...c]);
-            if (!found.read) setUnreadCount(u => Math.max(0, u - 1));
+            setClearedNotifications((c) => [{ ...found, cleared: true }, ...c]);
+            if (!found.read) setUnreadCount((u) => Math.max(0, u - 1));
           }
-          return prev.filter(n => (n._id || n.id) !== id);
+          return prev.filter((n) => getId(n) !== id);
         });
       } else setError('Failed to clear notification');
     } catch {
@@ -230,10 +256,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const res = await notificationService.clearAll();
       if (res.success) {
-        setActiveNotifications(prevActive => {
-          setClearedNotifications(prevCleared => [
-            ...prevActive.map(n => ({ ...n, cleared: true })),
-            ...prevCleared
+        setActiveNotifications((prevActive) => {
+          setClearedNotifications((prevCleared) => [
+            ...prevActive.map((n) => ({ ...n, cleared: true })),
+            ...prevCleared,
           ]);
           setUnreadCount(0);
           return [];
@@ -248,18 +274,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const res = await notificationService.restoreNotification(id);
       if (res.success) {
-        setClearedNotifications(prev => {
-          const found = prev.find(n => (n._id || n.id) === id);
+        setClearedNotifications((prev) => {
+          const found = prev.find((n) => getId(n) === id);
           if (found) {
-            setActiveNotifications(active => {
-              // Check if already exists to prevent duplicates
-              const exists = active.some(n => (n._id || n.id) === id);
-              if (exists) return active;
+            setActiveNotifications((active) => {
+              if (active.some((n) => getId(n) === id)) return active;
               return [found, ...active];
             });
-            if (!found.read) setUnreadCount(u => u + 1);
+            if (!found.read) setUnreadCount((u) => u + 1);
           }
-          return prev.filter(n => (n._id || n.id) !== id);
+          return prev.filter((n) => getId(n) !== id);
         });
       } else setError('Failed to restore notification');
     } catch {
@@ -271,7 +295,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const res = await notificationService.deleteNotification(id);
       if (res.success) {
-        setClearedNotifications(prev => prev.filter(n => (n._id || n.id) !== id));
+        setClearedNotifications((prev) => prev.filter((n) => getId(n) !== id));
       } else setError('Failed to delete notification');
     } catch {
       setError('Failed to delete notification');
@@ -293,41 +317,57 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const res = await notificationService.markAsRead(id);
       if (res.success) {
-        setActiveNotifications(prev =>
-          prev.map(n => (n._id || n.id) === id ? { ...n, read: true } : n)
-        );
-        const found = activeNotifications.find(n => (n._id || n.id) === id);
-        if (found && !found.read) setUnreadCount(u => Math.max(0, u - 1));
+        // Update atomically based on current state
+        setActiveNotifications((prev) => {
+          let dec = 0;
+          const next = prev.map((n) => {
+            if (getId(n) === id) {
+              if (!n.read) dec = 1;
+              return { ...n, read: true };
+            }
+            return n;
+          });
+          if (dec) setUnreadCount((u) => Math.max(0, u - dec));
+          return next;
+        });
       }
-    } catch {}
-  }, [activeNotifications]);
+    } catch {
+      /* no-op */
+    }
+  }, []);
 
   const markAllAsRead = useCallback(async () => {
     try {
       const res = await notificationService.markAllAsRead();
       if (res.success) {
-        setActiveNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        setActiveNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
         setUnreadCount(0);
       }
-    } catch {}
+    } catch {
+      /* no-op */
+    }
   }, []);
 
-  const addLocalNotification = useCallback((message: string, type: string = 'system') => {
-    if (!user) return;
-    const n: Notification = {
-      id: `local_${Date.now()}`,
-      recipient: user.username,
-      type: type as any,
-      title: 'Notification',
-      message,
-      read: false,
-      cleared: false,
-      createdAt: new Date().toISOString(),
-      priority: 'normal'
-    };
-    setActiveNotifications(prev => [n, ...prev]);
-    setUnreadCount(c => c + 1);
-  }, [user]);
+  const addLocalNotification = useCallback(
+    (message: string, type: string = 'system') => {
+      if (!user) return;
+      const safeType = /^[a-z0-9_\-]+$/i.test(type) ? type : 'system';
+      const n: Notification = {
+        id: `local_${Date.now()}`,
+        recipient: sanitizeUsername(user.username) || user.username,
+        type: safeType as any,
+        title: 'Notification',
+        message: sanitizeStrict(message),
+        read: false,
+        cleared: false,
+        createdAt: new Date().toISOString(),
+        priority: 'normal' as any,
+      };
+      setActiveNotifications((prev) => [n, ...prev]);
+      setUnreadCount((c) => c + 1);
+    },
+    [user]
+  );
 
   const value: NotificationContextType = {
     activeNotifications,
@@ -344,12 +384,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     refreshNotifications: loadNotifications,
     isLoading,
     error,
-    addLocalNotification
+    addLocalNotification,
   };
 
-  return (
-    <NotificationContext.Provider value={value}>
-      {children}
-    </NotificationContext.Provider>
-  );
+  return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };
