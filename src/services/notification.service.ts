@@ -1,8 +1,6 @@
 // src/services/notification.service.ts
 import { apiClient } from './api.config';
-import { storageService } from './storage.service';
 import { securityService, sanitize } from './security.service';
-import { v4 as uuidv4 } from 'uuid';
 import type { 
   Notification, 
   NotificationResponse, 
@@ -23,7 +21,7 @@ class NotificationService {
     return NotificationService.instance;
   }
 
-  // Get active notifications
+  // Get active notifications - NO localStorage
   async getActiveNotifications(limit: number = 50): Promise<NotificationResponse> {
     try {
       const cacheKey = `active_${limit}`;
@@ -33,7 +31,7 @@ class NotificationService {
       }
 
       const response = await apiClient.call<Notification[]>(
-        `/notifications/active?limit=${limit}`, // Fixed: removed /api prefix
+        `/notifications/active?limit=${limit}`,
         {
           method: 'GET',
           headers: {
@@ -45,24 +43,18 @@ class NotificationService {
       if (response.success && response.data) {
         const sanitizedNotifications = this.sanitizeNotifications(response.data);
         this.setCachedNotifications(cacheKey, sanitizedNotifications);
-        
-        // Store in local storage for offline access
-        await storageService.setItem('active_notifications', sanitizedNotifications);
-        
         return { success: true, data: sanitizedNotifications };
       }
 
       return response as NotificationResponse;
     } catch (error) {
       console.error('Error fetching active notifications:', error);
-      
-      // Try to return cached data on error
-      const cached = await storageService.getItem<Notification[]>('active_notifications', []);
-      return { success: true, data: cached };
+      // Return empty array on error, NO localStorage fallback
+      return { success: false, error: 'Failed to fetch notifications', data: [] };
     }
   }
 
-  // Get cleared notifications
+  // Get cleared notifications - NO localStorage
   async getClearedNotifications(limit: number = 50): Promise<NotificationResponse> {
     try {
       const cacheKey = `cleared_${limit}`;
@@ -72,7 +64,7 @@ class NotificationService {
       }
 
       const response = await apiClient.call<Notification[]>(
-        `/notifications/cleared?limit=${limit}`, // Fixed: removed /api prefix
+        `/notifications/cleared?limit=${limit}`,
         {
           method: 'GET',
           headers: {
@@ -84,28 +76,21 @@ class NotificationService {
       if (response.success && response.data) {
         const sanitizedNotifications = this.sanitizeNotifications(response.data);
         this.setCachedNotifications(cacheKey, sanitizedNotifications);
-        
-        // Store in local storage
-        await storageService.setItem('cleared_notifications', sanitizedNotifications);
-        
         return { success: true, data: sanitizedNotifications };
       }
 
       return response as NotificationResponse;
     } catch (error) {
       console.error('Error fetching cleared notifications:', error);
-      
-      // Try to return cached data on error
-      const cached = await storageService.getItem<Notification[]>('cleared_notifications', []);
-      return { success: true, data: cached };
+      // Return empty array on error, NO localStorage fallback
+      return { success: false, error: 'Failed to fetch notifications', data: [] };
     }
   }
 
-  // Get all notifications with pagination
   async getAllNotifications(page: number = 1, limit: number = 100): Promise<NotificationPaginationResponse> {
     try {
       const response = await apiClient.call<any>(
-        `/notifications/all?page=${page}&limit=${limit}`, // Fixed: removed /api prefix
+        `/notifications/all?page=${page}&limit=${limit}`,
         {
           method: 'GET',
           headers: {
@@ -133,11 +118,10 @@ class NotificationService {
     }
   }
 
-  // Get unread count
   async getUnreadCount(): Promise<number> {
     try {
       const response = await apiClient.call<{ count: number }>(
-        `/notifications/unread-count`, // Fixed: removed /api prefix
+        `/notifications/unread-count`,
         {
           method: 'GET',
           headers: {
@@ -157,13 +141,12 @@ class NotificationService {
     }
   }
 
-  // Mark notification as read
   async markAsRead(notificationId: string): Promise<NotificationResponse> {
     try {
       const sanitizedId = sanitize.strict(notificationId);
       
       const response = await apiClient.call<Notification>(
-        `/notifications/${sanitizedId}/read`, // Fixed: removed /api prefix
+        `/notifications/${sanitizedId}/read`,
         {
           method: 'PATCH',
           headers: {
@@ -186,11 +169,10 @@ class NotificationService {
     }
   }
 
-  // Mark all notifications as read
   async markAllAsRead(): Promise<NotificationResponse> {
     try {
       const response = await apiClient.call<any>(
-        `/notifications/read-all`, // Fixed: removed /api prefix
+        `/notifications/read-all`,
         {
           method: 'PATCH',
           headers: {
@@ -213,13 +195,12 @@ class NotificationService {
     }
   }
 
-  // Clear notification
   async clearNotification(notificationId: string): Promise<NotificationResponse> {
     try {
       const sanitizedId = sanitize.strict(notificationId);
       
       const response = await apiClient.call<Notification>(
-        `/notifications/${sanitizedId}/clear`, // Fixed: removed /api prefix
+        `/notifications/${sanitizedId}/clear`,
         {
           method: 'PATCH',
           headers: {
@@ -230,11 +211,6 @@ class NotificationService {
 
       if (response.success) {
         this.invalidateCache();
-        
-        // Update local storage
-        const active = await storageService.getItem<Notification[]>('active_notifications', []);
-        const updated = active.filter(n => (n._id || n.id) !== sanitizedId);
-        await storageService.setItem('active_notifications', updated);
       }
 
       return response as NotificationResponse;
@@ -247,11 +223,10 @@ class NotificationService {
     }
   }
 
-  // Clear all notifications
   async clearAll(): Promise<NotificationResponse> {
     try {
       const response = await apiClient.call<any>(
-        `/notifications/clear-all`, // Fixed: removed /api prefix
+        `/notifications/clear-all`,
         {
           method: 'PATCH',
           headers: {
@@ -262,7 +237,6 @@ class NotificationService {
 
       if (response.success) {
         this.invalidateCache();
-        await storageService.removeItem('active_notifications');
       }
 
       return response as NotificationResponse;
@@ -275,13 +249,12 @@ class NotificationService {
     }
   }
 
-  // Restore notification
   async restoreNotification(notificationId: string): Promise<NotificationResponse> {
     try {
       const sanitizedId = sanitize.strict(notificationId);
       
       const response = await apiClient.call<Notification>(
-        `/notifications/${sanitizedId}/restore`, // Fixed: removed /api prefix
+        `/notifications/${sanitizedId}/restore`,
         {
           method: 'PATCH',
           headers: {
@@ -304,13 +277,12 @@ class NotificationService {
     }
   }
 
-  // Delete notification
   async deleteNotification(notificationId: string): Promise<NotificationResponse> {
     try {
       const sanitizedId = sanitize.strict(notificationId);
       
       const response = await apiClient.call<any>(
-        `/notifications/${sanitizedId}`, // Fixed: removed /api prefix
+        `/notifications/${sanitizedId}`,
         {
           method: 'DELETE',
           headers: {
@@ -321,11 +293,6 @@ class NotificationService {
 
       if (response.success) {
         this.invalidateCache();
-        
-        // Update local storage
-        const cleared = await storageService.getItem<Notification[]>('cleared_notifications', []);
-        const updated = cleared.filter(n => (n._id || n.id) !== sanitizedId);
-        await storageService.setItem('cleared_notifications', updated);
       }
 
       return response as NotificationResponse;
@@ -338,11 +305,10 @@ class NotificationService {
     }
   }
 
-  // Delete all cleared notifications
   async deleteAllCleared(): Promise<NotificationResponse> {
     try {
       const response = await apiClient.call<any>(
-        `/notifications/cleared/all`, // Fixed: removed /api prefix
+        `/notifications/cleared/all`,
         {
           method: 'DELETE',
           headers: {
@@ -353,7 +319,6 @@ class NotificationService {
 
       if (response.success) {
         this.invalidateCache();
-        await storageService.removeItem('cleared_notifications');
       }
 
       return response as NotificationResponse;
@@ -366,13 +331,12 @@ class NotificationService {
     }
   }
 
-  // Get notifications by type
   async getNotificationsByType(type: string, limit: number = 50): Promise<NotificationResponse> {
     try {
       const sanitizedType = sanitize.strict(type);
       
       const response = await apiClient.call<Notification[]>(
-        `/notifications/type/${sanitizedType}?limit=${limit}`, // Fixed: removed /api prefix
+        `/notifications/type/${sanitizedType}?limit=${limit}`,
         {
           method: 'GET',
           headers: {
@@ -396,7 +360,6 @@ class NotificationService {
     }
   }
 
-  // Search notifications
   async searchNotifications(params: {
     q?: string;
     type?: string;
@@ -418,7 +381,7 @@ class NotificationService {
       ).toString();
 
       const response = await apiClient.call<Notification[]>(
-        `/notifications/search?${queryString}`, // Fixed: removed /api prefix
+        `/notifications/search?${queryString}`,
         {
           method: 'GET',
           headers: {
@@ -438,6 +401,41 @@ class NotificationService {
       return {
         success: false,
         error: 'Failed to search notifications'
+      };
+    }
+  }
+
+  // Create notification (send to backend)
+  async createNotification(notification: Partial<Notification>): Promise<NotificationResponse> {
+    try {
+      const response = await apiClient.call<Notification>(
+        `/notifications`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            recipient: notification.recipient,
+            type: notification.type || 'system',
+            title: notification.title || 'Notification',
+            message: notification.message || '',
+            priority: notification.priority || 'normal',
+            data: notification.data
+          })
+        }
+      );
+
+      if (response.success) {
+        this.invalidateCache();
+      }
+
+      return response as NotificationResponse;
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      return {
+        success: false,
+        error: 'Failed to create notification'
       };
     }
   }
@@ -470,96 +468,6 @@ class NotificationService {
 
   private invalidateCache(): void {
     this.cachedNotifications.clear();
-  }
-
-  // Create local notification (for legacy support)
-  async createLocalNotification(recipient: string, message: string, type: string = 'system'): Promise<void> {
-    try {
-      const notifications = await storageService.getItem<Record<string, Notification[]>>('local_notifications', {});
-      
-      const newNotification: Notification = {
-        id: `local_${Date.now()}_${Math.random()}`,
-        recipient: sanitize.username(recipient),
-        type: type as any,
-        title: 'Notification',
-        message: sanitize.strict(message),
-        read: false,
-        cleared: false,
-        createdAt: new Date().toISOString(),
-        priority: 'normal'
-      };
-
-      if (!notifications[recipient]) {
-        notifications[recipient] = [];
-      }
-
-      notifications[recipient].unshift(newNotification);
-      
-      // Keep only last 100 notifications per user
-      notifications[recipient] = notifications[recipient].slice(0, 100);
-      
-      await storageService.setItem('local_notifications', notifications);
-      
-      // Fire event for UI updates
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('notification:new', {
-          detail: newNotification
-        }));
-      }
-    } catch (error) {
-      console.error('Error creating local notification:', error);
-    }
-  }
-
-  // Sync local notifications with backend
-  async syncNotifications(): Promise<void> {
-    try {
-      // Get remote notifications
-      const remoteResponse = await this.getActiveNotifications(100);
-      if (!remoteResponse.success || !remoteResponse.data) return;
-
-      const remoteNotifications = Array.isArray(remoteResponse.data) ? remoteResponse.data : [];
-
-      // Get local notifications
-      const localNotifications = await storageService.getItem<Record<string, Notification[]>>('local_notifications', {});
-      
-      // Merge and deduplicate
-      // This is a simplified sync - in production you'd want more sophisticated conflict resolution
-      const merged: Record<string, Notification[]> = {};
-      
-      // Add remote notifications
-      remoteNotifications.forEach(n => {
-        if (!merged[n.recipient]) {
-          merged[n.recipient] = [];
-        }
-        merged[n.recipient].push(n);
-      });
-
-      // Add local notifications that don't exist remotely
-      Object.entries(localNotifications).forEach(([recipient, notifications]) => {
-        if (!merged[recipient]) {
-          merged[recipient] = [];
-        }
-        
-        notifications.forEach(localNotif => {
-          if (localNotif.id.startsWith('local_')) {
-            // This is a local-only notification, keep it
-            merged[recipient].push(localNotif);
-          }
-        });
-      });
-
-      // Sort by date and limit
-      Object.keys(merged).forEach(recipient => {
-        merged[recipient] = merged[recipient]
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 100);
-      });
-
-      await storageService.setItem('local_notifications', merged);
-    } catch (error) {
-      console.error('Error syncing notifications:', error);
-    }
   }
 }
 

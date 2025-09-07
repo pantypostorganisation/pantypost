@@ -39,11 +39,78 @@ router.get('/user-status/:username', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all threads for a user
+// Get all threads for a user - FIXED to return proper format
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
-    const threads = await Message.getThreads(username);
+    
+    // Get all messages where user is sender or receiver
+    const messages = await Message.find({
+      $or: [
+        { sender: username },
+        { receiver: username }
+      ]
+    }).sort({ createdAt: 1 });
+    
+    // Group messages by thread
+    const threadsMap = {};
+    
+    messages.forEach(msg => {
+      const threadId = msg.threadId;
+      
+      if (!threadsMap[threadId]) {
+        const participants = threadId.split('-');
+        threadsMap[threadId] = {
+          id: threadId,
+          participants: participants,
+          messages: [],
+          lastMessage: null,
+          unreadCount: 0,
+          updatedAt: msg.createdAt
+        };
+      }
+      
+      // Add message to thread
+      threadsMap[threadId].messages.push({
+        id: msg._id.toString(),
+        sender: msg.sender,
+        receiver: msg.receiver,
+        content: msg.content,
+        date: msg.createdAt,
+        isRead: msg.isRead,
+        read: msg.isRead,
+        type: msg.type,
+        meta: msg.meta,
+        threadId: msg.threadId
+      });
+      
+      // Update last message
+      threadsMap[threadId].lastMessage = {
+        id: msg._id.toString(),
+        sender: msg.sender,
+        receiver: msg.receiver,
+        content: msg.content,
+        date: msg.createdAt,
+        isRead: msg.isRead,
+        read: msg.isRead,
+        type: msg.type,
+        meta: msg.meta,
+        threadId: msg.threadId
+      };
+      
+      // Update timestamp
+      threadsMap[threadId].updatedAt = msg.createdAt;
+      
+      // Count unread messages
+      if (msg.receiver === username && !msg.isRead) {
+        threadsMap[threadId].unreadCount++;
+      }
+    });
+    
+    // Convert to array and sort by last message date
+    const threads = Object.values(threadsMap).sort((a, b) => 
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
     
     res.json({
       success: true,
@@ -58,7 +125,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
   }
 });
 
-// Get messages for a specific thread
+// Get messages for a specific thread - FIXED format
 router.get('/threads/:threadId', authMiddleware, async (req, res) => {
   try {
     const { threadId } = req.params;
@@ -77,12 +144,23 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
       .sort({ createdAt: 1 })
       .limit(100);
     
+    // Format messages properly
+    const formattedMessages = messages.map(msg => ({
+      id: msg._id.toString(),
+      sender: msg.sender,
+      receiver: msg.receiver,
+      content: msg.content,
+      date: msg.createdAt,
+      isRead: msg.isRead,
+      read: msg.isRead,
+      type: msg.type,
+      meta: msg.meta,
+      threadId: msg.threadId
+    }));
+    
     res.json({
       success: true,
-      data: {
-        threadId,
-        messages
-      }
+      data: formattedMessages
     });
   } catch (error) {
     console.error('Get thread messages error:', error);
@@ -131,7 +209,6 @@ router.post('/send', authMiddleware, async (req, res) => {
       { lastActive: new Date(), isOnline: true }
     );
     
-    // CRITICAL FIX: Add logging and ensure emission happens
     console.log('WEBSOCKET: Emitting new message event for message:', {
       id: message._id.toString(),
       sender: message.sender,
@@ -157,7 +234,7 @@ router.post('/send', authMiddleware, async (req, res) => {
     // Emit to both sender and receiver
     webSocketService.emitNewMessage(messageData);
     
-    // FIXED: Check if receiver is viewing the thread and auto-mark as read
+    // Check if receiver is viewing the thread and auto-mark as read
     if (webSocketService.isUserViewingThread(receiver, threadId)) {
       console.log('WEBSOCKET: Receiver is viewing thread, auto-marking as read');
       
@@ -191,7 +268,7 @@ router.post('/send', authMiddleware, async (req, res) => {
   }
 });
 
-// Mark messages as read - FIXED to handle both formats and emit proper events
+// Mark messages as read
 router.post('/mark-read', authMiddleware, async (req, res) => {
   try {
     let { messageIds, username, otherParty } = req.body;
@@ -243,7 +320,6 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     let messageSender = null;
     
     if (messageIds.length > 0) {
-      // FIXED: Handle both MongoDB ObjectId and UUID formats
       const firstMessage = await Message.findOne({
         $or: [
           { _id: messageIds[0] },
@@ -253,12 +329,11 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
       
       if (firstMessage) {
         threadId = firstMessage.threadId;
-        messageSender = firstMessage.sender; // Get the sender of the messages being read
+        messageSender = firstMessage.sender;
       }
     }
     
     // Update only messages where current user is receiver
-    // FIXED: Handle both ID formats in the update query
     const result = await Message.updateMany(
       {
         $or: messageIds.map(id => ({ _id: id })),
@@ -272,7 +347,7 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
     
     console.log('Mark read result:', result);
     
-    // FIXED: Emit message read event to BOTH users if we have a threadId
+    // Emit message read event to BOTH users if we have a threadId
     if (threadId && result.modifiedCount > 0) {
       console.log('WEBSOCKET: Emitting message:read event to both users');
       
@@ -286,7 +361,7 @@ router.post('/mark-read', authMiddleware, async (req, res) => {
       // Emit to the current user (reader)
       webSocketService.emitMessageRead(messageIds, threadId, currentUser);
       
-      // FIXED: Also emit to the sender so they get the read receipt update
+      // Also emit to the sender so they get the read receipt update
       if (messageSender && messageSender !== currentUser) {
         console.log('WEBSOCKET: Also emitting to sender:', messageSender);
         webSocketService.emitToUser(messageSender, 'message:read', readEventData);
@@ -327,6 +402,34 @@ router.get('/unread-count', authMiddleware, async (req, res) => {
   }
 });
 
+// Get blocked users for current user
+router.get('/blocked-users', authMiddleware, async (req, res) => {
+  try {
+    const username = req.user.username;
+    
+    // Get blocked users from User model
+    const user = await User.findOne({ username }).select('blockedUsers');
+    
+    const blockedData = {};
+    if (user && user.blockedUsers) {
+      blockedData[username] = user.blockedUsers;
+    } else {
+      blockedData[username] = [];
+    }
+    
+    res.json({
+      success: true,
+      data: blockedData
+    });
+  } catch (error) {
+    console.error('Get blocked users error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Block a user
 router.post('/block', authMiddleware, async (req, res) => {
   try {
@@ -340,9 +443,11 @@ router.post('/block', authMiddleware, async (req, res) => {
       });
     }
     
-    // Here you would typically store this in a database
-    // For now, we'll just return success
-    console.log(`User ${blocker} blocked ${blocked}`);
+    // Add to User's blockedUsers array
+    await User.findOneAndUpdate(
+      { username: blocker },
+      { $addToSet: { blockedUsers: blocked } }
+    );
     
     res.json({
       success: true,
@@ -373,9 +478,11 @@ router.post('/unblock', authMiddleware, async (req, res) => {
       });
     }
     
-    // Here you would typically remove this from database
-    // For now, we'll just return success
-    console.log(`User ${blocker} unblocked ${blocked}`);
+    // Remove from User's blockedUsers array
+    await User.findOneAndUpdate(
+      { username: blocker },
+      { $pull: { blockedUsers: blocked } }
+    );
     
     res.json({
       success: true,
@@ -386,6 +493,89 @@ router.post('/unblock', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('Unblock user error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get message notifications for current user
+router.get('/notifications', authMiddleware, async (req, res) => {
+  try {
+    const username = req.query.username || req.user.username;
+    
+    // Get unread message counts grouped by sender
+    const unreadMessages = await Message.aggregate([
+      {
+        $match: {
+          receiver: username,
+          isRead: false
+        }
+      },
+      {
+        $group: {
+          _id: '$sender',
+          count: { $sum: 1 },
+          lastMessage: { $last: '$content' },
+          lastDate: { $last: '$createdAt' }
+        }
+      },
+      {
+        $project: {
+          buyer: '$_id',
+          messageCount: '$count',
+          lastMessage: '$lastMessage',
+          timestamp: '$lastDate',
+          _id: 0
+        }
+      }
+    ]);
+    
+    res.json({
+      success: true,
+      data: unreadMessages
+    });
+  } catch (error) {
+    console.error('Get message notifications error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Clear message notifications
+router.post('/notifications/clear', authMiddleware, async (req, res) => {
+  try {
+    const { seller, buyer } = req.body;
+    
+    if (!seller || !buyer) {
+      return res.status(400).json({
+        success: false,
+        error: 'Seller and buyer are required'
+      });
+    }
+    
+    // Mark messages as read
+    const threadId = Message.getThreadId(seller, buyer);
+    await Message.updateMany(
+      {
+        threadId,
+        receiver: seller,
+        sender: buyer,
+        isRead: false
+      },
+      {
+        isRead: true
+      }
+    );
+    
+    res.json({
+      success: true
+    });
+  } catch (error) {
+    console.error('Clear notifications error:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -406,24 +596,61 @@ router.post('/report', authMiddleware, async (req, res) => {
       });
     }
     
-    // Here you would typically store this report in database
-    // For now, we'll just log and return success
-    console.log(`User ${reporter} reported ${reportee}`, {
-      reason,
-      category,
-      messageCount: messages?.length || 0
+    // Create report in Report model
+    const Report = require('../models/Report');
+    const report = new Report({
+      reporter,
+      reportedUser: reportee,
+      reason: reason || '',
+      category: category || 'other',
+      messages: messages || [],
+      status: 'pending',
+      processed: false
     });
+    
+    await report.save();
     
     res.json({
       success: true,
       data: {
         reporter,
         reportee,
-        reportId: `report_${Date.now()}`
+        reportId: report._id
       }
     });
   } catch (error) {
     console.error('Report user error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get unread reports count (for admins)
+router.get('/reports/unread-count', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+    
+    // Count unread reports from Report model
+    const Report = require('../models/Report');
+    const count = await Report.countDocuments({ 
+      status: 'pending',
+      processed: false 
+    });
+    
+    res.json({
+      success: true,
+      data: { count }
+    });
+  } catch (error) {
+    console.error('Get unread reports error:', error);
     res.status(500).json({
       success: false,
       error: error.message

@@ -1,20 +1,18 @@
+// src/context/MessageContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { v4 as uuidv4 } from 'uuid';
-import { messagesService, storageService } from '@/services';
+import { messagesService } from '@/services';
+import type { MessageThread as ServiceMessageThread } from '@/services/messages.service';
 import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
-
-// WebSocket
 import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
-
-// Rate limiter (reuse your shared util)
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 
-// ------------ Types ------------
+// Types
 type Message = {
   id?: string;
   sender: string;
@@ -37,36 +35,6 @@ type Message = {
   _optimisticId?: string;
 };
 
-type ReportLog = {
-  id?: string;
-  reporter: string;
-  reportee: string;
-  messages: Message[];
-  date: string;
-  processed?: boolean;
-  banApplied?: boolean;
-  banId?: string;
-  severity?: 'low' | 'medium' | 'high' | 'critical';
-  category?: 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'other';
-  adminNotes?: string;
-  processedBy?: string;
-  processedAt?: string;
-};
-
-type MessageOptions = {
-  type?: 'normal' | 'customRequest' | 'image' | 'tip';
-  meta?: {
-    id?: string;
-    title?: string;
-    price?: number;
-    tags?: string[];
-    message?: string;
-    imageUrl?: string;
-    tipAmount?: number;
-  };
-  _optimisticId?: string;
-};
-
 type MessageThread = { [otherParty: string]: Message[] };
 
 type ThreadInfo = {
@@ -80,6 +48,12 @@ type MessageNotification = {
   messageCount: number;
   lastMessage: string;
   timestamp: string;
+};
+
+type MessageOptions = {
+  type?: 'normal' | 'customRequest' | 'image' | 'tip';
+  meta?: Message['meta'];
+  _optimisticId?: string;
 };
 
 type MessageContextType = {
@@ -108,7 +82,7 @@ type MessageContextType = {
   getReportCount: () => number;
   blockedUsers: { [user: string]: string[] };
   reportedUsers: { [user: string]: string[] };
-  reportLogs: ReportLog[];
+  reportLogs: any[];
   messageNotifications: { [seller: string]: MessageNotification[] };
   clearMessageNotifications: (seller: string, buyer: string) => void;
   refreshMessages: () => void;
@@ -116,40 +90,33 @@ type MessageContextType = {
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
 
-// Keep conversation key logic unchanged to avoid breaking stored keys
 const getConversationKey = (userA: string, userB: string): string => {
   return [userA, userB].sort().join('-');
 };
 
-// Validation schemas
 const customRequestMetaSchema = z.object({
   title: messageSchemas.customRequest.shape.title,
   price: messageSchemas.customRequest.shape.price,
   message: messageSchemas.customRequest.shape.description,
 });
 
-// Helpers
 const CLIP = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
 
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<{ [conversationKey: string]: Message[] }>({});
   const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
-  const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
+  const [reportLogs, setReportLogs] = useState<any[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
   const [isLoading, setIsLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
-  // WebSocket
   const wsContext = useWebSocket ? useWebSocket() : null;
   const { subscribe, isConnected } = wsContext || { subscribe: null, isConnected: false };
 
-  // Deduping & optimistic mapping
   const processedMessageIds = useRef<Set<string>>(new Set());
   const optimisticMessageMap = useRef<Map<string, string>>(new Map());
   const subscriptionsRef = useRef<(() => void)[]>([]);
-
-  // Rate limiter
   const rateLimiter = useRef(getRateLimiter()).current;
 
   // Initialize service
@@ -157,50 +124,71 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data
+  // Load initial data from API only
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
         setIsLoading(false);
         return;
       }
+      
       try {
         setIsLoading(true);
 
-        const storedMessages = await storageService.getItem<{ [key: string]: Message[] }>('panty_messages', {});
-        if (storedMessages && typeof storedMessages === 'object') {
-          const sanitized: { [key: string]: Message[] } = {};
-          Object.entries(storedMessages).forEach(([key, msgs]) => {
-            sanitized[key] = Array.isArray(msgs)
-              ? msgs.map((msg) => ({
-                  ...msg,
-                  content: sanitizeStrict(msg.content || ''),
-                  meta: msg.meta
-                    ? {
-                        ...msg.meta,
-                        title: msg.meta.title ? sanitizeStrict(msg.meta.title) : undefined,
-                        message: msg.meta.message ? sanitizeStrict(msg.meta.message) : undefined,
-                        tags: msg.meta.tags?.map((t) => sanitizeStrict(t).slice(0, 30)),
-                      }
-                    : undefined,
-                }))
-              : [];
+        // Load all data from API through the service
+        const [threadsResponse, blockedResponse, notificationsResponse] = await Promise.all([
+          messagesService.getThreads(''), // Get all threads
+          messagesService.getBlockedUsers(),
+          messagesService.getMessageNotifications('')
+        ]);
+
+        // Process threads into messages format
+        if (threadsResponse.success && threadsResponse.data) {
+          const processedMessages: { [key: string]: Message[] } = {};
+          threadsResponse.data.forEach((thread: ServiceMessageThread) => {
+            if (thread.messages && thread.messages.length > 0) {
+              processedMessages[thread.id] = thread.messages;
+            }
           });
-          setMessages(sanitized);
+          setMessages(processedMessages);
         }
 
-        setBlockedUsers((await storageService.getItem<{ [user: string]: string[] }>('panty_blocked', {})) || {});
-        setReportedUsers((await storageService.getItem<{ [user: string]: string[] }>('panty_reported', {})) || {});
-        setReportLogs((await storageService.getItem<ReportLog[]>('panty_report_logs', [])) || {});
-        setMessageNotifications(
-          (await storageService.getItem<{ [seller: string]: MessageNotification[] }>('panty_message_notifications', {})) || {}
-        );
+        // Set blocked users
+        if (blockedResponse.success && blockedResponse.data) {
+          setBlockedUsers(blockedResponse.data);
+        }
+
+        // Set notifications
+        if (notificationsResponse.success && notificationsResponse.data) {
+          const notifs: { [seller: string]: MessageNotification[] } = {};
+          notificationsResponse.data.forEach((notif: any) => {
+            const seller = notif.seller || notif.recipient;
+            if (seller) {
+              if (!notifs[seller]) notifs[seller] = [];
+              notifs[seller].push({
+                buyer: notif.buyer || notif.sender,
+                messageCount: notif.messageCount || 1,
+                lastMessage: notif.lastMessage || notif.message || '',
+                timestamp: notif.timestamp || notif.createdAt || new Date().toISOString()
+              });
+            }
+          });
+          setMessageNotifications(notifs);
+        }
+
       } catch (err) {
-        console.error('Error loading message data:', err);
+        console.error('Error loading message data from API:', err);
+        // Don't load from localStorage - just show empty state
+        setMessages({});
+        setBlockedUsers({});
+        setReportedUsers({});
+        setReportLogs([]);
+        setMessageNotifications({});
       } finally {
         setIsLoading(false);
       }
     };
+    
     loadData();
   }, []);
 
@@ -214,24 +202,20 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
-    // message:new
     const unsubscribeNewMessage = subscribe('message:new' as WebSocketEvent, (data: any) => {
       if (!data || !data.sender || !data.receiver) return;
 
       const conversationKey = getConversationKey(data.sender, data.receiver);
 
-      // dedupe by id
       if (data.id && processedMessageIds.current.has(data.id)) return;
       if (data.id) {
         processedMessageIds.current.add(data.id);
-        // trim memory
         if (processedMessageIds.current.size > 1000) {
           const last = Array.from(processedMessageIds.current).slice(-500);
           processedMessageIds.current = new Set(last);
         }
       }
 
-      // Sanitize payload
       const safeContent = sanitizeStrict(data.content || '');
       const safeMeta = data.meta
         ? {
@@ -259,19 +243,15 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       setMessages((prev) => {
         const existing = prev[conversationKey] || [];
 
-        // Replace optimistic
         if (data._optimisticId) {
           optimisticMessageMap.current.set(data._optimisticId, newMessage.id!);
           const withoutOptimistic = existing.filter((m) => m._optimisticId !== data._optimisticId);
           const dup = withoutOptimistic.some((m) => m.id && m.id === newMessage.id);
           if (dup) return prev;
 
-          const updated = { ...prev, [conversationKey]: [...withoutOptimistic, newMessage] };
-          storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
-          return updated;
+          return { ...prev, [conversationKey]: [...withoutOptimistic, newMessage] };
         }
 
-        // Check duplicate by id or by content+time (~2s)
         const isDup = existing.some((m) => {
           if (m.id && newMessage.id && m.id === newMessage.id) return true;
           if (m.sender === newMessage.sender && m.receiver === newMessage.receiver && m.content === newMessage.content) {
@@ -282,14 +262,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
         if (isDup) return prev;
 
-        const updated = { ...prev, [conversationKey]: [...existing, newMessage] };
-        storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
-        return updated;
+        return { ...prev, [conversationKey]: [...existing, newMessage] };
       });
 
       setUpdateTrigger((n) => n + 1);
 
-      // Notifications (sanitize preview)
       if (data.type !== 'customRequest') {
         const preview = CLIP(safeContent, 50);
         setMessageNotifications((prev) => {
@@ -320,7 +297,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     });
 
-    // message:read
     const unsubscribeRead = subscribe('message:read' as WebSocketEvent, (data: any) => {
       if (!data || !data.threadId || !Array.isArray(data.messageIds)) return;
 
@@ -335,7 +311,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             return msg;
           });
         }
-        storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
         return updated;
       });
 
@@ -352,40 +327,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   }, [subscribe, isConnected]);
 
-  // Persist on changes
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoading) {
-      storageService.setItem('panty_messages', messages);
-    }
-  }, [messages, isLoading]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoading) {
-      storageService.setItem('panty_blocked', blockedUsers);
-    }
-  }, [blockedUsers, isLoading]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoading) {
-      storageService.setItem('panty_reported', reportedUsers);
-    }
-  }, [reportedUsers, isLoading]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoading) {
-      storageService.setItem('panty_report_logs', reportLogs);
-    }
-  }, [reportLogs, isLoading]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !isLoading) {
-      storageService.setItem('panty_message_notifications', messageNotifications);
-    }
-  }, [messageNotifications, isLoading]);
-
-  // ------------- Actions -------------
-
-  // Send message (rate-limited + block checks + sanitization)
+  // All actions now use the API service
   const sendMessage = useCallback(
     async (sender: string, receiver: string, content: string, options?: MessageOptions) => {
       const cleanSender = sanitizeUsername(sender) || sender;
@@ -396,7 +338,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
 
-      // Block checks (both directions)
       const recvBlocked = blockedUsers[cleanReceiver]?.includes(cleanSender);
       const sndBlocked = blockedUsers[cleanSender]?.includes(cleanReceiver);
       if (recvBlocked || sndBlocked) {
@@ -404,14 +345,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
 
-      // Rate limit per sender
       const rate = rateLimiter.check(`MESSAGE_SEND:${cleanSender}`, { maxAttempts: 20, windowMs: 30_000 });
       if (!rate.allowed) {
         console.warn(`[MessageContext] Rate limit exceeded. Try again in ${rate.waitTime}s`);
         return;
       }
 
-      // Allow image-only messages
       let sanitizedContent = content;
       if (options?.type === 'image' && !sanitizedContent.trim() && options?.meta?.imageUrl) {
         sanitizedContent = 'Image shared';
@@ -426,7 +365,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         sanitizedContent = contentValidation.data;
       }
 
-      // Sanitize meta
       let sanitizedMeta = options?.meta;
       if (sanitizedMeta) {
         sanitizedMeta = {
@@ -438,19 +376,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       try {
-        const payload = {
+        const result = await messagesService.sendMessage({
           sender: cleanSender,
           receiver: cleanReceiver,
           content: sanitizedContent,
           type: options?.type,
           meta: sanitizedMeta,
-          _optimisticId: options?._optimisticId,
-        };
-        const result = await messagesService.sendMessage(payload);
+        });
 
         if (result.success && result.data) {
-          // Rely on WebSocket echo to add the message (prevents duplicates).
-          // Update notification preview locally.
+          // Message will be added via WebSocket echo
           if (options?.type !== 'customRequest') {
             const preview = CLIP(sanitizeStrict(sanitizedContent), 50);
             setMessageNotifications((prev) => {
@@ -561,9 +496,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const updatedConv = conv.map((msg) =>
             msg.receiver === userA && msg.sender === userB && !msg.read ? { ...msg, read: true, isRead: true } : msg
           );
-        const updated = { ...prev, [conversationKey]: updatedConv };
-          storageService.setItem('panty_messages', updated).catch((e) => console.error('[MessageContext] save fail:', e));
-          return updated;
+          return { ...prev, [conversationKey]: updatedConv };
         });
 
         clearMessageNotifications(userA, userB);
@@ -581,6 +514,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (filtered.length === arr.length) return prev;
       return { ...prev, [seller]: filtered };
     });
+    
+    // Also clear on backend
+    messagesService.clearMessageNotifications(seller, buyer);
   }, []);
 
   const blockUser = useCallback(async (blocker: string, blockee: string) => {
@@ -624,7 +560,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const cleanReporter = sanitizeUsername(reporter) || reporter;
         const cleanReportee = sanitizeUsername(reportee) || reportee;
 
-        const result = await messagesService.reportUser({ reporter: cleanReporter, reportee: cleanReportee, messages: reportMessages });
+        const result = await messagesService.reportUser({ 
+          reporter: cleanReporter, 
+          reportee: cleanReportee, 
+          messages: reportMessages 
+        });
+        
         if (result.success) {
           setReportedUsers((prev) => {
             const list = prev[cleanReporter] || [];
@@ -632,7 +573,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             return prev;
           });
 
-          const newReport: ReportLog = {
+          const newReport = {
             id: uuidv4(),
             reporter: cleanReporter,
             reportee: cleanReportee,
@@ -709,13 +650,12 @@ export const useMessages = () => {
   return context;
 };
 
-// External (header) helper
+// External helper for report count (now uses API)
 export const getReportCount = async (): Promise<number> => {
   try {
     if (typeof window === 'undefined') return 0;
-    const reports = await storageService.getItem<ReportLog[]>('panty_report_logs', []);
-    if (!Array.isArray(reports)) return 0;
-    return reports.filter((r) => r && typeof r === 'object' && !r.processed).length;
+    const response = await messagesService.getUnreadReports();
+    return response.success && response.data ? response.data.count : 0;
   } catch (e) {
     console.error('Error getting external report count:', e);
     return 0;

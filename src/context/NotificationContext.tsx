@@ -1,3 +1,4 @@
+// src/context/NotificationContext.tsx
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
@@ -37,13 +38,12 @@ export const useNotifications = () => {
 // ---------- helpers ----------
 const getId = (n: Partial<Notification> | any) => n?._id || n?.id || undefined;
 
-// Shallow-sanitize: sanitize string leaves one level deep (keeps numbers/objects intact)
 const sanitizeDataPayload = (val: any) => {
   if (!val || typeof val !== 'object') return val;
   const out: any = Array.isArray(val) ? [] : {};
   Object.entries(val).forEach(([k, v]) => {
     if (typeof v === 'string') out[k] = sanitizeStrict(v);
-    else out[k] = v; // keep non-strings as-is
+    else out[k] = v;
   });
   return out;
 };
@@ -79,8 +79,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const isMountedRef = useRef(true);
   const lastFetchRef = useRef<number>(0);
   const FETCH_COOLDOWN = 1000;
-
-  // Track processed IDs to prevent dupes
   const processedNotificationIds = useRef<Set<string>>(new Set());
 
   const loadNotifications = useCallback(async () => {
@@ -92,6 +90,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setIsLoading(true);
     setError(null);
     try {
+      // ONLY load from API, NO localStorage fallback
       const [activeRes, clearedRes] = await Promise.all([
         notificationService.getActiveNotifications(50),
         notificationService.getClearedNotifications(50),
@@ -115,8 +114,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         );
         setClearedNotifications(sanitizedCleared);
       }
-    } catch {
-      if (isMountedRef.current) setError('Failed to load notifications');
+    } catch (err) {
+      console.error('Failed to load notifications from API:', err);
+      if (isMountedRef.current) {
+        setError('Failed to load notifications');
+        // Don't set any fallback data - just show empty
+        setActiveNotifications([]);
+        setClearedNotifications([]);
+      }
     } finally {
       if (isMountedRef.current) setIsLoading(false);
     }
@@ -141,19 +146,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (!subscribe || !user) return;
     const unsubs: Array<() => void> = [];
 
-    // Primary event from backend
     unsubs.push(
       subscribe('notification:new' as WebSocketEvent, (data: any) => {
         if (!isMountedRef.current) return;
 
         const rawId = getId(data);
         if (rawId && processedNotificationIds.current.has(rawId)) {
-          // already handled
           return;
         }
         if (rawId) {
           processedNotificationIds.current.add(rawId);
-          // memory cap
           if (processedNotificationIds.current.size > 400) {
             const ids = Array.from(processedNotificationIds.current);
             processedNotificationIds.current = new Set(ids.slice(-200));
@@ -162,7 +164,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         const n = sanitizeNotification(data, user.username);
 
-        // de-dupe state
         setActiveNotifications((prev) => {
           if (rawId && prev.some((x) => getId(x) === rawId)) return prev;
           return [n, ...prev];
@@ -172,7 +173,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       })
     );
 
-    // Keep management events
     unsubs.push(
       subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
         const id = getId(data?.notificationId ? { id: data.notificationId } : data);
@@ -232,8 +232,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => unsubs.forEach((fn) => fn());
   }, [subscribe, user]);
 
-  // -------- Actions (API + state) --------
-
+  // All actions now ONLY use API, no localStorage
   const clearNotification = useCallback(async (id: string) => {
     try {
       const res = await notificationService.clearNotification(id);
@@ -317,7 +316,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const res = await notificationService.markAsRead(id);
       if (res.success) {
-        // Update atomically based on current state
         setActiveNotifications((prev) => {
           let dec = 0;
           const next = prev.map((n) => {
@@ -348,12 +346,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
+  // This is now only for temporary UI notifications, not persisted
   const addLocalNotification = useCallback(
     (message: string, type: string = 'system') => {
       if (!user) return;
       const safeType = /^[a-z0-9_\-]+$/i.test(type) ? type : 'system';
       const n: Notification = {
-        id: `local_${Date.now()}`,
+        id: `temp_${Date.now()}`,
         recipient: sanitizeUsername(user.username) || user.username,
         type: safeType as any,
         title: 'Notification',
@@ -365,6 +364,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       };
       setActiveNotifications((prev) => [n, ...prev]);
       setUnreadCount((c) => c + 1);
+      
+      // Optionally, send to backend to persist
+      // notificationService.createNotification(n);
     },
     [user]
   );
