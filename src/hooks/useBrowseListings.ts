@@ -18,6 +18,7 @@ import { Listing } from '@/context/ListingContext';
 import { sanitizeSearchQuery, sanitizeNumber, sanitizeStrict } from '@/utils/security/sanitization';
 import { useRateLimit } from '@/utils/security/rate-limiter';
 import { searchSchemas } from '@/utils/validation/schemas';
+import { resolveApiUrl } from '@/utils/url';
 
 // Type definitions - matching what we actually have in storage
 interface Order {
@@ -31,6 +32,13 @@ interface User {
   username: string;
   verified?: boolean;
   verificationStatus?: string;
+}
+
+// Extended Listing type that includes sellerProfile from backend
+interface ListingFromBackend extends Listing {
+  sellerProfile?: SellerProfile;
+  isSellerVerified?: boolean;
+  sellerSalesCount?: number;
 }
 
 // Helper functions to normalize listings for utility functions
@@ -224,35 +232,6 @@ export const useBrowseListings = () => {
     return filtered;
   }, [contextListings, filter, debouncedSearchTerm, minPrice, maxPrice, selectedHourRange, sortBy]);
 
-  // Load seller profiles
-  useEffect(() => {
-    const loadSellerProfiles = async () => {
-      if (typeof window !== 'undefined' && !contextLoading && contextListings.length > 0) {
-        const currentSellers = new Set(contextListings.map(listing => listing.seller));
-        const profiles: { [key: string]: SellerProfile } = {};
-        
-        const sellersArray = Array.from(currentSellers).slice(0, MAX_CACHED_PROFILES);
-        
-        // Load all user profiles at once
-        const userProfiles = await storageService.getItem<any>('user_profiles', {});
-        
-        sellersArray.forEach(seller => {
-          const profileData = userProfiles[seller];
-          if (profileData) {
-            profiles[sanitizeStrict(seller)] = { 
-              bio: profileData.bio ? sanitizeStrict(profileData.bio) : null, 
-              pic: profileData.profilePic || null 
-            };
-          }
-        });
-        
-        setSellerProfiles(profiles);
-      }
-    };
-    
-    loadSellerProfiles();
-  }, [contextListings, contextLoading]);
-
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -395,7 +374,19 @@ export const useBrowseListings = () => {
         const sellerUser = contextUsers?.[listing.seller];
         const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
         const sellerSalesCount = getSellerSalesCount(listing.seller);
-        const sellerProfile = sellerProfiles[listing.seller];
+        
+        // Cast to the extended type to access sellerProfile
+        const listingWithBackendData = listing as ListingFromBackend;
+        
+        // Use the sellerProfile from the listing if it exists
+        // and resolve the pic URL if it's a relative path
+        let sellerProfile = listingWithBackendData.sellerProfile;
+        if (sellerProfile?.pic) {
+          sellerProfile = {
+            ...sellerProfile,
+            pic: resolveApiUrl(sellerProfile.pic)
+          };
+        }
         
         return {
           ...listing,
@@ -416,7 +407,7 @@ export const useBrowseListings = () => {
       console.error('Error creating paginated listings:', error);
       return [];
     }
-  }, [filteredListings, contextUsers, getSellerSalesCount, sellerProfiles, page]);
+  }, [filteredListings, contextUsers, getSellerSalesCount, page]);
   
   const totalPages = useMemo(() => {
     try {

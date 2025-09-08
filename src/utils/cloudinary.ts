@@ -61,21 +61,35 @@ const getAuthToken = (): string | null => {
  * Upload a single file - NOW USES BACKEND
  * This is the main function used for profile picture uploads
  * @param file - The file to upload
+ * @param uploadType - Type of upload (profile-pic, gallery, verification, listing)
  * @returns Promise with upload result
  */
 export const uploadToCloudinary = async (
-  file: File
+  file: File,
+  uploadType: 'profile-pic' | 'gallery' | 'verification' | 'listing' = 'profile-pic'
 ): Promise<CloudinaryUploadResult> => {
   // Validate file before upload
   if (!isValidImageFile(file)) {
     throw new Error(`Invalid file: ${file.name}. Must be JPEG, PNG, WebP, or GIF under 10MB.`);
   }
   
-  console.log('[Upload] Using backend for profile picture upload');
+  console.log(`[Upload] Using backend for ${uploadType} upload`);
   
-  // Use backend upload endpoint for profile pictures
+  // Use backend upload endpoint
   const formData = new FormData();
-  formData.append('file', file);
+  
+  // IMPORTANT: Match the field name to what the backend expects for each endpoint
+  if (uploadType === 'profile-pic') {
+    formData.append('profilePic', file);  // Backend expects 'profilePic' NOT 'file'
+  } else if (uploadType === 'gallery') {
+    formData.append('gallery', file);  // Backend expects 'gallery' for gallery
+  } else if (uploadType === 'listing') {
+    formData.append('images', file);  // Backend expects 'images' for listing
+  } else if (uploadType === 'verification') {
+    formData.append('file', file);  // Single file for verification
+  } else {
+    formData.append('file', file);  // Default to 'file'
+  }
   
   try {
     const token = getAuthToken();
@@ -83,9 +97,23 @@ export const uploadToCloudinary = async (
       throw new Error('Not authenticated. Please log in again.');
     }
     
-    // Use the backend profile-pic endpoint
-    const url = buildApiUrl('/upload/profile-pic');
+    // Determine the correct endpoint based on upload type
+    let endpoint = '/upload/profile-pic';
+    if (uploadType === 'gallery') {
+      endpoint = '/upload/gallery';
+    } else if (uploadType === 'verification') {
+      endpoint = '/upload/verification';
+    } else if (uploadType === 'listing') {
+      endpoint = '/upload/listing-images';
+    }
+    
+    const url = buildApiUrl(endpoint);
     console.log('[Upload] Uploading to backend:', url);
+    console.log('[Upload] File details:', {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
     
     const response = await fetch(url, {
       method: 'POST',
@@ -94,29 +122,68 @@ export const uploadToCloudinary = async (
         // Don't set Content-Type - let browser set it with boundary for FormData
       },
       body: formData,
+      credentials: 'include', // Include cookies
     });
     
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(error.error || `Upload failed: ${response.statusText}`);
+    const responseText = await response.text();
+    console.log('[Upload] Raw response:', responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('[Upload] Failed to parse response:', responseText);
+      throw new Error('Invalid response from server');
     }
     
-    const data = await response.json();
+    if (!response.ok) {
+      console.error('[Upload] Upload failed:', data);
+      throw new Error(data.error || `Upload failed: ${response.statusText}`);
+    }
+    
     console.log('[Upload] Backend response:', data);
     
     if (!data.success || !data.data) {
-      throw new Error('Invalid response from server');
+      throw new Error(data.error || 'Invalid response from server');
+    }
+    
+    // Handle different response formats based on upload type
+    let uploadData = data.data;
+    
+    // For gallery uploads, data.data might be an object with newImages array
+    if (uploadType === 'gallery' && data.data.newImages) {
+      uploadData = {
+        url: data.data.newImages[0],
+        filename: `gallery_${Date.now()}`,
+        size: file.size
+      };
+    }
+    
+    // For listing uploads, data.data might have a files array
+    if (uploadType === 'listing' && data.data.files) {
+      uploadData = data.data.files[0];
+    }
+    
+    // Ensure URL is absolute
+    let finalUrl = uploadData.url;
+    if (!finalUrl.startsWith('http')) {
+      // If it's a relative URL, prepend the API base URL
+      if (finalUrl.startsWith('/')) {
+        finalUrl = `${API_BASE_URL}${finalUrl}`;
+      } else {
+        finalUrl = `${API_BASE_URL}/${finalUrl}`;
+      }
     }
     
     // Convert backend response to CloudinaryUploadResult format for compatibility
     return {
-      url: data.data.url.startsWith('http') ? data.data.url : `${API_BASE_URL}${data.data.url}`,
-      publicId: data.data.filename || `backend_${Date.now()}`,
+      url: finalUrl,
+      publicId: uploadData.filename || `backend_${Date.now()}`,
       format: file.type.split('/')[1] || 'jpeg',
-      width: 400, // Default dimensions since backend doesn't return these
-      height: 600,
-      bytes: data.data.size || file.size,
-      createdAt: new Date().toISOString(),
+      width: uploadData.width || 400, // Default dimensions since backend doesn't return these
+      height: uploadData.height || 600,
+      bytes: uploadData.size || file.size,
+      createdAt: uploadData.createdAt || new Date().toISOString(),
     };
   } catch (error) {
     console.error('[Upload] Backend upload error:', error);
@@ -125,14 +192,37 @@ export const uploadToCloudinary = async (
 };
 
 /**
+ * Upload for gallery images specifically
+ */
+export const uploadGalleryImage = async (file: File): Promise<CloudinaryUploadResult> => {
+  return uploadToCloudinary(file, 'gallery');
+};
+
+/**
+ * Upload for verification documents
+ */
+export const uploadVerificationDocument = async (file: File): Promise<CloudinaryUploadResult> => {
+  return uploadToCloudinary(file, 'verification');
+};
+
+/**
+ * Upload for listing images specifically
+ */
+export const uploadListingImage = async (file: File): Promise<CloudinaryUploadResult> => {
+  return uploadToCloudinary(file, 'listing');
+};
+
+/**
  * Upload multiple files to backend with progress tracking
  * @param files - Array of files to upload
- * @param onProgress - Progress callback
+ * @param onProgress - Progress callback (NOW SECOND PARAMETER)
+ * @param uploadType - Type of upload (NOW THIRD PARAMETER)
  * @returns Promise with array of upload results
  */
 export const uploadMultipleToCloudinary = async (
   files: File[],
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  uploadType: 'gallery' | 'listing' = 'listing'
 ): Promise<CloudinaryUploadResult[]> => {
   // Validate all files first
   const invalidFiles = files.filter(file => !isValidImageFile(file));
@@ -144,26 +234,150 @@ export const uploadMultipleToCloudinary = async (
     );
   }
   
-  const results: CloudinaryUploadResult[] = [];
-  const totalFiles = files.length;
-  
-  for (let i = 0; i < files.length; i++) {
+  // For listing uploads, batch upload to listing-images endpoint
+  if (uploadType === 'listing' && files.length > 0) {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('images', file); // Note: 'images' for multiple listing files
+    });
+    
     try {
-      const result = await uploadToCloudinary(files[i]);
-      results.push(result);
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+      
+      const url = buildApiUrl('/upload/listing-images');
+      console.log('[Upload] Batch uploading listing images:', url);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(error.error || `Upload failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('[Upload] Batch upload response:', data);
+      
+      if (!data.success || !data.data) {
+        throw new Error('Invalid response from server');
+      }
+      
+      // Convert response to CloudinaryUploadResult array
+      const results: CloudinaryUploadResult[] = [];
+      const uploadedFiles = data.data.files || [];
+      
+      uploadedFiles.forEach((fileData: any, index: number) => {
+        let finalUrl = fileData.url;
+        if (!finalUrl.startsWith('http')) {
+          finalUrl = finalUrl.startsWith('/') 
+            ? `${API_BASE_URL}${finalUrl}`
+            : `${API_BASE_URL}/${finalUrl}`;
+        }
+        
+        results.push({
+          url: finalUrl,
+          publicId: fileData.filename || `listing_${Date.now()}_${index}`,
+          format: files[index]?.type.split('/')[1] || 'jpeg',
+          width: 400,
+          height: 600,
+          bytes: fileData.size || files[index]?.size || 0,
+          createdAt: new Date().toISOString(),
+        });
+      });
       
       if (onProgress) {
-        const progress = ((i + 1) / totalFiles) * 100;
-        onProgress(progress);
+        onProgress(100);
       }
+      
+      return results;
     } catch (error) {
-      console.error(`Failed to upload file ${i + 1}:`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to upload file ${files[i].name}: ${errorMessage}`);
+      console.error('[Upload] Batch upload error:', error);
+      throw error instanceof Error ? error : new Error('Batch upload failed');
     }
   }
   
-  return results;
+  // For gallery, we can upload all at once
+  if (uploadType === 'gallery' && files.length > 0) {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('gallery', file); // Note: 'gallery' for multiple gallery files
+    });
+    
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+      
+      const url = buildApiUrl('/upload/gallery');
+      console.log('[Upload] Batch uploading to gallery:', url);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(error.error || `Upload failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('[Upload] Batch upload response:', data);
+      
+      if (!data.success || !data.data) {
+        throw new Error('Invalid response from server');
+      }
+      
+      // Convert response to CloudinaryUploadResult array
+      const results: CloudinaryUploadResult[] = [];
+      const newImages = data.data.newImages || [];
+      
+      newImages.forEach((url: string, index: number) => {
+        let finalUrl = url;
+        if (!finalUrl.startsWith('http')) {
+          finalUrl = finalUrl.startsWith('/') 
+            ? `${API_BASE_URL}${finalUrl}`
+            : `${API_BASE_URL}/${finalUrl}`;
+        }
+        
+        results.push({
+          url: finalUrl,
+          publicId: `gallery_${Date.now()}_${index}`,
+          format: files[index]?.type.split('/')[1] || 'jpeg',
+          width: 400,
+          height: 600,
+          bytes: files[index]?.size || 0,
+          createdAt: new Date().toISOString(),
+        });
+      });
+      
+      if (onProgress) {
+        onProgress(100);
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('[Upload] Batch upload error:', error);
+      throw error instanceof Error ? error : new Error('Batch upload failed');
+    }
+  }
+  
+  // Default fallback - return empty array
+  return [];
 };
 
 /**

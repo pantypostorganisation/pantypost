@@ -9,6 +9,7 @@ import { ListingCardProps } from '@/types/browse';
 import { isAuctionListing } from '@/utils/browseUtils';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
+import { resolveApiUrl } from '@/utils/url';  // Import the URL resolver
 
 export default function ListingCard({
   listing,
@@ -34,6 +35,9 @@ export default function ListingCard({
   // Generate consistent seller ID
   const sellerId = `seller_${listing.seller}`;
   const isFav = user?.role === 'buyer' ? isFavorited(sellerId) : false;
+
+  // FIX: Resolve the seller profile picture URL
+  const resolvedSellerPic = resolveApiUrl(listing.sellerProfile?.pic);
 
   const handleFavoriteClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -230,9 +234,9 @@ export default function ListingCard({
             className="flex items-center gap-3 text-base text-gray-400 hover:text-[#ff950e] transition-colors group/seller"
             onClick={e => e.stopPropagation()}
           >
-            {listing.sellerProfile?.pic ? (
+            {resolvedSellerPic ? (
               <img
-                src={listing.sellerProfile.pic}
+                src={resolvedSellerPic}
                 alt={listing.seller}
                 className="w-12 h-12 rounded-full object-cover border-2 border-gray-700 group-hover/seller:border-[#ff950e] transition-colors"
                 onError={(e) => {

@@ -1,4 +1,4 @@
-// backend/models/Listing.js
+// pantypost-backend/models/Listing.js
 const mongoose = require('mongoose');
 
 // Create listing schema

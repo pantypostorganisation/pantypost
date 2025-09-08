@@ -76,7 +76,7 @@ export interface PopularTag {
   count: number;
 }
 
-// Backend listing format with isLocked field
+// Backend listing format with isLocked field and seller profile data
 interface BackendListing {
   _id?: string;
   id?: string;
@@ -95,6 +95,12 @@ interface BackendListing {
   createdAt: string;
   soldAt?: string;
   isLocked?: boolean; // Server indicates premium content is locked
+  sellerProfile?: {
+    bio: string | null;
+    pic: string | null;
+  };
+  isSellerVerified?: boolean;
+  sellerSalesCount?: number;
   auction?: {
     isAuction: boolean;
     startingPrice: number;
@@ -130,13 +136,23 @@ const createListingValidationSchema = z.object({
 type CreateListingValidationData = z.infer<typeof createListingValidationSchema>;
 
 /**
- * Convert backend listing format to frontend format with isLocked support
+ * Convert backend listing format to frontend format with isLocked support and seller profile
  */
-function convertBackendToFrontend(backendListing: BackendListing): Listing & { isLocked?: boolean } {
+function convertBackendToFrontend(backendListing: BackendListing): Listing & { 
+  isLocked?: boolean;
+  sellerProfile?: any;
+  isSellerVerified?: boolean;
+  sellerSalesCount?: number;
+} {
   // Handle both _id and id fields
   const listingId = backendListing._id || backendListing.id || uuidv4();
   
-  const frontendListing: Listing & { isLocked?: boolean } = {
+  const frontendListing: Listing & { 
+    isLocked?: boolean;
+    sellerProfile?: any;
+    isSellerVerified?: boolean;
+    sellerSalesCount?: number;
+  } = {
     id: listingId,
     title: backendListing.title,
     description: backendListing.description,
@@ -151,6 +167,10 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & { i
     tags: backendListing.tags || [],
     hoursWorn: backendListing.hoursWorn,
     views: backendListing.views || 0,
+    // Include seller profile data from backend
+    sellerProfile: backendListing.sellerProfile || undefined,
+    isSellerVerified: backendListing.isSellerVerified || false,
+    sellerSalesCount: backendListing.sellerSalesCount || 0,
   };
 
   // Convert auction data if present with reserve price support

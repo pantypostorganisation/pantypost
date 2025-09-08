@@ -1,4 +1,4 @@
-// backend/routes/listing.routes.js
+// pantypost-backend/routes/listing.routes.js
 const express = require('express');
 const router = express.Router();
 const Listing = require('../models/Listing');
@@ -34,6 +34,31 @@ async function isUserSubscribedToSeller(buyer, seller) {
 }
 
 /**
+ * Populate seller profile data for a listing
+ */
+async function populateSellerProfile(listing) {
+  try {
+    const seller = await User.findOne({ username: listing.seller });
+    if (seller) {
+      // Add seller profile data to listing
+      listing.sellerProfile = {
+        bio: seller.bio || null,
+        pic: seller.profilePic || null
+      };
+      listing.isSellerVerified = seller.isVerified || false;
+      listing.sellerSalesCount = await Order.countDocuments({ 
+        seller: listing.seller, 
+        status: { $in: ['completed', 'delivered'] } 
+      });
+    }
+    return listing;
+  } catch (error) {
+    console.error('[Listing] Error populating seller profile:', error);
+    return listing;
+  }
+}
+
+/**
  * Filter listing data based on premium access
  * Returns a sanitized version of the listing for non-subscribers
  */
@@ -53,6 +78,11 @@ function filterPremiumContent(listing, hasAccess) {
     status: listing.status,
     createdAt: listing.createdAt,
     isVerified: listing.isVerified,
+    
+    // Include seller profile data even for locked content
+    sellerProfile: listing.sellerProfile,
+    isSellerVerified: listing.isSellerVerified,
+    sellerSalesCount: listing.sellerSalesCount,
     
     // Obscure sensitive data
     description: 'Premium content - Subscribe to view full details',
@@ -282,8 +312,13 @@ router.get('/', async (req, res) => {
       Listing.countDocuments(filter)
     ]);
     
+    // Populate seller profiles for all listings
+    const populatedListings = await Promise.all(
+      listings.map(listing => populateSellerProfile(listing.toObject()))
+    );
+    
     // Check user authentication and subscriptions for premium content filtering
-    let processedListings = listings;
+    let processedListings = populatedListings;
     const token = req.headers.authorization?.replace('Bearer ', '');
     
     if (token) {
@@ -294,7 +329,7 @@ router.get('/', async (req, res) => {
         const role = decoded.role;
         
         // Process each listing for premium content
-        processedListings = await Promise.all(listings.map(async (listing) => {
+        processedListings = await Promise.all(populatedListings.map(async (listing) => {
           if (!listing.isPremium) return listing;
           
           // Seller sees their own listings
@@ -306,22 +341,22 @@ router.get('/', async (req, res) => {
           // Check subscription for buyers
           if (role === 'buyer') {
             const hasAccess = await isUserSubscribedToSeller(username, listing.seller);
-            return filterPremiumContent(listing.toObject(), hasAccess);
+            return filterPremiumContent(listing, hasAccess);
           }
           
           // Others get filtered content
-          return filterPremiumContent(listing.toObject(), false);
+          return filterPremiumContent(listing, false);
         }));
       } catch (error) {
         // Invalid token - filter all premium content
-        processedListings = listings.map(listing => 
-          filterPremiumContent(listing.toObject(), false)
+        processedListings = populatedListings.map(listing => 
+          filterPremiumContent(listing, false)
         );
       }
     } else {
       // No token - filter all premium content
-      processedListings = listings.map(listing => 
-        filterPremiumContent(listing.toObject(), false)
+      processedListings = populatedListings.map(listing => 
+        filterPremiumContent(listing, false)
       );
     }
     
@@ -499,14 +534,17 @@ router.post('/', authMiddleware, async (req, res) => {
     const listing = new Listing(listingData);
     await listing.save();
     
+    // Populate seller profile for the response
+    const populatedListing = await populateSellerProfile(listing.toObject());
+    
     // Emit WebSocket event
     if (global.webSocketService) {
-      global.webSocketService.emitNewListing(listing);
+      global.webSocketService.emitNewListing(populatedListing);
     }
     
     res.json({
       success: true,
-      data: listing
+      data: populatedListing
     });
   } catch (error) {
     res.status(400).json({
@@ -527,6 +565,9 @@ router.get('/:id', async (req, res) => {
         error: 'Listing not found'
       });
     }
+    
+    // Populate seller profile
+    const populatedListing = await populateSellerProfile(listing.toObject());
     
     // Check premium access
     let hasAccess = true;
@@ -557,7 +598,7 @@ router.get('/:id', async (req, res) => {
       }
     }
     
-    const responseData = filterPremiumContent(listing.toObject(), hasAccess);
+    const responseData = filterPremiumContent(populatedListing, hasAccess);
     
     res.json({
       success: true,
@@ -571,6 +612,10 @@ router.get('/:id', async (req, res) => {
     });
   }
 });
+
+// Continue with the rest of the routes unchanged...
+// (POST /api/listings/:id/purchase, POST /api/listings/:id/views, etc.)
+// [Rest of the file remains the same from line 452 onwards]
 
 // POST /api/listings/:id/purchase - Direct purchase endpoint with premium check
 router.post('/:id/purchase', authMiddleware, async (req, res) => {
@@ -822,6 +867,9 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       
       await listing.save();
       
+      // Populate seller profile for the response
+      const populatedListing = await populateSellerProfile(listing.toObject());
+      
       // Create database notification for seller about new bid
       await Notification.createBidNotification(listing.seller, bidder, listing, bidAmount);
       console.log('[Bid] Created database notification for seller');
@@ -964,7 +1012,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       
       // Emit WebSocket event for the bid
       if (global.webSocketService) {
-        global.webSocketService.emitNewBid(listing, {
+        global.webSocketService.emitNewBid(populatedListing, {
           bidder: bidder,
           amount: bidAmount,
           date: new Date()
@@ -973,7 +1021,7 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       
       res.json({
         success: true,
-        data: listing,
+        data: populatedListing,
         message: `Bid placed successfully! You are now the highest bidder at $${bidAmount}!`
       });
     } catch (bidError) {
@@ -989,6 +1037,10 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     });
   }
 });
+
+// Continue with remaining routes unchanged...
+// [POST /api/listings/:id/end-auction, POST /api/listings/:id/cancel-auction, etc.]
+// [Rest of the file remains exactly the same]
 
 // POST /api/listings/:id/end-auction - End an auction using settlement service (with race condition prevention)
 router.post('/:id/end-auction', async (req, res) => {
@@ -1156,13 +1208,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
     Object.assign(listing, req.body);
     await listing.save();
     
+    // Populate seller profile for the response
+    const populatedListing = await populateSellerProfile(listing.toObject());
+    
     if (global.webSocketService) {
-      global.webSocketService.emitListingUpdated(listing);
+      global.webSocketService.emitListingUpdated(populatedListing);
     }
     
     res.json({
       success: true,
-      data: listing
+      data: populatedListing
     });
   } catch (error) {
     res.status(400).json({

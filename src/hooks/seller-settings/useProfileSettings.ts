@@ -45,8 +45,8 @@ export function useProfileSettings() {
     const loadGalleryImages = async () => {
       if (user?.username && token) {
         try {
-          // FIX: Use buildApiUrl to construct the URL properly
-          const response = await fetch(buildApiUrl('/users/:username/profile/full', { username: user.username }), {
+          // Use proper buildApiUrl with params
+          const response = await fetch(buildApiUrl('/users/:username/profile', { username: user.username }), {
             headers: {
               'Authorization': `Bearer ${token}`,
             }
@@ -189,8 +189,9 @@ export function useProfileSettings() {
     try {
       // Create FormData for file upload
       const formData = new FormData();
+      // IMPORTANT: Backend expects 'images' (plural) for gallery endpoint
       selectedFiles.forEach(file => {
-        formData.append('gallery', file);
+        formData.append('images', file);  // Changed from 'gallery' to 'images'
       });
 
       // Start progress simulation
@@ -198,11 +199,11 @@ export function useProfileSettings() {
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      // FIX: Use buildApiUrl to construct the URL properly
       const response = await fetch(buildApiUrl('/upload/gallery'), {
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
+          // Don't set Content-Type - let browser set it for FormData
         },
         body: formData,
       });
@@ -262,8 +263,7 @@ export function useProfileSettings() {
     if (index < 0 || index >= galleryImages.length) return;
     
     try {
-      // FIX: Use buildApiUrl to construct the URL properly
-      const response = await fetch(buildApiUrl('/upload/gallery/:index', { index: index.toString() }), {
+      const response = await fetch(buildApiUrl(`/upload/gallery/${index}`), {
         method: 'DELETE',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
@@ -320,7 +320,7 @@ export function useProfileSettings() {
       try {
         // Remove all images one by one from backend
         for (let i = galleryImages.length - 1; i >= 0; i--) {
-          await fetch(buildApiUrl('/upload/gallery/:index', { index: i.toString() }), {
+          await fetch(buildApiUrl(`/upload/gallery/${i}`), {
             method: 'DELETE',
             headers: {
               'Authorization': token ? `Bearer ${token}` : '',
