@@ -1,5 +1,5 @@
 // src/services/verification.service.ts
-import { FEATURES, API_BASE_URL, ApiResponse } from './api.config';
+import { FEATURES, API_BASE_URL, ApiResponse, buildApiUrl } from './api.config';
 import { storageService } from './storage.service';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
@@ -163,7 +163,8 @@ class VerificationService {
           };
         }
 
-        const url = `${API_BASE_URL}/api/verification/submit`;
+        // FIX: Use buildApiUrl to construct the URL properly
+        const url = buildApiUrl('/verification/submit');
         console.log('[VerificationService] Submitting to:', url);
         
         const response = await fetch(url, {
@@ -259,7 +260,8 @@ class VerificationService {
           };
         }
 
-        const response = await fetch(`${API_BASE_URL}/api/verification/status`, {
+        // FIX: Use buildApiUrl to construct the URL properly
+        const response = await fetch(buildApiUrl('/verification/status'), {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -339,8 +341,9 @@ class VerificationService {
           };
         }
 
+        // FIX: Use buildApiUrl to construct the URL properly
         const response = await fetch(
-          `${API_BASE_URL}/api/verification/pending?${queryParams.toString()}`,
+          buildApiUrl('/verification/pending') + '?' + queryParams.toString(),
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -462,8 +465,9 @@ class VerificationService {
   ): Promise<ApiResponse<any>> {
     try {
       if (FEATURES.USE_API_USERS) {
+        // FIX: Use buildApiUrl to construct the URL properly
         return await this.apiCall<any>(
-          `${API_BASE_URL}/api/verification/${verificationId}/review`,
+          buildApiUrl('/verification/:id/review', { id: verificationId }),
           {
             method: 'PATCH',
             headers: {
@@ -553,7 +557,8 @@ class VerificationService {
   async getVerificationStats(): Promise<ApiResponse<VerificationStats>> {
     try {
       if (FEATURES.USE_API_USERS) {
-        return await this.apiCall<VerificationStats>(`${API_BASE_URL}/api/verification/stats`);
+        // FIX: Use buildApiUrl to construct the URL properly
+        return await this.apiCall<VerificationStats>(buildApiUrl('/verification/stats'));
       }
 
       // LocalStorage fallback
@@ -619,17 +624,33 @@ class VerificationService {
    * Helper: Convert base64 to File
    */
   private base64ToFile(base64: string, filename: string): File {
-    const arr = base64.split(',');
-    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
+    try {
+      // Handle data URLs and raw base64
+      let mime = 'image/jpeg';
+      let data = base64;
+      
+      if (base64.includes(',')) {
+        const arr = base64.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        if (mimeMatch) {
+          mime = mimeMatch[1];
+        }
+        data = arr[1];
+      }
+      
+      const bstr = atob(data);
+      const n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      
+      for (let i = 0; i < n; i++) {
+        u8arr[i] = bstr.charCodeAt(i);
+      }
+      
+      return new File([u8arr], filename, { type: mime });
+    } catch (error) {
+      console.error('[VerificationService] Error converting base64 to file:', error);
+      throw new Error('Failed to process image data');
     }
-    
-    return new File([u8arr], filename, { type: mime });
   }
 }
 

@@ -37,8 +37,8 @@ interface UseProfileDataReturn {
   isLoadingProfile: boolean;
   isSaving: boolean;
   
-  // Actions
-  handleProfilePicChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
+  // Actions - NOTE: handleProfilePicChange returns void, not Promise<void>
+  handleProfilePicChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   removeProfilePic: () => void;
   saveProfile: () => Promise<boolean>;
   refreshProfile: () => Promise<void>;
@@ -228,8 +228,8 @@ export function useProfileData(): UseProfileDataReturn {
       JSON.stringify(galleryImages) !== JSON.stringify(originalData.current.galleryImages);
   }, [bio, profilePic, subscriptionPrice, galleryImages]);
 
-  // Handle profile picture change with security
-  const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Internal async function for profile picture upload
+  const handleProfilePicChangeAsync = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -291,6 +291,12 @@ export function useProfileData(): UseProfileDataReturn {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Wrapped function that returns void (for Zod compatibility)
+  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Call the async function but don't return the promise
+    handleProfilePicChangeAsync(e);
   };
 
   // Remove profile picture
@@ -515,7 +521,7 @@ export function useProfileData(): UseProfileDataReturn {
     isLoadingProfile,
     isSaving,
     
-    // Actions
+    // Actions - handleProfilePicChange now returns void
     handleProfilePicChange,
     removeProfilePic,
     saveProfile,

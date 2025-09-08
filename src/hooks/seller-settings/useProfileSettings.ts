@@ -6,7 +6,7 @@ import { useProfileData } from './useProfileData';
 import { useProfileSave } from './useProfileSave';
 import { useTierCalculation } from './useTierCalculation';
 import { storageService } from '@/services';
-import { API_BASE_URL } from '@/services/api.config';
+import { API_BASE_URL, buildApiUrl } from '@/services/api.config';
 import { sanitizeUrl } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
@@ -45,8 +45,8 @@ export function useProfileSettings() {
     const loadGalleryImages = async () => {
       if (user?.username && token) {
         try {
-          // Fetch user profile from backend to get gallery images
-          const response = await fetch(`${API_BASE_URL}/api/users/${user.username}/profile/full`, {
+          // FIX: Use buildApiUrl to construct the URL properly
+          const response = await fetch(buildApiUrl('/users/:username/profile/full', { username: user.username }), {
             headers: {
               'Authorization': `Bearer ${token}`,
             }
@@ -198,8 +198,8 @@ export function useProfileSettings() {
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      // Upload to backend
-      const response = await fetch(`${API_BASE_URL}/api/upload/gallery`, {
+      // FIX: Use buildApiUrl to construct the URL properly
+      const response = await fetch(buildApiUrl('/upload/gallery'), {
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
@@ -262,8 +262,8 @@ export function useProfileSettings() {
     if (index < 0 || index >= galleryImages.length) return;
     
     try {
-      // Call backend to remove image
-      const response = await fetch(`${API_BASE_URL}/api/upload/gallery/${index}`, {
+      // FIX: Use buildApiUrl to construct the URL properly
+      const response = await fetch(buildApiUrl('/upload/gallery/:index', { index: index.toString() }), {
         method: 'DELETE',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
@@ -320,7 +320,7 @@ export function useProfileSettings() {
       try {
         // Remove all images one by one from backend
         for (let i = galleryImages.length - 1; i >= 0; i--) {
-          await fetch(`${API_BASE_URL}/api/upload/gallery/${i}`, {
+          await fetch(buildApiUrl('/upload/gallery/:index', { index: i.toString() }), {
             method: 'DELETE',
             headers: {
               'Authorization': token ? `Bearer ${token}` : '',

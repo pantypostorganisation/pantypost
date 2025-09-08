@@ -1,6 +1,8 @@
 // src/utils/cloudinary.ts
 
-// Cloudinary configuration
+import { API_BASE_URL, buildApiUrl } from '@/services/api.config';
+
+// Cloudinary configuration (kept for future use if needed)
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '';
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
 
@@ -11,20 +13,6 @@ const isCloudinaryConfigured = () => {
          CLOUD_NAME !== 'your_cloud_name' && 
          UPLOAD_PRESET !== 'your_upload_preset';
 };
-
-// Mock image URLs for development
-const MOCK_IMAGE_URLS = [
-  'https://picsum.photos/400/600?random=1',
-  'https://picsum.photos/400/600?random=2',
-  'https://picsum.photos/400/600?random=3',
-  'https://picsum.photos/400/600?random=4',
-  'https://picsum.photos/400/600?random=5',
-  'https://picsum.photos/400/600?random=6',
-  'https://picsum.photos/400/600?random=7',
-  'https://picsum.photos/400/600?random=8',
-  'https://picsum.photos/400/600?random=9',
-  'https://picsum.photos/400/600?random=10',
-];
 
 // Types
 export interface CloudinaryUploadResult {
@@ -51,45 +39,27 @@ export interface BatchDeleteResult {
 }
 
 /**
- * Convert File to base64 data URL
+ * Get auth token from sessionStorage (where AuthContext stores it)
  */
-const fileToDataURL = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        resolve(e.target.result as string);
-      } else {
-        reject(new Error('Failed to read file'));
-      }
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
+const getAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const stored = sessionStorage.getItem('auth_tokens');
+    if (stored) {
+      const tokens = JSON.parse(stored);
+      return tokens?.token || null;
+    }
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
+  }
+  
+  return null;
 };
 
 /**
- * Generate a mock upload result for development using actual uploaded file
- */
-const generateMockUploadResult = async (file: File, index: number): Promise<CloudinaryUploadResult> => {
-  const randomId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  // Convert the actual file to a data URL
-  const dataUrl = await fileToDataURL(file);
-  
-  return {
-    url: dataUrl,
-    publicId: randomId,
-    format: file.type.split('/')[1] || 'jpeg',
-    width: 400, // We could calculate actual dimensions if needed
-    height: 600,
-    bytes: file.size,
-    createdAt: new Date().toISOString(),
-  };
-};
-
-/**
- * Upload a single file to Cloudinary
+ * Upload a single file - NOW USES BACKEND
+ * This is the main function used for profile picture uploads
  * @param file - The file to upload
  * @returns Promise with upload result
  */
@@ -101,51 +71,61 @@ export const uploadToCloudinary = async (
     throw new Error(`Invalid file: ${file.name}. Must be JPEG, PNG, WebP, or GIF under 10MB.`);
   }
   
-  // Check if we should use mock data
-  if (!isCloudinaryConfigured()) {
-    console.warn('Cloudinary not configured. Using local image data for development.');
-    // Simulate upload delay
-    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
-    return await generateMockUploadResult(file, 0);
-  }
+  console.log('[Upload] Using backend for profile picture upload');
   
+  // Use backend upload endpoint for profile pictures
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('upload_preset', UPLOAD_PRESET);
   
   try {
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('Not authenticated. Please log in again.');
+    }
+    
+    // Use the backend profile-pic endpoint
+    const url = buildApiUrl('/upload/profile-pic');
+    console.log('[Upload] Uploading to backend:', url);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Don't set Content-Type - let browser set it with boundary for FormData
+      },
+      body: formData,
+    });
     
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Upload failed: ${response.statusText || error}`);
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.error || `Upload failed: ${response.statusText}`);
     }
     
     const data = await response.json();
+    console.log('[Upload] Backend response:', data);
     
+    if (!data.success || !data.data) {
+      throw new Error('Invalid response from server');
+    }
+    
+    // Convert backend response to CloudinaryUploadResult format for compatibility
     return {
-      url: data.secure_url,
-      publicId: data.public_id,
-      format: data.format,
-      width: data.width,
-      height: data.height,
-      bytes: data.bytes,
-      createdAt: data.created_at,
+      url: data.data.url.startsWith('http') ? data.data.url : `${API_BASE_URL}${data.data.url}`,
+      publicId: data.data.filename || `backend_${Date.now()}`,
+      format: file.type.split('/')[1] || 'jpeg',
+      width: 400, // Default dimensions since backend doesn't return these
+      height: 600,
+      bytes: data.data.size || file.size,
+      createdAt: new Date().toISOString(),
     };
   } catch (error) {
-    console.error('Cloudinary upload error:', error);
+    console.error('[Upload] Backend upload error:', error);
     throw error instanceof Error ? error : new Error('Upload failed');
   }
 };
 
 /**
- * Upload multiple files to Cloudinary with progress tracking
+ * Upload multiple files to backend with progress tracking
  * @param files - Array of files to upload
  * @param onProgress - Progress callback
  * @returns Promise with array of upload results
@@ -164,25 +144,6 @@ export const uploadMultipleToCloudinary = async (
     );
   }
   
-  // Check if we should use mock data
-  if (!isCloudinaryConfigured()) {
-    console.warn('Cloudinary not configured. Using local image data for development.');
-    const results: CloudinaryUploadResult[] = [];
-    
-    for (let i = 0; i < files.length; i++) {
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 700));
-      results.push(await generateMockUploadResult(files[i], i));
-      
-      if (onProgress) {
-        const progress = ((i + 1) / files.length) * 100;
-        onProgress(progress);
-      }
-    }
-    
-    return results;
-  }
-  
   const results: CloudinaryUploadResult[] = [];
   const totalFiles = files.length;
   
@@ -197,12 +158,6 @@ export const uploadMultipleToCloudinary = async (
       }
     } catch (error) {
       console.error(`Failed to upload file ${i + 1}:`, error);
-      // Clean up any successful uploads if one fails
-      if (results.length > 0 && isCloudinaryConfigured()) {
-        console.log('Rolling back successful uploads:', results.map(r => r.publicId));
-        // Attempt to delete successfully uploaded images
-        await batchDeleteFromCloudinary(results.map(r => r.publicId));
-      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to upload file ${files[i].name}: ${errorMessage}`);
     }
@@ -212,45 +167,21 @@ export const uploadMultipleToCloudinary = async (
 };
 
 /**
- * Delete an image from Cloudinary
+ * Delete an image - for backend images, this is handled server-side
  * @param publicId - The public ID of the image to delete
  * @returns Promise indicating success
  */
 export const deleteFromCloudinary = async (publicId: string): Promise<CloudinaryDeleteResult> => {
-  // If using mock data, just return success
-  if (!isCloudinaryConfigured() || publicId.startsWith('mock_')) {
-    console.log('Mock mode: Simulating image deletion for', publicId);
-    return {
-      result: 'ok',
-      publicId: publicId,
-    };
-  }
-  
-  try {
-    // For now, make a request to the mock API endpoint
-    const response = await fetch('/api/cloudinary/delete', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ publicId }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Delete failed' }));
-      throw new Error(error.message || `Delete failed: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error('Delete from Cloudinary error:', error);
-    throw error instanceof Error ? error : new Error('Delete failed');
-  }
+  // Backend handles image deletion when profile is updated
+  console.log('[Delete] Image deletion handled by backend:', publicId);
+  return {
+    result: 'ok',
+    publicId: publicId,
+  };
 };
 
 /**
- * Batch delete multiple images from Cloudinary
+ * Batch delete multiple images
  * @param publicIds - Array of public IDs to delete
  * @returns Promise with batch delete results
  */
@@ -258,65 +189,31 @@ export const batchDeleteFromCloudinary = async (
   publicIds: string[]
 ): Promise<BatchDeleteResult> => {
   const results: BatchDeleteResult = {
-    successful: [],
+    successful: publicIds, // Backend handles deletion
     failed: [],
   };
-
-  // Process deletions in parallel with error handling for each
-  const deletePromises = publicIds.map(async (publicId) => {
-    try {
-      const result = await deleteFromCloudinary(publicId);
-      if (result.result === 'ok') {
-        results.successful.push(publicId);
-      } else {
-        results.failed.push({
-          publicId,
-          error: result.result === 'not found' ? 'Image not found' : 'Delete failed',
-        });
-      }
-    } catch (error) {
-      results.failed.push({
-        publicId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
-  await Promise.allSettled(deletePromises);
+  
+  console.log('[Delete] Batch deletion handled by backend:', publicIds);
   return results;
 };
 
 /**
  * Delete image by URL (extracts public ID and deletes)
- * @param url - Cloudinary URL
+ * @param url - Image URL
  * @returns Promise indicating success
  */
 export const deleteImageByUrl = async (url: string): Promise<CloudinaryDeleteResult> => {
-  // Handle data URLs (local images)
-  if (url.includes('data:image')) {
-    return {
-      result: 'ok',
-      publicId: 'local_image',
-    };
-  }
-  
-  // Handle mock URLs
-  if (url.includes('picsum.photos')) {
-    const mockId = url.match(/id=(mock_[a-zA-Z0-9_]+)/)?.[1] || 'mock_unknown';
-    return deleteFromCloudinary(mockId);
-  }
-  
-  const publicId = extractPublicId(url);
-  if (!publicId) {
-    throw new Error('Invalid Cloudinary URL: Unable to extract public ID');
-  }
-  
-  return deleteFromCloudinary(publicId);
+  // Backend handles deletion
+  return {
+    result: 'ok',
+    publicId: 'backend_managed',
+  };
 };
 
 /**
- * Generate a thumbnail URL for a Cloudinary image
- * @param url - The original Cloudinary URL
+ * Generate a thumbnail URL for an image
+ * For backend images, returns the same URL (backend could implement thumbnail generation)
+ * @param url - The original URL
  * @param width - Thumbnail width
  * @param height - Thumbnail height
  * @returns Thumbnail URL
@@ -326,22 +223,22 @@ export const generateThumbnailUrl = (
   width: number = 300,
   height: number = 300
 ): string => {
-  // Handle mock URLs (data URLs)
-  if (url.includes('data:image')) {
-    return url; // Data URLs can't be resized via URL manipulation
+  // For backend URLs, return as is (backend could implement query params for sizing)
+  if (url.includes('/uploads/')) {
+    return url; // Could add ?w=${width}&h=${height} if backend supports it
   }
   
-  // Handle picsum photos
-  if (url.includes('picsum.photos')) {
-    return url.replace(/\/\d+\/\d+/, `/${width}/${height}`);
+  // For Cloudinary URLs (if ever used)
+  if (url.includes('cloudinary.com')) {
+    return url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,q_auto/`);
   }
   
-  return url.replace('/upload/', `/upload/w_${width},h_${height},c_fill,q_auto/`);
+  return url;
 };
 
 /**
- * Generate an optimized URL for a Cloudinary image
- * @param url - The original Cloudinary URL
+ * Generate an optimized URL for an image
+ * @param url - The original URL
  * @param options - Optimization options
  * @returns Optimized URL
  */
@@ -355,35 +252,31 @@ export const generateOptimizedUrl = (
     blur?: number;
   } = {}
 ): string => {
-  // Handle mock URLs (data URLs and picsum)
-  if (url.includes('data:image')) {
-    return url; // Data URLs can't be transformed via URL manipulation
+  // For backend URLs, return as is
+  if (url.includes('/uploads/')) {
+    return url;
   }
   
-  if (url.includes('picsum.photos')) {
-    const { width = 400, height = 600, blur } = options;
-    let mockUrl = url.replace(/\/\d+\/\d+/, `/${width}/${height}`);
-    if (blur) {
-      mockUrl += `${mockUrl.includes('?') ? '&' : '?'}blur=${Math.min(10, blur / 100)}`;
-    }
-    return mockUrl;
+  // For Cloudinary URLs (if ever used)
+  if (url.includes('cloudinary.com')) {
+    const { width, height, quality = 'auto', format = 'auto', blur } = options;
+    
+    let transformations = [`q_${quality}`, `f_${format}`];
+    
+    if (width) transformations.push(`w_${width}`);
+    if (height) transformations.push(`h_${height}`);
+    if (blur) transformations.push(`e_blur:${blur}`);
+    
+    const transformString = transformations.join(',');
+    return url.replace('/upload/', `/upload/${transformString}/`);
   }
   
-  const { width, height, quality = 'auto', format = 'auto', blur } = options;
-  
-  let transformations = [`q_${quality}`, `f_${format}`];
-  
-  if (width) transformations.push(`w_${width}`);
-  if (height) transformations.push(`h_${height}`);
-  if (blur) transformations.push(`e_blur:${blur}`);
-  
-  const transformString = transformations.join(',');
-  return url.replace('/upload/', `/upload/${transformString}/`);
+  return url;
 };
 
 /**
  * Generate a blurred preview URL (useful for premium content)
- * @param url - The original Cloudinary URL
+ * @param url - The original URL
  * @param blurLevel - Blur intensity (100-2000, higher = more blur)
  * @returns Blurred URL
  */
@@ -429,7 +322,7 @@ export const formatFileSize = (bytes: number): string => {
 };
 
 /**
- * Convert a base64 string to a File object for Cloudinary upload
+ * Convert a base64 string to a File object
  * @param base64 - The base64 string
  * @param filename - The filename to use
  * @returns File object
@@ -450,7 +343,7 @@ export const base64ToFile = (base64: string, filename: string): File => {
 };
 
 /**
- * Extract Cloudinary public ID from URL
+ * Extract Cloudinary public ID from URL (kept for compatibility)
  * @param url - Cloudinary URL
  * @returns Public ID or null if not a valid Cloudinary URL
  */
@@ -470,18 +363,26 @@ export const extractPublicId = (url: string): string | null => {
  * @returns Boolean
  */
 export const isCloudinaryUrl = (url: string): boolean => {
-  return url.includes('cloudinary.com') && url.includes(CLOUD_NAME);
+  return url.includes('cloudinary.com') && !!CLOUD_NAME && url.includes(CLOUD_NAME);
 };
 
 /**
- * Check if Cloudinary is configured and show appropriate message
+ * Check if using backend or Cloudinary
+ */
+export const checkUploadConfig = (): { backend: boolean; message: string } => {
+  return {
+    backend: true,
+    message: 'Using backend server for image uploads. All images are stored on your server.'
+  };
+};
+
+/**
+ * Check if Cloudinary is configured (for backward compatibility)
  */
 export const checkCloudinaryConfig = (): { configured: boolean; message?: string } => {
-  if (!isCloudinaryConfigured()) {
-    return {
-      configured: false,
-      message: 'Cloudinary is not configured. Using mock images for development. To enable real image uploads, please update your .env.local file with valid Cloudinary credentials.'
-    };
-  }
-  return { configured: true };
+  // Always return false since we're using backend now
+  return {
+    configured: false,
+    message: 'Using backend server for image uploads instead of Cloudinary.'
+  };
 };

@@ -1,9 +1,5 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/admin/reports/page": "app/admin/reports/page.js",
-  "/buyers/messages/page": "app/buyers/messages/page.js",
   "/icon.png/route": "app/icon.png/route.js",
-  "/login/page": "app/login/page.js",
-  "/page": "app/page.js",
   "/sellers/profile/page": "app/sellers/profile/page.js"
 }

@@ -1,7 +1,7 @@
 // src/components/seller-settings/ProfileInfoCard.tsx
 'use client';
 
-import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Camera } from 'lucide-react';
 import React, { RefObject, useState, useEffect, useCallback } from 'react';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
@@ -206,14 +206,17 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
           disabled={isUploading}
         />
 
-        <SecureImage
-          src="/Upload_New_Picture.png"
-          alt="Upload New Picture"
+        {/* Upload button */}
+        <button
           onClick={() => !isUploading && profilePicInputRef.current?.click()}
-          className={`w-24 h-auto object-contain transition-transform duration-200 ${
-            isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:scale-[1.02]'
+          disabled={isUploading}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ff950e] text-white font-medium transition-all ${
+            isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#ff8c00] active:scale-95'
           }`}
-        />
+        >
+          <Camera className="w-4 h-4" />
+          <span>Upload Picture</span>
+        </button>
 
         {/* File error message */}
         {fileError && (

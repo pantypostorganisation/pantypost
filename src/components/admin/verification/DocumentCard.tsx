@@ -15,7 +15,7 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
 
-  // Don't sanitize URLs that are from our backend
+  // Fix URLs that incorrectly have /api/ in the path for static uploads
   const getSafeImageUrl = (url?: string): string => {
     if (!url) return '';
     
@@ -24,15 +24,31 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
       return url;
     }
     
-    // If it's an absolute URL from our backend, return as is
-    if (url.startsWith('http://localhost:5000') || 
-        url.startsWith('https://localhost:5000') ||
-        url.includes('/uploads/verification/')) {
+    // FIX: Check for URLs with /api/uploads/ and fix them
+    // Backend serves uploads directly from /uploads/, not /api/uploads/
+    if (url.includes('/api/uploads/')) {
+      // Extract the base URL and the path
+      const baseUrl = url.substring(0, url.indexOf('/api/uploads/'));
+      const path = url.substring(url.indexOf('/api/uploads/') + 4); // Remove '/api' prefix
+      const fixedUrl = `${baseUrl}${path}`;
+      console.log('[DocumentCard] Fixed URL from:', url, 'to:', fixedUrl);
+      return fixedUrl;
+    }
+    
+    // If it's a relative upload path, construct the correct URL
+    if (url.startsWith('/uploads/')) {
+      // Use base URL without /api
+      const baseUrl = 'http://localhost:5000';
+      return `${baseUrl}${url}`;
+    }
+    
+    // If it's already a correct absolute URL from our backend, return as is
+    if (url.startsWith('http://localhost:5000/uploads/') || 
+        url.startsWith('https://localhost:5000/uploads/')) {
       return url;
     }
     
-    // For any other URL, sanitize it
-    // But since we're dealing with backend URLs, just return the URL
+    // For any other URL, return as is
     return url;
   };
 
@@ -45,7 +61,7 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
   };
 
   const handleImageError = () => {
-    console.error('[DocumentCard] Failed to load image:', safeSrc);
+    console.error('[DocumentCard] Failed to load image:', imageSrc, '-> Fixed to:', safeSrc);
     setImageLoading(false);
     setImageError(true);
   };

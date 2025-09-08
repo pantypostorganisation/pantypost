@@ -4,6 +4,10 @@ import React, { useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { sanitizeHtml, sanitizeMarkdown } from '@/utils/security/sanitization';
 
+// Simple gray placeholder as a data URL (1x1 pixel stretched)
+// This is a tiny base64 encoded transparent PNG that won't cause 404 errors
+const DEFAULT_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yMDAgMTIwQzE3Ny45MDkgMTIwIDE2MCAxMzcuOTA5IDE2MCAxNjBDMTYwIDE4Mi4wOTEgMTc3LjkwOSAyMDAgMjAwIDIwMEMyMjIuMDkxIDIwMCAyNDAgMTgyLjA5MSAyNDAgMTYwQzI0MCAxMzcuOTA5IDIyMi4wOTEgMTIwIDIwMCAxMjBaTTIwMCAxODBDMTg4Ljk1NCAxODAgMTgwIDE3MS4wNDYgMTgwIDE2MEMxODAgMTQ4Ljk1NCAxODguOTU0IDE0MCAyMDAgMTQwQzIxMS4wNDYgMTQwIDIyMCAxNDguOTU0IDIyMCAxNjBDMjIwIDE3MS4wNDYgMjExLjA0NiAxODAgMjAwIDE4MFoiIGZpbGw9IiM2QjcyODAiLz4KPHBhdGggZD0iTTI4MCAyNDBIMTIwVjI2MEgyODBWMjQwWiIgZmlsbD0iIzZCNzI4MCIvPgo8L3N2Zz4=';
+
 interface SecureMessageDisplayProps {
   content: string;
   allowBasicFormatting?: boolean;
@@ -145,15 +149,21 @@ export const SecureImage: React.FC<SecureImageProps> = ({
   src,
   alt,
   className = '',
-  fallbackSrc = '/placeholder-image.png',
+  fallbackSrc = DEFAULT_PLACEHOLDER, // Use data URL instead of file reference
   onError,
   onClick,
 }) => {
   const [imageSrc, setImageSrc] = React.useState(src);
   const [hasError, setHasError] = React.useState(false);
 
+  // Reset state when src prop changes
+  React.useEffect(() => {
+    setImageSrc(src);
+    setHasError(false);
+  }, [src]);
+
   const handleError = () => {
-    if (!hasError) {
+    if (!hasError && imageSrc !== fallbackSrc) {
       setHasError(true);
       setImageSrc(fallbackSrc);
       onError?.();
