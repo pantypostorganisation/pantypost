@@ -1,7 +1,12 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
+  "/admin/verification-requests/page": "app/admin/verification-requests/page.js",
   "/browse/[id]/page": "app/browse/[id]/page.js",
   "/browse/page": "app/browse/page.js",
+  "/buyers/dashboard/page": "app/buyers/dashboard/page.js",
   "/icon.png/route": "app/icon.png/route.js",
-  "/sellers/[username]/page": "app/sellers/[username]/page.js"
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/sellers/profile/page": "app/sellers/profile/page.js",
+  "/sellers/verify/page": "app/sellers/verify/page.js"
 }

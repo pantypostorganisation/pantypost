@@ -1,3 +1,4 @@
+// src/components/browse/ListingGrid.tsx
 'use client';
 
 import { AlertTriangle } from 'lucide-react';

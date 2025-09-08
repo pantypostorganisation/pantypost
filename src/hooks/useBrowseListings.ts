@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
-import { storageService, securityService } from '@/services';
+import { storageService, listingsService } from '@/services';
 import { FilterOptions, CategoryCounts, SellerProfile, ListingWithProfile } from '@/types/browse';
 import { 
   HOUR_RANGE_OPTIONS, 
@@ -65,15 +65,12 @@ export const useBrowseListings = () => {
   const router = useRouter();
   const { checkLimit: checkSearchLimit } = useRateLimit('SEARCH');
   
-  // Get data from ListingContext
+  // CRITICAL FIX: Don't use context listings, fetch fresh from API
   const { 
-    listings: contextListings,
     users: contextUsers,
     subscriptions: contextSubscriptions,
     orderHistory: contextOrderHistory,
-    isLoading: contextLoading,
     error: contextError,
-    refreshListings
   } = useListings();
 
   // State for filters and UI
@@ -90,6 +87,11 @@ export const useBrowseListings = () => {
   const [listingErrors, setListingErrors] = useState<{ [listingId: string]: string }>({});
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
+  
+  // CRITICAL: Add state for fresh listings
+  const [freshListings, setFreshListings] = useState<Listing[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastFetchTime, setLastFetchTime] = useState(0);
 
   // Refs
   const timeCache = useRef<{[key: string]: {formatted: string, expires: number}}>({});
@@ -99,6 +101,77 @@ export const useBrowseListings = () => {
   const lastQuickViewTime = useRef<number>(0);
 
   const MAX_CACHED_PROFILES = 100;
+  const REFRESH_INTERVAL = 5000; // Refresh every 5 seconds
+
+  // CRITICAL FIX: Fetch fresh listings from API
+  const fetchFreshListings = useCallback(async () => {
+    if (!mountedRef.current) return;
+    
+    try {
+      setIsLoading(true);
+      console.log('[useBrowseListings] Fetching fresh listings from API...');
+      
+      // Clear the listings service cache to force fresh data
+      listingsService.clearCache();
+      
+      // Fetch fresh listings directly from API
+      const result = await listingsService.getListings({ isActive: true });
+      
+      if (result.success && result.data && mountedRef.current) {
+        console.log('[useBrowseListings] Got fresh listings:', result.data.length);
+        setFreshListings(result.data);
+        setLastFetchTime(Date.now());
+      }
+    } catch (error) {
+      console.error('[useBrowseListings] Error fetching listings:', error);
+    } finally {
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  // Initial fetch and periodic refresh
+  useEffect(() => {
+    // Initial fetch
+    fetchFreshListings();
+    
+    // Set up periodic refresh
+    const refreshInterval = setInterval(() => {
+      if (mountedRef.current) {
+        fetchFreshListings();
+      }
+    }, REFRESH_INTERVAL);
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [fetchFreshListings]);
+
+  // Listen for any events that should trigger a refresh
+  useEffect(() => {
+    const handleRefreshNeeded = () => {
+      console.log('[useBrowseListings] Refresh triggered by event');
+      fetchFreshListings();
+    };
+    
+    // Listen for various events that might change listings
+    window.addEventListener('listing:removed', handleRefreshNeeded);
+    window.addEventListener('listingDeleted', handleRefreshNeeded);
+    window.addEventListener('listingCreated', handleRefreshNeeded);
+    window.addEventListener('listings:refreshed', handleRefreshNeeded);
+    window.addEventListener('verification:status-changed', handleRefreshNeeded);
+    window.addEventListener('user:verification-updated', handleRefreshNeeded);
+    
+    return () => {
+      window.removeEventListener('listing:removed', handleRefreshNeeded);
+      window.removeEventListener('listingDeleted', handleRefreshNeeded);
+      window.removeEventListener('listingCreated', handleRefreshNeeded);
+      window.removeEventListener('listings:refreshed', handleRefreshNeeded);
+      window.removeEventListener('verification:status-changed', handleRefreshNeeded);
+      window.removeEventListener('user:verification-updated', handleRefreshNeeded);
+    };
+  }, [fetchFreshListings]);
 
   // Sanitized search term setter
   const handleSearchTermChange = useCallback((value: string) => {
@@ -131,13 +204,13 @@ export const useBrowseListings = () => {
     }
   }, []);
 
-  // Apply filters to context listings
+  // Apply filters to fresh listings (not context listings)
   const filteredListings = useMemo(() => {
     console.log('=== Filtering listings ===');
-    console.log('Context listings count:', contextListings.length);
+    console.log('Fresh listings count:', freshListings.length);
     console.log('Current filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
     
-    let filtered = [...contextListings];
+    let filtered = [...freshListings];
     
     // Filter out ended auctions
     filtered = filtered.filter(listing => {
@@ -230,7 +303,7 @@ export const useBrowseListings = () => {
     
     console.log('Final filtered count:', filtered.length);
     return filtered;
-  }, [contextListings, filter, debouncedSearchTerm, minPrice, maxPrice, selectedHourRange, sortBy]);
+  }, [freshListings, filter, debouncedSearchTerm, minPrice, maxPrice, selectedHourRange, sortBy]);
 
   // Debounced search
   useEffect(() => {
@@ -343,7 +416,7 @@ export const useBrowseListings = () => {
   // Memoized calculations
   const categoryCounts = useMemo(() => {
     try {
-      const activeListings = contextListings.filter(isListingActive);
+      const activeListings = freshListings.filter(isListingActive);
       
       return {
         all: activeListings.length,
@@ -355,7 +428,7 @@ export const useBrowseListings = () => {
       console.error('Error calculating category counts:', error);
       return { all: 0, standard: 0, premium: 0, auction: 0 };
     }
-  }, [contextListings]);
+  }, [freshListings]);
 
   const getSellerSalesCount = useCallback((seller: string) => {
     try {
@@ -371,12 +444,14 @@ export const useBrowseListings = () => {
     try {
       // First, create listings with profile data
       const listingsWithProfiles = filteredListings.map(listing => {
-        const sellerUser = contextUsers?.[listing.seller];
-        const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
-        const sellerSalesCount = getSellerSalesCount(listing.seller);
-        
-        // Cast to the extended type to access sellerProfile
+        // Cast to check for backend data
         const listingWithBackendData = listing as ListingFromBackend;
+        
+        // CRITICAL: Use the isSellerVerified field directly from the backend
+        // The backend already provides this field
+        const isSellerVerified = listingWithBackendData.isSellerVerified || false;
+        
+        const sellerSalesCount = listingWithBackendData.sellerSalesCount ?? getSellerSalesCount(listing.seller);
         
         // Use the sellerProfile from the listing if it exists
         // and resolve the pic URL if it's a relative path
@@ -388,11 +463,14 @@ export const useBrowseListings = () => {
           };
         }
         
+        console.log(`[Browse] Seller ${listing.seller} verification from backend:`, isSellerVerified);
+        
         return {
           ...listing,
           sellerProfile,
           sellerSalesCount,
-          isSellerVerified
+          isSellerVerified, // Use backend's verification status directly
+          isVerified: isSellerVerified // Also set for compatibility
         } as ListingWithProfile;
       });
 
@@ -407,7 +485,7 @@ export const useBrowseListings = () => {
       console.error('Error creating paginated listings:', error);
       return [];
     }
-  }, [filteredListings, contextUsers, getSellerSalesCount, page]);
+  }, [filteredListings, getSellerSalesCount, page]);
   
   const totalPages = useMemo(() => {
     try {
@@ -514,11 +592,6 @@ export const useBrowseListings = () => {
     return true;
   }, [checkSearchLimit]);
 
-  // Trigger refresh when component mounts
-  useEffect(() => {
-    refreshListings();
-  }, []);
-
   return {
     // Auth & State
     user,
@@ -547,7 +620,7 @@ export const useBrowseListings = () => {
     totalPages,
     
     // Loading state
-    isLoading: contextLoading,
+    isLoading,
     error: contextError,
     
     // Handlers
@@ -560,7 +633,7 @@ export const useBrowseListings = () => {
     handleNextPage,
     handlePageClick,
     resetFilters,
-    refreshListings,
+    refreshListings: fetchFreshListings,
     
     // Utils
     isSubscribed,

@@ -91,6 +91,31 @@ export default function BrowsePage() {
     };
   }, []);
 
+  // ADD: Listen for verification status changes
+  useEffect(() => {
+    const handleVerificationChange = (event: CustomEvent) => {
+      console.log('[BrowsePage] Verification status changed:', event.detail);
+      
+      // Refresh listings after a small delay to ensure backend has updated
+      setTimeout(() => {
+        refreshListings();
+      }, 500);
+    };
+
+    // Listen for multiple verification-related events
+    window.addEventListener('verification:status-changed', handleVerificationChange as EventListener);
+    window.addEventListener('user:verification-updated', handleVerificationChange as EventListener);
+    window.addEventListener('verification:approved', handleVerificationChange as EventListener);
+    window.addEventListener('verification:rejected', handleVerificationChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('verification:status-changed', handleVerificationChange as EventListener);
+      window.removeEventListener('user:verification-updated', handleVerificationChange as EventListener);
+      window.removeEventListener('verification:approved', handleVerificationChange as EventListener);
+      window.removeEventListener('verification:rejected', handleVerificationChange as EventListener);
+    };
+  }, [refreshListings]);
+
   // Listen for subscription changes and refresh listings
   useEffect(() => {
     const handleSubscriptionChange = (event: CustomEvent) => {

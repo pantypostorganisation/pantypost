@@ -25,6 +25,7 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
 import { ApiResponse } from '@/services/api.config';
 import { isAdmin } from '@/utils/security/permissions';
+import { resolveApiUrl } from '@/utils/url'; // Import the URL resolver
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -659,6 +660,154 @@ export const useBrowseDetail = () => {
     };
   }, [isAuction, user, listing?.id, checkCurrentUserFunds, updateState]);
 
+  // CRITICAL FIX: Load seller profile with proper URL resolution
+  useEffect(() => {
+    const loadProfileData = async () => {
+      if (listing?.seller) {
+        try {
+          // First check if the listing already has sellerProfile data from backend
+          const listingWithProfile = listing as any;
+          if (listingWithProfile.sellerProfile) {
+            // Use the profile data from the listing and resolve the pic URL
+            const profilePic = listingWithProfile.sellerProfile.pic ? 
+              resolveApiUrl(listingWithProfile.sellerProfile.pic) : null;
+            
+            updateState({ 
+              sellerProfile: { 
+                bio: listingWithProfile.sellerProfile.bio || null,
+                pic: profilePic,
+                subscriptionPrice: listingWithProfile.sellerProfile.subscriptionPrice || null
+              } 
+            });
+          } else {
+            // Fallback to fetching from profile utils
+            const profileData = await getUserProfileData(listing.seller);
+            if (profileData) {
+              // Resolve the profile picture URL if it exists
+              const profilePic = profileData.profilePic ? 
+                resolveApiUrl(profileData.profilePic) : null;
+              
+              updateState({ 
+                sellerProfile: { 
+                  bio: profileData.bio ? sanitize.strict(profileData.bio) : null,
+                  pic: profilePic,
+                  subscriptionPrice: profileData.subscriptionPrice
+                } 
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error loading seller profile:', error);
+        }
+      }
+    };
+
+    loadProfileData();
+  }, [listing?.seller, listing, updateState]);
+
+  useEffect(() => {
+    if (listing?.seller && currentUsername && !hasMarkedRef.current) {
+      markMessagesAsRead(currentUsername, listing.seller);
+      hasMarkedRef.current = true;
+    }
+  }, [listing?.seller, currentUsername, markMessagesAsRead]);
+
+  useEffect(() => {
+    if (isAuction && listing?.auction?.bids) {
+      const historyItems: BidHistoryItem[] = listing.auction.bids.map(bid => ({
+        bidder: bid.bidder,
+        amount: bid.amount,
+        date: bid.date
+      }));
+      
+      const sortedBids = historyItems.sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      updateState({ bidsHistory: sortedBids });
+    } else {
+      updateState({ bidsHistory: [] });
+    }
+  }, [isAuction, listing?.auction?.bids, updateState]);
+
+  useEffect(() => {
+    if (isAuction && isAuctionEnded && user?.role === "buyer" && isUserHighestBidder && !state.showAuctionSuccess) {
+      setTimeout(() => {
+        updateState({ showAuctionSuccess: true });
+        setTimeout(() => {
+          router.push('/buyers/my-orders');
+        }, 10000);
+      }, 1000);
+    }
+  }, [isAuction, isAuctionEnded, user?.role, isUserHighestBidder, state.showAuctionSuccess, router, updateState]);
+
+  useEffect(() => {
+    if (!isAuction) {
+      updateState({ 
+        biddingEnabled: true,
+        bidStatus: {}
+      });
+      return;
+    }
+    
+    if (isAuctionEnded) return;
+    
+    if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
+      updateState({ 
+        biddingEnabled: true,
+        bidStatus: {}
+      });
+      return;
+    }
+    
+    checkCurrentUserFunds();
+    
+    fundingTimerRef.current = setInterval(() => {
+      checkCurrentUserFunds();
+    }, FUNDING_CHECK_INTERVAL);
+    
+    return () => {
+      if (fundingTimerRef.current) {
+        clearInterval(fundingTimerRef.current);
+        fundingTimerRef.current = null;
+      }
+    };
+  }, [isAuction, isAuctionEnded, state.isProcessing, checkCurrentUserFunds, updateState]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleScroll = () => {
+      if (!imageRef.current) return;
+      const rect = imageRef.current.getBoundingClientRect();
+      updateState({ showStickyBuy: rect.bottom < 60 });
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [updateState]);
+
+  useEffect(() => {
+    if (!isAuction || isAuctionEnded || !mountedRef.current) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      if (mountedRef.current) {
+        updateState({ forceUpdateTimer: {} });
+      }
+    }, AUCTION_UPDATE_INTERVAL);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isAuction, isAuctionEnded, updateState]);
+
   // Action handlers
   const handlePurchase = useCallback(async () => {
     if (!user || !listing || state.isProcessing) return;
@@ -848,133 +997,6 @@ export const useBrowseDetail = () => {
   const handleBidAmountChange = useCallback((value: string) => {
     updateState({ bidAmount: value });
   }, [updateState]);
-
-  // Effects
-  useEffect(() => {
-    const loadProfileData = async () => {
-      if (listing?.seller) {
-        try {
-          const profileData = await getUserProfileData(listing.seller);
-          if (profileData) {
-            updateState({ 
-              sellerProfile: { 
-                bio: profileData.bio ? sanitize.strict(profileData.bio) : null,
-                pic: profileData.profilePic,
-                subscriptionPrice: profileData.subscriptionPrice
-              } 
-            });
-          }
-        } catch (error) {
-          console.error('Error loading seller profile:', error);
-        }
-      }
-    };
-
-    loadProfileData();
-  }, [listing?.seller, updateState]);
-
-  useEffect(() => {
-    if (listing?.seller && currentUsername && !hasMarkedRef.current) {
-      markMessagesAsRead(currentUsername, listing.seller);
-      hasMarkedRef.current = true;
-    }
-  }, [listing?.seller, currentUsername, markMessagesAsRead]);
-
-  useEffect(() => {
-    if (isAuction && listing?.auction?.bids) {
-      const historyItems: BidHistoryItem[] = listing.auction.bids.map(bid => ({
-        bidder: bid.bidder,
-        amount: bid.amount,
-        date: bid.date
-      }));
-      
-      const sortedBids = historyItems.sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      updateState({ bidsHistory: sortedBids });
-    } else {
-      updateState({ bidsHistory: [] });
-    }
-  }, [isAuction, listing?.auction?.bids, updateState]);
-
-  useEffect(() => {
-    if (isAuction && isAuctionEnded && user?.role === "buyer" && isUserHighestBidder && !state.showAuctionSuccess) {
-      setTimeout(() => {
-        updateState({ showAuctionSuccess: true });
-        setTimeout(() => {
-          router.push('/buyers/my-orders');
-        }, 10000);
-      }, 1000);
-    }
-  }, [isAuction, isAuctionEnded, user?.role, isUserHighestBidder, state.showAuctionSuccess, router, updateState]);
-
-  useEffect(() => {
-    if (!isAuction) {
-      updateState({ 
-        biddingEnabled: true,
-        bidStatus: {}
-      });
-      return;
-    }
-    
-    if (isAuctionEnded) return;
-    
-    if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
-      updateState({ 
-        biddingEnabled: true,
-        bidStatus: {}
-      });
-      return;
-    }
-    
-    checkCurrentUserFunds();
-    
-    fundingTimerRef.current = setInterval(() => {
-      checkCurrentUserFunds();
-    }, FUNDING_CHECK_INTERVAL);
-    
-    return () => {
-      if (fundingTimerRef.current) {
-        clearInterval(fundingTimerRef.current);
-        fundingTimerRef.current = null;
-      }
-    };
-  }, [isAuction, isAuctionEnded, state.isProcessing, checkCurrentUserFunds, updateState]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleScroll = () => {
-      if (!imageRef.current) return;
-      const rect = imageRef.current.getBoundingClientRect();
-      updateState({ showStickyBuy: rect.bottom < 60 });
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [updateState]);
-
-  useEffect(() => {
-    if (!isAuction || isAuctionEnded || !mountedRef.current) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      if (mountedRef.current) {
-        updateState({ forceUpdateTimer: {} });
-      }
-    }, AUCTION_UPDATE_INTERVAL);
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [isAuction, isAuctionEnded, updateState]);
 
   // Cleanup
   useEffect(() => {
