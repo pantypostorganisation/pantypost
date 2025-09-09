@@ -1,93 +1,195 @@
 // src/context/WebSocketContext.tsx
-
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+} from 'react';
+
 import { useAuth, getGlobalAuthToken } from '@/context/AuthContext';
-import { authService } from '@/services';
-import { 
-  createWebSocketService, 
-  getWebSocketService, 
-  destroyWebSocketService 
+import {
+  createWebSocketService,
+  getWebSocketService,
+  destroyWebSocketService,
 } from '@/services/websocket.service';
-import { 
-  WebSocketEvent, 
-  WebSocketState, 
+import { apiConfig, websocketConfig } from '@/config/environment';
+
+import type {
   WebSocketHandler,
   TypingData,
   OnlineStatusData,
-  RealtimeNotification
+  RealtimeNotification,
 } from '@/types/websocket';
-import { apiConfig, websocketConfig } from '@/config/environment';
+
+import {
+  WebSocketEvent,
+  WebSocketState,
+} from '@/types/websocket';
 
 interface WebSocketContextType {
   // Connection state
   isConnected: boolean;
   connectionState: WebSocketState;
-  
-  // Core methods
+
+  // Core
   connect: () => void;
   disconnect: () => void;
-  
+
   // Event subscription
-  subscribe: <T = any>(event: WebSocketEvent | string, handler: WebSocketHandler<T>) => () => void;
-  
-  // Sending events
+  subscribe: <T = any>(
+    event: WebSocketEvent | string,
+    handler: WebSocketHandler<T>
+  ) => () => void;
+
+  // Sending
   sendMessage: (event: WebSocketEvent | string, data: any) => void;
-  
+
   // Typing indicators
   sendTyping: (conversationId: string, isTyping: boolean) => void;
   typingUsers: Map<string, TypingData>;
-  
+
   // Online status
   onlineUsers: Set<string>;
   updateOnlineStatus: (isOnline: boolean) => void;
-  
+
   // Notifications
   notifications: RealtimeNotification[];
   markNotificationRead: (notificationId: string) => void;
   clearNotifications: () => void;
 }
 
-const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
+const WebSocketContext = createContext<WebSocketContextType | undefined>(
+  undefined
+);
 
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
-  // Return null instead of throwing to allow components to handle missing context gracefully
+  // Return null instead of throwing so consumers can feature-detect
   return context || null;
 };
 
-export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user, getAuthToken } = useAuth();
+
+  // Connection state
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionState, setConnectionState] = useState<WebSocketState>(WebSocketState.DISCONNECTED);
-  const [typingUsers, setTypingUsers] = useState<Map<string, TypingData>>(new Map());
+  const [connectionState, setConnectionState] = useState<WebSocketState>(
+    WebSocketState.DISCONNECTED
+  );
+
+  // Realtime UI state
+  const [typingUsers, setTypingUsers] = useState<Map<string, TypingData>>(
+    new Map()
+  );
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-  const [notifications, setNotifications] = useState<RealtimeNotification[]>([]);
-  
-  const typingTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const [notifications, setNotifications] = useState<RealtimeNotification[]>(
+    []
+  );
+
+  // Refs
+  const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map()
+  );
   const wsService = useRef(getWebSocketService());
   const currentToken = useRef<string | null>(null);
   const hasInitialized = useRef(false);
-  const pendingSubscriptions = useRef<Array<{ event: string; handler: WebSocketHandler }>>([]); // Store pending subscriptions
+  const pendingSubscriptions = useRef<
+    Array<{ event: string; handler: WebSocketHandler }>
+  >([]);
 
-  // Listen for auth token events from AuthContext
+  // ------------------------------
+  // Event handlers (declared early to avoid "used before declared")
+  // ------------------------------
+
+  // Handle typing updates
+  const handleTypingUpdate = useCallback((data: TypingData) => {
+    const key = `${data.conversationId}-${data.userId}`;
+
+    if (data.isTyping) {
+      setTypingUsers((prev) => new Map(prev).set(key, data));
+
+      const existing = typingTimers.current.get(key);
+      if (existing) clearTimeout(existing);
+
+      // Auto-clear typing after 3s
+      const timer = setTimeout(() => {
+        setTypingUsers((prev) => {
+          const next = new Map(prev);
+          next.delete(key);
+          return next;
+        });
+        typingTimers.current.delete(key);
+      }, 3000);
+
+      typingTimers.current.set(key, timer);
+    } else {
+      setTypingUsers((prev) => {
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+
+      const existing = typingTimers.current.get(key);
+      if (existing) {
+        clearTimeout(existing);
+        typingTimers.current.delete(key);
+      }
+    }
+  }, []);
+
+  // Handle user online
+  const handleUserOnline = useCallback((data: OnlineStatusData) => {
+    setOnlineUsers((prev) => {
+      const next = new Set(prev);
+      next.add(data.userId);
+      return next;
+    });
+  }, []);
+
+  // Handle user offline
+  const handleUserOffline = useCallback((data: OnlineStatusData) => {
+    setOnlineUsers((prev) => {
+      const next = new Set(prev);
+      next.delete(data.userId);
+      return next;
+    });
+  }, []);
+
+  // Handle new realtime notification
+  const handleNewNotification = useCallback((notification: RealtimeNotification) => {
+    // cap at last 50
+    setNotifications((prev) => [notification, ...prev].slice(0, 50));
+  }, []);
+
+  // ------------------------------
+  // Listen for auth token changes from AuthContext (window events)
+  // ------------------------------
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleTokenUpdate = (event: CustomEvent) => {
-      const newToken = event.detail?.token;
+    const handleTokenUpdate = (event: Event) => {
+      // CustomEvent<{token:string|null}>
+      const ce = event as CustomEvent;
+      const newToken = ce.detail?.token as string | null;
       console.log('[WebSocket] Auth token updated:', !!newToken);
-      
+
       if (newToken !== currentToken.current) {
         currentToken.current = newToken;
-        
-        // Reconnect with new token if we have a user and WebSocket is enabled
+
+        // Reconnect with new token if applicable
         if (user && websocketConfig.enabled && wsService.current) {
-          console.log('[WebSocket] Reconnecting with new token...');
+          console.log('[WebSocket] Reconnecting with updated token...');
           wsService.current.disconnect();
           setTimeout(() => {
-            initializeWebSocket();
+            initializeWebSocket().catch((e) =>
+              console.error('[WebSocket] Re-init error:', e)
+            );
           }, 1000);
         }
       }
@@ -96,59 +198,62 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const handleTokenClear = () => {
       console.log('[WebSocket] Auth token cleared');
       currentToken.current = null;
-      
-      // Disconnect WebSocket when token is cleared
+
       if (wsService.current) {
         wsService.current.disconnect();
       }
-      
+
       setIsConnected(false);
       setConnectionState(WebSocketState.DISCONNECTED);
       setOnlineUsers(new Set());
       setTypingUsers(new Map());
     };
 
-    // Listen for auth events from AuthContext
-    window.addEventListener('auth-token-updated', handleTokenUpdate as EventListener);
+    window.addEventListener(
+      'auth-token-updated',
+      handleTokenUpdate as EventListener
+    );
     window.addEventListener('auth-token-cleared', handleTokenClear);
 
     return () => {
-      window.removeEventListener('auth-token-updated', handleTokenUpdate as EventListener);
+      window.removeEventListener(
+        'auth-token-updated',
+        handleTokenUpdate as EventListener
+      );
       window.removeEventListener('auth-token-cleared', handleTokenClear);
     };
   }, [user]);
 
-  // Improved WebSocket initialization
+  // ------------------------------
+  // WebSocket initialization
+  // ------------------------------
   const initializeWebSocket = useCallback(async (): Promise<(() => void) | undefined> => {
     if (!user || !websocketConfig.enabled) {
       console.log('[WebSocket] User not available or WebSocket disabled');
       return undefined;
     }
 
-    // Try multiple ways to get the auth token
-    let token = currentToken.current;
-    
-    if (!token) {
-      token = getAuthToken();
-    }
-    
+    // Try multiple sources for auth token
+    let token = currentToken.current || getAuthToken() || null;
+
     if (!token && typeof window !== 'undefined') {
       token = getGlobalAuthToken();
     }
-    
+
     if (!token) {
-      console.log('[WebSocket] No auth token available');
+      console.log('[WebSocket] No auth token available, skipping connect');
       return undefined;
     }
 
-    console.log('[WebSocket] Initializing with token:', !!token);
     currentToken.current = token;
-    
+    console.log('[WebSocket] Initializing with token:', !!token);
+
     try {
-      // Use WebSocket URL from config
-      const wsUrl = websocketConfig.url || apiConfig.baseUrl.replace('/api', '').replace('http', 'ws');
-      
-      // Create WebSocket service if it doesn't exist
+      const wsUrl =
+        websocketConfig.url ||
+        apiConfig.baseUrl.replace('/api', '').replace(/^http/, 'ws');
+
+      // Lazily create service
       if (!wsService.current) {
         wsService.current = createWebSocketService({
           url: wsUrl,
@@ -156,49 +261,48 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           autoConnect: true,
           reconnect: true,
           reconnectAttempts: 5,
-          reconnectDelay: 3000
+          reconnectDelay: 3000,
         });
       }
 
-      // Subscribe to connection events
+      // Connection lifecycle
       const unsubConnect = wsService.current.on(WebSocketEvent.CONNECT, () => {
         setIsConnected(true);
         setConnectionState(WebSocketState.CONNECTED);
         console.log('[WebSocket] Connected');
-        
-        // Process any pending subscriptions
+
+        // Flush any queued subscriptions
         if (pendingSubscriptions.current.length > 0) {
-          console.log('[WebSocket] Processing', pendingSubscriptions.current.length, 'pending subscriptions');
           const pending = [...pendingSubscriptions.current];
           pendingSubscriptions.current = [];
-          
           pending.forEach(({ event, handler }) => {
-            if (wsService.current) {
-              wsService.current.on(event as WebSocketEvent, handler);
-            }
+            wsService.current?.on(event as WebSocketEvent, handler);
           });
         }
-        
-        // Send initial online status
+
+        // Broadcast we're online
         updateOnlineStatus(true);
       });
 
-      const unsubDisconnect = wsService.current.on(WebSocketEvent.DISCONNECT, () => {
-        setIsConnected(false);
-        setConnectionState(WebSocketState.DISCONNECTED);
-        setOnlineUsers(new Set());
-        setTypingUsers(new Map());
-        console.log('[WebSocket] Disconnected');
-      });
+      const unsubDisconnect = wsService.current.on(
+        WebSocketEvent.DISCONNECT,
+        () => {
+          setIsConnected(false);
+          setConnectionState(WebSocketState.DISCONNECTED);
+          setOnlineUsers(new Set());
+          setTypingUsers(new Map());
+          console.log('[WebSocket] Disconnected');
+        }
+      );
 
       const unsubError = wsService.current.on(WebSocketEvent.ERROR, (error) => {
         setConnectionState(WebSocketState.ERROR);
         console.error('[WebSocket] Error:', error);
       });
 
-      // Subscribe to app events
+      // App events
       const unsubTyping = wsService.current.on<TypingData>(
-        WebSocketEvent.MESSAGE_TYPING, 
+        WebSocketEvent.MESSAGE_TYPING,
         handleTypingUpdate
       );
 
@@ -217,113 +321,155 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         handleNewNotification
       );
 
-      // Subscribe to message events
-      const unsubMessageNew = wsService.current.on('message:new' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] New message received:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('message:new', { detail: data }));
+      // Message events -> forward to DOM
+      const unsubMessageNew = wsService.current.on(
+        'message:new' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('message:new', { detail: data }));
+          }
         }
-      });
+      );
 
-      const unsubMessageRead = wsService.current.on('message:read' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Message read event:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
+      const unsubMessageRead = wsService.current.on(
+        'message:read' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
+          }
         }
-      });
+      );
 
-      // Subscribe to order events
-      const unsubOrderCreated = wsService.current.on('order:created' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Order created event received:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('order:created', { detail: data }));
+      // Order events -> forward
+      const unsubOrderCreated = wsService.current.on(
+        'order:created' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('order:created', { detail: data }));
+          }
         }
-      });
+      );
 
-      const unsubOrderNew = wsService.current.on('order:new' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Order new event received:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('order:new', { detail: data }));
+      const unsubOrderNew = wsService.current.on(
+        'order:new' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('order:new', { detail: data }));
+          }
         }
-      });
+      );
 
-      // Subscribe to auction events
-      const unsubAuctionWon = wsService.current.on('auction:won' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Auction won event received:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('auction:won', { detail: data }));
+      // Auction events -> forward
+      const unsubAuctionWon = wsService.current.on(
+        'auction:won' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('auction:won', { detail: data }));
+          }
         }
-      });
+      );
 
-      const unsubAuctionEnded = wsService.current.on('auction:ended' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Auction ended event received:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('auction:ended', { detail: data }));
+      const unsubAuctionEnded = wsService.current.on(
+        'auction:ended' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('auction:ended', { detail: data }));
+          }
         }
-      });
+      );
 
-      const unsubListingSold = wsService.current.on('listing:sold' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Listing sold event received:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('listing:sold', { detail: data }));
+      const unsubListingSold = wsService.current.on(
+        'listing:sold' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('listing:sold', { detail: data }));
+          }
         }
-      });
+      );
 
-      // Subscribe to wallet balance updates
-      const unsubWalletUpdate = wsService.current.on('wallet:balance_update' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Wallet balance update:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('wallet:balance_update', { detail: data }));
+      // Wallet events -> forward
+      const unsubWalletUpdate = wsService.current.on(
+        'wallet:balance_update' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('wallet:balance_update', { detail: data })
+            );
+          }
         }
-      });
+      );
 
-      const unsubWalletTransaction = wsService.current.on('wallet:transaction' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Wallet transaction:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('wallet:transaction', { detail: data }));
+      const unsubWalletTransaction = wsService.current.on(
+        'wallet:transaction' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('wallet:transaction', { detail: data })
+            );
+          }
         }
-      });
+      );
 
-      // Subscribe to notification events
-      const unsubNotificationNew = wsService.current.on('notification:new' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] New notification:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('notification:new', { detail: data }));
+      // Notification events -> forward
+      const unsubNotificationNew = wsService.current.on(
+        'notification:new' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('notification:new', { detail: data })
+            );
+          }
         }
-      });
+      );
 
-      const unsubNotificationCleared = wsService.current.on('notification:cleared' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Notification cleared:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('notification:cleared', { detail: data }));
+      const unsubNotificationCleared = wsService.current.on(
+        'notification:cleared' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('notification:cleared', { detail: data })
+            );
+          }
         }
-      });
+      );
 
-      const unsubNotificationAllCleared = wsService.current.on('notification:all_cleared' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] All notifications cleared:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('notification:all_cleared', { detail: data }));
+      const unsubNotificationAllCleared = wsService.current.on(
+        'notification:all_cleared' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('notification:all_cleared', { detail: data })
+            );
+          }
         }
-      });
+      );
 
-      const unsubNotificationRestored = wsService.current.on('notification:restored' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Notification restored:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('notification:restored', { detail: data }));
+      const unsubNotificationRestored = wsService.current.on(
+        'notification:restored' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('notification:restored', { detail: data })
+            );
+          }
         }
-      });
+      );
 
-      const unsubNotificationDeleted = wsService.current.on('notification:deleted' as WebSocketEvent, (data: any) => {
-        console.log('[WebSocket Context] Notification deleted:', data);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('notification:deleted', { detail: data }));
+      const unsubNotificationDeleted = wsService.current.on(
+        'notification:deleted' as WebSocketEvent,
+        (data: any) => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('notification:deleted', { detail: data })
+            );
+          }
         }
-      });
+      );
 
       // Connect
-      wsService.current.connect();
+      wsService.current.connect?.();
 
-      // Store cleanup functions
+      // Return unified cleanup
       return () => {
         unsubConnect();
         unsubDisconnect();
@@ -352,9 +498,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setConnectionState(WebSocketState.ERROR);
       return undefined;
     }
-  }, [user, getAuthToken]);
+  }, [
+    user,
+    getAuthToken,
+    handleTypingUpdate,
+    handleUserOnline,
+    handleUserOffline,
+    handleNewNotification,
+  ]);
 
-  // Initialize WebSocket connection when user is available
+  // Initialize/teardown around user changes
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
@@ -367,8 +520,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     if (user && websocketConfig.enabled) {
       init();
-    } else if (wsService.current?.isConnected()) {
-      // Disconnect if no user or WebSocket disabled
+    } else if (wsService.current?.isConnected?.()) {
       wsService.current.disconnect();
       hasInitialized.current = false;
     }
@@ -379,146 +531,100 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, [user, initializeWebSocket]);
 
-  // Cleanup on unmount
+  // Final cleanup on unmount
   useEffect(() => {
     return () => {
-      typingTimers.current.forEach(timer => clearTimeout(timer));
-      if (wsService.current?.isConnected()) {
+      typingTimers.current.forEach((t) => clearTimeout(t));
+      typingTimers.current.clear();
+
+      if (wsService.current?.isConnected?.()) {
         wsService.current.disconnect();
       }
       destroyWebSocketService();
     };
   }, []);
 
-  // Handle typing updates
-  const handleTypingUpdate = useCallback((data: TypingData) => {
-    const key = `${data.conversationId}-${data.userId}`;
-    
-    if (data.isTyping) {
-      setTypingUsers(prev => new Map(prev).set(key, data));
-      
-      // Clear existing timer
-      const existingTimer = typingTimers.current.get(key);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-      }
-      
-      // Set new timer to remove typing indicator after 3 seconds
-      const timer = setTimeout(() => {
-        setTypingUsers(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(key);
-          return newMap;
-        });
-        typingTimers.current.delete(key);
-      }, 3000);
-      
-      typingTimers.current.set(key, timer);
-    } else {
-      setTypingUsers(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(key);
-        return newMap;
-      });
-      
-      const timer = typingTimers.current.get(key);
-      if (timer) {
-        clearTimeout(timer);
-        typingTimers.current.delete(key);
-      }
-    }
-  }, []);
-
-  // Handle user online
-  const handleUserOnline = useCallback((data: OnlineStatusData) => {
-    setOnlineUsers(prev => new Set(prev).add(data.userId));
-  }, []);
-
-  // Handle user offline
-  const handleUserOffline = useCallback((data: OnlineStatusData) => {
-    setOnlineUsers(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(data.userId);
-      return newSet;
-    });
-  }, []);
-
-  // Handle new notification
-  const handleNewNotification = useCallback((notification: RealtimeNotification) => {
-    setNotifications(prev => [notification, ...prev].slice(0, 50)); // Keep last 50
-  }, []);
-
+  // ------------------------------
   // Public methods
+  // ------------------------------
+
   const connect = useCallback(() => {
     if (!currentToken.current) {
       currentToken.current = getAuthToken() || getGlobalAuthToken();
     }
-    wsService.current?.connect();
+    wsService.current?.connect?.();
   }, [getAuthToken]);
 
   const disconnect = useCallback(() => {
-    wsService.current?.disconnect();
+    wsService.current?.disconnect?.();
   }, []);
 
-  // FIXED: Subscribe method that queues subscriptions if service not ready
-  const subscribe = useCallback(<T = any>(
-    event: WebSocketEvent | string, 
-    handler: WebSocketHandler<T>
-  ): (() => void) => {
-    if (!wsService.current) {
-      console.log('[WebSocket] Service not initialized - queueing subscription for:', event);
-      // Queue the subscription for later
-      pendingSubscriptions.current.push({ event, handler });
-      
-      // Return a cleanup function that removes from pending if not yet processed
-      return () => {
-        const index = pendingSubscriptions.current.findIndex(
-          sub => sub.event === event && sub.handler === handler
-        );
-        if (index !== -1) {
-          pendingSubscriptions.current.splice(index, 1);
-        }
-      };
-    }
-    
-    // Service is ready, subscribe immediately
-    return wsService.current.on<T>(event as WebSocketEvent, handler);
-  }, []);
+  // Subscribe with queuing if service isn't ready yet
+  const subscribe = useCallback(
+    <T = any,>(event: WebSocketEvent | string, handler: WebSocketHandler<T>) => {
+      if (!wsService.current) {
+        // Queue for later
+        console.log('[WebSocket] Service not ready, queueing subscription:', event);
+        pendingSubscriptions.current.push({ event, handler });
+
+        // Return cleanup to remove from queue if needed
+        return () => {
+          const idx = pendingSubscriptions.current.findIndex(
+            (s) => s.event === event && s.handler === handler
+          );
+          if (idx !== -1) pendingSubscriptions.current.splice(idx, 1);
+        };
+      }
+
+      // Service ready: normal subscription
+      return wsService.current.on<T>(event as WebSocketEvent, handler);
+    },
+    []
+  );
 
   const sendMessage = useCallback((event: WebSocketEvent | string, data: any) => {
-    if (!wsService.current?.isConnected()) {
-      console.warn('[WebSocket] Not connected, cannot send message');
+    if (!wsService.current?.isConnected?.()) {
+      console.warn('[WebSocket] Not connected; cannot send', event);
       return;
     }
-    wsService.current.send(event, data);
+    wsService.current.send?.(event, data);
   }, []);
 
-  const sendTyping = useCallback((conversationId: string, isTyping: boolean) => {
-    if (!user) return;
-    
-    sendMessage(WebSocketEvent.MESSAGE_TYPING, {
-      userId: user.id,
-      username: user.username,
-      conversationId,
-      isTyping
-    });
-  }, [user, sendMessage]);
+  const sendTyping = useCallback(
+    (conversationId: string, isTyping: boolean) => {
+      if (!user) return;
 
-  const updateOnlineStatus = useCallback((isOnline: boolean) => {
-    if (!user) return;
-    
-    sendMessage(
-      isOnline ? WebSocketEvent.USER_ONLINE : WebSocketEvent.USER_OFFLINE,
-      { userId: user.id, isOnline }
-    );
-  }, [user, sendMessage]);
+      sendMessage(WebSocketEvent.MESSAGE_TYPING, {
+        userId: user.id,
+        username: user.username,
+        conversationId,
+        isTyping,
+      });
+    },
+    [user, sendMessage]
+  );
 
-  const markNotificationRead = useCallback((notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
-    );
-    sendMessage(WebSocketEvent.NOTIFICATION_READ, { notificationId });
-  }, [sendMessage]);
+  const updateOnlineStatus = useCallback(
+    (isOnline: boolean) => {
+      if (!user) return;
+
+      sendMessage(
+        isOnline ? WebSocketEvent.USER_ONLINE : WebSocketEvent.USER_OFFLINE,
+        { userId: user.id, isOnline }
+      );
+    },
+    [user, sendMessage]
+  );
+
+  const markNotificationRead = useCallback(
+    (notificationId: string) => {
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+      );
+      sendMessage(WebSocketEvent.NOTIFICATION_READ, { notificationId });
+    },
+    [sendMessage]
+  );
 
   const clearNotifications = useCallback(() => {
     setNotifications([]);
@@ -537,7 +643,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     updateOnlineStatus,
     notifications,
     markNotificationRead,
-    clearNotifications
+    clearNotifications,
   };
 
   return (
