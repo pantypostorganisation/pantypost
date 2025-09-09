@@ -18,14 +18,14 @@ export default function SellerProfile({
 }: SellerProfileProps) {
   const safeUsername = sanitizeUsername(seller);
 
-  // Debug logging
-  console.log('[SellerProfile] Review data:', {
-    seller: safeUsername,
-    sellerAverageRating,
-    sellerReviewCount,
-    hasRating: sellerAverageRating !== null && sellerAverageRating !== undefined && sellerAverageRating > 0,
-    hasReviews: sellerReviewCount > 0
-  });
+  // Ensure we have valid review data
+  const hasReviews = sellerReviewCount > 0;
+  
+  // Force use the actual rating value if it exists
+  let displayRating = 0;
+  if (sellerAverageRating !== null && sellerAverageRating !== undefined) {
+    displayRating = Number(sellerAverageRating);
+  }
 
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
@@ -63,19 +63,21 @@ export default function SellerProfile({
             {isVerified && <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />}
           </div>
 
-          {/* Star Rating Display - Updated logic */}
-          {sellerReviewCount > 0 && sellerAverageRating !== null && sellerAverageRating !== undefined ? (
+          {/* Star Rating Display */}
+          {hasReviews && displayRating > 0 ? (
             <div className="flex items-center gap-2 mb-2">
-              <StarRating rating={sellerAverageRating} size="sm" />
-              <span className="text-yellow-400 text-sm font-medium">{sellerAverageRating.toFixed(1)}</span>
-              <span className="text-gray-500 text-xs">({sellerReviewCount} review{sellerReviewCount !== 1 ? 's' : ''})</span>
+              <StarRating rating={displayRating} size="sm" />
+              <span className="text-[#ff950e] text-sm font-semibold">
+                {displayRating.toFixed(1)}
+              </span>
+              <span className="text-gray-400 text-xs">
+                ({sellerReviewCount} review{sellerReviewCount !== 1 ? 's' : ''})
+              </span>
             </div>
           ) : (
             <div className="flex items-center gap-2 mb-2">
-              <div className="flex items-center gap-1 text-gray-500">
-                <Star className="w-4 h-4" />
-                <span className="text-xs">No reviews yet</span>
-              </div>
+              <StarRating rating={0} size="sm" />
+              <span className="text-gray-500 text-xs">No reviews yet</span>
             </div>
           )}
 

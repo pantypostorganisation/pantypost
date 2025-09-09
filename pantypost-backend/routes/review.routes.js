@@ -40,7 +40,7 @@ router.get('/seller/:username', async (req, res) => {
       status: 'approved' 
     });
     
-    // Calculate average rating
+    // Calculate average rating with proper decimal handling
     const stats = await Review.aggregate([
       { $match: { reviewee: username, status: 'approved' } },
       { 
@@ -57,19 +57,37 @@ router.get('/seller/:username', async (req, res) => {
       }
     ]);
     
+    // Process stats to ensure proper decimal handling
+    let processedStats = {
+      avgRating: 0,
+      totalReviews: 0,
+      fiveStars: 0,
+      fourStars: 0,
+      threeStars: 0,
+      twoStars: 0,
+      oneStars: 0
+    };
+    
+    if (stats && stats.length > 0) {
+      processedStats = stats[0];
+      // Ensure avgRating maintains decimal precision
+      if (processedStats.avgRating !== null && processedStats.avgRating !== undefined) {
+        // Round to 1 decimal place for display
+        processedStats.avgRating = Math.round(processedStats.avgRating * 10) / 10;
+      }
+    }
+    
+    console.log('[Review Route] Seller stats:', {
+      username,
+      avgRating: processedStats.avgRating,
+      totalReviews: processedStats.totalReviews
+    });
+    
     res.json({
       success: true,
       data: {
         reviews,
-        stats: stats[0] || {
-          avgRating: 0,
-          totalReviews: 0,
-          fiveStars: 0,
-          fourStars: 0,
-          threeStars: 0,
-          twoStars: 0,
-          oneStars: 0
-        },
+        stats: processedStats,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -79,6 +97,7 @@ router.get('/seller/:username', async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('[Review Route] Error getting seller reviews:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -232,7 +251,7 @@ router.post('/', authMiddleware, async (req, res) => {
     
     console.log('[Review Route] Review created successfully:', review._id);
     
-    // Update seller's rating in User model
+    // Update seller's rating in User model with proper decimal handling
     const allSellerReviews = await Review.find({ 
       reviewee: sellerUsername,
       status: 'approved'
@@ -241,13 +260,22 @@ router.post('/', authMiddleware, async (req, res) => {
     const totalRating = allSellerReviews.reduce((sum, r) => sum + r.rating, 0);
     const avgRating = totalRating / allSellerReviews.length;
     
+    // Store with 1 decimal precision
+    const roundedRating = Math.round(avgRating * 10) / 10;
+    
     await User.findOneAndUpdate(
       { username: sellerUsername },
       { 
-        rating: Math.round(avgRating * 10) / 10, // Round to 1 decimal
+        rating: roundedRating,
         reviewCount: allSellerReviews.length
       }
     );
+    
+    console.log('[Review Route] Updated seller rating:', {
+      seller: sellerUsername,
+      rating: roundedRating,
+      reviewCount: allSellerReviews.length
+    });
     
     res.json({
       success: true,

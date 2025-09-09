@@ -6,7 +6,7 @@
   "/icon.png/route": "app/icon.png/route.js",
   "/login/page": "app/login/page.js",
   "/page": "app/page.js",
-  "/sellers/[username]/page": "app/sellers/[username]/page.js",
   "/sellers/orders-to-fulfil/page": "app/sellers/orders-to-fulfil/page.js",
-  "/sellers/profile/page": "app/sellers/profile/page.js"
+  "/signup/page": "app/signup/page.js",
+  "/wallet/buyer/page": "app/wallet/buyer/page.js"
 }

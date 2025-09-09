@@ -3,7 +3,6 @@
 
 import { Star } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { sanitizeNumber } from '@/utils/security/sanitization';
 
 interface StarRatingProps {
   rating: number;
@@ -22,9 +21,9 @@ export default function StarRating({
   interactive = false,
   size = 'md',
 }: StarRatingProps) {
-  // Validate and sanitize the rating
-  const sanitizedRating = sanitizeNumber(rating, MIN_RATING, MAX_RATING, 0);
-
+  // DON'T use sanitizeNumber - it's rounding! Just clamp the value instead
+  const clampedRating = Math.max(MIN_RATING, Math.min(MAX_RATING, rating || 0));
+  
   // Prevent rapid clicks
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -73,27 +72,57 @@ export default function StarRating({
 
   return (
     <div className={`flex ${containerClasses[safeSize]}`} role="radiogroup" aria-label="Star rating">
-      {VALID_STARS.map((star) => (
-        <button
-          key={star}
-          type="button"
-          onClick={() => handleRatingChange(star)}
-          disabled={!interactive || isProcessing}
-          className={`${
-            interactive && !isProcessing ? 'cursor-pointer' : 'cursor-default'
-          } focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-opacity-50 rounded`}
-          aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
-          aria-pressed={star <= sanitizedRating}
-          role="radio"
-          aria-checked={star === Math.round(sanitizedRating)}
-        >
-          <Star
-            className={`${sizeClasses[safeSize]} ${
-              star <= sanitizedRating ? 'fill-[#ff950e] text-[#ff950e]' : 'fill-gray-300 text-gray-300'
-            } ${interactive && !isProcessing ? 'hover:fill-[#ff950e] hover:text-[#ff950e] transition-colors' : ''}`}
-          />
-        </button>
-      ))}
+      {VALID_STARS.map((star) => {
+        // Calculate fill for this star
+        const fillAmount = Math.max(0, Math.min(1, clampedRating - (star - 1)));
+        const isPartiallyFilled = fillAmount > 0 && fillAmount < 1;
+        const isFullyFilled = fillAmount >= 1;
+        
+        const starElement = (
+          <div key={star} className="relative inline-block">
+            {/* Base gray star - always visible */}
+            <Star
+              className={`${sizeClasses[safeSize]} fill-gray-300 text-gray-300`}
+            />
+            
+            {/* Orange overlay - width based on fill amount */}
+            {fillAmount > 0 && (
+              <div
+                className="absolute inset-0 overflow-hidden"
+                style={{
+                  width: `${fillAmount * 100}%`
+                }}
+              >
+                <Star
+                  className={`${sizeClasses[safeSize]} fill-[#ff950e] text-[#ff950e]`}
+                />
+              </div>
+            )}
+          </div>
+        );
+
+        if (interactive) {
+          return (
+            <button
+              key={star}
+              type="button"
+              onClick={() => handleRatingChange(star)}
+              disabled={!interactive || isProcessing}
+              className={`${
+                interactive && !isProcessing ? 'cursor-pointer' : 'cursor-default'
+              } focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-opacity-50 rounded`}
+              aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+              aria-pressed={star <= clampedRating}
+              role="radio"
+              aria-checked={star === Math.round(clampedRating)}
+            >
+              {starElement}
+            </button>
+          );
+        }
+
+        return starElement;
+      })}
     </div>
   );
 }

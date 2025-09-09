@@ -11,9 +11,6 @@ import { SignupState, SignupFormData, FormErrors, UserRole } from '@/types/signu
 import { validateForm, calculatePasswordStrength } from '@/utils/signupUtils';
 import { z } from 'zod';
 
-// 🔧 FIX: Use correct API Base URL (localhost instead of 52.62.54.24)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
-
 export const useSignup = () => {
   const router = useRouter();
   const { user, isAuthReady, apiClient, login } = useAuth();
@@ -78,7 +75,7 @@ export const useSignup = () => {
           const sanitized = sanitizeUsername(state.username);
           authSchemas.username.parse(sanitized);
           
-          // 🔧 FIX: Use correct endpoint path (remove /api prefix since apiClient adds it)
+          // Use apiClient which properly constructs URLs
           const response = await apiClient.get<{ available: boolean; message: string }>(
             `/auth/verify-username?username=${encodeURIComponent(sanitized)}`
           );
@@ -156,7 +153,7 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, [field]: sanitizedValue }));
   }, []);
 
-  // 🔧 FIX: Updated handleSubmit to work properly with backend
+  // Fixed handleSubmit - now uses apiClient properly
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
@@ -223,26 +220,19 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, isSubmitting: true, errors: {} }));
     
     try {
-      // 🔧 FIX: Call backend signup API directly (not through apiClient to avoid double /api prefix)
-      console.log('[Signup] Making signup request to:', `${API_BASE_URL}/api/auth/signup`);
+      console.log('[Signup] Making signup request via apiClient');
       
-      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: state.username,
-          email: state.email,
-          password: state.password,
-          role: state.role
-        })
+      // Use apiClient which properly handles URL construction
+      const response = await apiClient.post('/auth/signup', {
+        username: state.username,
+        email: state.email,
+        password: state.password,
+        role: state.role
       });
       
-      const data = await response.json();
-      console.log('[Signup] Response:', { status: response.status, success: data.success });
+      console.log('[Signup] Response:', { success: response.success });
       
-      if (data.success && data.data) {
+      if (response.success && response.data) {
         console.log('[Signup] Success! Now logging in...');
         
         // Clear rate limit on success
@@ -279,14 +269,14 @@ export const useSignup = () => {
         }
       } else {
         // Handle API error response
-        const errorMessage = data.error?.message || 'Registration failed. Please try again.';
+        const errorMessage = response.error?.message || 'Registration failed. Please try again.';
         setState(prev => ({
           ...prev,
           errors: { 
             ...prev.errors, 
             form: errorMessage,
             // If the error has a field, set that specific field error
-            ...(data.error?.field && { [data.error.field]: errorMessage })
+            ...(response.error?.field && { [response.error.field]: errorMessage })
           }
         }));
       }
