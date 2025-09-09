@@ -1616,7 +1616,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
           if (role === "buyer" && !isAdminUser(validatedUsername)) {
             setBuyerBalancesState((prev) => ({ ...prev, [validatedUsername]: newBalance }));
-          } else if (role === "seller" && !isAdminUser(validicatedUsername)) {
+          } else if (role === "seller" && !isAdminUser(validatedUsername)) {
             setSellerBalancesState((prev) => ({ ...prev, [validatedUsername]: newBalance }));
           }
 

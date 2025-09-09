@@ -73,6 +73,12 @@ export default function ListingDetailPage() {
     isLoading,
     error,
     
+    // Seller info - ADD THESE
+    sellerTierInfo,
+    isVerified,
+    sellerAverageRating,
+    sellerReviewCount,
+    
     // Refs
     imageRef,
     bidInputRef,
@@ -241,7 +247,7 @@ export default function ListingDetailPage() {
           customData: {
             item_name: listing.title || 'Unknown',
             seller_name: listing.seller || 'Unknown',
-            seller_verified: (listing.isSellerVerified ?? listing.isVerified) || false,
+            seller_verified: isVerified || false,
             is_premium: listing.isPremium || false,
             is_auction: isActualAuction || false
           }
@@ -250,7 +256,7 @@ export default function ListingDetailPage() {
         console.error('Failed to track view event:', error);
       }
     }
-  }, [listing, listingId, isActualAuction, trackEvent]);
+  }, [listing, listingId, isActualAuction, isVerified, trackEvent]);
 
   // Track purchase success (with deduplication)
   useEffect(() => {
@@ -300,14 +306,14 @@ export default function ListingDetailPage() {
     if (!listing || !sellerId || !isMountedRef.current) return;
     
     try {
-      const sellerTier = listing.sellerTierInfo?.tier || undefined;
+      const sellerTier = sellerTierInfo?.tier || undefined;
       
       const success = await toggleFav({
         id: sellerId,
         username: listing.seller,
         profilePicture: sellerProfile?.pic || undefined,
         tier: sellerTier,
-        isVerified: (listing.isSellerVerified ?? listing.isVerified) || false,
+        isVerified: isVerified || false,
       });
       
       if (success && isMountedRef.current) {
@@ -340,7 +346,7 @@ export default function ListingDetailPage() {
         toast.error('Failed to update favorites');
       }
     }
-  }, [listing, sellerId, sellerProfile, isFavorited, toggleFav, trackEvent, favError]);
+  }, [listing, sellerId, sellerProfile, sellerTierInfo, isVerified, isFavorited, toggleFav, trackEvent, favError]);
 
   const handleSubscribeClick = useCallback(() => {
     if (listing?.seller && isMountedRef.current) {
@@ -579,83 +585,83 @@ export default function ListingDetailPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     className={`p-4 rounded-xl font-medium ${
-                    purchaseStatus.includes('successful') 
-                       ? 'bg-green-900/30 border border-green-800 text-green-400' 
-                       : 'bg-red-900/30 border border-red-800 text-red-400'
-                   }`}
-                 >
-                   {purchaseStatus}
-                 </motion.div>
-               )}
-             </AnimatePresence>
+                      purchaseStatus.includes('successful') 
+                        ? 'bg-green-900/30 border border-green-800 text-green-400' 
+                        : 'bg-red-900/30 border border-red-800 text-red-400'
+                    }`}
+                  >
+                    {purchaseStatus}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-             {/* Premium Content Lock - FIXED: Use isLocked field */}
-             {isLockedPremium && (
-               <PremiumLockMessage listing={listing} userRole={user?.role} />
-             )}
+              {/* Premium Content Lock - FIXED: Use isLocked field */}
+              {isLockedPremium && (
+                <PremiumLockMessage listing={listing} userRole={user?.role} />
+              )}
 
-             {/* Seller Profile */}
-             {user?.role === 'buyer' && (
-               <SellerProfile
-                 seller={listing.seller}
-                 sellerProfile={sellerProfile}
-                 sellerTierInfo={listing.sellerTierInfo}
-                 sellerAverageRating={listing.sellerAverageRating}
-                 sellerReviewCount={listing.sellerReviewCount || 0}
-                 isVerified={(listing.isSellerVerified ?? listing.isVerified) || false}
-               />
-             )}
+              {/* Seller Profile - FIXED: Use the correct props from hook */}
+              {user?.role === 'buyer' && (
+                <SellerProfile
+                  seller={listing.seller}
+                  sellerProfile={sellerProfile}
+                  sellerTierInfo={sellerTierInfo}
+                  sellerAverageRating={sellerAverageRating}
+                  sellerReviewCount={sellerReviewCount}
+                  isVerified={isVerified}
+                />
+              )}
 
-             {/* Trust & Safety */}
-             <TrustBadges />
-           </motion.div>
-         </div>
+              {/* Trust & Safety */}
+              <TrustBadges />
+            </motion.div>
+          </div>
 
-         {/* Modals */}
-         <BidHistoryModal
-           show={showBidHistory}
-           onClose={() => updateState({ showBidHistory: false })}
-           bidsHistory={bidsHistory}
-           currentUsername={currentUsername}
-           formatBidDate={formatBidDate}
-           calculateTotalPayable={calculateTotalPayable}
-         />
+          {/* Modals */}
+          <BidHistoryModal
+            show={showBidHistory}
+            onClose={() => updateState({ showBidHistory: false })}
+            bidsHistory={bidsHistory}
+            currentUsername={currentUsername}
+            formatBidDate={formatBidDate}
+            calculateTotalPayable={calculateTotalPayable}
+          />
 
-         <PurchaseSuccessModal
-           showPurchaseSuccess={showPurchaseSuccess}
-           showAuctionSuccess={showAuctionSuccess}
-           isAuctionListing={isActualAuction}
-           listing={listing}
-           isUserHighestBidder={isUserHighestBidder}
-           userRole={user?.role}
-           calculateTotalPayable={calculateTotalPayable}
-           onNavigate={router.push}
-         />
+          <PurchaseSuccessModal
+            showPurchaseSuccess={showPurchaseSuccess}
+            showAuctionSuccess={showAuctionSuccess}
+            isAuctionListing={isActualAuction}
+            listing={listing}
+            isUserHighestBidder={isUserHighestBidder}
+            userRole={user?.role}
+            calculateTotalPayable={calculateTotalPayable}
+            onNavigate={router.push}
+          />
 
-         <AuctionEndedModal
-           isAuctionListing={isActualAuction}
-           isAuctionEnded={isAuctionEnded}
-           listing={listing}
-           isUserHighestBidder={isUserHighestBidder}
-           didUserBid={didUserBid}
-           userRole={user?.role}
-           username={user?.username}
-           bidsHistory={bidsHistory}
-           onNavigate={router.push}
-         />
+          <AuctionEndedModal
+            isAuctionListing={isActualAuction}
+            isAuctionEnded={isAuctionEnded}
+            listing={listing}
+            isUserHighestBidder={isUserHighestBidder}
+            didUserBid={didUserBid}
+            userRole={user?.role}
+            username={user?.username}
+            bidsHistory={bidsHistory}
+            onNavigate={router.push}
+          />
 
-         {/* Sticky Buy Button for Mobile - FIXED: Use isLocked field */}
-         <StickyPurchaseBar
-           show={showStickyBuy}
-           listing={listing}
-           isProcessing={isProcessing}
-           needsSubscription={isLockedPremium}
-           isAuctionListing={isActualAuction}
-           userRole={user?.role}
-           onPurchase={handlePurchaseWithAnalytics}
-         />
-       </div>
-     </main>
-   </BanCheck>
- );
+          {/* Sticky Buy Button for Mobile - FIXED: Use isLocked field */}
+          <StickyPurchaseBar
+            show={showStickyBuy}
+            listing={listing}
+            isProcessing={isProcessing}
+            needsSubscription={isLockedPremium}
+            isAuctionListing={isActualAuction}
+            userRole={user?.role}
+            onPurchase={handlePurchaseWithAnalytics}
+          />
+        </div>
+      </main>
+    </BanCheck>
+  );
 }

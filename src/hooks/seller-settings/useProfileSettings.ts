@@ -5,7 +5,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useProfileData } from './useProfileData';
 import { useProfileSave } from './useProfileSave';
 import { useTierCalculation } from './useTierCalculation';
-import { storageService } from '@/services';
 import { API_BASE_URL, buildApiUrl } from '@/services/api.config';
 import { sanitizeUrl } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
@@ -22,7 +21,7 @@ export function useProfileSettings() {
   // Profile data management
   const profileData = useProfileData();
   
-  // Gallery state
+  // Gallery state - NO LOCAL STORAGE
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [galleryUploading, setGalleryUploading] = useState(false);
@@ -31,73 +30,73 @@ export function useProfileSettings() {
   const multipleFileInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
   
-  // Profile save management - pass gallery images to the hook
+  // Profile save management
   const { saveSuccess, saveError, isSaving, handleSave: baseSaveProfile, handleSaveWithGallery } = useProfileSave();
   
-  // Tier calculation
+  // Tier calculation - backend data only
   const tierData = useTierCalculation();
   
   // State for tier modal
   const [selectedTierDetails, setSelectedTierDetails] = useState<any>(null);
 
-  // Load gallery images on mount from backend
+  // Load gallery images from backend ONLY - NO LOCAL STORAGE
   useEffect(() => {
     const loadGalleryImages = async () => {
-      if (user?.username && token) {
-        try {
-          // Use proper buildApiUrl with params
-          const response = await fetch(buildApiUrl('/users/:username/profile', { username: user.username }), {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              // Handle both direct data and nested profile structure
-              const userData = data.data.profile || data.data;
+      if (!user?.username || !token) {
+        setGalleryImages([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(buildApiUrl('/users/:username/profile', { username: user.username }), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            const userData = data.data.profile || data.data;
+            
+            if (userData.galleryImages && Array.isArray(userData.galleryImages)) {
+              const validatedGallery = userData.galleryImages
+                .map((url: string) => {
+                  if (url.startsWith('http://') || url.startsWith('https://')) {
+                    return url;
+                  } else if (url.startsWith('/uploads/')) {
+                    return `${API_BASE_URL}${url}`;
+                  } else {
+                    return sanitizeUrl(url);
+                  }
+                })
+                .filter((url: string | null): url is string => url !== '' && url !== null)
+                .slice(0, MAX_GALLERY_IMAGES);
               
-              if (userData.galleryImages && Array.isArray(userData.galleryImages)) {
-                const validatedGallery = userData.galleryImages
-                  .map((url: string) => {
-                    // Handle both relative and absolute URLs
-                    if (url.startsWith('http://') || url.startsWith('https://')) {
-                      return url;
-                    } else if (url.startsWith('/uploads/')) {
-                      // Convert relative upload paths to full URLs
-                      return `${API_BASE_URL}${url}`;
-                    } else {
-                      return sanitizeUrl(url);
-                    }
-                  })
-                  .filter((url: string | null): url is string => url !== '' && url !== null)
-                  .slice(0, MAX_GALLERY_IMAGES);
-                
-                setGalleryImages(validatedGallery);
-              }
+              setGalleryImages(validatedGallery);
+            } else {
+              setGalleryImages([]);
             }
           }
-        } catch (error) {
-          console.error('Failed to load gallery images from backend:', error);
-          // Fallback to localStorage
-          const storedGallery = await storageService.getItem<string[]>(
-            `profile_gallery_${user.username}`,
-            []
-          );
-          
-          const validatedGallery = storedGallery
-            .map(url => sanitizeUrl(url))
-            .filter((url): url is string => url !== '' && url !== null)
-            .slice(0, MAX_GALLERY_IMAGES);
-            
-          setGalleryImages(validatedGallery);
+        } else {
+          console.error('Failed to load gallery images from backend');
+          setGalleryImages([]);
         }
+      } catch (error) {
+        console.error('Failed to load gallery images from backend:', error);
+        setGalleryImages([]);
       }
     };
     
     loadGalleryImages();
   }, [user?.username, token]);
+
+  // Refresh tier data when profile is saved
+  useEffect(() => {
+    if (saveSuccess && tierData.refreshTierData) {
+      tierData.refreshTierData();
+    }
+  }, [saveSuccess, tierData.refreshTierData]);
 
   // Clear validation error when files change
   useEffect(() => {
@@ -106,7 +105,6 @@ export function useProfileSettings() {
 
   // Validate files
   const validateFiles = (files: File[]): { valid: boolean; error?: string } => {
-    // Check total number of images
     if (galleryImages.length + files.length > MAX_GALLERY_IMAGES) {
       return { 
         valid: false, 
@@ -114,7 +112,6 @@ export function useProfileSettings() {
       };
     }
 
-    // Validate each file
     for (const file of files) {
       const validation = securityService.validateFileUpload(file, {
         maxSize: MAX_FILE_SIZE,
@@ -137,7 +134,6 @@ export function useProfileSettings() {
 
     const newFiles = Array.from(files);
     
-    // Validate new files
     const validation = validateFiles(newFiles);
     if (!validation.valid) {
       setValidationError(validation.error || 'Invalid files selected');
@@ -158,11 +154,10 @@ export function useProfileSettings() {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Internal async upload function
+  // Upload gallery images - BACKEND ONLY
   const uploadGalleryImagesAsync = async () => {
-    if (selectedFiles.length === 0) return;
+    if (selectedFiles.length === 0 || !token) return;
 
-    // Check rate limit
     if (user?.username) {
       const rateLimitResult = rateLimiter.check('IMAGE_UPLOAD', {
         ...RATE_LIMITS.IMAGE_UPLOAD,
@@ -175,7 +170,6 @@ export function useProfileSettings() {
       }
     }
 
-    // Final validation before upload
     const validation = validateFiles(selectedFiles);
     if (!validation.valid) {
       setValidationError(validation.error || 'Invalid files');
@@ -187,14 +181,11 @@ export function useProfileSettings() {
     setValidationError('');
     
     try {
-      // Create FormData for file upload
       const formData = new FormData();
-      // IMPORTANT: Backend expects 'images' (plural) for gallery endpoint
       selectedFiles.forEach(file => {
-        formData.append('images', file);  // Changed from 'gallery' to 'images'
+        formData.append('images', file);
       });
 
-      // Start progress simulation
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
@@ -202,8 +193,7 @@ export function useProfileSettings() {
       const response = await fetch(buildApiUrl('/upload/gallery'), {
         method: 'POST',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          // Don't set Content-Type - let browser set it for FormData
+          'Authorization': `Bearer ${token}`,
         },
         body: formData,
       });
@@ -218,7 +208,6 @@ export function useProfileSettings() {
       const result = await response.json();
       
       if (result.success && result.data) {
-        // Extract URLs from response and convert relative paths to full URLs
         const newGallery = (result.data.gallery || []).map((url: string) => {
           if (url.startsWith('http://') || url.startsWith('https://')) {
             return url;
@@ -232,11 +221,6 @@ export function useProfileSettings() {
         setGalleryImages(newGallery);
         setSelectedFiles([]);
         setUploadProgress(100);
-        
-        // Also save to localStorage as backup
-        if (user?.username) {
-          await storageService.setItem(`profile_gallery_${user.username}`, newGallery);
-        }
         
         console.log('Gallery images uploaded successfully:', result.data);
       } else {
@@ -252,21 +236,19 @@ export function useProfileSettings() {
     }
   };
 
-  // Wrapped upload function that returns void
   const uploadGalleryImages = () => {
-    // Call async function but don't return the promise
     uploadGalleryImagesAsync();
   };
 
-  // Internal async remove function
+  // Remove gallery image - BACKEND ONLY
   const removeGalleryImageAsync = async (index: number) => {
-    if (index < 0 || index >= galleryImages.length) return;
+    if (index < 0 || index >= galleryImages.length || !token) return;
     
     try {
       const response = await fetch(buildApiUrl(`/upload/gallery/${index}`), {
         method: 'DELETE',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': `Bearer ${token}`,
         },
       });
 
@@ -278,7 +260,6 @@ export function useProfileSettings() {
       const result = await response.json();
       
       if (result.success && result.data) {
-        // Update with gallery returned from backend, converting URLs
         const updatedGallery = (result.data.gallery || []).map((url: string) => {
           if (url.startsWith('http://') || url.startsWith('https://')) {
             return url;
@@ -290,76 +271,56 @@ export function useProfileSettings() {
         });
         
         setGalleryImages(updatedGallery);
-        
-        // Update localStorage
-        if (user?.username) {
-          await storageService.setItem(`profile_gallery_${user.username}`, updatedGallery);
-        }
       }
     } catch (error) {
       console.error('Failed to remove image:', error);
-      // Fallback to local removal
+      // Just remove from state if backend fails
       const updatedGallery = galleryImages.filter((_, i) => i !== index);
       setGalleryImages(updatedGallery);
-      
-      if (user?.username) {
-        await storageService.setItem(`profile_gallery_${user.username}`, updatedGallery);
-      }
     }
   };
 
-  // Wrapped remove function that returns void
   const removeGalleryImage = (index: number) => {
-    // Call async function but don't return the promise
     removeGalleryImageAsync(index);
   };
 
-  // Internal async clear function
+  // Clear all gallery images - BACKEND ONLY
   const clearAllGalleryImagesAsync = async () => {
     if (window.confirm("Are you sure you want to remove all gallery images?")) {
+      if (!token) {
+        setGalleryImages([]);
+        return;
+      }
+
       try {
-        // Remove all images one by one from backend
         for (let i = galleryImages.length - 1; i >= 0; i--) {
           await fetch(buildApiUrl(`/upload/gallery/${i}`), {
             method: 'DELETE',
             headers: {
-              'Authorization': token ? `Bearer ${token}` : '',
+              'Authorization': `Bearer ${token}`,
             },
           });
         }
         
         setGalleryImages([]);
-        
-        // Clear localStorage
-        if (user?.username) {
-          await storageService.setItem(`profile_gallery_${user.username}`, []);
-        }
       } catch (error) {
         console.error('Failed to clear gallery:', error);
         setGalleryImages([]);
-        
-        if (user?.username) {
-          await storageService.setItem(`profile_gallery_${user.username}`, []);
-        }
       }
     }
   };
 
-  // Wrapped clear function that returns void
   const clearAllGalleryImages = () => {
-    // Call async function but don't return the promise
     clearAllGalleryImagesAsync();
   };
 
-  // Enhanced save handler that includes gallery
+  // Enhanced save handler
   const handleSave = async () => {
-    // Create profile data object with gallery
     const profileDataToSave = {
       bio: profileData.bio,
       profilePic: profileData.preview || profileData.profilePic,
       subscriptionPrice: profileData.subscriptionPrice,
       galleryImages: galleryImages.map(url => {
-        // Convert full URLs back to relative paths for storage
         if (url.startsWith(`${API_BASE_URL}/uploads/`)) {
           return url.replace(API_BASE_URL, '');
         }
@@ -367,12 +328,15 @@ export function useProfileSettings() {
       }),
     };
     
-    // Save profile including gallery URLs
     await baseSaveProfile(profileDataToSave);
     
-    // Also save gallery separately if needed
     if (galleryImages.length > 0) {
       await handleSaveWithGallery(galleryImages);
+    }
+    
+    // Refresh tier data after save
+    if (tierData.refreshTierData) {
+      await tierData.refreshTierData();
     }
     
     return saveSuccess;
@@ -394,7 +358,7 @@ export function useProfileSettings() {
     removeProfilePic: profileData.removeProfilePic,
     profilePicInputRef,
     
-    // Gallery - Now returning void functions
+    // Gallery - NO LOCAL STORAGE
     galleryImages,
     selectedFiles,
     galleryUploading,
@@ -402,18 +366,20 @@ export function useProfileSettings() {
     multipleFileInputRef,
     handleMultipleFileChange,
     removeSelectedFile,
-    uploadGalleryImages,  // Returns void
-    removeGalleryImage,   // Returns void  
-    clearAllGalleryImages, // Returns void
+    uploadGalleryImages,
+    removeGalleryImage,
+    clearAllGalleryImages,
     validationError,
     
-    // Tier info
+    // Tier info - BACKEND ONLY
     sellerTierInfo: tierData.sellerTierInfo,
     userStats: tierData.userStats,
     getTierProgress: tierData.getTierProgress,
     getNextTier: tierData.getNextTier,
     selectedTierDetails,
     setSelectedTierDetails,
+    isTierLoading: tierData.isLoading,
+    tierError: tierData.error,
     
     // Save functionality
     saveSuccess,

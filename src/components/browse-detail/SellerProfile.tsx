@@ -18,6 +18,15 @@ export default function SellerProfile({
 }: SellerProfileProps) {
   const safeUsername = sanitizeUsername(seller);
 
+  // Debug logging
+  console.log('[SellerProfile] Review data:', {
+    seller: safeUsername,
+    sellerAverageRating,
+    sellerReviewCount,
+    hasRating: sellerAverageRating !== null && sellerAverageRating !== undefined && sellerAverageRating > 0,
+    hasReviews: sellerReviewCount > 0
+  });
+
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
       <div className="flex items-center gap-4">
@@ -54,8 +63,8 @@ export default function SellerProfile({
             {isVerified && <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />}
           </div>
 
-          {/* Star Rating Display */}
-          {sellerAverageRating !== null && sellerAverageRating !== undefined ? (
+          {/* Star Rating Display - Updated logic */}
+          {sellerReviewCount > 0 && sellerAverageRating !== null && sellerAverageRating !== undefined ? (
             <div className="flex items-center gap-2 mb-2">
               <StarRating rating={sellerAverageRating} size="sm" />
               <span className="text-yellow-400 text-sm font-medium">{sellerAverageRating.toFixed(1)}</span>

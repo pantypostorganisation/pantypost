@@ -10,7 +10,7 @@ import { useAuction } from '@/context/AuctionContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { storageService, listingsService } from '@/services';
+import { storageService, listingsService, reviewsService } from '@/services';
 import { 
   isAuctionActive, 
   calculateTotalPayable, 
@@ -25,7 +25,7 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { financialSchemas } from '@/utils/validation/schemas';
 import { ApiResponse } from '@/services/api.config';
 import { isAdmin } from '@/utils/security/permissions';
-import { resolveApiUrl } from '@/utils/url'; // Import the URL resolver
+import { resolveApiUrl } from '@/utils/url';
 
 const AUCTION_UPDATE_INTERVAL = 1000;
 const FUNDING_CHECK_INTERVAL = 10000;
@@ -51,14 +51,6 @@ const initialState: DetailState = {
   bidSuccess: null,
   currentImageIndex: 0
 };
-
-interface Review {
-  seller: string;
-  reviewer: string;
-  rating: number;
-  comment: string;
-  date: string;
-}
 
 interface Message {
   id?: string;
@@ -98,7 +90,9 @@ export const useBrowseDetail = () => {
   // State
   const [state, setState] = useState<DetailState>(initialState);
   const [listing, setListing] = useState<ListingWithDetails | undefined>();
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [sellerReviews, setSellerReviews] = useState<any[]>([]);
+  const [sellerAverageRating, setSellerAverageRating] = useState<number | null>(null);
+  const [sellerReviewStats, setSellerReviewStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
@@ -423,19 +417,58 @@ export const useBrowseDetail = () => {
     loadListing();
   }, [listingId, listings, refreshListings]);
 
-  // Load additional data
+  // CRITICAL FIX: Load seller reviews from backend API
   useEffect(() => {
-    const loadData = async () => {
+    const loadSellerReviews = async () => {
+      if (!listing?.seller) {
+        console.log('[BrowseDetail] No seller found in listing');
+        return;
+      }
+
       try {
-        const reviewsData = await storageService.getItem<Review[]>('reviews', []);
-        setReviews(reviewsData);
+        console.log('[BrowseDetail] Loading reviews for seller:', listing.seller);
+        
+        // Fetch reviews from the backend API
+        const reviewsResponse = await reviewsService.getSellerReviews(listing.seller);
+        
+        console.log('[BrowseDetail] Reviews API response:', reviewsResponse);
+        
+        if (reviewsResponse.success && reviewsResponse.data) {
+          const { reviews, stats } = reviewsResponse.data;
+          
+          console.log('[BrowseDetail] Loaded reviews:', reviews?.length || 0, 'Stats:', stats);
+          
+          setSellerReviews(reviews || []);
+          setSellerReviewStats(stats || null);
+          
+          // Set average rating
+          if (stats && typeof stats.avgRating === 'number') {
+            setSellerAverageRating(stats.avgRating);
+            console.log('[BrowseDetail] Set average rating:', stats.avgRating);
+          } else if (reviews && reviews.length > 0) {
+            // Fallback: calculate average if stats not provided
+            const totalRating = reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
+            const avgRating = totalRating / reviews.length;
+            setSellerAverageRating(Math.round(avgRating * 10) / 10);
+            console.log('[BrowseDetail] Calculated average rating:', Math.round(avgRating * 10) / 10);
+          } else {
+            setSellerAverageRating(null);
+            console.log('[BrowseDetail] No reviews found, setting rating to null');
+          }
+        } else {
+          console.warn('[BrowseDetail] Failed to load reviews:', reviewsResponse.error);
+          setSellerReviews([]);
+          setSellerAverageRating(null);
+        }
       } catch (error) {
-        console.error('Error loading additional data:', error);
+        console.error('[BrowseDetail] Error loading seller reviews:', error);
+        setSellerReviews([]);
+        setSellerAverageRating(null);
       }
     };
 
-    loadData();
-  }, []);
+    loadSellerReviews();
+  }, [listing?.seller]);
 
   // Merge realtime bids with existing bids
   const mergedBidsHistory = useMemo(() => {
@@ -505,18 +538,6 @@ export const useBrowseDetail = () => {
     
     trackView();
   }, [listing, user]);
-
-  // Get seller reviews
-  const sellerReviews = useMemo(() => {
-    if (!listing?.seller) return [];
-    return reviews.filter(review => review.seller === listing.seller);
-  }, [listing?.seller, reviews]);
-
-  const sellerAverageRating = useMemo(() => {
-    if (sellerReviews.length === 0) return null;
-    const totalRating = sellerReviews.reduce((sum, review) => sum + review.rating, 0);
-    return totalRating / sellerReviews.length;
-  }, [sellerReviews]);
 
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
@@ -1024,7 +1045,7 @@ export const useBrowseDetail = () => {
     };
   }, []);
 
-  // Extract seller info
+  // Extract seller info with reviews
   const sellerInfo = useMemo(() => {
     if (!listing) return null;
     const info = extractSellerInfo(listing, users || {}, orderHistory as any);
@@ -1085,7 +1106,7 @@ export const useBrowseDetail = () => {
     };
   }
 
-  // Return everything
+  // Return everything including the review data
   return {
     user,
     listing,
@@ -1138,8 +1159,8 @@ export const useBrowseDetail = () => {
     router,
     sellerTierInfo: sellerInfo?.tierInfo,
     isVerified: sellerInfo?.isVerified || false,
-    sellerAverageRating: sellerInfo?.averageRating,
-    sellerReviewCount: sellerInfo?.reviewCount || 0,
+    sellerAverageRating: sellerAverageRating,
+    sellerReviewCount: sellerReviews.length,
     isLoading: false,
     error,
     rateLimitError
