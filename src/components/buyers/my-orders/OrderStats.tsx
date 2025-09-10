@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { DollarSign, Clock, Truck } from 'lucide-react';
+import { Clock, Truck } from 'lucide-react';
 import { OrderStats as StatsType } from '@/hooks/useMyOrders';
 
 interface OrderStatsProps {
@@ -11,19 +11,7 @@ interface OrderStatsProps {
 
 export default function OrderStats({ stats }: OrderStatsProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div className="bg-gray-800/50 p-6 rounded-xl border-2 border-red-500/60 hover:border-red-400/80 transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-red-400 text-sm font-medium">Total Spent</p>
-            <p className="text-white text-2xl font-bold">${stats.totalSpent.toFixed(2)}</p>
-          </div>
-          <div className="bg-red-500/20 p-3 rounded-lg">
-            <DollarSign className="w-8 h-8 text-red-400" />
-          </div>
-        </div>
-      </div>
-      
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
       <div className="bg-gradient-to-br from-yellow-500/15 to-amber-500/15 p-6 rounded-xl border border-yellow-500/40 hover:border-yellow-400/60 transition-all duration-300 hover:shadow-lg hover:shadow-yellow-500/15">
         <div className="flex items-center justify-between">
           <div>
@@ -35,7 +23,7 @@ export default function OrderStats({ stats }: OrderStatsProps) {
           </div>
         </div>
       </div>
-      
+
       <div className="bg-gradient-to-br from-blue-500/15 to-sky-500/15 p-6 rounded-xl border border-blue-500/40 hover:border-blue-400/60 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/15">
         <div className="flex items-center justify-between">
           <div>
