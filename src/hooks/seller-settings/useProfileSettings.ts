@@ -183,7 +183,8 @@ export function useProfileSettings() {
     try {
       const formData = new FormData();
       selectedFiles.forEach(file => {
-        formData.append('images', file);
+        // IMPORTANT: backend expects .array('gallery', 20)
+        formData.append('gallery', file);
       });
 
       const progressInterval = setInterval(() => {

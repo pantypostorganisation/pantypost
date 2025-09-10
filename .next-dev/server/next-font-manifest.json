@@ -9,6 +9,9 @@
     "[project]/src/app/browse/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
+    "[project]/src/app/buyers/dashboard/page": [
+      "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
+    ],
     "[project]/src/app/buyers/my-orders/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
@@ -18,13 +21,13 @@
     "[project]/src/app/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
-    "[project]/src/app/sellers/orders-to-fulfil/page": [
+    "[project]/src/app/sellers/[username]/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
-    "[project]/src/app/signup/page": [
+    "[project]/src/app/sellers/my-listings/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ],
-    "[project]/src/app/wallet/buyer/page": [
+    "[project]/src/app/sellers/profile/page": [
       "static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2"
     ]
   },
